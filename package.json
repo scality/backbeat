@@ -1,0 +1,19 @@
+{
+  "name": "backbeat",
+  "version": "1.0.0",
+  "description": "S3 object lifecycle manager",
+  "main": "index.js",
+  "scripts": {
+    "test": "echo \"Error: no test specified\" && exit 1"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scality/backbeat.git"
+  },
+  "author": "Scality Inc.",
+  "license": "ISC",
+  "bugs": {
+    "url": "https://github.com/scality/backbeat/issues"
+  },
+  "homepage": "https://github.com/scality/backbeat#readme"
+}

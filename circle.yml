@@ -1,0 +1,13 @@
+general:
+    branches:
+        ignore:
+            - /^ultron\/.*/ # Ignore ultron/* branches
+
+machine:
+    node:
+        version: 4.5.0
+test:
+    override:
+        - npm run --silent lint_md
+        - npm run --silent lint
+        - npm test
