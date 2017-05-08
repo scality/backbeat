@@ -5,9 +5,12 @@ general:
 
 machine:
     node:
-        version: 4.5.0
+        version: 6.9.5
+    services:
+        - docker
 test:
     override:
+        - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
         - npm run --silent lint_md
         - npm run --silent lint
         - npm test
