@@ -1,6 +1,6 @@
 const assert = require('assert');
 const { errors } = require('arsenal');
-const BackbeatProducer = require('../lib/BackbeatProducer');
+const BackbeatProducer = require('../../lib/BackbeatProducer');
 const zookeeper = { host: 'localhost', port: 2181 };
 const log = { logLevel: 'info', dumpLevel: 'error' };
 const topic = 'backbeat-producer-spec';
@@ -11,6 +11,8 @@ const multipleMessages = [
     { key: 'qux', message: 'hi' },
 ];
 const oneMessage = [{ key: 'foo', message: 'hello world' }];
+
+
 [
     {
         type: 'partition mechanism',

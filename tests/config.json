@@ -1,0 +1,37 @@
+{
+    "zookeeper": {
+        "host": "127.0.0.1",
+        "port": 2181
+    },
+    "kafka": {
+        "host": "127.0.0.1",
+        "port": 9092
+    },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "transport": "http",
+        "accessKey": "accessKey1",
+        "secretKey": "verySecretKey1"
+    },
+    "replication": {
+        "source": {
+            "logSource": "dmd",
+            "dmd": {
+                "host": "127.0.0.1",
+                "port": 9990
+            }
+        },
+        "topic": "backbeat-test-replication",
+        "groupId": "backbeat-test-replication-group",
+        "queuePopulator": {
+            "cronRule": "*/5 * * * * *",
+            "batchMaxRead": 10000,
+            "zookeeperNamespace": "/backbeat/test/replication-populator"
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    }
+}

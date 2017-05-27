@@ -4,7 +4,10 @@
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
-    "test": "mocha --recursive tests/",
+    "queue_populator": "node extensions/replication/queuePopulator/task.js",
+    "test": "mocha --recursive tests/unit",
+    "ft_test": "mocha --recursive tests/functional",
+    "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')"
   },
@@ -21,15 +24,18 @@
   "dependencies": {
     "arsenal": "scality/Arsenal",
     "async": "^2.3.0",
+    "bucketclient": "scality/bucketclient",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines",
     "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
     "kafka-node": "^1.6.0",
+    "node-schedule": "^1.2.0",
     "werelogs": "scality/werelogs"
   },
   "devDependencies": {
-    "mocha": "^3.3.0"
+    "mocha": "^3.3.0",
+    "aws-sdk": "2.28.0"
   }
 }
