@@ -1,0 +1,62 @@
+{
+    "zookeeper": {
+        "host": "127.0.0.1",
+        "port": 2181
+    },
+    "kafka": {
+        "host": "127.0.0.1",
+        "port": 9092
+    },
+    "extensions": {
+        "replication": {
+            "source": {
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 8000
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8500
+                },
+                "logSource": "bucketd",
+                "bucketd": {
+                    "host": "127.0.0.1",
+                    "port": 9000,
+                    "raftSession": 1
+                },
+                "dmd": {
+                    "host": "127.0.0.1",
+                    "port": 9990
+                }
+            },
+            "destination": {
+                "s3": {
+                    "host": "127.0.0.2",
+                    "port": 9000
+                },
+                "vault": {
+                    "host": "127.0.0.2",
+                    "port": 9500
+                },
+                "certFilePaths": {
+                    "key": "ssl/key.pem",
+                    "cert": "ssl/cert.crt",
+                    "ca": "ssl/ca.crt"
+                }
+            },
+            "topic": "backbeat-replication",
+            "groupId": "backbeat-replication-group",
+            "queuePopulator": {
+                "cronRule": "*/5 * * * * *",
+                "batchMaxRead": 10000,
+                "zookeeperNamespace": "/backbeat/replication"
+            },
+            "queueProcessor": {
+            }
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    }
+}
