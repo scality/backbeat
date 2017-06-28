@@ -5,6 +5,7 @@
   "main": "index.js",
   "scripts": {
     "queue_populator": "node extensions/replication/queuePopulator/task.js",
+    "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive tests/functional",
     "bh_test": "mocha --recursive tests/behavior",
