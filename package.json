@@ -25,6 +25,7 @@
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines",
     "eslint-plugin-react": "^4.2.3",
+    "joi": "^10.6",
     "kafka-node": "^1.6.0",
     "werelogs": "scality/werelogs"
   },
