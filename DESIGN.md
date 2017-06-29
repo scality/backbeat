@@ -72,6 +72,13 @@ highlights how CRR can be achieved by using Backbeat.
 Reference: AWS rules of what is and what is not replicated
 http://docs.aws.amazon.com/AmazonS3/latest/dev/crr-what-is-isnot-replicated.html
 
+Note: For Active/Passive setup, the target will be READONLY. This would mean
+that in a D/R setup for a customer, if the customer loses site A they can
+point themselves to site B to perform READONLY actions until site A comes back
+up. Although they could write to site B these writes will not be replicated to
+site A (one of the many reasons being site A may have data that hasn't been
+fully replicated to site B when the failure occurred).
+
 * For V1, all replication actions go through S3. S3 exposes routes for Metadata
     and Data backends to Backbeat.
 * MetaData journal is used as the source of truth.
