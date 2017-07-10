@@ -36,7 +36,9 @@ const joiSchema = {
                 bucketd: hostPortJoi.keys({
                     raftSession: joi.number().required(),
                 }),
-                dmd: hostPortJoi,
+                dmd: hostPortJoi.keys({
+                    logName: joi.string().default('s3-recordlog'),
+                }),
             },
             destination: {
                 s3: hostPortJoi.required(),

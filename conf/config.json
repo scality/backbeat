@@ -49,7 +49,7 @@
             "queuePopulator": {
                 "cronRule": "*/5 * * * * *",
                 "batchMaxRead": 10000,
-                "zookeeperNamespace": "/backbeat/replication"
+                "zookeeperNamespace": "/backbeat/replication-populator"
             },
             "queueProcessor": {
             }
