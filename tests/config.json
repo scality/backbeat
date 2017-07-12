@@ -1,7 +1,8 @@
 {
     "zookeeper": {
         "host": "127.0.0.1",
-        "port": 2181
+        "port": 2181,
+        "namespace": ""
     },
     "kafka": {
         "host": "127.0.0.1",
