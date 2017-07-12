@@ -17,7 +17,8 @@ const QueueEntry = require('../utils/QueueEntry');
 
 class QueueProcessor {
 
-    constructor(sourceConfig, destConfig, repConfig, logConfig) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig, logConfig) {
+        this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
@@ -235,12 +236,13 @@ class QueueProcessor {
 
     start() {
         const consumer = new BackbeatConsumer({
+            zookeeper: this.zkConfig,
+            log: this.logConfig,
             topic: this.repConfig.topic,
             groupId: this.repConfig.groupId,
             concurrency: 1, // replication has to process entries in
                             // order, so one at a time
             queueProcessor: this._processEntry.bind(this),
-            log: this.logConfig,
         });
         consumer.on('error', () => {});
         consumer.subscribe();

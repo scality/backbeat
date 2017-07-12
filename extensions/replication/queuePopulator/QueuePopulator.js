@@ -73,8 +73,7 @@ class QueuePopulator {
                            `or 'dmd', got '${sourceConfig.logSource}'`);
             return process.nextTick(() => cb(errors.InternalError));
         }
-        this.pathToLastProcessedSeq =
-            `/logState/${logIdentifier}/lastProcessedSeq`;
+        this.pathToLogOffset = `/logState/${logIdentifier}/logOffset`;
 
         return async.parallel([
             done => this._setupLogSource(done),
@@ -82,11 +81,14 @@ class QueuePopulator {
             done => this._setupZookeeper(done),
         ], err => {
             if (err) {
-                this.log.error('Error starting up queuePopulator',
+                this.log.error('error starting up queue populator',
                                { method: 'QueuePopulator.open',
                                  error: err, errorStack: err.stack });
                 return cb(err);
             }
+            this.log.info('queue populator is ready to populate ' +
+                          'replication queue',
+                          { logOffset: this.logOffset });
             return cb();
         });
     }
@@ -156,94 +158,89 @@ class QueuePopulator {
     }
 
     _setupZookeeper(done) {
-        const zkNamespace = this.repConfig.queuePopulator.zookeeperNamespace;
-        const zookeeperUrl =
-                  `${this.zkConfig.host}:${this.zkConfig.port}` +
-                  `${zkNamespace}`;
-        this.log.info('opening zookeeper connection for state ' +
-                      'management',
+        const { host, port, namespace } = this.zkConfig;
+        const populatorNamespace = namespace +
+                  this.repConfig.queuePopulator.zookeeperNamespace;
+        const zookeeperUrl = `${host}:${port}${populatorNamespace}`;
+        this.log.info('opening zookeeper connection for state management',
                       { zookeeperUrl });
         const zkClient = zookeeper.createClient(zookeeperUrl);
         zkClient.connect();
         this.zkClient = zkClient;
-        this._readLastProcessedSeq((err, seq) => {
+        this._readLogOffset((err, offset) => {
             if (err) {
                 return done(err);
             }
-            this.lastProcessedSeq = seq;
+            this.logOffset = offset;
             return done();
         });
     }
 
-    _writeLastProcessedSeq(done) {
+    _writeLogOffset(done) {
         const zkClient = this.zkClient;
-        const pathToLastProcessedSeq = this.pathToLastProcessedSeq;
-        const lastProcessedSeq = this.lastProcessedSeq;
+        const pathToLogOffset = this.pathToLogOffset;
         zkClient.setData(
-            pathToLastProcessedSeq,
-            new Buffer(lastProcessedSeq.toString()), -1,
+            pathToLogOffset, new Buffer(this.logOffset.toString()), -1,
             err => {
                 if (err) {
                     this.log.error(
-                        'error saving last processed sequence number',
-                        { method: 'QueuePopulator._writeLastProcessedSeq',
-                          zkPath: pathToLastProcessedSeq,
-                          lastProcessedSeq });
+                        'error saving log offset',
+                        { method: 'QueuePopulator._writeLogOffset',
+                          zkPath: pathToLogOffset,
+                          logOffset: this.logOffset });
                     return done(err);
                 }
                 this.log.debug(
-                    'saved last processed sequence number',
-                    { method: 'QueuePopulator._writeLastProcessedSeq',
-                      zkPath: pathToLastProcessedSeq,
-                      lastProcessedSeq });
+                    'saved log offset',
+                    { method: 'QueuePopulator._writeLogOffset',
+                      zkPath: pathToLogOffset,
+                      logOffset: this.logOffset });
                 return done();
             });
     }
 
-    _readLastProcessedSeq(done) {
+    _readLogOffset(done) {
         const zkClient = this.zkClient;
-        const pathToLastProcessedSeq = this.pathToLastProcessedSeq;
-        this.zkClient.getData(pathToLastProcessedSeq, (err, data) => {
+        const pathToLogOffset = this.pathToLogOffset;
+        this.zkClient.getData(pathToLogOffset, (err, data) => {
             if (err) {
                 if (err.name !== 'NO_NODE') {
                     this.log.error(
-                        'Could not fetch latest processed sequence number',
-                        { method: 'QueuePopulator._readLastProcessedSeq',
-                          error: err,
-                          errorStack: err.stack });
+                        'Could not fetch log offset',
+                        { method: 'QueuePopulator._readLogOffset',
+                          error: err, errorStack: err.stack });
                     return done(err);
                 }
-                return zkClient.mkdirp(pathToLastProcessedSeq, err => {
+                return zkClient.mkdirp(pathToLogOffset, err => {
                     if (err) {
                         this.log.error(
                             'Could not pre-create path in zookeeper',
-                            { method: 'QueuePopulator._readLastProcessedSeq',
-                              zkPath: pathToLastProcessedSeq,
-                              error: err,
-                              errorStack: err.stack });
+                            { method: 'QueuePopulator._readLogOffset',
+                              zkPath: pathToLogOffset,
+                              error: err, errorStack: err.stack });
                         return done(err);
                     }
-                    return done(null, 0);
+                    return done(null, 1);
                 });
             }
             if (data) {
-                const lastProcessedSeq = Number.parseInt(data, 10);
-                if (isNaN(lastProcessedSeq)) {
+                const logOffset = Number.parseInt(data, 10);
+                if (isNaN(logOffset)) {
                     this.log.error(
-                        'invalid latest processed sequence number',
-                        { method: 'QueuePopulator._readLastProcessedSeq',
-                          zkPath: pathToLastProcessedSeq,
-                          lastProcessedSeq: data.toString() });
-                    return done(null, 0);
+                        'invalid stored log offset',
+                        { method: 'QueuePopulator._readLogOffset',
+                          zkPath: pathToLogOffset,
+                          logOffset: data.toString() });
+                    return done(null, 1);
                 }
                 this.log.debug(
-                    'fetched latest processed sequence number',
-                    { method: 'QueuePopulator._readLastProcessedSeq',
-                      zkPath: pathToLastProcessedSeq,
-                      lastProcessedSeq });
-                return done(null, lastProcessedSeq);
+                    'fetched current log offset successfully',
+                    { method: 'QueuePopulator._readLogOffset',
+                      zkPath: pathToLogOffset,
+                      logOffset });
+                return done(null, logOffset);
             }
-            return done(null, 0);
+            return done(null, 1);
         });
     }
 
@@ -288,8 +285,8 @@ class QueuePopulator {
      *       hold multiple entries)
      *     - queuedEntries {Number} - number of new entries queued in kafka
      *       topic
-     *     - lastProcessedSeq {Number} - last sequence number read and
-     *       processed from the log
+     *     - logOffset {Number} - next offset (sequence number) to process
+     *       from the log
      *     - processedAll {Boolean} - true if the log has no more unread
      *       records
      * @return {undefined}
@@ -307,7 +304,7 @@ class QueuePopulator {
             next => this._processReadRecords(params, batchState, next),
             next => this._processPrepareEntries(batchState, next),
             next => this._processPublishEntries(batchState, next),
-            next => this._processSaveLastProcessedSeq(batchState, next),
+            next => this._processSaveLogOffset(batchState, next),
         ],
             err => {
                 if (err) {
@@ -321,7 +318,7 @@ class QueuePopulator {
                     readRecords: batchState.logStats.nbLogRecordsRead,
                     readEntries: batchState.logStats.nbLogEntriesRead,
                     queuedEntries: batchState.entriesToPublish.length,
-                    lastProcessedSeq: this.lastProcessedSeq,
+                    logOffset: this.logOffset,
                     processedAll,
                 });
             });
@@ -330,8 +327,8 @@ class QueuePopulator {
 
     _processReadRecords(params, batchState, done) {
         const readOptions = {};
-        if (this.lastProcessedSeq !== undefined) {
-            readOptions.startSeq = this.lastProcessedSeq + 1;
+        if (this.logOffset !== undefined) {
+            readOptions.startSeq = this.logOffset;
         }
         if (params && params.maxRead !== undefined) {
             readOptions.limit = params.maxRead;
@@ -357,7 +354,7 @@ class QueuePopulator {
     _processPrepareEntries(batchState, done) {
         const { logRes, logStats } = batchState;
 
-        if (logRes.info.end === null) {
+        if (logRes.info.start === null) {
             return done(null);
         }
         logRes.log.on('data', record => {
@@ -384,11 +381,12 @@ class QueuePopulator {
     }
 
     _processPublishEntries(batchState, done) {
-        const { entriesToPublish, logRes } = batchState;
+        const { entriesToPublish, logRes, logStats } = batchState;
 
         if (entriesToPublish.length === 0) {
-            if (logRes.info.end !== null) {
-                batchState.nextLastProcessedSeq = logRes.info.end;
+            if (logRes.info.start !== null) {
+                batchState.nextLogOffset =
+                    logRes.info.start + logStats.nbLogRecordsRead;
             }
             return done();
         }
@@ -400,21 +398,22 @@ class QueuePopulator {
                       error: err, errorStack: err.stack });
                 return done(err);
             }
-            batchState.nextLastProcessedSeq = logRes.info.end;
+            batchState.nextLogOffset =
+                logRes.info.start + logStats.nbLogRecordsRead;
             this.log.debug(
                 'entries published successfully',
                 { method: 'QueuePopulator._processPublishEntries',
                   entryCount: entriesToPublish.length,
-                  lastProcessedSeq: batchState.nextLastProcessedSeq });
+                  logOffset: batchState.nextLogOffset });
             return done();
         });
     }
 
-    _processSaveLastProcessedSeq(batchState, done) {
-        if (batchState.nextLastProcessedSeq !== undefined &&
-            batchState.nextLastProcessedSeq !== this.lastProcessedSeq) {
-            this.lastProcessedSeq = batchState.nextLastProcessedSeq;
-            return this._writeLastProcessedSeq(done);
+    _processSaveLogOffset(batchState, done) {
+        if (batchState.nextLogOffset !== undefined &&
+            batchState.nextLogOffset !== this.logOffset) {
+            this.logOffset = batchState.nextLogOffset;
+            return this._writeLogOffset(done);
         }
         return process.nextTick(() => done());
     }
@@ -427,7 +426,7 @@ class QueuePopulator {
             readRecords: 0,
             readEntries: 0,
             queuedEntries: 0,
-            lastProcessedSeq: this.lastProcessedSeq,
+            logOffset: this.logOffset,
         };
         function cbProcess(err, counters) {
             if (err) {
@@ -436,7 +435,7 @@ class QueuePopulator {
             countersTotal.readRecords += counters.readRecords;
             countersTotal.readEntries += counters.readEntries;
             countersTotal.queuedEntries += counters.queuedEntries;
-            countersTotal.lastProcessedSeq = counters.lastProcessedSeq;
+            countersTotal.logOffset = counters.logOffset;
             self.log.debug('process batch finished',
                            { counters, countersTotal });
             if (counters.processedAll) {
