@@ -1,7 +1,8 @@
 {
     "zookeeper": {
         "host": "127.0.0.1",
-        "port": 2181
+        "port": 2181,
+        "namespace": "/backbeat"
     },
     "kafka": {
         "host": "127.0.0.1",
@@ -49,7 +50,7 @@
             "queuePopulator": {
                 "cronRule": "*/5 * * * * *",
                 "batchMaxRead": 10000,
-                "zookeeperNamespace": "/backbeat/replication-populator"
+                "zookeeperNamespace": "/replication-populator"
             },
             "queueProcessor": {
             }
