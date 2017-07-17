@@ -16,7 +16,7 @@
     "url": "git+https://github.com/scality/backbeat.git"
   },
   "author": "Scality Inc.",
-  "license": "ISC",
+  "license": "Apache-2.0",
   "bugs": {
     "url": "https://github.com/scality/backbeat/issues"
   },
