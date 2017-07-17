@@ -7,7 +7,8 @@
 ## OVERVIEW
 
 Backbeat is an engine with a messaging system at its heart.
-It's part of Zenko, [Scality](http://www.scality.com/)’s Open Source Multi-Cloud Data Controller.
+It's part of Zenko, [Scality](http://www.scality.com/)’s 
+Open Source Multi-Cloud Data Controller.
 Learn more about Zenko at [Zenko.io](http://www.zenko.io/)
 
 Backbeat is optimised for queuing metadata update and dispatching work
