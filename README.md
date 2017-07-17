@@ -1,4 +1,4 @@
-# backbeat
+# Zenko Backbeat
 
 ![backbeat logo](res/backbeat-logo.png)
 
@@ -6,8 +6,10 @@
 
 ## OVERVIEW
 
-Backbeat is an engine with a messaging system at its heart. The core
-engine can be extended for many use cases.
+Backbeat is an engine with a messaging system at its heart. It's part of Zenko, [Scality](http://www.scality.com/)’s Open Source Multi-Cloud Data Controller. Learn more about Zenko at [Zenko.io](http://www.zenko.io/)
+
+Backbeat is optimised for queuing metadata update and dispatching work to long running tasls in the background.
+The core engine can be extended for many use cases, which are called extentions as listed below.
 
 ## EXTENSIONS
 
