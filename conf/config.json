@@ -13,13 +13,18 @@
             "source": {
                 "s3": {
                     "host": "127.0.0.1",
-                    "port": 8000
+                    "port": 8000,
+                    "transport": "https"
                 },
-                "vault": {
-                    "host": "127.0.0.1",
-                    "port": 8500
+                "auth": {
+                    "type": "local",
+                    "user": "bart",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8500
+                    }
                 },
-                "logSource": "bucketd",
+                "logSource": "dmd",
                 "bucketd": {
                     "host": "127.0.0.1",
                     "port": 9000,
@@ -33,11 +38,16 @@
             "destination": {
                 "s3": {
                     "host": "127.0.0.2",
-                    "port": 9000
+                    "port": 9000,
+                    "transport": "https"
                 },
-                "vault": {
-                    "host": "127.0.0.2",
-                    "port": 9500
+                "auth": {
+                    "type": "local",
+                    "user": "backbeat",
+                    "vault": {
+                        "host": "127.0.0.2",
+                        "port": 9500
+                    }
                 },
                 "certFilePaths": {
                     "key": "ssl/key.pem",

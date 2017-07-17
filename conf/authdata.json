@@ -1,0 +1,17 @@
+{
+    "users": [{
+        "name": "bart",
+        "arn": "aws::iam:123456789012:root",
+        "keys": {
+            "access": "accessKey1",
+            "secret": "verySecretKey1"
+        }
+    }, {
+        "name": "backbeat",
+        "arn": "aws::iam:123456789012:user/backbeat",
+        "keys": {
+            "access": "accessKeyBackbeat",
+            "secret": "verySecretKeyBackbeat"
+        }
+    }]
+}

@@ -1,0 +1,124 @@
+{
+    "version": "1.0",
+    "metadata": {
+        "apiVersion": "2017-07-01",
+        "checksumFormat": "md5",
+        "endpointPrefix": "s3",
+        "globalEndpoint": "127.0.0.1",
+        "protocol": "rest-json",
+        "serviceAbbreviation": "Backbeat",
+        "serviceFullName": "Backbeat Internal Routes",
+        "signatureVersion": "s3",
+        "timestampFormat": "rfc822",
+        "uid": "backbeat-2017-07-01"
+    },
+    "operations": {
+        "PutData": {
+            "http": {
+                "method": "PUT",
+                "requestUri": "/_/backbeat/{Bucket}/{Key+}/data"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "ContentLength": {
+                        "location": "header",
+                        "locationName": "Content-Length",
+                        "type": "long"
+                    },
+                    "ContentMD5": {
+                        "location": "header",
+                        "locationName": "Content-MD5"
+                    },
+                    "Body": {
+                        "streaming": true,
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "Locations": {
+                        "type": "list",
+                        "member": {
+                            "type": "structure",
+                            "members": {
+                                "key": {
+                                    "type": "string"
+                                },
+                                "dataStoreName": {
+                                    "type": "string"
+                                },
+                                "size": {
+                                    "type": "long"
+                                },
+                                "start": {
+                                    "type": "long"
+                                }
+                            }
+                        }
+                    }
+                },
+                "payload": "Locations"
+            }
+        },
+        "PutMetadata": {
+            "http": {
+                "method": "PUT",
+                "requestUri": "/_/backbeat/{Bucket}/{Key+}/metadata"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "ContentLength": {
+                        "location": "header",
+                        "locationName": "Content-Length",
+                        "type": "long"
+                    },
+                    "ContentMD5": {
+                        "location": "header",
+                        "locationName": "Content-MD5"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
+            }
+        }
+    }
+}

@@ -4,6 +4,12 @@ const joi = require('joi');
 const { hostPortJoi, logJoi, zookeeperJoi } =
           require('../lib/config/configItems.joi.js');
 
+const authJoi = joi.object({
+    type: joi.alternatives().try('local', 'remote').required(),
+    user: joi.string(),
+    vault: hostPortJoi,
+});
+
 const joiSchema = {
     zookeeper: zookeeperJoi,
     kafka: hostPortJoi.default({
@@ -14,8 +20,11 @@ const joiSchema = {
     extensions: {
         replication: {
             source: {
-                s3: hostPortJoi.required(),
-                vault: hostPortJoi.required(),
+                s3: hostPortJoi.keys({
+                    transport: joi.alternatives().try('http', 'https')
+                        .default('https'),
+                }).required(),
+                auth: authJoi.required(),
                 logSource: joi.alternatives()
                     .try('bucketd', 'dmd').required(),
                 bucketd: hostPortJoi.keys({
@@ -26,8 +35,11 @@ const joiSchema = {
                 }),
             },
             destination: {
-                s3: hostPortJoi.required(),
-                vault: hostPortJoi.required(),
+                s3: hostPortJoi.keys({
+                    transport: joi.alternatives().try('http', 'https')
+                        .default('https'),
+                }).required(),
+                auth: authJoi.required(),
                 certFilePaths: joi.object({
                     key: joi.string().required(),
                     cert: joi.string().required(),
