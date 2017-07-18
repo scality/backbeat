@@ -113,6 +113,10 @@ class QueueEntry {
         return destBucketArn.split(':').slice(-1)[0];
     }
 
+    getOwnerCanonicalId() {
+        return this.objMd['owner-id'];
+    }
+
     getLogInfo() {
         return {
             bucket: this.getBucket(),
@@ -120,6 +124,15 @@ class QueueEntry {
             versionId: this.getVersionId(),
             isDeleteMarker: this.isDeleteMarker(),
         };
+    }
+
+    setOwner(ownerCanonicalId, ownerDisplayName) {
+        this.objMd['owner-id'] = ownerCanonicalId;
+        this.objMd['owner-display-name'] = ownerDisplayName;
+    }
+
+    setLocation(location) {
+        this.objMd.location = location;
     }
 
     _convertEntry(bucket, repStatus) {
@@ -141,10 +154,6 @@ class QueueEntry {
 
     toFailedEntry() {
         return this._convertEntry(this.getBucket(), 'FAILED');
-    }
-
-    setLocations(locations) {
-        this.objMd.locations = locations;
     }
 }
 

@@ -17,8 +17,8 @@
                     "transport": "https"
                 },
                 "auth": {
-                    "type": "local",
-                    "user": "bart",
+                    "type": "account",
+                    "account": "bart",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500
@@ -42,8 +42,8 @@
                     "transport": "https"
                 },
                 "auth": {
-                    "type": "local",
-                    "user": "backbeat",
+                    "type": "account",
+                    "account": "lisa",
                     "vault": {
                         "host": "127.0.0.2",
                         "port": 9500
