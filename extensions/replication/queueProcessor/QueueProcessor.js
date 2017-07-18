@@ -8,6 +8,7 @@ const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
+const Vaultclient = require('vaultclient');
 
 const authdata = require('../../../conf/authdata.json');
 
@@ -66,8 +67,31 @@ class _AccountAuthManager {
 }
 
 class _RoleAuthManager {
-    constructor() {
-        throw Error('Role-based authentication not yet implemented');
+    constructor(authConfig, log) {
+        this._log = log;
+        const { host, port } = authConfig.vault;
+        this._vaultclient = new Vaultclient(host, port);
+    }
+
+    getCredentialProvider() {
+        return this.credentialProvider;
+    }
+
+    lookupAccountAttributes(accountId, cb) {
+        this._vaultclient.getCanonicalIdsByAccountIds([accountId], {},
+            (err, res) => {
+                if (err) {
+                    return cb(err);
+                }
+                if (!res || !res.message || !res.message.body
+                    || res.message.body.length === 0) {
+                    return cb(errors.AccountNotFound);
+                }
+                return {
+                    canonicalID: res.message.body[0].canonicalID,
+                    displayName: res.message.body[0].name,
+                };
+            });
     }
 }
 
