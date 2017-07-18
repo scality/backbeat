@@ -15,6 +15,67 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const QueueEntry = require('../utils/QueueEntry');
 
+class _AccountAuthManager {
+    constructor(authConfig, log) {
+        assert.strictEqual(authConfig.type, 'account');
+
+        this.log = log;
+        const accountInfo = authdata.accounts.find(
+            account => account.name === authConfig.account);
+        if (accountInfo === undefined) {
+            throw Error(`No such account registered: ${authConfig.account}`);
+        }
+        if (accountInfo.arn === undefined) {
+            throw Error(`Configured account ${authConfig.account} has no ` +
+                        '"arn" property defined');
+        }
+        if (accountInfo.canonicalID === undefined) {
+            throw Error(`Configured account ${authConfig.account} has no ` +
+                        '"canonicalID" property defined');
+        }
+        if (accountInfo.displayName === undefined) {
+            throw Error(`Configured account ${authConfig.account} has no ` +
+                        '"displayName" property defined');
+        }
+        this.accountArn = accountInfo.arn;
+        this.canonicalID = accountInfo.canonicalID;
+        this.displayName = accountInfo.displayName;
+        this.credentialProvider = new AWS.CredentialProviderChain([
+            new AWS.Credentials(accountInfo.keys.access,
+                                accountInfo.keys.secret),
+        ]);
+    }
+
+    getCredentialProvider() {
+        return this.credentialProvider;
+    }
+
+    lookupAccountAttributes(accountId, cb) {
+        if (!this.accountArn.startsWith(accountId)) {
+            this.log.error('Target account for replication must match ' +
+                           'configured destination account ARN',
+                           { targetAccount: accountId,
+                             localAccountArn: this.accountArn });
+            return process.nextTick(() => cb(errors.AccountNotFound));
+        }
+        // return local account's attributes
+        return process.nextTick(
+            () => cb(null, { canonicalID: this.canonicalID,
+                             displayName: this.displayName }));
+    }
+}
+
+class _RoleAuthManager {
+    constructor() {
+        throw Error('Role-based authentication not yet implemented');
+    }
+}
+
+
+function _extractAccountIdFromRole(role) {
+    return role.split(':').slice(0, 5).join(':');
+}
+
 class QueueProcessor {
 
     constructor(zkConfig, sourceConfig, destConfig, repConfig, logConfig) {
@@ -29,15 +90,14 @@ class QueueProcessor {
                                    dump: logConfig.dumpLevel });
         this.log = this.logger.newRequestLogger();
 
-        const s3sourceCredProvider =
-                  this._setupCredentialProvider(sourceConfig.auth);
-        const s3destCredProvider =
-                  this._setupCredentialProvider(destConfig.auth);
+        this.s3sourceAuthManager = this._createAuthManager(sourceConfig.auth);
+        this.s3destAuthManager = this._createAuthManager(destConfig.auth);
 
         this.S3source = new AWS.S3({
             endpoint: `${sourceConfig.s3.transport}://` +
                 `${sourceConfig.s3.host}:${sourceConfig.s3.port}`,
-            credentialProvider: s3sourceCredProvider,
+            credentialProvider:
+            this.s3sourceAuthManager.getCredentialProvider(),
             sslEnabled: true,
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
@@ -45,36 +105,28 @@ class QueueProcessor {
         this.backbeatSource = new BackbeatClient({
             endpoint: `${sourceConfig.s3.transport}://` +
                 `${sourceConfig.s3.host}:${sourceConfig.s3.port}`,
-            credentialProvider: s3sourceCredProvider,
+            credentialProvider:
+            this.s3sourceAuthManager.getCredentialProvider(),
             sslEnabled: true,
         });
 
         this.backbeatDest = new BackbeatClient({
             endpoint: `${destConfig.s3.transport}://` +
                 `${destConfig.s3.host}:${destConfig.s3.port}`,
-            credentialProvider: s3destCredProvider,
+            credentialProvider:
+            this.s3destAuthManager.getCredentialProvider(),
             sslEnabled: true,
         });
     }
 
-    _setupCredentialProvider(authConfig) {
-        if (authConfig.type === 'remote') {
-            throw Error('Vault authentication not yet implemented');
-        } else {
-            assert.strictEqual(authConfig.type, 'local');
-            const userInfo = authdata.users.find(
-                user => user.name === authConfig.user);
-            if (userInfo === undefined) {
-                throw Error(`No such user registered: ${authConfig.user}`);
-            }
-            return new AWS.CredentialProviderChain([
-                new AWS.Credentials(userInfo.keys.access,
-                                    userInfo.keys.secret),
-            ]);
+    _createAuthManager(authConfig) {
+        if (authConfig.type === 'account') {
+            return new _AccountAuthManager(authConfig, this.log);
         }
+        return new _RoleAuthManager(authConfig, this.log);
     }
 
-    _getBucketReplicationRole(entry, cb) {
+    _getBucketReplicationRoles(entry, cb) {
         this.log.debug('getting bucket replication',
                        { entry: entry.getLogInfo() });
         this.S3source.getBucketReplication(
@@ -88,7 +140,34 @@ class QueueProcessor {
                                      httpStatus: err.statusCode });
                     return cb(err);
                 }
-                return cb(null, data.ReplicationConfiguration.Role);
+                const roles = data.ReplicationConfiguration.Role.split(',');
+                if (roles.length !== 2) {
+                    this.log.error('expecting two roles separated by a ' +
+                                   'comma in replication configuration',
+                                   { entry: entry.getLogInfo(),
+                                     origin: this.sourceConfig.s3 });
+                    return cb(errors.InternalError);
+                }
+                return cb(null, roles[0], roles[1]);
+            });
+    }
+
+    _processRoles(sourceEntry, sourceRole, destEntry, targetRole, cb) {
+        this.log.debug('processing role for destination',
+                       { entry: destEntry.getLogInfo(),
+                         role: targetRole });
+        const targetAccountId = _extractAccountIdFromRole(targetRole);
+        this.s3destAuthManager.lookupAccountAttributes(
+            targetAccountId, (err, accountAttr) => {
+                if (err) {
+                    return cb(err);
+                }
+                this.log.debug('setting owner info in target metadata',
+                               { entry: destEntry.getLogInfo(),
+                                 accountAttr });
+                destEntry.setOwner(accountAttr.canonicalID,
+                                   accountAttr.displayName);
+                return cb(null, accountAttr);
             });
     }
 
@@ -120,6 +199,7 @@ class QueueProcessor {
         this.backbeatDest.putData({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
+            CanonicalID: entry.getOwnerCanonicalId(),
             ContentLength: entry.getContentLength(),
             ContentMD5: entry.getContentMD5(),
             Body: sourceStream,
@@ -131,7 +211,7 @@ class QueueProcessor {
                                  error: err });
                 return cbOnce(err);
             }
-            return cbOnce(null, data.Locations);
+            return cbOnce(null, data.Location);
         });
     }
 
@@ -172,13 +252,26 @@ class QueueProcessor {
         this.log.debug('processing entry',
                        { entry: sourceEntry.getLogInfo() });
 
-        const _doneProcessingEntry = err => {
+        const _doneProcessingCompletedEntry = err => {
             if (err) {
-                this.log.error('an error occurred while processing entry',
+                this.log.error('an error occurred while writing ' +
+                               'replication status to COMPLETED',
                                { entry: sourceEntry.getLogInfo() });
                 return done(err);
             }
             this.log.info('entry replicated successfully',
+                          { entry: sourceEntry.getLogInfo() });
+            return done(null);
+        };
+
+        const _doneProcessingFailedEntry = err => {
+            if (err) {
+                this.log.error('an error occurred while writing ' +
+                               'replication status to FAILED',
+                               { entry: sourceEntry.getLogInfo() });
+                return done(err);
+            }
+            this.log.info('replication status set to FAILED',
                           { entry: sourceEntry.getLogInfo() });
             return done(null);
         };
@@ -189,24 +282,28 @@ class QueueProcessor {
                               { entry: sourceEntry.getLogInfo(),
                                 error: err });
                 this._putMetaData('source', sourceEntry.toFailedEntry(),
-                                  _doneProcessingEntry);
+                                  _doneProcessingFailedEntry);
                 // TODO: queue entry back in kafka for later retry
             } else {
                 this.log.debug('replication succeeded for object, updating ' +
                                'source replication status to COMPLETED',
                                { entry: sourceEntry.getLogInfo() });
                 this._putMetaData('source', sourceEntry.toCompletedEntry(),
-                                  _doneProcessingEntry);
+                                  _doneProcessingCompletedEntry);
             }
         };
 
         if (sourceEntry.isDeleteMarker()) {
             return async.waterfall([
                 next => {
-                    this._getBucketReplicationRole(sourceEntry, next);
+                    this._getBucketReplicationRoles(sourceEntry, next);
+                },
+                (sourceRole, targetRole, next) => {
+                    this._processRoles(sourceEntry, sourceRole,
+                                       destEntry, targetRole, next);
                 },
                 // put metadata in target bucket
-                (role, next) => {
+                (accountAttr, next) => {
                     // TODO check that bucket role matches role in metadata
                     this._putMetaData('target', destEntry, next);
                 },
@@ -215,9 +312,13 @@ class QueueProcessor {
         return async.waterfall([
             // get data stream from source bucket
             next => {
-                this._getBucketReplicationRole(sourceEntry, next);
+                this._getBucketReplicationRoles(sourceEntry, next);
             },
-            (role, next) => {
+            (sourceRole, targetRole, next) => {
+                this._processRoles(sourceEntry, sourceRole,
+                                   destEntry, targetRole, next);
+            },
+            (accountAttr, next) => {
                 // TODO check that bucket role matches role in metadata
                 this._getData(sourceEntry, next);
             },
@@ -227,8 +328,8 @@ class QueueProcessor {
             },
             // update location, replication status and put metadata in
             // target bucket
-            (locations, next) => {
-                destEntry.setLocations(locations);
+            (location, next) => {
+                destEntry.setLocation(location);
                 this._putMetaData('target', destEntry, next);
             },
         ], _writeReplicationStatus);

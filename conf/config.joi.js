@@ -5,8 +5,8 @@ const { hostPortJoi, logJoi, zookeeperJoi } =
           require('../lib/config/configItems.joi.js');
 
 const authJoi = joi.object({
-    type: joi.alternatives().try('local', 'remote').required(),
-    user: joi.string(),
+    type: joi.alternatives().try('account', 'role').required(),
+    account: joi.string(),
     vault: hostPortJoi,
 });
 
