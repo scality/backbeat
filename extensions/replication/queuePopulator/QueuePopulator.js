@@ -20,23 +20,28 @@ class QueuePopulator {
      *
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
-     * @param {String} zkConfig.host - zookeeper host
-     * @param {Number} zkConfig.port - zookeeper port
+     * @param {string} zkConfig.endpoint - zookeeper endpoint string
+     *   as "host:port[/chroot]"
+     * @param {Object} sourceConfig - source configuration
+     * @param {String} sourceConfig.logSource - type of source
+     *   log: "bucketd" (raft log) or "dmd" (bucketfile)
+     * @param {Object} [sourceConfig.bucketd] - bucketd source
+     *   configuration (mandatory if logSource is "bucket")
+     * @param {Object} [sourceConfig.dmd] - dmd source
+     *   configuration (mandatory if logSource is "dmd")
      * @param {Object} repConfig - replication configuration object
      * @param {String} repConfig.topic - replication topic name
-     * @param {Object} repConfig.source - source configuration
-     * @param {String} repConfig.source.logSource - type of source
-     *   log: "bucketd" (raft log) or "dmd" (bucketfile)
-     * @param {Object} [repConfig.source.bucketd] - bucketd source
-     *   configuration (mandatory if logSource is "bucket")
-     * @param {Object} [repConfig.source.dmd] - dmd source
-     *   configuration (mandatory if logSource is "dmd")
+     * @param {String} repConfig.queuePopulator - config object
+     *   specific to queue populator
+     * @param {String} repConfig.queuePopulator.zookeeperPath -
+     *   sub-path to use for storing populator state in zookeeper
      * @param {Logger} logConfig - logging configuration object
      * @param {String} logConfig.logLevel - logging level
      * @param {Logger} logConfig.dumpLevel - dump level
      */
-    constructor(zkConfig, repConfig, logConfig) {
+    constructor(zkConfig, sourceConfig, repConfig, logConfig) {
         this.zkConfig = zkConfig;
+        this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
         this.logConfig = logConfig;
 
@@ -53,24 +58,24 @@ class QueuePopulator {
      * @return {undefined}
      */
     open(cb) {
-        const sourceConfig = this.repConfig.source;
         let logIdentifier;
 
         this.logState = {};
         this.state = {};
 
-        switch (sourceConfig.logSource) {
+        switch (this.sourceConfig.logSource) {
         case 'bucketd':
-            this.logState.raftSession = sourceConfig.bucketd.raftSession;
+            this.logState.raftSession =
+                this.sourceConfig.bucketd.raftSession;
             logIdentifier = `raft_${this.logState.raftSession}`;
             break;
         case 'dmd':
-            this.logState.logName = sourceConfig.dmd.logName;
+            this.logState.logName = this.sourceConfig.dmd.logName;
             logIdentifier = `bucketFile_${this.logState.logName}`;
             break;
         default:
             this.log.error("bad 'logSource' config value: expect 'bucketd'" +
-                           `or 'dmd', got '${sourceConfig.logSource}'`);
+                           `or 'dmd', got '${this.sourceConfig.logSource}'`);
             return process.nextTick(() => cb(errors.InternalError));
         }
         this.pathToLogOffset = `/logState/${logIdentifier}/logOffset`;
@@ -94,7 +99,7 @@ class QueuePopulator {
     }
 
     _setupLogSource(done) {
-        switch (this.repConfig.source.logSource) {
+        switch (this.sourceConfig.logSource) {
         case 'bucketd':
             return this._openRaftLog(done);
         case 'dmd':
@@ -106,7 +111,7 @@ class QueuePopulator {
     }
 
     _openRaftLog(done) {
-        const bucketdConfig = this.repConfig.source.bucketd;
+        const bucketdConfig = this.sourceConfig.bucketd;
         this.log.info('initializing raft log handle',
                       { method: 'QueuePopulator._openRaftLog',
                         bucketdConfig });
@@ -119,7 +124,7 @@ class QueuePopulator {
     }
 
     _openBucketFileLog(done) {
-        const dmdConfig = this.repConfig.source.dmd;
+        const dmdConfig = this.sourceConfig.dmd;
         this.log.info('initializing bucketfile log handle',
                       { method: 'QueuePopulator._openBucketFileLog',
                         dmdConfig });
@@ -158,11 +163,10 @@ class QueuePopulator {
     }
 
     _setupZookeeper(done) {
-        const { host, port, namespace } = this.zkConfig;
-        const populatorNamespace = namespace +
-                  this.repConfig.queuePopulator.zookeeperNamespace;
-        const zookeeperUrl = `${host}:${port}${populatorNamespace}`;
-        this.log.info('opening zookeeper connection for state management',
+        const populatorZkPath = this.repConfig.queuePopulator.zookeeperPath;
+        const zookeeperUrl = `${this.zkConfig.endpoint}${populatorZkPath}`;
+        this.log.info('opening zookeeper connection for persisting ' +
+                      'populator state',
                       { zookeeperUrl });
         const zkClient = zookeeper.createClient(zookeeperUrl);
         zkClient.connect();

@@ -6,6 +6,7 @@ const Logger = require('werelogs').Logger;
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
 const repConfig = config.extensions.replication;
+const sourceConfig = config.extensions.replication.source;
 const QueuePopulator = require('./QueuePopulator');
 
 const logger = new Logger('Backbeat:Replication:task',
@@ -40,7 +41,8 @@ function queueBatch(queuePopulator, taskState) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, repConfig, config.log);
+const queuePopulator = new QueuePopulator(zkConfig, sourceConfig,
+                                          repConfig, config.log);
 
 async.waterfall([
     done => {

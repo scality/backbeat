@@ -47,13 +47,13 @@ const joiSchema = {
                 }).required(),
             },
             topic: joi.string().required(),
-            groupId: joi.string().required(),
             queuePopulator: {
                 cronRule: joi.string().required(),
                 batchMaxRead: joi.number().default(10000),
-                zookeeperNamespace: joi.string().required(),
+                zookeeperPath: joi.string().required(),
             },
             queueProcessor: {
+                groupId: joi.string().required(),
             },
         },
     },

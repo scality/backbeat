@@ -57,6 +57,7 @@ describe('queuePopulator', () => {
             },
             (data, next) => {
                 queuePopulator = new QueuePopulator(testConfig.zookeeper,
+                                                    testConfig.source,
                                                     testConfig.replication,
                                                     testConfig.log);
                 queuePopulator.open(next);
