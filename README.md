@@ -11,19 +11,19 @@ It's part of Zenko, [Scality](http://www.scality.com/)’s
 Open Source Multi-Cloud Data Controller.
 Learn more about Zenko at [Zenko.io](http://www.zenko.io/)
 
-Backbeat is optimised for queuing metadata update and dispatching work
-to long running tasls in the background.
+Backbeat is optimized for queuing metadata updates and dispatching work
+to long-running tasks in the background.
 The core engine can be extended for many use cases,
-which are called extentions as listed below.
+which are called extensions, as listed below.
 
 ## EXTENSIONS
 
 ### Asynchronous Replication
 
-    This feature replicates objects from one S3 bucket to
-    another S3 bucket in a different geological region. The extension uses
-    Metadata journal as the source of truth and replicates object updates in a
-    FIFO order.
+This feature replicates objects from one S3 bucket to another S3
+bucket in a different geographical region. The extension uses the
+local Metadata journal as the source of truth and replicates object
+updates in a FIFO order.
 
 ## DESIGN
 
