@@ -108,6 +108,10 @@ class QueueEntry {
         return this.objMd.replicationInfo.content;
     }
 
+    getReplicationRoles() {
+        return this.objMd.replicationInfo.role;
+    }
+
     getReplicationDestBucket() {
         const destBucketArn = this.objMd.replicationInfo.destination;
         return destBucketArn.split(':').slice(-1)[0];

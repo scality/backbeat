@@ -8,12 +8,14 @@ const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
+const Vaultclient = require('vaultclient');
 
 const authdata = require('../../../conf/authdata.json');
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const QueueEntry = require('../utils/QueueEntry');
+const CredentialsManager = require('../../../credentials/CredentialsManager');
 
 class _AccountAuthManager {
     constructor(authConfig, log) {
@@ -66,8 +68,33 @@ class _AccountAuthManager {
 }
 
 class _RoleAuthManager {
-    constructor() {
-        throw Error('Role-based authentication not yet implemented');
+    constructor(authConfig, roleArn, log) {
+        this._log = log;
+        const { host, port } = authConfig.vault;
+        this._vaultclient = new Vaultclient(host, port);
+        this.credentialProvider = new CredentialsManager(host, port,
+            'replication', roleArn);
+    }
+
+    getCredentialProvider() {
+        return this.credentialProvider;
+    }
+
+    lookupAccountAttributes(accountId, cb) {
+        this._vaultclient.getCanonicalIdsByAccountIds([accountId], {},
+            (err, res) => {
+                if (err) {
+                    return cb(err);
+                }
+                if (!res || !res.message || !res.message.body
+                    || res.message.body.length === 0) {
+                    return cb(errors.AccountNotFound);
+                }
+                return {
+                    canonicalID: res.message.body[0].canonicalID,
+                    displayName: res.message.body[0].name,
+                };
+            });
     }
 }
 
@@ -90,46 +117,33 @@ class QueueProcessor {
                                    dump: logConfig.dumpLevel });
         this.log = this.logger.newRequestLogger();
 
-        this.s3sourceAuthManager = this._createAuthManager(sourceConfig.auth);
-        this.s3destAuthManager = this._createAuthManager(destConfig.auth);
-
-        this.S3source = new AWS.S3({
-            endpoint: `${sourceConfig.s3.transport}://` +
-                `${sourceConfig.s3.host}:${sourceConfig.s3.port}`,
-            credentialProvider:
-            this.s3sourceAuthManager.getCredentialProvider(),
-            sslEnabled: true,
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-        });
-        this.backbeatSource = new BackbeatClient({
-            endpoint: `${sourceConfig.s3.transport}://` +
-                `${sourceConfig.s3.host}:${sourceConfig.s3.port}`,
-            credentialProvider:
-            this.s3sourceAuthManager.getCredentialProvider(),
-            sslEnabled: true,
-        });
-
-        this.backbeatDest = new BackbeatClient({
-            endpoint: `${destConfig.s3.transport}://` +
-                `${destConfig.s3.host}:${destConfig.s3.port}`,
-            credentialProvider:
-            this.s3destAuthManager.getCredentialProvider(),
-            sslEnabled: true,
-        });
+        this.s3sourceAuthManager = null;
+        this.s3destAuthManager = null;
+        this.S3source = null;
+        this.backbeatSource = null;
+        this.backbeatDest = null;
     }
 
-    _createAuthManager(authConfig) {
+    _createAuthManager(authConfig, roleArn) {
         if (authConfig.type === 'account') {
             return new _AccountAuthManager(authConfig, this.log);
         }
-        return new _RoleAuthManager(authConfig, this.log);
+        return new _RoleAuthManager(authConfig, roleArn, this.log);
     }
 
     _getBucketReplicationRoles(entry, cb) {
         this.log.debug('getting bucket replication',
                        { entry: entry.getLogInfo() });
-        this.S3source.getBucketReplication(
+        const entryRoles = entry.getReplicationRoles();
+        if (entryRoles.length !== 2) {
+            this.log.error('expecting two roles separated by a ' +
+                           'comma in replication configuration',
+                           { entry: entry.getLogInfo(),
+                             origin: this.sourceConfig.s3 });
+            return cb(errors.InternalError);
+        }
+        this._setupClients(entryRoles[0], entryRoles[1]);
+        return this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() }, (err, data) => {
                 if (err) {
                     this.log.error('error response getting replication ' +
@@ -240,6 +254,37 @@ class QueueProcessor {
         });
     }
 
+    _setupClients(sourceRole, targetRole) {
+        this.s3sourceAuthManager =
+            this._createAuthManager(this.sourceConfig.auth, sourceRole);
+        this.s3destAuthManager =
+            this._createAuthManager(this.destConfig.auth, targetRole);
+        this.S3source = new AWS.S3({
+            endpoint: `${this.sourceConfig.s3.transport}://` +
+                `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
+            credentialProvider:
+            this.s3sourceAuthManager.getCredentialProvider(),
+            sslEnabled: true,
+            s3ForcePathStyle: true,
+            signatureVersion: 'v4',
+        });
+        this.backbeatSource = new BackbeatClient({
+            endpoint: `${this.sourceConfig.s3.transport}://` +
+                `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
+            credentialProvider:
+            this.s3sourceAuthManager.getCredentialProvider(),
+            sslEnabled: true,
+        });
+
+        this.backbeatDest = new BackbeatClient({
+            endpoint: `${this.destConfig.s3.transport}://` +
+                `${this.destConfig.s3.host}:${this.destConfig.s3.port}`,
+            credentialProvider:
+            this.s3destAuthManager.getCredentialProvider(),
+            sslEnabled: true,
+        });
+    }
+
     _processEntry(kafkaEntry, done) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         const destEntry = sourceEntry.toReplicaEntry();
@@ -261,7 +306,7 @@ class QueueProcessor {
             }
             this.log.info('entry replicated successfully',
                           { entry: sourceEntry.getLogInfo() });
-            return done(null);
+            return done();
         };
 
         const _doneProcessingFailedEntry = err => {
@@ -273,7 +318,7 @@ class QueueProcessor {
             }
             this.log.info('replication status set to FAILED',
                           { entry: sourceEntry.getLogInfo() });
-            return done(null);
+            return done();
         };
 
         const _writeReplicationStatus = err => {
