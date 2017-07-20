@@ -24,6 +24,7 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "arsenal": "scality/Arsenal",
+    "aws-sdk": "2.28.0",
     "async": "^2.3.0",
     "bucketclient": "scality/bucketclient",
     "eslint": "^2.4.0",
@@ -37,7 +38,6 @@
     "werelogs": "scality/werelogs"
   },
   "devDependencies": {
-    "mocha": "^3.3.0",
-    "aws-sdk": "2.28.0"
+    "mocha": "^3.3.0"
   }
 }
