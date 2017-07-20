@@ -105,6 +105,31 @@ function _extractAccountIdFromRole(role) {
 
 class QueueProcessor {
 
+    /**
+     * Create a queue processor object to activate Cross-Region
+     * Replication from a kafka topic dedicated to store replication
+     * entries to a target S3 endpoint.
+     *
+     * @constructor
+     * @param {Object} zkConfig - zookeeper configuration object
+     * @param {string} zkConfig.endpoint - zookeeper endpoint string
+     *   as "host:port[/chroot]"
+     * @param {Object} sourceConfig - source S3 configuration
+     * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
+     * @param {Object} sourceConfig.auth - authentication info on source
+     * @param {Object} destConfig - target S3 configuration
+     * @param {Object} destConfig.s3 - s3 endpoint configuration object
+     * @param {Object} destConfig.auth - authentication info on target
+     * @param {Object} repConfig - replication configuration object
+     * @param {String} repConfig.topic - replication topic name
+     * @param {String} repConfig.queueProcessor - config object
+     *   specific to queue processor
+     * @param {String} repConfig.queueProcessor.groupId - kafka
+     *   consumer group ID
+     * @param {Logger} logConfig - logging configuration object
+     * @param {String} logConfig.logLevel - logging level
+     * @param {Logger} logConfig.dumpLevel - dump level
+     */
     constructor(zkConfig, sourceConfig, destConfig, repConfig, logConfig) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
@@ -385,7 +410,7 @@ class QueueProcessor {
             zookeeper: this.zkConfig,
             log: this.logConfig,
             topic: this.repConfig.topic,
-            groupId: this.repConfig.groupId,
+            groupId: this.repConfig.queueProcessor.groupId,
             concurrency: 1, // replication has to process entries in
                             // order, so one at a time
             queueProcessor: this._processEntry.bind(this),
