@@ -8,7 +8,7 @@ const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
-const Vaultclient = require('vaultclient');
+const VaultClient = require('vaultclient').Client;
 
 const authdata = require('../../../conf/authdata.json');
 
@@ -71,7 +71,7 @@ class _RoleAuthManager {
     constructor(authConfig, roleArn, log) {
         this._log = log;
         const { host, port } = authConfig.vault;
-        this._vaultclient = new Vaultclient(host, port);
+        this._vaultclient = new VaultClient(host, port);
         this.credentialProvider = new CredentialsManager(host, port,
             'replication', roleArn);
     }
@@ -90,17 +90,17 @@ class _RoleAuthManager {
                     || res.message.body.length === 0) {
                     return cb(errors.AccountNotFound);
                 }
-                return {
-                    canonicalID: res.message.body[0].canonicalID,
+                return cb(null, {
+                    canonicalID: res.message.body[0].canonicalId,
                     displayName: res.message.body[0].name,
-                };
+                });
             });
     }
 }
 
 
 function _extractAccountIdFromRole(role) {
-    return role.split(':').slice(0, 5).join(':');
+    return role.split(':')[4];
 }
 
 class QueueProcessor {
@@ -159,8 +159,12 @@ class QueueProcessor {
     _getBucketReplicationRoles(entry, cb) {
         this.log.debug('getting bucket replication',
                        { entry: entry.getLogInfo() });
-        const entryRoles = entry.getReplicationRoles();
-        if (entryRoles.length !== 2) {
+        const entryRolesString = entry.getReplicationRoles();
+        let entryRoles;
+        if (entryRolesString !== undefined) {
+            entryRoles = entryRolesString.split(',');
+        }
+        if (entryRoles === undefined || entryRoles.length !== 2) {
             this.log.error('expecting two roles separated by a ' +
                            'comma in replication configuration',
                            { entry: entry.getLogInfo(),
@@ -287,7 +291,7 @@ class QueueProcessor {
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
-            credentialProvider:
+            credentials:
             this.s3sourceAuthManager.getCredentialProvider(),
             sslEnabled: true,
             s3ForcePathStyle: true,
@@ -296,7 +300,7 @@ class QueueProcessor {
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
-            credentialProvider:
+            credentials:
             this.s3sourceAuthManager.getCredentialProvider(),
             sslEnabled: true,
         });
@@ -304,7 +308,7 @@ class QueueProcessor {
         this.backbeatDest = new BackbeatClient({
             endpoint: `${this.destConfig.s3.transport}://` +
                 `${this.destConfig.s3.host}:${this.destConfig.s3.port}`,
-            credentialProvider:
+            credentials:
             this.s3destAuthManager.getCredentialProvider(),
             sslEnabled: true,
         });
@@ -351,16 +355,22 @@ class QueueProcessor {
                 this.log.warn('replication failed for object',
                               { entry: sourceEntry.getLogInfo(),
                                 error: err });
-                this._putMetaData('source', sourceEntry.toFailedEntry(),
-                                  _doneProcessingFailedEntry);
+                if (this.backbeatSource !== null) {
+                    return this._putMetaData('source',
+                                             sourceEntry.toFailedEntry(),
+                                             _doneProcessingFailedEntry);
+                }
+                this.log.info('replication status update skipped',
+                              { entry: sourceEntry.getLogInfo() });
+                return done();
                 // TODO: queue entry back in kafka for later retry
-            } else {
-                this.log.debug('replication succeeded for object, updating ' +
-                               'source replication status to COMPLETED',
-                               { entry: sourceEntry.getLogInfo() });
-                this._putMetaData('source', sourceEntry.toCompletedEntry(),
-                                  _doneProcessingCompletedEntry);
             }
+            this.log.debug('replication succeeded for object, updating ' +
+                           'source replication status to COMPLETED',
+                           { entry: sourceEntry.getLogInfo() });
+            return this._putMetaData('source',
+                                     sourceEntry.toCompletedEntry(),
+                                     _doneProcessingCompletedEntry);
         };
 
         if (sourceEntry.isDeleteMarker()) {
