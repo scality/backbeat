@@ -78,6 +78,7 @@ class QueuePopulator {
                            `or 'dmd', got '${this.sourceConfig.logSource}'`);
             return process.nextTick(() => cb(errors.InternalError));
         }
+        this.pathToLogState = `/logState/${logIdentifier}`;
         this.pathToLogOffset = `/logState/${logIdentifier}/logOffset`;
 
         return async.parallel([
@@ -215,16 +216,28 @@ class QueuePopulator {
                           error: err, errorStack: err.stack });
                     return done(err);
                 }
-                return zkClient.mkdirp(pathToLogOffset, err => {
+                return zkClient.mkdirp(this.pathToLogState, err => {
                     if (err) {
                         this.log.error(
                             'Could not pre-create path in zookeeper',
                             { method: 'QueuePopulator._readLogOffset',
-                              zkPath: pathToLogOffset,
+                              zkPath: this.pathToLogState,
                               error: err, errorStack: err.stack });
                         return done(err);
                     }
-                    return done(null, 1);
+                    return zkClient.create(
+                        pathToLogOffset, new Buffer('1'),
+                        err => {
+                            if (err) {
+                                this.log.error(
+                                    'Could not pre-create path in zookeeper',
+                                    { method: 'QueuePopulator._readLogOffset',
+                                      zkPath: pathToLogOffset,
+                                      error: err, errorStack: err.stack });
+                                return done(err);
+                            }
+                            return done(null, 1);
+                        });
                 });
             }
             if (data) {
