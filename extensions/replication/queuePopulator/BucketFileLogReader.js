@@ -1,0 +1,46 @@
+const arsenal = require('arsenal');
+const MetadataFileClient = arsenal.storage.metadata.MetadataFileClient;
+
+const LogReader = require('./LogReader');
+
+class BucketFileLogReader extends LogReader {
+    constructor(params) {
+        const { zkClient, kafkaProducer, dmdConfig, logConfig, logger } =
+            params;
+        super({ zkClient, kafkaProducer, logConsumer: null,
+                logId: `bucketFile_${dmdConfig.logName}`, logger });
+
+        this._dmdConfig = dmdConfig;
+        this._log = logger;
+        this._log.info('initializing bucketfile log reader', {
+            method: 'BucketFileLogReader.constructor',
+            dmdConfig,
+        });
+
+        this._mdClient = new MetadataFileClient({
+            host: dmdConfig.host,
+            port: dmdConfig.port,
+            log: logConfig,
+        });
+    }
+
+    setup(done) {
+        const { logName } = this._dmdConfig;
+        this._mdClient.openRecordLog({ logName }, err => {
+            if (err) {
+                this._log.error('error opening record log', {
+                    method: 'BucketFileLogReader.constructor',
+                    dmdConfig: this.dmdConfig,
+                });
+                return done(err);
+            }
+            return super.setup(done);
+        });
+    }
+
+    getLogInfo() {
+        return { logName: this._dmdConfig.logName };
+    }
+}
+
+module.exports = BucketFileLogReader;

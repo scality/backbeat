@@ -1,8 +1,6 @@
 {
     "zookeeper": {
-        "host": "127.0.0.1",
-        "port": 2181,
-        "namespace": ""
+        "endpoint": "127.0.0.1:2181"
     },
     "kafka": {
         "host": "127.0.0.1",
@@ -20,7 +18,8 @@
             "logSource": "dmd",
             "dmd": {
                 "host": "127.0.0.1",
-                "port": 9990
+                "port": 9990,
+                "logName": "s3-recordlog"
             }
         },
         "topic": "backbeat-test-replication",
@@ -28,7 +27,7 @@
         "queuePopulator": {
             "cronRule": "*/5 * * * * *",
             "batchMaxRead": 10000,
-            "zookeeperNamespace": "/backbeat/test/replication-populator"
+            "zookeeperPath": "/backbeat/test/replication-populator"
         }
     },
     "log": {
