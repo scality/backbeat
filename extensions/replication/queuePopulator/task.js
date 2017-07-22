@@ -27,8 +27,10 @@ function queueBatch(queuePopulator, taskState) {
         { maxRead: repConfig.queuePopulator.batchMaxRead },
         (err, counters) => {
             if (err) {
-                log.error('an error occurred during replication',
-                          { error: err, errorStack: err.stack });
+                if (!err.ServiceUnavailable) {
+                    log.error('an error occurred during replication',
+                              { error: err, errorStack: err.stack });
+                }
             } else {
                 const logFunc = (counters.readRecords > 0 ?
                                  log.info : log.debug)
@@ -63,4 +65,11 @@ async.waterfall([
                   { error: err });
         process.exit(1);
     }
+});
+
+process.on('SIGTERM', () => {
+    log.info('received SIGTERM, exiting');
+    queuePopulator.close(() => {
+        process.exit(0);
+    });
 });
