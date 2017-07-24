@@ -135,6 +135,8 @@ class QueuePopulator {
             }
             return this._openRaftLog(items[0]);
         });
+        this.log.info('waiting to be provisioned a raft ID',
+                      { zkEndpoint });
     }
 
     _openRaftLog(raftId) {
