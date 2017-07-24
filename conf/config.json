@@ -25,8 +25,7 @@
                 "logSource": "dmd",
                 "bucketd": {
                     "host": "127.0.0.1",
-                    "port": 9000,
-                    "raftSession": 1
+                    "port": 9000
                 },
                 "dmd": {
                     "host": "127.0.0.1",
