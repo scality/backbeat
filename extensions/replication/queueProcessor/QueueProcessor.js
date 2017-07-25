@@ -3,6 +3,7 @@
 const async = require('async');
 const assert = require('assert');
 const AWS = require('aws-sdk');
+const http = require('http');
 
 const Logger = require('werelogs').Logger;
 
@@ -147,6 +148,10 @@ class QueueProcessor {
         this.S3source = null;
         this.backbeatSource = null;
         this.backbeatDest = null;
+
+        // TODO: for SSL support, create HTTPS agents instead
+        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        this.destHTTPAgent = new http.Agent({ keepAlive: true });
     }
 
     _createAuthManager(authConfig, roleArn) {
@@ -296,6 +301,7 @@ class QueueProcessor {
             sslEnabled: true,
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
+            httpOptions: { agent: this.sourceHTTPAgent },
         });
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.s3.transport}://` +
@@ -303,6 +309,7 @@ class QueueProcessor {
             credentials:
             this.s3sourceAuthManager.getCredentialProvider(),
             sslEnabled: true,
+            httpOptions: { agent: this.sourceHTTPAgent },
         });
 
         this.backbeatDest = new BackbeatClient({
@@ -311,6 +318,7 @@ class QueueProcessor {
             credentials:
             this.s3destAuthManager.getCredentialProvider(),
             sslEnabled: true,
+            httpOptions: { agent: this.destHTTPAgent },
         });
     }
 
