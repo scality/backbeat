@@ -140,7 +140,6 @@ class QueueProcessor {
         this.logger = new Logger('Backbeat:Replication:QueueProcessor',
                                  { level: logConfig.logLevel,
                                    dump: logConfig.dumpLevel });
-        this.log = this.logger.newRequestLogger();
 
         this.s3sourceAuthManager = null;
         this.s3destAuthManager = null;
@@ -153,97 +152,97 @@ class QueueProcessor {
         this.destHTTPAgent = new http.Agent({ keepAlive: true });
     }
 
-    _createAuthManager(authConfig, roleArn) {
+    _createAuthManager(authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new _AccountAuthManager(authConfig, this.log);
+            return new _AccountAuthManager(authConfig, log);
         }
-        return new _RoleAuthManager(authConfig, roleArn, this.log);
+        return new _RoleAuthManager(authConfig, roleArn, log);
     }
 
-    _getBucketReplicationRoles(entry, cb) {
-        this.log.debug('getting bucket replication',
-                       { entry: entry.getLogInfo() });
+    _getBucketReplicationRoles(entry, log, cb) {
+        log.debug('getting bucket replication',
+                  { entry: entry.getLogInfo() });
         const entryRolesString = entry.getReplicationRoles();
         let entryRoles;
         if (entryRolesString !== undefined) {
             entryRoles = entryRolesString.split(',');
         }
         if (entryRoles === undefined || entryRoles.length !== 2) {
-            this.log.error('expecting two roles separated by a ' +
-                           'comma in replication configuration',
-                           { entry: entry.getLogInfo(),
-                             origin: this.sourceConfig.s3 });
+            log.error('expecting two roles separated by a ' +
+                      'comma in replication configuration',
+                      { entry: entry.getLogInfo(),
+                        origin: this.sourceConfig.s3 });
             return cb(errors.InternalError);
         }
-        this._setupClients(entryRoles[0], entryRoles[1]);
+        this._setupClients(entryRoles[0], entryRoles[1], log);
         return this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() }, (err, data) => {
                 if (err) {
-                    this.log.error('error getting replication ' +
-                                   'configuration from S3',
-                                   { entry: entry.getLogInfo(),
-                                     origin: this.sourceConfig.s3,
-                                     error: err.message,
-                                     errorStack: err.stack,
-                                     httpStatus: err.statusCode });
+                    log.error('error getting replication ' +
+                              'configuration from S3',
+                              { entry: entry.getLogInfo(),
+                                origin: this.sourceConfig.s3,
+                                error: err.message,
+                                errorStack: err.stack,
+                                httpStatus: err.statusCode });
                     return cb(err);
                 }
                 const roles = data.ReplicationConfiguration.Role.split(',');
                 if (roles.length !== 2) {
-                    this.log.error('expecting two roles separated by a ' +
-                                   'comma in replication configuration',
-                                   { entry: entry.getLogInfo(),
-                                     origin: this.sourceConfig.s3 });
+                    log.error('expecting two roles separated by a ' +
+                              'comma in replication configuration',
+                              { entry: entry.getLogInfo(),
+                                origin: this.sourceConfig.s3 });
                     return cb(errors.InternalError);
                 }
                 return cb(null, roles[0], roles[1]);
             });
     }
 
-    _processRoles(sourceEntry, sourceRole, destEntry, targetRole, cb) {
-        this.log.debug('processing role for destination',
-                       { entry: destEntry.getLogInfo(),
-                         role: targetRole });
+    _processRoles(sourceEntry, sourceRole, destEntry, targetRole, log, cb) {
+        log.debug('processing role for destination',
+                  { entry: destEntry.getLogInfo(),
+                    role: targetRole });
         const targetAccountId = _extractAccountIdFromRole(targetRole);
         this.s3destAuthManager.lookupAccountAttributes(
             targetAccountId, (err, accountAttr) => {
                 if (err) {
                     return cb(err);
                 }
-                this.log.debug('setting owner info in target metadata',
-                               { entry: destEntry.getLogInfo(),
-                                 accountAttr });
+                log.debug('setting owner info in target metadata',
+                          { entry: destEntry.getLogInfo(),
+                            accountAttr });
                 destEntry.setOwner(accountAttr.canonicalID,
                                    accountAttr.displayName);
                 return cb(null, accountAttr);
             });
     }
 
-    _getData(entry, cb) {
-        this.log.debug('getting data', { entry: entry.getLogInfo() });
+    _getData(entry, log, cb) {
+        log.debug('getting data', { entry: entry.getLogInfo() });
         const req = this.S3source.getObject({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             VersionId: entry.getEncodedVersionId() });
         const incomingMsg = req.createReadStream();
         req.on('error', err => {
-            this.log.error('error response getting data from S3',
-                           { entry: entry.getLogInfo(),
-                             origin: this.sourceConfig.s3,
-                             error: err.message,
-                             httpStatus: err.statusCode });
+            log.error('error response getting data from S3',
+                      { entry: entry.getLogInfo(),
+                        origin: this.sourceConfig.s3,
+                        error: err.message,
+                        httpStatus: err.statusCode });
             incomingMsg.emit('error', err);
         });
         return cb(null, incomingMsg);
     }
 
-    _putData(entry, sourceStream, cb) {
-        this.log.debug('putting data', { entry: entry.getLogInfo() });
+    _putData(entry, sourceStream, log, cb) {
+        log.debug('putting data', { entry: entry.getLogInfo() });
         const cbOnce = jsutil.once(cb);
         sourceStream.on('error', err => {
-            this.log.error('error from source S3 server',
-                           { entry: entry.getLogInfo(),
-                             error: err.message });
+            log.error('error from source S3 server',
+                      { entry: entry.getLogInfo(),
+                        error: err.message });
             return cbOnce(err);
         });
         this.backbeatDest.putData({
@@ -255,21 +254,21 @@ class QueueProcessor {
             Body: sourceStream,
         }, (err, data) => {
             if (err) {
-                this.log.error('error response from destination S3 server',
-                               { entry: entry.getLogInfo(),
-                                 origin: this.destConfig.s3,
-                                 error: err.message,
-                                 errorStack: err.stack });
+                log.error('error response from destination S3 server',
+                          { entry: entry.getLogInfo(),
+                            origin: this.destConfig.s3,
+                            error: err.message,
+                            errorStack: err.stack });
                 return cbOnce(err);
             }
             return cbOnce(null, data.Location);
         });
     }
 
-    _putMetaData(where, entry, cb) {
-        this.log.debug('putting metadata',
-                       { where, entry: entry.getLogInfo(),
-                         replicationStatus: entry.getReplicationStatus() });
+    _putMetaData(where, entry, log, cb) {
+        log.debug('putting metadata',
+                  { where, entry: entry.getLogInfo(),
+                    replicationStatus: entry.getReplicationStatus() });
         const cbOnce = jsutil.once(cb);
         const target = where === 'source' ?
                   this.backbeatSource : this.backbeatDest;
@@ -281,22 +280,22 @@ class QueueProcessor {
             Body: mdBlob,
         }, (err, data) => {
             if (err) {
-                this.log.error('error response from S3',
-                               { entry: entry.getLogInfo(),
-                                 origin: this.destConfig.s3,
-                                 error: err.message,
-                                 errorStack: err.stack });
+                log.error('error response from S3',
+                          { entry: entry.getLogInfo(),
+                            origin: this.destConfig.s3,
+                            error: err.message,
+                            errorStack: err.stack });
                 return cbOnce(err);
             }
             return cbOnce(null, data);
         });
     }
 
-    _setupClients(sourceRole, targetRole) {
+    _setupClients(sourceRole, targetRole, log) {
         this.s3sourceAuthManager =
-            this._createAuthManager(this.sourceConfig.auth, sourceRole);
+            this._createAuthManager(this.sourceConfig.auth, sourceRole, log);
         this.s3destAuthManager =
-            this._createAuthManager(this.destConfig.auth, targetRole);
+            this._createAuthManager(this.destConfig.auth, targetRole, log);
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
@@ -337,102 +336,106 @@ class QueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        const log = this.logger.newRequestLogger();
+
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
-            this.log.error('error processing source entry',
-                           { error: sourceEntry.error });
+            log.error('error processing source entry',
+                      { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
         const destEntry = sourceEntry.toReplicaEntry();
 
-        this.log.debug('processing entry',
-                       { entry: sourceEntry.getLogInfo() });
+        log.debug('processing entry',
+                  { entry: sourceEntry.getLogInfo() });
 
         const _doneProcessingCompletedEntry = err => {
             if (err) {
-                this.log.error('an error occurred while writing ' +
-                               'replication status to COMPLETED',
-                               { entry: sourceEntry.getLogInfo() });
+                log.error('an error occurred while writing ' +
+                          'replication status to COMPLETED',
+                          { entry: sourceEntry.getLogInfo() });
                 return done(err);
             }
-            this.log.info('entry replicated successfully',
-                          { entry: sourceEntry.getLogInfo() });
+            log.info('entry replicated successfully',
+                     { entry: sourceEntry.getLogInfo() });
             return done();
         };
 
         const _doneProcessingFailedEntry = err => {
             if (err) {
-                this.log.error('an error occurred while writing ' +
-                               'replication status to FAILED',
-                               { entry: sourceEntry.getLogInfo() });
+                log.error('an error occurred while writing ' +
+                          'replication status to FAILED',
+                          { entry: sourceEntry.getLogInfo() });
                 return done(err);
             }
-            this.log.info('replication status set to FAILED',
-                          { entry: sourceEntry.getLogInfo() });
+            log.info('replication status set to FAILED',
+                     { entry: sourceEntry.getLogInfo() });
             return done();
         };
 
         const _writeReplicationStatus = err => {
             if (err) {
-                this.log.warn('replication failed for object',
-                              { entry: sourceEntry.getLogInfo(),
-                                error: err });
+                log.warn('replication failed for object',
+                         { entry: sourceEntry.getLogInfo(),
+                           error: err });
                 if (this.backbeatSource !== null) {
                     return this._putMetaData('source',
                                              sourceEntry.toFailedEntry(),
+                                             log,
                                              _doneProcessingFailedEntry);
                 }
-                this.log.info('replication status update skipped',
-                              { entry: sourceEntry.getLogInfo() });
+                log.info('replication status update skipped',
+                         { entry: sourceEntry.getLogInfo() });
                 return done();
                 // TODO: queue entry back in kafka for later retry
             }
-            this.log.debug('replication succeeded for object, updating ' +
-                           'source replication status to COMPLETED',
-                           { entry: sourceEntry.getLogInfo() });
+            log.debug('replication succeeded for object, updating ' +
+                      'source replication status to COMPLETED',
+                      { entry: sourceEntry.getLogInfo() });
             return this._putMetaData('source',
                                      sourceEntry.toCompletedEntry(),
+                                     log,
                                      _doneProcessingCompletedEntry);
         };
 
         if (sourceEntry.isDeleteMarker()) {
             return async.waterfall([
                 next => {
-                    this._getBucketReplicationRoles(sourceEntry, next);
+                    this._getBucketReplicationRoles(sourceEntry, log, next);
                 },
                 (sourceRole, targetRole, next) => {
                     this._processRoles(sourceEntry, sourceRole,
-                                       destEntry, targetRole, next);
+                                       destEntry, targetRole, log, next);
                 },
                 // put metadata in target bucket
                 (accountAttr, next) => {
                     // TODO check that bucket role matches role in metadata
-                    this._putMetaData('target', destEntry, next);
+                    this._putMetaData('target', destEntry, log, next);
                 },
             ], _writeReplicationStatus);
         }
         return async.waterfall([
             // get data stream from source bucket
             next => {
-                this._getBucketReplicationRoles(sourceEntry, next);
+                this._getBucketReplicationRoles(sourceEntry, log, next);
             },
             (sourceRole, targetRole, next) => {
                 this._processRoles(sourceEntry, sourceRole,
-                                   destEntry, targetRole, next);
+                                   destEntry, targetRole, log, next);
             },
             (accountAttr, next) => {
                 // TODO check that bucket role matches role in metadata
-                this._getData(sourceEntry, next);
+                this._getData(sourceEntry, log, next);
             },
             // put data in target bucket
             (stream, next) => {
-                this._putData(destEntry, stream, next);
+                this._putData(destEntry, stream, log, next);
             },
             // update location, replication status and put metadata in
             // target bucket
             (location, next) => {
                 destEntry.setLocation(location);
-                this._putMetaData('target', destEntry, next);
+                this._putMetaData('target', destEntry, log, next);
             },
         ], _writeReplicationStatus);
     }
@@ -450,8 +453,8 @@ class QueueProcessor {
         consumer.on('error', () => {});
         consumer.subscribe();
 
-        this.log.info('queue processor is ready to consume ' +
-                      'replication entries');
+        this.logger.info('queue processor is ready to consume ' +
+                         'replication entries');
     }
 }
 
