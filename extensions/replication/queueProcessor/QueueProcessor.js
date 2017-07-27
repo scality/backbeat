@@ -22,7 +22,7 @@ class _AccountAuthManager {
     constructor(authConfig, log) {
         assert.strictEqual(authConfig.type, 'account');
 
-        this.log = log;
+        this._log = log;
         const accountInfo = authdata.accounts.find(
             account => account.name === authConfig.account);
         if (accountInfo === undefined) {
@@ -40,31 +40,30 @@ class _AccountAuthManager {
             throw Error(`Configured account ${authConfig.account} has no ` +
                         '"displayName" property defined');
         }
-        this.accountArn = accountInfo.arn;
-        this.canonicalID = accountInfo.canonicalID;
-        this.displayName = accountInfo.displayName;
-        this.credentialProvider = new AWS.CredentialProviderChain([
-            new AWS.Credentials(accountInfo.keys.access,
-                                accountInfo.keys.secret),
-        ]);
+        this._accountArn = accountInfo.arn;
+        this._canonicalID = accountInfo.canonicalID;
+        this._displayName = accountInfo.displayName;
+        this._credentials = new AWS.Credentials(accountInfo.keys.access,
+                                                accountInfo.keys.secret);
     }
 
-    getCredentialProvider() {
-        return this.credentialProvider;
+    getCredentials() {
+        return this._credentials;
     }
 
     lookupAccountAttributes(accountId, cb) {
-        if (!this.accountArn.startsWith(accountId)) {
-            this.log.error('Target account for replication must match ' +
-                           'configured destination account ARN',
-                           { targetAccount: accountId,
-                             localAccountArn: this.accountArn });
+        const localAccountId = this._accountArn.split(':')[3];
+        if (localAccountId !== accountId) {
+            this._log.error('Target account for replication must match ' +
+                            'configured destination account ARN',
+                            { targetAccountId: accountId,
+                              localAccountId });
             return process.nextTick(() => cb(errors.AccountNotFound));
         }
         // return local account's attributes
         return process.nextTick(
-            () => cb(null, { canonicalID: this.canonicalID,
-                             displayName: this.displayName }));
+            () => cb(null, { canonicalID: this._canonicalID,
+                             displayName: this._displayName }));
     }
 }
 
@@ -73,12 +72,12 @@ class _RoleAuthManager {
         this._log = log;
         const { host, port } = authConfig.vault;
         this._vaultclient = new VaultClient(host, port);
-        this.credentialProvider = new CredentialsManager(host, port,
-            'replication', roleArn);
+        this._credentials = new CredentialsManager(host, port,
+                                                   'replication', roleArn);
     }
 
-    getCredentialProvider() {
-        return this.credentialProvider;
+    getCredentials() {
+        return this._credentials;
     }
 
     lookupAccountAttributes(accountId, cb) {
@@ -180,11 +179,12 @@ class QueueProcessor {
         return this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() }, (err, data) => {
                 if (err) {
-                    this.log.error('error response getting replication ' +
+                    this.log.error('error getting replication ' +
                                    'configuration from S3',
                                    { entry: entry.getLogInfo(),
                                      origin: this.sourceConfig.s3,
-                                     error: err,
+                                     error: err.message,
+                                     errorStack: err.stack,
                                      httpStatus: err.statusCode });
                     return cb(err);
                 }
@@ -230,7 +230,8 @@ class QueueProcessor {
             this.log.error('error response getting data from S3',
                            { entry: entry.getLogInfo(),
                              origin: this.sourceConfig.s3,
-                             error: err, httpStatus: err.statusCode });
+                             error: err.message,
+                             httpStatus: err.statusCode });
             incomingMsg.emit('error', err);
         });
         return cb(null, incomingMsg);
@@ -241,7 +242,8 @@ class QueueProcessor {
         const cbOnce = jsutil.once(cb);
         sourceStream.on('error', err => {
             this.log.error('error from source S3 server',
-                           { entry: entry.getLogInfo(), error: err });
+                           { entry: entry.getLogInfo(),
+                             error: err.message });
             return cbOnce(err);
         });
         this.backbeatDest.putData({
@@ -256,7 +258,8 @@ class QueueProcessor {
                 this.log.error('error response from destination S3 server',
                                { entry: entry.getLogInfo(),
                                  origin: this.destConfig.s3,
-                                 error: err });
+                                 error: err.message,
+                                 errorStack: err.stack });
                 return cbOnce(err);
             }
             return cbOnce(null, data.Location);
@@ -281,7 +284,8 @@ class QueueProcessor {
                 this.log.error('error response from S3',
                                { entry: entry.getLogInfo(),
                                  origin: this.destConfig.s3,
-                                 error: err });
+                                 error: err.message,
+                                 errorStack: err.stack });
                 return cbOnce(err);
             }
             return cbOnce(null, data);
@@ -297,7 +301,7 @@ class QueueProcessor {
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
             credentials:
-            this.s3sourceAuthManager.getCredentialProvider(),
+            this.s3sourceAuthManager.getCredentials(),
             sslEnabled: true,
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
@@ -307,7 +311,7 @@ class QueueProcessor {
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
             credentials:
-            this.s3sourceAuthManager.getCredentialProvider(),
+            this.s3sourceAuthManager.getCredentials(),
             sslEnabled: true,
             httpOptions: { agent: this.sourceHTTPAgent },
         });
@@ -316,21 +320,31 @@ class QueueProcessor {
             endpoint: `${this.destConfig.s3.transport}://` +
                 `${this.destConfig.s3.host}:${this.destConfig.s3.port}`,
             credentials:
-            this.s3destAuthManager.getCredentialProvider(),
+            this.s3destAuthManager.getCredentials(),
             sslEnabled: true,
             httpOptions: { agent: this.destHTTPAgent },
         });
     }
 
-    _processEntry(kafkaEntry, done) {
+    /**
+     * Proceed to the replication of an object given a kafka
+     * replication queue entry
+     *
+     * @param {object} kafkaEntry - entry generated by the queue populator
+     * @param {string} kafkaEntry.key - kafka entry key
+     * @param {string} kafkaEntry.value - kafka entry value
+     * @param {function} done - callback function
+     * @return {undefined}
+     */
+    processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-        const destEntry = sourceEntry.toReplicaEntry();
-
         if (sourceEntry.error) {
             this.log.error('error processing source entry',
                            { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
+        const destEntry = sourceEntry.toReplicaEntry();
+
         this.log.debug('processing entry',
                        { entry: sourceEntry.getLogInfo() });
 
@@ -431,7 +445,7 @@ class QueueProcessor {
             groupId: this.repConfig.queueProcessor.groupId,
             concurrency: 1, // replication has to process entries in
                             // order, so one at a time
-            queueProcessor: this._processEntry.bind(this),
+            queueProcessor: this.processKafkaEntry.bind(this),
         });
         consumer.on('error', () => {});
         consumer.subscribe();

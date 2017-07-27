@@ -55,17 +55,22 @@ class QueueEntry {
     }
 
     static createFromKafkaEntry(kafkaEntry) {
-        const record = JSON.parse(kafkaEntry.value);
-        const objMd = JSON.parse(record.value);
-        const entry = new QueueEntry(
-            record.bucket,
-            QueueEntry._extractVersionedBaseKey(record.key),
-            objMd);
-        const err = entry.checkSanity();
-        if (err) {
-            return { error: err };
+        try {
+            const record = JSON.parse(kafkaEntry.value);
+            const objMd = JSON.parse(record.value);
+            const entry = new QueueEntry(
+                record.bucket,
+                QueueEntry._extractVersionedBaseKey(record.key),
+                objMd);
+            const err = entry.checkSanity();
+            if (err) {
+                return { error: err };
+            }
+            return entry;
+        } catch (err) {
+            return { error: { message: 'malformed JSON in kafka entry',
+                              description: err.message } };
         }
-        return entry;
     }
 
     isDeleteMarker() {
