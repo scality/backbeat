@@ -135,6 +135,31 @@ class QueueEntry {
         };
     }
 
+    getLocation() {
+        return this.objMd.location;
+    }
+
+    buildLocationKey(location, key) {
+        const destinationLocation = Object.assign({}, location);
+        return destinationLocation.key = key; // eslint-disable-line
+    }
+
+    getDataStoreETag(location) {
+        return location.dataStoreETag;
+    }
+
+    getPartNumber(location) {
+        return Number.parseInt(location.dataStoreETag.split(':')[0], 10);
+    }
+
+    getPartETag(location) {
+        return location.dataStoreETag.split(':')[1];
+    }
+
+    getPartSize(location) {
+        return location.size;
+    }
+
     setOwner(ownerCanonicalId, ownerDisplayName) {
         this.objMd['owner-id'] = ownerCanonicalId;
         this.objMd['owner-display-name'] = ownerDisplayName;

@@ -18,6 +18,8 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const QueueEntry = require('../utils/QueueEntry');
 const CredentialsManager = require('../../../credentials/CredentialsManager');
 
+const LIMIT = 10;
+
 class _AccountAuthManager {
     constructor(authConfig, log) {
         assert.strictEqual(authConfig.type, 'account');
@@ -218,51 +220,59 @@ class QueueProcessor {
             });
     }
 
-    _getData(entry, log, cb) {
-        log.debug('getting data', { entry: entry.getLogInfo() });
-        const req = this.S3source.getObject({
-            Bucket: entry.getBucket(),
-            Key: entry.getObjectKey(),
-            VersionId: entry.getEncodedVersionId() });
-        const incomingMsg = req.createReadStream();
-        req.on('error', err => {
-            log.error('error response getting data from S3',
-                      { entry: entry.getLogInfo(),
-                        origin: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode });
-            incomingMsg.emit('error', err);
-        });
-        return cb(null, incomingMsg);
-    }
-
-    _putData(entry, sourceStream, log, cb) {
-        log.debug('putting data', { entry: entry.getLogInfo() });
-        const cbOnce = jsutil.once(cb);
-        sourceStream.on('error', err => {
-            log.error('error from source S3 server',
-                      { entry: entry.getLogInfo(),
-                        error: err.message });
-            return cbOnce(err);
-        });
-        this.backbeatDest.putData({
-            Bucket: entry.getBucket(),
-            Key: entry.getObjectKey(),
-            CanonicalID: entry.getOwnerCanonicalId(),
-            ContentLength: entry.getContentLength(),
-            ContentMD5: entry.getContentMD5(),
-            Body: sourceStream,
-        }, (err, data) => {
-            if (err) {
-                log.error('error response from destination S3 server',
-                          { entry: entry.getLogInfo(),
-                            origin: this.destConfig.s3,
-                            error: err.message,
-                            errorStack: err.stack });
-                return cbOnce(err);
+    _getAndPutData(sourceEntry, destEntry, log, cb) {
+        log.debug('getting data', { entry: sourceEntry.getLogInfo() });
+        const locations = sourceEntry.getLocation();
+        return async.mapLimit(locations, LIMIT, (part, done) => {
+            const doneOnce = jsutil.once(done);
+            if (sourceEntry.getDataStoreETag(part) === undefined) {
+                log.error('cannot replicate object without dataStoreETag ' +
+                          'property',
+                          { entry: destEntry.getLogInfo() });
+                return doneOnce(errors.InvalidObjectState);
             }
-            return cbOnce(null, data.Location);
-        });
+            const partNumber = sourceEntry.getPartNumber(part);
+            const req = this.S3source.getObject({
+                Bucket: sourceEntry.getBucket(),
+                Key: sourceEntry.getObjectKey(),
+                VersionId: sourceEntry.getEncodedVersionId(),
+                PartNumber: partNumber,
+            });
+            const incomingMsg = req.createReadStream();
+            req.on('error', err => {
+                log.error('error response getting data from S3',
+                          { entry: sourceEntry.getLogInfo(),
+                            origin: this.sourceConfig.s3,
+                            error: err, httpStatus: err.statusCode });
+                return doneOnce(err);
+            });
+            log.debug('putting data', { entry: destEntry.getLogInfo() });
+            incomingMsg.on('error', err => {
+                log.error('error from source S3 server',
+                          { entry: destEntry.getLogInfo(), error: err });
+                return doneOnce(err);
+            });
+            return this.backbeatDest.putData({
+                Bucket: destEntry.getBucket(),
+                Key: destEntry.getObjectKey(),
+                CanonicalID: destEntry.getOwnerCanonicalId(),
+                ContentLength: destEntry.getPartSize(part),
+                ContentMD5: destEntry.getPartETag(part),
+                Body: incomingMsg,
+            }, (err, data) => {
+                if (err) {
+                    log.error('error response from destination S3 server', {
+                        method: 'QueueProcessor._getAndPutData',
+                        entry: destEntry.getLogInfo(),
+                        origin: this.destConfig.s3,
+                        error: err,
+                    });
+                    return doneOnce(err);
+                }
+                return doneOnce(null,
+                    destEntry.buildLocationKey(part, data.Location[0]));
+            });
+        }, cb);
     }
 
     _putMetaData(where, entry, log, cb) {
@@ -423,13 +433,10 @@ class QueueProcessor {
                 this._processRoles(sourceEntry, sourceRole,
                                    destEntry, targetRole, log, next);
             },
+            // Get data from source bucket and put it on the target bucket
             (accountAttr, next) => {
                 // TODO check that bucket role matches role in metadata
-                this._getData(sourceEntry, log, next);
-            },
-            // put data in target bucket
-            (stream, next) => {
-                this._putData(destEntry, stream, log, next);
+                this._getAndPutData(sourceEntry, destEntry, log, next);
             },
             // update location, replication status and put metadata in
             // target bucket
