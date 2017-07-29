@@ -45,9 +45,9 @@ class QueuePopulator {
         this.repConfig = repConfig;
         this.logConfig = logConfig;
 
-        this.logger = new Logger('Backbeat:Replication:QueuePopulator',
-                                 { level: logConfig.logLevel,
-                                   dump: logConfig.dumpLevel });
+        this.log = new Logger('Backbeat:Replication:QueuePopulator',
+                              { level: logConfig.logLevel,
+                                dump: logConfig.dumpLevel });
     }
 
     /**
