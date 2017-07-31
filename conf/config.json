@@ -57,6 +57,38 @@
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300
             }
+        },
+        "clueso": {
+            "source": {
+                "logSource": "dmd",
+                "bucketd": {
+                    "host": "127.0.0.1",
+                    "port": 9000,
+                    "raftSession": 1
+                },
+                "dmd": {
+                    "host": "10.100.119.176",
+                    "port": 9990
+                }
+            },
+            "s3": {
+                "host": "127.0.0.1",
+                "port": 80,
+                "transport": "http",
+                "accessKeyId": "accessKey1",
+                "secretKeyId": "verySecretKey1"
+            },
+            "livy": {
+                "host": "127.0.0.1",
+                "port": 8998,
+                "transport": "http"
+            },
+            "topic": "backbeat-clueso",
+            "queuePopulator": {
+                "cronRule": "*/5 * * * * *",
+                "batchMaxRead": 10000,
+                "zookeeperPath": "/clueso-populator"
+            }
         }
     },
     "log": {

@@ -56,6 +56,35 @@ const joiSchema = {
                 retryTimeoutS: joi.number().default(300),
             },
         },
+        clueso: {
+            source: {
+                logSource: joi.alternatives()
+                    .try('bucketd', 'dmd').required(),
+                bucketd: hostPortJoi.keys({
+                    raftSession: joi.number().required(),
+                }),
+                dmd: hostPortJoi.keys({
+                    logName: joi.string().default('s3-recordlog'),
+                }),
+            },
+            // TODO: Handle auth in unified way
+            s3: hostPortJoi.keys({
+                transport: joi.alternatives().try('http', 'https')
+                    .default('http'),
+                accessKeyId: joi.string().required(),
+                secretKeyId: joi.string().required(),
+            }).required(),
+            livy: hostPortJoi.keys({
+                transport: joi.alternatives().try('http', 'https')
+                    .default('http'),
+            }).required(),
+            topic: joi.string().required(),
+            queuePopulator: {
+                cronRule: joi.string().required(),
+                batchMaxRead: joi.number().default(10000),
+                zookeeperPath: joi.string().required(),
+            },
+        },
     },
 };
 
