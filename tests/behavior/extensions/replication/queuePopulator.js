@@ -21,9 +21,11 @@ const s3config = {
 describe('queuePopulator', () => {
     let queuePopulator;
     let s3;
-    let latestLastProcessedSeq;
 
-    before(done => {
+    before(function setup(done) {
+        this.timeout(30000); // may take some time to keep up with the
+                             // log entries
+
         s3 = new S3(s3config);
         async.waterfall([
             next => {
@@ -43,7 +45,8 @@ describe('queuePopulator', () => {
                 s3.putBucketReplication(
                     { Bucket: testBucket,
                       ReplicationConfiguration: {
-                          Role: 'arn:aws:iam::123456789012:role/backbeat',
+                          Role: 'arn:aws:iam::123456789012:role/backbeat,' +
+                              'arn:aws:iam::123456789012:role/backbeat',
                           Rules: [{
                               Destination: {
                                   Bucket: 'arn:aws:s3:::dummy-dest-bucket',
@@ -56,21 +59,15 @@ describe('queuePopulator', () => {
                     }, next);
             },
             (data, next) => {
-                queuePopulator = new QueuePopulator(testConfig.zookeeper,
-                                                    testConfig.source,
-                                                    testConfig.replication,
-                                                    testConfig.log);
+                queuePopulator = new QueuePopulator(
+                    testConfig.zookeeper,
+                    testConfig.replication.source,
+                    testConfig.replication,
+                    testConfig.log);
                 queuePopulator.open(next);
             },
             next => {
                 queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
-            },
-            (counters, next) => {
-                // we need to save the current last processed sequence
-                // number because the storage backend may have an
-                // existing non-empty log
-                latestLastProcessedSeq = counters.lastProcessedSeq;
-                next();
             },
         ], err => {
             assert.ifError(err);
@@ -88,12 +85,8 @@ describe('queuePopulator', () => {
     it('processAllLogEntries with nothing to do', done => {
         queuePopulator.processAllLogEntries(
             { maxRead: 10 }, (err, counters) => {
-                // we need to fetch what is the current last processed
-                // sequence number because the storage backend may
-                // have a non-empty log already
-                latestLastProcessedSeq = counters.lastProcessedSeq;
                 assert.ifError(err);
-                assert.strictEqual(counters.queuedEntries, 0);
+                assert.strictEqual(counters[0].queuedEntries, 0);
                 done();
             });
     });
@@ -111,12 +104,8 @@ describe('queuePopulator', () => {
             (counters, next) => {
                 // 2 reads expected: master key and and versioned key
                 // 1 queued: versioned key only
-                assert.deepStrictEqual(counters, {
-                    readRecords: 2,
-                    readEntries: 2,
-                    queuedEntries: 1,
-                    lastProcessedSeq: latestLastProcessedSeq + 2 });
-                latestLastProcessedSeq = counters.lastProcessedSeq;
+                assert.strictEqual(counters[0].readEntries, 2);
+                assert.strictEqual(counters[0].queuedEntries, 1);
                 next();
             },
         ], err => {
@@ -136,12 +125,8 @@ describe('queuePopulator', () => {
             (counters, next) => {
                 // 2 reads expected: master key update + new delete marker
                 // 1 queued: versioned key (delete marker)
-                assert.deepStrictEqual(counters, {
-                    readRecords: 2,
-                    readEntries: 2,
-                    queuedEntries: 1,
-                    lastProcessedSeq: latestLastProcessedSeq + 2 });
-                latestLastProcessedSeq = counters.lastProcessedSeq;
+                assert.strictEqual(counters[0].readEntries, 2);
+                assert.strictEqual(counters[0].queuedEntries, 1);
                 next();
             },
         ], err => {
@@ -177,12 +162,8 @@ describe('queuePopulator', () => {
             (counters, next) => {
                 // 2 reads expected: master key and and versioned key
                 // 1 queued: versioned key only
-                assert.deepStrictEqual(counters, {
-                    readRecords: 200,
-                    readEntries: 200,
-                    queuedEntries: 100,
-                    lastProcessedSeq: latestLastProcessedSeq + 200 });
-                latestLastProcessedSeq = counters.lastProcessedSeq;
+                assert.strictEqual(counters[0].readEntries, 200);
+                assert.strictEqual(counters[0].queuedEntries, 100);
                 next();
             },
         ], err => {

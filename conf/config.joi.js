@@ -27,9 +27,7 @@ const joiSchema = {
                 auth: authJoi.required(),
                 logSource: joi.alternatives()
                     .try('bucketd', 'dmd').required(),
-                bucketd: hostPortJoi.keys({
-                    raftSession: joi.number().required(),
-                }),
+                bucketd: hostPortJoi,
                 dmd: hostPortJoi.keys({
                     logName: joi.string().default('s3-recordlog'),
                 }),
