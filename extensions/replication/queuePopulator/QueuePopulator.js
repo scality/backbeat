@@ -3,8 +3,6 @@ const zookeeper = require('node-zookeeper-client');
 
 const Logger = require('werelogs').Logger;
 
-const errors = require('arsenal').errors;
-
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const ProvisionDispatcher =
           require('../../../lib/provisioning/ProvisionDispatcher');
@@ -200,10 +198,6 @@ class QueuePopulator {
     }
 
     _processAllLogEntries(params, done) {
-        if (this.logReaders.length === 0) {
-            this.log.debug('queue populator has no configured log source');
-            return process.nextTick(() => done(errors.ServiceUnavailable));
-        }
         return async.map(
             this.logReaders,
             (logReader, done) => logReader.processAllLogEntries(params, done),

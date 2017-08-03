@@ -25,7 +25,7 @@ function queueBatch(queuePopulator, batchInProgress) {
     const maxRead = repConfig.queuePopulator.batchMaxRead;
     queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
         batchInProgress = false;
-        if (err && !err.ServiceUnavailable) {
+        if (err) {
             log.error('an error occurred during replication', {
                 method: 'QueuePopulator::task.queueBatch',
                 error: err,
