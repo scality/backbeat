@@ -116,7 +116,7 @@ class QueueProcessor {
      *
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
-     * @param {string} zkConfig.endpoint - zookeeper endpoint string
+     * @param {string} zkConfig.connectionString - zookeeper connection string
      *   as "host:port[/chroot]"
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
