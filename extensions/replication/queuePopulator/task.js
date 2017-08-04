@@ -1,7 +1,7 @@
 const async = require('async');
 const schedule = require('node-schedule');
 
-const Logger = require('werelogs').Logger;
+const werelogs = require('werelogs');
 
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
@@ -9,10 +9,10 @@ const repConfig = config.extensions.replication;
 const sourceConfig = config.extensions.replication.source;
 const QueuePopulator = require('./QueuePopulator');
 
-const logger = new Logger('Backbeat:Replication:task',
-                          { level: config.log.logLevel,
-                            dump: config.log.dumpLevel });
-const log = logger.newRequestLogger();
+const log = new werelogs.Logger('Backbeat:Replication:task');
+
+werelogs.configure({ level: config.log.logLevel,
+                     dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, batchInProgress) {
@@ -42,8 +42,7 @@ function queueBatch(queuePopulator, batchInProgress) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, sourceConfig,
-                                          repConfig, config.log);
+const queuePopulator = new QueuePopulator(zkConfig, sourceConfig, repConfig);
 
 async.waterfall([
     done => queuePopulator.open(done),

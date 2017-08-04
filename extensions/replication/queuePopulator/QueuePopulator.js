@@ -33,19 +33,13 @@ class QueuePopulator {
      *   specific to queue populator
      * @param {String} repConfig.queuePopulator.zookeeperPath -
      *   sub-path to use for storing populator state in zookeeper
-     * @param {Logger} logConfig - logging configuration object
-     * @param {String} logConfig.logLevel - logging level
-     * @param {Logger} logConfig.dumpLevel - dump level
      */
-    constructor(zkConfig, sourceConfig, repConfig, logConfig) {
+    constructor(zkConfig, sourceConfig, repConfig) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
-        this.logConfig = logConfig;
 
-        this.log = new Logger('Backbeat:Replication:QueuePopulator',
-                              { level: logConfig.logLevel,
-                                dump: logConfig.dumpLevel });
+        this.log = new Logger('Backbeat:Replication:QueuePopulator');
 
         // list of active log readers
         this.logReaders = [];
@@ -101,7 +95,6 @@ class QueuePopulator {
                 new BucketFileLogReader({ zkClient: this.zkClient,
                                           kafkaProducer: this.producer,
                                           dmdConfig: this.sourceConfig.dmd,
-                                          logConfig: this.logConfig,
                                           logger: this.log,
                                         }),
             ];
@@ -118,8 +111,7 @@ class QueuePopulator {
                   this.repConfig.queuePopulator.zookeeperPath;
         const zkEndpoint = `${zookeeperUrl}/raft-id-dispatcher`;
         this.raftIdDispatcher =
-            new ProvisionDispatcher({ endpoint: zkEndpoint },
-                                    this.logConfig);
+            new ProvisionDispatcher({ endpoint: zkEndpoint });
         this.raftIdDispatcher.subscribe((err, items) => {
             if (err) {
                 this.log.error('error when receiving raft ID provision list',
@@ -147,7 +139,6 @@ class QueuePopulator {
     _setupProducer(done) {
         const producer = new BackbeatProducer({
             zookeeper: this.zkConfig,
-            log: this.logConfig,
             topic: this.repConfig.topic,
         });
         producer.once('error', done);
