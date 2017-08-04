@@ -8,6 +8,9 @@ machine:
         version: 6.9.5
     services:
         - docker
+    environment:
+        CXX: G++-4.9
+
 test:
     override:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
