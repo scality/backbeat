@@ -389,15 +389,15 @@ describe('queue processor error management with mocking', () => {
         queueProcessor = new QueueProcessor(
             {} /* zkConfig not needed */,
             { auth: { type: 'role',
-                      vault: { host: constants.source.vault,
-                               port: 7777 } },
-              s3: { host: constants.source.s3,
-                    port: 7777, transport: 'http' } },
+                      vault: { hosts: [{ host: constants.source.vault,
+                                         port: 7777 }] } },
+              s3: { hosts: [{ host: constants.source.s3,
+                              port: 7777 }], transport: 'http' } },
             { auth: { type: 'role',
-                      vault: { host: constants.target.vault,
-                               port: 7777 } },
-              s3: { host: constants.target.s3,
-                    port: 7777, transport: 'http' } },
+                      vault: { hosts: [{ host: constants.target.vault,
+                                         port: 7777 }] } },
+              s3: { hosts: [{ host: constants.target.s3,
+                              port: 7777 }], transport: 'http' } },
             {} /* repConfig not needed */,
             { logLevel: 'info', dumpLevel: 'error' });
 

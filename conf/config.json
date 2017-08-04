@@ -10,16 +10,24 @@
         "replication": {
             "source": {
                 "s3": {
-                    "host": "127.0.0.1",
-                    "port": 8000,
+                    "hosts": [
+                        {
+                            "host": "127.0.0.1",
+                            "port": 8000
+                        }
+                    ],
                     "transport": "https"
                 },
                 "auth": {
                     "type": "account",
                     "account": "bart",
                     "vault": {
-                        "host": "127.0.0.1",
-                        "port": 8500
+                        "hosts": [
+                            {
+                                "host": "127.0.0.1",
+                                "port": 8500
+                            }
+                        ]
                     }
                 },
                 "logSource": "dmd",
@@ -34,16 +42,24 @@
             },
             "destination": {
                 "s3": {
-                    "host": "127.0.0.2",
-                    "port": 9000,
+                    "hosts": [
+                        {
+                            "host": "127.0.0.2",
+                            "port": 9000
+                        }
+                    ],
                     "transport": "https"
                 },
                 "auth": {
                     "type": "account",
                     "account": "lisa",
                     "vault": {
-                        "host": "127.0.0.2",
-                        "port": 9500
+                        "hosts": [
+                            {
+                                "host": "127.0.0.2",
+                                "port": 9500
+                            }
+                        ]
                     }
                 },
                 "certFilePaths": {

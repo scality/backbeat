@@ -73,7 +73,8 @@ class _AccountAuthManager {
 class _RoleAuthManager {
     constructor(authConfig, roleArn, log) {
         this._log = log;
-        const { host, port } = authConfig.vault;
+        // FIXME use bootstrap list
+        const { host, port } = authConfig.vault.hosts[0];
         this._vaultclient = new VaultClient(host, port);
         this._credentials = new CredentialsManager(host, port,
                                                    'replication', roleArn);
@@ -362,13 +363,17 @@ class QueueProcessor {
     }
 
     _setupClients(sourceRole, targetRole, log) {
+        const sourceS3 = this.sourceConfig.s3.hosts[0];
+        // FIXME use bootstrap list
+        const destS3 = this.destConfig.s3.hosts[0];
+
         this.s3sourceAuthManager =
             this._createAuthManager(this.sourceConfig.auth, sourceRole, log);
         this.s3destAuthManager =
             this._createAuthManager(this.destConfig.auth, targetRole, log);
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.s3.transport}://` +
-                `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
+                `${sourceS3.host}:${sourceS3.port}`,
             credentials:
             this.s3sourceAuthManager.getCredentials(),
             sslEnabled: true,
@@ -378,7 +383,7 @@ class QueueProcessor {
         });
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.s3.transport}://` +
-                `${this.sourceConfig.s3.host}:${this.sourceConfig.s3.port}`,
+                `${sourceS3.host}:${sourceS3.port}`,
             credentials:
             this.s3sourceAuthManager.getCredentials(),
             sslEnabled: true,
@@ -398,7 +403,7 @@ class QueueProcessor {
         });
         this.backbeatDestMetadata = new BackbeatClient({
             endpoint: `${this.destConfig.s3.transport}://` +
-                `${this.destConfig.s3.host}:${this.destConfig.s3.port}`,
+                `${destS3.host}:${destS3.port}`,
             credentials:
             this.s3destAuthManager.getCredentials(),
             sslEnabled: true,
