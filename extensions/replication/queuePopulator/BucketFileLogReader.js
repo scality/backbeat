@@ -24,7 +24,7 @@ class BucketFileLogReader extends LogReader {
 
     setup(done) {
         const { logName } = this._dmdConfig;
-        this._mdClient.openRecordLog({ logName }, err => {
+        this._mdClient.openRecordLog({ logName }, (err, logProxy) => {
             if (err) {
                 this._log.error('error opening record log', {
                     method: 'BucketFileLogReader.constructor',
@@ -32,6 +32,7 @@ class BucketFileLogReader extends LogReader {
                 });
                 return done(err);
             }
+            this.setLogConsumer(logProxy);
             return super.setup(done);
         });
     }
