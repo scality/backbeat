@@ -535,7 +535,7 @@ class QueueProcessor {
             // we should retry or give up updating the status.
             if (err.retryable) {
                 return this._retryUpdateReplicationStatus(
-                    updatedSourceEntry, backoffCtx, log, done);
+                    updatedSourceEntry, { backoffCtx, log }, done);
             }
             return done();
         };
