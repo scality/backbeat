@@ -7,8 +7,12 @@
         "port": 9092
     },
     "s3": {
-        "host": "127.0.0.1",
-        "port": 8000,
+        "hosts": [
+            {
+                "host": "127.0.0.1",
+                "port": 8000
+            }
+        ],
         "transport": "http",
         "accessKey": "accessKey1",
         "secretKey": "verySecretKey1"

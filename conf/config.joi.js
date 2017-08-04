@@ -1,13 +1,15 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, logJoi, zookeeperJoi } =
+const { hostPortJoi, hostsListJoi, logJoi, zookeeperJoi } =
           require('../lib/config/configItems.joi.js');
 
 const authJoi = joi.object({
     type: joi.alternatives().try('account', 'role').required(),
     account: joi.string(),
-    vault: hostPortJoi,
+    vault: joi.object({
+        hosts: hostsListJoi.required(),
+    }),
 });
 
 const joiSchema = {
@@ -20,7 +22,8 @@ const joiSchema = {
     extensions: {
         replication: {
             source: {
-                s3: hostPortJoi.keys({
+                s3: joi.object({
+                    hosts: hostsListJoi.required(),
                     transport: joi.alternatives().try('http', 'https')
                         .default('http'),
                 }).required(),
@@ -33,7 +36,8 @@ const joiSchema = {
                 }),
             },
             destination: {
-                s3: hostPortJoi.keys({
+                s3: joi.object({
+                    hosts: hostsListJoi.required(),
                     transport: joi.alternatives().try('http', 'https')
                         .default('http'),
                 }).required(),
