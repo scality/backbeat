@@ -12,7 +12,7 @@ const ZK_TEST_PATH = '/tests/prov-test';
 
 describe('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
-    const zkConf = { endpoint: `localhost:2181${ZK_TEST_PATH}` };
+    const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
     const logConf = { logLevel: 'info', dumpLevel: 'error' };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
     let clients = [];

@@ -1,10 +1,9 @@
 {
     "zookeeper": {
-        "endpoint": "127.0.0.1:2181"
+        "connectionString": "127.0.0.1:2181"
     },
     "kafka": {
-        "host": "127.0.0.1",
-        "port": 9092
+        "hosts": "127.0.0.1:9092"
     },
     "s3": {
         "hosts": [

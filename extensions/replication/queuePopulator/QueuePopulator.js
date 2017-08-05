@@ -114,7 +114,7 @@ class QueuePopulator {
 
     _subscribeToRaftSessionDispatcher() {
         const zookeeperUrl =
-                  this.zkConfig.endpoint +
+                  this.zkConfig.connectionString +
                   this.repConfig.queuePopulator.zookeeperPath;
         const zkEndpoint = `${zookeeperUrl}/raft-id-dispatcher`;
         this.raftIdDispatcher =
@@ -164,7 +164,8 @@ class QueuePopulator {
 
     _setupZookeeper(done) {
         const populatorZkPath = this.repConfig.queuePopulator.zookeeperPath;
-        const zookeeperUrl = `${this.zkConfig.endpoint}${populatorZkPath}`;
+        const zookeeperUrl =
+            `${this.zkConfig.connectionString}${populatorZkPath}`;
         this.log.info('opening zookeeper connection for persisting ' +
                       'populator state',
                       { zookeeperUrl });

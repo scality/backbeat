@@ -1,7 +1,7 @@
 const assert = require('assert');
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
-const zookeeper = { endpoint: 'localhost:2181' };
+const zookeeper = { connectionString: 'localhost:2181' };
 const log = { logLevel: 'info', dumpLevel: 'error' };
 const topic = 'backbeat-consumer-spec';
 const groupId = `replication-group-${Math.random()}`;

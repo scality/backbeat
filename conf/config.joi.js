@@ -14,10 +14,9 @@ const authJoi = joi.object({
 
 const joiSchema = {
     zookeeper: zookeeperJoi,
-    kafka: hostPortJoi.default({
-        host: '127.0.0.1',
-        port: 9092,
-    }),
+    kafka: {
+        hosts: joi.string().required(),
+    },
     log: logJoi,
     extensions: {
         replication: {
