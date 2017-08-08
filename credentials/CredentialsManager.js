@@ -59,7 +59,11 @@ class CredentialsManager extends Credentials {
                         error: err,
                         method: 'CredentialsManager.refresh',
                     });
-                    return cb(err);
+                    // We need to generate a new error instance
+                    // instead of passing a possibly global arsenal
+                    // error returned by vault client, because AWS
+                    // client is transforming it its own way.
+                    return cb(err.customizeDescription(err.description));
                 }
                 /*
                     {
