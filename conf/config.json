@@ -74,7 +74,8 @@
                 "zookeeperPath": "/replication-populator"
             },
             "queueProcessor": {
-                "groupId": "backbeat-replication-group"
+                "groupId": "backbeat-replication-group",
+                "retryTimeoutS": 300
             }
         }
     },
