@@ -71,12 +71,12 @@ class _AccountAuthManager {
 }
 
 class _RoleAuthManager {
-    constructor(authConfig, roleArn, log) {
+    constructor(bootstrapList, roleArn, log) {
         this._log = log;
         // FIXME use bootstrap list
-        const { host, port } = authConfig.vault.hosts[0];
+        const [host, port] = bootstrapList[0].split(':');
         this._vaultclient = new VaultClient(host, port);
-        this._credentials = new CredentialsManager(host, port,
+        this._credentials = new CredentialsManager(this._vaultclient,
                                                    'replication', roleArn);
     }
 
@@ -122,7 +122,6 @@ class QueueProcessor {
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
      * @param {Object} destConfig - target S3 configuration
-     * @param {Object} destConfig.s3 - s3 endpoint configuration object
      * @param {Object} destConfig.auth - authentication info on target
      * @param {Object} repConfig - replication configuration object
      * @param {String} repConfig.topic - replication topic name
@@ -141,10 +140,8 @@ class QueueProcessor {
 
         this.s3sourceAuthManager = null;
         this.s3destAuthManager = null;
-        this.S3source = null;
         this.backbeatSource = null;
-        this.backbeatDestData = null;
-        this.backbeatDestMetadata = null;
+        this.backbeatDest = null;
 
         // TODO: for SSL support, create HTTPS agents instead
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
@@ -176,7 +173,7 @@ class QueueProcessor {
             return cb(errors.BadRole);
         }
         this._setupClients(entryRoles[0], entryRoles[1], log);
-        return this.S3source.getBucketReplication(
+        return this.backbeatSource.getBucketReplication(
             { Bucket: entry.getBucket() }, (err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
@@ -276,7 +273,7 @@ class QueueProcessor {
                 return doneOnce(errors.InvalidObjectState);
             }
             const partNumber = sourceEntry.getPartNumber(part);
-            const req = this.S3source.getObject({
+            const req = this.backbeatSource.getObject({
                 Bucket: sourceEntry.getBucket(),
                 Key: sourceEntry.getObjectKey(),
                 VersionId: sourceEntry.getEncodedVersionId(),
@@ -304,7 +301,7 @@ class QueueProcessor {
                 return doneOnce(err);
             });
             log.debug('putting data', { entry: destEntry.getLogInfo() });
-            return this.backbeatDestData.putData({
+            return this.backbeatDest.putData({
                 Bucket: destEntry.getBucket(),
                 Key: destEntry.getObjectKey(),
                 CanonicalID: destEntry.getOwnerCanonicalId(),
@@ -315,10 +312,10 @@ class QueueProcessor {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'target';
+                    // TODO: add current node in bootstrap as log param
                     log.error('an error occurred on putData to S3',
                               { method: 'QueueProcessor._getAndPutData',
                                 entry: destEntry.getLogInfo(),
-                                origin: this.destConfig.s3,
                                 error: err.message });
                     return doneOnce(err);
                 }
@@ -334,7 +331,7 @@ class QueueProcessor {
                     replicationStatus: entry.getReplicationStatus() });
         const cbOnce = jsutil.once(cb);
         const target = where === 'source' ?
-                  this.backbeatSource : this.backbeatDestMetadata;
+                  this.backbeatSource : this.backbeatDest;
         const mdBlob = entry.getMetadataBlob();
         target.putMetadata({
             Bucket: entry.getBucket(),
@@ -357,51 +354,31 @@ class QueueProcessor {
     }
 
     _setupClients(sourceRole, targetRole, log) {
-        const sourceS3 = this.sourceConfig.s3.hosts[0];
+        const sourceS3 = this.sourceConfig.s3.host;
         // FIXME use bootstrap list
-        const destS3 = this.destConfig.s3.hosts[0];
+        const [destHost, destPort] = this.destConfig.bootstrapList[0]
+            .split(':');
 
         this.s3sourceAuthManager =
             this._createAuthManager(this.sourceConfig.auth, sourceRole, log);
         this.s3destAuthManager =
             this._createAuthManager(this.destConfig.auth, targetRole, log);
-        this.S3source = new AWS.S3({
-            endpoint: `${this.sourceConfig.s3.transport}://` +
-                `${sourceS3.host}:${sourceS3.port}`,
-            credentials:
-            this.s3sourceAuthManager.getCredentials(),
-            sslEnabled: true,
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: { agent: this.sourceHTTPAgent },
-        });
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.s3.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials:
-            this.s3sourceAuthManager.getCredentials(),
-            sslEnabled: true,
+            credentials: this.s3sourceAuthManager.getCredentials(),
+            sslEnabled: false,
             httpOptions: { agent: this.sourceHTTPAgent },
         });
 
-        this.backbeatDestData = new BackbeatClient({
-            endpoint: `${this.destConfig.s3.transport}://` +
-                `${this.destConfig.s3.host}:${this.destConfig.s3.port}`,
-            credentials:
-            this.s3destAuthManager.getCredentials(),
-            sslEnabled: true,
+        this.backbeatDest = new BackbeatClient({
+            endpoint: `${this.destConfig.transport}://${destHost}:${destPort}`,
+            credentials: this.s3destAuthManager.getCredentials(),
+            sslEnabled: false,
             httpOptions: { agent: this.destHTTPAgent },
             // disable retries for data route (need to fetch data
             // again from source)
             maxRetries: 0,
-        });
-        this.backbeatDestMetadata = new BackbeatClient({
-            endpoint: `${this.destConfig.s3.transport}://` +
-                `${destS3.host}:${destS3.port}`,
-            credentials:
-            this.s3destAuthManager.getCredentials(),
-            sslEnabled: true,
-            httpOptions: { agent: this.destHTTPAgent },
         });
     }
 

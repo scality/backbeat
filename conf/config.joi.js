@@ -1,16 +1,17 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, hostsListJoi, logJoi, zookeeperJoi } =
+const { hostPortJoi, bootstrapListJoi, logJoi, zookeeperJoi } =
           require('../lib/config/configItems.joi.js');
 
 const authJoi = joi.object({
     type: joi.alternatives().try('account', 'role').required(),
     account: joi.string(),
-    vault: joi.object({
-        hosts: hostsListJoi.required(),
-    }),
+    vault: hostPortJoi,
 });
+
+const transportJoi = joi.alternatives().try('http', 'https')
+    .default('http');
 
 const joiSchema = {
     zookeeper: zookeeperJoi,
@@ -21,26 +22,19 @@ const joiSchema = {
     extensions: {
         replication: {
             source: {
-                s3: joi.object({
-                    hosts: hostsListJoi.required(),
-                    transport: joi.alternatives().try('http', 'https')
-                        .default('http'),
-                }).required(),
+                transport: transportJoi,
+                s3: hostPortJoi.required(),
                 auth: authJoi.required(),
-                logSource: joi.alternatives()
-                    .try('bucketd', 'dmd').required(),
+                logSource: joi.alternatives().try('bucketd', 'dmd').required(),
                 bucketd: hostPortJoi,
                 dmd: hostPortJoi.keys({
                     logName: joi.string().default('s3-recordlog'),
                 }),
             },
             destination: {
-                s3: joi.object({
-                    hosts: hostsListJoi.required(),
-                    transport: joi.alternatives().try('http', 'https')
-                        .default('http'),
-                }).required(),
+                transport: transportJoi,
                 auth: authJoi.required(),
+                bootstrapList: bootstrapListJoi,
                 certFilePaths: joi.object({
                     key: joi.string().required(),
                     cert: joi.string().required(),

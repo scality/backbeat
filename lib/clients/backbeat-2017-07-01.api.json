@@ -126,6 +126,40 @@
                     }
                 }
             }
+        },
+        "GetObject": {
+            "name": "GetObject",
+            "http": {
+                "method": "GET",
+                "requestUri": "/{Bucket}/{Key+}"
+            },
+            "input": {
+                "shape": "GetObjectRequest"
+            },
+            "output": {
+                "shape": "GetObjectOutput"
+            },
+            "errors": [
+                {
+                    "shape": "NoSuchKey"
+                }
+            ],
+            "documentationUrl": "http://docs.amazonwebservices.com/AmazonS3/latest/API/RESTObjectGET.html",
+            "documentation": "Retrieves objects from Amazon S3."
+        },
+        "GetBucketReplication": {
+            "name": "GetBucketReplication",
+            "http": {
+                "method": "GET",
+                "requestUri": "/{Bucket}?replication"
+            },
+            "input": {
+                "shape": "GetBucketReplicationRequest"
+            },
+            "output": {
+                "shape": "GetBucketReplicationOutput"
+            },
+            "documentation": "Returns the replication configuration of a bucket."
         }
     }
 }
