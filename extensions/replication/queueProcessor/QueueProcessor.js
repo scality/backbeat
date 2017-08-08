@@ -130,20 +130,14 @@ class QueueProcessor {
      *   specific to queue processor
      * @param {String} repConfig.queueProcessor.groupId - kafka
      *   consumer group ID
-     * @param {Logger} logConfig - logging configuration object
-     * @param {String} logConfig.logLevel - logging level
-     * @param {Logger} logConfig.dumpLevel - dump level
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, logConfig) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
-        this.logConfig = logConfig;
 
-        this.logger = new Logger('Backbeat:Replication:QueueProcessor',
-                                 { level: logConfig.logLevel,
-                                   dump: logConfig.dumpLevel });
+        this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
         this.s3sourceAuthManager = null;
         this.s3destAuthManager = null;
@@ -579,7 +573,6 @@ class QueueProcessor {
     start() {
         const consumer = new BackbeatConsumer({
             zookeeper: this.zkConfig,
-            log: this.logConfig,
             topic: this.repConfig.topic,
             groupId: this.repConfig.queueProcessor.groupId,
             concurrency: 1, // replication has to process entries in

@@ -2,7 +2,6 @@ const assert = require('assert');
 const { errors } = require('arsenal');
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const zookeeper = { connectionString: 'localhost:2181' };
-const log = { logLevel: 'info', dumpLevel: 'error' };
 const topic = 'backbeat-producer-spec';
 const partition = 0;
 const multipleMessages = [
@@ -16,11 +15,11 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 [
     {
         type: 'partition mechanism',
-        config: { zookeeper, topic, partition, log },
+        config: { zookeeper, topic, partition },
     },
     {
         type: 'auto-partitioning (keyed-message) mechanism',
-        config: { zookeeper, topic, log },
+        config: { zookeeper, topic },
     },
 ].forEach(item => {
     describe(`BackbeatProducer - ${item.type}`, () => {
@@ -51,7 +50,7 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 describe('BackbeatProducer - Error case', () => {
     let producer;
     before(done => {
-        producer = new BackbeatProducer({ zookeeper, topic, log });
+        producer = new BackbeatProducer({ zookeeper, topic });
         producer
             .on('ready', () => producer.close(done))
             .on('error', done);

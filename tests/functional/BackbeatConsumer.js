@@ -2,7 +2,6 @@ const assert = require('assert');
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const zookeeper = { connectionString: 'localhost:2181' };
-const log = { logLevel: 'info', dumpLevel: 'error' };
 const topic = 'backbeat-consumer-spec';
 const groupId = `replication-group-${Math.random()}`;
 const messages = [
@@ -28,9 +27,9 @@ describe.skip('BackbeatConsumer', () => {
                 done();
             }
         }
-        producer = new BackbeatProducer({ zookeeper, log, topic });
+        producer = new BackbeatProducer({ zookeeper, topic });
         consumer = new BackbeatConsumer({ zookeeper, groupId, topic,
-            queueProcessor, log });
+            queueProcessor });
         producer.on('ready', () => {
             producerReady = true;
             _doneIfReady();

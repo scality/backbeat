@@ -398,8 +398,7 @@ describe('queue processor error management with mocking', () => {
                                          port: 7777 }] } },
               s3: { hosts: [{ host: constants.target.s3,
                               port: 7777 }], transport: 'http' } },
-            {} /* repConfig not needed */,
-            { logLevel: 'info', dumpLevel: 'error' });
+            {} /* repConfig not needed */);
 
         // don't call start() on the queue processor, so that we don't
         // attempt to fetch entries from kafka

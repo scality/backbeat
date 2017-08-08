@@ -13,7 +13,6 @@ const ZK_TEST_PATH = '/tests/prov-test';
 describe('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
     const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
-    const logConf = { logLevel: 'info', dumpLevel: 'error' };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
     let clients = [];
 
@@ -25,7 +24,7 @@ function testDispatch() {
         zkClient.on('connected', () => {
             zkClient.mkdirp(ZK_TEST_PATH, err => {
                 assert.ifError(err);
-                const prov = new ProvisionDispatcher(zkConf, logConf);
+                const prov = new ProvisionDispatcher(zkConf);
                 prov.addProvisions(provisionList, done);
             });
         });
@@ -45,7 +44,7 @@ function testDispatch() {
     });
 
     it('should be given all provisions when alone', done => {
-        clients[0] = new ProvisionDispatcher(zkConf, logConf);
+        clients[0] = new ProvisionDispatcher(zkConf);
         clients[0].subscribe((err, items) => {
             assert.ifError(err);
             assert.deepStrictEqual(items, provisionList);
@@ -90,7 +89,7 @@ function testDispatch() {
             });
         }
         for (let i = 0; i < 10; ++i) {
-            clients[i] = new ProvisionDispatcher(zkConf, logConf);
+            clients[i] = new ProvisionDispatcher(zkConf);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {
@@ -139,7 +138,7 @@ function testDispatch() {
             });
         }
         for (let i = 0; i < 10; ++i) {
-            clients[i] = new ProvisionDispatcher(zkConf, logConf);
+            clients[i] = new ProvisionDispatcher(zkConf);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {

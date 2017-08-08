@@ -5,8 +5,7 @@ const LogReader = require('./LogReader');
 
 class BucketFileLogReader extends LogReader {
     constructor(params) {
-        const { zkClient, kafkaProducer, dmdConfig, logConfig, logger } =
-            params;
+        const { zkClient, kafkaProducer, dmdConfig, logger } = params;
         super({ zkClient, kafkaProducer, logConsumer: null,
                 logId: `bucketFile_${dmdConfig.logName}`, logger });
 
@@ -20,7 +19,6 @@ class BucketFileLogReader extends LogReader {
         this._mdClient = new MetadataFileClient({
             host: dmdConfig.host,
             port: dmdConfig.port,
-            log: logConfig,
         });
     }
 
