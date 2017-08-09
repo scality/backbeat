@@ -2,7 +2,7 @@
 
 const constants = {
     zookeeperReplicationNamespace: '/backbeat/replication',
-    proxyPath: '/_/backbeat',
+    proxyPath: '/_/backbeat/vault',
 };
 
 module.exports = constants;
