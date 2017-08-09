@@ -1,5 +1,6 @@
 const assert = require('assert');
 const http = require('http');
+const { Client } = require('vaultclient');
 const CredentialsManager = require('../../credentials/CredentialsManager');
 
 const role = 'arn:aws:iam::1234567890:role/backbeat';
@@ -46,7 +47,8 @@ describe('Credentials Manager', () => {
     let credentialsManager = null;
     let vaultServer = null;
     before(done => {
-        credentialsManager = new CredentialsManager(vaultHost, vaultPort, role,
+        const vaultclient = new Client(vaultHost, vaultPort);
+        credentialsManager = new CredentialsManager(vaultclient, role,
             extension);
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
