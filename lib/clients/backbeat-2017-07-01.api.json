@@ -16,7 +16,7 @@
         "PutData": {
             "http": {
                 "method": "PUT",
-                "requestUri": "/_/backbeat/{Bucket}/{Key+}/data"
+                "requestUri": "/_/backbeat/data/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",
@@ -86,7 +86,7 @@
         "PutMetadata": {
             "http": {
                 "method": "PUT",
-                "requestUri": "/_/backbeat/{Bucket}/{Key+}/metadata"
+                "requestUri": "/_/backbeat/metadata/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",

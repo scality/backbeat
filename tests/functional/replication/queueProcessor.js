@@ -158,7 +158,7 @@ class S3Mock extends TestConfigurator {
                     }),
                     putMetadata: () => ({
                         method: 'PUT',
-                        path: `/_/backbeat/${this.getParam('source.bucket')}/${this.getParam('key')}/metadata`,
+                        path: `/_/backbeat/metadata/${this.getParam('source.bucket')}/${this.getParam('key')}`,
                         query: {},
                         handler: () => this._putMetadataSource,
                     }),
@@ -178,13 +178,13 @@ class S3Mock extends TestConfigurator {
                 s3: {
                     putData: () => ({
                         method: 'PUT',
-                        path: `/_/backbeat/${this.getParam('target.bucket')}/${this.getParam('key')}/data`,
+                        path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('key')}`,
                         query: {},
                         handler: () => this._putData,
                     }),
                     putMetadata: () => ({
                         method: 'PUT',
-                        path: `/_/backbeat/${this.getParam('target.bucket')}/${this.getParam('key')}/metadata`,
+                        path: `/_/backbeat/metadata/${this.getParam('target.bucket')}/${this.getParam('key')}`,
                         query: {},
                         handler: () => this._putMetadataTarget,
                     }),
