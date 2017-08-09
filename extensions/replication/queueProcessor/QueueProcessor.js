@@ -11,6 +11,7 @@ const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const VaultClient = require('vaultclient').Client;
+const { proxyPath } = require('../constants');
 
 const authdata = require('../../../conf/authdata.json');
 
@@ -76,7 +77,9 @@ class _RoleAuthManager {
         this._log = log;
         // FIXME use bootstrap list
         const [host, port] = bootstrapList[0].servers.split(':');
-        this._vaultclient = new VaultClient(host, port);
+        this._vaultclient = new VaultClient(host, port, undefined, undefined,
+            undefined, undefined, undefined, undefined, undefined, undefined,
+            proxyPath);
         this._credentials = new CredentialsManager(this._vaultclient,
                                                    'replication', roleArn);
     }
