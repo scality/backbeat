@@ -24,10 +24,11 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "arsenal": "scality/Arsenal",
-    "aws-sdk": "2.28.0",
     "async": "^2.3.0",
+    "aws-sdk": "2.28.0",
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient",
+    "commander": "^2.11.0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines",

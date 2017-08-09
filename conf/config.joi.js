@@ -7,7 +7,9 @@ const { hostPortJoi, bootstrapListJoi, logJoi } =
 const authJoi = joi.object({
     type: joi.alternatives().try('account', 'role').required(),
     account: joi.string(),
-    vault: hostPortJoi,
+    vault: hostPortJoi.keys({
+        adminPort: joi.number().greater(0).optional(),
+    }),
 });
 
 const transportJoi = joi.alternatives().try('http', 'https')
