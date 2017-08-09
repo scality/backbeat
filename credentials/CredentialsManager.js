@@ -1,11 +1,9 @@
 const { Credentials } = require('aws-sdk');
 const joi = require('joi');
-const vaultclient = require('vaultclient');
 const { Logger } = require('werelogs');
 
 const configJoi = {
-    host: joi.string().required(),
-    port: joi.number().required(),
+    vaultclient: joi.object().required(),
     extension: joi.string().required(),
     roleArn: joi.string().required(),
 };
@@ -17,17 +15,16 @@ const configJoi = {
 class CredentialsManager extends Credentials {
     /**
     * constructor
-    * @param {string} host - hostname/ip of Vault server
-    * @param {number} port - port of Vault server
+    * @param {object} vaultclient - Vaultclient instance
     * @param {string} extension - name of the extension
     * @param {string} roleArn - ARN of the role
     * @return {object} this - current instance
     */
-    constructor(host, port, extension, roleArn) {
+    constructor(vaultclient, extension, roleArn) {
         super();
-        joi.attempt({ host, port, extension, roleArn }, configJoi);
+        joi.attempt({ vaultclient, extension, roleArn }, configJoi);
 
-        this._vaultclient = new vaultclient.Client(host, port);
+        this._vaultclient = vaultclient;
         this._log = new Logger('Backbeat').newRequestLogger();
         this._extension = extension;
         this._roleArn = roleArn;

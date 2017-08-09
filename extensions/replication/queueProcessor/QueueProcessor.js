@@ -72,12 +72,12 @@ class _AccountAuthManager {
 }
 
 class _RoleAuthManager {
-    constructor(authConfig, roleArn, log) {
+    constructor(bootstrapList, roleArn, log) {
         this._log = log;
         // FIXME use bootstrap list
-        const { host, port } = authConfig.vault.hosts[0];
+        const [host, port] = bootstrapList[0].split(':');
         this._vaultclient = new VaultClient(host, port);
-        this._credentials = new CredentialsManager(host, port,
+        this._credentials = new CredentialsManager(this._vaultclient,
                                                    'replication', roleArn);
     }
 
@@ -120,7 +120,6 @@ class QueueProcessor {
      * @param {string} zkConfig.connectionString - zookeeper connection string
      *   as "host:port[/chroot]"
      * @param {Object} sourceConfig - source S3 configuration
-     * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
      * @param {Object} destConfig - target S3 configuration
      * @param {Object} destConfig.s3 - s3 endpoint configuration object
@@ -334,10 +333,10 @@ class QueueProcessor {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'target';
+                    // TODO: add current node in bootstrap as log param
                     log.error('an error occurred when looking up target ' +
                               'account attributes',
                               { method: 'QueueProcessor._setTargetAccountMd',
-                                entry: destEntry.getLogInfo(),
                                 error: err.message });
                     return cb(err);
                 }
@@ -449,9 +448,10 @@ class QueueProcessor {
     }
 
     _setupClients(sourceRole, targetRole, log) {
-        const sourceS3 = this.sourceConfig.s3.hosts[0];
+        const sourceS3 = this.sourceConfig.s3.host;
         // FIXME use bootstrap list
-        const destS3 = this.destConfig.s3.hosts[0];
+        const [destHost, destPort] = this.destConfig.bootstrapList[0]
+            .split(':');
 
         this.s3sourceAuthManager =
             this._createAuthManager(this.sourceConfig.auth, sourceRole, log);
@@ -462,32 +462,28 @@ class QueueProcessor {
         // putData route in order to fetch data again from source).
 
         this.S3source = new AWS.S3({
-            endpoint: `${this.sourceConfig.s3.transport}://` +
+            endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials:
-            this.s3sourceAuthManager.getCredentials(),
-            sslEnabled: true,
+            credentials: this.s3sourceAuthManager.getCredentials(),
+            sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
             httpOptions: { agent: this.sourceHTTPAgent },
             maxRetries: 0,
         });
         this.backbeatSource = new BackbeatClient({
-            endpoint: `${this.sourceConfig.s3.transport}://` +
+            endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials:
-            this.s3sourceAuthManager.getCredentials(),
-            sslEnabled: true,
+            credentials: this.s3sourceAuthManager.getCredentials(),
+            sslEnabled: this.sourceConfig.transport === 'https',
             httpOptions: { agent: this.sourceHTTPAgent },
             maxRetries: 0,
         });
 
         this.backbeatDest = new BackbeatClient({
-            endpoint: `${this.destConfig.s3.transport}://` +
-                `${destS3.host}:${destS3.port}`,
-            credentials:
-            this.s3destAuthManager.getCredentials(),
-            sslEnabled: true,
+            endpoint: `${this.destConfig.transport}://${destHost}:${destPort}`,
+            credentials: this.s3destAuthManager.getCredentials(),
+            sslEnabled: this.destConfig.transport === 'https',
             httpOptions: { agent: this.destHTTPAgent },
             maxRetries: 0,
         });
