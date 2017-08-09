@@ -15,7 +15,7 @@ const configJoi = {
 class CredentialsManager extends Credentials {
     /**
     * constructor
-    * @param {object} vaultclient - Vaultclient instance
+    * @param {object} vaultclient - vaultclient instance
     * @param {string} extension - name of the extension
     * @param {string} roleArn - ARN of the role
     * @return {object} this - current instance
