@@ -111,7 +111,7 @@ class _SetupReplication {
         };
         this._iamClients = {
             source: _setupIAMClient(source.transport,
-                `${source.auth.vault.host}:${source.auth.vault.iamPort}`,
+                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 sourceProfile),
             target: _setupIAMClient(source.transport, destEndpoint,
                 targetProfile),
