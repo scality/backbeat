@@ -1,8 +1,8 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, bootstrapListJoi, logJoi, zookeeperJoi } =
-          require('../lib/config/configItems.joi.js');
+const { hostPortJoi, bootstrapListJoi, logJoi } =
+    require('../lib/config/configItems.joi.js');
 
 const authJoi = joi.object({
     type: joi.alternatives().try('account', 'role').required(),
@@ -14,7 +14,9 @@ const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
 
 const joiSchema = {
-    zookeeper: zookeeperJoi,
+    zookeeper: {
+        connectionString: joi.string().required(),
+    },
     kafka: {
         hosts: joi.string().required(),
     },
