@@ -5,105 +5,109 @@ const URL = require('url');
 const querystring = require('querystring');
 
 const VersionIDUtils = require('arsenal').versioning.VersionID;
+const routesUtils = require('arsenal').s3routes.routesUtils;
+const errors = require('arsenal').errors;
+
+const Logger = require('werelogs').Logger;
 
 const QueueProcessor = require('../../../extensions/replication' +
                                '/queueProcessor/QueueProcessor');
+const TestConfigurator = require('../../utils/TestConfigurator');
 
 /* eslint-disable max-len */
 
+
 function getMD5(body) {
     return crypto.createHash('md5').update(body).digest('hex');
+}
+
+function buildLocations(keysArray, bodiesArray, options) {
+    const locations = [];
+    let start = 0;
+    for (let i = 0; i < keysArray.length; ++i) {
+        const location = { key: keysArray[i],
+                           start,
+                           size: bodiesArray[i].length,
+                           dataStoreName: 'file' };
+        if (!(options && options.doNotIncludeETag)) {
+            location.dataStoreETag = `${i + 1}:${getMD5(bodiesArray[i])}`;
+        }
+        locations.push(location);
+        start += bodiesArray[i].length;
+    }
+    return locations;
+}
+
+const XML_CHARACTER_MAP = {
+    '&': '&amp;',
+    '"': '&quot;',
+    "'": '&apos;',
+    '<': '&lt;',
+    '>': '&gt;',
+};
+
+const xmlRegex = new RegExp(
+    `[${Object.keys(XML_CHARACTER_MAP).join('')}]`, 'g');
+
+function escapeForXML(string) {
+    return string && string.replace
+        ? string.replace(xmlRegex, item => XML_CHARACTER_MAP[item])
+        : string;
 }
 
 const constants = {
     source: {
         s3: '127.0.0.1',
         vault: '127.0.0.2',
-        bucket: 'source-bucket',
-        accountId: 123456789012,
-        accessKey: 'accessKey1',
-        secretKey: 'verySecretKey1',
-        canonicalId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
-        dataKeyPart1: '6d808697fbaf9f16fb32b94be189b80b3b9b2890',
-        dataKeyPart2: 'ab30293a044eca5215068c6a06cfdb1b636a16e4',
+        dataPartsKeys: ['6d808697fbaf9f16fb32b94be189b80b3b9b2890',
+                        'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
     },
     target: {
         s3: '127.0.0.3',
         vault: '127.0.0.4',
-        bucket: 'target-bucket',
-        accountId: 123456789013,
-        accessKey: 'accessKey2',
-        secretKey: 'verySecretKey2',
-        canonicalId: 'bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1',
-        dataKeyPart1: '7d808697fbaf9f16fb32b94be189b80b3b9b2890',
-        dataKeyPart2: 'e54e2ced6625f67e07f4735fb7b897a7bc81d603',
+        dataPartsKeys: ['7d808697fbaf9f16fb32b94be189b80b3b9b2890',
+                        'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
     },
-    key: 'key_to_replicate',
-    versionId: '98498980852335999999RG001  100',
-    bodyPart1: 'some contents to be replicated',
-    bodyPart2: 'some more contents to be replicated',
-    roleSessionName: 'backbeat-replication',
+    partsContents: ['some contents to be replicated',
+                    'some more contents to be replicated'],
 };
 
-const srcLocations = [
-    {
-        key: constants.source.dataKeyPart1,
-        start: 0,
-        size: constants.bodyPart1.length,
-        dataStoreName: 'file',
-        dataStoreETag: `1:${getMD5(constants.bodyPart1)}`,
-    },
-    {
-        key: constants.source.dataKeyPart2,
-        start: constants.bodyPart1.length,
-        size: constants.bodyPart2.length,
-        dataStoreName: 'file',
-        dataStoreETag: `2:${getMD5(constants.bodyPart2)}`,
-    },
-];
+class S3Mock extends TestConfigurator {
+    constructor() {
+        super();
 
-const destLocations = [
-    {
-        key: constants.target.dataKeyPart1,
-        start: 0,
-        size: constants.bodyPart1.length,
-        dataStoreName: 'file',
-        dataStoreETag: `1:${getMD5(constants.bodyPart1)}`,
-    },
-    {
-        key: constants.target.dataKeyPart2,
-        start: constants.bodyPart1.length,
-        size: constants.bodyPart2.length,
-        dataStoreName: 'file',
-        dataStoreETag: `2:${getMD5(constants.bodyPart2)}`,
-    },
-];
+        this.log = new Logger('QueueProcessor:test:S3Mock');
 
-class S3Mock {
-    constructor(locations) {
-        this.locations = locations;
-        this.partsContent = [constants.bodyPart1, constants.bodyPart2];
-        this.versionIdEncoded = VersionIDUtils.encode(constants.versionId);
-        this.contentMd5 = getMD5(constants.bodyPart1 + constants.bodyPart2);
-        this.sourceRole =
-            `arn:aws:iam::${constants.source.accountId}:role/backbeat`;
-        this.targetRole =
-            `arn:aws:iam::${constants.target.accountId}:role/backbeat`;
-        this.kafkaEntry = {
+        const sourceMd = {
+            versionedKey: () =>
+                `${this.getParam('key')}\u0000${this.getParam('versionId')}`,
+            contentMd5: () => this.getParam('contentMd5'),
+            contentLength: () => this.getParam('contentLength'),
+            location: () =>
+                buildLocations(this.getParam('source.dataPartsKeys'),
+                               this.getParam('partsContents')),
+            replicationInfo: {
+                role: () =>
+                    `${this.getParam('source.role')},${this.getParam('target.role')}`,
+                destination: () =>
+                    `arn:aws:s3:::${this.getParam('target.bucket')}`,
+            },
+        };
+
+        const kafkaEntry = () => ({
             key: 'somekey',
             value: JSON.stringify({
                 type: 'put',
-                bucket: constants.source.bucket,
-                key: `${constants.key}\u0000${constants.versionId}`,
+                bucket: this.getParam('source.bucket'),
+                key: this.getParam('source.md.versionedKey'),
                 value: JSON.stringify({
                     'md-model-version': 2,
                     'owner-display-name': 'Bart',
-                    'owner-id': constants.source.canonicalId,
-                    'content-length': constants.bodyPart1.length +
-                        constants.bodyPart2.length,
+                    'owner-id': this.getParam('source.canonicalId'),
+                    'content-length': this.getParam('source.md.contentLength'),
                     'content-type': 'text/plain',
                     'last-modified': '2017-07-25T21:45:47.660Z',
-                    'content-md5': this.contentMd5,
+                    'content-md5': this.getParam('source.md.contentMd5'),
                     'x-amz-version-id': 'null',
                     'x-amz-server-version-id': '',
                     'x-amz-storage-class': 'STANDARD',
@@ -119,234 +123,203 @@ class S3Mock {
                         READ_ACP: [],
                     },
                     'key': '',
-                    'location': this.locations,
+                    'location': this.getParam('source.md.location'),
                     'isDeleteMarker': false,
                     'tags': {},
                     'replicationInfo': {
                         status: 'PENDING',
                         content: ['DATA', 'METADATA'],
-                        destination: `arn:aws:s3:::${constants.target.bucket}`,
+                        destination: this.getParam('source.md.replicationInfo.destination'),
                         storageClass: 'STANDARD',
-                        role: `${this.sourceRole},${this.targetRole}`,
+                        role: this.getParam('source.md.replicationInfo.role'),
                     },
-                    'x-amz-meta-s3cmd-attrs': `uid:0/gname:root/uname:root/gid:0/mode:33188/mtime:1501018866/atime:1501018885/md5:${this.contentMd5}/ctime:1501018866`,
-                    'versionId': constants.versionId,
+                    'x-amz-meta-s3cmd-attrs': `uid:0/gname:root/uname:root/gid:0/mode:33188/mtime:1501018866/atime:1501018885/md5:${this.getParam('contentMd5')}/ctime:1501018866`,
+                    'versionId': this.getParam('versionId'),
                 }),
             }),
-        };
-        this.replicatedData = null;
-        this.replicatedMd = null;
-        this.putDataCount = 0;
+        });
 
-        this.baselineHandlers = [
-            {
-                host: constants.source.s3,
-                method: 'GET',
-                path: `/${constants.source.bucket}`,
-                query: {
-                    replication: '',
-                },
-                handler: (req, url, query, res) => {
-                    res.setHeader('content-type', 'application/xml');
-                    res.writeHead(200);
-                    res.end(`<?xml version="1.0" encoding="UTF-8"?><ReplicationConfiguration xmlns="http://s3.amazonaws.com/doc/2006-03-01/"><Rule><ID>myrule</ID><Prefix/><Status>Enabled</Status><Destination><Bucket>arn:aws:s3:::${constants.target.bucket}</Bucket><StorageClass>STANDARD</StorageClass></Destination></Rule><Role>${this.sourceRole},${this.targetRole}</Role></ReplicationConfiguration>`);
-                },
-
-            }, {
-                host: constants.target.vault,
-                method: 'GET',
-                path: '/',
-                query: {
-                    Action: 'AccountsCanonicalIds',
-                },
-                handler: (req, url, query, res) => {
-                    assert.strictEqual(Number(query.accountIds),
-                                       constants.target.accountId);
-
-                    res.writeHead(200);
-                    res.end(JSON.stringify([
-                        {
-                            accountId: query.accountId,
-                            canonicalId: constants.target.canonicalId,
+        const routes = {
+            source: {
+                s3: {
+                    getBucketReplication: () => ({
+                        method: 'GET',
+                        path: `/${this.getParam('source.bucket')}`,
+                        query: {
+                            replication: '',
                         },
-                    ]));
+                        handler: () => this._getBucketReplication,
+                    }),
+                    getObject: () => ({
+                        method: 'GET',
+                        path: `/${this.getParam('source.bucket')}/${this.getParam('key')}`,
+                        query: {},
+                        handler: () => this._getObject,
+                    }),
+                    putMetadata: () => ({
+                        method: 'PUT',
+                        path: `/_/backbeat/${this.getParam('source.bucket')}/${this.getParam('key')}/metadata`,
+                        query: {},
+                        handler: () => this._putMetadataSource,
+                    }),
                 },
-
-            }, {
-                host: constants.source.vault,
-                method: 'POST',
-                path: '/',
-                query: {
-                    Action: 'AssumeRoleBackbeat',
-                },
-                handler: (req, url, query, res) => {
-                    assert.strictEqual(query.RoleArn, this.sourceRole);
-                    assert.strictEqual(query.RoleSessionName,
-                                       constants.roleSessionName);
-
-                    res.setHeader('content-type', 'application/json');
-                    res.writeHead(200);
-                    res.end(JSON.stringify({
-                        Credentials: {
-                            AccessKeyId: constants.source.accessKey,
-                            SecretAccessKey: constants.source.secretKey,
-                            SessionToken: 'dummySessionToken',
-                            Expiration: 1501108900014,
+                vault: {
+                    assumeRoleBackbeat: () => ({
+                        method: 'POST',
+                        path: '/',
+                        query: {
+                            Action: 'AssumeRoleBackbeat',
                         },
-                        AssumedRoleUser: 'arn:aws:sts::123456789012:assumed-role/backbeat/backbeat-replication',
-                    }));
-                },
-
-            }, {
-                host: constants.source.s3,
-                method: 'GET',
-                path: `/${constants.source.bucket}/${constants.key}`,
-                query: {},
-                handler: (req, url, query, res) => {
-                    const partNumber = Number.parseInt(query.partNumber, 10);
-                    const resBody = this.partsContent[partNumber - 1];
-                    assert.strictEqual(query.versionId,
-                                       this.versionIdEncoded);
-
-                    res.setHeader('content-type', 'application/octet-stream');
-                    res.setHeader('content-length', resBody.length);
-                    res.writeHead(200);
-                    res.end(resBody);
-                },
-
-            }, {
-                host: constants.target.vault,
-                method: 'POST',
-                path: '/',
-                query: {
-                    Action: 'AssumeRoleBackbeat',
-                },
-                handler: (req, url, query, res) => {
-                    assert.strictEqual(query.RoleArn, this.targetRole);
-                    assert.strictEqual(query.RoleSessionName,
-                                       constants.roleSessionName);
-
-                    res.setHeader('content-type', 'application/json');
-                    res.writeHead(200);
-                    res.end(JSON.stringify({
-                        Credentials: {
-                            AccessKeyId: constants.target.accessKey,
-                            SecretAccessKey: constants.target.secretKey,
-                            SessionToken: 'dummySessionToken',
-                            Expiration: 1501108900014,
-                        },
-                        AssumedRoleUser: `arn:aws:sts::${constants.source.accountId}:assumed-role/backbeat/${constants.roleSessionName}`,
-                    }));
-                },
-
-            }, {
-                host: constants.target.s3,
-                method: 'PUT',
-                path: `/_/backbeat/${constants.target.bucket}/${constants.key}/data`,
-                query: {},
-                handler: (req, url, query, reqBody, res) => {
-                    this.putDataCount++;
-                    if (this.putDataCount < this.locations.length) {
-                        assert.strictEqual(this.hasPutTargetData, false);
-                    }
-                    const md5 = req.headers['content-md5'];
-                    const { dataStoreETag } = srcLocations.find(location =>
-                        location.dataStoreETag.includes(md5));
-                    const partNumber = Number(dataStoreETag.split(':')[0]);
-                    assert.strictEqual(reqBody, this.partsContent[partNumber - 1]);
-
-                    res.setHeader('content-type', 'application/json');
-                    res.writeHead(200);
-                    res.end(JSON.stringify([destLocations[partNumber - 1]]));
-                    this.hasPutTargetData =
-                        this.putDataCount === this.locations.length;
-                },
-
-            }, {
-                host: constants.target.s3,
-                method: 'PUT',
-                path: `/_/backbeat/${constants.target.bucket}/${constants.key}/metadata`,
-                query: {},
-                handler: (req, url, query, reqBody, res) => {
-                    assert.strictEqual(this.hasPutTargetData, true);
-                    assert.strictEqual(this.hasPutTargetMd, false);
-
-                    const parsedMd = JSON.parse(reqBody);
-                    assert.deepStrictEqual(parsedMd.replicationInfo, {
-                        status: 'REPLICA',
-                        content: ['DATA', 'METADATA'],
-                        destination: `arn:aws:s3:::${constants.target.bucket}`,
-                        storageClass: 'STANDARD',
-                        role: `${this.sourceRole},${this.targetRole}`,
-                    });
-                    assert.strictEqual(parsedMd['owner-id'],
-                                       constants.target.canonicalId);
-
-                    // Assert locations, depending on whether it is multipart
-                    assert.deepStrictEqual(parsedMd.location,
-                        this.locations.length > 1 ?
-                        destLocations : [destLocations[0]]);
-
-                    res.writeHead(200);
-                    res.end();
-                    this.hasPutTargetMd = true;
-                },
-
-            }, {
-                host: constants.source.s3,
-                method: 'PUT',
-                path: `/_/backbeat/${constants.source.bucket}/${constants.key}/metadata`,
-                query: {},
-                handler: (req, url, query, reqBody, res) => {
-                    assert.strictEqual(this.hasPutTargetMd, true);
-                    assert.strictEqual(this.hasPutSourceMd, false);
-
-                    const parsedMd = JSON.parse(reqBody);
-                    assert.deepStrictEqual(parsedMd.replicationInfo, {
-                        status: 'COMPLETED',
-                        content: ['DATA', 'METADATA'],
-                        destination: `arn:aws:s3:::${constants.target.bucket}`,
-                        storageClass: 'STANDARD',
-                        role: `${this.sourceRole},${this.targetRole}`,
-                    });
-                    assert.strictEqual(parsedMd['owner-id'],
-                                       constants.source.canonicalId);
-
-                    res.writeHead(200);
-                    res.end();
-                    this.hasPutSourceMd = true;
+                        handler: () => this._assumeRoleBackbeatSource,
+                    }),
                 },
             },
-        ];
+            target: {
+                s3: {
+                    putData: () => ({
+                        method: 'PUT',
+                        path: `/_/backbeat/${this.getParam('target.bucket')}/${this.getParam('key')}/data`,
+                        query: {},
+                        handler: () => this._putData,
+                    }),
+                    putMetadata: () => ({
+                        method: 'PUT',
+                        path: `/_/backbeat/${this.getParam('target.bucket')}/${this.getParam('key')}/metadata`,
+                        query: {},
+                        handler: () => this._putMetadataTarget,
+                    }),
+                },
+                vault: {
+                    getAccountsCanonicalIds: () => ({
+                        method: 'GET',
+                        path: '/',
+                        query: {
+                            Action: 'AccountsCanonicalIds',
+                        },
+                        handler: () => this._getAccountsCanonicalIds,
+                    }),
+                    assumeRoleBackbeat: () => ({
+                        method: 'POST',
+                        path: '/',
+                        query: {
+                            Action: 'AssumeRoleBackbeat',
+                        },
+                        handler: () => this._assumeRoleBackbeatTarget,
+                    }),
+                },
+            },
+        };
+
+        const params = {
+            source: {
+                bucket: 'source-bucket',
+                accountId: 123456789012,
+                accessKey: 'accessKey1',
+                secretKey: 'verySecretKey1',
+                canonicalId: 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa',
+                dataPartsKeys: () =>
+                    constants.source.dataPartsKeys.slice(
+                        0, this.getParam('nbParts')),
+                role: () =>
+                    `arn:aws:iam::${this.getParam('source.accountId')}:role/backbeat`,
+                assumedRole: () =>
+                    `arn:aws:sts::${this.getParam('source.accountId')}:assumed-role/backbeat/${this.getParam('roleSessionName')}`,
+                md: sourceMd,
+            },
+            target: {
+                bucket: 'target-bucket',
+                accountId: 123456789013,
+                accessKey: 'accessKey2',
+                secretKey: 'verySecretKey2',
+                canonicalId: 'bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1',
+                dataPartsKeys: () =>
+                    constants.target.dataPartsKeys.slice(
+                        0, this.getParam('nbParts')),
+                role: () =>
+                    `arn:aws:iam::${this.getParam('target.accountId')}:role/backbeat`,
+                assumedRole: () =>
+                    `arn:aws:sts::${this.getParam('target.accountId')}:assumed-role/backbeat/${this.getParam('roleSessionName')}`,
+                md: {
+                    location: () =>
+                        buildLocations(this.getParam('target.dataPartsKeys'),
+                                       this.getParam('partsContents')),
+                },
+            },
+            key: 'key_to_replicate',
+            nbParts: 1,
+            versionId: '98498980852335999999RG001  100',
+            roleSessionName: 'backbeat-replication',
+            replicationEnabled: true,
+            partsContents: () =>
+                constants.partsContents.slice(0, this.getParam('nbParts')),
+            versionIdEncoded: () =>
+                VersionIDUtils.encode(this.getParam('versionId')),
+            contentLength: () =>
+                this.getParam('partsContents')
+                .reduce((sum, partBody) => sum + partBody.length, 0),
+            contentMd5: () =>
+                getMD5(this.getParam('partsContents').join('')),
+            kafkaEntry,
+            routes,
+        };
+
+        this.setParam(null, params, { persistent: true });
 
         this.resetTest();
     }
 
     resetTest() {
+        super.resetTest();
+
+        this.partsWritten = [];
         this.hasPutTargetData = false;
+        this.putDataCount = 0;
         this.hasPutTargetMd = false;
         this.hasPutSourceMd = false;
+        this.setExpectedReplicationStatus('COMPLETED');
     }
 
-    _matchHandler(req, url, query) {
-        return this.baselineHandlers.find(
-            h => (h.host === req.headers.host.split(':')[0] &&
-                  h.method === req.method &&
-                  h.path === url.pathname &&
-                  Object.keys(h.query).every(k => query[k] === h.query[k])));
+    setExpectedReplicationStatus(expected) {
+        this.expectedReplicationStatus = expected;
     }
 
-    _onParsedRequest(req, url, query, reqBody, res) {
-        const handler = this._matchHandler(req, url, query);
+    _findRouteHandler(req, url, query) {
+        const host = req.headers.host.split(':')[0];
+        let routesKey;
+        if (host === constants.source.s3) {
+            routesKey = 'routes.source.s3';
+        } else if (host === constants.source.vault) {
+            routesKey = 'routes.source.vault';
+        } else if (host === constants.target.s3) {
+            routesKey = 'routes.target.s3';
+        } else if (host === constants.target.vault) {
+            routesKey = 'routes.target.vault';
+        }
+        const routes = this.getParam(routesKey);
+        const action = Object.keys(routes).find(key => {
+            const route = routes[key];
+            return (route.method === req.method &&
+                    route.path === url.pathname &&
+                    Object.keys(route.query).every(
+                        k => query[k] === route.query[k]));
+        });
+        if (action === undefined) {
+            return undefined;
+        }
+        return this.getParam(`${routesKey}.${action}.handler`);
+    }
+
+    _onParsedRequest(req, url, query, res, reqBody) {
+        const handler = this._findRouteHandler(req, url, query);
         if (handler !== undefined) {
             if (req.method === 'GET') {
-                return handler.handler(req, url, query, res);
+                return handler.bind(this)(req, url, query, res);
             }
             if (req.method === 'PUT') {
-                return handler.handler(req, url, query, reqBody, res);
+                return handler.bind(this)(req, url, query, res, reqBody);
             }
             if (req.method === 'POST') {
-                return handler.handler(req, url, query, res);
+                return handler.bind(this)(req, url, query, res);
             }
         }
         res.writeHead(501);
@@ -369,18 +342,216 @@ class S3Mock {
                 if (req.method === 'POST') {
                     const formData = querystring.parse(reqBody);
                     return this._onParsedRequest(req, url, formData,
-                                                 reqBody, res);
+                                                 res, reqBody);
                 }
-                return this._onParsedRequest(req, url, query, reqBody, res);
+                return this._onParsedRequest(req, url, query, res, reqBody);
             });
         }
-        return this._onParsedRequest(req, url, query, null, res);
+        return this._onParsedRequest(req, url, query, res);
+    }
+
+    installS3ErrorResponder(action, error, options) {
+        this.setParam(`routes.${action}.handler`,
+                      (req, url, query, res) => {
+                          routesUtils.responseXMLBody(
+                              error, null, res, this.log.newRequestLogger());
+                          if (options && options.once) {
+                              this.resetParam(`routes.${action}.handler`);
+                          }
+                      }, { _static: true });
+    }
+
+    installVaultErrorResponder(action, error, options) {
+        const xmlBody = [
+            '<ErrorResponse ',
+            'xmlns="https://iam.amazonaws.com/doc/2010-05-08/">',
+            '<Error>',
+            '<Code>', error.message, '</Code>',
+            '<Message>', escapeForXML(error.description), '</Message>',
+            '</Error>',
+            '<RequestId>42</RequestId>',
+            '</ErrorResponse>',
+        ];
+        this.setParam(`routes.${action}.handler`,
+                      (req, url, query, res) => {
+                          res.writeHead(error.code);
+                          res.end(xmlBody.join(''));
+                          if (options && options.once) {
+                              this.resetParam(`routes.${action}.handler`);
+                          }
+                      }, { _static: true });
+    }
+
+    installBackbeatErrorResponder(action, error, options) {
+        this.setParam(`routes.${action}.handler`,
+                      (req, url, query, res) => {
+                          routesUtils.responseJSONBody(
+                              error, null, res, this.log.newRequestLogger());
+                          if (options && options.once) {
+                              this.resetParam(`routes.${action}.handler`);
+                          }
+                      }, { _static: true });
+    }
+
+    // default handlers
+
+    _getBucketReplication(req, url, query, res) {
+        res.setHeader('content-type', 'application/xml');
+        res.writeHead(200);
+        res.end(['<?xml version="1.0" encoding="UTF-8"?>',
+                 '<ReplicationConfiguration ',
+                 'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
+                 '<Rule>',
+                 '<ID>myrule</ID>', '<Prefix/>',
+                 '<Status>',
+                 this.getParam('replicationEnabled') ? 'Enabled' : 'Disabled',
+                 '</Status>',
+                 '<Destination>',
+                 '<Bucket>',
+                 this.getParam('source.md.replicationInfo.destination'),
+                 '</Bucket>',
+                 '<StorageClass>STANDARD</StorageClass>',
+                 '</Destination>',
+                 '</Rule>',
+                 '<Role>',
+                 this.getParam('source.md.replicationInfo.role'),
+                '</Role>',
+                 '</ReplicationConfiguration>'].join(''));
+    }
+
+    _getAccountsCanonicalIds(req, url, query, res) {
+        assert.strictEqual(Number(query.accountIds),
+                           this.getParam('target.accountId'));
+
+        res.writeHead(200);
+        res.end(JSON.stringify([
+            {
+                accountId: query.accountId,
+                canonicalId: this.getParam('target.canonicalId'),
+            },
+        ]));
+    }
+
+    _assumeRoleBackbeatSource(req, url, query, res) {
+        assert.strictEqual(query.RoleArn,
+                           this.getParam('source.role'));
+        assert.strictEqual(query.RoleSessionName,
+                           this.getParam('roleSessionName'));
+
+        res.setHeader('content-type', 'application/json');
+        res.writeHead(200);
+        res.end(JSON.stringify({
+            Credentials: {
+                AccessKeyId: this.getParam('source.accessKey'),
+                SecretAccessKey: this.getParam('source.secretKey'),
+                SessionToken: 'dummySessionToken',
+                Expiration: 1501108900014,
+            },
+            AssumedRoleUser: this.getParam('source.assumedRole'),
+        }));
+    }
+
+    _assumeRoleBackbeatTarget(req, url, query, res) {
+        assert.strictEqual(query.RoleArn,
+                           this.getParam('target.role'));
+        assert.strictEqual(query.RoleSessionName,
+                           this.getParam('roleSessionName'));
+
+        res.setHeader('content-type', 'application/json');
+        res.writeHead(200);
+        res.end(JSON.stringify({
+            Credentials: {
+                AccessKeyId: this.getParam('target.accessKey'),
+                SecretAccessKey: this.getParam('target.secretKey'),
+                SessionToken: 'dummySessionToken',
+                Expiration: 1501108900014,
+            },
+            AssumedRoleUser: this.getParam('target.assumedRole'),
+        }));
+    }
+
+    _getObject(req, url, query, res) {
+        const partNumber = Number.parseInt(query.partNumber, 10);
+        const resBody = this.getParam('partsContents')[partNumber - 1];
+        assert.strictEqual(query.versionId,
+                           this.getParam('versionIdEncoded'));
+
+        res.setHeader('content-type', 'application/octet-stream');
+        res.setHeader('content-length', resBody.length);
+        res.writeHead(200);
+        res.end(resBody);
+    }
+
+    _putData(req, url, query, res, reqBody) {
+        const srcLocations = this.getParam('source.md.location');
+        const destLocations = this.getParam('target.md.location');
+        const md5 = req.headers['content-md5'];
+        const { dataStoreETag } = srcLocations.find(
+            location => location.dataStoreETag.includes(md5));
+        const partNumber = Number(dataStoreETag.split(':')[0]);
+        assert.strictEqual(
+            reqBody, this.getParam('partsContents')[partNumber - 1]);
+
+        res.setHeader('content-type', 'application/json');
+        res.writeHead(200);
+        res.end(JSON.stringify([destLocations[partNumber - 1]]));
+        this.partsWritten[partNumber - 1] = true;
+        this.hasPutTargetData =
+            (this.partsWritten.filter(written => written === true).length
+             === srcLocations.length);
+    }
+
+    _putMetadataTarget(req, url, query, res, reqBody) {
+        if (this.getParam('nbParts') > 0) {
+            assert.strictEqual(this.hasPutTargetData, true);
+        }
+        assert.strictEqual(this.hasPutTargetMd, false);
+
+        const parsedMd = JSON.parse(reqBody);
+        assert.deepStrictEqual(parsedMd.replicationInfo, {
+            status: 'REPLICA',
+            content: ['DATA', 'METADATA'],
+            destination: this.getParam('source.md.replicationInfo.destination'),
+            storageClass: 'STANDARD',
+            role: this.getParam('source.md.replicationInfo.role'),
+        });
+        assert.strictEqual(parsedMd['owner-id'],
+                           this.getParam('target.canonicalId'));
+
+        // Assert locations, depending on whether it is multipart
+        assert.deepStrictEqual(parsedMd.location,
+                               this.getParam('target.md.location'));
+
+        res.writeHead(200);
+        res.end();
+        this.hasPutTargetMd = true;
+    }
+
+    _putMetadataSource(req, url, query, res, reqBody) {
+        assert.strictEqual(this.hasPutTargetMd,
+                           (this.expectedReplicationStatus === 'COMPLETED'));
+        assert.strictEqual(this.hasPutSourceMd, false);
+
+        const parsedMd = JSON.parse(reqBody);
+        assert.deepStrictEqual(parsedMd.replicationInfo, {
+            status: this.expectedReplicationStatus,
+            content: ['DATA', 'METADATA'],
+            destination: this.getParam('source.md.replicationInfo.destination'),
+            storageClass: 'STANDARD',
+            role: this.getParam('source.md.replicationInfo.role'),
+        });
+        assert.strictEqual(parsedMd['owner-id'],
+                           this.getParam('source.canonicalId'));
+
+        res.writeHead(200);
+        res.end();
+        this.hasPutSourceMd = true;
     }
 }
 
 /* eslint-enable max-len */
 
-describe('queue processor error management with mocking', () => {
+describe('queue processor functional tests with mocking', () => {
     let queueProcessor;
     let httpServer;
     let s3mock;
@@ -398,51 +569,243 @@ describe('queue processor error management with mocking', () => {
                                          port: 7777 }] } },
               s3: { hosts: [{ host: constants.target.s3,
                               port: 7777 }], transport: 'http' } },
-            {} /* repConfig not needed */);
+            { queueProcessor: {
+                retryTimeoutS: 5,
+                // groupId not needed for tests
+            } });
 
         // don't call start() on the queue processor, so that we don't
         // attempt to fetch entries from kafka
+
+        s3mock = new S3Mock();
+        httpServer = http.createServer(
+            (req, res) => s3mock.onRequest(req, res));
+        httpServer.listen(7777);
+    });
+
+    after(() => {
+        httpServer.close();
     });
 
     afterEach(() => {
         s3mock.resetTest();
-        httpServer.close();
     });
 
-    describe('object with single part', () => {
-        before(() => {
-            s3mock = new S3Mock([srcLocations[0]]);
-            httpServer = http.createServer(
-                (req, res) => s3mock.onRequest(req, res));
-            httpServer.listen(7777);
-        });
+    describe('success path tests', () => {
+        [{ caption: 'object with single part',
+           nbParts: 1 },
+         { caption: 'object with multiple parts',
+           nbParts: 2 },
+         { caption: 'empty object',
+           nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
+               before(() => {
+                   s3mock.setParam('nbParts', testCase.nbParts);
+               });
+               it('should complete a replication end-to-end', done => {
+                   queueProcessor.processKafkaEntry(
+                       s3mock.getParam('kafkaEntry'), err => {
+                           assert.ifError(err);
+                           assert.strictEqual(s3mock.hasPutTargetData,
+                                              testCase.nbParts > 0);
+                           assert(s3mock.hasPutTargetMd);
+                           assert(s3mock.hasPutSourceMd);
+                           done();
+                       });
+               });
+           }));
+    });
 
-        it('should complete a replication end-to-end', done => {
-            queueProcessor.processKafkaEntry(s3mock.kafkaEntry, err => {
-                assert.ifError(err);
-                assert(s3mock.hasPutTargetData);
-                assert(s3mock.hasPutTargetMd);
-                assert(s3mock.hasPutSourceMd);
-                done();
+    describe('error paths', function errorPaths() {
+        this.timeout(15000); // to leave room for retry delays and timeout
+
+        describe('source Vault errors', () => {
+            ['assumeRoleBackbeat'].forEach(action => {
+                [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
+                    it(`should skip processing on ${error.code} ` +
+                    `(${error.message}) from source Vault on ${action}`,
+                    done => {
+                        s3mock.installVaultErrorResponder(
+                            `source.vault.${action}`, error);
+
+                        queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(!s3mock.hasPutTargetData);
+                                assert(!s3mock.hasPutTargetMd);
+                                assert(!s3mock.hasPutSourceMd);
+                                done();
+                            });
+                    });
+                });
             });
         });
-    });
 
-    describe('object with multiple parts', () => {
-        before(() => {
-            s3mock = new S3Mock(srcLocations);
-            httpServer = http.createServer(
-                (req, res) => s3mock.onRequest(req, res));
-            httpServer.listen(7777);
+        describe('source S3 errors', () => {
+            it('should skip on 403 (AccessDenied) from source S3 on getObject',
+            done => {
+                s3mock.installS3ErrorResponder(
+                    'source.s3.getObject', errors.AccessDenied);
+
+                queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert(!s3mock.hasPutTargetData);
+                        assert(!s3mock.hasPutTargetMd);
+                        assert(!s3mock.hasPutSourceMd);
+                        done();
+                    });
+            });
+
+            it('should fail if replication is disabled in bucket replication ' +
+            'configuration', done => {
+                s3mock.setParam('replicationEnabled', false);
+                s3mock.setExpectedReplicationStatus('FAILED');
+
+                queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert(!s3mock.hasPutTargetData);
+                        assert(!s3mock.hasPutTargetMd);
+                        assert(s3mock.hasPutSourceMd);
+                        done();
+                    });
+            });
+
+            it('should fail if object misses dataStoreETag property', done => {
+                s3mock.setParam(
+                    'source.md.location',
+                    buildLocations(s3mock.getParam('source.dataPartsKeys'),
+                                   s3mock.getParam('partsContents'),
+                                   { doNotIncludeETag: true }));
+                s3mock.setExpectedReplicationStatus('FAILED');
+
+                queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert(!s3mock.hasPutTargetData);
+                        assert(!s3mock.hasPutTargetMd);
+                        assert(s3mock.hasPutSourceMd);
+                        done();
+                    });
+            });
+
+            ['getBucketReplication', 'getObject'].forEach(action => {
+                [errors.InternalError].forEach(error => {
+                    it(`should retry on ${error.code} (${error.message}) ` +
+                    `from source S3 on ${action}`, done => {
+                        s3mock.installS3ErrorResponder(
+                            `source.s3.${action}`, error, { once: true });
+
+                        queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(s3mock.hasPutTargetData);
+                                assert(s3mock.hasPutTargetMd);
+                                assert(s3mock.hasPutSourceMd);
+                                done();
+                            });
+                    });
+                });
+            });
         });
 
-        it('should complete a replication end-to-end', done => {
-            queueProcessor.processKafkaEntry(s3mock.kafkaEntry, err => {
-                assert.ifError(err);
-                assert(s3mock.hasPutTargetData);
-                assert(s3mock.hasPutTargetMd);
-                assert(s3mock.hasPutSourceMd);
-                done();
+        describe('target Vault errors', () => {
+            ['getAccountsCanonicalIds',
+             'assumeRoleBackbeat'].forEach(action => {
+                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
+                     it(`should fail on ${error.code} (${error.message}) ` +
+                     `from target Vault on ${action}`, done => {
+                         s3mock.installVaultErrorResponder(
+                             `target.vault.${action}`, error);
+                         s3mock.setExpectedReplicationStatus('FAILED');
+
+                         queueProcessor.processKafkaEntry(
+                             s3mock.getParam('kafkaEntry'), err => {
+                                 assert.ifError(err);
+                                 assert(!s3mock.hasPutTargetData);
+                                 assert(!s3mock.hasPutTargetMd);
+                                 assert(s3mock.hasPutSourceMd);
+                                 done();
+                             });
+                     });
+                 });
+             });
+
+            ['getAccountsCanonicalIds'].forEach(action => {
+                [errors.InternalError].forEach(error => {
+                    it(`should retry on ${error.code} (${error.message}) ` +
+                    `from target Vault on ${action}`, done => {
+                        s3mock.installVaultErrorResponder(
+                            `target.vault.${action}`, error, { once: true });
+
+                        queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(s3mock.hasPutTargetData);
+                                assert(s3mock.hasPutTargetMd);
+                                assert(s3mock.hasPutSourceMd);
+                                done();
+                            });
+                    });
+                });
+            });
+        });
+
+        describe('target S3 errors', () => {
+            ['putData', 'putMetadata'].forEach(action => {
+                [errors.AccessDenied].forEach(error => {
+                    it(`should fail on ${error.code} (${error.message}) ` +
+                    `from target S3 on ${action}`, done => {
+                        s3mock.installS3ErrorResponder(`target.s3.${action}`,
+                                                       error);
+                        s3mock.setExpectedReplicationStatus('FAILED');
+
+                        queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(!s3mock.hasPutTargetMd);
+                                assert(s3mock.hasPutSourceMd);
+                                done();
+                            });
+                    });
+                });
+            });
+
+            ['putData', 'putMetadata'].forEach(action => {
+                [errors.InternalError].forEach(error => {
+                    it(`should retry on ${error.code} (${error.message}) ` +
+                    `from target S3 on ${action}`, done => {
+                        s3mock.installS3ErrorResponder(`target.s3.${action}`,
+                                                       error, { once: true });
+
+                        queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(s3mock.hasPutTargetData);
+                                assert(s3mock.hasPutTargetMd);
+                                assert(s3mock.hasPutSourceMd);
+                                done();
+                            });
+                    });
+                });
+            });
+        });
+
+        describe('retry behavior', () => {
+            it('should give up retries after configured timeout (5s)',
+            done => {
+                s3mock.installS3ErrorResponder('source.s3.getObject',
+                                               errors.InternalError);
+                s3mock.setExpectedReplicationStatus('FAILED');
+
+                queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert(!s3mock.hasPutTargetData);
+                        assert(!s3mock.hasPutTargetMd);
+                        assert(s3mock.hasPutSourceMd);
+                        done();
+                    });
             });
         });
     });
