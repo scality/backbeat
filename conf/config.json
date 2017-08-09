@@ -33,7 +33,9 @@
             },
             "destination": {
                 "transport": "http",
-                "bootstrapList": ["127.0.0.1:8443"],
+                "bootstrapList": [
+                    { "site": "sf", "servers": ["127.0.0.1:8443"]}
+                ],
                 "certFilePaths": {
                     "key": "ssl/key.pem",
                     "cert": "ssl/cert.crt",

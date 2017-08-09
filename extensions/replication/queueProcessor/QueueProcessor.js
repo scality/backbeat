@@ -75,7 +75,7 @@ class _RoleAuthManager {
     constructor(bootstrapList, roleArn, log) {
         this._log = log;
         // FIXME use bootstrap list
-        const [host, port] = bootstrapList[0].split(':');
+        const [host, port] = bootstrapList[0].servers.split(':');
         this._vaultclient = new VaultClient(host, port);
         this._credentials = new CredentialsManager(this._vaultclient,
                                                    'replication', roleArn);
@@ -450,7 +450,7 @@ class QueueProcessor {
     _setupClients(sourceRole, targetRole, log) {
         const sourceS3 = this.sourceConfig.s3.host;
         // FIXME use bootstrap list
-        const [destHost, destPort] = this.destConfig.bootstrapList[0]
+        const [destHost, destPort] = this.destConfig.bootstrapList[0].servers
             .split(':');
 
         this.s3sourceAuthManager =
