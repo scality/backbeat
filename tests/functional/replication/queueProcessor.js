@@ -641,19 +641,20 @@ describe('queue processor functional tests with mocking', () => {
         });
 
         describe('source S3 errors', () => {
-            it('should skip on 403 (AccessDenied) from source S3 on getObject',
-            done => {
-                s3mock.installS3ErrorResponder(
-                    'source.s3.getObject', errors.AccessDenied);
-
-                queueProcessor.processKafkaEntry(
-                    s3mock.getParam('kafkaEntry'), err => {
-                        assert.ifError(err);
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                        assert(!s3mock.hasPutSourceMd);
-                        done();
-                    });
+            [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
+                it(`should skip on ${error.code} (${error.message}) ` +
+                'from source S3 on getObject', done => {
+                    s3mock.installS3ErrorResponder('source.s3.getObject',
+                                                   error);
+                    queueProcessor.processKafkaEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            assert(!s3mock.hasPutSourceMd);
+                            done();
+                        });
+                });
             });
 
             it('should fail if replication is disabled in bucket replication ' +
