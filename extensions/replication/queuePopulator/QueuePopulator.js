@@ -18,7 +18,7 @@ class QueuePopulator {
      *
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
-     * @param {string} zkConfig.endpoint - zookeeper endpoint string
+     * @param {string} zkConfig.connectionString - zookeeper connection string
      *   as "host:port[/chroot]"
      * @param {Object} sourceConfig - source configuration
      * @param {String} sourceConfig.logSource - type of source
@@ -111,7 +111,7 @@ class QueuePopulator {
                   this.repConfig.queuePopulator.zookeeperPath;
         const zkEndpoint = `${zookeeperUrl}/raft-id-dispatcher`;
         this.raftIdDispatcher =
-            new ProvisionDispatcher({ endpoint: zkEndpoint });
+            new ProvisionDispatcher({ connectionString: zkEndpoint });
         this.raftIdDispatcher.subscribe((err, items) => {
             if (err) {
                 this.log.error('error when receiving raft ID provision list',
