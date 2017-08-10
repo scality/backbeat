@@ -378,6 +378,9 @@ class QueueProcessor {
             PartNumber: partNumber,
         });
         req.on('error', err => {
+            if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                return doneOnce(errors.ObjNotFound);
+            }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             log.error('an error occurred on getObject from S3',
@@ -390,6 +393,9 @@ class QueueProcessor {
         });
         const incomingMsg = req.createReadStream();
         incomingMsg.on('error', err => {
+            if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                return doneOnce(errors.ObjNotFound);
+            }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3',
@@ -537,6 +543,12 @@ class QueueProcessor {
                           { failMethod: err.method,
                             entry: sourceEntry.getLogInfo(),
                             error: err.description });
+                return done();
+            }
+            if (err.ObjNotFound) {
+                log.info('replication skipped: ' +
+                         'source object version does not exist',
+                         { entry: sourceEntry.getLogInfo() });
                 return done();
             }
             log.debug('replication failed permanently for object, ' +
