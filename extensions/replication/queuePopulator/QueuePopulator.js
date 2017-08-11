@@ -62,7 +62,7 @@ class QueuePopulator {
             if (err) {
                 this.log.error('error starting up queue populator',
                                { method: 'QueuePopulator.open',
-                                 error: err, errorStack: err.stack });
+                                 error: err });
                 return cb(err);
             }
             this._setupLogSources();

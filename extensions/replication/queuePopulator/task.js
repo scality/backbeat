@@ -29,7 +29,6 @@ function queueBatch(queuePopulator, batchInProgress) {
             log.error('an error occurred during replication', {
                 method: 'QueuePopulator::task.queueBatch',
                 error: err,
-                errorStack: err.stack,
             });
             return undefined;
         }

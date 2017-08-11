@@ -80,7 +80,7 @@ class LogReader {
                     this.log.error(
                         'Could not fetch log offset',
                         { method: 'LogReader._readLogOffset',
-                          error: err, errorStack: err.stack });
+                          error: err });
                     return done(err);
                 }
                 return this.zkClient.mkdirp(pathToLogOffset, err => {
@@ -89,7 +89,7 @@ class LogReader {
                             'Could not pre-create path in zookeeper',
                             { method: 'LogReader._readLogOffset',
                               zkPath: pathToLogOffset,
-                              error: err, errorStack: err.stack });
+                              error: err });
                         return done(err);
                     }
                     return done(null, 1);
@@ -232,7 +232,7 @@ class LogReader {
                 this.log.error(
                     'error while reading log records',
                     { method: 'LogReader._processReadRecords',
-                      params, error: err, errorStack: err.stack });
+                      params, error: err });
                 return done(err);
             }
             this.log.debug(
@@ -311,7 +311,7 @@ class LogReader {
                 this.log.error(
                     'error publishing entries from log',
                     { method: 'LogReader._processPublishEntries',
-                      error: err, errorStack: err.stack });
+                      error: err });
                 return done(err);
             }
             batchState.nextLogOffset =
