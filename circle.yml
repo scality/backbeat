@@ -9,7 +9,11 @@ machine:
     services:
         - docker
     environment:
-        CXX: G++-4.9
+        CXX: g++-4.9
+
+dependencies:
+    pre:
+        - rm -rf node_modules
 
 test:
     override:
