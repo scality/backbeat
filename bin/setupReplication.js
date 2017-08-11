@@ -66,7 +66,6 @@ function _setupS3Client(transport, endpoint, profile) {
     });
 }
 
-
 function _setupIAMClient(transport, endpoint, profile) {
     const credentials = new SharedIniFileCredentials({ profile });
     return new IAM({
@@ -102,19 +101,24 @@ class _SetupReplication {
         this._targetBucket = targetBucket;
         // TODO: support bootstrap list failover
         const destEndpoint = destination.bootstrapList[0].servers[0];
+        const verifySourceProfile = sourceProfile === undefined ?
+            'default' : sourceProfile;
+        const verifyTargetProfile = targetProfile === undefined ?
+            'default' : targetProfile;
+
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`,
-                sourceProfile),
+                verifySourceProfile),
             target: _setupS3Client(destination.transport, destEndpoint,
-                targetProfile),
+                verifyTargetProfile),
         };
         this._iamClients = {
             source: _setupIAMClient(source.transport,
                 `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
-                sourceProfile),
+                verifySourceProfile),
             target: _setupIAMClient(source.transport, destEndpoint,
-                targetProfile),
+                verifyTargetProfile),
         };
     }
 
@@ -149,7 +153,6 @@ class _SetupReplication {
                 this._log.error('bucket sanity check error', {
                     error: err.message,
                     method: '_SetupReplication._isValidBucket',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -168,7 +171,6 @@ class _SetupReplication {
                         'Cannot retrieve versioning configuration', {
                             error: err.message,
                             method: '_SetupReplication._isVersioningEnabled',
-                            errorStack: err.stack,
                         }
                     );
                     return cb(err);
@@ -203,7 +205,6 @@ class _SetupReplication {
                     'Cannot retrieve role configuration', {
                         error: err.message,
                         method: '_SetupReplication._isValidRole',
-                        errorStack: err.stack,
                     }
                 );
                 return cb(err);
@@ -234,7 +235,6 @@ class _SetupReplication {
                         'Cannot retrieve replication configuration', {
                             error: err.message,
                             method: '_SetupReplication._isReplicationEnabled',
-                            errorStack: err.stack,
                         }
                     );
                     return cb(err);
@@ -264,7 +264,6 @@ class _SetupReplication {
                 this._log.error('error creating a bucket', {
                     error: err.message,
                     method: '_SetupReplication._createBucket',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -289,7 +288,6 @@ class _SetupReplication {
                 this._log.error('error creating a role', {
                     error: err.message,
                     method: '_SetupReplication._createRole',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -313,7 +311,6 @@ class _SetupReplication {
                 this._log.error('error creating policy', {
                     error: err.message,
                     method: '_SetupReplication._createPolicy',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -340,7 +337,6 @@ class _SetupReplication {
                 this._log.error('error enabling versioning', {
                     error: err.message,
                     method: '_SetupReplication._enableVersioning',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -363,7 +359,6 @@ class _SetupReplication {
                 this._log.error('error attaching resource policy', {
                     error: err.message,
                     method: '_SetupReplication._attachResourcePolicy',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -395,7 +390,6 @@ class _SetupReplication {
                 this._log.error('error enabling replication', {
                     error: err.message,
                     method: '_SetupReplication._enableReplication',
-                    errorStack: err.stack,
                 });
                 return cb(err);
             }
@@ -442,66 +436,81 @@ class _SetupReplication {
 program
     .version('1.0.0')
     .command('setup')
-    // .arguments('<source-bucket> <destination-bucket>')
-    .option('--source-bucket', 'source bucket name')
-    .option('--source-profile', 'aws/credentials profile to use for source')
-    .option('--target-bucket', 'target bucket name')
-    .option('--target-profile', 'aws/credentials profile to use for target')
-    .action((cmd, options) => {
+    .option('--source-bucket <name>', '[required] source bucket name')
+    .option('--source-profile <name>',
+            'aws/credentials profile to use for source')
+    .option('--target-bucket <name>', 'target bucket name')
+    .option('--target-profile <name>',
+            'aws/credentials profile to use for target')
+    .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
-        const sourceBucket = options['source-bucket'];
-        const targetBucket = options['target-bucket'];
-        const sourceProfile = options['source-profile'];
-        const targetProfile = options['target-profile'];
+
+        const sourceBucket = options.sourceBucket;
+        const targetBucket = options.targetBucket;
+        const sourceProfile = options.sourceProfile;
+        const targetProfile = options.targetProfile;
+
+        // Required options
+        if (!sourceBucket || !targetBucket) {
+            program.commands.find(n => n._name === 'setup').help();
+            process.exit(1);
+        }
+
         const s = new _SetupReplication(sourceBucket, targetBucket,
             sourceProfile, targetProfile, log, config);
         s.setupReplication(err => {
             if (err) {
                 log.error('replication setup failed', {
                     error: err.message,
-                    errorStack: err.stack,
                 });
-                return process.exit(1);
+                process.exit(1);
             }
             log.info('replication setup successful');
-            return process.exit();
+            process.exit();
         });
     });
 
 program
     .command('validate')
-    .option('--source-bucket', 'source bucket name')
-    .option('--source-profile', 'aws/credentials profile to use for source')
-    .option('--target-bucket', 'target bucket name')
-    .option('--target-profile', 'aws/credentials profile to use for target')
-    .action((cmd, options) => {
-        const sourceBucket = options['source-bucket'];
-        const targetBucket = options['target-bucket'];
-        const sourceProfile = options['source-profile'];
-        const targetProfile = options['target-profile'];
-
+    .option('--source-bucket <name>', 'source bucket name')
+    .option('--source-profile <name>',
+            'aws/credentials profile to use for source')
+    .option('--target-bucket <name>', 'target bucket name')
+    .option('--target-profile <name>',
+            'aws/credentials profile to use for target')
+    .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
+
+        const sourceBucket = options.sourceBucket;
+        const targetBucket = options.targetBucket;
+        const sourceProfile = options.sourceProfile;
+        const targetProfile = options.targetProfile;
+
+        // Required options
+        if (!sourceBucket || !targetBucket) {
+            program.commands.find(n => n._name === 'validate').help();
+            process.exit(1);
+        }
+
         const s = new _SetupReplication(sourceBucket, targetBucket,
             sourceProfile, targetProfile, log, config);
         s.checkSanity(err => {
             if (err) {
                 log.error('replication validation check failed', {
                     error: err.message,
-                    errorStack: err.stack,
                 });
-                return process.exit(1);
+                process.exit(1);
             }
             log.info('replication is correctly setup');
-            return process.exit();
+            process.exit();
         });
     });
 
 program.parse(process.argv);
-const validCommands = program.commands.map(n => n.name());
+const validCommands = program.commands.map(n => n._name);
 
-// Is the command given invalid or are there too few or
-// too many arguments passed
-if (validCommands.indexOf(process.argv[2]) < 0 || program.args.length !== 3) {
+// Is the command given invalid or are there too few arguments passed
+if (!validCommands.includes(process.argv[2])) {
     program.help();
     process.exit(1);
 }
