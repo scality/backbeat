@@ -35,11 +35,10 @@ class QueuePopulator {
      * @param {String} cluesoConfig.queuePopulator.zookeeperPath -
      *   sub-path to use for storing populator state in zookeeper
      */
-    constructor(zkConfig, sourceConfig, cluesoConfig, logConfig) {
+    constructor(zkConfig, sourceConfig, cluesoConfig) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.cluesoConfig = cluesoConfig;
-        this.logConfig = logConfig;
         this.log = new werelogs.Logger('Backbeat:Clueso:QueuePopulator');
     }
 
@@ -123,7 +122,6 @@ class QueuePopulator {
         const mdClient = new MetadataFileClient({
             host: dmdConfig.host,
             port: dmdConfig.port,
-            log: this.logConfig,
         });
         const logConsumer = mdClient.openRecordLog({
             logName: dmdConfig.logName,
@@ -139,7 +137,6 @@ class QueuePopulator {
     _setupProducer(done) {
         const producer = new BackbeatProducer({
             zookeeper: this.zkConfig,
-            log: this.logConfig,
             topic: this.cluesoConfig.topic,
         });
         producer.once('error', done);

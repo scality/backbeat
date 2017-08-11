@@ -82,9 +82,16 @@ async.waterfall([
         // applicable options
         livyClient.postBatch({ file: '/Users/lhs/Documents/sparkingKafka/' +
                 'target/scala-2.11/sparkingKafka-assembly-1.0.jar',
-            className: 'pi' }, done);
+            className: 'pi' }, (err, res) => {
+            if (err) {
+                return done(err);
+            }
+            log.info('response from livy on creating streaming job',
+                { response: res });
+            return done();
+        });
+        // TODO: keep polling livy until confirm batch job running
     },
-    // TODO: submit spark streaming batch job to livy
     done => {
         queuePopulator.open(done);
     },
