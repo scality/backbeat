@@ -66,7 +66,7 @@ class _AccountAuthManager {
     }
 
     lookupAccountAttributes(accountId, cb) {
-        const localAccountId = this._accountArn.split(':')[3];
+        const localAccountId = this._accountArn.split(':')[4];
         if (localAccountId !== accountId) {
             this._log.error('Target account for replication must match ' +
                             'configured destination account ARN',
