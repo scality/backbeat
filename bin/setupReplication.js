@@ -66,8 +66,14 @@ function _setupS3Client(transport, endpoint, profile) {
     });
 }
 
-function _setupIAMClient(transport, endpoint, profile) {
+function _setupIAMClient(where, transport, endpoint, profile) {
     const credentials = new SharedIniFileCredentials({ profile });
+    const httpOptions = { timeout: 1000 };
+
+    if (where === 'target') {
+        httpOptions.proxy = `${transport}://${endpoint}${proxyIAMPath}`;
+    }
+
     return new IAM({
         endpoint: `${transport}://${endpoint}`,
         sslEnabled: transport === 'https',
@@ -75,10 +81,7 @@ function _setupIAMClient(transport, endpoint, profile) {
         maxRetries: 0,
         region: 'us-east-1',
         signatureCache: false,
-        httpOptions: {
-            timeout: 1000,
-            proxy: proxyIAMPath,
-        },
+        httpOptions,
     });
 }
 
@@ -114,10 +117,11 @@ class _SetupReplication {
                 verifyTargetProfile),
         };
         this._iamClients = {
-            source: _setupIAMClient(source.transport,
+            source: _setupIAMClient('source', source.transport,
                 `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifySourceProfile),
-            target: _setupIAMClient(source.transport, destEndpoint,
+            target: _setupIAMClient('target', destination.transport,
+                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifyTargetProfile),
         };
     }
