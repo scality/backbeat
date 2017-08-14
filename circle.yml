@@ -12,9 +12,9 @@ machine:
         CXX: g++-4.9
 
 dependencies:
-    pre:
+    override:
         - rm -rf node_modules
-
+        - npm install
 test:
     override:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
