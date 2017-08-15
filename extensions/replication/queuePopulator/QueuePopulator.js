@@ -162,7 +162,7 @@ class QueuePopulator {
                       { zookeeperUrl });
         this.zkClient = zookeeper.createClient(zookeeperUrl);
         this.zkClient.connect();
-        this.zkClient.on('connected', done);
+        this.zkClient.once('connected', done);
     }
 
     _setupUpdatedReaders(done) {
