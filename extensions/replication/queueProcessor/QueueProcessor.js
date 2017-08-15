@@ -10,6 +10,7 @@ const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
+const RoundRobin = require('arsenal').network.RoundRobin;
 const VaultClient = require('vaultclient').Client;
 const { proxyPath } = require('../constants');
 
@@ -73,14 +74,10 @@ class _AccountAuthManager {
 }
 
 class _RoleAuthManager {
-    constructor(bootstrapList, roleArn, log) {
+    constructor(vaultClient, roleArn, log) {
         this._log = log;
-        // FIXME use bootstrap list
-        const [host, port] = bootstrapList[0].servers.split(':');
-        this._vaultclient = new VaultClient(host, port, undefined, undefined,
-            undefined, undefined, undefined, undefined, undefined, undefined,
-            proxyPath);
-        this._credentials = new CredentialsManager(this._vaultclient,
+        this._vaultclient = vaultClient;
+        this._credentials = new CredentialsManager(vaultClient,
                                                    'replication', roleArn);
     }
 
@@ -123,9 +120,9 @@ class QueueProcessor {
      * @param {string} zkConfig.connectionString - zookeeper connection string
      *   as "host:port[/chroot]"
      * @param {Object} sourceConfig - source S3 configuration
+     * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
      * @param {Object} destConfig - target S3 configuration
-     * @param {Object} destConfig.s3 - s3 endpoint configuration object
      * @param {Object} destConfig.auth - authentication info on target
      * @param {Object} repConfig - replication configuration object
      * @param {String} repConfig.topic - replication topic name
@@ -145,25 +142,50 @@ class QueueProcessor {
 
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
+        // global variables
+        // TODO: for SSL support, create HTTPS agents instead
+        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        // FIXME support multiple destination sites
+        if (destConfig.bootstrapList.length > 0) {
+            this.destHosts =
+                new RoundRobin(destConfig.bootstrapList[0].servers);
+        } else {
+            this.destHosts = null;
+        }
+        // per-request state variables
+        this.sourceRole = null;
+        this.targetRole = null;
+        this.destBackbeatHost = null;
         this.s3sourceAuthManager = null;
         this.s3destAuthManager = null;
         this.S3source = null;
         this.backbeatSource = null;
         this.backbeatDest = null;
-
-        // TODO: for SSL support, create HTTPS agents instead
-        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true });
     }
 
-    _createAuthManager(authConfig, roleArn, log) {
+    _createAuthManager(where, authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
             return new _AccountAuthManager(authConfig, log);
         }
-        return new _RoleAuthManager(authConfig, roleArn, log);
+        let vaultClient;
+        if (where === 'source') {
+            const { host, port } = this.sourceConfig.auth.vault;
+            vaultClient = new VaultClient(host, port);
+        } else { // target
+            const { host, port } = this.destHosts.pickHost();
+            vaultClient = new VaultClient(
+                host, port,
+                undefined, undefined, undefined, undefined,
+                undefined, undefined, undefined, undefined,
+                proxyPath);
+        }
+        return new _RoleAuthManager(vaultClient, roleArn, log);
     }
 
-    _retry(actionDesc, entry, shouldRetryFunc, func, log, done) {
+    _retry(args, done) {
+        const { actionDesc, entry,
+                actionFunc, shouldRetryFunc, onRetryFunc, log } = args;
         const backoffCtx = new BackOff(BACKOFF_PARAMS);
         let nbRetries = 0;
         const startTime = Date.now();
@@ -181,6 +203,10 @@ class QueueProcessor {
             if (!shouldRetryFunc(err)) {
                 return done(err);
             }
+            if (onRetryFunc) {
+                onRetryFunc(err);
+            }
+
             const now = Date.now();
             if (now > (startTime +
                        self.repConfig.queueProcessor.retryTimeoutS * 1000)) {
@@ -195,56 +221,86 @@ class QueueProcessor {
                      { entry: entry.getLogInfo(),
                        nbRetries, retryDelay: `${retryDelayMs}ms` });
             nbRetries += 1;
-            return setTimeout(() => func(_handleRes), retryDelayMs);
+            return setTimeout(() => actionFunc(_handleRes), retryDelayMs);
         }
-        func(_handleRes);
+        actionFunc(_handleRes);
     }
 
     _setupRoles(entry, log, cb) {
-        this._retry(
-            'get bucket replication configuration', entry,
+        this._retry({
+            actionDesc: 'get bucket replication configuration',
+            entry,
+            actionFunc: done => this._setupRolesOnce(entry, log, done),
             // Rely on AWS SDK notion of retryable error to decide if
             // we should set the entry replication status to FAILED
             // (non retryable) or retry later.
-            err => err.retryable,
-            done => this._setupRolesOnce(entry, log, done), log, cb);
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, cb);
     }
 
     _setTargetAccountMd(destEntry, targetRole, log, cb) {
-        this._retry(
-            'lookup target account attributes', destEntry,
+        this._retry({
+            actionDesc: 'lookup target account attributes',
+            entry: destEntry,
+            actionFunc: done => this._setTargetAccountMdOnce(
+                destEntry, targetRole, log, done),
             // this call uses our own Vault client which does not set
             // the 'retryable' field
-            err => (err.InternalError || err.code === 'InternalError' ||
-                    err.ServiceUnavailable ||
-                    err.code === 'ServiceUnavailable'),
-            done => this._setTargetAccountMdOnce(destEntry, targetRole,
-                                                 log, done), log, cb);
+            shouldRetryFunc: err =>
+                (err.InternalError || err.code === 'InternalError' ||
+                 err.ServiceUnavailable || err.code === 'ServiceUnavailable'),
+            onRetryFunc: () => {
+                this.destHosts.pickNextHost();
+                this._setupDestClients(this.targetRole, log);
+            },
+            log,
+        }, cb);
     }
 
     _getAndPutPart(sourceEntry, destEntry, part, log, cb) {
-        this._retry(
-            'stream part data', sourceEntry,
-            err => err.retryable,
-            done => this._getAndPutPartOnce(sourceEntry, destEntry, part,
-                                            log, done), log, cb);
+        this._retry({
+            actionDesc: 'stream part data',
+            entry: sourceEntry,
+            actionFunc: done => this._getAndPutPartOnce(
+                sourceEntry, destEntry, part, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
     }
 
     _putMetadata(where, entry, log, cb) {
-        this._retry(
-            `update metadata on ${where}`, entry,
-            err => err.retryable,
-            done => this._putMetadataOnce(where, entry, log, done),
-            log, cb);
+        this._retry({
+            actionDesc: `update metadata on ${where}`,
+            entry,
+            actionFunc: done => this._putMetadataOnce(where, entry,
+                                                      log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
     }
 
-    _updateReplicationStatus(updatedSourceEntry, params, _done) {
-        this._retry(
-            'write replication status', updatedSourceEntry,
-            err => err.retryable,
-            done => this._updateReplicationStatusOnce(updatedSourceEntry,
-                                                      params, done),
-            params.log, _done);
+    _updateReplicationStatus(updatedSourceEntry, params, cb) {
+        this._retry({
+            actionDesc: 'write replication status',
+            entry: updatedSourceEntry,
+            actionFunc: done => this._updateReplicationStatusOnce(
+                updatedSourceEntry, params, done),
+            shouldRetryFunc: err => err.retryable,
+            log: params.log,
+        }, cb);
     }
 
     _setupRolesOnce(entry, log, cb) {
@@ -264,7 +320,12 @@ class QueueProcessor {
                         roles: entryRolesString });
             return cb(errors.BadRole);
         }
-        this._setupClients(entryRoles[0], entryRoles[1], log);
+        this.sourceRole = entryRoles[0];
+        this.targetRole = entryRoles[1];
+
+        this._setupSourceClients(this.sourceRole, log);
+        this._setupDestClients(this.targetRole, log);
+
         return this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() }, (err, data) => {
                 if (err) {
@@ -336,10 +397,10 @@ class QueueProcessor {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'target';
-                    // TODO: add current node in bootstrap as log param
                     log.error('an error occurred when looking up target ' +
                               'account attributes',
                               { method: 'QueueProcessor._setTargetAccountMd',
+                                entry: destEntry.getLogInfo(),
                                 error: err.message });
                     return cb(err);
                 }
@@ -419,7 +480,7 @@ class QueueProcessor {
                 log.error('an error occurred on putData to S3',
                           { method: 'QueueProcessor._getAndPutData',
                             entry: destEntry.getLogInfo(),
-                            origin: this.destConfig.s3,
+                            origin: this.destBackbeatHost,
                             error: err.message });
                 return doneOnce(err);
             }
@@ -448,7 +509,7 @@ class QueueProcessor {
                 log.error('an error occurred when putting metadata to S3',
                           { method: 'QueueProcessor._putMetadata',
                             entry: entry.getLogInfo(),
-                            origin: this.destConfig.s3,
+                            origin: this.destBackbeatHost,
                             error: err.message });
                 return cbOnce(err);
             }
@@ -456,24 +517,20 @@ class QueueProcessor {
         });
     }
 
-    _setupClients(sourceRole, targetRole, log) {
-        const sourceS3 = this.sourceConfig.s3.host;
-        // FIXME use bootstrap list
-        const [destHost, destPort] = this.destConfig.bootstrapList[0].servers
-            .split(':');
-
+    _setupSourceClients(sourceRole, log) {
         this.s3sourceAuthManager =
-            this._createAuthManager(this.sourceConfig.auth, sourceRole, log);
-        this.s3destAuthManager =
-            this._createAuthManager(this.destConfig.auth, targetRole, log);
+            this._createAuthManager('source', this.sourceConfig.auth,
+                                    sourceRole, log);
 
         // Disable retries, use our own retry policy (mandatory for
         // putData route in order to fetch data again from source).
 
+        const sourceS3 = this.sourceConfig.s3;
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials: this.s3sourceAuthManager.getCredentials(),
+            credentials:
+            this.s3sourceAuthManager.getCredentials(),
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
@@ -488,9 +545,17 @@ class QueueProcessor {
             httpOptions: { agent: this.sourceHTTPAgent },
             maxRetries: 0,
         });
+    }
 
+    _setupDestClients(targetRole, log) {
+        this.s3destAuthManager =
+            this._createAuthManager('target', this.destConfig.auth,
+                                    targetRole, log);
+
+        this.destBackbeatHost = this.destHosts.pickHost();
         this.backbeatDest = new BackbeatClient({
-            endpoint: `${this.destConfig.transport}://${destHost}:${destPort}`,
+            endpoint: `${this.destConfig.transport}://` +
+                `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destAuthManager.getCredentials(),
             sslEnabled: this.destConfig.transport === 'https',
             httpOptions: { agent: this.destHTTPAgent },

@@ -63,8 +63,8 @@ const constants = {
                         'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
     },
     target: {
-        s3: '127.0.0.3',
-        vault: '127.0.0.4',
+        hosts: [{ host: '127.0.0.3', port: 7777 },
+                { host: '127.0.0.4', port: 7777 }],
         dataPartsKeys: ['7d808697fbaf9f16fb32b94be189b80b3b9b2890',
                         'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
     },
@@ -175,38 +175,34 @@ class S3Mock extends TestConfigurator {
                 },
             },
             target: {
-                s3: {
-                    putData: () => ({
-                        method: 'PUT',
-                        path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('key')}`,
-                        query: {},
-                        handler: () => this._putData,
-                    }),
-                    putMetadata: () => ({
-                        method: 'PUT',
-                        path: `/_/backbeat/metadata/${this.getParam('target.bucket')}/${this.getParam('key')}`,
-                        query: {},
-                        handler: () => this._putMetadataTarget,
-                    }),
-                },
-                vault: {
-                    getAccountsCanonicalIds: () => ({
-                        method: 'GET',
-                        path: '/',
-                        query: {
-                            Action: 'AccountsCanonicalIds',
-                        },
-                        handler: () => this._getAccountsCanonicalIds,
-                    }),
-                    assumeRoleBackbeat: () => ({
-                        method: 'POST',
-                        path: '/',
-                        query: {
-                            Action: 'AssumeRoleBackbeat',
-                        },
-                        handler: () => this._assumeRoleBackbeatTarget,
-                    }),
-                },
+                putData: () => ({
+                    method: 'PUT',
+                    path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('key')}`,
+                    query: {},
+                    handler: () => this._putData,
+                }),
+                putMetadata: () => ({
+                    method: 'PUT',
+                    path: `/_/backbeat/metadata/${this.getParam('target.bucket')}/${this.getParam('key')}`,
+                    query: {},
+                    handler: () => this._putMetadataTarget,
+                }),
+                getAccountsCanonicalIds: () => ({
+                    method: 'GET',
+                    path: '/_/backbeat/vault',
+                    query: {
+                        Action: 'AccountsCanonicalIds',
+                    },
+                    handler: () => this._getAccountsCanonicalIds,
+                }),
+                assumeRoleBackbeat: () => ({
+                    method: 'POST',
+                    path: '/_/backbeat/vault',
+                    query: {
+                        Action: 'AssumeRoleBackbeat',
+                    },
+                    handler: () => this._assumeRoleBackbeatTarget,
+                }),
             },
         };
 
@@ -277,6 +273,12 @@ class S3Mock extends TestConfigurator {
         this.hasPutTargetMd = false;
         this.hasPutSourceMd = false;
         this.setExpectedReplicationStatus('COMPLETED');
+        this.requestsPerHost = {
+            '127.0.0.1': 0,
+            '127.0.0.2': 0,
+            '127.0.0.3': 0,
+            '127.0.0.4': 0,
+        };
     }
 
     setExpectedReplicationStatus(expected) {
@@ -290,10 +292,8 @@ class S3Mock extends TestConfigurator {
             routesKey = 'routes.source.s3';
         } else if (host === constants.source.vault) {
             routesKey = 'routes.source.vault';
-        } else if (host === constants.target.s3) {
-            routesKey = 'routes.target.s3';
-        } else if (host === constants.target.vault) {
-            routesKey = 'routes.target.vault';
+        } else if (constants.target.hosts.find(h => h.host === host)) {
+            routesKey = 'routes.target';
         }
         const routes = this.getParam(routesKey);
         const action = Object.keys(routes).find(key => {
@@ -334,6 +334,9 @@ class S3Mock extends TestConfigurator {
     onRequest(req, res) {
         const url = URL.parse(req.url);
         const query = querystring.parse(url.query);
+        const host = req.headers.host.split(':')[0];
+        this.requestsPerHost[host] += 1;
+
         if (req.method === 'PUT' || req.method === 'POST') {
             const chunks = [];
             req.on('data', chunk => chunks.push(chunk));
@@ -557,18 +560,22 @@ describe('queue processor functional tests with mocking', () => {
     let s3mock;
 
     before(() => {
+        const serverList =
+                  constants.target.hosts.map(h => `${h.host}:${h.port}`);
         queueProcessor = new QueueProcessor(
             {} /* zkConfig not needed */,
             { auth: { type: 'role',
-                      vault: { hosts: [{ host: constants.source.vault,
-                                         port: 7777 }] } },
-              s3: { hosts: [{ host: constants.source.s3,
-                              port: 7777 }], transport: 'http' } },
-            { auth: { type: 'role',
-                      vault: { hosts: [{ host: constants.target.vault,
-                                         port: 7777 }] } },
-              s3: { hosts: [{ host: constants.target.s3,
-                              port: 7777 }], transport: 'http' } },
+                      vault: { host: constants.source.vault,
+                               port: 7777 } },
+              s3: { host: constants.source.s3,
+                    port: 7777 },
+              transport: 'http',
+            },
+            { auth: { type: 'role' },
+              bootstrapList: [{
+                  site: 'sf', servers: serverList,
+              }],
+              transport: 'http' },
             { queueProcessor: {
                 retryTimeoutS: 5,
                 // groupId not needed for tests
@@ -717,7 +724,7 @@ describe('queue processor functional tests with mocking', () => {
                      it(`should fail on ${error.code} (${error.message}) ` +
                      `from target Vault on ${action}`, done => {
                          s3mock.installVaultErrorResponder(
-                             `target.vault.${action}`, error);
+                             `target.${action}`, error);
                          s3mock.setExpectedReplicationStatus('FAILED');
 
                          queueProcessor.processKafkaEntry(
@@ -737,7 +744,7 @@ describe('queue processor functional tests with mocking', () => {
                     it(`should retry on ${error.code} (${error.message}) ` +
                     `from target Vault on ${action}`, done => {
                         s3mock.installVaultErrorResponder(
-                            `target.vault.${action}`, error, { once: true });
+                            `target.${action}`, error, { once: true });
 
                         queueProcessor.processKafkaEntry(
                             s3mock.getParam('kafkaEntry'), err => {
@@ -745,6 +752,11 @@ describe('queue processor functional tests with mocking', () => {
                                 assert(s3mock.hasPutTargetData);
                                 assert(s3mock.hasPutTargetMd);
                                 assert(s3mock.hasPutSourceMd);
+                                // should have retried on other host
+                                assert(s3mock.requestsPerHost['127.0.0.3']
+                                       > 0);
+                                assert(s3mock.requestsPerHost['127.0.0.4']
+                                       > 0);
                                 done();
                             });
                     });
@@ -757,7 +769,7 @@ describe('queue processor functional tests with mocking', () => {
                 [errors.AccessDenied].forEach(error => {
                     it(`should fail on ${error.code} (${error.message}) ` +
                     `from target S3 on ${action}`, done => {
-                        s3mock.installS3ErrorResponder(`target.s3.${action}`,
+                        s3mock.installS3ErrorResponder(`target.${action}`,
                                                        error);
                         s3mock.setExpectedReplicationStatus('FAILED');
 
@@ -776,7 +788,7 @@ describe('queue processor functional tests with mocking', () => {
                 [errors.InternalError].forEach(error => {
                     it(`should retry on ${error.code} (${error.message}) ` +
                     `from target S3 on ${action}`, done => {
-                        s3mock.installS3ErrorResponder(`target.s3.${action}`,
+                        s3mock.installS3ErrorResponder(`target.${action}`,
                                                        error, { once: true });
 
                         queueProcessor.processKafkaEntry(
@@ -785,6 +797,11 @@ describe('queue processor functional tests with mocking', () => {
                                 assert(s3mock.hasPutTargetData);
                                 assert(s3mock.hasPutTargetMd);
                                 assert(s3mock.hasPutSourceMd);
+                                // should have retried on other host
+                                assert(s3mock.requestsPerHost['127.0.0.3']
+                                       > 0);
+                                assert(s3mock.requestsPerHost['127.0.0.4']
+                                       > 0);
                                 done();
                             });
                     });
