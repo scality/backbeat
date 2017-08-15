@@ -62,23 +62,28 @@ function _setupS3Client(transport, endpoint, profile) {
         endpoint: `${transport}://${endpoint}`,
         sslEnabled: transport === 'https',
         credentials,
+        region: 'us-east-2',
         s3ForcePathStyle: true,
+        signatureVersion: 'v4',
     });
 }
 
-function _setupIAMClient(transport, endpoint, profile) {
+function _setupIAMClient(where, transport, endpoint, profile) {
     const credentials = new SharedIniFileCredentials({ profile });
+    const httpOptions = { timeout: 1000 };
+
+    if (where === 'target') {
+        httpOptions.proxy = `${transport}://${endpoint}${proxyIAMPath}`;
+    }
+
     return new IAM({
         endpoint: `${transport}://${endpoint}`,
         sslEnabled: transport === 'https',
         credentials,
         maxRetries: 0,
-        region: 'us-east-1',
+        region: 'us-east-2',
         signatureCache: false,
-        httpOptions: {
-            timeout: 1000,
-            proxy: proxyIAMPath,
-        },
+        httpOptions,
     });
 }
 
@@ -114,10 +119,11 @@ class _SetupReplication {
                 verifyTargetProfile),
         };
         this._iamClients = {
-            source: _setupIAMClient(source.transport,
+            source: _setupIAMClient('source', source.transport,
                 `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifySourceProfile),
-            target: _setupIAMClient(source.transport, destEndpoint,
+            target: _setupIAMClient('target', destination.transport,
+                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifyTargetProfile),
         };
     }
@@ -260,18 +266,27 @@ class _SetupReplication {
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
         this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
-            if (err) {
+            if (err && err.code !== 'BucketAlreadyOwnedByYou') {
                 this._log.error('error creating a bucket', {
                     error: err.message,
                     method: '_SetupReplication._createBucket',
                 });
                 return cb(err);
             }
-            this._log.debug('Created bucket', {
-                bucket: where,
-                response: res,
-                method: '_createBucket',
-            });
+
+            if (err && err.code === 'BucketAlreadyOwnedByYou') {
+                this._log.debug('Bucket already exists. Continuing setup.', {
+                    bucket: where,
+                    response: res,
+                    method: '_SetupReplication._createBucket',
+                });
+            } else {
+                this._log.debug('Created bucket', {
+                    bucket: where,
+                    response: res,
+                    method: '_SetupReplication._createBucket',
+                });
+            }
             return cb(null, res);
         });
     }
@@ -294,7 +309,7 @@ class _SetupReplication {
             this._log.debug('Created role', {
                 bucket: where,
                 response: res,
-                method: '_createRole',
+                method: '_SetupReplication._createRole',
             });
             return cb(null, res);
         });
@@ -317,7 +332,7 @@ class _SetupReplication {
             this._log.debug('Created policy', {
                 bucket: where,
                 response: res,
-                method: '_createPolicy',
+                method: '_SetupReplication._createPolicy',
             });
             return cb(null, res);
         });
@@ -343,7 +358,7 @@ class _SetupReplication {
             this._log.debug('Versioning enabled', {
                 bucket: where,
                 response: res,
-                method: '_enableVersioning',
+                method: '_SetupReplication._enableVersioning',
             });
             return cb(null, res);
         });
@@ -365,7 +380,7 @@ class _SetupReplication {
             this._log.debug('Attached resource policy', {
                 bucket: where,
                 response: res,
-                method: '_attachResourcePolicy',
+                method: '_SetupReplication._attachResourcePolicy',
             });
             return cb(null, res);
         });
@@ -395,7 +410,7 @@ class _SetupReplication {
             }
             this._log.debug('Bucket replication enabled', {
                 response: res,
-                method: '_enableReplication',
+                method: '_SetupReplication._enableReplication',
             });
             return cb(null, res);
         });
