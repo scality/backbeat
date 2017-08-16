@@ -22,6 +22,14 @@ const QueueEntry = require('../utils/QueueEntry');
 const CredentialsManager = require('../../../credentials/CredentialsManager');
 
 const MPU_CONC_LIMIT = 10;
+/**
+* Given that the largest object JSON from S3 is about 1.6 MB and adding some
+* padding to it, Backbeat replication topic is currently setup with a config
+* max.message.bytes.limit to 5MB. Consumers need to update their fetchMaxBytes
+* to get atleast 5MB put in the Kafka topic, adding a little extra bytes of
+* padding for approximation.
+*/
+const CONSUMER_FETCH_MAX_BYTES = 5000020;
 const BACKOFF_PARAMS = { min: 1000, max: 300000, jitter: 0.1, factor: 1.5 };
 
 class _AccountAuthManager {
@@ -702,6 +710,7 @@ class QueueProcessor {
             concurrency: 1, // replication has to process entries in
                             // order, so one at a time
             queueProcessor: this.processKafkaEntry.bind(this),
+            fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
         consumer.on('error', () => {});
         consumer.subscribe();
