@@ -421,10 +421,33 @@ class QueueProcessor {
             });
     }
 
+    // Object metadata may contain multiple elements for a single part if
+    // the part was originally copied from another MPU. Here we reduce the
+    // locations array to a single element for each part.
+    _getLocations(sourceEntry) {
+        const locations = sourceEntry.getLocation();
+        const reducedLocations = [];
+        let partTotal = 0;
+        for (let i = 0; i < locations.length; i++) {
+            const currPart = locations[i];
+            const currPartNum = sourceEntry.getPartNumber(currPart);
+            const nextPart = locations[i + 1];
+            const nextPartNum = nextPart ?
+                sourceEntry.getPartNumber(nextPart) : undefined;
+            if (currPartNum === nextPartNum) {
+                partTotal += sourceEntry.getPartSize(currPart);
+            } else {
+                currPart.size = partTotal += sourceEntry.getPartSize(currPart);
+                reducedLocations.push(currPart);
+                partTotal = 0;
+            }
+        }
+        return reducedLocations;
+    }
 
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
-        const locations = sourceEntry.getLocation();
+        const locations = this._getLocations(sourceEntry);
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
         }, cb);
