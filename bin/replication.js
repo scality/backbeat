@@ -2,10 +2,14 @@ const async = require('async');
 const program = require('commander');
 const { S3, IAM, SharedIniFileCredentials } = require('aws-sdk');
 
-const { Logger } = require('werelogs');
-
+const werelogs = require('werelogs');
+const { RoundRobin } = require('arsenal').network;
+const Logger = werelogs.Logger;
 const config = require('../conf/Config');
-const { proxyIAMPath } = require('../extensions/replication/constants');
+werelogs.configure({
+    level: config.log.logLevel,
+    dump: config.log.dumpLevel,
+});
 
 const trustPolicy = {
     Version: '2012-10-17',
@@ -59,26 +63,32 @@ function _buildResourcePolicy(source, target) {
 function _setupS3Client(transport, endpoint, profile) {
     const credentials = new SharedIniFileCredentials({ profile });
     return new S3({
-        endpoint: `${transport}://${endpoint}`,
+        endpoint: `${endpoint}`,
         sslEnabled: transport === 'https',
         credentials,
         s3ForcePathStyle: true,
+        signatureVersion: 'v4',
     });
 }
 
-function _setupIAMClient(transport, endpoint, profile) {
+function _setupIAMClient(where, transport, endpoint, profile) {
     const credentials = new SharedIniFileCredentials({ profile });
+    const httpOptions = { timeout: 1000 };
+    let iamEndpoint = endpoint;
+    if (where === 'target') {
+        const [host] = endpoint.split(':');
+        const destIAMPort = 8600;
+        iamEndpoint = `${host}:${destIAMPort}`;
+    }
+
     return new IAM({
-        endpoint: `${transport}://${endpoint}`,
+        endpoint: `${transport}://${iamEndpoint}`,
         sslEnabled: transport === 'https',
         credentials,
         maxRetries: 0,
-        region: 'us-east-1',
+        region: 'us-east-2',
         signatureCache: false,
-        httpOptions: {
-            timeout: 1000,
-            proxy: proxyIAMPath,
-        },
+        httpOptions,
     });
 }
 
@@ -99,25 +109,28 @@ class _SetupReplication {
         this._log = log;
         this._sourceBucket = sourceBucket;
         this._targetBucket = targetBucket;
-        // TODO: support bootstrap list failover
-        const destEndpoint = destination.bootstrapList[0].servers[0];
+        this.destHosts =
+            new RoundRobin(destination.bootstrapList[0].servers);
         const verifySourceProfile = sourceProfile === undefined ?
             'default' : sourceProfile;
         const verifyTargetProfile = targetProfile === undefined ?
             'default' : targetProfile;
-
+        source.auth.vault.host = 'localhost';
+        source.s3.host = 'localhost';
+        const destHost = this.destHosts.pickHost().host;
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`,
                 verifySourceProfile),
-            target: _setupS3Client(destination.transport, destEndpoint,
+            target: _setupS3Client(destination.transport, destHost,
                 verifyTargetProfile),
         };
         this._iamClients = {
-            source: _setupIAMClient(source.transport,
+            source: _setupIAMClient('source', source.transport,
                 `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifySourceProfile),
-            target: _setupIAMClient(source.transport, destEndpoint,
+            target: _setupIAMClient('target', destination.transport,
+                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifyTargetProfile),
         };
     }
@@ -260,18 +273,28 @@ class _SetupReplication {
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
         this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
-            if (err) {
+            if (err && err.code !== 'BucketAlreadyOwnedByYou') {
                 this._log.error('error creating a bucket', {
                     error: err.message,
+                    errCode: err.code,
                     method: '_SetupReplication._createBucket',
                 });
                 return cb(err);
             }
-            this._log.debug('Created bucket', {
-                bucket: where,
-                response: res,
-                method: '_createBucket',
-            });
+
+            if (err && err.code === 'BucketAlreadyOwnedByYou') {
+                this._log.debug('Bucket already exists. Continuing setup.', {
+                    bucket: where,
+                    response: res,
+                    method: '_SetupReplication._createBucket',
+                });
+            } else {
+                this._log.debug('Created bucket', {
+                    bucket: where,
+                    response: res,
+                    method: '_SetupReplication._createBucket',
+                });
+            }
             return cb(null, res);
         });
     }
@@ -288,6 +311,8 @@ class _SetupReplication {
                 this._log.error('error creating a role', {
                     error: err.message,
                     method: '_SetupReplication._createRole',
+                    errCode: err.code,
+                    where,
                 });
                 return cb(err);
             }
@@ -310,6 +335,7 @@ class _SetupReplication {
             if (err) {
                 this._log.error('error creating policy', {
                     error: err.message,
+                    where,
                     method: '_SetupReplication._createPolicy',
                 });
                 return cb(err);
@@ -403,7 +429,7 @@ class _SetupReplication {
 
     setupReplication(cb) {
         return async.waterfall([
-            next => async.parallel({
+            next => async.series({
                 sourceBucket: done => this._createBucket('source', done),
                 targetBucket: done => this._createBucket('target', done),
                 sourceRole: done => this._createRole('source', done),
@@ -417,7 +443,6 @@ class _SetupReplication {
                 const sourcePolicyArn = data.sourcePolicy.Policy.Arn;
                 const targetPolicyArn = data.targetPolicy.Policy.Arn;
                 const roleArns = `${sourceRole.Arn},${targetRole.Arn}`;
-
                 async.series([
                     done => this._enableVersioning('source', done),
                     done => this._enableVersioning('target', done),
