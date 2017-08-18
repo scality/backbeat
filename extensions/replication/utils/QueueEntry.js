@@ -139,9 +139,9 @@ class QueueEntry {
         return this.objMd.location;
     }
 
-    buildLocationKey(location, key) {
-        const destinationLocation = Object.assign({}, location);
-        return destinationLocation.key = key; // eslint-disable-line
+    buildLocationKey(location, dataLocation) {
+        const { key, dataStoreName } = dataLocation;
+        return Object.assign({}, location, { key, dataStoreName });
     }
 
     getDataStoreETag(location) {
