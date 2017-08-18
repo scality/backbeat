@@ -20,12 +20,12 @@ describe('QueueEntry helper class', () => {
                 entry.getEncodedVersionId(),
                 '39383530303038363133343437313939393939395247303031202030');
             assert.strictEqual(entry.getContentLength(), 542);
-            assert.strictEqual(entry.getContentMD5(),
+            assert.strictEqual(entry.getContentMd5(),
                                '01064f35c238bd2b785e34508c3d27f4');
             assert.strictEqual(entry.getReplicationStatus(), 'PENDING');
             const repContent = entry.getReplicationContent();
             assert.deepStrictEqual(repContent, ['DATA', 'METADATA']);
-            const destBucket = entry.getReplicationDestBucket();
+            const destBucket = entry.getReplicationTargetBucket();
             assert.deepStrictEqual(destBucket, 'dummy-dest-bucket');
         });
 
@@ -61,13 +61,13 @@ describe('QueueEntry helper class', () => {
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                 },
             ];
-            entry.objMd.location = locations;
+            entry.setLocation(locations);
             assert.deepStrictEqual(entry.getReducedLocations(), locations);
         });
 
         it('should reduce an array when first part is > 1 element', () => {
             const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-            entry.objMd.location = [
+            entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
                     size: 1,
@@ -89,7 +89,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                 },
-            ];
+            ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
                 {
                     key: 'deebfb287cfcee1d137b0136562d2d776ba491e1',
@@ -110,7 +110,7 @@ describe('QueueEntry helper class', () => {
 
         it('should reduce an array when second part is > 1 element', () => {
             const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-            entry.objMd.location = [
+            entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
                     size: 1,
@@ -132,7 +132,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                 },
-            ];
+            ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
@@ -153,7 +153,7 @@ describe('QueueEntry helper class', () => {
 
         it('should reduce an array when multiple parts are > 1 element', () => {
             const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-            entry.objMd.location = [
+            entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
                     size: 1,
@@ -182,7 +182,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                 },
-            ];
+            ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
