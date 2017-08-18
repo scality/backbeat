@@ -2,6 +2,7 @@ const async = require('async');
 const schedule = require('node-schedule');
 const AWS = require('aws-sdk');
 
+const errors = require('arsenal').errors;
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
 const cluesoConfig = config.extensions.clueso;
@@ -25,6 +26,25 @@ const s3Client = new AWS.S3({
     s3ForcePathStyle: true,
     signatureVersion: 'v4',
 });
+
+// TODO: have this configurable
+const postBatchParams = {
+    file: 'file:///apps/spark-modules/clueso-1.0-SNAPSHOT-all.jar',
+    className: 'com.scality.clueso.MetadataIngestionPipeline',
+    name: 'Clueso Metadata Ingestion Pipeline',
+    executorCores: 1,
+    executorMemory: '512m',
+    driverCores: 1,
+    driverMemory: '512m',
+    queue: 'default',
+    args: ['/apps/spark-modules/application.conf'],
+    conf: {
+        'spark.driver.port': '38600',
+        'spark.cores.max': '2',
+        'spark.sql.parquet.cacheMetadata': 'false' },
+};
+
+const WAIT_BEFORE_CHECKING_BATCH_STATE = 5000;
 
 const LivyClient = require('arsenal').LivyClient;
 const useHttps = !!cluesoConfig.livy.transport.https;
@@ -78,19 +98,34 @@ async.waterfall([
     },
     done => {
         log.info('submitting streaming job to livy/spark');
-        // TODO: switch out with actual streaming jar and other
-        // applicable options
-        livyClient.postBatch({ file: '/Users/lhs/Documents/sparkingKafka/' +
-                'target/scala-2.11/sparkingKafka-assembly-1.0.jar',
-            className: 'pi' }, (err, res) => {
+        livyClient.postBatch(postBatchParams, (err, res) => {
             if (err) {
                 return done(err);
             }
             log.info('response from livy on creating streaming job',
                 { response: res });
-            return done();
+            return done(null, res.id);
         });
-        // TODO: keep polling livy until confirm batch job running
+    },
+    (batchId, done) => {
+        log.info('checking streaming batch job state');
+        setTimeout(() => {
+            livyClient.getSessionOrBatchState('batch', batchId, (err, res) => {
+                if (err) {
+                    return done(err);
+                }
+                if (res.state !== 'running') {
+                    log.info('batch state is not running',
+                    { batchState: res.state });
+                    const error = errors.InternalError
+                    .customizeDescription('Livy streaming job failed to start');
+                    // TODO: delete the batch job
+                    return done(error);
+                }
+                log.info('batch state is running', { batchState: res.state });
+                return done();
+            });
+        }, WAIT_BEFORE_CHECKING_BATCH_STATE);
     },
     done => {
         queuePopulator.open(done);
@@ -106,7 +141,7 @@ async.waterfall([
     },
 ], err => {
     if (err) {
-        log.error('error during queue populator initialization',
+        log.error('error during clueso initialization',
                   { error: err });
         process.exit(1);
     }
