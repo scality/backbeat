@@ -152,15 +152,14 @@ class QueuePopulator {
     }
 
     _setupZookeeper(done) {
-        const populatorZkPath = this.cluesoConfig.queuePopulator
-            .zookeeperPath;
-        const zookeeperUrl = `${this.zkConfig.endpoint}${populatorZkPath}`;
+        const populatorZkPath = this.cluesoConfig.queuePopulator.zookeeperPath;
+        const zookeeperUrl =
+            `${this.zkConfig.connectionString}${populatorZkPath}`;
         this.log.info('opening zookeeper connection for persisting ' +
                       'populator state',
                       { zookeeperUrl });
-        const zkClient = zookeeper.createClient(zookeeperUrl);
-        zkClient.connect();
-        this.zkClient = zkClient;
+        this.zkClient = zookeeper.createClient(zookeeperUrl);
+        this.zkClient.connect();
         this._readLogOffset((err, offset) => {
             if (err) {
                 return done(err);
