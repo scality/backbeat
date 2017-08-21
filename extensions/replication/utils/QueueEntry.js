@@ -136,7 +136,8 @@ class QueueEntry {
     }
 
     getLocation() {
-        return this.objMd.location;
+        const { location } = this.objMd;
+        return Array.isArray(location) ? location : [];
     }
 
     buildLocationKey(location, dataLocation) {
