@@ -423,10 +423,18 @@ class QueueProcessor {
     // Object metadata may contain multiple elements for a single part if
     // the part was originally copied from another MPU. Here we reduce the
     // locations array to a single element for each part.
-    _getLocations(sourceEntry) {
+    _getLocations(sourceEntry, log) {
         const locations = sourceEntry.getLocation();
         const reducedLocations = [];
         let partTotal = 0;
+        if (locations.some(
+            part => sourceEntry.getDataStoreETag(part) === undefined)) {
+            log.error('cannot replicate object without dataStoreETag ' +
+                      'property',
+                      { method: 'QueueProcessor._getLocations',
+                        entry: sourceEntry.getLogInfo() });
+            return undefined;
+        }
         for (let i = 0; i < locations.length; i++) {
             const currPart = locations[i];
             const currPartNum = sourceEntry.getPartNumber(currPart);
@@ -446,7 +454,10 @@ class QueueProcessor {
 
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
-        const locations = this._getLocations(sourceEntry);
+        const locations = this._getLocations(sourceEntry, log);
+        if (!locations) {
+            return cb(errors.InvalidObjectState);
+        }
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
         }, cb);
@@ -454,13 +465,6 @@ class QueueProcessor {
 
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         const doneOnce = jsutil.once(done);
-        if (sourceEntry.getDataStoreETag(part) === undefined) {
-            log.error('cannot replicate object without dataStoreETag ' +
-                      'property',
-                      { method: 'QueueProcessor._getAndPutData',
-                        entry: destEntry.getLogInfo() });
-            return doneOnce(errors.InvalidObjectState);
-        }
         const partNumber = sourceEntry.getPartNumber(part);
         const req = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
