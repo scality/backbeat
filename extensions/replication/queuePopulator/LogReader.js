@@ -259,7 +259,7 @@ class LogReader {
                     value: entry.value,
                 };
                 return {
-                    key: entry.key,
+                    key: encodeURIComponent(entry.key),
                     message: JSON.stringify(queueEntry),
                 };
             }
