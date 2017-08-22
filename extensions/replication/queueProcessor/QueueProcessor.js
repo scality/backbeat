@@ -85,8 +85,8 @@ class _RoleAuthManager {
     constructor(vaultClient, roleArn, log) {
         this._log = log;
         this._vaultclient = vaultClient;
-        this._credentials = new CredentialsManager(vaultClient,
-                                                   'replication', roleArn);
+        this._credentials = new CredentialsManager(
+            vaultClient, 'replication', roleArn, log.getUids());
     }
 
     getCredentials() {
@@ -94,7 +94,8 @@ class _RoleAuthManager {
     }
 
     lookupAccountAttributes(accountId, cb) {
-        this._vaultclient.getCanonicalIdsByAccountIds([accountId], {},
+        this._vaultclient.getCanonicalIdsByAccountIds(
+            [accountId], { reqUid: this._log.getSerializedUids() },
             (err, res) => {
                 if (err) {
                     return cb(err);
@@ -114,6 +115,14 @@ class _RoleAuthManager {
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
+}
+
+function attachReqUids(s3req, log) {
+    s3req.on('build', () => {
+        // eslint-disable-next-line no-param-reassign
+        s3req.httpRequest.headers['X-Scal-Request-Uids'] =
+            log.getSerializedUids();
+    });
 }
 
 class QueueProcessor {
@@ -203,7 +212,7 @@ class QueueProcessor {
             const err = args[0];
             if (!err) {
                 if (nbRetries > 0) {
-                    log.info(`succeeded to ${actionDesc}`,
+                    log.info(`succeeded to ${actionDesc} after retries`,
                              { entry: entry.getLogInfo(), nbRetries });
                 }
                 return done.apply(null, args);
@@ -221,7 +230,7 @@ class QueueProcessor {
                 log.error(`retried for too long to ${actionDesc}, giving up`,
                           { entry: entry.getLogInfo(),
                             nbRetries,
-                            retryTotalTime: `${(now - startTime) / 1000}s` });
+                            retryTotalMs: `${now - startTime}` });
                 return done(err);
             }
             const retryDelayMs = backoffCtx.duration();
@@ -333,63 +342,65 @@ class QueueProcessor {
         this._setupSourceClients(this.sourceRole, log);
         this._setupDestClients(this.targetRole, log);
 
-        return this.S3source.getBucketReplication(
-            { Bucket: entry.getBucket() }, (err, data) => {
-                if (err) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('error getting replication ' +
-                              'configuration from S3',
-                              { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo(),
-                                origin: 'source',
-                                peer: this.sourceConfig.s3,
-                                error: err.message,
-                                httpStatus: err.statusCode });
-                    return cb(err);
-                }
-                const replicationEnabled = (
-                    data.ReplicationConfiguration.Rules.some(
-                        rule => entry.getObjectKey().startsWith(rule.Prefix)
-                            && rule.Status === 'Enabled'));
-                if (!replicationEnabled) {
-                    log.debug('replication disabled for object',
-                              { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo() });
-                    return cb(errors.PreconditionFailed.customizeDescription(
-                        'replication disabled for object'));
-                }
-                const roles = data.ReplicationConfiguration.Role.split(',');
-                if (roles.length !== 2) {
-                    log.error('expecting two roles separated by a ' +
-                              'comma in bucket replication configuration',
-                              { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo(),
-                                roles });
-                    return cb(errors.BadRole);
-                }
-                if (roles[0] !== entryRoles[0]) {
-                    log.error('role in replication entry for source does ' +
-                              'not match role in bucket replication ' +
-                              'configuration ',
-                              { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo(),
-                                entryRole: entryRoles[0],
-                                bucketRole: roles[0] });
-                    return cb(errors.BadRole);
-                }
-                if (roles[1] !== entryRoles[1]) {
-                    log.error('role in replication entry for target does ' +
-                              'not match role in bucket replication ' +
-                              'configuration ',
-                              { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo(),
-                                entryRole: entryRoles[1],
-                                bucketRole: roles[1] });
-                    return cb(errors.BadRole);
-                }
-                return cb(null, roles[0], roles[1]);
-            });
+        const req = this.S3source.getBucketReplication(
+            { Bucket: entry.getBucket() });
+        attachReqUids(req, log);
+        return req.send((err, data) => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('error getting replication ' +
+                          'configuration from S3',
+                          { method: 'QueueProcessor._setupRoles',
+                            entry: entry.getLogInfo(),
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
+                            error: err.message,
+                            httpStatus: err.statusCode });
+                return cb(err);
+            }
+            const replicationEnabled = (
+                data.ReplicationConfiguration.Rules.some(
+                    rule => entry.getObjectKey().startsWith(rule.Prefix)
+                        && rule.Status === 'Enabled'));
+            if (!replicationEnabled) {
+                log.debug('replication disabled for object',
+                          { method: 'QueueProcessor._setupRoles',
+                            entry: entry.getLogInfo() });
+                return cb(errors.PreconditionFailed.customizeDescription(
+                    'replication disabled for object'));
+            }
+            const roles = data.ReplicationConfiguration.Role.split(',');
+            if (roles.length !== 2) {
+                log.error('expecting two roles separated by a ' +
+                          'comma in bucket replication configuration',
+                          { method: 'QueueProcessor._setupRoles',
+                            entry: entry.getLogInfo(),
+                            roles });
+                return cb(errors.BadRole);
+            }
+            if (roles[0] !== entryRoles[0]) {
+                log.error('role in replication entry for source does ' +
+                          'not match role in bucket replication ' +
+                          'configuration ',
+                          { method: 'QueueProcessor._setupRoles',
+                            entry: entry.getLogInfo(),
+                            entryRole: entryRoles[0],
+                            bucketRole: roles[0] });
+                return cb(errors.BadRole);
+            }
+            if (roles[1] !== entryRoles[1]) {
+                log.error('role in replication entry for target does ' +
+                          'not match role in bucket replication ' +
+                          'configuration ',
+                          { method: 'QueueProcessor._setupRoles',
+                            entry: entry.getLogInfo(),
+                            entryRole: entryRoles[1],
+                            bucketRole: roles[1] });
+                return cb(errors.BadRole);
+            }
+            return cb(null, roles[0], roles[1]);
+        });
     }
 
     _setTargetAccountMdOnce(destEntry, targetRole, log, cb) {
@@ -466,13 +477,14 @@ class QueueProcessor {
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         const doneOnce = jsutil.once(done);
         const partNumber = sourceEntry.getPartNumber(part);
-        const req = this.S3source.getObject({
+        const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: partNumber,
         });
-        req.on('error', err => {
+        attachReqUids(sourceReq, log);
+        sourceReq.on('error', err => {
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             if (err.ObjNotFound || err.code === 'ObjNotFound') {
@@ -487,7 +499,7 @@ class QueueProcessor {
                         httpStatus: err.statusCode });
             return doneOnce(err);
         });
-        const incomingMsg = req.createReadStream();
+        const incomingMsg = sourceReq.createReadStream();
         incomingMsg.on('error', err => {
             if (err.ObjNotFound || err.code === 'ObjNotFound') {
                 return doneOnce(errors.ObjNotFound);
@@ -503,14 +515,16 @@ class QueueProcessor {
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo() });
-        return this.backbeatDest.putData({
+        const destReq = this.backbeatDest.putData({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerCanonicalId(),
             ContentLength: destEntry.getPartSize(part),
             ContentMD5: destEntry.getPartETag(part),
             Body: incomingMsg,
-        }, (err, data) => {
+        });
+        attachReqUids(destReq, log);
+        return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
@@ -539,13 +553,15 @@ class QueueProcessor {
         // if it's a metadata operation only
         const replicationContent = (mdOnly ? 'METADATA' : undefined);
         const mdBlob = entry.getMetadataBlob();
-        target.putMetadata({
+        const req = target.putMetadata({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
             ReplicationContent: replicationContent,
-        }, (err, data) => {
+        });
+        attachReqUids(req, log);
+        req.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = where;
@@ -759,11 +775,11 @@ class QueueProcessor {
                             updatedSourceEntry.getReplicationStatus() });
                 return done(err);
             }
-            log.info('replication status updated',
-                     { entry: updatedSourceEntry.getLogInfo(),
-                       replicationStatus:
-                       updatedSourceEntry.getReplicationStatus(),
-                       reason });
+            log.end().info('replication status updated',
+                           { entry: updatedSourceEntry.getLogInfo(),
+                             replicationStatus:
+                             updatedSourceEntry.getReplicationStatus(),
+                             reason });
             return done();
         };
 
@@ -771,10 +787,10 @@ class QueueProcessor {
             return this._putMetadata(
                 'source', updatedSourceEntry, false, log, _doneUpdate);
         }
-        log.info('replication status update skipped',
-                 { entry: updatedSourceEntry.getLogInfo(),
-                   replicationStatus:
-                   updatedSourceEntry.getReplicationStatus() });
+        log.end().info('replication status update skipped',
+                       { entry: updatedSourceEntry.getLogInfo(),
+                         replicationStatus:
+                         updatedSourceEntry.getReplicationStatus() });
         return done();
     }
 

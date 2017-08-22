@@ -52,7 +52,7 @@ describe('Credentials Manager', () => {
             undefined, undefined, undefined, undefined, undefined, undefined,
             undefined, proxyPath);
         credentialsManager = new CredentialsManager(vaultclient, role,
-            extension);
+            extension, ['test', 'CredentialsManager', 'requids']);
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
     });
