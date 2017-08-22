@@ -324,7 +324,6 @@ class QueueProcessor {
                       'comma in entry replication configuration',
                       { method: 'QueueProcessor._setupRoles',
                         entry: entry.getLogInfo(),
-                        origin: this.sourceConfig.s3,
                         roles: entryRolesString });
             return cb(errors.BadRole);
         }
@@ -343,7 +342,8 @@ class QueueProcessor {
                               'configuration from S3',
                               { method: 'QueueProcessor._setupRoles',
                                 entry: entry.getLogInfo(),
-                                origin: this.sourceConfig.s3,
+                                origin: 'source',
+                                peer: this.sourceConfig.s3,
                                 error: err.message,
                                 httpStatus: err.statusCode });
                     return cb(err);
@@ -355,8 +355,7 @@ class QueueProcessor {
                 if (!replicationEnabled) {
                     log.debug('replication disabled for object',
                               { method: 'QueueProcessor._setupRoles',
-                                entry: entry.getLogInfo(),
-                                origin: this.sourceConfig.s3 });
+                                entry: entry.getLogInfo() });
                     return cb(errors.PreconditionFailed.customizeDescription(
                         'replication disabled for object'));
                 }
@@ -366,7 +365,6 @@ class QueueProcessor {
                               'comma in bucket replication configuration',
                               { method: 'QueueProcessor._setupRoles',
                                 entry: entry.getLogInfo(),
-                                origin: this.sourceConfig.s3,
                                 roles });
                     return cb(errors.BadRole);
                 }
@@ -376,7 +374,6 @@ class QueueProcessor {
                               'configuration ',
                               { method: 'QueueProcessor._setupRoles',
                                 entry: entry.getLogInfo(),
-                                origin: this.sourceConfig.s3,
                                 entryRole: entryRoles[0],
                                 bucketRole: roles[0] });
                     return cb(errors.BadRole);
@@ -387,7 +384,6 @@ class QueueProcessor {
                               'configuration ',
                               { method: 'QueueProcessor._setupRoles',
                                 entry: entry.getLogInfo(),
-                                origin: this.sourceConfig.s3,
                                 entryRole: entryRoles[1],
                                 bucketRole: roles[1] });
                     return cb(errors.BadRole);
@@ -409,6 +405,9 @@ class QueueProcessor {
                               'account attributes',
                               { method: 'QueueProcessor._setTargetAccountMd',
                                 entry: destEntry.getLogInfo(),
+                                origin: 'target',
+                                peer: (this.destConfig.auth.type === 'role' ?
+                                       this.destConfig.auth.vault : undefined),
                                 error: err.message });
                     return cb(err);
                 }
@@ -478,7 +477,8 @@ class QueueProcessor {
             log.error('an error occurred on getObject from S3',
                       { method: 'QueueProcessor._getAndPutData',
                         entry: sourceEntry.getLogInfo(),
-                        origin: this.sourceConfig.s3,
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
                         error: err.message,
                         httpStatus: err.statusCode });
             return doneOnce(err);
@@ -493,6 +493,8 @@ class QueueProcessor {
             log.error('an error occurred when streaming data from S3',
                       { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
                         error: err.message });
             return doneOnce(err);
         });
@@ -511,7 +513,8 @@ class QueueProcessor {
                 log.error('an error occurred on putData to S3',
                           { method: 'QueueProcessor._getAndPutData',
                             entry: destEntry.getLogInfo(),
-                            origin: this.destBackbeatHost,
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
                             error: err.message });
                 return doneOnce(err);
             }
@@ -540,7 +543,10 @@ class QueueProcessor {
                 log.error('an error occurred when putting metadata to S3',
                           { method: 'QueueProcessor._putMetadata',
                             entry: entry.getLogInfo(),
-                            origin: this.destBackbeatHost,
+                            origin: where,
+                            peer: (where === 'source' ?
+                                   this.sourceConfig.s3 :
+                                   this.destBackbeatHost),
                             error: err.message });
                 return cbOnce(err);
             }
@@ -638,6 +644,7 @@ class QueueProcessor {
                           'processing skipped',
                           { failMethod: err.method,
                             entry: sourceEntry.getLogInfo(),
+                            origin: err.origin,
                             error: err.description });
                 return done();
             }
@@ -702,6 +709,8 @@ class QueueProcessor {
                 log.error('an error occurred when writing replication ' +
                           'status',
                           { entry: updatedSourceEntry.getLogInfo(),
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
                             replicationStatus:
                             updatedSourceEntry.getReplicationStatus() });
                 return done(err);
