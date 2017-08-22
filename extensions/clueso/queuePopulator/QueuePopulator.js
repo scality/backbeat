@@ -159,8 +159,11 @@ class QueuePopulator {
                       'populator state',
                       { zookeeperUrl });
         this.zkClient = zookeeper.createClient(zookeeperUrl);
+        console.log("creating zookeeper client!!", this.zkClient);
         this.zkClient.connect();
+        console.log("just called connect!!")
         this._readLogOffset((err, offset) => {
+            console.log("in callback for read offset log", err, offset);
             if (err) {
                 return done(err);
             }
@@ -195,7 +198,9 @@ class QueuePopulator {
     _readLogOffset(done) {
         const zkClient = this.zkClient;
         const pathToLogOffset = this.pathToLogOffset;
+        console.log("about to call get data!!")
         this.zkClient.getData(pathToLogOffset, (err, data) => {
+            console.log("called zkClient.getDATA!!!", err, data)
             if (err) {
                 if (err.name !== 'NO_NODE') {
                     this.log.error(
@@ -205,6 +210,7 @@ class QueuePopulator {
                     return done(err);
                 }
                 return zkClient.mkdirp(pathToLogOffset, err => {
+                    console.log("in callback for mkdirp!!", err)
                     if (err) {
                         this.log.error(
                             'Could not pre-create path in zookeeper',
