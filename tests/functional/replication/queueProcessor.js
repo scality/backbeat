@@ -91,6 +91,7 @@ class S3Mock extends TestConfigurator {
                     `${this.getParam('source.role')},${this.getParam('target.role')}`,
                 destination: () =>
                     `arn:aws:s3:::${this.getParam('target.bucket')}`,
+                content: ['DATA', 'METADATA'],
             },
         };
 
@@ -128,7 +129,7 @@ class S3Mock extends TestConfigurator {
                     'tags': {},
                     'replicationInfo': {
                         status: 'PENDING',
-                        content: ['DATA', 'METADATA'],
+                        content: this.getParam('source.md.replicationInfo.content'),
                         destination: this.getParam('source.md.replicationInfo.destination'),
                         storageClass: 'STANDARD',
                         role: this.getParam('source.md.replicationInfo.role'),
@@ -506,14 +507,24 @@ class S3Mock extends TestConfigurator {
 
     _putMetadataTarget(req, url, query, res, reqBody) {
         if (this.getParam('nbParts') > 0) {
-            assert.strictEqual(this.hasPutTargetData, true);
+            if (this.getParam('source.md.replicationInfo.content')
+                .includes('DATA')) {
+                assert.strictEqual(this.hasPutTargetData, true);
+            } else if (req.headers['x-scal-replication-content']
+                       === 'METADATA') {
+                assert.strictEqual(this.hasPutTargetData, false);
+            } else {
+                assert.strictEqual(this.hasPutTargetData, true);
+            }
         }
         assert.strictEqual(this.hasPutTargetMd, false);
 
         const parsedMd = JSON.parse(reqBody);
+        const replicatedContent =
+                  this.getParam('source.md.replicationInfo.content');
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: 'REPLICA',
-            content: ['DATA', 'METADATA'],
+            content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'STANDARD',
             role: this.getParam('source.md.replicationInfo.role'),
@@ -521,9 +532,12 @@ class S3Mock extends TestConfigurator {
         assert.strictEqual(parsedMd['owner-id'],
                            this.getParam('target.canonicalId'));
 
-        // Assert locations, depending on whether it is multipart
-        assert.deepStrictEqual(parsedMd.location,
-                               this.getParam('target.md.location'));
+        if (req.headers['x-scal-replication-content'] === 'METADATA') {
+            assert.deepStrictEqual(parsedMd.location, []);
+        } else {
+            assert.deepStrictEqual(parsedMd.location,
+                                   this.getParam('target.md.location'));
+        }
 
         res.writeHead(200);
         res.end();
@@ -538,7 +552,7 @@ class S3Mock extends TestConfigurator {
         const parsedMd = JSON.parse(reqBody);
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: this.expectedReplicationStatus,
-            content: ['DATA', 'METADATA'],
+            content: this.getParam('source.md.replicationInfo.content'),
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'STANDARD',
             role: this.getParam('source.md.replicationInfo.role'),
@@ -620,6 +634,38 @@ describe('queue processor functional tests with mocking', () => {
                        });
                });
            }));
+
+        it('should replicate metadata in metadata-only mode', done => {
+            s3mock.setParam('nbParts', 2);
+            s3mock.setParam('source.md.replicationInfo.content',
+                            ['METADATA']);
+            queueProcessor.processKafkaEntry(
+                s3mock.getParam('kafkaEntry'), err => {
+                    assert.ifError(err);
+                    assert.strictEqual(s3mock.hasPutTargetData, false);
+                    assert(s3mock.hasPutTargetMd);
+                    assert(s3mock.hasPutSourceMd);
+                    done();
+                });
+        });
+
+        it('should retry with full replication if metadata-only returns ' +
+        'ObjNotFound', done => {
+            s3mock.setParam('nbParts', 2);
+            s3mock.setParam('source.md.replicationInfo.content',
+                            ['METADATA']);
+            s3mock.installBackbeatErrorResponder('target.putMetadata',
+                                                 errors.ObjNotFound,
+                                                 { once: true });
+            queueProcessor.processKafkaEntry(
+                s3mock.getParam('kafkaEntry'), err => {
+                    assert.ifError(err);
+                    assert.strictEqual(s3mock.hasPutTargetData, true);
+                    assert(s3mock.hasPutTargetMd);
+                    assert(s3mock.hasPutSourceMd);
+                    done();
+                });
+        });
     });
 
     describe('error paths', function errorPaths() {
