@@ -57,11 +57,10 @@ class QueueEntry {
     static createFromKafkaEntry(kafkaEntry) {
         try {
             const record = JSON.parse(kafkaEntry.value);
+            const decodedKey = decodeURIComponent(record.key);
+            const key = QueueEntry._extractVersionedBaseKey(decodedKey);
             const objMd = JSON.parse(record.value);
-            const entry = new QueueEntry(
-                record.bucket,
-                QueueEntry._extractVersionedBaseKey(record.key),
-                objMd);
+            const entry = new QueueEntry(record.bucket, key, objMd);
             const err = entry.checkSanity();
             if (err) {
                 return { error: err };
