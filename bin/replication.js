@@ -1,15 +1,12 @@
 const async = require('async');
-const program = require('commander');
+const os = require('os');
 const { S3, IAM, SharedIniFileCredentials } = require('aws-sdk');
 
-const werelogs = require('werelogs');
 const { RoundRobin } = require('arsenal').network;
-const Logger = werelogs.Logger;
-const config = require('../conf/Config');
-werelogs.configure({
-    level: config.log.logLevel,
-    dump: config.log.dumpLevel,
-});
+
+// User can define where to find credentials file. Relative Path is used.
+const AWS_CRED_LOC = process.env.AWS_SHARED_CREDENTIALS_FILE ||
+    `${os.homedir()}/.aws/credentials`;
 
 const trustPolicy = {
     Version: '2012-10-17',
@@ -61,7 +58,11 @@ function _buildResourcePolicy(source, target) {
 }
 
 function _setupS3Client(transport, endpoint, profile) {
-    const credentials = new SharedIniFileCredentials({ profile });
+    const credentials = new SharedIniFileCredentials({
+        profile,
+        filename: AWS_CRED_LOC,
+    });
+
     return new S3({
         endpoint: `${endpoint}`,
         sslEnabled: transport === 'https',
@@ -72,7 +73,11 @@ function _setupS3Client(transport, endpoint, profile) {
 }
 
 function _setupIAMClient(where, transport, endpoint, profile) {
-    const credentials = new SharedIniFileCredentials({ profile });
+    const credentials = new SharedIniFileCredentials({
+        profile,
+        filename: AWS_CRED_LOC,
+    });
+
     const httpOptions = { timeout: 1000 };
     let iamEndpoint = endpoint;
     if (where === 'target') {
@@ -92,7 +97,7 @@ function _setupIAMClient(where, transport, endpoint, profile) {
     });
 }
 
-class _SetupReplication {
+class SetupReplication {
     /**
      * This class sets up two buckets for replication.
      * @constructor
@@ -115,8 +120,10 @@ class _SetupReplication {
             'default' : sourceProfile;
         const verifyTargetProfile = targetProfile === undefined ?
             'default' : targetProfile;
-        source.auth.vault.host = 'localhost';
-        source.s3.host = 'localhost';
+
+        // TODO: Destination is sending request directly to s3-nginx on port 80.
+        // For now, destination S3 and IAM ports are hard-coded.
+        // In future PR, we will calculate the signature using a proxy path.
         const destHost = this.destHosts.pickHost().host;
         this._s3Clients = {
             source: _setupS3Client(source.transport,
@@ -158,14 +165,13 @@ class _SetupReplication {
     }
 
     _isValidBucket(where, cb) {
-        // Does the bucket exist and is it reachable?
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
         this._s3Clients[where].headBucket({ Bucket: bucket }, err => {
             if (err) {
                 this._log.error('bucket sanity check error', {
                     error: err.message,
-                    method: '_SetupReplication._isValidBucket',
+                    method: 'SetupReplication._isValidBucket',
                 });
                 return cb(err);
             }
@@ -174,7 +180,6 @@ class _SetupReplication {
     }
 
     _isVersioningEnabled(where, cb) {
-        // Does the bucket have versioning enabled?
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
         this._s3Clients[where].getBucketVersioning({ Bucket: bucket },
@@ -183,7 +188,7 @@ class _SetupReplication {
                     this._log.error('versioning sanity check error: ' +
                         'Cannot retrieve versioning configuration', {
                             error: err.message,
-                            method: '_SetupReplication._isVersioningEnabled',
+                            method: 'SetupReplication._isVersioningEnabled',
                         }
                     );
                     return cb(err);
@@ -194,7 +199,7 @@ class _SetupReplication {
                     this._log.error('versioning sanity check error: ' +
                         'Status Disabled', {
                             error: error.message,
-                            method: '_SetupReplication._isVersioningEnabled',
+                            method: 'SetupReplication._isVersioningEnabled',
                         }
                     );
                     return cb(error);
@@ -217,7 +222,7 @@ class _SetupReplication {
                 this._log.error('role validation sanity check error: ' +
                     'Cannot retrieve role configuration', {
                         error: err.message,
-                        method: '_SetupReplication._isValidRole',
+                        method: 'SetupReplication._isValidRole',
                     }
                 );
                 return cb(err);
@@ -229,7 +234,7 @@ class _SetupReplication {
                 this._log.error('role validation sanity check error: ' +
                     'ARN mis-match', {
                         error: err.message,
-                        method: '_SetupReplication._isVersioningEnabled',
+                        method: 'SetupReplication._isVersioningEnabled',
                     }
                 );
                 return cb(error);
@@ -239,7 +244,6 @@ class _SetupReplication {
     }
 
     _isReplicationEnabled(src, cb) {
-        // Is the Replication config enabled?
         this._s3Clients[src].getBucketReplication(
             { Bucket: this._sourceBucket },
             (err, res) => {
@@ -247,7 +251,7 @@ class _SetupReplication {
                     this._log.error('replication status sanity check error: ' +
                         'Cannot retrieve replication configuration', {
                             error: err.message,
-                            method: '_SetupReplication._isReplicationEnabled',
+                            method: 'SetupReplication._isReplicationEnabled',
                         }
                     );
                     return cb(err);
@@ -259,7 +263,7 @@ class _SetupReplication {
                     this._log.error('replication status sanity check error: ' +
                         'Status Disabled', {
                             error: error.message,
-                            method: '_SetupReplication._isReplicationEnabled',
+                            method: 'SetupReplication._isReplicationEnabled',
                         }
                     );
                     return cb(error);
@@ -277,7 +281,7 @@ class _SetupReplication {
                 this._log.error('error creating a bucket', {
                     error: err.message,
                     errCode: err.code,
-                    method: '_SetupReplication._createBucket',
+                    method: 'SetupReplication._createBucket',
                 });
                 return cb(err);
             }
@@ -286,13 +290,13 @@ class _SetupReplication {
                 this._log.debug('Bucket already exists. Continuing setup.', {
                     bucket: where,
                     response: res,
-                    method: '_SetupReplication._createBucket',
+                    method: 'SetupReplication._createBucket',
                 });
             } else {
                 this._log.debug('Created bucket', {
                     bucket: where,
                     response: res,
-                    method: '_SetupReplication._createBucket',
+                    method: 'SetupReplication._createBucket',
                 });
             }
             return cb(null, res);
@@ -310,7 +314,7 @@ class _SetupReplication {
             if (err) {
                 this._log.error('error creating a role', {
                     error: err.message,
-                    method: '_SetupReplication._createRole',
+                    method: 'SetupReplication._createRole',
                     errCode: err.code,
                     where,
                 });
@@ -336,7 +340,7 @@ class _SetupReplication {
                 this._log.error('error creating policy', {
                     error: err.message,
                     where,
-                    method: '_SetupReplication._createPolicy',
+                    method: 'SetupReplication._createPolicy',
                 });
                 return cb(err);
             }
@@ -362,7 +366,7 @@ class _SetupReplication {
             if (err) {
                 this._log.error('error enabling versioning', {
                     error: err.message,
-                    method: '_SetupReplication._enableVersioning',
+                    method: 'SetupReplication._enableVersioning',
                 });
                 return cb(err);
             }
@@ -384,7 +388,7 @@ class _SetupReplication {
             if (err) {
                 this._log.error('error attaching resource policy', {
                     error: err.message,
-                    method: '_SetupReplication._attachResourcePolicy',
+                    method: 'SetupReplication._attachResourcePolicy',
                 });
                 return cb(err);
             }
@@ -415,7 +419,7 @@ class _SetupReplication {
             if (err) {
                 this._log.error('error enabling replication', {
                     error: err.message,
-                    method: '_SetupReplication._enableReplication',
+                    method: 'SetupReplication._enableReplication',
                 });
                 return cb(err);
             }
@@ -458,84 +462,4 @@ class _SetupReplication {
     }
 }
 
-program
-    .version('1.0.0')
-    .command('setup')
-    .option('--source-bucket <name>', '[required] source bucket name')
-    .option('--source-profile <name>',
-            'aws/credentials profile to use for source')
-    .option('--target-bucket <name>', 'target bucket name')
-    .option('--target-profile <name>',
-            'aws/credentials profile to use for target')
-    .action(options => {
-        const log = new Logger('BackbeatSetup').newRequestLogger();
-
-        const sourceBucket = options.sourceBucket;
-        const targetBucket = options.targetBucket;
-        const sourceProfile = options.sourceProfile;
-        const targetProfile = options.targetProfile;
-
-        // Required options
-        if (!sourceBucket || !targetBucket) {
-            program.commands.find(n => n._name === 'setup').help();
-            process.exit(1);
-        }
-
-        const s = new _SetupReplication(sourceBucket, targetBucket,
-            sourceProfile, targetProfile, log, config);
-        s.setupReplication(err => {
-            if (err) {
-                log.error('replication setup failed', {
-                    error: err.message,
-                });
-                process.exit(1);
-            }
-            log.info('replication setup successful');
-            process.exit();
-        });
-    });
-
-program
-    .command('validate')
-    .option('--source-bucket <name>', 'source bucket name')
-    .option('--source-profile <name>',
-            'aws/credentials profile to use for source')
-    .option('--target-bucket <name>', 'target bucket name')
-    .option('--target-profile <name>',
-            'aws/credentials profile to use for target')
-    .action(options => {
-        const log = new Logger('BackbeatSetup').newRequestLogger();
-
-        const sourceBucket = options.sourceBucket;
-        const targetBucket = options.targetBucket;
-        const sourceProfile = options.sourceProfile;
-        const targetProfile = options.targetProfile;
-
-        // Required options
-        if (!sourceBucket || !targetBucket) {
-            program.commands.find(n => n._name === 'validate').help();
-            process.exit(1);
-        }
-
-        const s = new _SetupReplication(sourceBucket, targetBucket,
-            sourceProfile, targetProfile, log, config);
-        s.checkSanity(err => {
-            if (err) {
-                log.error('replication validation check failed', {
-                    error: err.message,
-                });
-                process.exit(1);
-            }
-            log.info('replication is correctly setup');
-            process.exit();
-        });
-    });
-
-program.parse(process.argv);
-const validCommands = program.commands.map(n => n._name);
-
-// Is the command given invalid or are there too few arguments passed
-if (!validCommands.includes(process.argv[2])) {
-    program.help();
-    process.exit(1);
-}
+module.exports = { SetupReplication };
