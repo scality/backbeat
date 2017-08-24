@@ -18,14 +18,15 @@ class CredentialsManager extends Credentials {
     * @param {object} vaultclient - vaultclient instance
     * @param {string} extension - name of the extension
     * @param {string} roleArn - ARN of the role
+    * @param {string} reqUids - logging request ids (not serialized)
     * @return {object} this - current instance
     */
-    constructor(vaultclient, extension, roleArn) {
+    constructor(vaultclient, extension, roleArn, reqUids) {
         super();
         joi.attempt({ vaultclient, extension, roleArn }, configJoi);
 
         this._vaultclient = vaultclient;
-        this._log = new Logger('Backbeat').newRequestLogger();
+        this._log = new Logger('Backbeat').newRequestLogger(reqUids);
         this._extension = extension;
         this._roleArn = roleArn;
         this.accessKeyId = null;
@@ -50,7 +51,8 @@ class CredentialsManager extends Credentials {
         });
         const roleSessionName = `backbeat-${this._extension}`;
         return this._vaultclient.assumeRoleBackbeat(this._roleArn,
-            roleSessionName, {}, (err, res) => {
+            roleSessionName, { reqUid: this._log.getSerializedUids() },
+            (err, res) => {
                 if (err) {
                     this._log.error('error assuming backbeat role', {
                         error: err,
