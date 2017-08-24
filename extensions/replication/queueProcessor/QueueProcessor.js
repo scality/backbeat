@@ -283,11 +283,11 @@ class QueueProcessor {
         }, cb);
     }
 
-    _putMetadata(where, entry, log, cb) {
+    _putMetadata(where, entry, mdOnly, log, cb) {
         this._retry({
             actionDesc: `update metadata on ${where}`,
             entry,
-            actionFunc: done => this._putMetadataOnce(where, entry,
+            actionFunc: done => this._putMetadataOnce(where, entry, mdOnly,
                                                       log, done),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
@@ -473,11 +473,11 @@ class QueueProcessor {
             PartNumber: partNumber,
         });
         req.on('error', err => {
-            if (err.ObjNotFound || err.code === 'ObjNotFound') {
-                return doneOnce(errors.ObjNotFound);
-            }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
+            if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                return doneOnce(err);
+            }
             log.error('an error occurred on getObject from S3',
                       { method: 'QueueProcessor._getAndPutData',
                         entry: sourceEntry.getLogInfo(),
@@ -527,23 +527,31 @@ class QueueProcessor {
         });
     }
 
-    _putMetadataOnce(where, entry, log, cb) {
+    _putMetadataOnce(where, entry, mdOnly, log, cb) {
         log.debug('putting metadata',
                   { where, entry: entry.getLogInfo(),
                     replicationStatus: entry.getReplicationStatus() });
         const cbOnce = jsutil.once(cb);
         const target = where === 'source' ?
                   this.backbeatSource : this.backbeatDest;
+
+        // sends extra header x-scal-replication-content to the target
+        // if it's a metadata operation only
+        const replicationContent = (mdOnly ? 'METADATA' : undefined);
         const mdBlob = entry.getMetadataBlob();
         target.putMetadata({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
+            ReplicationContent: replicationContent,
         }, (err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = where;
+                if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                    return cbOnce(err);
+                }
                 log.error('an error occurred when putting metadata to S3',
                           { method: 'QueueProcessor._putMetadata',
                             entry: entry.getLogInfo(),
@@ -632,41 +640,6 @@ class QueueProcessor {
         log.debug('processing entry',
                   { entry: sourceEntry.getLogInfo() });
 
-        const _handleReplicationOutcome = err => {
-            if (!err) {
-                log.debug('replication succeeded for object, updating ' +
-                          'source replication status to COMPLETED',
-                          { entry: sourceEntry.getLogInfo() });
-                return this._updateReplicationStatus(
-                    sourceEntry.toCompletedEntry(), { log }, done);
-            }
-            if (err.BadRole ||
-                (err.origin === 'source' &&
-                 (err.NoSuchEntity || err.code === 'NoSuchEntity' ||
-                  err.AccessDenied || err.code === 'AccessDenied'))) {
-                log.error('replication failed permanently for object, ' +
-                          'processing skipped',
-                          { failMethod: err.method,
-                            entry: sourceEntry.getLogInfo(),
-                            origin: err.origin,
-                            error: err.description });
-                return done();
-            }
-            if (err.ObjNotFound) {
-                log.info('replication skipped: ' +
-                         'source object version does not exist',
-                         { entry: sourceEntry.getLogInfo() });
-                return done();
-            }
-            log.debug('replication failed permanently for object, ' +
-                      'updating replication status to FAILED',
-                      { failMethod: err.method,
-                        entry: sourceEntry.getLogInfo(),
-                        error: err.description });
-            return this._updateReplicationStatus(
-                sourceEntry.toFailedEntry(),
-                { log, reason: err.description }, done);
-        };
 
         if (sourceEntry.isDeleteMarker()) {
             return async.waterfall([
@@ -680,10 +653,13 @@ class QueueProcessor {
                 // put metadata in target bucket
                 next => {
                     // TODO check that bucket role matches role in metadata
-                    this._putMetadata('target', destEntry, log, next);
+                    this._putMetadata('target', destEntry, false, log, next);
                 },
-            ], _handleReplicationOutcome);
+            ], err => this._handleReplicationOutcome(err, sourceEntry,
+                                                     destEntry, log, done));
         }
+
+        const mdOnly = !sourceEntry.getReplicationContent().includes('DATA');
         return async.waterfall([
             // get data stream from source bucket
             next => {
@@ -694,15 +670,79 @@ class QueueProcessor {
             },
             // Get data from source bucket and put it on the target bucket
             next => {
-                this._getAndPutData(sourceEntry, destEntry, log, next);
+                if (!mdOnly) {
+                    return this._getAndPutData(sourceEntry, destEntry, log,
+                        next);
+                }
+                return next(null, []);
             },
             // update location, replication status and put metadata in
             // target bucket
             (location, next) => {
                 destEntry.setLocation(location);
-                this._putMetadata('target', destEntry, log, next);
+                this._putMetadata('target', destEntry, mdOnly, log, next);
             },
-        ], _handleReplicationOutcome);
+        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
+                                                 log, done));
+    }
+
+    _processQueueEntryRetryFull(sourceEntry, destEntry, log, done) {
+        log.debug('reprocessing entry as full replication',
+                  { entry: sourceEntry.getLogInfo() });
+
+        return async.waterfall([
+            next => this._getAndPutData(sourceEntry, destEntry, log, next),
+            // update location, replication status and put metadata in
+            // target bucket
+            (location, next) => {
+                destEntry.setLocation(location);
+                this._putMetadata('target', destEntry, false, log, next);
+            },
+        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
+                                                 log, done));
+    }
+
+    _handleReplicationOutcome(err, sourceEntry, destEntry, log, done) {
+        if (!err) {
+            log.debug('replication succeeded for object, updating ' +
+                      'source replication status to COMPLETED',
+                      { entry: sourceEntry.getLogInfo() });
+            return this._updateReplicationStatus(
+                sourceEntry.toCompletedEntry(), { log }, done);
+        }
+        if (err.BadRole ||
+            (err.origin === 'source' &&
+             (err.NoSuchEntity || err.code === 'NoSuchEntity' ||
+              err.AccessDenied || err.code === 'AccessDenied'))) {
+            log.error('replication failed permanently for object, ' +
+                      'processing skipped',
+                      { failMethod: err.method,
+                        entry: sourceEntry.getLogInfo(),
+                        origin: err.origin,
+                        error: err.description });
+            return done();
+        }
+        if (err.ObjNotFound || err.code === 'ObjNotFound') {
+            if (err.origin === 'source') {
+                log.info('replication skipped: ' +
+                         'source object version does not exist',
+                         { entry: sourceEntry.getLogInfo() });
+                return done();
+            }
+            log.info('target object version does not exist, retrying ' +
+                     'a full replication',
+                     { entry: sourceEntry.getLogInfo() });
+            return this._processQueueEntryRetryFull(sourceEntry, destEntry,
+                                                    log, done);
+        }
+        log.debug('replication failed permanently for object, ' +
+                  'updating replication status to FAILED',
+                  { failMethod: err.method,
+                    entry: sourceEntry.getLogInfo(),
+                    error: err.description });
+        return this._updateReplicationStatus(
+            sourceEntry.toFailedEntry(),
+            { log, reason: err.description }, done);
     }
 
     _updateReplicationStatusOnce(updatedSourceEntry, params, done) {
@@ -729,7 +769,7 @@ class QueueProcessor {
 
         if (this.backbeatSource !== null) {
             return this._putMetadata(
-                'source', updatedSourceEntry, log, _doneUpdate);
+                'source', updatedSourceEntry, false, log, _doneUpdate);
         }
         log.info('replication status update skipped',
                  { entry: updatedSourceEntry.getLogInfo(),

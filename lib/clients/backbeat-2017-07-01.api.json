@@ -105,6 +105,11 @@
                     },
                     "Body": {
                         "type": "blob"
+                    },
+                    "ReplicationContent": {
+                        "location": "header",
+                        "locationName": "x-scal-replication-content",
+                        "type": "string"
                     }
                 },
                 "payload": "Body"
