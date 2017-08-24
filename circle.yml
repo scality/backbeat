@@ -21,3 +21,4 @@ test:
         - npm run --silent lint_md
         - npm run --silent lint
         - npm test
+        - npm run ft_test
