@@ -115,8 +115,6 @@ class _SetupReplication {
             'default' : sourceProfile;
         const verifyTargetProfile = targetProfile === undefined ?
             'default' : targetProfile;
-        source.auth.vault.host = 'localhost';
-        source.s3.host = 'localhost';
         const destHost = this.destHosts.pickHost().host;
         this._s3Clients = {
             source: _setupS3Client(source.transport,
@@ -130,7 +128,7 @@ class _SetupReplication {
                 `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
                 verifySourceProfile),
             target: _setupIAMClient('target', destination.transport,
-                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
+                `${destHost}:${source.auth.vault.adminPort}`,
                 verifyTargetProfile),
         };
     }
@@ -164,6 +162,9 @@ class _SetupReplication {
         this._s3Clients[where].headBucket({ Bucket: bucket }, err => {
             if (err) {
                 this._log.error('bucket sanity check error', {
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
                     error: err.message,
                     method: '_SetupReplication._isValidBucket',
                 });
@@ -182,6 +183,9 @@ class _SetupReplication {
                 if (err) {
                     this._log.error('versioning sanity check error: ' +
                         'Cannot retrieve versioning configuration', {
+                            bucket: where === 'source' ? this._sourceBucket :
+                                this._targetBucket,
+                            errCode: err.code,
                             error: err.message,
                             method: '_SetupReplication._isVersioningEnabled',
                         }
@@ -193,6 +197,8 @@ class _SetupReplication {
                         'be Enabled. Status is still Disabled.');
                     this._log.error('versioning sanity check error: ' +
                         'Status Disabled', {
+                            bucket: where === 'source' ? this._sourceBucket :
+                                this._targetBucket,
                             error: error.message,
                             method: '_SetupReplication._isVersioningEnabled',
                         }
@@ -216,6 +222,9 @@ class _SetupReplication {
             if (err) {
                 this._log.error('role validation sanity check error: ' +
                     'Cannot retrieve role configuration', {
+                        bucket: where === 'source' ? this._sourceBucket :
+                            this._targetBucket,
+                        errCode: err.code,
                         error: err.message,
                         method: '_SetupReplication._isValidRole',
                     }
@@ -228,6 +237,8 @@ class _SetupReplication {
                     '`getBucketReplication` and ARN found in `getRole`.');
                 this._log.error('role validation sanity check error: ' +
                     'ARN mis-match', {
+                        bucket: where === 'source' ? this._sourceBucket :
+                            this._targetBucket,
                         error: err.message,
                         method: '_SetupReplication._isVersioningEnabled',
                     }
@@ -246,6 +257,7 @@ class _SetupReplication {
                 if (err) {
                     this._log.error('replication status sanity check error: ' +
                         'Cannot retrieve replication configuration', {
+                            errCode: err.code,
                             error: err.message,
                             method: '_SetupReplication._isReplicationEnabled',
                         }
@@ -275,23 +287,26 @@ class _SetupReplication {
         this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
             if (err && err.code !== 'BucketAlreadyOwnedByYou') {
                 this._log.error('error creating a bucket', {
-                    error: err.message,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
                     errCode: err.code,
+                    error: err.message,
                     method: '_SetupReplication._createBucket',
                 });
                 return cb(err);
             }
-
             if (err && err.code === 'BucketAlreadyOwnedByYou') {
                 this._log.debug('Bucket already exists. Continuing setup.', {
-                    bucket: where,
-                    response: res,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
+                    error: err.message,
                     method: '_SetupReplication._createBucket',
                 });
             } else {
                 this._log.debug('Created bucket', {
-                    bucket: where,
-                    response: res,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
                     method: '_SetupReplication._createBucket',
                 });
             }
@@ -309,16 +324,17 @@ class _SetupReplication {
         this._iamClients[where].createRole(params, (err, res) => {
             if (err) {
                 this._log.error('error creating a role', {
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
                     error: err.message,
                     method: '_SetupReplication._createRole',
-                    errCode: err.code,
-                    where,
                 });
                 return cb(err);
             }
             this._log.debug('Created role', {
-                bucket: where,
-                response: res,
+                bucket: where === 'source' ? this._sourceBucket :
+                    this._targetBucket,
                 method: '_createRole',
             });
             return cb(null, res);
@@ -334,15 +350,17 @@ class _SetupReplication {
         this._iamClients[where].createPolicy(params, (err, res) => {
             if (err) {
                 this._log.error('error creating policy', {
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
                     error: err.message,
-                    where,
                     method: '_SetupReplication._createPolicy',
                 });
                 return cb(err);
             }
             this._log.debug('Created policy', {
-                bucket: where,
-                response: res,
+                bucket: where === 'source' ? this._sourceBucket :
+                    this._targetBucket,
                 method: '_createPolicy',
             });
             return cb(null, res);
@@ -361,14 +379,17 @@ class _SetupReplication {
         this._s3Clients[where].putBucketVersioning(params, (err, res) => {
             if (err) {
                 this._log.error('error enabling versioning', {
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
                     error: err.message,
                     method: '_SetupReplication._enableVersioning',
                 });
                 return cb(err);
             }
             this._log.debug('Versioning enabled', {
-                bucket: where,
-                response: res,
+                bucket: where === 'source' ? this._sourceBucket :
+                    this._targetBucket,
                 method: '_enableVersioning',
             });
             return cb(null, res);
@@ -383,14 +404,17 @@ class _SetupReplication {
         this._iamClients[where].attachRolePolicy(params, (err, res) => {
             if (err) {
                 this._log.error('error attaching resource policy', {
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.code,
                     error: err.message,
                     method: '_SetupReplication._attachResourcePolicy',
                 });
                 return cb(err);
             }
             this._log.debug('Attached resource policy', {
-                bucket: where,
-                response: res,
+                bucket: where === 'source' ? this._sourceBucket :
+                    this._targetBucket,
                 method: '_attachResourcePolicy',
             });
             return cb(null, res);
@@ -414,13 +438,13 @@ class _SetupReplication {
         this._s3Clients.source.putBucketReplication(params, (err, res) => {
             if (err) {
                 this._log.error('error enabling replication', {
+                    errCode: err.code,
                     error: err.message,
                     method: '_SetupReplication._enableReplication',
                 });
                 return cb(err);
             }
             this._log.debug('Bucket replication enabled', {
-                response: res,
                 method: '_enableReplication',
             });
             return cb(null, res);
@@ -486,6 +510,7 @@ program
         s.setupReplication(err => {
             if (err) {
                 log.error('replication setup failed', {
+                    errCode: err.code,
                     error: err.message,
                 });
                 process.exit(1);
@@ -512,7 +537,8 @@ program
         const targetProfile = options.targetProfile;
 
         // Required options
-        if (!sourceBucket || !targetBucket) {
+        if (!sourceBucket || !targetBucket ||
+            !sourceProfile || !targetProfile) {
             program.commands.find(n => n._name === 'validate').help();
             process.exit(1);
         }
@@ -522,6 +548,7 @@ program
         s.checkSanity(err => {
             if (err) {
                 log.error('replication validation check failed', {
+                    errCode: err.code,
                     error: err.message,
                 });
                 process.exit(1);
