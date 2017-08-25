@@ -487,7 +487,7 @@ class QueueProcessor {
         sourceReq.on('error', err => {
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
-            if (err.ObjNotFound || err.code === 'ObjNotFound') {
+            if (err.statusCode === 404) {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3',
@@ -501,7 +501,7 @@ class QueueProcessor {
         });
         const incomingMsg = sourceReq.createReadStream();
         incomingMsg.on('error', err => {
-            if (err.ObjNotFound || err.code === 'ObjNotFound') {
+            if (err.statusCode === 404) {
                 return doneOnce(errors.ObjNotFound);
             }
             // eslint-disable-next-line no-param-reassign
