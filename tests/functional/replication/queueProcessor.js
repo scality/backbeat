@@ -153,13 +153,13 @@ class S3Mock extends TestConfigurator {
                     }),
                     getObject: () => ({
                         method: 'GET',
-                        path: `/${this.getParam('source.bucket')}/${this.getParam('key')}`,
+                        path: `/${this.getParam('source.bucket')}/${this.getParam('encodedKey')}`,
                         query: {},
                         handler: () => this._getObject,
                     }),
                     putMetadata: () => ({
                         method: 'PUT',
-                        path: `/_/backbeat/metadata/${this.getParam('source.bucket')}/${this.getParam('key')}`,
+                        path: `/_/backbeat/metadata/${this.getParam('source.bucket')}/${this.getParam('encodedKey')}`,
                         query: {},
                         handler: () => this._putMetadataSource,
                     }),
@@ -178,13 +178,13 @@ class S3Mock extends TestConfigurator {
             target: {
                 putData: () => ({
                     method: 'PUT',
-                    path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('key')}`,
+                    path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('encodedKey')}`,
                     query: {},
                     handler: () => this._putData,
                 }),
                 putMetadata: () => ({
                     method: 'PUT',
-                    path: `/_/backbeat/metadata/${this.getParam('target.bucket')}/${this.getParam('key')}`,
+                    path: `/_/backbeat/metadata/${this.getParam('target.bucket')}/${this.getParam('encodedKey')}`,
                     query: {},
                     handler: () => this._putMetadataTarget,
                 }),
@@ -242,7 +242,8 @@ class S3Mock extends TestConfigurator {
                                        this.getParam('partsContents')),
                 },
             },
-            key: 'key_to_replicate',
+            key: 'key_to_replicate_with_some_utf8_䆩鈁櫨㟔罳_and_encoded_chars_%EA%9D%8B',
+            encodedKey: () => encodeURIComponent(this.getParam('key')),
             nbParts: 1,
             versionId: '98498980852335999999RG001  100',
             roleSessionName: 'backbeat-replication',
