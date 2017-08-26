@@ -161,8 +161,8 @@ class QueueProcessor {
 
         // global variables
         // TODO: for SSL support, create HTTPS agents instead
-        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        this.sourceHTTPAgent = new http.Agent({ keepAlive: true, timeout: 0 });
+        this.destHTTPAgent = new http.Agent({ keepAlive: true, timeout: 0 });
         // FIXME support multiple destination sites
         if (destConfig.bootstrapList.length > 0) {
             this.destHosts =
