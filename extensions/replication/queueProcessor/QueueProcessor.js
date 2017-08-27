@@ -161,8 +161,8 @@ class QueueProcessor {
 
         // global variables
         // TODO: for SSL support, create HTTPS agents instead
-        this.sourceHTTPAgent = new http.Agent({ keepAlive: true, timeout: 0 });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true, timeout: 0 });
+        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        this.destHTTPAgent = new http.Agent({ keepAlive: true });
         // FIXME support multiple destination sites
         if (destConfig.bootstrapList.length > 0) {
             this.destHosts =
@@ -599,7 +599,7 @@ class QueueProcessor {
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
-            httpOptions: { agent: this.sourceHTTPAgent },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
         this.backbeatSource = new BackbeatClient({
@@ -607,7 +607,7 @@ class QueueProcessor {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceAuthManager.getCredentials(),
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
     }
