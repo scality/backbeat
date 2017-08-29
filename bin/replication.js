@@ -487,10 +487,10 @@ program
     .command('setup')
     .option('--source-bucket <name>', '[required] source bucket name')
     .option('--source-profile <name>',
-            'aws/credentials profile to use for source')
-    .option('--target-bucket <name>', 'target bucket name')
+            '[required] source aws/credentials profile')
+    .option('--target-bucket <name>', '[required] target bucket name')
     .option('--target-profile <name>',
-            'aws/credentials profile to use for target')
+            '[required] target aws/credentials profile')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
 
@@ -522,12 +522,12 @@ program
 
 program
     .command('validate')
-    .option('--source-bucket <name>', 'source bucket name')
+    .option('--source-bucket <name>', '[required] source bucket name')
     .option('--source-profile <name>',
-            'aws/credentials profile to use for source')
-    .option('--target-bucket <name>', 'target bucket name')
+            '[required] source aws/credentials profile')
+    .option('--target-bucket <name>', '[required] target bucket name')
     .option('--target-profile <name>',
-            'aws/credentials profile to use for target')
+            '[required] target aws/credentials profile')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
 
