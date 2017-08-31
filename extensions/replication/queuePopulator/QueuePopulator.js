@@ -1,8 +1,8 @@
 const async = require('async');
-const zookeeper = require('node-zookeeper-client');
 
 const Logger = require('werelogs').Logger;
 
+const zookeeper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const ProvisionDispatcher =
           require('../../../lib/provisioning/ProvisionDispatcher');
@@ -138,7 +138,7 @@ class QueuePopulator {
 
     _setupProducer(done) {
         const producer = new BackbeatProducer({
-            zookeeper: this.zkConfig,
+            zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.repConfig.topic,
         });
         producer.once('error', done);
@@ -160,9 +160,16 @@ class QueuePopulator {
         this.log.info('opening zookeeper connection for persisting ' +
                       'populator state',
                       { zookeeperUrl });
-        this.zkClient = zookeeper.createClient(zookeeperUrl);
+        this.zkClient = zookeeper.createClient(zookeeperUrl, {
+            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
+        });
         this.zkClient.connect();
-        this.zkClient.once('connected', done);
+        this.zkClient.once('error', done);
+        this.zkClient.once('ready', () => {
+            // just in case there would be more 'error' events emitted
+            this.zkClient.removeAllListeners('error');
+            done();
+        });
     }
 
     _setupUpdatedReaders(done) {
