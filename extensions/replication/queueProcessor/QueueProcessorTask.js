@@ -125,7 +125,14 @@ class QueueProcessorTask {
     }
 
     _setTargetAccountMd(destEntry, targetRole, log, cb) {
-        this._retry({
+        if (!this.destHosts) {
+            log.warn('cannot process entry: no target site configured',
+                     { entry: destEntry.getLogInfo() });
+            return cb(errors.InternalError);
+        }
+        this._setupDestClients(this.targetRole, log);
+
+        return this._retry({
             actionDesc: 'lookup target account attributes',
             entry: destEntry,
             actionFunc: done => this._setTargetAccountMdOnce(
@@ -208,7 +215,6 @@ class QueueProcessorTask {
         this.targetRole = entryRoles[1];
 
         this._setupSourceClients(this.sourceRole, log);
-        this._setupDestClients(this.targetRole, log);
 
         const req = this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() });
