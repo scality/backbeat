@@ -2,7 +2,8 @@
 
 ![backbeat logo](res/backbeat-logo.png)
 
-[![Circle CI](http://ci.ironmann.io/gh/scality/backbeat.svg?style=svg&circle-token=32e5dfd968e673450c44f0a255d1a812bae9b00c)](http://ci.ironmann.io/gh/scality/backbeat)
+[![CircleCI][badgepub]](https://circleci.com/gh/scality/backbeat)
+[![Scality CI][badgepriv]](http://ci.ironmann.io/gh/scality/backbeat)
 
 ## OVERVIEW
 
@@ -261,3 +262,6 @@ $HOME
     ├── s3
     └── vault
 ```
+
+[badgepriv]: http://ci.ironmann.io/gh/scality/backbeat.svg?style=svg&circle-token=32e5dfd968e673450c44f0a255d1a812bae9b00c
+[badgepub]: https://circleci.com/gh/scality/backbeat.svg?style=svg
