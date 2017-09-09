@@ -246,7 +246,8 @@ class QueuePopulator {
     _shieldBucket(bucketName) {
         if (bucketName.startsWith('mpuShadowBucket') ||
         bucketName === 'users..bucket' ||
-        bucketName === 'METADATA') {
+        bucketName === 'METADATA' ||
+        bucketName === '__metastore') {
             return true;
         }
         return false;
