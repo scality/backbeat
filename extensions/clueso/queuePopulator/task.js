@@ -15,6 +15,9 @@ werelogs.configure({ level: config.log.logLevel,
 
 const log = new werelogs.Logger('Backbeat:Clueso:task');
 
+const sparkBucket = 'METADATA';
+const sparkMetadataPrefix = 'landing/_spark_metadata/';
+
 const s3port = cluesoConfig.s3.port === 80 ?
     '' : `:${cluesoConfig.s3.port}`;
 // TODO: update to use credentials in unified way
@@ -84,7 +87,7 @@ const queuePopulator = new QueuePopulator(zkConfig, sourceConfig,
 async.waterfall([
     done => {
         log.info('attempting to create METADATA bucket');
-        s3Client.createBucket({ Bucket: 'METADATA' }, err => {
+        s3Client.createBucket({ Bucket: sparkBucket }, err => {
             // note, will not get this error with legacy AWS behavior
             if (err && err.code === 'BucketAlreadyOwnedByYou') {
                 log.info('bucket METADATA already existed');
@@ -94,6 +97,33 @@ async.waterfall([
                 log.info('bucket METADATA created');
             }
             return done(err);
+        });
+    },
+    done => {
+        log.info('cleaning up spark metadata');
+        s3Client.listObjects({ Bucket: sparkBucket,
+            Prefix: sparkMetadataPrefix }, (err, res) => {
+            if (err) {
+                log.info('err listing objects in METADATA bucket');
+                return done(err);
+            }
+            const keysToDelete = res.Contents.map(item => item.Key);
+            log.info('keys to delete in METADATA bucket', { keysToDelete });
+            if (keysToDelete.length === 0) {
+                // no spark metadata files to clean up
+                return done();
+            }
+            return async.eachLimit(keysToDelete, 10, (key, next) => {
+                return s3Client.deleteObject({ Bucket: sparkBucket, Key: key },
+                err => {
+                    if (err) {
+                        log.info('error deleting spark metadata',
+                        { error: err });
+                        return next(err);
+                    }
+                    return next();
+                });
+            }, done);
         });
     },
     done => {
