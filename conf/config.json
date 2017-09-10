@@ -1,6 +1,6 @@
 {
     "zookeeper": {
-        "connectionString": "127.0.0.1:2181/backbeat"
+        "connectionString": "127.0.0.1:2181"
     },
     "kafka": {
         "hosts": "127.0.0.1:9092"
