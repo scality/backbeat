@@ -79,6 +79,22 @@ function queueBatch(queuePopulator, taskState) {
         });
     return undefined;
 }
+
+function cleanUp(batchId) {
+    if (batchId !== undefined) {
+        log.info('attempting to delete livy batch job before exiting');
+        return livyClient.deleteBatch(batchId, err => {
+            if (err) {
+                log.info('error deleting livy batch job',
+                { error: err, batchId });
+            }
+            log.info('deleted livy batch', { batchId });
+            throw new Error('backbeat-clueso exiting');
+        });
+    }
+    throw new Error('backbeat-clueso exiting');
+}
+
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, sourceConfig,
@@ -142,37 +158,43 @@ async.waterfall([
         setTimeout(() => {
             livyClient.getSessionOrBatchState('batch', batchId, (err, res) => {
                 if (err) {
-                    return done(err);
+                    return done(err, batchId);
                 }
                 if (res.state !== 'running') {
                     log.info('batch state is not running',
                     { batchState: res.state });
                     const error = errors.InternalError
                     .customizeDescription('Livy streaming job failed to start');
-                    // TODO: delete the batch job
-                    return done(error);
+                    return done(error, batchId);
                 }
                 log.info('batch state is running', { batchState: res.state });
-                return done();
+                return done(null, batchId);
             });
         }, WAIT_BEFORE_CHECKING_BATCH_STATE);
     },
-    done => {
-        queuePopulator.open(done);
+    (batchId, done) => {
+        queuePopulator.open(err => {
+            done(err, batchId);
+        });
     },
-    done => {
+    (batchId, done) => {
         const taskState = {
             batchInProgress: false,
         };
         schedule.scheduleJob(cluesoConfig.queuePopulator.cronRule, () => {
             queueBatch(queuePopulator, taskState);
         });
-        done();
+        done(null, batchId);
     },
-], err => {
+], (err, batchId) => {
     if (err) {
         log.error('error during clueso initialization',
                   { error: err });
-        process.exit(1);
+        return cleanUp(batchId);
     }
+    process.once('SIGINT', cleanUp.bind(this, batchId));
+    process.once('SIGHUP', cleanUp.bind(this, batchId));
+    process.once('SIGQUIT', cleanUp.bind(this, batchId));
+    process.once('SIGTERM', cleanUp.bind(this, batchId));
+    return undefined;
 });
