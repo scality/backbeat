@@ -799,8 +799,7 @@ class QueueProcessor {
             zookeeper: this.zkConfig,
             topic: this.repConfig.topic,
             groupId: this.repConfig.queueProcessor.groupId,
-            concurrency: 1, // replication has to process entries in
-                            // order, so one at a time
+            concurrency: 10, // versioning can support out of order updates
             queueProcessor: this.processKafkaEntry.bind(this),
             fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
