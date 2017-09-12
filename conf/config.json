@@ -56,7 +56,8 @@
             },
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
-                "retryTimeoutS": 300
+                "retryTimeoutS": 300,
+                "concurrency": 10
             }
         }
     },
