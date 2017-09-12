@@ -61,8 +61,8 @@ class QueuePopulator {
         ], err => {
             if (err) {
                 this.log.error('error starting up queue populator',
-                               { method: 'QueuePopulator.open',
-                                 error: err });
+                    { method: 'QueuePopulator.open',
+                        error: err });
                 return cb(err);
             }
             this._setupLogSources();
@@ -93,10 +93,10 @@ class QueuePopulator {
         case 'dmd':
             this.logReadersUpdate = [
                 new BucketFileLogReader({ zkClient: this.zkClient,
-                                          kafkaProducer: this.producer,
-                                          dmdConfig: this.sourceConfig.dmd,
-                                          logger: this.log,
-                                        }),
+                    kafkaProducer: this.producer,
+                    dmdConfig: this.sourceConfig.dmd,
+                    logger: this.log,
+                }),
             ];
             break;
         default:

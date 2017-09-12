@@ -15,6 +15,6 @@ const queueProcessor = new QueueProcessor(zkConfig,
                                           repConfig);
 
 werelogs.configure({ level: config.log.logLevel,
-                     dump: config.log.dumpLevel });
+    dump: config.log.dumpLevel });
 
 queueProcessor.start();

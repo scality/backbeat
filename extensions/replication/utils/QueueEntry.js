@@ -67,7 +67,7 @@ class QueueEntry {
             return entry;
         } catch (err) {
             return { error: { message: 'malformed JSON in kafka entry',
-                              description: err.message } };
+                description: err.message } };
         }
     }
 

@@ -69,13 +69,13 @@ class CredentialsManager extends Credentials {
                         data: {
                             Credentials: {
                                 AccessKeyId: 'xxxxx',
-                    			SecretAccessKey: 'xxxxx',
-                    			SessionToken: 'xxxxx',
-                    			Expiration: 1499389378705
-                    		},
-                    		AssumedRoleUser: 'xxxx'
-                    	},
-                    	code: 200
+                                SecretAccessKey: 'xxxxx',
+                                SessionToken: 'xxxxx',
+                                Expiration: 1499389378705
+                            },
+                            AssumedRoleUser: 'xxxx'
+                        },
+                        code: 200
                     }
                 */
                 const { AccessKeyId, SecretAccessKey, SessionToken,

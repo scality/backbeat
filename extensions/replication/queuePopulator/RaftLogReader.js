@@ -10,14 +10,14 @@ class RaftLogReader extends LogReader {
                   = params;
         const { host, port } = bucketdConfig;
         logger.info('initializing raft log reader',
-                    { method: 'RaftLogReader.constructor',
-                      bucketdConfig, raftId });
+            { method: 'RaftLogReader.constructor',
+                bucketdConfig, raftId });
         const bucketClient = new BucketClient(`${host}:${port}`);
         const logConsumer = new LogConsumer({ bucketClient,
-                                              raftSession: raftId,
-                                              logger });
+            raftSession: raftId,
+            logger });
         super({ zkClient, kafkaProducer, logConsumer,
-                logId: `raft_${raftId}`, logger });
+            logId: `raft_${raftId}`, logger });
         this.raftId = raftId;
     }
 

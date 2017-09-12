@@ -44,20 +44,20 @@ class LogReader {
      */
     setup(done) {
         this.log.debug('setting up log source',
-                       { method: 'LogReader.setup',
-                         logSource: this.getLogInfo() });
+            { method: 'LogReader.setup',
+                logSource: this.getLogInfo() });
         this._readLogOffset((err, offset) => {
             if (err) {
                 this.log.error('log source setup failed',
-                               { method: 'LogReader.setup',
-                                 logSource: this.getLogInfo() });
+                    { method: 'LogReader.setup',
+                        logSource: this.getLogInfo() });
                 return done(err);
             }
             this.logOffset = offset;
             this.log.info('log reader is ready to populate replication ' +
                           'queue',
-                          { logSource: this.getLogInfo(),
-                            logOffset: this.logOffset });
+                { logSource: this.getLogInfo(),
+                    logOffset: this.logOffset });
             return done();
         });
     }
@@ -80,7 +80,7 @@ class LogReader {
                     this.log.error(
                         'Could not fetch log offset',
                         { method: 'LogReader._readLogOffset',
-                          error: err });
+                            error: err });
                     return done(err);
                 }
                 return this.zkClient.mkdirp(pathToLogOffset, err => {
@@ -88,8 +88,8 @@ class LogReader {
                         this.log.error(
                             'Could not pre-create path in zookeeper',
                             { method: 'LogReader._readLogOffset',
-                              zkPath: pathToLogOffset,
-                              error: err });
+                                zkPath: pathToLogOffset,
+                                error: err });
                         return done(err);
                     }
                     return done(null, 1);
@@ -97,19 +97,19 @@ class LogReader {
             }
             if (data) {
                 const logOffset = Number.parseInt(data, 10);
-                if (isNaN(logOffset)) {
+                if (Number.isNaN(logOffset)) {
                     this.log.error(
                         'invalid stored log offset',
                         { method: 'LogReader._readLogOffset',
-                          zkPath: pathToLogOffset,
-                          logOffset: data.toString() });
+                            zkPath: pathToLogOffset,
+                            logOffset: data.toString() });
                     return done(null, 1);
                 }
                 this.log.debug(
                     'fetched current log offset successfully',
                     { method: 'LogReader._readLogOffset',
-                      zkPath: pathToLogOffset,
-                      logOffset });
+                        zkPath: pathToLogOffset,
+                        logOffset });
                 return done(null, logOffset);
             }
             return done(null, 1);
@@ -118,23 +118,24 @@ class LogReader {
 
     _writeLogOffset(done) {
         const pathToLogOffset = this.pathToLogOffset;
+        const offsetString = this.logOffset.toString();
         this.zkClient.setData(
             pathToLogOffset,
-            new Buffer(this.logOffset.toString()), -1,
+            Buffer.from(offsetString), -1,
             err => {
                 if (err) {
                     this.log.error(
                         'error saving log offset',
                         { method: 'LogReader._writeLogOffset',
-                          zkPath: pathToLogOffset,
-                          logOffset: this.logOffset });
+                            zkPath: pathToLogOffset,
+                            logOffset: this.logOffset });
                     return done(err);
                 }
                 this.log.debug(
                     'saved log offset',
                     { method: 'LogReader._writeLogOffset',
-                      zkPath: pathToLogOffset,
-                      logOffset: this.logOffset });
+                        zkPath: pathToLogOffset,
+                        logOffset: this.logOffset });
                 return done();
             });
     }
@@ -232,13 +233,13 @@ class LogReader {
                 this.log.error(
                     'error while reading log records',
                     { method: 'LogReader._processReadRecords',
-                      params, error: err });
+                        params, error: err });
                 return done(err);
             }
             this.log.debug(
                 'readRecords callback',
                 { method: 'LogReader._processReadRecords',
-                  params, info: res.info });
+                    params, info: res.info });
             batchState.logRes = res;
             return done();
         });
@@ -247,7 +248,7 @@ class LogReader {
     _logEntryToQueueEntry(record, entry) {
         if (entry.type === 'put' &&
             entry.key !== undefined && entry.value !== undefined &&
-            ! isMasterKey(entry.key)) {
+            !isMasterKey(entry.key)) {
             const value = JSON.parse(entry.value);
             if (value.replicationInfo &&
                 value.replicationInfo.status === 'PENDING') {
@@ -285,8 +286,8 @@ class LogReader {
         });
         logRes.log.on('error', err => {
             this.log.error('error fetching entries from log',
-                           { method: 'LogReader._processPrepareEntries',
-                             error: err });
+                { method: 'LogReader._processPrepareEntries',
+                    error: err });
             return done(err);
         });
         logRes.log.on('end', () => {
@@ -311,7 +312,7 @@ class LogReader {
                 this.log.error(
                     'error publishing entries from log',
                     { method: 'LogReader._processPublishEntries',
-                      error: err });
+                        error: err });
                 return done(err);
             }
             batchState.nextLogOffset =
@@ -319,8 +320,8 @@ class LogReader {
             this.log.debug(
                 'entries published successfully',
                 { method: 'LogReader._processPublishEntries',
-                  entryCount: entriesToPublish.length,
-                  logOffset: batchState.nextLogOffset });
+                    entryCount: entriesToPublish.length,
+                    logOffset: batchState.nextLogOffset });
             return done();
         });
     }
