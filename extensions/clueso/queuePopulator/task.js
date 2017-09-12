@@ -44,7 +44,9 @@ const postBatchParams = {
     conf: {
         'spark.driver.port': '38600',
         'spark.cores.max': '2',
-        'spark.sql.parquet.cacheMetadata': 'false' },
+        'spark.sql.parquet.cacheMetadata': 'false',
+        'spark.metrics.conf': '/apps/spark-modules/metrics.properties'
+    },
 };
 
 const WAIT_BEFORE_CHECKING_BATCH_STATE = 5000;
