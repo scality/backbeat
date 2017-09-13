@@ -44,7 +44,8 @@ const postBatchParams = {
     conf: {
         'spark.driver.port': '38600',
         'spark.cores.max': '2',
-        'spark.metrics.conf': '/apps/spark-modules/metrics.properties'
+        'spark.metrics.conf': '/apps/spark-modules/metrics.properties',
+        'spark.sql.streaming.metricsEnabled': 'true',
     },
 };
 
