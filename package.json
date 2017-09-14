@@ -29,10 +29,6 @@
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient",
     "commander": "^2.11.0",
-    "eslint": "^2.4.0",
-    "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines",
-    "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
     "kafka-node": "^1.6.0",
     "node-schedule": "^1.2.0",
@@ -40,6 +36,10 @@
     "werelogs": "scality/werelogs"
   },
   "devDependencies": {
+    "eslint": "4.6.0",
+    "eslint-config-airbnb-base": "12.0.0",
+    "eslint-config-scality": "scality/Guidelines#chore/upgradeEslint",
+    "eslint-plugin-import": "2.7.0",
     "mocha": "^3.3.0"
   }
 }
