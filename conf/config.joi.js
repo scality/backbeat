@@ -18,6 +18,7 @@ const transportJoi = joi.alternatives().try('http', 'https')
 const joiSchema = {
     zookeeper: {
         connectionString: joi.string().required(),
+        autoCreateNamespace: joi.boolean().default(false),
     },
     kafka: {
         hosts: joi.string().required(),

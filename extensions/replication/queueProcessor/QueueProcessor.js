@@ -796,7 +796,7 @@ class QueueProcessor {
 
     start() {
         const consumer = new BackbeatConsumer({
-            zookeeper: this.zkConfig,
+            zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.repConfig.topic,
             groupId: this.repConfig.queueProcessor.groupId,
             concurrency: 1, // replication has to process entries in
