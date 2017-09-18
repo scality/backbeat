@@ -166,7 +166,8 @@ class QueueProcessor {
         // FIXME support multiple destination sites
         if (destConfig.bootstrapList.length > 0) {
             this.destHosts =
-                new RoundRobin(destConfig.bootstrapList[0].servers);
+                new RoundRobin(destConfig.bootstrapList[0].servers,
+                               { defaultPort: 80 });
         } else {
             this.destHosts = null;
         }
