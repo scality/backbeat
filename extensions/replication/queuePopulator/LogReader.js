@@ -259,7 +259,7 @@ class LogReader {
                     value: entry.value,
                 };
                 return {
-                    key: encodeURIComponent(entry.key),
+                    key: encodeURIComponent(`${record.db}/${entry.key}`),
                     message: JSON.stringify(queueEntry),
                 };
             }
