@@ -3,11 +3,11 @@ const schedule = require('node-schedule');
 
 const werelogs = require('werelogs');
 
-const config = require('../../../conf/Config');
+const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
 const repConfig = config.extensions.replication;
 const sourceConfig = config.extensions.replication.source;
-const QueuePopulator = require('./QueuePopulator');
+const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:Replication:task');
 
