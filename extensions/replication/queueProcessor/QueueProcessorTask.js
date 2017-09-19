@@ -52,7 +52,7 @@ class QueueProcessorTask {
         }
         let vaultClient;
         if (where === 'source') {
-            vaultClient = this.sourceVault;
+            vaultClient = this.sourceS3Vault;
         } else { // target
             const { host, port } = this.destHosts.pickHost();
             const key = `${host}:${port}`;
@@ -60,8 +60,8 @@ class QueueProcessorTask {
                 this.destVaults[key] = new VaultClient(
                     host, port,
                     undefined, undefined, undefined, undefined,
-                    undefined, undefined, undefined, undefined,
-                    proxyPath);
+                    undefined, undefined, undefined,
+                    undefined, proxyPath);
             }
             vaultClient = this.destVaults[key];
         }
