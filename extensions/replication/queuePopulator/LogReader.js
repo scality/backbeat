@@ -246,23 +246,45 @@ class LogReader {
     }
 
     _logEntryToQueueEntry(record, entry) {
+        // FIXME: copied from S3, move those values to arsenal from
+        // S3/constants.js and use them
+        const excluded = {
+            usersBucket: 'users..bucket',
+            oldUsersBucket: 'namespaceusersbucket',
+            mpuBucketPrefix: 'mpuShadowBucket',
+        };
+
         if (entry.type === 'put' &&
-            entry.key !== undefined && entry.value !== undefined &&
-            !isMasterKey(entry.key)) {
-            const value = JSON.parse(entry.value);
-            if (value.replicationInfo &&
-                value.replicationInfo.status === 'PENDING') {
-                this.log.trace('queueing entry', { entry });
-                const queueEntry = {
-                    type: entry.type,
-                    bucket: record.db,
-                    key: entry.key,
-                    value: entry.value,
-                };
-                return {
-                    key: encodeURIComponent(entry.key),
-                    message: JSON.stringify(queueEntry),
-                };
+            entry.key !== undefined && entry.value !== undefined) {
+            const isVersionedKey = !isMasterKey(entry.key);
+            const metaStoreOp = record.db === '__metastore';
+            if (isVersionedKey || metaStoreOp) {
+                const value = JSON.parse(entry.value);
+                if ((isVersionedKey &&
+                     value.replicationInfo &&
+                     value.replicationInfo.status === 'PENDING') ||
+                    (metaStoreOp &&
+                     entry.key !== excluded.usersBucket &&
+                     entry.key !== excluded.oldUsersBucket &&
+                     !entry.key.startsWith(excluded.mpuBucketPrefix) &&
+                     !value.transient &&
+                     !value.deleted &&
+                     !value.versioningConfiguration &&
+                     !value.replicationConfiguration)) {
+                    this.log.trace('queueing entry',
+                                   { key: entry.key,
+                                     bucket: record.db });
+                    const queueEntry = {
+                        type: entry.type,
+                        bucket: record.db,
+                        key: entry.key,
+                        value: entry.value,
+                    };
+                    return {
+                        key: encodeURIComponent(entry.key),
+                        message: JSON.stringify(queueEntry),
+                    };
+                }
             }
         }
         return null;
