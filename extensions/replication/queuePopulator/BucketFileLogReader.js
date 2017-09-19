@@ -7,7 +7,7 @@ class BucketFileLogReader extends LogReader {
     constructor(params) {
         const { zkClient, kafkaProducer, dmdConfig, logger } = params;
         super({ zkClient, kafkaProducer, logConsumer: null,
-                logId: `bucketFile_${dmdConfig.logName}`, logger });
+            logId: `bucketFile_${dmdConfig.logName}`, logger });
 
         this._dmdConfig = dmdConfig;
         this._log = logger;

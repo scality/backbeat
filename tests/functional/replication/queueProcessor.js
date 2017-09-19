@@ -26,9 +26,9 @@ function buildLocations(keysArray, bodiesArray, options) {
     let start = 0;
     for (let i = 0; i < keysArray.length; ++i) {
         const location = { key: keysArray[i],
-                           start,
-                           size: bodiesArray[i].length,
-                           dataStoreName: 'file' };
+            start,
+            size: bodiesArray[i].length,
+            dataStoreName: 'file' };
         if (!(options && options.doNotIncludeETag)) {
             location.dataStoreETag = `${i + 1}:${getMD5(bodiesArray[i])}`;
         }
@@ -60,16 +60,16 @@ const constants = {
         s3: '127.0.0.1',
         vault: '127.0.0.2',
         dataPartsKeys: ['6d808697fbaf9f16fb32b94be189b80b3b9b2890',
-                        'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
+            'ab30293a044eca5215068c6a06cfdb1b636a16e4'],
     },
     target: {
         hosts: [{ host: '127.0.0.3', port: 7777 },
                 { host: '127.0.0.4', port: 7777 }],
         dataPartsKeys: ['7d808697fbaf9f16fb32b94be189b80b3b9b2890',
-                        'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
+            'e54e2ced6625f67e07f4735fb7b897a7bc81d603'],
     },
     partsContents: ['some contents to be replicated',
-                    'some more contents to be replicated'],
+        'some more contents to be replicated'],
 };
 
 class S3Mock extends TestConfigurator {
@@ -404,24 +404,24 @@ class S3Mock extends TestConfigurator {
         res.setHeader('content-type', 'application/xml');
         res.writeHead(200);
         res.end(['<?xml version="1.0" encoding="UTF-8"?>',
-                 '<ReplicationConfiguration ',
-                 'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
-                 '<Rule>',
-                 '<ID>myrule</ID>', '<Prefix/>',
-                 '<Status>',
-                 this.getParam('replicationEnabled') ? 'Enabled' : 'Disabled',
-                 '</Status>',
-                 '<Destination>',
-                 '<Bucket>',
-                 this.getParam('source.md.replicationInfo.destination'),
-                 '</Bucket>',
-                 '<StorageClass>STANDARD</StorageClass>',
-                 '</Destination>',
-                 '</Rule>',
-                 '<Role>',
-                 this.getParam('source.md.replicationInfo.role'),
-                '</Role>',
-                 '</ReplicationConfiguration>'].join(''));
+            '<ReplicationConfiguration ',
+            'xmlns="http://s3.amazonaws.com/doc/2006-03-01/">',
+            '<Rule>',
+            '<ID>myrule</ID>', '<Prefix/>',
+            '<Status>',
+            this.getParam('replicationEnabled') ? 'Enabled' : 'Disabled',
+            '</Status>',
+            '<Destination>',
+            '<Bucket>',
+            this.getParam('source.md.replicationInfo.destination'),
+            '</Bucket>',
+            '<StorageClass>STANDARD</StorageClass>',
+            '</Destination>',
+            '</Rule>',
+            '<Role>',
+            this.getParam('source.md.replicationInfo.role'),
+            '</Role>',
+            '</ReplicationConfiguration>'].join(''));
     }
 
     _getAccountsCanonicalIds(req, url, query, res) {
@@ -580,17 +580,17 @@ describe('queue processor functional tests with mocking', () => {
         queueProcessor = new QueueProcessor(
             {} /* zkConfig not needed */,
             { auth: { type: 'role',
-                      vault: { host: constants.source.vault,
-                               port: 7777 } },
-              s3: { host: constants.source.s3,
+                vault: { host: constants.source.vault,
+                    port: 7777 } },
+                s3: { host: constants.source.s3,
                     port: 7777 },
-              transport: 'http',
+                transport: 'http',
             },
             { auth: { type: 'role' },
-              bootstrapList: [{
-                  site: 'sf', servers: serverList,
-              }],
-              transport: 'http' },
+                bootstrapList: [{
+                    site: 'sf', servers: serverList,
+                }],
+                transport: 'http' },
             { queueProcessor: {
                 retryTimeoutS: 5,
                 // groupId not needed for tests
@@ -615,16 +615,16 @@ describe('queue processor functional tests with mocking', () => {
 
     describe('success path tests', () => {
         [{ caption: 'object with single part',
-           nbParts: 1 },
-         { caption: 'object with multiple parts',
-           nbParts: 2 },
-         { caption: 'empty object',
-           nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
-               before(() => {
-                   s3mock.setParam('nbParts', testCase.nbParts);
-               });
-               it('should complete a replication end-to-end', done => {
-                   queueProcessor.processKafkaEntry(
+            nbParts: 1 },
+        { caption: 'object with multiple parts',
+            nbParts: 2 },
+        { caption: 'empty object',
+            nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
+                before(() => {
+                    s3mock.setParam('nbParts', testCase.nbParts);
+                });
+                it('should complete a replication end-to-end', done => {
+                    queueProcessor.processKafkaEntry(
                        s3mock.getParam('kafkaEntry'), err => {
                            assert.ifError(err);
                            assert.strictEqual(s3mock.hasPutTargetData,
@@ -633,8 +633,8 @@ describe('queue processor functional tests with mocking', () => {
                            assert(s3mock.hasPutSourceMd);
                            done();
                        });
-               });
-           }));
+                });
+            }));
 
         it('should replicate metadata in metadata-only mode', done => {
             s3mock.setParam('nbParts', 2);
@@ -766,25 +766,25 @@ describe('queue processor functional tests with mocking', () => {
 
         describe('target Vault errors', () => {
             ['getAccountsCanonicalIds',
-             'assumeRoleBackbeat'].forEach(action => {
-                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
-                     it(`should fail on ${error.code} (${error.message}) ` +
-                     `from target Vault on ${action}`, done => {
-                         s3mock.installVaultErrorResponder(
-                             `target.${action}`, error);
-                         s3mock.setExpectedReplicationStatus('FAILED');
+                'assumeRoleBackbeat'].forEach(action => {
+                    [errors.AccessDenied, errors.NoSuchEntity].forEach(err => {
+                        it(`should fail on ${err.code} (${err.message}) ` +
+                        `from target Vault on ${action}`, done => {
+                            s3mock.installVaultErrorResponder(
+                             `target.${action}`, err);
+                            s3mock.setExpectedReplicationStatus('FAILED');
 
-                         queueProcessor.processKafkaEntry(
-                             s3mock.getParam('kafkaEntry'), err => {
-                                 assert.ifError(err);
+                            queueProcessor.processKafkaEntry(
+                             s3mock.getParam('kafkaEntry'), error => {
+                                 assert.ifError(error);
                                  assert(!s3mock.hasPutTargetData);
                                  assert(!s3mock.hasPutTargetMd);
                                  assert(s3mock.hasPutSourceMd);
                                  done();
                              });
-                     });
-                 });
-             });
+                        });
+                    });
+                });
 
             ['getAccountsCanonicalIds'].forEach(action => {
                 [errors.InternalError].forEach(error => {

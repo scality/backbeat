@@ -12,7 +12,7 @@ const QueuePopulator = require('./QueuePopulator');
 const log = new werelogs.Logger('Backbeat:Replication:task');
 
 werelogs.configure({ level: config.log.logLevel,
-                     dump: config.log.dumpLevel });
+    dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, batchInProgress) {

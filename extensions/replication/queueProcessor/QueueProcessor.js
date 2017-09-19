@@ -70,14 +70,14 @@ class _AccountAuthManager {
         if (localAccountId !== accountId) {
             this._log.error('Target account for replication must match ' +
                             'configured destination account ARN',
-                            { targetAccountId: accountId,
-                              localAccountId });
+                { targetAccountId: accountId,
+                    localAccountId });
             return process.nextTick(() => cb(errors.AccountNotFound));
         }
         // return local account's attributes
         return process.nextTick(
             () => cb(null, { canonicalID: this._canonicalID,
-                             displayName: this._displayName }));
+                displayName: this._displayName }));
     }
 }
 
@@ -216,7 +216,7 @@ class QueueProcessor {
                     log.info(`succeeded to ${actionDesc} after retries`,
                              { entry: entry.getLogInfo(), nbRetries });
                 }
-                return done.apply(null, args);
+                return done(...args);
             }
             if (!shouldRetryFunc(err)) {
                 return done(err);
@@ -229,15 +229,15 @@ class QueueProcessor {
             if (now > (startTime +
                        self.repConfig.queueProcessor.retryTimeoutS * 1000)) {
                 log.error(`retried for too long to ${actionDesc}, giving up`,
-                          { entry: entry.getLogInfo(),
-                            nbRetries,
-                            retryTotalMs: `${now - startTime}` });
+                    { entry: entry.getLogInfo(),
+                        nbRetries,
+                        retryTotalMs: `${now - startTime}` });
                 return done(err);
             }
             const retryDelayMs = backoffCtx.duration();
             log.info(`temporary failure to ${actionDesc}, scheduled retry`,
-                     { entry: entry.getLogInfo(),
-                       nbRetries, retryDelay: `${retryDelayMs}ms` });
+                { entry: entry.getLogInfo(),
+                    nbRetries, retryDelay: `${retryDelayMs}ms` });
             nbRetries += 1;
             return setTimeout(() => actionFunc(_handleRes), retryDelayMs);
         }
@@ -332,9 +332,9 @@ class QueueProcessor {
         if (entryRoles === undefined || entryRoles.length !== 2) {
             log.error('expecting two roles separated by a ' +
                       'comma in entry replication configuration',
-                      { method: 'QueueProcessor._setupRoles',
-                        entry: entry.getLogInfo(),
-                        roles: entryRolesString });
+                { method: 'QueueProcessor._setupRoles',
+                    entry: entry.getLogInfo(),
+                    roles: entryRolesString });
             return cb(errors.BadRole);
         }
         this.sourceRole = entryRoles[0];
@@ -352,12 +352,12 @@ class QueueProcessor {
                 err.origin = 'source';
                 log.error('error getting replication ' +
                           'configuration from S3',
-                          { method: 'QueueProcessor._setupRoles',
-                            entry: entry.getLogInfo(),
-                            origin: 'source',
-                            peer: this.sourceConfig.s3,
-                            error: err.message,
-                            httpStatus: err.statusCode });
+                    { method: 'QueueProcessor._setupRoles',
+                        entry: entry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
+                        error: err.message,
+                        httpStatus: err.statusCode });
                 return cb(err);
             }
             const replicationEnabled = (
@@ -366,8 +366,8 @@ class QueueProcessor {
                         && rule.Status === 'Enabled'));
             if (!replicationEnabled) {
                 log.debug('replication disabled for object',
-                          { method: 'QueueProcessor._setupRoles',
-                            entry: entry.getLogInfo() });
+                    { method: 'QueueProcessor._setupRoles',
+                        entry: entry.getLogInfo() });
                 return cb(errors.PreconditionFailed.customizeDescription(
                     'replication disabled for object'));
             }
@@ -375,29 +375,29 @@ class QueueProcessor {
             if (roles.length !== 2) {
                 log.error('expecting two roles separated by a ' +
                           'comma in bucket replication configuration',
-                          { method: 'QueueProcessor._setupRoles',
-                            entry: entry.getLogInfo(),
-                            roles });
+                    { method: 'QueueProcessor._setupRoles',
+                        entry: entry.getLogInfo(),
+                        roles });
                 return cb(errors.BadRole);
             }
             if (roles[0] !== entryRoles[0]) {
                 log.error('role in replication entry for source does ' +
                           'not match role in bucket replication ' +
                           'configuration ',
-                          { method: 'QueueProcessor._setupRoles',
-                            entry: entry.getLogInfo(),
-                            entryRole: entryRoles[0],
-                            bucketRole: roles[0] });
+                    { method: 'QueueProcessor._setupRoles',
+                        entry: entry.getLogInfo(),
+                        entryRole: entryRoles[0],
+                        bucketRole: roles[0] });
                 return cb(errors.BadRole);
             }
             if (roles[1] !== entryRoles[1]) {
                 log.error('role in replication entry for target does ' +
                           'not match role in bucket replication ' +
                           'configuration ',
-                          { method: 'QueueProcessor._setupRoles',
-                            entry: entry.getLogInfo(),
-                            entryRole: entryRoles[1],
-                            bucketRole: roles[1] });
+                    { method: 'QueueProcessor._setupRoles',
+                        entry: entry.getLogInfo(),
+                        entryRole: entryRoles[1],
+                        bucketRole: roles[1] });
                 return cb(errors.BadRole);
             }
             return cb(null, roles[0], roles[1]);
@@ -415,17 +415,17 @@ class QueueProcessor {
                     err.origin = 'target';
                     log.error('an error occurred when looking up target ' +
                               'account attributes',
-                              { method: 'QueueProcessor._setTargetAccountMd',
-                                entry: destEntry.getLogInfo(),
-                                origin: 'target',
-                                peer: (this.destConfig.auth.type === 'role' ?
+                        { method: 'QueueProcessor._setTargetAccountMd',
+                            entry: destEntry.getLogInfo(),
+                            origin: 'target',
+                            peer: (this.destConfig.auth.type === 'role' ?
                                        this.destConfig.auth.vault : undefined),
-                                error: err.message });
+                            error: err.message });
                     return cb(err);
                 }
                 log.debug('setting owner info in target metadata',
-                          { entry: destEntry.getLogInfo(),
-                            accountAttr });
+                    { entry: destEntry.getLogInfo(),
+                        accountAttr });
                 destEntry.setOwner(accountAttr.canonicalID,
                                    accountAttr.displayName);
                 return cb();
@@ -443,8 +443,8 @@ class QueueProcessor {
             part => sourceEntry.getDataStoreETag(part) === undefined)) {
             log.error('cannot replicate object without dataStoreETag ' +
                       'property',
-                      { method: 'QueueProcessor._getLocations',
-                        entry: sourceEntry.getLogInfo() });
+                { method: 'QueueProcessor._getLocations',
+                    entry: sourceEntry.getLogInfo() });
             return undefined;
         }
         for (let i = 0; i < locations.length; i++) {
@@ -456,7 +456,7 @@ class QueueProcessor {
             if (currPartNum === nextPartNum) {
                 partTotal += sourceEntry.getPartSize(currPart);
             } else {
-                currPart.size = partTotal += sourceEntry.getPartSize(currPart);
+                currPart.size = partTotal + sourceEntry.getPartSize(currPart);
                 reducedLocations.push(currPart);
                 partTotal = 0;
             }
@@ -492,12 +492,12 @@ class QueueProcessor {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3',
-                      { method: 'QueueProcessor._getAndPutData',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode });
+                { method: 'QueueProcessor._getAndPutData',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    httpStatus: err.statusCode });
             return doneOnce(err);
         });
         const incomingMsg = sourceReq.createReadStream();
@@ -508,11 +508,11 @@ class QueueProcessor {
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3',
-                      { method: 'QueueProcessor._getAndPutData',
-                        entry: destEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message });
+                { method: 'QueueProcessor._getAndPutData',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message });
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo() });
@@ -530,11 +530,11 @@ class QueueProcessor {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
                 log.error('an error occurred on putData to S3',
-                          { method: 'QueueProcessor._getAndPutData',
-                            entry: destEntry.getLogInfo(),
-                            origin: 'target',
-                            peer: this.destBackbeatHost,
-                            error: err.message });
+                    { method: 'QueueProcessor._getAndPutData',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message });
                 return doneOnce(err);
             }
             return doneOnce(null,
@@ -544,8 +544,8 @@ class QueueProcessor {
 
     _putMetadataOnce(where, entry, mdOnly, log, cb) {
         log.debug('putting metadata',
-                  { where, entry: entry.getLogInfo(),
-                    replicationStatus: entry.getReplicationStatus() });
+            { where, entry: entry.getLogInfo(),
+                replicationStatus: entry.getReplicationStatus() });
         const cbOnce = jsutil.once(cb);
         const target = where === 'source' ?
                   this.backbeatSource : this.backbeatDest;
@@ -570,13 +570,13 @@ class QueueProcessor {
                     return cbOnce(err);
                 }
                 log.error('an error occurred when putting metadata to S3',
-                          { method: 'QueueProcessor._putMetadata',
-                            entry: entry.getLogInfo(),
-                            origin: where,
-                            peer: (where === 'source' ?
+                    { method: 'QueueProcessor._putMetadata',
+                        entry: entry.getLogInfo(),
+                        origin: where,
+                        peer: (where === 'source' ?
                                    this.sourceConfig.s3 :
                                    this.destBackbeatHost),
-                            error: err.message });
+                        error: err.message });
                 return cbOnce(err);
             }
             return cbOnce(null, data);
@@ -733,10 +733,10 @@ class QueueProcessor {
               err.AccessDenied || err.code === 'AccessDenied'))) {
             log.error('replication failed permanently for object, ' +
                       'processing skipped',
-                      { failMethod: err.method,
-                        entry: sourceEntry.getLogInfo(),
-                        origin: err.origin,
-                        error: err.description });
+                { failMethod: err.method,
+                    entry: sourceEntry.getLogInfo(),
+                    origin: err.origin,
+                    error: err.description });
             return done();
         }
         if (err.ObjNotFound || err.code === 'ObjNotFound') {
@@ -754,9 +754,9 @@ class QueueProcessor {
         }
         log.debug('replication failed permanently for object, ' +
                   'updating replication status to FAILED',
-                  { failMethod: err.method,
-                    entry: sourceEntry.getLogInfo(),
-                    error: err.description });
+            { failMethod: err.method,
+                entry: sourceEntry.getLogInfo(),
+                error: err.description });
         return this._updateReplicationStatus(
             sourceEntry.toFailedEntry(),
             { log, reason: err.description }, done);
@@ -769,18 +769,18 @@ class QueueProcessor {
             if (err) {
                 log.error('an error occurred when writing replication ' +
                           'status',
-                          { entry: updatedSourceEntry.getLogInfo(),
-                            origin: 'source',
-                            peer: this.sourceConfig.s3,
-                            replicationStatus:
+                    { entry: updatedSourceEntry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
+                        replicationStatus:
                             updatedSourceEntry.getReplicationStatus() });
                 return done(err);
             }
             log.end().info('replication status updated',
-                           { entry: updatedSourceEntry.getLogInfo(),
-                             replicationStatus:
+                { entry: updatedSourceEntry.getLogInfo(),
+                    replicationStatus:
                              updatedSourceEntry.getReplicationStatus(),
-                             reason });
+                    reason });
             return done();
         };
 
@@ -789,8 +789,8 @@ class QueueProcessor {
                 'source', updatedSourceEntry, false, log, _doneUpdate);
         }
         log.end().info('replication status update skipped',
-                       { entry: updatedSourceEntry.getLogInfo(),
-                         replicationStatus:
+            { entry: updatedSourceEntry.getLogInfo(),
+                replicationStatus:
                          updatedSourceEntry.getReplicationStatus() });
         return done();
     }

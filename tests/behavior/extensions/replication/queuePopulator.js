@@ -36,26 +36,26 @@ describe('queuePopulator', () => {
             (data, next) => {
                 s3.putBucketVersioning(
                     { Bucket: testBucket,
-                      VersioningConfiguration: {
-                          Status: 'Enabled',
-                      },
+                        VersioningConfiguration: {
+                            Status: 'Enabled',
+                        },
                     }, next);
             },
             (data, next) => {
                 s3.putBucketReplication(
                     { Bucket: testBucket,
-                      ReplicationConfiguration: {
-                          Role: 'arn:aws:iam::123456789012:role/backbeat,' +
+                        ReplicationConfiguration: {
+                            Role: 'arn:aws:iam::123456789012:role/backbeat,' +
                               'arn:aws:iam::123456789012:role/backbeat',
-                          Rules: [{
-                              Destination: {
-                                  Bucket: 'arn:aws:s3:::dummy-dest-bucket',
-                                  StorageClass: 'STANDARD',
-                              },
-                              Prefix: '',
-                              Status: 'Enabled',
-                          }],
-                      },
+                            Rules: [{
+                                Destination: {
+                                    Bucket: 'arn:aws:s3:::dummy-dest-bucket',
+                                    StorageClass: 'STANDARD',
+                                },
+                                Prefix: '',
+                                Status: 'Enabled',
+                            }],
+                        },
                     }, next);
             },
             (data, next) => {
@@ -93,9 +93,9 @@ describe('queuePopulator', () => {
         async.waterfall([
             next => {
                 s3.putObject({ Bucket: testBucket,
-                               Key: 'keyToReplicate',
-                               Body: 'howdy',
-                               Tagging: 'mytag=mytagvalue' }, next);
+                    Key: 'keyToReplicate',
+                    Body: 'howdy',
+                    Tagging: 'mytag=mytagvalue' }, next);
             },
             (data, next) => {
                 queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
@@ -116,7 +116,7 @@ describe('queuePopulator', () => {
         async.waterfall([
             next => {
                 s3.deleteObject({ Bucket: testBucket,
-                                  Key: 'keyToReplicate' }, next);
+                    Key: 'keyToReplicate' }, next);
             },
             (data, next) => {
                 queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
