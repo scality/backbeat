@@ -3,11 +3,11 @@ const errors = require('arsenal').errors;
 const CredentialsManager = require('../../../credentials/CredentialsManager');
 
 class RoleAuthManager {
-    constructor(vaultClient, roleArn, log) {
+    constructor(vaultclient, roleArn, log) {
         this._log = log;
-        this._vaultclient = vaultClient;
+        this._vaultclient = vaultclient;
         this._credentials = new CredentialsManager(
-            vaultClient, 'replication', roleArn, log.getUids());
+            vaultclient, 'replication', roleArn, log.getUids());
     }
 
     getCredentials() {
