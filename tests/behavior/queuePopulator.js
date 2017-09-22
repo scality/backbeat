@@ -4,10 +4,9 @@ const async = require('async');
 const AWS = require('aws-sdk');
 const S3 = AWS.S3;
 
-const QueuePopulator = require('../../../../extensions/replication' +
-                               '/queuePopulator/QueuePopulator');
+const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 
-const testConfig = require('../../../config.json');
+const testConfig = require('../config.json');
 const testBucket = 'queue-populator-test-bucket';
 
 const s3config = {
@@ -61,8 +60,8 @@ describe('queuePopulator', () => {
             (data, next) => {
                 queuePopulator = new QueuePopulator(
                     testConfig.zookeeper,
-                    testConfig.replication.source,
-                    testConfig.replication);
+                    testConfig.queuePopulator,
+                    testConfig.extensions);
                 queuePopulator.open(next);
             },
             next => {
@@ -85,7 +84,7 @@ describe('queuePopulator', () => {
         queuePopulator.processAllLogEntries(
             { maxRead: 10 }, (err, counters) => {
                 assert.ifError(err);
-                assert.strictEqual(counters[0].queuedEntries, 0);
+                assert.deepStrictEqual(counters[0].queuedEntries, {});
                 done();
             });
     });
@@ -104,7 +103,8 @@ describe('queuePopulator', () => {
                 // 2 reads expected: master key and and versioned key
                 // 1 queued: versioned key only
                 assert.strictEqual(counters[0].readEntries, 2);
-                assert.strictEqual(counters[0].queuedEntries, 1);
+                assert.deepStrictEqual(counters[0].queuedEntries,
+                                       { 'backbeat-test-replication': 1 });
                 next();
             },
         ], err => {
@@ -125,7 +125,8 @@ describe('queuePopulator', () => {
                 // 2 reads expected: master key update + new delete marker
                 // 1 queued: versioned key (delete marker)
                 assert.strictEqual(counters[0].readEntries, 2);
-                assert.strictEqual(counters[0].queuedEntries, 1);
+                assert.deepStrictEqual(counters[0].queuedEntries,
+                                       { 'backbeat-test-replication': 1 });
                 next();
             },
         ], err => {
@@ -162,7 +163,8 @@ describe('queuePopulator', () => {
                 // 2 reads expected: master key and and versioned key
                 // 1 queued: versioned key only
                 assert.strictEqual(counters[0].readEntries, 200);
-                assert.strictEqual(counters[0].queuedEntries, 100);
+                assert.deepStrictEqual(counters[0].queuedEntries,
+                                       { 'backbeat-test-replication': 100 });
                 next();
             },
         ], err => {

@@ -6,6 +6,20 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "zookeeperPath": "/queue-populator",
+        "logSource": "dmd",
+        "bucketd": {
+            "host": "127.0.0.1",
+            "port": 9000
+        },
+        "dmd": {
+            "host": "127.0.0.1",
+            "port": 9990
+        }
+    },
     "extensions": {
         "replication": {
             "source": {
@@ -22,15 +36,6 @@
                         "port": 8500,
                         "adminPort": 8600
                     }
-                },
-                "logSource": "dmd",
-                "bucketd": {
-                    "host": "127.0.0.1",
-                    "port": 9000
-                },
-                "dmd": {
-                    "host": "127.0.0.1",
-                    "port": 9990
                 }
             },
             "destination": {
@@ -49,11 +54,6 @@
                 }
             },
             "topic": "backbeat-replication",
-            "queuePopulator": {
-                "cronRule": "*/5 * * * * *",
-                "batchMaxRead": 10000,
-                "zookeeperPath": "/replication-populator"
-            },
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,

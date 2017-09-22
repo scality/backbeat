@@ -187,3 +187,63 @@ the producers/consumers adding records for non-replicated and replicated
 entries. Since each entry would have a sequence number, calculating the
 difference between the sequence numbers of the latest non-replicated and
 replicated records would give us the required statistics.
+
+## WRITING EXTENSIONS
+
+A backbeat extension allows to add more functionality to the core
+backbeat asynchronous processor. E.g. Asynchronous Replication is one
+of the extensions available for backbeat.
+
+Extensions are located in the extensions/ directory, with a
+sub-directory named after the extension name (lowercase).
+
+### Extending the Queue Populator
+
+The queue populator is a core backbeat process which reads entries
+from the metadata log periodically and provides them to all running
+extensions through the filter() method, while maintaining the
+offsets of the latest processed log entries.
+
+Extensions can publish messages to one or more kafka topics on
+reception of particular log entry events.
+
+To achieve this, in the extension module directory, create an
+'index.js' file exporting the attributes defining the extension
+metadata and entrypoints, e.g. to create a "mycoolext" extension, put
+in extensions/mycoolext/index.js:
+
+```
+module.exports = {
+    name: 'my cool extension',
+    version: '1.0.0',
+    queuePopulatorExtension: require('./MyCoolExtensionPopulator.js'),
+};
+```
+
+Here, MyCoolExtensionPopulator.js exports a class that:
+
+- inherits from lib/queuePopulator/QueuePopulatorExtension class
+
+- implements the filter() method, which gets called whenever new
+  metadata log entries are fetched, with an "entry" argument
+  containing the fields: { bucket, key, type=(put|del), value }
+
+- calls QueuePopulatorExtension.publish() method from the filter()
+  method to schedule queueing of kafka entries to topics.
+
+Extensions are enabled based on config.json having a sub-section in
+"extensions" matching the name of the extension directory.
+
+E.g. this config.json enables mycoolext extension, and provides
+configuration param someparam as "somevalue" to extension classes.
+
+```
+{
+    [...]
+    "extensions": {
+        "mycoolext": {
+            "someparam": "somevalue"
+        }
+    }
+}
+```
