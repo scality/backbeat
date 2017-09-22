@@ -5,6 +5,10 @@ const VersionIDUtils = require('arsenal').versioning.VersionID;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 
+function _extractVersionedBaseKey(key) {
+    return key.split(VID_SEP)[0];
+}
+
 class QueueEntry {
 
     /**
@@ -12,14 +16,15 @@ class QueueEntry {
      * @param {string} bucket - bucket name for entry's object (may be
      *   source bucket or destination bucket depending on replication
      *   status)
-     * @param {string} objectKey - entry's object key without version
-     *   suffix
+     * @param {string} objectVersionedKey - entry's object key with
+     *   version suffix
      * @param {object} objMd - entry's object metadata as a parsed JS
      *   object
      */
-    constructor(bucket, objectKey, objMd) {
+    constructor(bucket, objectVersionedKey, objMd) {
         this.bucket = bucket;
-        this.objectKey = objectKey;
+        this.objectVersionedKey = objectVersionedKey;
+        this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
         this.objMd = objMd;
     }
 
@@ -50,16 +55,11 @@ class QueueEntry {
         return undefined;
     }
 
-    static _extractVersionedBaseKey(key) {
-        return key.split(VID_SEP)[0];
-    }
-
     static createFromKafkaEntry(kafkaEntry) {
         try {
             const record = JSON.parse(kafkaEntry.value);
-            const key = QueueEntry._extractVersionedBaseKey(record.key);
             const objMd = JSON.parse(record.value);
-            const entry = new QueueEntry(record.bucket, key, objMd);
+            const entry = new QueueEntry(record.bucket, record.key, objMd);
             const err = entry.checkSanity();
             if (err) {
                 return { error: err };
@@ -81,6 +81,10 @@ class QueueEntry {
 
     getObjectKey() {
         return this.objectKey;
+    }
+
+    getObjectVersionedKey() {
+        return this.objectVersionedKey;
     }
 
     getVersionId() {
@@ -159,6 +163,30 @@ class QueueEntry {
         return location.size;
     }
 
+    // Object metadata may contain multiple elements for a single part if
+    // the part was originally copied from another MPU. Here we reduce the
+    // locations array to a single element for each part.
+    getReducedLocations() {
+        const locations = this.getLocation();
+        const reducedLocations = [];
+        let partTotal = 0;
+        for (let i = 0; i < locations.length; i++) {
+            const currPart = locations[i];
+            const currPartNum = this.getPartNumber(currPart);
+            const nextPart = locations[i + 1];
+            const nextPartNum = nextPart ?
+                      this.getPartNumber(nextPart) : undefined;
+            if (currPartNum === nextPartNum) {
+                partTotal += this.getPartSize(currPart);
+            } else {
+                currPart.size = partTotal + this.getPartSize(currPart);
+                reducedLocations.push(currPart);
+                partTotal = 0;
+            }
+        }
+        return reducedLocations;
+    }
+
     setOwner(ownerCanonicalId, ownerDisplayName) {
         this.objMd['owner-id'] = ownerCanonicalId;
         this.objMd['owner-display-name'] = ownerDisplayName;
@@ -173,7 +201,7 @@ class QueueEntry {
         const replicaMd = Object.assign({}, this.objMd);
         replicaMd.replicationInfo = replicationInfo;
         replicaMd.replicationInfo.status = repStatus;
-        return new QueueEntry(bucket, this.objectKey, replicaMd);
+        return new QueueEntry(bucket, this.objectVersionedKey, replicaMd);
     }
 
     toReplicaEntry() {
