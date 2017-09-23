@@ -99,7 +99,7 @@ class QueueProcessor {
     }
 
     _loadAdminCreds() {
-        const adminCredsJSON = fs.readFileSync('conf/admin-backbeat.json');
+        const adminCredsJSON = fs.readFileSync('/conf/admin-backbeat.json');
         const adminCredsObj = JSON.parse(adminCredsJSON);
         const accessKey = Object.keys(adminCredsObj)[0];
         const secretKey = adminCredsObj[accessKey];
