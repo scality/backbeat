@@ -249,28 +249,19 @@ class LogReader {
         // FIXME: copied from S3, move those values to arsenal from
         // S3/constants.js and use them
         const excluded = {
-            usersBucket: 'users..bucket',
-            oldUsersBucket: 'namespaceusersbucket',
             mpuBucketPrefix: 'mpuShadowBucket',
         };
-
         if (entry.type === 'put' &&
             entry.key !== undefined && entry.value !== undefined) {
             const isVersionedKey = !isMasterKey(entry.key);
-            const metaStoreOp = record.db === '__metastore';
-            if (isVersionedKey || metaStoreOp) {
+            const bucketOp = record.db === 'users..bucket';
+            if (isVersionedKey || bucketOp) {
                 const value = JSON.parse(entry.value);
                 if ((isVersionedKey &&
                      value.replicationInfo &&
                      value.replicationInfo.status === 'PENDING') ||
-                    (metaStoreOp &&
-                     entry.key !== excluded.usersBucket &&
-                     entry.key !== excluded.oldUsersBucket &&
-                     !entry.key.startsWith(excluded.mpuBucketPrefix) &&
-                     !value.transient &&
-                     !value.deleted &&
-                     !value.versioningConfiguration &&
-                     !value.replicationConfiguration)) {
+                    (bucketOp &&
+                     !entry.key.startsWith(excluded.mpuBucketPrefix))) {
                     this.log.trace('queueing entry',
                                    { key: entry.key,
                                      bucket: record.db });
