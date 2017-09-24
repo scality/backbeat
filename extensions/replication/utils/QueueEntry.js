@@ -24,7 +24,11 @@ class QueueEntry {
     constructor(bucket, objectVersionedKey, objMd) {
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
-        this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        if (bucket === 'users..bucket') {
+            this.objectKey = objectVersionedKey;
+        } else {
+            this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        }
         this.objMd = objMd;
     }
 
@@ -35,22 +39,24 @@ class QueueEntry {
         if (typeof this.objectKey !== 'string') {
             return { message: 'missing object key' };
         }
-        if (typeof this.objMd.replicationInfo !== 'object' ||
-            typeof this.objMd.replicationInfo.destination !== 'string') {
-            return { message: 'malformed source metadata: ' +
-                     'missing destination info' };
-        }
-        if (typeof this.objMd.versionId !== 'string') {
-            return { message: 'malformed source metadata: ' +
-                     'bad or missing versionId' };
-        }
-        if (typeof this.objMd['content-length'] !== 'number') {
-            return { message: 'malformed source metadata: ' +
-                     'bad or missing content-length' };
-        }
-        if (typeof this.objMd['content-md5'] !== 'string') {
-            return { message: 'malformed source metadata: ' +
-                     'bad or missing content-md5' };
+        if (this.bucket !== 'users..bucket') {
+            if (typeof this.objMd.replicationInfo !== 'object' ||
+                typeof this.objMd.replicationInfo.destination !== 'string') {
+                return { message: 'malformed source metadata: ' +
+                         'missing destination info' };
+            }
+            if (typeof this.objMd.versionId !== 'string') {
+                return { message: 'malformed source metadata: ' +
+                         'bad or missing versionId' };
+            }
+            if (typeof this.objMd['content-length'] !== 'number') {
+                return { message: 'malformed source metadata: ' +
+                         'bad or missing content-length' };
+            }
+            if (typeof this.objMd['content-md5'] !== 'string') {
+                return { message: 'malformed source metadata: ' +
+                         'bad or missing content-md5' };
+            }
         }
         return undefined;
     }
@@ -69,6 +75,10 @@ class QueueEntry {
             return { error: { message: 'malformed JSON in kafka entry',
                 description: err.message } };
         }
+    }
+
+    isPutBucketOp() {
+        return this.bucket === 'users..bucket';
     }
 
     isDeleteMarker() {
@@ -126,6 +136,11 @@ class QueueEntry {
 
     getOwnerCanonicalId() {
         return this.objMd['owner-id'];
+    }
+
+    getOwnerDisplayName() {
+        return (this._ownerDisplayName ?
+                this._ownerDisplayName : this.objMd['owner-display-name']);
     }
 
     getLogInfo() {

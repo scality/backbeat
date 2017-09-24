@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
+const fs = require('fs');
 
 const Logger = require('werelogs').Logger;
 
@@ -12,6 +13,7 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const QueueEntry = require('../utils/QueueEntry');
 const ReplicationTaskScheduler = require('./ReplicationTaskScheduler');
 const QueueProcessorTask = require('./QueueProcessorTask');
+const SetupBucketTask = require('./SetupBucketTask');
 
 /**
 * Given that the largest object JSON from S3 is about 1.6 MB and adding some
@@ -66,13 +68,26 @@ class QueueProcessor {
             this.destHosts =
                 new RoundRobin(destConfig.bootstrapList[0].servers,
                                { defaultPort: 80 });
+            if (destConfig.bootstrapList[0].echo) {
+                this.logger.info('starting in echo mode');
+                this._loadAdminCreds();
+                this.accountCredsCache = {};
+            }
         } else {
             this.destHosts = null;
         }
 
         if (sourceConfig.auth.type === 'role') {
-            const { host, port } = sourceConfig.auth.vault;
-            this.sourceVault = new VaultClient(host, port);
+            const { host, port, adminPort } = sourceConfig.auth.vault;
+            this.sourceS3Vault = new VaultClient(host, port);
+            if (this.adminCreds) {
+                this.sourceAdminVault = new VaultClient(
+                    host, adminPort,
+                    undefined, undefined, undefined, undefined,
+                    undefined,
+                    this.adminCreds.accessKey,
+                    this.adminCreds.secretKey);
+            }
         }
         if (destConfig.auth.type === 'role') {
             // vault client cache per destination
@@ -83,6 +98,14 @@ class QueueProcessor {
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }
 
+    _loadAdminCreds() {
+        const adminCredsJSON = fs.readFileSync('/conf/admin-backbeat.json');
+        const adminCredsObj = JSON.parse(adminCredsJSON);
+        const accessKey = Object.keys(adminCredsObj)[0];
+        const secretKey = adminCredsObj[accessKey];
+        this.adminCreds = { accessKey, secretKey };
+    }
+
     getStateVars() {
         return {
             sourceConfig: this.sourceConfig,
@@ -91,8 +114,11 @@ class QueueProcessor {
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,
-            sourceVault: this.sourceVault,
+            sourceAdminVault: this.sourceAdminVault,
+            sourceS3Vault: this.sourceS3Vault,
             destVaults: this.destVaults,
+            adminCreds: this.adminCreds,
+            accountCredsCache: this.accountCredsCache,
             logger: this.logger,
         };
     }
@@ -130,9 +156,18 @@ class QueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
+        // FIXME support multiple destinations
+        if ((this.destConfig.bootstrapList.length === 0 ||
+             !this.destConfig.bootstrapList[0].echo) &&
+            sourceEntry.isPutBucketOp()) {
+            // ignore
+            return done();
+        }
+        const task = sourceEntry.isPutBucketOp() ?
+                  new SetupBucketTask(this) :
+                  new QueueProcessorTask(this);
         return this.taskScheduler.push(
-            { task: new QueueProcessorTask(this),
-              entry: sourceEntry },
+            { task, entry: sourceEntry },
             `${sourceEntry.getBucket()}/${sourceEntry.getObjectVersionedKey()}`,
             done);
     }

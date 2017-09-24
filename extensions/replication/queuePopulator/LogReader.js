@@ -246,23 +246,36 @@ class LogReader {
     }
 
     _logEntryToQueueEntry(record, entry) {
+        // FIXME: copied from S3, move those values to arsenal from
+        // S3/constants.js and use them
+        const excluded = {
+            mpuBucketPrefix: 'mpuShadowBucket',
+        };
         if (entry.type === 'put' &&
-            entry.key !== undefined && entry.value !== undefined &&
-            !isMasterKey(entry.key)) {
-            const value = JSON.parse(entry.value);
-            if (value.replicationInfo &&
-                value.replicationInfo.status === 'PENDING') {
-                this.log.trace('queueing entry', { entry });
-                const queueEntry = {
-                    type: entry.type,
-                    bucket: record.db,
-                    key: entry.key,
-                    value: entry.value,
-                };
-                return {
-                    key: encodeURIComponent(entry.key),
-                    message: JSON.stringify(queueEntry),
-                };
+            entry.key !== undefined && entry.value !== undefined) {
+            const isVersionedKey = !isMasterKey(entry.key);
+            const bucketOp = record.db === 'users..bucket';
+            if (isVersionedKey || bucketOp) {
+                const value = JSON.parse(entry.value);
+                if ((isVersionedKey &&
+                     value.replicationInfo &&
+                     value.replicationInfo.status === 'PENDING') ||
+                    (bucketOp &&
+                     !entry.key.startsWith(excluded.mpuBucketPrefix))) {
+                    this.log.trace('queueing entry',
+                                   { key: entry.key,
+                                     bucket: record.db });
+                    const queueEntry = {
+                        type: entry.type,
+                        bucket: record.db,
+                        key: entry.key,
+                        value: entry.value,
+                    };
+                    return {
+                        key: encodeURIComponent(entry.key),
+                        message: JSON.stringify(queueEntry),
+                    };
+                }
             }
         }
         return null;
