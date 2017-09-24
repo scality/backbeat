@@ -24,7 +24,7 @@ class QueueEntry {
     constructor(bucket, objectVersionedKey, objMd) {
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
-        if (bucket === '__metastore') {
+        if (bucket === 'users..bucket') {
             this.objectKey = objectVersionedKey;
         } else {
             this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
@@ -39,7 +39,7 @@ class QueueEntry {
         if (typeof this.objectKey !== 'string') {
             return { message: 'missing object key' };
         }
-        if (this.bucket !== '__metastore') {
+        if (this.bucket !== 'users..bucket') {
             if (typeof this.objMd.replicationInfo !== 'object' ||
                 typeof this.objMd.replicationInfo.destination !== 'string') {
                 return { message: 'malformed source metadata: ' +
@@ -78,7 +78,7 @@ class QueueEntry {
     }
 
     isPutBucketOp() {
-        return this.bucket === '__metastore';
+        return this.bucket === 'users..bucket';
     }
 
     isDeleteMarker() {
@@ -135,12 +135,12 @@ class QueueEntry {
     }
 
     getOwnerCanonicalId() {
-        return this.objMd[this.isPutBucketOp() ? 'owner' : 'owner-id'];
+        return this.objMd['owner-id'];
     }
 
     getOwnerDisplayName() {
-        return this.objMd[this.isPutBucketOp() ?
-                          'ownerDisplayName' : 'owner-display-name'];
+        return (this._ownerDisplayName ?
+                this._ownerDisplayName : this.objMd['owner-display-name']);
     }
 
     getLogInfo() {
@@ -203,11 +203,8 @@ class QueueEntry {
     }
 
     setOwner(ownerCanonicalId, ownerDisplayName) {
-        this.objMd[this.isPutBucketOp() ? 'owner' : 'owner-id']
-            = ownerCanonicalId;
-        this.objMd[this.isPutBucketOp() ?
-                   'ownerDisplayName' : 'owner-display-name']
-            = ownerDisplayName;
+        this.objMd['owner-id'] = ownerCanonicalId;
+        this.objMd['owner-display-name'] = ownerDisplayName;
     }
 
     setLocation(location) {

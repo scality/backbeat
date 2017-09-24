@@ -18,6 +18,10 @@ const trustPolicy = {
     ],
 };
 
+// FIXME: copied from S3, move those values to arsenal from
+// S3/constants.js and use them
+const splitter = '..|..';
+
 function _buildResourcePolicy(source, target) {
     return {
         Version: '2012-10-17',
@@ -107,12 +111,30 @@ class SetupBucketTask {
     }
 
     _getSourceAccountCreds(sourceEntry, log, done) {
-        const displayName = sourceEntry.getOwnerDisplayName();
-        const canonicalId = sourceEntry.getOwnerCanonicalId();
+        const keyParts = sourceEntry.getObjectKey().split(splitter);
+        const canonicalId = keyParts[0];
         let email;
         let accountCreds;
 
         async.waterfall([
+            done => {
+                // XXX HACK: will not work with > 1000 account, needs
+                // a proper route to get account name from canonical
+                // ID
+                this.sourceAdminVault.listAccounts(
+                    { maxItems: 1000 }, (err, data) => {
+                        if (err) {
+                            return done(err);
+                        }
+                        data.accounts.forEach(account => {
+                            if (account.canonicalId === canonicalId) {
+                                sourceEntry.setOwner(canonicalId,
+                                                     account.name);
+                            }
+                        });
+                        return done();
+                    });
+            },
             done => this.sourceS3Vault.getEmailAddresses(
                 [canonicalId], { reqUid: log.getSerializedUids() }, done),
             (res, done) => {
@@ -122,7 +144,7 @@ class SetupBucketTask {
                     return done(null, null);
                 }
                 return this.sourceAdminVault.generateAccountAccessKey(
-                    displayName, done);
+                    sourceEntry.getOwnerDisplayName(), done);
             }, (res, done) => {
                 if (res) {
                     accountCreds = {
@@ -423,8 +445,8 @@ class SetupBucketTask {
         let sourcePolicyArn;
         let targetPolicyArn;
 
-        this._sourceBucket = sourceEntry.getObjectKey();
-        this._targetBucket = sourceEntry.getObjectKey();
+        this._sourceBucket = sourceEntry.getObjectKey().split(splitter)[1];
+        this._targetBucket = this._sourceBucket;
 
         async.waterfall([
             done => this._getSourceAccountCreds(sourceEntry, log, done),
@@ -468,7 +490,7 @@ class SetupBucketTask {
             if (err) {
                 log.end().error(
                     'echo mode: error during replication configuration',
-                    { bucket: sourceEntry.getObjectKey(),
+                    { bucket: this._sourceBucket,
                       userName: sourceEntry.getOwnerDisplayName(),
                       userEmail: email,
                       error: err,
@@ -477,7 +499,7 @@ class SetupBucketTask {
             }
             log.end().info(
                 'echo mode: configured replication for bucket',
-                { bucket: sourceEntry.getObjectKey(),
+                { bucket: this._sourceBucket,
                   userName: sourceEntry.getOwnerDisplayName(),
                   userEmail: email,
                   sourceRoleArn: sourceRole.Arn,
