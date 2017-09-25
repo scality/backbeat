@@ -6,6 +6,7 @@
   "scripts": {
     "queue_populator": "node extensions/replication/queuePopulator/task.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "start": "npm-run-all --parallel queue_populator queue_processor",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive tests/functional",
     "bh_test": "mocha --recursive tests/behavior",
@@ -36,6 +37,7 @@
     "joi": "^10.6",
     "kafka-node": "^1.6.0",
     "node-schedule": "^1.2.0",
+    "npm-run-all": "~4.0.2",
     "vaultclient": "github:scality/vaultclient",
     "werelogs": "scality/werelogs"
   },
