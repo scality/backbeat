@@ -265,6 +265,9 @@ class QueuePopulator {
                     delete value[attributeName];
                 }
             });
+            // only send on the first location to avoid huge array
+            // for mpu objects
+            value.location = value.location.slice(0, 1);
             const queueEntry = {
                 type: entry.type,
                 bucket: record.db,
