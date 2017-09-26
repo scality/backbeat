@@ -18,7 +18,7 @@ RUN adduser -u 1042 --home /home/eve --disabled-password --gecos "" eve \
     && adduser eve sudo \
     && sed -ri 's/(%sudo.*)ALL$/\1NOPASSWD:ALL/' /etc/sudoers
 
-ARG BUILDBOT_VERSION=0.9.1
+ENV BUILDBOT_VERSION=0.9.1
 
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
