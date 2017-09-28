@@ -22,9 +22,10 @@ if [[ "$LOG_LEVEL" ]]; then
     fi
 fi
 
-if [[ $JQ_FILTERS_CONFIG != "." ]]; then
-    jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
-    mv conf/config.json.tmp conf/config.json
+if [[ ! "$BACKBEAT_CONFIG_FILE" ]]; then
+    BACKBEAT_CONFIG_FILE=conf/config.json
 fi
+jq "$JQ_FILTERS_CONFIG" "$BACKBEAT_CONFIG_FILE" > /tmp/config.json.tmp
+mv /tmp/config.json.tmp "$BACKBEAT_CONFIG_FILE"
 
 exec "$@"
