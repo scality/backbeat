@@ -1,0 +1,33 @@
+---
+version: 0.2
+
+branches:
+  default:
+    stage: pre-merge
+
+stages:
+  pre-merge:
+    worker:
+      type: docker
+      path: eve/workers/unit_and_feature_tests
+      volumes:
+        - '/home/eve/workspace'
+    steps:
+      - Git:
+          name: fetch source
+          repourl: '%(prop:git_reference)s'
+          shallow: True
+          retryFetch: True
+          haltOnFailure: True
+      - ShellCommand:
+          name: run static analysis tools on markdown
+          command: npm run --silent lint_md
+      - ShellCommand:
+          name: run static analysis tools on code
+          command: npm run --silent lint
+      - ShellCommand:
+          name: run unit tests
+          command: npm test
+      - ShellCommand:
+          name: run feature tests
+          command: npm run ft_test
