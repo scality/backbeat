@@ -1,6 +1,10 @@
 {
     "zookeeper": {
-        "connectionString": "127.0.0.1:2181"
+        "connectionString": "127.0.0.1:2181",
+        "autoCreateNamespace": true
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
     },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
@@ -16,9 +20,6 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
-    "metrics": {
-        "topic": "backbeat-test-metrics"
-    },
     "s3": {
         "host": "127.0.0.1",
         "port": 8000,
@@ -29,12 +30,23 @@
     "extensions": {
         "replication": {
             "topic": "backbeat-test-replication",
+            "replicationStatusTopic": "backbeat-test-replication-status",
             "groupId": "backbeat-test-replication-group"
         }
     },
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
     },
     "redis": {
         "name": "backbeat-test",
