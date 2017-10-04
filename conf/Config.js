@@ -58,6 +58,11 @@ class Config {
                 ca: ca ? fs.readFileSync(capath, 'ascii') : undefined,
             };
         }
+
+        const healthChecks = config.server.healthChecks.allowFrom;
+        if (healthChecks && healthChecks.length === 0) {
+            this.healthChecks = { allowFrom: ['127.0.0.1/8', '::1'] };
+        }
     }
 }
 

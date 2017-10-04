@@ -20,6 +20,9 @@
             "port": 9990
         }
     },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
     "extensions": {
         "replication": {
             "source": {
@@ -65,5 +68,12 @@
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
     }
 }

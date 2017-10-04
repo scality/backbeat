@@ -7,10 +7,12 @@
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "test": "mocha --recursive tests/unit",
-    "ft_test": "mocha --recursive tests/functional",
+    "ft_test": "mocha --recursive $(find tests/functional -name '*.js' ! -name 'BackbeatServer.js')",
+    "ft_server_test": "mocha tests/functional/api/BackbeatServer.js",
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
-    "lint_md": "mdlint $(git ls-files '*.md')"
+    "lint_md": "mdlint $(git ls-files '*.md')",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
