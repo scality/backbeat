@@ -125,12 +125,13 @@ chmod 400 ./tests/utils/keyfile && \
 VAULT_DB_BACKEND=MEMORY node vaultd.js
 ```
 
-In a new shell, start the Scality S3 server:
+In a new shell, start the Scality S3 server with the record log enabled:
 
 ```
 git clone https://github.com/scality/s3 ~/replication/s3 && \
 cd ~/replication/s3 && \
 npm i && \
+sed -i '' 's/"enabled": false.*/"enabled": true,/' config.json \
 S3BACKEND=file S3VAULT=scality npm start
 ```
 
@@ -188,10 +189,20 @@ Default region name [None]:
 Default output format [None]:
 ```
 
+For this quickstart, we assume you are replicating to an S3 server running
+locally. So let's update the destination to use the host `127.0.0.1` and the
+default S3 port `8000`:
+
+```
+sed 's/const destHost = .*/const destHost = "127.0.0.1:8000"/' \
+~/replication/backbeat/bin/replication.js > \
+~/replication/backbeat/bin/localReplication.js \
+```
+
 Set up replication on your buckets:
 
 ```
-node ~/replication/backbeat/bin/setupReplication.js setup \
+node ~/replication/backbeat/bin/localReplication.js setup \
 --source-bucket source-bucket \
 --source-profile backbeatuser \
 --target-bucket target-bucket \
