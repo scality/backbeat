@@ -2,8 +2,14 @@ const assert = require('assert');
 const AWS = require('aws-sdk');
 
 const errors = require('arsenal').errors;
+const AuthLoader = require('arsenal').auth.inMemory.AuthLoader;
 
-const authdata = require('../../../conf/authdata.json');
+const authLoader = new AuthLoader(null, false);
+
+if (process.env.BACKBEAT_AUTH_CONFIG) {
+    authLoader.addFilesByGlob(process.env.BACKBEAT_AUTH_CONFIG);
+}
+const authdata = authLoader.getData();
 
 class AccountAuthManager {
     constructor(authConfig, log) {
@@ -15,23 +21,12 @@ class AccountAuthManager {
         if (accountInfo === undefined) {
             throw Error(`No such account registered: ${authConfig.account}`);
         }
-        if (accountInfo.arn === undefined) {
-            throw Error(`Configured account ${authConfig.account} has no ` +
-                        '"arn" property defined');
+        if (accountInfo.keys.length === 0) {
+            throw Error(`Account ${authConfig.account} has no configured ` +
+                        'access/secret key pair');
         }
-        if (accountInfo.canonicalID === undefined) {
-            throw Error(`Configured account ${authConfig.account} has no ` +
-                        '"canonicalID" property defined');
-        }
-        if (accountInfo.displayName === undefined) {
-            throw Error(`Configured account ${authConfig.account} has no ` +
-                        '"displayName" property defined');
-        }
-        this._accountArn = accountInfo.arn;
-        this._canonicalID = accountInfo.canonicalID;
-        this._displayName = accountInfo.displayName;
-        this._credentials = new AWS.Credentials(accountInfo.keys.access,
-                                                accountInfo.keys.secret);
+        this._credentials = new AWS.Credentials(accountInfo.keys[0].access,
+                                                accountInfo.keys[0].secret);
     }
 
     getCredentials() {
@@ -39,18 +34,7 @@ class AccountAuthManager {
     }
 
     lookupAccountAttributes(accountId, cb) {
-        const localAccountId = this._accountArn.split(':')[4];
-        if (localAccountId !== accountId) {
-            this._log.error('Target account for replication must match ' +
-                            'configured destination account ARN',
-                { targetAccountId: accountId,
-                    localAccountId });
-            return process.nextTick(() => cb(errors.AccountNotFound));
-        }
-        // return local account's attributes
-        return process.nextTick(
-            () => cb(null, { canonicalID: this._canonicalID,
-                displayName: this._displayName }));
+        return process.nextTick(() => cb(errors.NotImplemented));
     }
 }
 

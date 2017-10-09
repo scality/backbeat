@@ -192,6 +192,10 @@ class QueueEntry {
         this.objMd['owner-display-name'] = ownerDisplayName;
     }
 
+    unsetOwner() {
+        this.setOwner(null, null);
+    }
+
     setLocation(location) {
         this.objMd.location = location;
     }

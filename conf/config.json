@@ -16,7 +16,7 @@
                 },
                 "auth": {
                     "type": "account",
-                    "account": "bart",
+                    "account": "CRR",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -45,7 +45,7 @@
                 },
                 "auth": {
                     "type": "account",
-                    "account": "lisa"
+                    "account": "CRR"
                 }
             },
             "topic": "backbeat-replication",
