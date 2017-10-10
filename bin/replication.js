@@ -1,9 +1,11 @@
 const program = require('commander');
+const { SharedIniFileCredentials } = require('aws-sdk');
 
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
-const config = require('../conf/Config');
+const { RoundRobin } = require('arsenal').network;
 
+const config = require('../conf/Config');
 const SetupReplication =
           require('../extensions/replication/utils/SetupReplication');
 
@@ -12,6 +14,43 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
+
+function _createSetupReplication(command, options, log) {
+    const sourceBucket = options.sourceBucket;
+    const targetBucket = options.targetBucket;
+    const sourceProfile = options.sourceProfile;
+    const targetProfile = options.targetProfile;
+
+    // Required options
+    if (!sourceBucket || !targetBucket ||
+        !sourceProfile || !targetProfile) {
+        program.commands.find(n => n._name === command).help();
+        process.exit(1);
+    }
+
+    const { source, destination } = config.extensions.replication;
+    const sourceCredentials =
+              new SharedIniFileCredentials({ profile: sourceProfile });
+    const targetCredentials =
+              new SharedIniFileCredentials({ profile: targetProfile });
+
+    return new SetupReplication({
+        source: {
+            bucket: sourceBucket,
+            credentials: sourceCredentials,
+            s3: source.s3,
+            vault: source.auth.vault,
+            transport: source.transport,
+        },
+        target: {
+            bucket: targetBucket,
+            credentials: targetCredentials,
+            hosts: new RoundRobin(destination.bootstrapList[0].servers),
+            transport: destination.transport,
+        },
+        log,
+    });
+}
 
 program
     .version('1.0.0')
@@ -24,20 +63,7 @@ program
             '[required] target aws/credentials profile')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
-
-        const sourceBucket = options.sourceBucket;
-        const targetBucket = options.targetBucket;
-        const sourceProfile = options.sourceProfile;
-        const targetProfile = options.targetProfile;
-
-        // Required options
-        if (!sourceBucket || !targetBucket) {
-            program.commands.find(n => n._name === 'setup').help();
-            process.exit(1);
-        }
-
-        const s = new SetupReplication(sourceBucket, targetBucket,
-            sourceProfile, targetProfile, log, config);
+        const s = _createSetupReplication('setup', options, log);
         s.setupReplication(err => {
             if (err) {
                 log.error('replication setup failed', {
@@ -61,21 +87,7 @@ program
             '[required] target aws/credentials profile')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
-
-        const sourceBucket = options.sourceBucket;
-        const targetBucket = options.targetBucket;
-        const sourceProfile = options.sourceProfile;
-        const targetProfile = options.targetProfile;
-
-        // Required options
-        if (!sourceBucket || !targetBucket ||
-            !sourceProfile || !targetProfile) {
-            program.commands.find(n => n._name === 'validate').help();
-            process.exit(1);
-        }
-
-        const s = new SetupReplication(sourceBucket, targetBucket,
-            sourceProfile, targetProfile, log, config);
+        const s = _createSetupReplication('validate', options, log);
         s.checkSanity(err => {
             if (err) {
                 log.error('replication validation check failed', {

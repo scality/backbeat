@@ -1,7 +1,5 @@
 const async = require('async');
-const { S3, IAM, SharedIniFileCredentials } = require('aws-sdk');
-
-const { RoundRobin } = require('arsenal').network;
+const { S3, IAM } = require('aws-sdk');
 
 const trustPolicy = {
     Version: '2012-10-17',
@@ -52,8 +50,7 @@ function _buildResourcePolicy(source, target) {
     };
 }
 
-function _setupS3Client(transport, endpoint, profile) {
-    const credentials = new SharedIniFileCredentials({ profile });
+function _setupS3Client(transport, endpoint, credentials) {
     return new S3({
         endpoint: `${endpoint}`,
         sslEnabled: transport === 'https',
@@ -63,8 +60,7 @@ function _setupS3Client(transport, endpoint, profile) {
     });
 }
 
-function _setupIAMClient(where, transport, endpoint, profile) {
-    const credentials = new SharedIniFileCredentials({ profile });
+function _setupIAMClient(where, transport, endpoint, credentials) {
     const httpOptions = { timeout: 1000 };
     let iamEndpoint = endpoint;
     if (where === 'target') {
@@ -88,40 +84,45 @@ class SetupReplication {
     /**
      * This class sets up two buckets for replication.
      * @constructor
-     * @param {String} sourceBucket - Source Bucket Name
-     * @param {String} targetBucket - Target Bucket Name
-     * @param {String} sourceProfile - Source Credentials Profile
-     * @param {String} targetProfile - Target Credentials Profile
-     * @param {Object} log - Werelogs Request Logger object
-     * @param {Object} config - bucket configurations
+     * @param {Object} params - constructor params
+     * @param {String} params.source.bucket - source bucket name
+     * @param {Object} params.source.credentials - source aws-sdk
+     *   Credentials object
+     * @param {Object} params.source.s3.host - source S3 host name
+     * @param {String|Number} params.source.s3.port - source S3 port
+     * @param {Object} params.source.vault.host - source vault host name
+     * @param {String|Number} params.source.vault.adminPort - source
+     *   vault admin port
+     * @param {String} [params.source.transport] - transport protocol for
+     *   source (http/https)
+     * @param {String} params.target.bucket - target bucket name
+     * @param {Object} params.target.credentials - target aws-sdk
+     *   Credentials object
+     * @param {RoundRobin} params.target.hosts - destination hosts
+     * @param {String} [params.target.transport] - transport protocol for
+     *   target (http/https)
+     * @param {Object} params.log - werelogs request logger object
      */
-    constructor(sourceBucket, targetBucket, sourceProfile, targetProfile, log,
-        config) {
-        const { source, destination } = config.extensions.replication;
+    constructor(params) {
+        const { source, target, log } = params;
         this._log = log;
-        this._sourceBucket = sourceBucket;
-        this._targetBucket = targetBucket;
-        this.destHosts =
-            new RoundRobin(destination.bootstrapList[0].servers);
-        const verifySourceProfile = sourceProfile === undefined ?
-            'default' : sourceProfile;
-        const verifyTargetProfile = targetProfile === undefined ?
-            'default' : targetProfile;
+        this._sourceBucket = source.bucket;
+        this._targetBucket = target.bucket;
+        this.destHosts = target.hosts;
         const destHost = this.destHosts.pickHost().host;
         this._s3Clients = {
             source: _setupS3Client(source.transport,
-                `${source.s3.host}:${source.s3.port}`,
-                verifySourceProfile),
-            target: _setupS3Client(destination.transport, destHost,
-                verifyTargetProfile),
+                `${source.s3.host}:${source.s3.port}`, source.credentials),
+            target: _setupS3Client(target.transport, destHost,
+                                   target.credentials),
         };
         this._iamClients = {
             source: _setupIAMClient('source', source.transport,
-                `${source.auth.vault.host}:${source.auth.vault.adminPort}`,
-                verifySourceProfile),
-            target: _setupIAMClient('target', destination.transport,
-                `${destHost}:${source.auth.vault.adminPort}`,
-                verifyTargetProfile),
+                `${source.vault.host}:${source.vault.adminPort}`,
+                source.credentials),
+            target: _setupIAMClient('target', target.transport,
+                `${destHost}:${source.vault.adminPort}`,
+                target.credentials),
         };
     }
 
