@@ -137,7 +137,7 @@ class QueueProcessor {
                 new MultipleBackendTask(this) : new QueueProcessorTask(this),
             entry: sourceEntry,
         },
-        `${sourceEntry.getBucket()}/${sourceEntry.getObjectVersionedKey()}`,
+        `${sourceEntry.getBucket()}/${sourceEntry.getObjectKey()}`,
         done);
     }
 }

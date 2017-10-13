@@ -26,14 +26,13 @@ describe('replication task scheduler', () => {
             }
         }
         for (let i = 0; i < 10; ++i) {
-            objects.push({ versionedKey: `key_with_version_${i}`,
-                          value: -1 });
+            objects.push({ objectKey: `key_${i}`, value: -1 });
             // the following inner operations shall be executed in
-            // order because they have the same versionedKey (passed
+            // order because they have the same objectKey (passed
             // to taskScheduler.push())
             for (let j = 0; j < 10; ++j) {
                 taskScheduler.push({ object: objects[i], setValueTo: j },
-                                   objects[i].versionedKey, doneFunc);
+                                   objects[i].objectKey, doneFunc);
             }
         }
     });
