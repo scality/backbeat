@@ -3,13 +3,13 @@ const schedule = require('node-schedule');
 
 const werelogs = require('werelogs');
 
-const config = require('../../../conf/Config');
+const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
-const repConfig = config.extensions.replication;
-const sourceConfig = config.extensions.replication.source;
-const QueuePopulator = require('./QueuePopulator');
+const extConfigs = config.extensions;
+const qpConfig = config.queuePopulator;
+const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
-const log = new werelogs.Logger('Backbeat:Replication:task');
+const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
@@ -22,7 +22,7 @@ function queueBatch(queuePopulator, batchInProgress) {
     }
     log.debug('start queueing replication batch');
     batchInProgress = true;
-    const maxRead = repConfig.queuePopulator.batchMaxRead;
+    const maxRead = qpConfig.batchMaxRead;
     queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
         batchInProgress = false;
         if (err) {
@@ -41,13 +41,13 @@ function queueBatch(queuePopulator, batchInProgress) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, sourceConfig, repConfig);
+const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
 
 async.waterfall([
     done => queuePopulator.open(done),
     done => {
         const batchInProgress = false;
-        schedule.scheduleJob(repConfig.queuePopulator.cronRule, () => {
+        schedule.scheduleJob(qpConfig.cronRule, () => {
             queueBatch(queuePopulator, batchInProgress);
         });
         done();

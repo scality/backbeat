@@ -23,6 +23,16 @@ const joiSchema = {
     kafka: {
         hosts: joi.string().required(),
     },
+    queuePopulator: {
+        cronRule: joi.string().required(),
+        batchMaxRead: joi.number().default(10000),
+        zookeeperPath: joi.string().required(),
+        logSource: joi.alternatives().try('bucketd', 'dmd').required(),
+        bucketd: hostPortJoi,
+        dmd: hostPortJoi.keys({
+            logName: joi.string().default('s3-recordlog'),
+        }),
+    },
     log: logJoi,
     extensions: {
         replication: {
@@ -30,11 +40,6 @@ const joiSchema = {
                 transport: transportJoi,
                 s3: hostPortJoi.required(),
                 auth: authJoi.required(),
-                logSource: joi.alternatives().try('bucketd', 'dmd').required(),
-                bucketd: hostPortJoi,
-                dmd: hostPortJoi.keys({
-                    logName: joi.string().default('s3-recordlog'),
-                }),
             },
             destination: {
                 transport: transportJoi,
@@ -47,11 +52,6 @@ const joiSchema = {
                 }).required(),
             },
             topic: joi.string().required(),
-            queuePopulator: {
-                cronRule: joi.string().required(),
-                batchMaxRead: joi.number().default(10000),
-                zookeeperPath: joi.string().required(),
-            },
             queueProcessor: {
                 groupId: joi.string().required(),
                 retryTimeoutS: joi.number().default(300),

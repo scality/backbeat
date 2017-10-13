@@ -2,35 +2,31 @@
     "zookeeper": {
         "connectionString": "127.0.0.1:2181"
     },
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "zookeeperPath": "/backbeat/test/queue-populator",
+        "logSource": "dmd",
+        "dmd": {
+            "host": "127.0.0.1",
+            "port": 9990,
+            "logName": "s3-recordlog"
+        }
+    },
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
     "s3": {
-        "hosts": [
-            {
-                "host": "127.0.0.1",
-                "port": 8000
-            }
-        ],
+        "host": "127.0.0.1",
+        "port": 8000,
         "transport": "http",
         "accessKey": "accessKey1",
         "secretKey": "verySecretKey1"
     },
-    "replication": {
-        "source": {
-            "logSource": "dmd",
-            "dmd": {
-                "host": "127.0.0.1",
-                "port": 9990,
-                "logName": "s3-recordlog"
-            }
-        },
-        "topic": "backbeat-test-replication",
-        "groupId": "backbeat-test-replication-group",
-        "queuePopulator": {
-            "cronRule": "*/5 * * * * *",
-            "batchMaxRead": 10000,
-            "zookeeperPath": "/backbeat/test/replication-populator"
+    "extensions": {
+        "replication": {
+            "topic": "backbeat-test-replication",
+            "groupId": "backbeat-test-replication-group"
         }
     },
     "log": {
