@@ -15,16 +15,16 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
-function queueBatch(queuePopulator, batchInProgress) {
-    if (batchInProgress) {
+function queueBatch(queuePopulator, taskState) {
+    if (taskState.batchInProgress) {
         log.warn('skipping replication batch: previous one still in progress');
         return undefined;
     }
     log.debug('start queueing replication batch');
-    batchInProgress = true;
+    taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
     queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
-        batchInProgress = false;
+        taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during replication', {
                 method: 'QueuePopulator::task.queueBatch',
@@ -46,9 +46,11 @@ const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
 async.waterfall([
     done => queuePopulator.open(done),
     done => {
-        const batchInProgress = false;
+        const taskState = {
+            batchInProgress: false,
+        };
         schedule.scheduleJob(qpConfig.cronRule, () => {
-            queueBatch(queuePopulator, batchInProgress);
+            queueBatch(queuePopulator, taskState);
         });
         done();
     },
