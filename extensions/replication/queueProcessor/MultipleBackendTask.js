@@ -87,6 +87,202 @@ class MultipleBackendTask extends QueueProcessorTask {
         });
     }
 
+    _getAndPutMPUPart(sourceEntry, destEntry, part, uploadId, log, cb) {
+        this._retry({
+            actionDesc: 'stream part data',
+            entry: sourceEntry,
+            actionFunc: done => this._getAndPutMPUPartOnce(sourceEntry,
+                destEntry, part, uploadId, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
+    }
+
+    _getAndPutMPUPartOnce(sourceEntry, destEntry, part, uploadId, log, done) {
+        log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
+        const doneOnce = jsutil.once(done);
+        const partNumber = sourceEntry.getPartNumber(part);
+        const sourceReq = this.S3source.getObject({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+            PartNumber: partNumber,
+        });
+        attachReqUids(sourceReq, log);
+        sourceReq.on('error', err => {
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            if (err.statusCode === 404) {
+                return doneOnce(err);
+            }
+            log.error('an error occurred on getObject from S3', {
+                method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                entry: sourceEntry.getLogInfo(),
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+                httpStatus: err.statusCode,
+            });
+            return doneOnce(err);
+        });
+        const incomingMsg = sourceReq.createReadStream();
+        incomingMsg.on('error', err => {
+            if (err.statusCode === 404) {
+                return doneOnce(errors.ObjNotFound);
+            }
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            log.error('an error occurred when streaming data from S3', {
+                entry: destEntry.getLogInfo(),
+                method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+            });
+            return doneOnce(err);
+        });
+        log.debug('putting data', { entry: destEntry.getLogInfo() });
+
+        const destReq = this.backbeatSource.multipleBackendPutMPUPart({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            ContentLength: destEntry.getPartSize(part),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: destEntry.getReplicationStorageClass(),
+            PartNumber: destEntry.getPartNumber(part),
+            UploadId: uploadId,
+            Body: incomingMsg,
+        });
+        attachReqUids(destReq, log);
+        return destReq.send((err, data) => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'target';
+                log.error('an error occurred on putting MPU part to S3', {
+                    method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            return doneOnce(null, data);
+        });
+    }
+
+    _getAndPutMultipartUpload(sourceEntry, destEntry, part, uploadId, log, cb) {
+        this._retry({
+            actionDesc: 'stream part data',
+            entry: sourceEntry,
+            actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
+                destEntry, part, uploadId, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
+    }
+
+    _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
+        if (sourceEntry.getLocation().some(part =>
+            sourceEntry.getDataStoreETag(part) === undefined)) {
+            log.error('cannot replicate object without dataStoreETag property',
+                {
+                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    entry: sourceEntry.getLogInfo(),
+                });
+            return cb(errors.InvalidObjectState);
+        }
+        let destReq = this.backbeatSource.multipleBackendInitiateMPU({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: destEntry.getReplicationStorageClass(),
+            VersionId: destEntry.getEncodedVersionId(),
+        });
+        attachReqUids(destReq, log);
+        return destReq.send((err, data) => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'target';
+                log.error('an error occurred on initating MPU to S3', {
+                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            const uploadId = data.uploadId;
+            const locations = sourceEntry.getReducedLocations();
+            return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+                this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
+                    log, (err, data) => {
+                        if (err) {
+                            return done(err);
+                        }
+                        return done(null, {
+                            PartNumber: [data.partNumber],
+                            ETag: [data.ETag],
+                        });
+                    }),
+            (err, data) => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'target';
+                    log.error('an error occurred on putting MPU part to S3', {
+                        method:
+                            'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message,
+                    });
+                    return doneOnce(err);
+                }
+                destReq = this.backbeatSource.multipleBackendCompleteMPU({
+                    Bucket: destEntry.getBucket(),
+                    Key: destEntry.getObjectKey(),
+                    StorageType: destEntry.getReplicationStorageType(),
+                    StorageClass: destEntry.getReplicationStorageClass(),
+                    UploadId: uploadId,
+                    Body: JSON.stringify(data),
+                });
+                attachReqUids(destReq, log);
+                return destReq.send(err => {
+                    if (err) {
+                        // eslint-disable-next-line no-param-reassign
+                        err.origin = 'target';
+                        log.error('an error occurred on completing MPU to S3', {
+                            method: 'MultipleBackendTask.' +
+                                '_getAndPutMultipartUploadOnce',
+                            entry: destEntry.getLogInfo(),
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
+                            error: err.message,
+                        });
+                        return doneOnce(err);
+                    }
+                    return doneOnce();
+                });
+            });
+        });
+    }
+
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
@@ -257,6 +453,11 @@ class MultipleBackendTask extends QueueProcessorTask {
                 if (sourceEntry.isDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, destEntry, log,
                         next);
+                }
+                const content = sourceEntry.getReplicationContent();
+                if (content.includes('MPU')) {
+                    return this._getAndPutMultipartUpload(sourceEntry,
+                        destEntry, log, next);
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
             },
