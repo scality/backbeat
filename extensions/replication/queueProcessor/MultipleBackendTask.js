@@ -376,6 +376,120 @@ class MultipleBackendTask extends QueueProcessorTask {
         });
     }
 
+    _getAndPutObjectTagging(sourceEntry, destEntry, log, cb) {
+        this._retry({
+            actionDesc: 'stream part data',
+            entry: sourceEntry,
+            actionFunc: done => this._getAndPutObjectTaggingOnce(
+               sourceEntry, destEntry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
+    }
+
+    _getAndPutObjectTaggingOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating object tags', {
+            entry: sourceEntry.getLogInfo(),
+        });
+        const sourceReq = this.S3source.getObjectTagging({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+        });
+        attachReqUids(sourceReq, log);
+        sourceReq.on('error', err => {
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            if (err.statusCode === 404) {
+                log.error('the source object was not found', {
+                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    httpStatus: err.statusCode,
+                });
+                return doneOnce(err);
+            }
+            log.error('an error occurred on getObject from S3', {
+                method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
+                entry: sourceEntry.getLogInfo(),
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+                httpStatus: err.statusCode,
+            });
+            return doneOnce(err);
+        });
+        const incomingMsg = sourceReq.createReadStream();
+        incomingMsg.on('error', err => {
+            if (err.statusCode === 404) {
+                log.error('the source object was not found', {
+                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    httpStatus: err.statusCode,
+                });
+                return doneOnce(errors.ObjNotFound);
+            }
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            log.error('an error occurred when streaming data from S3', {
+                entry: destEntry.getLogInfo(),
+                method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+            });
+            return doneOnce(err);
+        });
+        const data = [];
+        incomingMsg.on('data', chunk => data.push(chunk.toString()));
+        incomingMsg.on('end', () => {
+            const tagsXML = data.join('');
+            log.debug('putting object tagging', {
+                entry: destEntry.getLogInfo(),
+            });
+            const destReq = this.backbeatSource
+               .multipleBackendPutObjectTagging({
+                   Bucket: destEntry.getBucket(),
+                   Key: destEntry.getObjectKey(),
+                   ContentLength: tagsXML.length,
+                   StorageType: destEntry.getReplicationStorageType(),
+                   StorageClass: destEntry.getReplicationStorageClass(),
+                   VersionId: destEntry.getEncodedVersionId(),
+                   Body: tagsXML,
+               });
+            attachReqUids(destReq, log);
+            return destReq.send(err => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'target';
+                    log.error('an error occurred putting object tagging to ' +
+                    'S3', {
+                        method:
+                           'MultipleBackendTask._getAndPutObjectTaggingOnce',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message,
+                    });
+                    return doneOnce(err);
+                }
+                return doneOnce();
+            });
+        });
+    }
+
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
         if (sourceEntry.getLocation().some(part =>
@@ -458,6 +572,10 @@ class MultipleBackendTask extends QueueProcessorTask {
                 if (content.includes('MPU')) {
                     return this._getAndPutMultipartUpload(sourceEntry,
                         destEntry, log, next);
+                }
+                if (content.includes('PUT_TAGGING')) {
+                    return this._getAndPutObjectTagging(sourceEntry, destEntry,
+                        log, next);
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
             },
