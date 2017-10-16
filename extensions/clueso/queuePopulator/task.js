@@ -16,7 +16,7 @@ werelogs.configure({ level: config.log.logLevel,
 const log = new werelogs.Logger('Backbeat:Clueso:task');
 
 const sparkBucket = 'METADATA';
-const sparkMetadataPrefix = 'landing/_spark_metadata/';
+const sparkMetadataPrefix = 'alluxio/landing/_spark_metadata/';
 
 const s3port = cluesoConfig.s3.port === 80 ?
     '' : `:${cluesoConfig.s3.port}`;
