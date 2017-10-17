@@ -10,20 +10,13 @@ const { proxyPath } = require('../constants');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const AccountAuthManager = require('./AccountAuthManager');
 const RoleAuthManager = require('./RoleAuthManager');
+const attachReqUids = require('../utils/attachReqUids');
 
 const MPU_CONC_LIMIT = 10;
 const BACKOFF_PARAMS = { min: 1000, max: 300000, jitter: 0.1, factor: 1.5 };
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
-}
-
-function _attachReqUids(s3req, log) {
-    s3req.on('build', () => {
-        // eslint-disable-next-line no-param-reassign
-        s3req.httpRequest.headers['X-Scal-Request-Uids'] =
-            log.getSerializedUids();
-    });
 }
 
 class QueueProcessorTask {
@@ -218,7 +211,7 @@ class QueueProcessorTask {
 
         const req = this.S3source.getBucketReplication(
             { Bucket: entry.getBucket() });
-        _attachReqUids(req, log);
+        attachReqUids(req, log);
         return req.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
@@ -330,7 +323,7 @@ class QueueProcessorTask {
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: partNumber,
         });
-        _attachReqUids(sourceReq, log);
+        attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
@@ -370,7 +363,7 @@ class QueueProcessorTask {
             ContentMD5: destEntry.getPartETag(part),
             Body: incomingMsg,
         });
-        _attachReqUids(destReq, log);
+        attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
@@ -407,7 +400,7 @@ class QueueProcessorTask {
             Body: mdBlob,
             ReplicationContent: replicationContent,
         });
-        _attachReqUids(req, log);
+        attachReqUids(req, log);
         req.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign

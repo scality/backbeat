@@ -74,6 +74,68 @@
                 "payload": "Location"
             }
         },
+        "MultipleBackendPutObject": {
+            "http": {
+                "method": "PUT",
+                "requestUri": "/_/backbeat/multiplebackendputobject/{Bucket}/{Key+}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "ContentLength": {
+                        "location": "header",
+                        "locationName": "Content-Length",
+                        "type": "long"
+                    },
+                    "ContentMD5": {
+                        "location": "header",
+                        "locationName": "Content-MD5"
+                    },
+                    "CanonicalID": {
+                        "location": "header",
+                        "locationName": "X-Scal-Canonical-Id"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "VersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Version-Id"
+                    },
+                    "Body": {
+                        "streaming": true,
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "PutMetadata": {
             "http": {
                 "method": "PUT",

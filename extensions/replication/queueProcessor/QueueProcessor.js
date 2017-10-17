@@ -12,6 +12,8 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const QueueEntry = require('../utils/QueueEntry');
 const ReplicationTaskScheduler = require('./ReplicationTaskScheduler');
 const QueueProcessorTask = require('./QueueProcessorTask');
+const MultipleBackendTask = require('./MultipleBackendTask');
+
 
 /**
 * Given that the largest object JSON from S3 is about 1.6 MB and adding some
@@ -130,11 +132,13 @@ class QueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
-        return this.taskScheduler.push(
-            { task: new QueueProcessorTask(this),
-              entry: sourceEntry },
-            `${sourceEntry.getBucket()}/${sourceEntry.getObjectVersionedKey()}`,
-            done);
+        return this.taskScheduler.push({
+            task: sourceEntry.getReplicationStorageType() === 'aws_s3' ?
+                new MultipleBackendTask(this) : new QueueProcessorTask(this),
+            entry: sourceEntry,
+        },
+        `${sourceEntry.getBucket()}/${sourceEntry.getObjectVersionedKey()}`,
+        done);
     }
 }
 
