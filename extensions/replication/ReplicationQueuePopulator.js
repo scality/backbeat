@@ -2,6 +2,7 @@ const { isMasterKey } = require('arsenal/lib/versioning/Version');
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
+const QueueEntry = require('./utils/QueueEntry');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -14,12 +15,16 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             return;
         }
         const value = JSON.parse(entry.value);
-        if (!value.replicationInfo ||
-            value.replicationInfo.status !== 'PENDING') {
+        const queueEntry = new QueueEntry(entry.bucket, entry.key, value);
+        const sanityCheckRes = queueEntry.checkSanity();
+        if (sanityCheckRes) {
+            return;
+        }
+        if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
         this.publish(this.repConfig.topic,
-                     `${entry.bucket}/${entry.key}`,
+                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(entry));
     }
 }
