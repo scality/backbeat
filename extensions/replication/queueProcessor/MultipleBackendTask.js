@@ -200,6 +200,52 @@ class MultipleBackendTask extends QueueProcessorTask {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
     }
 
+    _putDeleteMarker(sourceEntry, destEntry, log, cb) {
+        this._retry({
+            actionDesc: 'put delete marker',
+            entry: sourceEntry,
+            actionFunc: done => this._putDeleteMarkerOnce(
+                sourceEntry, destEntry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
+    }
+
+    _putDeleteMarkerOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating delete marker', {
+            entry: sourceEntry.getLogInfo(),
+        });
+        const destReq = this.backbeatSource.multipleBackendDeleteObject({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: destEntry.getReplicationStorageClass(),
+        });
+        attachReqUids(destReq, log);
+        return destReq.send(err => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'target';
+                log.error('an error occurred on putting delete marker to S3', {
+                    method: 'MultipleBackendTask._putDeleteMarkerOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            return doneOnce();
+        });
+    }
+
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry();
@@ -207,8 +253,13 @@ class MultipleBackendTask extends QueueProcessorTask {
 
         return async.waterfall([
             next => this._setupRoles(sourceEntry, log, next),
-            (sourceRole, next) =>
-                this._getAndPutData(sourceEntry, destEntry, log, next),
+            (sourceRole, next) => {
+                if (sourceEntry.isDeleteMarker()) {
+                    return this._putDeleteMarker(sourceEntry, destEntry, log,
+                        next);
+                }
+                return this._getAndPutData(sourceEntry, destEntry, log, next);
+            },
         ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
             log, done));
     }
