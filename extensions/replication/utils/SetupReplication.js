@@ -109,19 +109,20 @@ class SetupReplication {
         this._sourceBucket = source.bucket;
         this._targetBucket = target.bucket;
         this.destHosts = target.hosts;
-        const destHost = this.destHosts.pickHost().host;
+        const destHost = this.destHosts.pickHost();
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`, source.credentials),
-            target: _setupS3Client(target.transport, destHost,
-                                   target.credentials),
+            target: _setupS3Client(target.transport,
+                `${destHost.host}:${destHost.port}`, target.credentials),
         };
         this._iamClients = {
             source: _setupIAMClient('source', source.transport,
                 `${source.vault.host}:${source.vault.adminPort}`,
                 source.credentials),
+            // XXX use target port through nginx gateway
             target: _setupIAMClient('target', target.transport,
-                `${destHost}:${source.vault.adminPort}`,
+                `${destHost.host}:${source.vault.adminPort}`,
                 target.credentials),
         };
     }
