@@ -68,6 +68,8 @@ function _setupS3Client(transport, endpoint, profile) {
         credentials,
         s3ForcePathStyle: true,
         signatureVersion: 'v4',
+        maxRetries: 0,
+        httpOptions: { timeout: 0 },
     });
 }
 
