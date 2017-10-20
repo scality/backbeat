@@ -463,7 +463,7 @@ class QueueProcessorTask {
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destAuthManager.getCredentials(),
             sslEnabled: this.destConfig.transport === 'https',
-            httpOptions: { agent: this.destHTTPAgent },
+            httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
     }
