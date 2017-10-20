@@ -145,19 +145,20 @@ class QueueProcessorTask {
     }
 
     _getAndPutPart(sourceEntry, destEntry, part, log, cb) {
+        const partLogger = this.logger.newRequestLogger(log.getUids());
         this._retry({
             actionDesc: 'stream part data',
             entry: sourceEntry,
             actionFunc: done => this._getAndPutPartOnce(
-                sourceEntry, destEntry, part, log, done),
+                sourceEntry, destEntry, part, partLogger, done),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
                 if (err.origin === 'target') {
                     this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
+                    this._setupDestClients(this.targetRole, partLogger);
                 }
             },
-            log,
+            log: partLogger,
         }, cb);
     }
 
@@ -337,6 +338,7 @@ class QueueProcessorTask {
             log.error('an error occurred on getObject from S3',
                 { method: 'QueueProcessor._getAndPutData',
                     entry: sourceEntry.getLogInfo(),
+                    part,
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message,
@@ -353,12 +355,13 @@ class QueueProcessorTask {
             log.error('an error occurred when streaming data from S3',
                 { method: 'QueueProcessor._getAndPutData',
                     entry: destEntry.getLogInfo(),
+                    part,
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message });
             return doneOnce(err);
         });
-        log.debug('putting data', { entry: destEntry.getLogInfo() });
+        log.debug('putting data', { entry: destEntry.getLogInfo(), part });
         const destReq = this.backbeatDest.putData({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
@@ -375,6 +378,7 @@ class QueueProcessorTask {
                 log.error('an error occurred on putData to S3',
                     { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
+                        part,
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message });
