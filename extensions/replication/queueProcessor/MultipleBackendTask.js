@@ -6,6 +6,8 @@ const jsutil = require('arsenal').jsutil;
 const QueueProcessorTask = require('./QueueProcessorTask');
 const attachReqUids = require('../utils/attachReqUids');
 
+const MPU_CONC_LIMIT = 10;
+
 class MultipleBackendTask extends QueueProcessorTask {
 
     _setupRolesOnce(entry, log, cb) {
@@ -88,13 +90,11 @@ class MultipleBackendTask extends QueueProcessorTask {
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
-        // TODO handle zero-byte objects which have no parts
-        const partNumber = sourceEntry.getPartNumber(part);
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: partNumber,
+            PartNumber: part ? sourceEntry.getPartNumber(part) : undefined,
         });
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
@@ -151,8 +151,10 @@ class MultipleBackendTask extends QueueProcessorTask {
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerCanonicalId(),
-            ContentLength: destEntry.getPartSize(part),
-            ContentMD5: destEntry.getPartETag(part),
+            ContentLength: part ? destEntry.getPartSize(part) :
+                destEntry.getContentLength(),
+            ContentMD5: part ? destEntry.getPartETag(part) :
+                destEntry.getContentMD5(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
@@ -176,6 +178,26 @@ class MultipleBackendTask extends QueueProcessorTask {
             // with value
             return doneOnce(null, data);
         });
+    }
+
+    _getAndPutData(sourceEntry, destEntry, log, cb) {
+        log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
+        if (sourceEntry.getLocation().some(part =>
+            sourceEntry.getDataStoreETag(part) === undefined)) {
+            log.error('cannot replicate object without dataStoreETag property',
+                {
+                    method: 'MultipleBackendTask._getAndPutData',
+                    entry: sourceEntry.getLogInfo(),
+                });
+            return cb(errors.InvalidObjectState);
+        }
+        const locations = sourceEntry.getReducedLocations();
+        // Metadata-only operations have no part locations.
+        if (locations.length === 0) {
+            return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);
+        }
+        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
     }
 
     processQueueEntry(sourceEntry, done) {
