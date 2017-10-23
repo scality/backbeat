@@ -35,7 +35,7 @@ function buildLocations(keysArray, bodiesArray, options) {
         locations.push(location);
         start += bodiesArray[i].length;
     }
-    return locations;
+    return (locations.length > 0 ? locations : null);
 }
 
 const XML_CHARACTER_MAP = {
@@ -534,7 +534,7 @@ class S3Mock extends TestConfigurator {
                            this.getParam('target.canonicalId'));
 
         if (req.headers['x-scal-replication-content'] === 'METADATA') {
-            assert.deepStrictEqual(parsedMd.location, []);
+            assert.deepStrictEqual(parsedMd.location, null);
         } else {
             assert.deepStrictEqual(parsedMd.location,
                                    this.getParam('target.md.location'));
