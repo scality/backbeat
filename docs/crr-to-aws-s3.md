@@ -54,7 +54,7 @@ env_replication_endpoints:
 * Upon acquiring an entry to replicate, the task sends a GET Object ?versionId
   request to CloudServer
 
-* The steam is piped to PUT /_/backbeat Data request with header
+* The stream is piped to PUT /_/backbeat Data request with header
   `x-scal-replication-storage-type: aws_s3`
 
 * Upon receiving 200, read `x-amz-scal-version-id` from the header and send PUT
