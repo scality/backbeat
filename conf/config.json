@@ -21,6 +21,20 @@
         }
     },
     "extensions": {
+        "clueso": {
+            "s3": {
+                "host": "127.0.0.1",
+                "port": 8000,
+                "transport": "http",
+                "accessKeyId": "accessKey1",
+                "secretKeyId": "verySecretKey1"
+            },
+            "livy": {
+                "host": "127.0.0.1",
+                "port": 8998,
+                "transport": "http"
+            }
+        },
         "replication": {
             "source": {
                 "transport": "http",

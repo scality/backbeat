@@ -59,6 +59,19 @@ const joiSchema = {
                 concurrency: joi.number().greater(0).default(10),
             },
         },
+        clueso: {
+            // TODO: Handle auth in unified way
+            s3: hostPortJoi.keys({
+                transport: joi.alternatives().try('http', 'https')
+                    .default('http'),
+                accessKeyId: joi.string().required(),
+                secretKeyId: joi.string().required(),
+            }).required(),
+            livy: hostPortJoi.keys({
+                transport: joi.alternatives().try('http', 'https')
+                    .default('http'),
+            }).required(),
+        },
     },
 };
 
