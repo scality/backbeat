@@ -2,6 +2,7 @@ const async = require('async');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
+const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const QueueProcessorTask = require('./QueueProcessorTask');
 const attachReqUids = require('../utils/attachReqUids');
@@ -107,12 +108,12 @@ class MultipleBackendTask extends QueueProcessorTask {
     _getAndPutMPUPartOnce(sourceEntry, destEntry, part, uploadId, log, done) {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
-        const partNumber = sourceEntry.getPartNumber(part);
+        const partObj = new ObjectMDLocation(part);
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: partNumber,
+            PartNumber: partObj.getPartNumber(),
         });
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
@@ -152,10 +153,10 @@ class MultipleBackendTask extends QueueProcessorTask {
         const destReq = this.backbeatSource.multipleBackendPutMPUPart({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            ContentLength: destEntry.getPartSize(part),
+            ContentLength: partObj.getPartSize(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
-            PartNumber: destEntry.getPartNumber(part),
+            PartNumber: partObj.getPartNumber(),
             UploadId: uploadId,
             Body: incomingMsg,
         });
@@ -197,8 +198,10 @@ class MultipleBackendTask extends QueueProcessorTask {
     _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
         const doneOnce = jsutil.once(cb);
         log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
-        if (sourceEntry.getLocation().some(part =>
-            sourceEntry.getDataStoreETag(part) === undefined)) {
+        if (sourceEntry.getLocation().some(part => {
+            const partObj = new ObjectMDLocation(part);
+            return partObj.getDataStoreETag() === undefined;
+        })) {
             log.error('cannot replicate object without dataStoreETag property',
                 {
                     method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
@@ -286,11 +289,12 @@ class MultipleBackendTask extends QueueProcessorTask {
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
+        const partObj = part ? new ObjectMDLocation(part) : undefined;
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: part ? sourceEntry.getPartNumber(part) : undefined,
+            PartNumber: part ? partObj.getPartNumber() : undefined,
         });
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
@@ -346,11 +350,11 @@ class MultipleBackendTask extends QueueProcessorTask {
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            CanonicalID: destEntry.getOwnerCanonicalId(),
-            ContentLength: part ? destEntry.getPartSize(part) :
+            CanonicalID: destEntry.getOwnerId(),
+            ContentLength: part ? partObj.getPartSize() :
                 destEntry.getContentLength(),
-            ContentMD5: part ? destEntry.getPartETag(part) :
-                destEntry.getContentMD5(),
+            ContentMD5: part ? partObj.getPartETag() :
+                destEntry.getContentMd5(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
@@ -492,8 +496,10 @@ class MultipleBackendTask extends QueueProcessorTask {
 
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
-        if (sourceEntry.getLocation().some(part =>
-            sourceEntry.getDataStoreETag(part) === undefined)) {
+        if (sourceEntry.getLocation().some(part => {
+            const partObj = new ObjectMDLocation(part);
+            return partObj.getDataStoreETag() === undefined;
+        })) {
             log.error('cannot replicate object without dataStoreETag property',
                 {
                     method: 'MultipleBackendTask._getAndPutData',
@@ -564,7 +570,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return async.waterfall([
             next => this._setupRoles(sourceEntry, log, next),
             (sourceRole, next) => {
-                if (sourceEntry.isDeleteMarker()) {
+                if (sourceEntry.getIsDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, destEntry, log,
                         next);
                 }
