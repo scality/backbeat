@@ -387,6 +387,50 @@
                 "members": {}
             }
         },
+        "MultipleBackendDeleteObjectTagging": {
+            "http": {
+                "method": "DELETE",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=deleteobjecttagging"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "VersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Version-Id"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
+        },
         "PutMetadata": {
             "http": {
                 "method": "PUT",

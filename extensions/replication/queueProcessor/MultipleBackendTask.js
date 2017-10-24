@@ -382,7 +382,7 @@ class MultipleBackendTask extends QueueProcessorTask {
 
     _getAndPutObjectTagging(sourceEntry, destEntry, log, cb) {
         this._retry({
-            actionDesc: 'stream part data',
+            actionDesc: 'send object tagging XML data',
             entry: sourceEntry,
             actionFunc: done => this._getAndPutObjectTaggingOnce(
                sourceEntry, destEntry, log, done),
@@ -413,7 +413,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -436,7 +436,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         incomingMsg.on('error', err => {
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -491,6 +491,53 @@ class MultipleBackendTask extends QueueProcessorTask {
                 }
                 return doneOnce();
             });
+        });
+    }
+
+    _deleteObjectTagging(sourceEntry, destEntry, log, cb) {
+        this._retry({
+            actionDesc: 'delete object tagging',
+            entry: sourceEntry,
+            actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry,
+                destEntry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            onRetryFunc: err => {
+                if (err.origin === 'target') {
+                    this.destHosts.pickNextHost();
+                    this._setupDestClients(this.targetRole, log);
+                }
+            },
+            log,
+        }, cb);
+    }
+
+    _deleteObjectTaggingOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating delete object tagging', {
+            entry: sourceEntry.getLogInfo(),
+        });
+        const destReq = this.backbeatSource.multipleBackendDeleteObjectTagging({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            VersionId: destEntry.getEncodedVersionId(),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: destEntry.getReplicationStorageClass(),
+        });
+        attachReqUids(destReq, log);
+        return destReq.send(err => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'target';
+                log.error('an error occurred on deleting object tagging', {
+                    method: 'MultipleBackendTask._deleteObjectTaggingOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            return doneOnce();
         });
     }
 
@@ -581,6 +628,10 @@ class MultipleBackendTask extends QueueProcessorTask {
                 }
                 if (content.includes('PUT_TAGGING')) {
                     return this._getAndPutObjectTagging(sourceEntry, destEntry,
+                        log, next);
+                }
+                if (content.includes('DELETE_TAGGING')) {
+                    return this._deleteObjectTagging(sourceEntry, destEntry,
                         log, next);
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
