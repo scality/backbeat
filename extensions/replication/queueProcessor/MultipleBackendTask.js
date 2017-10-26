@@ -95,12 +95,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._getAndPutMPUPartOnce(sourceEntry,
                 destEntry, part, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -185,12 +179,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
                 destEntry, part, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -304,7 +292,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -314,7 +302,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3', {
-                method: 'MultipleBackendTask._getAndPutData',
+                method: 'MultipleBackendTask._getAndPutPartOnce',
                 entry: sourceEntry.getLogInfo(),
                 origin: 'source',
                 peer: this.sourceConfig.s3,
@@ -327,7 +315,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         incomingMsg.on('error', err => {
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -340,7 +328,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3', {
                 entry: destEntry.getLogInfo(),
-                method: 'MultipleBackendTask._getAndPutData',
+                method: 'MultipleBackendTask._getAndPutPartOnce',
                 origin: 'source',
                 peer: this.sourceConfig.s3,
                 error: err.message,
@@ -368,7 +356,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
                 log.error('an error occurred on putData to S3', {
-                    method: 'MultipleBackendTask._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: destEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -388,12 +376,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._getAndPutObjectTaggingOnce(
                sourceEntry, destEntry, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -503,12 +485,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry,
                 destEntry, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -572,12 +548,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._putDeleteMarkerOnce(
                 sourceEntry, destEntry, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
