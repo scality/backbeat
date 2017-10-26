@@ -372,9 +372,9 @@
                         "location": "header",
                         "locationName": "X-Scal-Storage-Class"
                     },
-                    "VersionId": {
+                    "DataStoreVersionId": {
                         "location": "header",
-                        "locationName": "X-Scal-Version-Id"
+                        "locationName": "X-Scal-Data-Store-Version-Id"
                     },
                     "Body": {
                         "type": "blob"
@@ -408,10 +408,6 @@
                         "location": "uri",
                         "locationName": "Key"
                     },
-                    "VersionId": {
-                        "location": "header",
-                        "locationName": "X-Scal-Version-Id"
-                    },
                     "StorageClass": {
                         "location": "header",
                         "locationName": "X-Scal-Storage-Class"
@@ -419,6 +415,10 @@
                     "StorageType": {
                         "location": "header",
                         "locationName": "X-Scal-Storage-Type"
+                    },
+                    "DataStoreVersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Data-Store-Version-Id"
                     },
                     "Body": {
                         "type": "blob"

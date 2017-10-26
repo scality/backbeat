@@ -266,7 +266,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                     Body: JSON.stringify(data),
                 });
                 attachReqUids(destReq, log);
-                return destReq.send(err => {
+                return destReq.send((err, data) => {
                     if (err) {
                         // eslint-disable-next-line no-param-reassign
                         err.origin = 'target';
@@ -280,6 +280,8 @@ class MultipleBackendTask extends QueueProcessorTask {
                         });
                         return doneOnce(err);
                     }
+                    sourceEntry
+                        .setReplicationDataStoreVersionId(data.versionId);
                     return doneOnce();
                 });
             });
@@ -374,8 +376,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                 });
                 return doneOnce(err);
             }
-            // TODO Set target object's versionId and update source metadata
-            // with value
+            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
             return doneOnce(null, data);
         });
     }
@@ -464,15 +465,16 @@ class MultipleBackendTask extends QueueProcessorTask {
                 entry: destEntry.getLogInfo(),
             });
             const destReq = this.backbeatSource
-               .multipleBackendPutObjectTagging({
-                   Bucket: destEntry.getBucket(),
-                   Key: destEntry.getObjectKey(),
-                   ContentLength: tagsXML.length,
-                   StorageType: destEntry.getReplicationStorageType(),
-                   StorageClass: destEntry.getReplicationStorageClass(),
-                   VersionId: destEntry.getEncodedVersionId(),
-                   Body: tagsXML,
-               });
+                .multipleBackendPutObjectTagging({
+                    Bucket: destEntry.getBucket(),
+                    Key: destEntry.getObjectKey(),
+                    ContentLength: tagsXML.length,
+                    StorageType: destEntry.getReplicationStorageType(),
+                    StorageClass: destEntry.getReplicationStorageClass(),
+                    DataStoreVersionId:
+                        destEntry.getReplicationDataStoreVersionId(),
+                    Body: tagsXML,
+                });
             attachReqUids(destReq, log);
             return destReq.send(err => {
                 if (err) {
@@ -519,9 +521,9 @@ class MultipleBackendTask extends QueueProcessorTask {
         const destReq = this.backbeatSource.multipleBackendDeleteObjectTagging({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            VersionId: destEntry.getEncodedVersionId(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
+            DataStoreVersionId: destEntry.getReplicationDataStoreVersionId(),
         });
         attachReqUids(destReq, log);
         return destReq.send(err => {
