@@ -77,7 +77,7 @@
         "MultipleBackendPutObject": {
             "http": {
                 "method": "PUT",
-                "requestUri": "/_/backbeat/multiplebackendputobject/{Bucket}/{Key+}"
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=putobject"
             },
             "input": {
                 "type": "structure",
@@ -136,10 +136,54 @@
                 }
             }
         },
-        "MultipleBackendPutObjectTagging": {
+        "MultipleBackendDeleteObject": {
+            "http": {
+                "method": "DELETE",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=deleteobject"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "MultipleBackendPutMPUPart": {
             "http": {
                 "method": "PUT",
-                "requestUri": "/_/backbeat/multiplebackendputobjecttagging/{Bucket}/{Key+}"
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=putpart"
             },
             "input": {
                 "type": "structure",
@@ -170,9 +214,66 @@
                         "location": "header",
                         "locationName": "X-Scal-Storage-Class"
                     },
+                    "PartNumber": {
+                        "location": "header",
+                        "locationName": "X-Scal-Part-Number",
+                        "type": "long"
+                    },
+                    "UploadId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Upload-Id"
+                    },
+                    "Body": {
+                        "streaming": true,
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "partNumber": {
+                        "type": "long"
+                    },
+                    "ETag": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "MultipleBackendInitiateMPU": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=initiatempu"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
                     "VersionId": {
                         "location": "header",
                         "locationName": "X-Scal-Version-Id"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
                     },
                     "Body": {
                         "type": "blob"
@@ -182,13 +283,65 @@
             },
             "output": {
                 "type": "structure",
-                "members": {}
+                "members": {
+                    "uploadId": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
+        "MultipleBackendCompleteMPU": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=completempu"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "UploadId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Upload-Id"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "MultipleBackendPutObjectTagging": {
             "http": {
-                "method": "PUT",
-                "requestUri": "/_/backbeat/multiplebackendputobjecttagging/{Bucket}/{Key+}"
+                "method": "POST",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=puttagging"
             },
             "input": {
                 "type": "structure",
