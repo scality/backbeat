@@ -20,10 +20,12 @@ function _createSetupReplication(command, options, log) {
     const targetBucket = options.targetBucket;
     const sourceProfile = options.sourceProfile;
     const targetProfile = options.targetProfile;
+    const siteName = options.siteName;
+    const targetIsExternal = siteName !== undefined;
 
     // Required options
     if (!sourceBucket || !targetBucket ||
-        !sourceProfile || !targetProfile) {
+        !sourceProfile || (!targetProfile && !targetIsExternal)) {
         program.commands.find(n => n._name === command).help();
         process.exit(1);
     }
@@ -47,6 +49,8 @@ function _createSetupReplication(command, options, log) {
             credentials: targetCredentials,
             hosts: new RoundRobin(destination.bootstrapList[0].servers),
             transport: destination.transport,
+            isExternal: targetIsExternal,
+            siteName,
         },
         log,
     });
@@ -59,8 +63,10 @@ program
     .option('--source-profile <name>',
             '[required] source aws/credentials profile')
     .option('--target-bucket <name>', '[required] target bucket name')
-    .option('--target-profile <name>',
-            '[required] target aws/credentials profile')
+    .option('--target-profile <name>', '[optional] target aws/credentials ' +
+            'profile (optional if using external location)')
+    .option('--site-name <name>', '[optional] the site name (required if ' +
+            'using external location)')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
         const s = _createSetupReplication('setup', options, log);
@@ -83,8 +89,10 @@ program
     .option('--source-profile <name>',
             '[required] source aws/credentials profile')
     .option('--target-bucket <name>', '[required] target bucket name')
-    .option('--target-profile <name>',
-            '[required] target aws/credentials profile')
+    .option('--target-profile <name>', '[optional] target aws/credentials ' +
+            'profile (optional if using external location)')
+    .option('--site-name <name>', '[optional] the site name (required if ' +
+            'using external location)')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
         const s = _createSetupReplication('validate', options, log);
