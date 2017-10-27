@@ -372,9 +372,53 @@
                         "location": "header",
                         "locationName": "X-Scal-Storage-Class"
                     },
-                    "VersionId": {
+                    "DataStoreVersionId": {
                         "location": "header",
-                        "locationName": "X-Scal-Version-Id"
+                        "locationName": "X-Scal-Data-Store-Version-Id"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
+        },
+        "MultipleBackendDeleteObjectTagging": {
+            "http": {
+                "method": "DELETE",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=deleteobjecttagging"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "DataStoreVersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Data-Store-Version-Id"
                     },
                     "Body": {
                         "type": "blob"
