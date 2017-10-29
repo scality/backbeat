@@ -329,26 +329,44 @@ class QueueProcessorTask {
             PartNumber: partNumber,
         });
         attachReqUids(sourceReq, log);
+        let sourceErr = null;
+        let abort = false;
         sourceReq.on('error', err => {
+            if (sourceErr) {
+                return undefined;
+            }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
-            if (err.statusCode === 404) {
-                return doneOnce(err);
-            }
-            log.error('an error occurred on getObject from S3',
-                { method: 'QueueProcessor._getAndPutData',
+            sourceErr = err;
+            if (err.statusCode !== 404) {
+                log.error('an error occurred on getObject from S3', {
+                    method: 'QueueProcessor._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     part,
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message,
-                    httpStatus: err.statusCode });
-            return doneOnce(err);
+                    httpStatus: err.statusCode,
+                });
+            }
+            abort = true;
+            sourceReq.abort();
+            return undefined;
+        });
+        sourceReq.on('complete', () => {
+            if (abort) {
+                return doneOnce(sourceErr);
+            }
+            return undefined;
         });
         const incomingMsg = sourceReq.createReadStream();
         incomingMsg.on('error', err => {
+            if (sourceErr) {
+                return undefined;
+            }
             if (err.statusCode === 404) {
-                return doneOnce(errors.ObjNotFound);
+                sourceErr = errors.ObjNotFound;
+                return incomingMsg.end();
             }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
@@ -359,7 +377,8 @@ class QueueProcessorTask {
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message });
-            return doneOnce(err);
+            sourceErr = err;
+            return incomingMsg.end();
         });
         log.debug('putting data', { entry: destEntry.getLogInfo(), part });
         const destReq = this.backbeatDest.putData({
@@ -373,6 +392,9 @@ class QueueProcessorTask {
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {
+                if (sourceErr) {
+                    return doneOnce(sourceErr);
+                }
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
                 log.error('an error occurred on putData to S3',
