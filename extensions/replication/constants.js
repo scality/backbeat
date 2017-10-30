@@ -7,6 +7,12 @@ const constants = {
     metricsExtension: 'crr',
     metricsTypeQueued: 'queued',
     metricsTypeProcessed: 'processed',
+    redisKeys: {
+        ops: 'bb:crr:ops',
+        bytes: 'bb:crr:bytes',
+        opsDone: 'bb:crr:opsdone',
+        bytesDone: 'bb:crr:bytesdone',
+    },
 };
 
 module.exports = constants;
