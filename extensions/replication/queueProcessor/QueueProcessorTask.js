@@ -447,7 +447,8 @@ class QueueProcessorTask {
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0,
+                connectTimeout: 0 },
             maxRetries: 0,
         });
         this.backbeatSource = new BackbeatClient({
@@ -455,7 +456,8 @@ class QueueProcessorTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceAuthManager.getCredentials(),
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0,
+                connectTimeout: 0 },
             maxRetries: 0,
         });
     }
@@ -471,7 +473,8 @@ class QueueProcessorTask {
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destAuthManager.getCredentials(),
             sslEnabled: this.destConfig.transport === 'https',
-            httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.destHTTPAgent, timeout: 0,
+                connectTimeout: 0 },
             maxRetries: 0,
         });
     }
