@@ -452,11 +452,11 @@ class QueueProcessor {
             const nextPart = locations[i + 1];
             const nextPartNum = nextPart ?
                 sourceEntry.getPartNumber(nextPart) : undefined;
-            if (currPartNum === nextPartNum) {
-                partTotal += sourceEntry.getPartSize(currPart);
-            } else {
-                currPart.size = partTotal += sourceEntry.getPartSize(currPart);
-                reducedLocations.push(currPart);
+            partTotal += sourceEntry.getPartSize(currPart);
+            if (currPartNum !== nextPartNum) {
+                const consolidatedPart = Object.assign({}, currPart,
+                                                       { size: partTotal });
+                reducedLocations.push(consolidatedPart);
                 partTotal = 0;
             }
         }
