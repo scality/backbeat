@@ -15,7 +15,7 @@ const trustPolicy = {
 };
 
 function _buildResourcePolicy(source, target) {
-    return {
+    const policy = {
         Version: '2012-10-17',
         Statement: [
             {
@@ -48,6 +48,11 @@ function _buildResourcePolicy(source, target) {
             },
         ],
     };
+    if (this._targetIsExternal) {
+        policy.Statement[0].Action.push('s3:GetObjectVersionTagging');
+        policy.Statement[2].Action.push('s3:ReplicateTags');
+    }
+    return policy;
 }
 
 function _setupS3Client(transport, endpoint, credentials) {
@@ -103,6 +108,10 @@ class SetupReplication {
      * @param {RoundRobin} params.target.hosts - destination hosts
      * @param {String} [params.target.transport] - transport protocol for
      *   target (http/https)
+     * @param {Boolean} params.target.isExternal - whether target bucket
+     *   is on an external location
+     * @param {String} [params.target.siteName] - the site name where the target
+     *   bucket exists, if the target is on an external location
      * @param {Object} params.log - werelogs request logger object
      */
     constructor(params) {
@@ -110,12 +119,15 @@ class SetupReplication {
         this._log = log;
         this._sourceBucket = source.bucket;
         this._targetBucket = target.bucket;
+        this._targetIsExternal = target.isExternal;
+        this._targetSiteName = target.siteName;
         this.destHosts = target.hosts;
         const destHost = this.destHosts.pickHost();
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`, source.credentials),
-            target: _setupS3Client(target.transport,
+            target: target.isExternal ? undefined :
+                _setupS3Client(target.transport,
                 `${destHost.host}:${destHost.port}`, target.credentials),
         };
         this._iamClients = {
@@ -123,8 +135,8 @@ class SetupReplication {
                 `${source.vault.host}:${source.vault.adminPort}`,
                 source.credentials),
             // XXX use target port through nginx gateway
-            target: _setupIAMClient('target', target.transport,
-                `${destHost.host}:${source.vault.adminPort}`,
+            target: target.isExternal ? undefined : _setupIAMClient('target',
+                target.transport, `${destHost.host}:${source.vault.adminPort}`,
                 target.credentials),
         };
     }
@@ -132,17 +144,23 @@ class SetupReplication {
     checkSanity(cb) {
         return async.waterfall([
             next => this._isValidBucket('source', next),
-            next => this._isValidBucket('target', next),
+            next => (this._targetIsExternal ? next() :
+                this._isValidBucket('target', next)),
             next => this._isVersioningEnabled('source', next),
-            next => this._isVersioningEnabled('target', next),
+            next => (this._targetIsExternal ? next() :
+                this._isVersioningEnabled('target', next)),
             next => this._isReplicationEnabled('source', next),
             (arns, next) => this._arnParser(arns, next),
             (arnObj, next) => this._isValidRole('source', arnObj, next),
-            (arnObj, next) => this._isValidRole('target', arnObj, next),
+            (arnObj, next) => (this._targetIsExternal ? next() :
+                this._isValidRole('target', arnObj, next)),
         ], cb);
     }
 
     _arnParser(arns, cb) {
+        if (this._targetIsExternal) {
+            return cb(null, { source: arns });
+        }
         const [src, des] = arns.split(',');
 
         return cb(null, {
@@ -418,14 +436,16 @@ class SetupReplication {
     }
 
     _enableReplication(roleArns, cb) {
+        const destination = { Bucket: `arn:aws:s3:::${this._targetBucket}` };
+        if (this._targetSiteName !== undefined) {
+            destination.StorageClass = this._targetSiteName;
+        }
         const params = {
             Bucket: this._sourceBucket,
             ReplicationConfiguration: {
                 Role: roleArns,
                 Rules: [{
-                    Destination: {
-                        Bucket: `arn:aws:s3:::${this._targetBucket}`,
-                    },
+                    Destination: destination,
                     Prefix: '',
                     Status: 'Enabled',
                 }],
@@ -451,25 +471,33 @@ class SetupReplication {
         return async.waterfall([
             next => async.series({
                 sourceBucket: done => this._createBucket('source', done),
-                targetBucket: done => this._createBucket('target', done),
+                targetBucket: done => (this._targetIsExternal ? done() :
+                    this._createBucket('target', done)),
                 sourceRole: done => this._createRole('source', done),
-                targetRole: done => this._createRole('target', done),
+                targetRole: done => (this._targetIsExternal ? done() :
+                    this._createRole('target', done)),
                 sourcePolicy: done => this._createPolicy('source', done),
-                targetPolicy: done => this._createPolicy('target', done),
+                targetPolicy: done => (this._targetIsExternal ? done() :
+                        this._createPolicy('target', done)),
             }, next),
             (data, next) => {
                 const sourceRole = data.sourceRole.Role;
-                const targetRole = data.targetRole.Role;
+                const targetRole = this._targetIsExternal ? undefined :
+                    data.targetRole.Role;
                 const sourcePolicyArn = data.sourcePolicy.Policy.Arn;
-                const targetPolicyArn = data.targetPolicy.Policy.Arn;
-                const roleArns = `${sourceRole.Arn},${targetRole.Arn}`;
+                const targetPolicyArn = this._targetIsExternal ? undefined :
+                    data.targetPolicy.Policy.Arn;
+                const roleArns = this._targetIsExternal ? sourceRole.Arn :
+                    `${sourceRole.Arn},${targetRole.Arn}`;
                 async.series([
                     done => this._enableVersioning('source', done),
-                    done => this._enableVersioning('target', done),
+                    done => (this._targetIsExternal ? done() :
+                        this._enableVersioning('target', done)),
                     done => this._attachResourcePolicy(sourcePolicyArn,
                         sourceRole.RoleName, 'source', done),
-                    done => this._attachResourcePolicy(targetPolicyArn,
-                        targetRole.RoleName, 'target', done),
+                    done => (this._targetIsExternal ? done() :
+                        this._attachResourcePolicy(targetPolicyArn,
+                        targetRole.RoleName, 'target', done)),
                     done => this._enableReplication(roleArns, done),
                 ], next);
             },
