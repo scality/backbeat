@@ -10,6 +10,12 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     filter(entry) {
+      const value = JSON.parse(entry.value);
+      const queueEntry = new QueueEntry(entry.bucket, entry.key, value);
+      const sanityCheckRes = queueEntry.checkSanity();
+      if (sanityCheckRes) {
+        return;
+      }
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(entry));

@@ -1,6 +1,6 @@
 {
     "zookeeper": {
-        "connectionString": "127.0.0.1:2181/backbeat",
+        "connectionString": "127.0.0.1:2181",
         "autoCreateNamespace": false
     },
     "kafka": {
@@ -9,14 +9,14 @@
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
-        "zookeeperPath": "/queue-populator",
+        "zookeeperPath": "/backbeat",
         "logSource": "dmd",
         "bucketd": {
             "host": "127.0.0.1",
             "port": 9000
         },
         "dmd": {
-            "host": "127.0.0.1",
+            "host": "clueso102",
             "port": 9990
         }
     },
@@ -24,7 +24,7 @@
         "clueso": {
             "s3": {
                 "host": "127.0.0.1",
-                "port": 8000,
+                "port": 80,
                 "transport": "http",
                 "accessKeyId": "accessKey1",
                 "secretKeyId": "verySecretKey1"
@@ -68,7 +68,7 @@
                     "account": "lisa"
                 }
             },
-            "topic": "backbeat-replication",
+            "topic": "backbeat",
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
