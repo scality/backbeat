@@ -55,6 +55,7 @@ class QueueProcessor {
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
+        this.destHosts = null;
 
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
@@ -63,13 +64,14 @@ class QueueProcessor {
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
         this.destHTTPAgent = new http.Agent({ keepAlive: true });
 
-        // FIXME support multiple destination sites
-        if (destConfig.bootstrapList.length > 0) {
-            this.destHosts =
-                new RoundRobin(destConfig.bootstrapList[0].servers,
-                               { defaultPort: 80 });
-        } else {
-            this.destHosts = null;
+        // FIXME support multiple cloud-server destination sites
+        if (Array.isArray(destConfig.bootstrapList)) {
+            destConfig.bootstrapList.forEach(dest => {
+                if (Array.isArray(dest.servers)) {
+                    this.destHosts =
+                        new RoundRobin(dest.servers, { defaultPort: 80 });
+                }
+            });
         }
 
         if (sourceConfig.auth.type === 'role') {

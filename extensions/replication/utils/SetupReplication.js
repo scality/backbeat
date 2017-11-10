@@ -122,7 +122,8 @@ class SetupReplication {
         this._targetIsExternal = target.isExternal;
         this._targetSiteName = target.siteName;
         this.destHosts = target.hosts;
-        const destHost = this.destHosts.pickHost();
+        const destHost = target.isExternal ?
+            undefined : this.destHosts.pickHost();
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`, source.credentials),
