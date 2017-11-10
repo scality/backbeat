@@ -35,7 +35,8 @@ function _createSetupReplication(command, options, log) {
               new SharedIniFileCredentials({ profile: sourceProfile });
     const targetCredentials =
               new SharedIniFileCredentials({ profile: targetProfile });
-
+    const destinationEndpoint =
+        destination.bootstrapList.find(dest => Array.isArray(dest.servers));
     return new SetupReplication({
         source: {
             bucket: sourceBucket,
@@ -47,7 +48,8 @@ function _createSetupReplication(command, options, log) {
         target: {
             bucket: targetBucket,
             credentials: targetCredentials,
-            hosts: new RoundRobin(destination.bootstrapList[0].servers),
+            hosts: targetIsExternal ?
+                undefined : new RoundRobin(destinationEndpoint.servers),
             transport: destination.transport,
             isExternal: targetIsExternal,
             siteName,
