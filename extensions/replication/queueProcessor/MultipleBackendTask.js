@@ -158,7 +158,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putting MPU part to S3', {
                     method: 'MultipleBackendTask._getAndPutMPUPartOnce',
                     entry: destEntry.getLogInfo(),
@@ -208,7 +208,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on initating MPU to S3', {
                     method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
                     entry: destEntry.getLogInfo(),
@@ -234,7 +234,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             (err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
+                    err.origin = 'source';
                     log.error('an error occurred on putting MPU part to S3', {
                         method:
                             'MultipleBackendTask._getAndPutMultipartUploadOnce',
@@ -257,7 +257,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                 return destReq.send((err, data) => {
                     if (err) {
                         // eslint-disable-next-line no-param-reassign
-                        err.origin = 'target';
+                        err.origin = 'source';
                         log.error('an error occurred on completing MPU to S3', {
                             method: 'MultipleBackendTask.' +
                                 '_getAndPutMultipartUploadOnce',
@@ -354,7 +354,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putData to S3', {
                     method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: destEntry.getLogInfo(),
@@ -461,7 +461,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             return destReq.send(err => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
+                    err.origin = 'source';
                     log.error('an error occurred putting object tagging to ' +
                     'S3', {
                         method:
@@ -505,7 +505,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send(err => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on deleting object tagging', {
                     method: 'MultipleBackendTask._deleteObjectTaggingOnce',
                     entry: destEntry.getLogInfo(),
@@ -567,7 +567,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send(err => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putting delete marker to S3', {
                     method: 'MultipleBackendTask._putDeleteMarkerOnce',
                     entry: destEntry.getLogInfo(),
