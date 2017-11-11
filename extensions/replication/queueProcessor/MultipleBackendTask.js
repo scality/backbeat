@@ -203,6 +203,12 @@ class MultipleBackendTask extends QueueProcessorTask {
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
+            UserMetaData: sourceEntry.getUserMetadata(),
+            ContentType: sourceEntry.getContentType(),
+            CacheControl: sourceEntry.getCacheControl() || undefined,
+            ContentDisposition:
+                sourceEntry.getContentDisposition() || undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
@@ -336,7 +342,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo() });
-
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
@@ -348,6 +353,12 @@ class MultipleBackendTask extends QueueProcessorTask {
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
+            UserMetaData: sourceEntry.getUserMetadata(),
+            ContentType: sourceEntry.getContentType() || undefined,
+            CacheControl: sourceEntry.getCacheControl() || undefined,
+            ContentDisposition:
+                sourceEntry.getContentDisposition() || undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);

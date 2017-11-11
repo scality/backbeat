@@ -73,6 +73,20 @@ class QueueEntry extends ObjectMD {
         return this.objectVersionedKey;
     }
 
+    getUserMetadata() {
+        const metaHeaders = {};
+        const data = this.getValue();
+        Object.keys(data).forEach(key => {
+            if (key.startsWith('x-amz-meta-')) {
+                metaHeaders[key] = data[key];
+            }
+        });
+        if (Object.keys(metaHeaders).length > 0) {
+            return JSON.stringify(metaHeaders);
+        }
+        return undefined;
+    }
+
     getLogInfo() {
         return {
             bucket: this.getBucket(),
