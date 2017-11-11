@@ -104,6 +104,26 @@
                         "location": "header",
                         "locationName": "Content-MD5"
                     },
+                    "ContentType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Type"
+                    },
+                    "UserMetaData": {
+                        "location": "header",
+                        "locationName": "X-Scal-User-Metadata"
+                    },
+                    "CacheControl": {
+                        "location": "header",
+                        "locationName": "X-Scal-Cache-Control"
+                    },
+                    "ContentDisposition": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Disposition"
+                    },
+                    "ContentEncoding": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Encoding"
+                    },
                     "CanonicalID": {
                         "location": "header",
                         "locationName": "X-Scal-Canonical-Id"
@@ -274,6 +294,26 @@
                     "StorageType": {
                         "location": "header",
                         "locationName": "X-Scal-Storage-Type"
+                    },
+                    "ContentType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Type"
+                    },
+                    "UserMetaData": {
+                        "location": "header",
+                        "locationName": "X-Scal-User-Metadata"
+                    },
+                    "CacheControl": {
+                        "location": "header",
+                        "locationName": "X-Scal-Cache-Control"
+                    },
+                    "ContentDisposition": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Disposition"
+                    },
+                    "ContentEncoding": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Encoding"
                     },
                     "Body": {
                         "type": "blob"
