@@ -5,7 +5,7 @@ const { hostPortJoi, bootstrapListJoi, logJoi } =
     require('../lib/config/configItems.joi.js');
 
 const authJoi = joi.object({
-    type: joi.alternatives().try('account', 'role').required(),
+    type: joi.alternatives().try('account', 'role', 'service').required(),
     account: joi.string(),
     vault: hostPortJoi.keys({
         adminPort: joi.number().greater(0).optional(),
