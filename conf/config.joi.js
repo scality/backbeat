@@ -1,7 +1,20 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
+
+const { hostPortJoi, bootstrapListJoi, logJoi } =
+    require('../lib/config/configItems.joi.js');
+
+const authJoi = joi.object({
+    type: joi.alternatives().try('account', 'role', 'service').required(),
+    account: joi.string(),
+    vault: hostPortJoi.keys({
+        adminPort: joi.number().greater(0).optional(),
+    }),
+});
+
+const transportJoi = joi.alternatives().try('http', 'https')
+    .default('http');
 
 const joiSchema = {
     zookeeper: {
