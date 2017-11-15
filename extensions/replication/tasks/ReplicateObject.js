@@ -6,6 +6,12 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+
+const {
+    StaticFileAccountAuthManager,
+    ProvisionedServiceAccountAuthManager,
+} = require('./AccountAuthManager');
+const RoleAuthManager = require('./RoleAuthManager');
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const AccountCredentials =
@@ -45,7 +51,10 @@ class ReplicateObject extends BackbeatTask {
 
     _createCredentials(where, authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new AccountCredentials(authConfig, log);
+            return new StaticFileAccountAuthManager(authConfig, log);
+        }
+        if (authConfig.type === 'service') {
+            return new ProvisionedServiceAccountAuthManager(authConfig, log);
         }
         let vaultclient;
         if (where === 'source') {
