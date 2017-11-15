@@ -2,15 +2,13 @@ const assert = require('assert');
 const AWS = require('aws-sdk');
 
 const errors = require('arsenal').errors;
-
-const authdata = require('../../../conf/authdata.json');
+const management = require('../../../lib/management');
 
 class AccountAuthManager {
     constructor(authConfig, log) {
-        assert.strictEqual(authConfig.type, 'account');
-
         this._log = log;
-        const accountInfo = authdata.accounts.find(
+        this.initAuthData();
+        const accountInfo = this.getAuthData().accounts.find(
             account => account.name === authConfig.account);
         if (accountInfo === undefined) {
             throw Error(`No such account registered: ${authConfig.account}`);
@@ -54,4 +52,37 @@ class AccountAuthManager {
     }
 }
 
-module.exports = AccountAuthManager;
+class StaticFileAccountAuthManager extends AccountAuthManager {
+    constructor(authConfig, log) {
+        assert.strictEqual(authConfig.type, 'account');
+        super(authConfig, log);
+    }
+
+    initAuthData() {
+        this._authdata = require('../../../conf/authdata.json');
+    }
+
+    getAuthData() {
+        return this._authdata;
+    }
+}
+
+class ProvisionedServiceAccountAuthManager extends AccountAuthManager {
+    constructor(authConfig, log) {
+        assert.strictEqual(authConfig.type, 'service');
+        super(authConfig, log);
+    }
+
+    initAuthData() {
+        this._authdata = management.getLatestServiceAccountCredentials();
+    }
+
+    getAuthData() {
+        return this._authdata;
+    }
+}
+
+module.exports = {
+    StaticFileAccountAuthManager,
+    ProvisionedServiceAccountAuthManager,
+};

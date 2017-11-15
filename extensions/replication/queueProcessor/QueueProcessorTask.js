@@ -9,7 +9,10 @@ const VaultClient = require('vaultclient').Client;
 const { proxyPath } = require('../constants');
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
-const AccountAuthManager = require('./AccountAuthManager');
+const {
+    StaticFileAccountAuthManager,
+    ProvisionedServiceAccountAuthManager,
+} = require('./AccountAuthManager');
 const RoleAuthManager = require('./RoleAuthManager');
 const attachReqUids = require('../utils/attachReqUids');
 
@@ -42,7 +45,10 @@ class QueueProcessorTask {
 
     _createAuthManager(where, authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new AccountAuthManager(authConfig, log);
+            return new StaticFileAccountAuthManager(authConfig, log);
+        }
+        if (authConfig.type === 'service') {
+            return new ProvisionedServiceAccountAuthManager(authConfig, log);
         }
         let vaultClient;
         if (where === 'source') {
