@@ -10,6 +10,8 @@ const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const destConfig = repConfig.destination;
 
+const { initManagement } = require('../../../lib/management');
+
 const queueProcessor = new QueueProcessor(zkConfig,
                                           sourceConfig, destConfig,
                                           repConfig);
@@ -17,4 +19,15 @@ const queueProcessor = new QueueProcessor(zkConfig,
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-queueProcessor.start();
+function initAndStart() {
+    initManagement(error => {
+        if (error) {
+            console.error('could not load managment db', error);
+            setTimeout(initAndStart, 5000);
+            return;
+        }
+        queueProcessor.start();
+    });
+}
+
+initAndStart();

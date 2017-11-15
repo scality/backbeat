@@ -35,6 +35,7 @@
     "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
     "kafka-node": "^1.6.0",
+    "node-forge": "^0.7.1",
     "node-schedule": "^1.2.0",
     "vaultclient": "github:scality/vaultclient",
     "werelogs": "scality/werelogs"
