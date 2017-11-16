@@ -786,7 +786,8 @@ describe('queue processor functional tests with mocking', () => {
                     });
                 });
 
-            ['getAccountsCanonicalIds'].forEach(action => {
+            ['getAccountsCanonicalIds',
+            'assumeRoleBackbeat'].forEach(action => {
                 [errors.InternalError].forEach(error => {
                     it(`should retry on ${error.code} (${error.message}) ` +
                     `from target Vault on ${action}`, done => {
