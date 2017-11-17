@@ -5,12 +5,12 @@ const werelogs = require('werelogs');
 const QueueProcessor = require('./QueueProcessor');
 
 const config = require('../../../conf/Config');
-const zkConfig = config.zookeeper;
+const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const destConfig = repConfig.destination;
 
-const queueProcessor = new QueueProcessor(zkConfig,
+const queueProcessor = new QueueProcessor(kafkaConfig,
                                           sourceConfig, destConfig,
                                           repConfig);
 
