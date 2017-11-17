@@ -27,11 +27,6 @@ RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
 
 #
-# Configure build env
-#
-ENV CXX=g++-4.9
-
-#
 # Install nodejs packages needed by backbeat
 #
 COPY package.json /usr/lib/package.json
