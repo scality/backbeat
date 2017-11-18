@@ -8,6 +8,7 @@ machine:
         version: 6.9.5
     services:
         - docker
+        - redis
     environment:
         CXX: g++-4.9
 
