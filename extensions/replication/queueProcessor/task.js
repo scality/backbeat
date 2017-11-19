@@ -26,7 +26,13 @@ function initAndStart() {
             setTimeout(initAndStart, 5000);
             return;
         }
+        console.log('management init done');
         queueProcessor.start();
+        // setInterval(initManagement, 5000, error => {
+        //     if (error) {
+        //         console.error('could not refresh management db', error);
+        //     }
+        // });
     });
 }
 
