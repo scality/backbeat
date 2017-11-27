@@ -95,12 +95,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._getAndPutMPUPartOnce(sourceEntry,
                 destEntry, part, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -164,7 +158,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putting MPU part to S3', {
                     method: 'MultipleBackendTask._getAndPutMPUPartOnce',
                     entry: destEntry.getLogInfo(),
@@ -185,12 +179,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
                 destEntry, part, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -215,12 +203,18 @@ class MultipleBackendTask extends QueueProcessorTask {
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
+            UserMetaData: sourceEntry.getUserMetadata(),
+            ContentType: sourceEntry.getContentType(),
+            CacheControl: sourceEntry.getCacheControl() || undefined,
+            ContentDisposition:
+                sourceEntry.getContentDisposition() || undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on initating MPU to S3', {
                     method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
                     entry: destEntry.getLogInfo(),
@@ -246,7 +240,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             (err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
+                    err.origin = 'source';
                     log.error('an error occurred on putting MPU part to S3', {
                         method:
                             'MultipleBackendTask._getAndPutMultipartUploadOnce',
@@ -266,10 +260,10 @@ class MultipleBackendTask extends QueueProcessorTask {
                     Body: JSON.stringify(data),
                 });
                 attachReqUids(destReq, log);
-                return destReq.send(err => {
+                return destReq.send((err, data) => {
                     if (err) {
                         // eslint-disable-next-line no-param-reassign
-                        err.origin = 'target';
+                        err.origin = 'source';
                         log.error('an error occurred on completing MPU to S3', {
                             method: 'MultipleBackendTask.' +
                                 '_getAndPutMultipartUploadOnce',
@@ -280,6 +274,8 @@ class MultipleBackendTask extends QueueProcessorTask {
                         });
                         return doneOnce(err);
                     }
+                    sourceEntry
+                        .setReplicationDataStoreVersionId(data.versionId);
                     return doneOnce();
                 });
             });
@@ -302,7 +298,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -312,7 +308,7 @@ class MultipleBackendTask extends QueueProcessorTask {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3', {
-                method: 'MultipleBackendTask._getAndPutData',
+                method: 'MultipleBackendTask._getAndPutPartOnce',
                 entry: sourceEntry.getLogInfo(),
                 origin: 'source',
                 peer: this.sourceConfig.s3,
@@ -325,7 +321,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         incomingMsg.on('error', err => {
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -338,7 +334,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3', {
                 entry: destEntry.getLogInfo(),
-                method: 'MultipleBackendTask._getAndPutData',
+                method: 'MultipleBackendTask._getAndPutPartOnce',
                 origin: 'source',
                 peer: this.sourceConfig.s3,
                 error: err.message,
@@ -346,7 +342,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo() });
-
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
@@ -358,15 +353,21 @@ class MultipleBackendTask extends QueueProcessorTask {
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
+            UserMetaData: sourceEntry.getUserMetadata(),
+            ContentType: sourceEntry.getContentType() || undefined,
+            CacheControl: sourceEntry.getCacheControl() || undefined,
+            ContentDisposition:
+                sourceEntry.getContentDisposition() || undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putData to S3', {
-                    method: 'MultipleBackendTask._getAndPutData',
+                    method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: destEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -374,25 +375,18 @@ class MultipleBackendTask extends QueueProcessorTask {
                 });
                 return doneOnce(err);
             }
-            // TODO Set target object's versionId and update source metadata
-            // with value
+            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
             return doneOnce(null, data);
         });
     }
 
     _getAndPutObjectTagging(sourceEntry, destEntry, log, cb) {
         this._retry({
-            actionDesc: 'stream part data',
+            actionDesc: 'send object tagging XML data',
             entry: sourceEntry,
             actionFunc: done => this._getAndPutObjectTaggingOnce(
                sourceEntry, destEntry, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -413,7 +407,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             err.origin = 'source';
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -436,7 +430,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         incomingMsg.on('error', err => {
             if (err.statusCode === 404) {
                 log.error('the source object was not found', {
-                    method: 'QueueProcessor._getAndPutObjectTaggingOnce',
+                    method: 'MultipleBackendTask._getAndPutObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -464,20 +458,21 @@ class MultipleBackendTask extends QueueProcessorTask {
                 entry: destEntry.getLogInfo(),
             });
             const destReq = this.backbeatSource
-               .multipleBackendPutObjectTagging({
-                   Bucket: destEntry.getBucket(),
-                   Key: destEntry.getObjectKey(),
-                   ContentLength: tagsXML.length,
-                   StorageType: destEntry.getReplicationStorageType(),
-                   StorageClass: destEntry.getReplicationStorageClass(),
-                   VersionId: destEntry.getEncodedVersionId(),
-                   Body: tagsXML,
-               });
+                .multipleBackendPutObjectTagging({
+                    Bucket: destEntry.getBucket(),
+                    Key: destEntry.getObjectKey(),
+                    ContentLength: tagsXML.length,
+                    StorageType: destEntry.getReplicationStorageType(),
+                    StorageClass: destEntry.getReplicationStorageClass(),
+                    DataStoreVersionId:
+                        destEntry.getReplicationDataStoreVersionId(),
+                    Body: tagsXML,
+                });
             attachReqUids(destReq, log);
             return destReq.send(err => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
+                    err.origin = 'source';
                     log.error('an error occurred putting object tagging to ' +
                     'S3', {
                         method:
@@ -491,6 +486,47 @@ class MultipleBackendTask extends QueueProcessorTask {
                 }
                 return doneOnce();
             });
+        });
+    }
+
+    _deleteObjectTagging(sourceEntry, destEntry, log, cb) {
+        this._retry({
+            actionDesc: 'delete object tagging',
+            entry: sourceEntry,
+            actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry,
+                destEntry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, cb);
+    }
+
+    _deleteObjectTaggingOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating delete object tagging', {
+            entry: sourceEntry.getLogInfo(),
+        });
+        const destReq = this.backbeatSource.multipleBackendDeleteObjectTagging({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: destEntry.getReplicationStorageClass(),
+            DataStoreVersionId: destEntry.getReplicationDataStoreVersionId(),
+        });
+        attachReqUids(destReq, log);
+        return destReq.send(err => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('an error occurred on deleting object tagging', {
+                    method: 'MultipleBackendTask._deleteObjectTaggingOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            return doneOnce();
         });
     }
 
@@ -523,12 +559,6 @@ class MultipleBackendTask extends QueueProcessorTask {
             actionFunc: done => this._putDeleteMarkerOnce(
                 sourceEntry, destEntry, log, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, log);
-                }
-            },
             log,
         }, cb);
     }
@@ -548,7 +578,7 @@ class MultipleBackendTask extends QueueProcessorTask {
         return destReq.send(err => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
+                err.origin = 'source';
                 log.error('an error occurred on putting delete marker to S3', {
                     method: 'MultipleBackendTask._putDeleteMarkerOnce',
                     entry: destEntry.getLogInfo(),
@@ -581,6 +611,10 @@ class MultipleBackendTask extends QueueProcessorTask {
                 }
                 if (content.includes('PUT_TAGGING')) {
                     return this._getAndPutObjectTagging(sourceEntry, destEntry,
+                        log, next);
+                }
+                if (content.includes('DELETE_TAGGING')) {
+                    return this._deleteObjectTagging(sourceEntry, destEntry,
                         log, next);
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
