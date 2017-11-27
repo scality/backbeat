@@ -2,7 +2,7 @@ FROM node:6
 MAINTAINER Vianney Rancurel <vr@scality.com>
 
 RUN apt-get update \
-    && apt-get install -y jq python git build-essential supervisor --no-install-recommends \
+    && apt-get install -y jq netcat python git build-essential supervisor --no-install-recommends \
     && mkdir -p /var/log/supervisor \
     && mkdir -p /opt/backbeat
 
