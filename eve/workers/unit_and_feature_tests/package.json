@@ -1,0 +1,45 @@
+{
+  "name": "backbeat",
+  "version": "1.0.0",
+  "description": "Asynchronous queue and job manager",
+  "main": "index.js",
+  "scripts": {
+    "queue_populator": "node bin/queuePopulator.js",
+    "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "test": "mocha --recursive tests/unit",
+    "ft_test": "mocha --recursive tests/functional",
+    "bh_test": "mocha --recursive tests/behavior",
+    "lint": "eslint $(git ls-files '*.js')",
+    "lint_md": "mdlint $(git ls-files '*.md')"
+  },
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/scality/backbeat.git"
+  },
+  "author": "Scality Inc.",
+  "license": "Apache-2.0",
+  "bugs": {
+    "url": "https://github.com/scality/backbeat/issues"
+  },
+  "homepage": "https://github.com/scality/backbeat#readme",
+  "dependencies": {
+    "arsenal": "scality/Arsenal",
+    "async": "^2.3.0",
+    "aws-sdk": "2.147.0",
+    "backo": "^1.1.0",
+    "bucketclient": "scality/bucketclient",
+    "commander": "^2.11.0",
+    "eslint": "^2.4.0",
+    "eslint-config-airbnb": "^6.0.0",
+    "eslint-config-scality": "scality/Guidelines",
+    "eslint-plugin-react": "^4.2.3",
+    "joi": "^10.6",
+    "kafka-node": "^1.6.0",
+    "node-schedule": "^1.2.0",
+    "vaultclient": "github:scality/vaultclient",
+    "werelogs": "scality/werelogs"
+  },
+  "devDependencies": {
+    "mocha": "^3.3.0"
+  }
+}
