@@ -62,7 +62,15 @@ class CredentialsManager extends Credentials {
                     // instead of passing a possibly global arsenal
                     // error returned by vault client, because AWS
                     // client is transforming it its own way.
-                    return cb(err.customizeDescription(err.description));
+                    const newErr = err.customizeDescription(err.description);
+
+                    // Stick with the AWS SDK way of returning whether
+                    // the error is retryable
+                    newErr.retryable =
+                        (err.InternalError || err.code === 'InternalError' ||
+                         err.ServiceUnavailable ||
+                         err.code === 'ServiceUnavailable');
+                    return cb(newErr);
                 }
                 /*
                     {
