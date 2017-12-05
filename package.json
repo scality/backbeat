@@ -6,6 +6,7 @@
   "scripts": {
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "clueso_tasks": "node extensions/clueso/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive tests/functional",
     "bh_test": "mocha --recursive tests/behavior",
@@ -23,7 +24,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal",
+    "arsenal": "scality/Arsenal#ft/clueso",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
