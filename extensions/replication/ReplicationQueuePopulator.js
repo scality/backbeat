@@ -5,6 +5,7 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('./utils/ObjectQueueEntry');
 
+
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
@@ -39,6 +40,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const value = JSON.parse(entry.value);
         const queueEntry = new ObjectQueueEntry(entry.bucket,
                                                 entry.key, value);
+
         const sanityCheckRes = queueEntry.checkSanity();
         if (sanityCheckRes) {
             return;
@@ -49,8 +51,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
-                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(entry));
+           `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
+           JSON.stringify(entry));
     }
 }
 
