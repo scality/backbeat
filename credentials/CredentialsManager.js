@@ -67,9 +67,12 @@ class CredentialsManager extends Credentials {
                     // Stick with the AWS SDK way of returning whether
                     // the error is retryable
                     newErr.retryable =
-                        (err.InternalError || err.code === 'InternalError' ||
+                        (err.InternalError ||
+                         err.code === 'InternalError' ||
+                         err.code === 500 ||
                          err.ServiceUnavailable ||
-                         err.code === 'ServiceUnavailable');
+                         err.code === 'ServiceUnavailable' ||
+                         err.code === 503);
                     return cb(newErr);
                 }
                 /*
