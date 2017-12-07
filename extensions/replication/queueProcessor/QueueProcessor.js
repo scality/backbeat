@@ -134,6 +134,11 @@ class QueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
+        if (sourceEntry.getReplicationStatus() !== 'PENDING' ||
+            sourceEntry.isObjectMasterKey() ||
+            sourceEntry.getEntryType() !== 'put') {
+            return process.nextTick(() => done());
+        }
         return this.taskScheduler.push({
             task: sourceEntry.getReplicationStorageType() === 'aws_s3' ?
                 new MultipleBackendTask(this) : new QueueProcessorTask(this),
