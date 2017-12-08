@@ -137,6 +137,9 @@ class ReplicationStatusProcessor {
      */
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+        if (sourceEntry.healthcheck) {
+            return process.nextTick(() => done());
+        }
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
                               { error: sourceEntry.error });
