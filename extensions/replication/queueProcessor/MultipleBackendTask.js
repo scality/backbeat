@@ -1,4 +1,5 @@
 const async = require('async');
+const uuid = require('uuid/v4');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
@@ -183,24 +184,17 @@ class MultipleBackendTask extends QueueProcessorTask {
         }, cb);
     }
 
-    _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
-        const doneOnce = jsutil.once(cb);
-        log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
-        if (sourceEntry.getLocation().some(part => {
-            const partObj = new ObjectMDLocation(part);
-            return partObj.getDataStoreETag() === undefined;
-        })) {
-            log.error('cannot replicate object without dataStoreETag property',
-                {
-                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
-                    entry: sourceEntry.getLogInfo(),
-                });
-            return cb(errors.InvalidObjectState);
+    _initiateMPU(sourceEntry, destEntry, log, cb) {
+        const storageType = destEntry.getReplicationStorageType();
+        // If using Azure backend, create a unique ID to use as the block ID.
+        if (storageType === 'azure') {
+            const uploadId = uuid().replace(/-/g, '');
+            return setImmediate(() => cb(null, uploadId));
         }
-        let destReq = this.backbeatSource.multipleBackendInitiateMPU({
+        const destReq = this.backbeatSource.multipleBackendInitiateMPU({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            StorageType: destEntry.getReplicationStorageType(),
+            StorageType: storageType,
             StorageClass: destEntry.getReplicationStorageClass(),
             VersionId: destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
@@ -222,9 +216,33 @@ class MultipleBackendTask extends QueueProcessorTask {
                     peer: this.destBackbeatHost,
                     error: err.message,
                 });
+                return cb(err);
+            }
+            return cb(null, data.uploadId);
+        });
+    }
+
+    _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
+        const doneOnce = jsutil.once(cb);
+        log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
+        const missingDataStoreETag = sourceEntry.getLocation().some(part => {
+            const partObj = new ObjectMDLocation(part);
+            return partObj.getDataStoreETag() === undefined;
+        });
+        if (missingDataStoreETag) {
+            log.error('cannot replicate object without dataStoreETag property',
+                {
+                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    entry: sourceEntry.getLogInfo(),
+                });
+            return cb(errors.InvalidObjectState);
+        }
+
+        return this._initiateMPU(sourceEntry, destEntry, log,
+        (err, uploadId) => {
+            if (err) {
                 return doneOnce(err);
             }
-            const uploadId = data.uploadId;
             const locations = sourceEntry.getReducedLocations();
             return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
                 this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
@@ -232,10 +250,14 @@ class MultipleBackendTask extends QueueProcessorTask {
                         if (err) {
                             return done(err);
                         }
-                        return done(null, {
+                        const res = {
                             PartNumber: [data.partNumber],
                             ETag: [data.ETag],
-                        });
+                        };
+                        if (destEntry.getReplicationStorageType() === 'azure') {
+                            res.NumberSubParts = [data.numberSubParts];
+                        }
+                        return done(null, res);
                     }),
             (err, data) => {
                 if (err) {
@@ -251,11 +273,19 @@ class MultipleBackendTask extends QueueProcessorTask {
                     });
                     return doneOnce(err);
                 }
-                destReq = this.backbeatSource.multipleBackendCompleteMPU({
+                const destReq = this.backbeatSource.multipleBackendCompleteMPU({
                     Bucket: destEntry.getBucket(),
                     Key: destEntry.getObjectKey(),
                     StorageType: destEntry.getReplicationStorageType(),
                     StorageClass: destEntry.getReplicationStorageClass(),
+                    VersionId: destEntry.getEncodedVersionId(),
+                    UserMetaData: sourceEntry.getUserMetadata(),
+                    ContentType: sourceEntry.getContentType(),
+                    CacheControl: sourceEntry.getCacheControl() || undefined,
+                    ContentDisposition: sourceEntry.getContentDisposition() ||
+                        undefined,
+                    ContentEncoding: sourceEntry.getContentEncoding() ||
+                        undefined,
                     UploadId: uploadId,
                     Body: JSON.stringify(data),
                 });

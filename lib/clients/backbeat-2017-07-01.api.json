@@ -258,6 +258,9 @@
                     },
                     "ETag": {
                         "type": "string"
+                    },
+                    "numberSubParts": {
+                        "type": "long"
                     }
                 }
             }
@@ -358,6 +361,30 @@
                     "StorageClass": {
                         "location": "header",
                         "locationName": "X-Scal-Storage-Class"
+                    },
+                    "VersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Version-Id"
+                    },
+                    "ContentType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Type"
+                    },
+                    "UserMetaData": {
+                        "location": "header",
+                        "locationName": "X-Scal-User-Metadata"
+                    },
+                    "CacheControl": {
+                        "location": "header",
+                        "locationName": "X-Scal-Cache-Control"
+                    },
+                    "ContentDisposition": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Disposition"
+                    },
+                    "ContentEncoding": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Encoding"
                     },
                     "UploadId": {
                         "location": "header",
