@@ -134,8 +134,10 @@ class QueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
+        const multipleBackends = ['aws_s3', 'azure'];
+        const storageType = sourceEntry.getReplicationStorageType();
         return this.taskScheduler.push({
-            task: sourceEntry.getReplicationStorageType() === 'aws_s3' ?
+            task: multipleBackends.includes(storageType) ?
                 new MultipleBackendTask(this) : new QueueProcessorTask(this),
             entry: sourceEntry,
         },
