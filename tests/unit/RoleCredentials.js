@@ -54,7 +54,7 @@ describe('Credentials Manager', () => {
             undefined, proxyPath);
         roleCredentials = new RoleCredentials(
             vaultclient, role, extension,
-            new Logger('test:RoleCredentials:requids'));
+            new Logger('test:RoleCredentials').newRequestLogger('requids'));
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
     });

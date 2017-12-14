@@ -56,7 +56,13 @@
                 }
             },
             "topic": "backbeat-replication",
+            "replicationStatusTopic": "backbeat-replication-status",
             "queueProcessor": {
+                "groupId": "backbeat-replication-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "replicationStatusProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10

@@ -101,6 +101,17 @@ class ObjectQueueEntry extends ObjectMD {
         newEntry.setReplicationStatus('FAILED');
         return newEntry;
     }
+
+    toKafkaEntry() {
+        return { key: encodeURIComponent(
+            `${this.getBucket()}/${this.getObjectKey()}`),
+                 message: JSON.stringify({
+                     bucket: this.getBucket(),
+                     key: this.getObjectVersionedKey(),
+                     value: JSON.stringify(this.getValue()),
+                 }),
+               };
+    }
 }
 
 module.exports = ObjectQueueEntry;

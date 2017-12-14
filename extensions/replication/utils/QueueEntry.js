@@ -17,6 +17,9 @@ class QueueEntry {
     static createFromKafkaEntry(kafkaEntry) {
         try {
             const record = JSON.parse(kafkaEntry.value);
+            if (record.bootstrapId) {
+                return { error: 'bootstrap entry' };
+            }
             let entry;
             if (record.bucket === usersBucket) {
                 entry = new BucketQueueEntry(record.key);
