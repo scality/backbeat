@@ -1,8 +1,9 @@
 const assert = require('assert');
 const http = require('http');
 const { Client } = require('vaultclient');
+const { Logger } = require('werelogs');
 const { proxyPath } = require('../../extensions/replication/constants');
-const CredentialsManager = require('../../credentials/CredentialsManager');
+const RoleCredentials = require('../../lib/credentials/RoleCredentials');
 
 const role = 'arn:aws:iam::1234567890:role/backbeat';
 const extension = 'replication';
@@ -29,12 +30,12 @@ const server = http.createServer((req, res) => {
     res.end(payload);
 });
 
-function _assertCredentials(err, credentialsManager, cb) {
+function _assertCredentials(err, roleCredentials, cb) {
     if (err) {
         return cb(err);
     }
     const { accessKeyId, secretAccessKey, sessionToken, expired,
-        expiration } = credentialsManager;
+        expiration } = roleCredentials;
     assert.strictEqual(accessKeyId, AccessKeyId);
     assert.strictEqual(secretAccessKey, SecretAccessKey);
     assert.strictEqual(sessionToken, SessionToken);
@@ -45,42 +46,43 @@ function _assertCredentials(err, credentialsManager, cb) {
 
 
 describe('Credentials Manager', () => {
-    let credentialsManager = null;
+    let roleCredentials = null;
     let vaultServer = null;
     before(done => {
         const vaultclient = new Client(vaultHost, vaultPort, undefined,
             undefined, undefined, undefined, undefined, undefined, undefined,
             undefined, proxyPath);
-        credentialsManager = new CredentialsManager(vaultclient, role,
-            extension, ['test', 'CredentialsManager', 'requids']);
+        roleCredentials = new RoleCredentials(
+            vaultclient, role, extension,
+            new Logger('test:RoleCredentials:requids'));
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
     });
     after(() => {
-        credentialsManager = null;
+        roleCredentials = null;
         vaultServer.close();
     });
 
     it('should be able to acquire credentials on startup', done => {
-        credentialsManager.get(err => _assertCredentials(err,
-            credentialsManager, done));
+        roleCredentials.get(err => _assertCredentials(err,
+            roleCredentials, done));
     });
 
     it('should refresh credentials upon expiration', function test(done) {
         this.timeout(10000);
-        credentialsManager.get(err => {
+        roleCredentials.get(err => {
             if (err) {
                 return done(err);
             }
             // wait for an extra second after timeout to ensure credentials
             // have expired
-            const retryTimeout = (credentialsManager.expiration - Date.now()) +
+            const retryTimeout = (roleCredentials.expiration - Date.now()) +
                 1000;
             return setTimeout(() => {
-                assert(credentialsManager.expired === false,
+                assert(roleCredentials.expired === false,
                     'expected credentials to expire');
-                credentialsManager.get(err => _assertCredentials(err,
-                    credentialsManager, done));
+                roleCredentials.get(err => _assertCredentials(err,
+                    roleCredentials, done));
             }, retryTimeout);
         });
     });

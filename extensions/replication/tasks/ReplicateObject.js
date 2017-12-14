@@ -8,9 +8,10 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-// TODO move the following classes to better locations
-const AccountAuthManager = require('../queueProcessor/AccountAuthManager');
-const RoleAuthManager = require('../queueProcessor/RoleAuthManager');
+const AccountCredentials =
+          require('../../../lib/credentials/AccountCredentials');
+const RoleCredentials =
+          require('../../../lib/credentials/RoleCredentials');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -35,16 +36,16 @@ class ReplicateObject extends BackbeatTask {
         this.sourceRole = null;
         this.targetRole = null;
         this.destBackbeatHost = null;
-        this.s3sourceAuthManager = null;
-        this.s3destAuthManager = null;
+        this.s3sourceCredentials = null;
+        this.s3destCredentials = null;
         this.S3source = null;
         this.backbeatSource = null;
         this.backbeatDest = null;
     }
 
-    _createAuthManager(where, authConfig, roleArn, log) {
+    _createCredentials(where, authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new AccountAuthManager(authConfig, log);
+            return new AccountCredentials(authConfig, log);
         }
         let vaultclient;
         if (where === 'source') {
@@ -54,7 +55,7 @@ class ReplicateObject extends BackbeatTask {
             vaultclient = this.vaultclientCache.getClient('dest:s3',
                                                           host, port);
         }
-        return new RoleAuthManager(vaultclient, roleArn, log);
+        return new RoleCredentials(vaultclient, 'replication', roleArn, log);
     }
 
     _setupRoles(entry, log, cb) {
@@ -228,7 +229,7 @@ class ReplicateObject extends BackbeatTask {
         log.debug('changing target account owner',
                   { entry: destEntry.getLogInfo() });
         const targetAccountId = _extractAccountIdFromRole(targetRole);
-        this.s3destAuthManager.lookupAccountAttributes(
+        this.s3destCredentials.lookupAccountAttributes(
             targetAccountId, (err, accountAttr) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
@@ -383,8 +384,8 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _setupSourceClients(sourceRole, log) {
-        this.s3sourceAuthManager =
-            this._createAuthManager('source', this.sourceConfig.auth,
+        this.s3sourceCredentials =
+            this._createCredentials('source', this.sourceConfig.auth,
                                     sourceRole, log);
 
         // Disable retries, use our own retry policy (mandatory for
@@ -394,8 +395,7 @@ class ReplicateObject extends BackbeatTask {
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials:
-            this.s3sourceAuthManager.getCredentials(),
+            credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
             signatureVersion: 'v4',
@@ -405,7 +405,7 @@ class ReplicateObject extends BackbeatTask {
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials: this.s3sourceAuthManager.getCredentials(),
+            credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
             httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
@@ -413,15 +413,15 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _setupDestClients(targetRole, log) {
-        this.s3destAuthManager =
-            this._createAuthManager('target', this.destConfig.auth,
+        this.s3destCredentials =
+            this._createCredentials('target', this.destConfig.auth,
                                     targetRole, log);
 
         this.destBackbeatHost = this.destHosts.pickHost();
         this.backbeatDest = new BackbeatClient({
             endpoint: `${this.destConfig.transport}://` +
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
-            credentials: this.s3destAuthManager.getCredentials(),
+            credentials: this.s3destCredentials,
             sslEnabled: this.destConfig.transport === 'https',
             httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
             maxRetries: 0,
