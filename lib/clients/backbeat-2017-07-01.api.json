@@ -399,11 +399,6 @@
                         "location": "uri",
                         "locationName": "Key"
                     },
-                    "ContentLength": {
-                        "location": "header",
-                        "locationName": "Content-Length",
-                        "type": "long"
-                    },
                     "StorageType": {
                         "location": "header",
                         "locationName": "X-Scal-Storage-Type"
@@ -416,6 +411,18 @@
                         "location": "header",
                         "locationName": "X-Scal-Data-Store-Version-Id"
                     },
+                    "Tags": {
+                        "location": "header",
+                        "locationName": "X-Scal-Tags"
+                    },
+                    "SourceBucket": {
+                        "location": "header",
+                        "locationName": "X-Scal-Source-Bucket"
+                    },
+                    "SourceVersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Source-Version-Id"
+                    },
                     "Body": {
                         "type": "blob"
                     }
@@ -424,7 +431,11 @@
             },
             "output": {
                 "type": "structure",
-                "members": {}
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "MultipleBackendDeleteObjectTagging": {
@@ -460,6 +471,14 @@
                         "location": "header",
                         "locationName": "X-Scal-Data-Store-Version-Id"
                     },
+                    "SourceBucket": {
+                        "location": "header",
+                        "locationName": "X-Scal-Source-Bucket"
+                    },
+                    "SourceVersionId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Source-Version-Id"
+                    },
                     "Body": {
                         "type": "blob"
                     }
@@ -468,7 +487,11 @@
             },
             "output": {
                 "type": "structure",
-                "members": {}
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "PutMetadata": {
