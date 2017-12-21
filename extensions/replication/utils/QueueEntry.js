@@ -4,6 +4,13 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const invalidBuckets = {
+    'METADATA': true,
+    'PENSIEVE': true,
+    '__metastore': true,
+    'users..bucket': true,
+}
+const invalidPrefix = 'mpuShadowBucket';
 
 function _extractVersionedBaseKey(key) {
     return key.split(VID_SEP)[0];
@@ -37,6 +44,10 @@ class QueueEntry extends ObjectMD {
     checkSanity() {
         if (typeof this.bucket !== 'string') {
             return { message: 'missing bucket name' };
+        }
+        if (invalidBuckets[this.bucket] || this
+            .bucket.startsWith(invalidPrefix)) {
+            return { message: 'invalid bucket for populating'};
         }
         if (typeof this.objectKey !== 'string') {
             return { message: 'missing object key' };
