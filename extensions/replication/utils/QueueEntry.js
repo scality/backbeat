@@ -3,6 +3,7 @@ const { usersBucket } = require('arsenal').constants;
 const ObjectQueueEntry = require('./ObjectQueueEntry');
 const BucketQueueEntry = require('./BucketQueueEntry');
 
+
 class QueueEntry {
 
     /**
@@ -13,6 +14,29 @@ class QueueEntry {
      * @return {Object} - an object which inherits from
      *   {@link QueueEntry} base class
      */
+    constructor(bucket, objectVersionedKey, entryType, objMd) {
+        super(objMd);
+        this.bucket = bucket;
+        this.objectVersionedKey = objectVersionedKey;
+        this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        this.entryType = entryType;
+    }
+
+    clone() {
+        return new QueueEntry(this.bucket, this.objectVersionedKey,
+            this.entryType, this);
+    }
+
+    checkSanity() {
+        if (typeof this.bucket !== 'string') {
+            return { message: 'missing bucket name' };
+        }
+        if (typeof this.objectKey !== 'string') {
+            return { message: 'missing object key' };
+        }
+        return undefined;
+    }
+
     static createFromKafkaEntry(kafkaEntry) {
         try {
             const record = JSON.parse(kafkaEntry.value);
