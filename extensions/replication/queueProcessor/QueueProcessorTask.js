@@ -371,7 +371,10 @@ class QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        incomingMsg.once('end', () => {
+        process.stdout.write('printing from QPT._getAndPutPartOnce\n');
+        process.stdout.write(incomingMsg.eventNames().join(', '));
+        process.stdout.write('\n');
+        incomingMsg.once('readable', () => {
             destReq.send((err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign

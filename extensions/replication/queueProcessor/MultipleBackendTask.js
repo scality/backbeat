@@ -155,7 +155,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        incomingMsg.once('end', () => {
+        incomingMsg.once('readable', () => {
             destReq.send((err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
@@ -364,7 +364,7 @@ class MultipleBackendTask extends QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        incomingMsg.once('end', () => {
+        incomingMsg.once('readable', () => {
             destReq.send((err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
