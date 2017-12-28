@@ -155,20 +155,22 @@ class MultipleBackendTask extends QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                log.error('an error occurred on putting MPU part to S3', {
-                    method: 'MultipleBackendTask._getAndPutMPUPartOnce',
-                    entry: destEntry.getLogInfo(),
-                    origin: 'target',
-                    peer: this.destBackbeatHost,
-                    error: err.message,
-                });
-                return doneOnce(err);
-            }
-            return doneOnce(null, data);
+        incomingMsg.once('data', () => {
+            destReq.send((err, data) => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'source';
+                    log.error('an error occurred on putting MPU part to S3', {
+                        method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message,
+                    });
+                    return doneOnce(err);
+                }
+                return doneOnce(null, data);
+            });
         });
     }
 
@@ -362,21 +364,23 @@ class MultipleBackendTask extends QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                log.error('an error occurred on putData to S3', {
-                    method: 'MultipleBackendTask._getAndPutPartOnce',
-                    entry: destEntry.getLogInfo(),
-                    origin: 'target',
-                    peer: this.destBackbeatHost,
-                    error: err.message,
-                });
-                return doneOnce(err);
-            }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
-            return doneOnce(null, data);
+        incomingMsg.once('data', () => {
+            destReq.send((err, data) => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'source';
+                    log.error('an error occurred on putData to S3', {
+                        method: 'MultipleBackendTask._getAndPutPartOnce',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message,
+                    });
+                    return doneOnce(err);
+                }
+                sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+                return doneOnce(null, data);
+            });
         });
     }
 

@@ -371,21 +371,23 @@ class QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
-                log.error('an error occurred on putData to S3',
-                    { method: 'QueueProcessor._getAndPutData',
-                        entry: destEntry.getLogInfo(),
-                        part,
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message });
-                return doneOnce(err);
-            }
-            partObj.setDataLocation(data.Location[0]);
-            return doneOnce(null, partObj.getValue());
+        incomingMsg.once('data', () => {
+            destReq.send((err, data) => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'target';
+                    log.error('an error occurred on putData to S3',
+                        { method: 'QueueProcessor._getAndPutData',
+                            entry: destEntry.getLogInfo(),
+                            part,
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
+                            error: err.message });
+                    return doneOnce(err);
+                }
+                partObj.setDataLocation(data.Location[0]);
+                return doneOnce(null, partObj.getValue());
+            });
         });
     }
 
