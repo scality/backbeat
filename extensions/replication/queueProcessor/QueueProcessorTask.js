@@ -371,7 +371,7 @@ class QueueProcessorTask {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
-        incomingMsg.once('data', () => {
+        incomingMsg.once('end', () => {
             destReq.send((err, data) => {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
