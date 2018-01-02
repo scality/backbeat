@@ -23,21 +23,21 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal",
+    "arsenal": "scality/Arsenal#rel/7.2",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient",
+    "bucketclient": "scality/bucketclient#rel/7.2",
     "commander": "^2.11.0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines",
+    "eslint-config-scality": "scality/Guidelines#rel/7.2",
     "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
     "kafka-node": "^2.2.0",
     "node-schedule": "^1.2.0",
-    "vaultclient": "github:scality/vaultclient",
-    "werelogs": "scality/werelogs"
+    "vaultclient": "github:scality/vaultclient#rel/7.2",
+    "werelogs": "scality/werelogs#rel/7.2"
   },
   "devDependencies": {
     "mocha": "^3.3.0"
