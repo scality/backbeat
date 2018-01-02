@@ -6,14 +6,19 @@ const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const RoundRobin = require('arsenal').network.RoundRobin;
-const VaultClient = require('vaultclient').Client;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../utils/QueueEntry');
 const ReplicationTaskScheduler = require('./ReplicationTaskScheduler');
-const QueueProcessorTask = require('./QueueProcessorTask');
-const MultipleBackendTask = require('./MultipleBackendTask');
+const ReplicateObject = require('../tasks/ReplicateObject');
+const MultipleBackendTask = require('../tasks/MultipleBackendTask');
+const EchoBucket = require('../tasks/EchoBucket');
 
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const BucketQueueEntry = require('../utils/BucketQueueEntry');
+
+const { proxyVaultPath, proxyIAMPath } = require('../constants');
 
 /**
 * Given that the largest object JSON from S3 is about 1.6 MB and adding some
@@ -56,6 +61,10 @@ class QueueProcessor {
         this.destConfig = destConfig;
         this.repConfig = repConfig;
         this.destHosts = null;
+        this.sourceAdminVaultConfigured = false;
+        this.destAdminVaultConfigured = false;
+
+        this.echoMode = false;
 
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
@@ -64,27 +73,103 @@ class QueueProcessor {
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
         this.destHTTPAgent = new http.Agent({ keepAlive: true });
 
-        // FIXME support multiple cloud-server destination sites
+        this._setupVaultclientCache();
+
+        // FIXME support multiple scality destination sites
         if (Array.isArray(destConfig.bootstrapList)) {
             destConfig.bootstrapList.forEach(dest => {
                 if (Array.isArray(dest.servers)) {
                     this.destHosts =
                         new RoundRobin(dest.servers, { defaultPort: 80 });
+                    if (dest.echo) {
+                        this._setupEcho();
+                    }
                 }
             });
         }
 
-        if (sourceConfig.auth.type === 'role') {
-            const { host, port } = sourceConfig.auth.vault;
-            this.sourceVault = new VaultClient(host, port);
-        }
-        if (destConfig.auth.type === 'role') {
-            // vault client cache per destination
-            this.destVaults = {};
-        }
-
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
+    }
+
+    _setupVaultclientCache() {
+        this.vaultclientCache = new VaultClientCache();
+
+        if (this.sourceConfig.auth.type === 'role') {
+            const { host, port, adminPort, adminCredentials }
+                      = this.sourceConfig.auth.vault;
+            this.vaultclientCache
+                .setHost('source:s3', host)
+                .setPort('source:s3', port);
+            if (adminCredentials) {
+                this.vaultclientCache
+                    .setHost('source:admin', host)
+                    .setPort('source:admin', adminPort)
+                    .loadAdminCredentials('source:admin',
+                                          adminCredentials.accessKey,
+                                          adminCredentials.secretKey);
+                this.sourceAdminVaultConfigured = true;
+            }
+        }
+        if (this.destConfig.auth.type === 'role') {
+            if (this.destConfig.auth.vault) {
+                const { host, port, adminPort, adminCredentials }
+                          = this.destConfig.auth.vault;
+                if (host) {
+                    this.vaultclientCache.setHost('dest:s3', host);
+                }
+                if (port) {
+                    this.vaultclientCache.setPort('dest:s3', port);
+                }
+                if (adminCredentials) {
+                    if (host) {
+                        this.vaultclientCache.setHost('dest:admin', host);
+                    }
+                    if (adminPort) {
+                        this.vaultclientCache.setPort('dest:admin', adminPort);
+                    } else {
+                        // if dest vault admin port not configured, go
+                        // through nginx proxy
+                        this.vaultclientCache.setProxyPath('dest:admin',
+                                                           proxyIAMPath);
+                    }
+                    this.vaultclientCache.loadAdminCredentials(
+                        'dest:admin',
+                        adminCredentials.accessKey,
+                        adminCredentials.secretKey);
+                    this.destAdminVaultConfigured = true;
+                }
+            }
+            if (!this.destConfig.auth.vault ||
+                !this.destConfig.auth.vault.port) {
+                // if dest vault port not configured, go through nginx
+                // proxy
+                this.vaultclientCache.setProxyPath('dest:s3',
+                                                   proxyVaultPath);
+            }
+        }
+    }
+
+    _setupEcho() {
+        if (!this.sourceAdminVaultConfigured) {
+            throw new Error('echo mode not properly configured: missing ' +
+                            'credentials for source Vault admin client');
+        }
+        if (!this.destAdminVaultConfigured) {
+            throw new Error('echo mode not properly configured: missing ' +
+                            'credentials for destination Vault ' +
+                            'admin client');
+        }
+        if (process.env.BACKBEAT_ECHO_TEST_MODE === '1') {
+            this.logger.info('starting in echo mode',
+                             { method: 'QueueProcessor.constructor',
+                               testMode: true });
+        } else {
+            this.logger.info('starting in echo mode',
+                             { method: 'QueueProcessor.constructor' });
+        }
+        this.echoMode = true;
+        this.accountCredsCache = {};
     }
 
     getStateVars() {
@@ -95,8 +180,8 @@ class QueueProcessor {
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,
-            sourceVault: this.sourceVault,
-            destVaults: this.destVaults,
+            vaultclientCache: this.vaultclientCache,
+            accountCredsCache: this.accountCredsCache,
             logger: this.logger,
         };
     }
@@ -134,15 +219,29 @@ class QueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
-        const multipleBackends = ['aws_s3', 'azure'];
-        const storageType = sourceEntry.getReplicationStorageType();
-        return this.taskScheduler.push({
-            task: multipleBackends.includes(storageType) ?
-                new MultipleBackendTask(this) : new QueueProcessorTask(this),
-            entry: sourceEntry,
-        },
-        `${sourceEntry.getBucket()}/${sourceEntry.getObjectKey()}`,
-        done);
+        let task;
+        if (sourceEntry instanceof BucketQueueEntry) {
+            if (this.echoMode) {
+                task = new EchoBucket(this);
+            }
+            // ignore bucket entry if echo mode disabled
+        } else if (sourceEntry instanceof ObjectQueueEntry) {
+            const multipleBackends = ['aws_s3', 'azure'];
+            const storageType = sourceEntry.getReplicationStorageType();
+            if (multipleBackends.includes(storageType)) {
+                task = new MultipleBackendTask(this);
+            } else {
+                task = new ReplicateObject(this);
+            }
+        }
+        if (task) {
+            return this.taskScheduler.push({ task, entry: sourceEntry },
+                                           sourceEntry.getCanonicalKey(),
+                                           done);
+        }
+        this.logger.debug('skip source entry',
+                          { entry: sourceEntry.getLogInfo() });
+        return process.nextTick(done);
     }
 }
 

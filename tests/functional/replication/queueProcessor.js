@@ -228,7 +228,7 @@ class S3Mock extends TestConfigurator {
                 accountId: 123456789013,
                 accessKey: 'accessKey2',
                 secretKey: 'verySecretKey2',
-                canonicalId: 'bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1bac4bea1',
+                canonicalId: 'bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7',
                 dataPartsKeys: () =>
                     constants.target.dataPartsKeys.slice(
                         0, this.getParam('nbParts')),

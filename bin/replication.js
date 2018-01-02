@@ -54,6 +54,7 @@ function _createSetupReplication(command, options, log) {
             isExternal: targetIsExternal,
             siteName,
         },
+        checkSanity: true,
         log,
     });
 }

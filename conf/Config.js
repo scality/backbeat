@@ -5,6 +5,7 @@ const path = require('path');
 const joi = require('joi');
 
 const backbeatConfigJoi = require('./config.joi.js');
+const { adminCredsJoi } = require('../lib/config/configItems.joi.js');
 
 class Config {
     constructor() {
@@ -36,9 +37,27 @@ class Config {
 
         if (this.extensions !== undefined &&
             this.extensions.replication !== undefined) {
+            const { source, destination } = this.extensions.replication;
+
+            if (source.auth.vault) {
+                const { adminCredentialsFile } = source.auth.vault;
+                if (adminCredentialsFile) {
+                    source.auth.vault.adminCredentials =
+                        this._loadAdminCredentialsFromFile(
+                            adminCredentialsFile);
+                }
+            }
+            if (destination.auth.vault) {
+                const { adminCredentialsFile } = destination.auth.vault;
+                if (adminCredentialsFile) {
+                    destination.auth.vault.adminCredentials =
+                        this._loadAdminCredentialsFromFile(
+                            adminCredentialsFile);
+                }
+            }
+
             // additional target certs checks
-            const { certFilePaths } = this.extensions.replication.destination;
-            const { key, cert, ca } = certFilePaths;
+            const { key, cert, ca } = destination.certFilePaths;
 
             const makePath = value => (value.startsWith('/') ?
                                        value : `${this._basePath}/${value}`);
@@ -58,6 +77,16 @@ class Config {
                 ca: ca ? fs.readFileSync(capath, 'ascii') : undefined,
             };
         }
+    }
+
+    _loadAdminCredentialsFromFile(filePath) {
+        const adminCredsJSON = fs.readFileSync(filePath);
+        const adminCredsObj = JSON.parse(adminCredsJSON);
+        joi.attempt(adminCredsObj, adminCredsJoi,
+                    'invalid admin credentials');
+        const accessKey = Object.keys(adminCredsObj)[0];
+        const secretKey = adminCredsObj[accessKey];
+        return { accessKey, secretKey };
     }
 }
 
