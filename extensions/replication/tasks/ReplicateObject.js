@@ -114,8 +114,11 @@ class ReplicateObject extends BackbeatTask {
                     if (err.destReq) {
                         logg('HELLO WORLD-2');
                         err.destReq.abort();
+                        err.incomingMsg.abort();
                         // eslint-disable-next-line no-param-reassign
                         delete err.destReq;
+                        // eslint-disable-next-line no-param-reassign
+                        delete err.incomingMsg;
                     }
                     this.destHosts.pickNextHost();
                     this._setupDestClients(this.targetRole, partLogger);
@@ -128,8 +131,11 @@ class ReplicateObject extends BackbeatTask {
                 if (err.destReq) {
                     logg('HELLO WORLD-1');
                     err.destReq.abort();
+                    err.incomingMsg.abort();
                     // eslint-disable-next-line no-param-reassign
                     delete err.destReq;
+                    // eslint-disable-next-line no-param-reassign
+                    delete err.incomingMsg;
                 }
             } else {
                 logg('_getAndPutPart is all GOOD');
@@ -353,6 +359,8 @@ class ReplicateObject extends BackbeatTask {
                 err.origin = 'target';
                 // eslint-disable-next-line no-param-reassign
                 err.destReq = destReq;
+                // eslint-disable-next-line no-param-reassign
+                err.incomingMsg = incomingMsg;
                 log.error('an error occurred on putData to S3',
                     { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
