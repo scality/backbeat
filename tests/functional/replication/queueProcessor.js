@@ -115,7 +115,7 @@ class S3Mock extends TestConfigurator {
                     'content-md5': this.getParam('source.md.contentMd5'),
                     'x-amz-version-id': 'null',
                     'x-amz-server-version-id': '',
-                    'x-amz-storage-class': 'STANDARD',
+                    'x-amz-storage-class': 'sf',
                     'x-amz-server-side-encryption': '',
                     'x-amz-server-side-encryption-aws-kms-key-id': '',
                     'x-amz-server-side-encryption-customer-algorithm': '',
@@ -135,7 +135,7 @@ class S3Mock extends TestConfigurator {
                         status: 'PENDING',
                         content: this.getParam('source.md.replicationInfo.content'),
                         destination: this.getParam('source.md.replicationInfo.destination'),
-                        storageClass: 'STANDARD',
+                        storageClass: 'sf',
                         role: this.getParam('source.md.replicationInfo.role'),
                     },
                     'x-amz-meta-s3cmd-attrs': `uid:0/gname:root/uname:root/gid:0/mode:33188/mtime:1501018866/atime:1501018885/md5:${this.getParam('contentMd5')}/ctime:1501018866`,
@@ -425,7 +425,7 @@ class S3Mock extends TestConfigurator {
             '<Bucket>',
             this.getParam('source.md.replicationInfo.destination'),
             '</Bucket>',
-            '<StorageClass>STANDARD</StorageClass>',
+            '<StorageClass>sf</StorageClass>',
             '</Destination>',
             '</Rule>',
             '<Role>',
@@ -537,7 +537,7 @@ class S3Mock extends TestConfigurator {
             status: 'REPLICA',
             content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),
-            storageClass: 'STANDARD',
+            storageClass: 'sf',
             role: this.getParam('source.md.replicationInfo.role'),
         });
         assert.strictEqual(parsedMd['owner-id'],
@@ -565,7 +565,7 @@ class S3Mock extends TestConfigurator {
             status: this.expectedReplicationStatus,
             content: this.getParam('source.md.replicationInfo.content'),
             destination: this.getParam('source.md.replicationInfo.destination'),
-            storageClass: 'STANDARD',
+            storageClass: 'sf',
             role: this.getParam('source.md.replicationInfo.role'),
         });
         assert.strictEqual(parsedMd['owner-id'],
@@ -618,7 +618,7 @@ describe('queue processor functional tests with mocking', () => {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
               },
-            });
+            }, 'sf');
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
         // processor is ready, so that we ensure the replication
@@ -639,7 +639,7 @@ describe('queue processor functional tests with mocking', () => {
                       retryTimeoutS: 5,
                       groupId: 'backbeat-func-test-group-id',
                   },
-                });
+              }, 'sf');
             replicationStatusProcessor.start();
             replicationStatusProcessor.bootstrapKafkaConsumer(done);
         });

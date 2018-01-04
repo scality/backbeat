@@ -56,8 +56,9 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
+     * @param {String} site - site name
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig, site) {
         super();
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
@@ -68,6 +69,7 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
+        this.site = site;
 
         this.echoMode = false;
 
@@ -232,12 +234,14 @@ class QueueProcessor extends EventEmitter {
                 return undefined;
             }
             if (!(options && options.disableConsumer)) {
+                const groupId =
+                    `${this.repConfig.queueProcessor.groupId}-${this.site}`;
                 this._consumer = new BackbeatConsumer({
                     zookeeper: {
                         connectionString: this.zkConfig.connectionString,
                     },
                     topic: this.repConfig.topic,
-                    groupId: this.repConfig.queueProcessor.groupId,
+                    groupId,
                     concurrency: this.repConfig.queueProcessor.concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
                     fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
@@ -294,7 +298,8 @@ class QueueProcessor extends EventEmitter {
                 task = new EchoBucket(this);
             }
             // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry) {
+        } else if (sourceEntry instanceof ObjectQueueEntry &&
+            sourceEntry.getReplicationStorageClass().includes(this.site)) {
             const multipleBackends = ['aws_s3', 'azure'];
             const storageType = sourceEntry.getReplicationStorageType();
             if (multipleBackends.includes(storageType)) {
