@@ -1,6 +1,8 @@
 const async = require('async');
 const AWS = require('aws-sdk');
 
+const util = require('util');
+
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
@@ -112,36 +114,17 @@ class ReplicateObject extends BackbeatTask {
             onRetryFunc: err => {
                 if (err.origin === 'target') {
                     if (err.destReq) {
-                        logg('HELLO WORLD-2');
+                        logg('HELLO WORLD-1');
                         err.destReq.abort();
-                        err.incomingMsg.abort();
                         // eslint-disable-next-line no-param-reassign
                         delete err.destReq;
-                        // eslint-disable-next-line no-param-reassign
-                        delete err.incomingMsg;
                     }
                     this.destHosts.pickNextHost();
                     this._setupDestClients(this.targetRole, partLogger);
                 }
             },
             log: partLogger,
-        }, (err, data) => {
-            if (err) {
-                logg('_getAndPutPart got an ERROR');
-                if (err.destReq) {
-                    logg('HELLO WORLD-1');
-                    err.destReq.abort();
-                    err.incomingMsg.abort();
-                    // eslint-disable-next-line no-param-reassign
-                    delete err.destReq;
-                    // eslint-disable-next-line no-param-reassign
-                    delete err.incomingMsg;
-                }
-            } else {
-                logg('_getAndPutPart is all GOOD');
-            }
-            cb(err, data);
-        });
+        }, cb);
     }
 
     _putMetadata(where, entry, mdOnly, log, cb) {
@@ -296,7 +279,23 @@ class ReplicateObject extends BackbeatTask {
         }
         const locations = sourceEntry.getReducedLocations();
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done);
+            this._getAndPutPart(sourceEntry, destEntry, part, log,
+            (err, res) => {
+                if (err) {
+                    const partObj = new ObjectMDLocation(part);
+                    const partNumber = partObj.getPartNumber();
+                    const sourceReq = this.S3source.getObject({
+                        Bucket: sourceEntry.getBucket(),
+                        Key: sourceEntry.getObjectKey(),
+                        VersionId: sourceEntry.getEncodedVersionId(),
+                        PartNumber: partNumber,
+                    });
+                    // here I can abort sourceReq because retry failed
+                    // TODO: if err is a 404, may need to ignore
+                    sourceReq.abort();
+                }
+                done(err, res);
+            });
         }, cb);
     }
 
@@ -357,10 +356,9 @@ class ReplicateObject extends BackbeatTask {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
+                // TODO
                 // eslint-disable-next-line no-param-reassign
-                err.destReq = destReq;
-                // eslint-disable-next-line no-param-reassign
-                err.incomingMsg = incomingMsg;
+                // err.destReq = destReq;
                 log.error('an error occurred on putData to S3',
                     { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
@@ -368,7 +366,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message });
-                return doneOnce(err);
+                return doneOnce(err, destReq);
             }
             partObj.setDataLocation(data.Location[0]);
             return doneOnce(null, partObj.getValue());
