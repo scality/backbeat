@@ -54,8 +54,9 @@ class QueueProcessor {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
+     * @param {String} site - site name
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig, site) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -63,6 +64,7 @@ class QueueProcessor {
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
+        this.site = site;
 
         this.echoMode = false;
 
@@ -225,7 +227,8 @@ class QueueProcessor {
                 task = new EchoBucket(this);
             }
             // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry) {
+        } else if (sourceEntry instanceof ObjectQueueEntry &&
+            sourceEntry.getReplicationStorageClass().includes(this.site)) {
             const multipleBackends = ['aws_s3', 'azure'];
             const storageType = sourceEntry.getReplicationStorageType();
             if (multipleBackends.includes(storageType)) {
