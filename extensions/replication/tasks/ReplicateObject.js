@@ -18,11 +18,6 @@ function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
 
-function logg(str) {
-    process.stdout.write(str);
-    process.stdout.write('\n');
-}
-
 class ReplicateObject extends BackbeatTask {
     /**
      * Process a single replication entry
@@ -109,13 +104,11 @@ class ReplicateObject extends BackbeatTask {
             actionFunc: done => this._getAndPutPartOnce(
                 sourceEntry, destEntry, part, partLogger, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
+            onRetryFunc: (err, req) => {
                 if (err.origin === 'target') {
-                    if (err.destReq) {
-                        logg('HELLO WORLD-1');
-                        err.destReq.abort();
-                        // eslint-disable-next-line no-param-reassign
-                        delete err.destReq;
+                    if (req) {
+                        // destReq aborted since picking a new host
+                        req.abort();
                     }
                     this.destHosts.pickNextHost();
                     this._setupDestClients(this.targetRole, partLogger);
