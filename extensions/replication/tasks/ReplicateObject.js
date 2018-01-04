@@ -18,6 +18,11 @@ function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
 
+function logg(str) {
+    process.stdout.write(str);
+    process.stdout.write('\n');
+}
+
 class ReplicateObject extends BackbeatTask {
     /**
      * Process a single replication entry
@@ -106,12 +111,31 @@ class ReplicateObject extends BackbeatTask {
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
                 if (err.origin === 'target') {
+                    if (err.destReq) {
+                        logg('HELLO WORLD-2');
+                        err.destReq.abort();
+                        // eslint-disable-next-line no-param-reassign
+                        delete err.destReq;
+                    }
                     this.destHosts.pickNextHost();
                     this._setupDestClients(this.targetRole, partLogger);
                 }
             },
             log: partLogger,
-        }, cb);
+        }, (err, data) => {
+            if (err) {
+                logg('_getAndPutPart got an ERROR');
+                if (err.destReq) {
+                    logg('HELLO WORLD-1');
+                    err.destReq.abort();
+                    // eslint-disable-next-line no-param-reassign
+                    delete err.destReq;
+                }
+            } else {
+                logg('_getAndPutPart is all GOOD');
+            }
+            cb(err, data);
+        });
     }
 
     _putMetadata(where, entry, mdOnly, log, cb) {
@@ -327,6 +351,8 @@ class ReplicateObject extends BackbeatTask {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
+                // eslint-disable-next-line no-param-reassign
+                err.destReq = destReq;
                 log.error('an error occurred on putData to S3',
                     { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
