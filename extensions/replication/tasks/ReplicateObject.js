@@ -1,8 +1,6 @@
 const async = require('async');
 const AWS = require('aws-sdk');
 
-const util = require('util');
-
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
@@ -356,9 +354,6 @@ class ReplicateObject extends BackbeatTask {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
-                // TODO
-                // eslint-disable-next-line no-param-reassign
-                // err.destReq = destReq;
                 log.error('an error occurred on putData to S3',
                     { method: 'QueueProcessor._getAndPutData',
                         entry: destEntry.getLogInfo(),
