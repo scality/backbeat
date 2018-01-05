@@ -10,6 +10,9 @@ const attachReqUids = require('../utils/attachReqUids');
 
 const MPU_CONC_LIMIT = 10;
 
+// Temporarily hard coding for testing purposes.
+const SITE = 'zenko'
+
 class MultipleBackendTask extends ReplicateObject {
 
     _setupRolesOnce(entry, log, cb) {
@@ -304,8 +307,8 @@ class MultipleBackendTask extends ReplicateObject {
                         });
                         return doneOnce(err);
                     }
-                    sourceEntry
-                        .setReplicationDataStoreVersionId(data.versionId);
+                    sourceEntry.setReplicationSiteDataStoreVersionId(SITE,
+                        data.versionId);
                     return doneOnce();
                 });
             });
@@ -405,7 +408,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry
+                .setReplicationSiteDataStoreVersionId(SITE, data.versionId);
             return doneOnce(null, data);
         });
     }
@@ -434,10 +438,11 @@ class MultipleBackendTask extends ReplicateObject {
                 StorageType: destEntry.getReplicationStorageType(),
                 StorageClass: destEntry.getReplicationStorageClass(),
                 DataStoreVersionId:
-                    destEntry.getReplicationDataStoreVersionId(),
+                    destEntry.getReplicationSiteDataStoreVersionId(SITE),
                 Tags: JSON.stringify(destEntry.getTags()),
                 SourceBucket: sourceEntry.getBucket(),
                 SourceVersionId: sourceEntry.getVersionId(),
+                ReplicationEndpointSite: SITE,
             });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
@@ -450,7 +455,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry
+                .setReplicationSiteDataStoreVersionId(SITE, data.versionId);
             return doneOnce();
         });
     }
@@ -476,9 +482,10 @@ class MultipleBackendTask extends ReplicateObject {
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: destEntry.getReplicationStorageClass(),
-            DataStoreVersionId: destEntry.getReplicationDataStoreVersionId(),
+            DataStoreVersionId: destEntry.getReplicationSiteDataStoreVersionId(SITE),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
+            ReplicationEndpointSite: SITE,
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
@@ -492,7 +499,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry
+                .setReplicationSiteDataStoreVersionId(SITE, data.versionId);
             return doneOnce();
         });
     }
@@ -561,7 +569,7 @@ class MultipleBackendTask extends ReplicateObject {
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry();
+        const destEntry = sourceEntry.toReplicaEntry(SITE);
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
         return async.waterfall([
