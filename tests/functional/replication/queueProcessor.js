@@ -133,7 +133,17 @@ class S3Mock extends TestConfigurator {
                     'tags': {},
                     'replicationInfo': {
                         status: 'PENDING',
+                        backends: [{
+                            site: 'zenko',
+                            status: 'PENDING',
+                            dataStoreVersionId: '',
+                        }, {
+                            site: 'replicationaws',
+                            status: 'PENDING',
+                            dataStoreVersionId: '',
+                        }],
                         content: this.getParam('source.md.replicationInfo.content'),
+
                         destination: this.getParam('source.md.replicationInfo.destination'),
                         storageClass: 'sf',
                         role: this.getParam('source.md.replicationInfo.role'),
@@ -284,7 +294,7 @@ class S3Mock extends TestConfigurator {
         this.putDataCount = 0;
         this.hasPutTargetMd = false;
         this.onPutSourceMd = null;
-        this.setExpectedReplicationStatus('COMPLETED');
+        this.setExpectedReplicationStatus('PENDING');
         this.requestsPerHost = {
             '127.0.0.1': 0,
             '127.0.0.2': 0,
@@ -535,6 +545,15 @@ class S3Mock extends TestConfigurator {
                   this.getParam('source.md.replicationInfo.content');
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: 'REPLICA',
+            backends: [{
+                site: 'zenko',
+                status: 'PENDING',
+                dataStoreVersionId: '',
+            }, {
+                site: 'replicationaws',
+                status: 'PENDING',
+                dataStoreVersionId: '',
+            }],
             content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf',
@@ -557,12 +576,21 @@ class S3Mock extends TestConfigurator {
 
     _putMetadataSource(req, url, query, res, reqBody) {
         assert.strictEqual(this.hasPutTargetMd,
-                           (this.expectedReplicationStatus === 'COMPLETED'));
+                           (this.expectedReplicationStatus === 'PENDING'));
         assert.notStrictEqual(this.onPutSourceMd, null);
 
         const parsedMd = JSON.parse(reqBody);
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: this.expectedReplicationStatus,
+            backends: [{
+                site: 'zenko',
+                status: 'PENDING',
+                dataStoreVersionId: '',
+            }, {
+                site: 'replicationaws',
+                status: 'PENDING',
+                dataStoreVersionId: '',
+            }],
             content: this.getParam('source.md.replicationInfo.content'),
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf',

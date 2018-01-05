@@ -450,6 +450,10 @@
                         "location": "header",
                         "locationName": "X-Scal-Source-Version-Id"
                     },
+                    "ReplicationEndpointSite": {
+                        "location": "header",
+                        "locationName": "X-Scal-Replication-Endpoint-Site"
+                    },
                     "Body": {
                         "type": "blob"
                     }
@@ -505,6 +509,10 @@
                     "SourceVersionId": {
                         "location": "header",
                         "locationName": "X-Scal-Source-Version-Id"
+                    },
+                    "ReplicationEndpointSite": {
+                        "location": "header",
+                        "locationName": "X-Scal-Replication-Endpoint-Site"
                     },
                     "Body": {
                         "type": "blob"

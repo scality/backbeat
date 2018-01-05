@@ -6,6 +6,22 @@ function _extractVersionedBaseKey(key) {
     return key.split(VID_SEP)[0];
 }
 
+function _getGobalReplicationStatus(data) {
+    // Check the global status relative to the other backends
+    if (Array.isArray(data.replicationInfo.backends)) {
+        const statuses = data.replicationInfo.backends.map(backend =>
+            backend.status);
+        // If any site replication failed, set the global status to FAILED.
+        if (statuses.includes('FAILED')) {
+            return 'FAILED';
+        }
+        if (statuses.includes('PENDING')) {
+            return 'PENDING';
+        }
+    }
+    return 'COMPLETED';
+}
+
 class ObjectQueueEntry extends ObjectMD {
 
     /**
@@ -83,21 +99,25 @@ class ObjectQueueEntry extends ObjectMD {
         };
     }
 
-    toReplicaEntry() {
+    toReplicaEntry(site) {
         const newEntry = this.clone();
         newEntry.setBucket(this.getReplicationTargetBucket());
+        newEntry.setReplicationSiteStatus(site, 'REPLICA');
         newEntry.setReplicationStatus('REPLICA');
         return newEntry;
     }
 
-    toCompletedEntry() {
+    toCompletedEntry(site) {
         const newEntry = this.clone();
-        newEntry.setReplicationStatus('COMPLETED');
+        newEntry.setReplicationSiteStatus(site, 'COMPLETED');
+        const status = _getGobalReplicationStatus(this.getValue());
+        newEntry.setReplicationStatus(status);
         return newEntry;
     }
 
-    toFailedEntry() {
+    toFailedEntry(site) {
         const newEntry = this.clone();
+        newEntry.setReplicationSiteStatus(site, 'FAILED');
         newEntry.setReplicationStatus('FAILED');
         return newEntry;
     }

@@ -209,6 +209,7 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
+            site: this.site,
             logger: this.logger,
         };
     }
@@ -300,9 +301,9 @@ class QueueProcessor extends EventEmitter {
             // ignore bucket entry if echo mode disabled
         } else if (sourceEntry instanceof ObjectQueueEntry &&
             sourceEntry.getReplicationStorageClass().includes(this.site)) {
-            const multipleBackends = ['aws_s3', 'azure'];
-            const storageType = sourceEntry.getReplicationStorageType();
-            if (multipleBackends.includes(storageType)) {
+            const replicationEndpoint = this.destConfig.bootstrapList
+                .find(endpoint => endpoint.site === this.site);
+            if (['aws_s3', 'azure'].includes(replicationEndpoint.type)) {
                 task = new MultipleBackendTask(this);
             } else {
                 task = new ReplicateObject(this);
