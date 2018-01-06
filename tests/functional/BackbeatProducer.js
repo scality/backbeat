@@ -22,7 +22,9 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
         config: { zookeeper, topic },
     },
 ].forEach(item => {
-    describe(`BackbeatProducer - ${item.type}`, () => {
+    describe(`BackbeatProducer - ${item.type}`, function backbeatProducer() {
+        this.timeout(10000);
+
         let producer;
         before(done => {
             producer = new BackbeatProducer(item.config);
@@ -47,7 +49,9 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 });
 
 
-describe('BackbeatProducer - Error case', () => {
+describe('BackbeatProducer - Error case', function backbeatProducerErrors() {
+    this.timeout(10000);
+
     let producer;
     before(done => {
         producer = new BackbeatProducer({ zookeeper, topic });

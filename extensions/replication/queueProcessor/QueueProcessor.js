@@ -1,16 +1,18 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
+const { EventEmitter } = require('events');
 
 const Logger = require('werelogs').Logger;
 
 const errors = require('arsenal').errors;
 const RoundRobin = require('arsenal').network.RoundRobin;
 
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../utils/QueueEntry');
-const ReplicationTaskScheduler = require('./ReplicationTaskScheduler');
+const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const EchoBucket = require('../tasks/EchoBucket');
@@ -29,7 +31,7 @@ const { proxyVaultPath, proxyIAMPath } = require('../constants');
 */
 const CONSUMER_FETCH_MAX_BYTES = 5000020;
 
-class QueueProcessor {
+class QueueProcessor extends EventEmitter {
 
     /**
      * Create a queue processor object to activate Cross-Region
@@ -56,6 +58,7 @@ class QueueProcessor {
      *   replication
      */
     constructor(zkConfig, sourceConfig, destConfig, repConfig) {
+        super();
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -63,6 +66,8 @@ class QueueProcessor {
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
+        this.replicationStatusProducer = null;
+        this._consumer = null;
 
         this.echoMode = false;
 
@@ -150,6 +155,25 @@ class QueueProcessor {
         }
     }
 
+    _setupProducer(done) {
+        const producer = new BackbeatProducer({
+            zookeeper: { connectionString: this.zkConfig.connectionString },
+            topic: this.repConfig.replicationStatusTopic,
+        });
+        producer.once('error', done);
+        producer.once('ready', () => {
+            producer.removeAllListeners('error');
+            producer.on('error', err => {
+                this.log.error('error from backbeat producer', {
+                    topic: this.repConfig.replicationStatusTopic,
+                    error: err,
+                });
+            });
+            this.replicationStatusProducer = producer;
+            done();
+        });
+    }
+
     _setupEcho() {
         if (!this.sourceAdminVaultConfigured) {
             throw new Error('echo mode not properly configured: missing ' +
@@ -182,24 +206,69 @@ class QueueProcessor {
             destHTTPAgent: this.destHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
+            replicationStatusProducer: this.replicationStatusProducer,
             logger: this.logger,
         };
     }
 
-    start() {
-        const consumer = new BackbeatConsumer({
-            zookeeper: { connectionString: this.zkConfig.connectionString },
-            topic: this.repConfig.topic,
-            groupId: this.repConfig.queueProcessor.groupId,
-            concurrency: this.repConfig.queueProcessor.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-            fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
+    /**
+     * Start kafka consumer and producer. Emits a 'ready' even when
+     * producer and consumer are ready.
+     *
+     * Note: for tests, with auto.create.topics.enable option set on
+     * kafka container, this will also pre-create the topic.
+     *
+     * @param {object} [options] options object
+     * @param {boolean} [options.disableConsumer] - true to disable
+     *   startup of consumer (for testing: one has to call
+     *   processQueueEntry() explicitly)
+     * @return {undefined}
+     */
+    start(options) {
+        this._setupProducer(err => {
+            if (err) {
+                this.logger.info('error setting up kafka producer',
+                                 { error: err.message });
+                return undefined;
+            }
+            if (!(options && options.disableConsumer)) {
+                this._consumer = new BackbeatConsumer({
+                    zookeeper: {
+                        connectionString: this.zkConfig.connectionString,
+                    },
+                    topic: this.repConfig.topic,
+                    groupId: this.repConfig.queueProcessor.groupId,
+                    concurrency: this.repConfig.queueProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
+                });
+                this._consumer.on('error', () => {});
+                this._consumer.subscribe();
+            }
+            this.logger.info('queue processor is ready to consume ' +
+                             'replication entries');
+            return this.emit('ready');
         });
-        consumer.on('error', () => {});
-        consumer.subscribe();
+    }
 
-        this.logger.info('queue processor is ready to consume ' +
-                         'replication entries');
+    /**
+     * Stop kafka producer and consumer and commit current consumer
+     * offset
+     *
+     * @param {function} done - callback
+     * @return {undefined}
+     */
+    stop(done) {
+        if (!this.replicationStatusProducer) {
+            return setImmediate(done);
+        }
+        return this.replicationStatusProducer.close(() => {
+            if (this._consumer) {
+                this._consumer.close(done);
+            } else {
+                done();
+            }
+        });
     }
 
     /**
