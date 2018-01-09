@@ -3,6 +3,14 @@
 const ObjectMD = require('arsenal').models.ObjectMD;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const invalidBuckets = {
+    'METADATA': true,
+    'PENSIEVE': true,
+    '__metastore': true,
+    'users..bucket': true,
+}
+const invalidPrefix = 'mpuShadowBucket';
 
 function _extractVersionedBaseKey(key) {
     return key.split(VID_SEP)[0];
@@ -17,22 +25,29 @@ class QueueEntry extends ObjectMD {
      *   status)
      * @param {string} objectVersionedKey - entry's object key with
      *   version suffix
+     * @param {string} entryType - entry's type (put/delete)
      * @param {object} objMd - entry's object metadata
      */
-    constructor(bucket, objectVersionedKey, objMd) {
+    constructor(bucket, objectVersionedKey, entryType, objMd) {
         super(objMd);
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
         this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        this.entryType = entryType;
     }
 
     clone() {
-        return new QueueEntry(this.bucket, this.objectVersionedKey, this);
+        return new QueueEntry(this.bucket, this.objectVersionedKey,
+            this.entryType, this);
     }
 
     checkSanity() {
         if (typeof this.bucket !== 'string') {
             return { message: 'missing bucket name' };
+        }
+        if (invalidBuckets[this.bucket] || this
+            .bucket.startsWith(invalidPrefix)) {
+            return { message: 'invalid bucket for populating'};
         }
         if (typeof this.objectKey !== 'string') {
             return { message: 'missing object key' };
@@ -44,7 +59,8 @@ class QueueEntry extends ObjectMD {
         try {
             const record = JSON.parse(kafkaEntry.value);
             const objMd = JSON.parse(record.value);
-            const entry = new QueueEntry(record.bucket, record.key, objMd);
+            const entry = new QueueEntry(record.bucket, record.key,
+                record.type, objMd);
             const err = entry.checkSanity();
             if (err) {
                 return { error: err };
@@ -72,6 +88,15 @@ class QueueEntry extends ObjectMD {
     getObjectVersionedKey() {
         return this.objectVersionedKey;
     }
+
+    isObjectMasterKey() {
+        return isMasterKey(this.objectVersionedKey);
+    }
+
+    getEntryType() {
+        return this.entryType;
+    }
+
 
     getUserMetadata() {
         const metaHeaders = {};

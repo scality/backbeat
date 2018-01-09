@@ -54,7 +54,7 @@
                     "account": "lisa"
                 }
             },
-            "topic": "backbeat-replication",
+            "topic": "backbeat",
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
