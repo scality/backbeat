@@ -12,6 +12,7 @@ const AccountCredentials =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -132,29 +133,109 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
-    _publishReplicationStatus(updatedSourceEntry, params, cb) {
-        const { log, reason } = params;
+    _getMetadata(entry, log, cb) {
+        this.retry({
+            actionDesc: 'get metadata from source',
+            logFields: { entry: entry.getLogInfo() },
+            actionFunc: done => this._getMetadataOnce(entry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, cb);
+    }
 
-        const kafkaEntries = [updatedSourceEntry.toKafkaEntry()];
-        this.replicationStatusProducer.send(kafkaEntries, err => {
+    _getMetadataOnce(entry, log, cb) {
+        log.debug('getting metadata', {
+            where: 'source',
+            entry: entry.getLogInfo(),
+            method: 'ReplicateObject._getMetadataOnce',
+        });
+        const cbOnce = jsutil.once(cb);
+
+        const req = this.backbeatSource.getMetadata({
+            Bucket: entry.getBucket(),
+            Key: entry.getObjectKey(),
+            VersionId: entry.getEncodedVersionId(),
+        });
+        attachReqUids(req, log);
+        req.send((err, data) => {
             if (err) {
-                this.log.error(
-                    'error publishing entry to replication status topic',
-                    { method: 'ReplicateObject._publishReplicationStatus',
-                      topic: this.repConfig.replicationStatusTopic,
-                      entry: updatedSourceEntry.getLogInfo(),
-                      replicationStatus:
-                      updatedSourceEntry.getReplicationStatus(),
-                      error: err });
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                    return cbOnce(err);
+                }
+                log.error('an error occurred when getting metadata from S3', {
+                    method: 'ReplicateObject._getMetadataOnce',
+                    entry: entry.getLogInfo(),
+                    origin: 'source',
+                    error: err,
+                    errMsg: err.message,
+                    errCode: err.code,
+                    errStack: err.stack,
+                });
+                return cbOnce(err);
+            }
+            return cbOnce(null, data);
+        });
+    }
+
+    _refreshSourceEntry(sourceEntry, log, cb) {
+        this._getMetadata(sourceEntry, log, (err, blob) => {
+            if (err) {
+                log.error('error getting metadata blob from S3', {
+                    method: 'ReplicateObject._refreshSourceEntry',
+                    error: err,
+                });
                 return cb(err);
             }
-            log.end().info('replication status published', {
-                topic: this.repConfig.replicationStatusTopic,
-                entry: updatedSourceEntry.getLogInfo(),
-                replicationStatus: updatedSourceEntry.getReplicationStatus(),
-                reason,
+            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
+            if (parsedEntry.error) {
+                log.error('error parsing metadata blob', {
+                    error: parsedEntry.error,
+                    method: 'ReplicateObject._refreshSourceEntry',
+                });
+                return cb(errors.InternalError.
+                    customizeDescription('error parsing metadata blob'));
+            }
+            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+            return cb(null, refreshedEntry);
+        });
+    }
+
+    _publishReplicationStatus(sourceEntry, replicationStatus, params, cb) {
+        const { log, reason } = params;
+
+        this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
+            if (err) {
+                return cb(err);
+            }
+            const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
+                refreshedEntry.toCompletedEntry() :
+                refreshedEntry.toFailedEntry();
+            updatedSourceEntry.setReplicationDataStoreVersionId(
+                sourceEntry.getReplicationDataStoreVersionId());
+            const kafkaEntries = [updatedSourceEntry.toKafkaEntry()];
+            return this.replicationStatusProducer.send(kafkaEntries, err => {
+                if (err) {
+                    this.log.error(
+                        'error publishing entry to replication status topic',
+                        { method: 'ReplicateObject._publishReplicationStatus',
+                          topic: this.repConfig.replicationStatusTopic,
+                          entry: updatedSourceEntry.getLogInfo(),
+                          replicationStatus:
+                          updatedSourceEntry.getReplicationStatus(),
+                          error: err });
+                    return cb(err);
+                }
+                log.end().info('replication status published', {
+                    topic: this.repConfig.replicationStatusTopic,
+                    entry: updatedSourceEntry.getLogInfo(),
+                    replicationStatus,
+                    reason,
+                });
+                return cb();
             });
-            return cb();
         });
     }
 
@@ -509,12 +590,14 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _handleReplicationOutcome(err, sourceEntry, destEntry, log, done) {
+        let status;
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                       'replication status as COMPLETED',
                       { entry: sourceEntry.getLogInfo() });
-            return this._publishReplicationStatus(
-                sourceEntry.toCompletedEntry(), { log }, done);
+            status = 'COMPLETED';
+            return this._publishReplicationStatus(sourceEntry, status, { log },
+                done);
         }
         if (err.BadRole ||
             (err.origin === 'source' &&
@@ -546,8 +629,8 @@ class ReplicateObject extends BackbeatTask {
             { failMethod: err.method,
                 entry: sourceEntry.getLogInfo(),
                 error: err.description });
-        return this._publishReplicationStatus(
-            sourceEntry.toFailedEntry(),
+        status = 'FAILED';
+        return this._publishReplicationStatus(sourceEntry, status,
             { log, reason: err.description }, done);
     }
 }
