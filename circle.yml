@@ -2,6 +2,8 @@ general:
     branches:
         ignore:
             - /^ultron\/.*/ # Ignore ultron/* branches
+    artifacts:
+        - coverage/
 
 machine:
     node:
@@ -20,5 +22,5 @@ test:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
         - npm run --silent lint_md
         - npm run --silent lint
-        - npm test
-        - npm run ft_test
+        - npm test > $CIRCLE_ARTIFACTS/unit-tests.txt
+        - npm run ft_test > $CIRCLE_ARTIFACTS/functional-tests.txt
