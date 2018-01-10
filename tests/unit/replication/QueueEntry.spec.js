@@ -33,11 +33,43 @@ describe('QueueEntry helper class', () => {
             const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
             assert.strictEqual(entry.error, undefined);
 
-            const replica = entry.toReplicaEntry();
+            // If one site is a REPLICA, the global status should be REPLICA
+            const replica = entry.toReplicaEntry('zenko');
+            assert.strictEqual(replica.getReplicationSiteStatus('zenko'),
+                'REPLICA');
+            assert.strictEqual(
+                replica.getReplicationSiteStatus('replicationaws'),
+                'PENDING');
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
-            const completed = entry.toCompletedEntry();
-            assert.strictEqual(completed.getReplicationStatus(), 'COMPLETED');
+            // If one site is FAILED, the global status should be FAILED
+            const failed = entry.toFailedEntry('zenko');
+            assert.strictEqual(failed.getReplicationSiteStatus('zenko'),
+                'FAILED');
+            assert.strictEqual(
+                replica.getReplicationSiteStatus('replicationaws'),
+                'PENDING');
+            assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
+
+            // If one site is still PENDING, the global status should be PENDING
+            // even though one has completed
+            const completed = entry.toCompletedEntry('zenko');
+            assert.strictEqual(completed.getReplicationSiteStatus('zenko'),
+                'COMPLETED');
+            assert.strictEqual(
+                completed.getReplicationSiteStatus('replicationaws'),
+                'PENDING');
+            assert.strictEqual(completed.getReplicationStatus(), 'PENDING');
+
+            // If all sites are COMPLETED, the global status should be COMPLETED
+            const completed1 = entry.toCompletedEntry('zenko');
+            const completed2 = entry.toCompletedEntry('replicationaws');
+            assert.strictEqual(completed2
+                .getReplicationSiteStatus('replicationaws'),
+                'COMPLETED');
+            assert.strictEqual(completed1.getReplicationSiteStatus('zenko'),
+                'COMPLETED');
+            assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
         });
     });
 

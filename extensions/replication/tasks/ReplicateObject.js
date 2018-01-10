@@ -15,6 +15,9 @@ const RoleCredentials =
 
 const MPU_CONC_LIMIT = 10;
 
+// Temporarily hard coding for testing purposes.
+const SITE = 'zenko'
+
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
@@ -360,7 +363,7 @@ class ReplicateObject extends BackbeatTask {
     _putMetadataOnce(entry, mdOnly, log, cb) {
         log.debug('putting metadata',
                   { where: 'target', entry: entry.getLogInfo(),
-                    replicationStatus: entry.getReplicationStatus() });
+                    replicationStatus: entry.getReplicationSiteStatus(SITE) });
         const cbOnce = jsutil.once(cb);
 
         // sends extra header x-scal-replication-content to the target
@@ -441,7 +444,7 @@ class ReplicateObject extends BackbeatTask {
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry();
+        const destEntry = sourceEntry.toReplicaEntry(SITE);
 
         log.debug('processing entry',
                   { entry: sourceEntry.getLogInfo() });
@@ -514,7 +517,7 @@ class ReplicateObject extends BackbeatTask {
                       'replication status as COMPLETED',
                       { entry: sourceEntry.getLogInfo() });
             return this._publishReplicationStatus(
-                sourceEntry.toCompletedEntry(), { log }, done);
+                sourceEntry.toCompletedEntry(SITE), { log }, done);
         }
         if (err.BadRole ||
             (err.origin === 'source' &&
@@ -547,7 +550,7 @@ class ReplicateObject extends BackbeatTask {
                 entry: sourceEntry.getLogInfo(),
                 error: err.description });
         return this._publishReplicationStatus(
-            sourceEntry.toFailedEntry(),
+            sourceEntry.toFailedEntry(SITE),
             { log, reason: err.description }, done);
     }
 }

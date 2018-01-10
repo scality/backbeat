@@ -4,6 +4,8 @@ const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('./utils/ObjectQueueEntry');
+// Temporarily hard coding for testing purposes.
+const SITE = 'zenko'
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -43,7 +45,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
-        if (queueEntry.getReplicationStatus() !== 'PENDING') {
+        if (queueEntry.getReplicationSiteStatus(SITE) !== 'PENDING') {
             return;
         }
         this.log.trace('publishing object replication entry',
