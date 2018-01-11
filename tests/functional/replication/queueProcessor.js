@@ -167,6 +167,12 @@ class S3Mock extends TestConfigurator {
                         query: {},
                         handler: () => this._putMetadataSource,
                     }),
+                    getMetadata: () => ({
+                        method: 'GET',
+                        path: `/_/backbeat/metadata/${this.getParam('source.bucket')}/${this.getParam('encodedKey')}`,
+                        query: { versionId: VersionIDUtils.encode(this.getParam('versionId')) },
+                        handler: () => this._getMetadataSource,
+                    }),
                 },
                 vault: {
                     assumeRoleBackbeat: () => ({
@@ -569,6 +575,14 @@ class S3Mock extends TestConfigurator {
         res.end();
         this.onPutSourceMd();
         this.onPutSourceMd = null;
+    }
+
+    _getMetadataSource(req, url, query, res) {
+        assert(query.versionId);
+        res.writeHead(200);
+        res.end(JSON.stringify({
+            Body: JSON.parse(this.getParam('kafkaEntry.value')).value,
+        }));
     }
 }
 

@@ -569,6 +569,44 @@
                     }
                 }
             }
+        },
+        "GetMetadata": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/backbeat/metadata/{Bucket}/{Key+}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "VersionId"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "VersionId": {
+                        "type": "string",
+                        "documentation": "VersionId used to reference a specific version of the object.",
+                        "location": "querystring",
+                        "locationName": "versionId"
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "Body": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     }
 }
