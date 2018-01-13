@@ -49,7 +49,7 @@ describe('queuePopulator', () => {
                             Rules: [{
                                 Destination: {
                                     Bucket: 'arn:aws:s3:::dummy-dest-bucket',
-                                    StorageClass: 'STANDARD',
+                                    StorageClass: 'sf',
                                 },
                                 Prefix: '',
                                 Status: 'Enabled',

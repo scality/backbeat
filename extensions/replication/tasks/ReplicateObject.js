@@ -211,10 +211,10 @@ class ReplicateObject extends BackbeatTask {
                 return cb(err);
             }
             const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
-                refreshedEntry.toCompletedEntry() :
-                refreshedEntry.toFailedEntry();
-            updatedSourceEntry.setReplicationDataStoreVersionId(
-                sourceEntry.getReplicationDataStoreVersionId());
+                refreshedEntry.toCompletedEntry(this.site) :
+                refreshedEntry.toFailedEntry(this.site);
+            updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
             const kafkaEntries = [updatedSourceEntry.toKafkaEntry()];
             return this.replicationStatusProducer.send(kafkaEntries, err => {
                 if (err) {
@@ -441,7 +441,8 @@ class ReplicateObject extends BackbeatTask {
     _putMetadataOnce(entry, mdOnly, log, cb) {
         log.debug('putting metadata',
                   { where: 'target', entry: entry.getLogInfo(),
-                    replicationStatus: entry.getReplicationStatus() });
+                    replicationStatus:
+                        entry.getReplicationSiteStatus(this.site) });
         const cbOnce = jsutil.once(cb);
 
         // sends extra header x-scal-replication-content to the target
@@ -522,7 +523,7 @@ class ReplicateObject extends BackbeatTask {
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry();
+        const destEntry = sourceEntry.toReplicaEntry(this.site);
 
         log.debug('processing entry',
                   { entry: sourceEntry.getLogInfo() });

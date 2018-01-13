@@ -20,9 +20,10 @@ class MultipleBackendTask extends ReplicateObject {
         if (entryRolesString !== undefined) {
             entryRoles = entryRolesString.split(',');
         }
-        if (entryRoles === undefined || entryRoles.length !== 1) {
-            errMessage = 'expecting a single role in bucket replication ' +
-                'configuration when replicating to an external location';
+        if (entryRoles === undefined || entryRoles.length > 2) {
+            errMessage = 'expecting no more than two roles in bucket ' +
+                'replication configuration when replicating to an external ' +
+                'location';
             log.error(errMessage, {
                 method: 'MultipleBackendTask._setupRolesOnce',
                 entry: entry.getLogInfo(),
@@ -65,9 +66,10 @@ class MultipleBackendTask extends ReplicateObject {
                     errMessage));
             }
             const roles = data.ReplicationConfiguration.Role.split(',');
-            if (roles.length !== 1) {
-                errMessage = 'expecting a single role in bucket replication ' +
-                    'configuration when replicating to an external location';
+            if (roles.length > 2) {
+                errMessage = 'expecting no more than two roles in bucket ' +
+                    'replication configuration when replicating to an ' +
+                    'external location';
                 log.error(errMessage, {
                     method: 'MultipleBackendTask._setupRolesOnce',
                     entry: entry.getLogInfo(),
@@ -150,7 +152,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: destEntry.getObjectKey(),
             ContentLength: partObj.getPartSize(),
             StorageType: destEntry.getReplicationStorageType(),
-            StorageClass: destEntry.getReplicationStorageClass(),
+            StorageClass: this.site,
             PartNumber: partObj.getPartNumber(),
             UploadId: uploadId,
             Body: incomingMsg,
@@ -195,7 +197,7 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             StorageType: storageType,
-            StorageClass: destEntry.getReplicationStorageClass(),
+            StorageClass: this.site,
             VersionId: destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
@@ -277,7 +279,7 @@ class MultipleBackendTask extends ReplicateObject {
                     Bucket: destEntry.getBucket(),
                     Key: destEntry.getObjectKey(),
                     StorageType: destEntry.getReplicationStorageType(),
-                    StorageClass: destEntry.getReplicationStorageClass(),
+                    StorageClass: this.site,
                     VersionId: destEntry.getEncodedVersionId(),
                     UserMetaData: sourceEntry.getUserMetadata(),
                     ContentType: sourceEntry.getContentType(),
@@ -304,8 +306,8 @@ class MultipleBackendTask extends ReplicateObject {
                         });
                         return doneOnce(err);
                     }
-                    sourceEntry
-                        .setReplicationDataStoreVersionId(data.versionId);
+                    sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                        data.versionId);
                     return doneOnce();
                 });
             });
@@ -381,7 +383,7 @@ class MultipleBackendTask extends ReplicateObject {
             ContentMD5: part ? partObj.getPartETag() :
                 destEntry.getContentMd5(),
             StorageType: destEntry.getReplicationStorageType(),
-            StorageClass: destEntry.getReplicationStorageClass(),
+            StorageClass: this.site,
             VersionId: destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType() || undefined,
@@ -405,7 +407,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                data.versionId);
             return doneOnce(null, data);
         });
     }
@@ -432,12 +435,13 @@ class MultipleBackendTask extends ReplicateObject {
                 Bucket: destEntry.getBucket(),
                 Key: destEntry.getObjectKey(),
                 StorageType: destEntry.getReplicationStorageType(),
-                StorageClass: destEntry.getReplicationStorageClass(),
+                StorageClass: this.site,
                 DataStoreVersionId:
-                    destEntry.getReplicationDataStoreVersionId(),
+                    destEntry.getReplicationSiteDataStoreVersionId(this.site),
                 Tags: JSON.stringify(destEntry.getTags()),
                 SourceBucket: sourceEntry.getBucket(),
                 SourceVersionId: sourceEntry.getVersionId(),
+                ReplicationEndpointSite: this.site,
             });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
@@ -450,7 +454,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                data.versionId);
             return doneOnce();
         });
     }
@@ -475,10 +480,12 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
-            StorageClass: destEntry.getReplicationStorageClass(),
-            DataStoreVersionId: destEntry.getReplicationDataStoreVersionId(),
+            StorageClass: this.site,
+            DataStoreVersionId:
+                destEntry.getReplicationSiteDataStoreVersionId(this.site),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
+            ReplicationEndpointSite: this.site,
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
@@ -492,7 +499,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            sourceEntry.setReplicationDataStoreVersionId(data.versionId);
+            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                data.versionId);
             return doneOnce();
         });
     }
@@ -539,7 +547,7 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
-            StorageClass: destEntry.getReplicationStorageClass(),
+            StorageClass: this.site,
         });
         attachReqUids(destReq, log);
         return destReq.send(err => {
@@ -561,7 +569,7 @@ class MultipleBackendTask extends ReplicateObject {
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry();
+        const destEntry = sourceEntry.toReplicaEntry(this.site);
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
         return async.waterfall([
