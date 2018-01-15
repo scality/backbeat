@@ -12,6 +12,12 @@ const MPU_CONC_LIMIT = 10;
 
 class MultipleBackendTask extends ReplicateObject {
 
+    _getReplicationEndpointType() {
+        const replicationEndpoint = this.destConfig.bootstrapList
+            .find(endpoint => endpoint.site === this.site);
+        return replicationEndpoint.type;
+    }
+
     _setupRolesOnce(entry, log, cb) {
         log.debug('getting bucket replication', { entry: entry.getLogInfo() });
         const entryRolesString = entry.getReplicationRoles();
@@ -187,16 +193,15 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _initiateMPU(sourceEntry, destEntry, log, cb) {
-        const storageType = destEntry.getReplicationStorageType();
         // If using Azure backend, create a unique ID to use as the block ID.
-        if (storageType === 'azure') {
+        if (this._getReplicationEndpointType() === 'azure') {
             const uploadId = uuid().replace(/-/g, '');
             return setImmediate(() => cb(null, uploadId));
         }
         const destReq = this.backbeatSource.multipleBackendInitiateMPU({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            StorageType: storageType,
+            StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
             VersionId: destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
@@ -256,7 +261,7 @@ class MultipleBackendTask extends ReplicateObject {
                             PartNumber: [data.partNumber],
                             ETag: [data.ETag],
                         };
-                        if (destEntry.getReplicationStorageType() === 'azure') {
+                        if (this._getReplicationEndpointType() === 'azure') {
                             res.NumberSubParts = [data.numberSubParts];
                         }
                         return done(null, res);
