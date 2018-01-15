@@ -51,15 +51,15 @@ describe('QueueEntry helper class', () => {
                 'PENDING');
             assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
 
-            // If one site is still PENDING, the global status should be PENDING
-            // even though one has completed
+            // If one site is still PENDING, the global status should be
+            // PROCESSING even though one has completed
             const completed = entry.toCompletedEntry('zenko');
             assert.strictEqual(completed.getReplicationSiteStatus('zenko'),
                 'COMPLETED');
             assert.strictEqual(
                 completed.getReplicationSiteStatus('replicationaws'),
                 'PENDING');
-            assert.strictEqual(completed.getReplicationStatus(), 'PENDING');
+            assert.strictEqual(completed.getReplicationStatus(), 'PROCESSING');
 
             // If all sites are COMPLETED, the global status should be COMPLETED
             const completed1 = entry.toCompletedEntry('zenko');

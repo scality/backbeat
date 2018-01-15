@@ -294,7 +294,7 @@ class S3Mock extends TestConfigurator {
         this.putDataCount = 0;
         this.hasPutTargetMd = false;
         this.onPutSourceMd = null;
-        this.setExpectedReplicationStatus('PENDING');
+        this.setExpectedReplicationStatus('PROCESSING');
         this.requestsPerHost = {
             '127.0.0.1': 0,
             '127.0.0.2': 0,
@@ -576,7 +576,7 @@ class S3Mock extends TestConfigurator {
 
     _putMetadataSource(req, url, query, res, reqBody) {
         assert.strictEqual(this.hasPutTargetMd,
-                           (this.expectedReplicationStatus === 'PENDING'));
+                           (this.expectedReplicationStatus === 'PROCESSING'));
         assert.notStrictEqual(this.onPutSourceMd, null);
 
         const parsedMd = JSON.parse(reqBody);

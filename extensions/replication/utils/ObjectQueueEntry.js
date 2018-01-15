@@ -16,7 +16,7 @@ function _getGobalReplicationStatus(data) {
             return 'FAILED';
         }
         if (statuses.includes('PENDING')) {
-            return 'PENDING';
+            return 'PROCESSING';
         }
     }
     return 'COMPLETED';
