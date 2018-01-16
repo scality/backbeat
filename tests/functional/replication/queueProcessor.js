@@ -105,6 +105,7 @@ class S3Mock extends TestConfigurator {
                 type: 'put',
                 bucket: this.getParam('source.bucket'),
                 key: this.getParam('source.md.versionedKey'),
+                site: 'sf',
                 value: JSON.stringify({
                     'md-model-version': 2,
                     'owner-display-name': 'Bart',
@@ -134,7 +135,7 @@ class S3Mock extends TestConfigurator {
                     'replicationInfo': {
                         status: 'PENDING',
                         backends: [{
-                            site: 'zenko',
+                            site: 'sf',
                             status: 'PENDING',
                             dataStoreVersionId: '',
                         }, {
@@ -546,8 +547,8 @@ class S3Mock extends TestConfigurator {
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: 'REPLICA',
             backends: [{
-                site: 'zenko',
-                status: 'PENDING',
+                site: 'sf',
+                status: 'REPLICA',
                 dataStoreVersionId: '',
             }, {
                 site: 'replicationaws',
@@ -583,8 +584,9 @@ class S3Mock extends TestConfigurator {
         assert.deepStrictEqual(parsedMd.replicationInfo, {
             status: this.expectedReplicationStatus,
             backends: [{
-                site: 'zenko',
-                status: 'PENDING',
+                site: 'sf',
+                status: this.expectedReplicationStatus === 'FAILED' ? 'FAILED' :
+                    'COMPLETED',
                 dataStoreVersionId: '',
             }, {
                 site: 'replicationaws',

@@ -1,5 +1,7 @@
 const errors = require('arsenal').errors;
+const jsutil = require('arsenal').jsutil;
 
+const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -137,22 +139,109 @@ class UpdateReplicationStatus extends BackbeatTask {
         return this._updateReplicationStatus(sourceEntry, log, done);
     }
 
-    _updateReplicationStatus(sourceEntry, log, done) {
-        return this._putMetadata(sourceEntry, log, err => {
+    _getMetadata(entry, log, cb) {
+        this.retry({
+            actionDesc: 'get metadata from source',
+            logFields: { entry: entry.getLogInfo() },
+            actionFunc: done => this._getMetadataOnce(entry, log, done),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, cb);
+    }
+
+    _getMetadataOnce(entry, log, cb) {
+        log.debug('getting metadata', {
+            where: 'source',
+            entry: entry.getLogInfo(),
+            method: 'ReplicateObject._getMetadataOnce',
+        });
+        const cbOnce = jsutil.once(cb);
+
+        const req = this.backbeatSource.getMetadata({
+            Bucket: entry.getBucket(),
+            Key: entry.getObjectKey(),
+            VersionId: entry.getEncodedVersionId(),
+        });
+        attachReqUids(req, log);
+        req.send((err, data) => {
             if (err) {
-                log.error('an error occurred when writing replication ' +
-                          'status',
-                    { entry: sourceEntry.getLogInfo(),
-                      origin: 'source',
-                      peer: this.sourceConfig.s3,
-                      replicationStatus: sourceEntry.getReplicationStatus(),
-                      error: err.message });
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                    return cbOnce(err);
+                }
+                log.error('an error occurred when getting metadata from S3', {
+                    method: 'ReplicateObject._getMetadataOnce',
+                    entry: entry.getLogInfo(),
+                    origin: 'source',
+                    error: err,
+                    errMsg: err.message,
+                    errCode: err.code,
+                    errStack: err.stack,
+                });
+                return cbOnce(err);
+            }
+            return cbOnce(null, data);
+        });
+    }
+
+    _refreshSourceEntry(sourceEntry, log, cb) {
+        this._getMetadata(sourceEntry, log, (err, blob) => {
+            if (err) {
+                log.error('error getting metadata blob from S3', {
+                    method: 'ReplicateObject._refreshSourceEntry',
+                    error: err,
+                });
+                return cb(err);
+            }
+            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
+            if (parsedEntry.error) {
+                log.error('error parsing metadata blob', {
+                    error: parsedEntry.error,
+                    method: 'ReplicateObject._refreshSourceEntry',
+                });
+                return cb(errors.InternalError.
+                    customizeDescription('error parsing metadata blob'));
+            }
+            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+            return cb(null, refreshedEntry);
+        });
+    }
+
+    _updateReplicationStatus(sourceEntry, log, done) {
+        return this._refreshSourceEntry(sourceEntry, log,
+        (err, refreshedEntry) => {
+            if (err) {
                 return done(err);
             }
-            log.end().info('replication status updated',
-                { entry: sourceEntry.getLogInfo(),
-                  replicationStatus: sourceEntry.getReplicationStatus() });
-            return done();
+            const site = sourceEntry.getSite();
+            const updatedSourceEntry = sourceEntry
+                .getReplicationSiteStatus(site) === 'COMPLETED' ?
+                    refreshedEntry.toCompletedEntry(site) :
+                    refreshedEntry.toFailedEntry(site);
+            updatedSourceEntry.setSite(site);
+            updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
+                sourceEntry.getReplicationSiteDataStoreVersionId(site));
+            return this._putMetadata(updatedSourceEntry, log, err => {
+                if (err) {
+                    log.error('an error occurred when writing replication ' +
+                              'status',
+                        { entry: updatedSourceEntry.getLogInfo(),
+                          origin: 'source',
+                          peer: this.sourceConfig.s3,
+                          replicationStatus:
+                            updatedSourceEntry.getReplicationStatus(),
+                          error: err.message });
+                    return done(err);
+                }
+                log.end().info('replication status updated', {
+                    entry: updatedSourceEntry.getLogInfo(),
+                    replicationStatus:
+                        updatedSourceEntry.getReplicationStatus(),
+                });
+                return done();
+            });
         });
     }
 }
