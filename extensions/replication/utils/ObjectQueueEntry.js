@@ -6,7 +6,7 @@ function _extractVersionedBaseKey(key) {
     return key.split(VID_SEP)[0];
 }
 
-function _getGobalReplicationStatus(data) {
+function _getGlobalReplicationStatus(data) {
     // Check the global status relative to the other backends
     if (Array.isArray(data.replicationInfo.backends)) {
         const statuses = data.replicationInfo.backends.map(backend =>
@@ -110,7 +110,7 @@ class ObjectQueueEntry extends ObjectMD {
     toCompletedEntry(site) {
         const newEntry = this.clone();
         newEntry.setReplicationSiteStatus(site, 'COMPLETED');
-        const status = _getGobalReplicationStatus(this.getValue());
+        const status = _getGlobalReplicationStatus(this.getValue());
         newEntry.setReplicationStatus(status);
         return newEntry;
     }
