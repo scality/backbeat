@@ -6,7 +6,7 @@ function _extractVersionedBaseKey(key) {
     return key.split(VID_SEP)[0];
 }
 
-function _getGobalReplicationStatus(data) {
+function _getGlobalReplicationStatus(data) {
     // Check the global status relative to the other backends
     if (Array.isArray(data.replicationInfo.backends)) {
         const statuses = data.replicationInfo.backends.map(backend =>
@@ -16,7 +16,7 @@ function _getGobalReplicationStatus(data) {
             return 'FAILED';
         }
         if (statuses.includes('PENDING')) {
-            return 'PENDING';
+            return 'PROCESSING';
         }
     }
     return 'COMPLETED';
@@ -38,6 +38,16 @@ class ObjectQueueEntry extends ObjectMD {
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
         this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        this.site = null;
+    }
+
+    setSite(site) {
+        this.site = site;
+        return this;
+    }
+
+    getSite() {
+        return this.site;
     }
 
     clone() {
@@ -110,7 +120,7 @@ class ObjectQueueEntry extends ObjectMD {
     toCompletedEntry(site) {
         const newEntry = this.clone();
         newEntry.setReplicationSiteStatus(site, 'COMPLETED');
-        const status = _getGobalReplicationStatus(this.getValue());
+        const status = _getGlobalReplicationStatus(this.getValue());
         newEntry.setReplicationStatus(status);
         return newEntry;
     }
@@ -122,13 +132,14 @@ class ObjectQueueEntry extends ObjectMD {
         return newEntry;
     }
 
-    toKafkaEntry() {
+    toKafkaEntry(site) {
         return { key: encodeURIComponent(
             `${this.getBucket()}/${this.getObjectKey()}`),
                  message: JSON.stringify({
                      bucket: this.getBucket(),
                      key: this.getObjectVersionedKey(),
                      value: JSON.stringify(this.getValue()),
+                     site,
                  }),
                };
     }
