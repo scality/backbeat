@@ -133,109 +133,33 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
-    _getMetadata(entry, log, cb) {
-        this.retry({
-            actionDesc: 'get metadata from source',
-            logFields: { entry: entry.getLogInfo() },
-            actionFunc: done => this._getMetadataOnce(entry, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
-    }
-
-    _getMetadataOnce(entry, log, cb) {
-        log.debug('getting metadata', {
-            where: 'source',
-            entry: entry.getLogInfo(),
-            method: 'ReplicateObject._getMetadataOnce',
-        });
-        const cbOnce = jsutil.once(cb);
-
-        const req = this.backbeatSource.getMetadata({
-            Bucket: entry.getBucket(),
-            Key: entry.getObjectKey(),
-            VersionId: entry.getEncodedVersionId(),
-        });
-        attachReqUids(req, log);
-        req.send((err, data) => {
-            if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                if (err.ObjNotFound || err.code === 'ObjNotFound') {
-                    return cbOnce(err);
-                }
-                log.error('an error occurred when getting metadata from S3', {
-                    method: 'ReplicateObject._getMetadataOnce',
-                    entry: entry.getLogInfo(),
-                    origin: 'source',
-                    error: err,
-                    errMsg: err.message,
-                    errCode: err.code,
-                    errStack: err.stack,
-                });
-                return cbOnce(err);
-            }
-            return cbOnce(null, data);
-        });
-    }
-
-    _refreshSourceEntry(sourceEntry, log, cb) {
-        this._getMetadata(sourceEntry, log, (err, blob) => {
-            if (err) {
-                log.error('error getting metadata blob from S3', {
-                    method: 'ReplicateObject._refreshSourceEntry',
-                    error: err,
-                });
-                return cb(err);
-            }
-            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
-            if (parsedEntry.error) {
-                log.error('error parsing metadata blob', {
-                    error: parsedEntry.error,
-                    method: 'ReplicateObject._refreshSourceEntry',
-                });
-                return cb(errors.InternalError.
-                    customizeDescription('error parsing metadata blob'));
-            }
-            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
-            return cb(null, refreshedEntry);
-        });
-    }
-
     _publishReplicationStatus(sourceEntry, replicationStatus, params, cb) {
         const { log, reason } = params;
-
-        this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
+        const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
+            sourceEntry.toCompletedEntry(this.site) :
+            sourceEntry.toFailedEntry(this.site);
+        updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+            sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
+        const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
+        return this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
+                this.log.error(
+                    'error publishing entry to replication status topic',
+                    { method: 'ReplicateObject._publishReplicationStatus',
+                      topic: this.repConfig.replicationStatusTopic,
+                      entry: updatedSourceEntry.getLogInfo(),
+                      replicationStatus:
+                      updatedSourceEntry.getReplicationStatus(),
+                      error: err });
                 return cb(err);
             }
-            const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
-                refreshedEntry.toCompletedEntry(this.site) :
-                refreshedEntry.toFailedEntry(this.site);
-            updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
-            const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
-            return this.replicationStatusProducer.send(kafkaEntries, err => {
-                if (err) {
-                    this.log.error(
-                        'error publishing entry to replication status topic',
-                        { method: 'ReplicateObject._publishReplicationStatus',
-                          topic: this.repConfig.replicationStatusTopic,
-                          entry: updatedSourceEntry.getLogInfo(),
-                          replicationStatus:
-                          updatedSourceEntry.getReplicationStatus(),
-                          error: err });
-                    return cb(err);
-                }
-                log.end().info('replication status published', {
-                    topic: this.repConfig.replicationStatusTopic,
-                    entry: updatedSourceEntry.getLogInfo(),
-                    replicationStatus,
-                    reason,
-                });
-                return cb();
+            log.end().info('replication status published', {
+                topic: this.repConfig.replicationStatusTopic,
+                entry: updatedSourceEntry.getLogInfo(),
+                replicationStatus,
+                reason,
             });
+            return cb();
         });
     }
 
