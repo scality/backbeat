@@ -6,6 +6,19 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "auth": {
+        "type": "account",
+        "account": "bart",
+        "vault": {
+            "host": "127.0.0.1",
+            "port": 8500,
+            "adminPort": 8600
+        }
+    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -66,6 +79,29 @@
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10
+            }
+        },
+        "lifecycle": {
+            "zookeeperPath": "/lifecycle",
+            "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
+            "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+            "conductor": {
+                "cronRule": "0 */5 * * * *"
+            },
+            "producer": {
+                "groupId": "backbeat-lifecycle-producer-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "consumer": {
+                "groupId": "backbeat-lifecycle-consumer-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                }
             }
         }
     },
