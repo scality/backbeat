@@ -26,6 +26,7 @@ class QueueEntry {
             } else {
                 const mdObj = JSON.parse(record.value);
                 entry = new ObjectQueueEntry(record.bucket, record.key, mdObj);
+                entry.setSite(record.site);
             }
             const err = entry.checkSanity();
             if (err) {

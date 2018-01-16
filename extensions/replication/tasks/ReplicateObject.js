@@ -215,7 +215,7 @@ class ReplicateObject extends BackbeatTask {
                 refreshedEntry.toFailedEntry(this.site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
-            const kafkaEntries = [updatedSourceEntry.toKafkaEntry()];
+            const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
             return this.replicationStatusProducer.send(kafkaEntries, err => {
                 if (err) {
                     this.log.error(
