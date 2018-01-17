@@ -578,7 +578,7 @@ describe('queue processor functional tests with mocking', () => {
         const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
         queueProcessor = new QueueProcessor(
-            {} /* zkConfig not needed */,
+            {} /* kafkaConfig not needed */,
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,
                     port: 7777 } },

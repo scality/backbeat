@@ -1,9 +1,8 @@
 const assert = require('assert');
 const { errors } = require('arsenal');
 const BackbeatProducer = require('../../lib/BackbeatProducer');
-const zookeeper = { connectionString: 'localhost:2181' };
+const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-producer-spec';
-const partition = 0;
 const multipleMessages = [
     { key: 'foo', message: 'hello' },
     { key: 'bar', message: 'world' },
@@ -14,12 +13,8 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 
 [
     {
-        type: 'partition mechanism',
-        config: { zookeeper, topic, partition },
-    },
-    {
         type: 'auto-partitioning (keyed-message) mechanism',
-        config: { zookeeper, topic },
+        config: { kafka: kafkaConf, topic, pollIntervalMs: 100 },
     },
 ].forEach(item => {
     describe(`BackbeatProducer - ${item.type}`, () => {
@@ -35,14 +30,14 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
                 assert.ifError(err);
                 done();
             });
-        });
+        }).timeout(30000);
 
         it('should be able to send a batch of messages', done => {
             producer.send(multipleMessages, err => {
                 assert.ifError(err);
                 done();
             });
-        });
+        }).timeout(30000);
     });
 });
 
@@ -50,7 +45,7 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 describe('BackbeatProducer - Error case', () => {
     let producer;
     before(done => {
-        producer = new BackbeatProducer({ zookeeper, topic });
+        producer = new BackbeatProducer({ kafka: kafkaConf, topic });
         producer
             .on('ready', () => producer.close(done))
             .on('error', done);
@@ -63,5 +58,5 @@ describe('BackbeatProducer - Error case', () => {
             assert.deepStrictEqual(errors.InternalError, err);
             done();
         });
-    });
+    }).timeout(30000);
 });
