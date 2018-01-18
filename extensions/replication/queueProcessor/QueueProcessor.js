@@ -310,6 +310,7 @@ class QueueProcessor extends EventEmitter {
             }
         }
         if (task) {
+            this.logger.debug('source entry is being pushed');
             return this.taskScheduler.push({ task, entry: sourceEntry },
                                            sourceEntry.getCanonicalKey(),
                                            done);
