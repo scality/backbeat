@@ -27,9 +27,12 @@ const joiSchema = {
         cronRule: joi.string().required(),
         batchMaxRead: joi.number().default(10000),
         zookeeperPath: joi.string().required(),
-        logSource: joi.alternatives().try('bucketd', 'dmd').required(),
+        logSource: joi.alternatives().try('bucketd', 'dmd', 'mongo').required(),
         bucketd: hostPortJoi,
         dmd: hostPortJoi.keys({
+            logName: joi.string().default('s3-recordlog'),
+        }),
+        mongo: hostPortJoi.keys({
             logName: joi.string().default('s3-recordlog'),
         }),
     },
