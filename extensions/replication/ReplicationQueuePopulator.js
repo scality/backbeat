@@ -12,6 +12,10 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     filter(entry) {
+        if (entry.key === undefined) {
+            // bucket updates have no key in raft log
+            return undefined;
+        }
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
