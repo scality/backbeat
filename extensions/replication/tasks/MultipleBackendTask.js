@@ -175,7 +175,7 @@ class MultipleBackendTask extends ReplicateObject {
                     peer: this.destBackbeatHost,
                     error: err.message,
                 });
-                return doneOnce(err);
+                return doneOnce(err, destReq);
             }
             return doneOnce(null, data);
         });
@@ -255,6 +255,17 @@ class MultipleBackendTask extends ReplicateObject {
                 this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
                     log, (err, data) => {
                         if (err) {
+                            // abort sourceReq since retry and request failed
+                            process.stdout.write('TESTING BLOCK');
+                            const partObj = new ObjectMDLocation(part);
+                            const sourceReq = this.S3source.getObject({
+                                Bucket: sourceEntry.getBucket(),
+                                Key: sourceEntry.getObjectKey(),
+                                VersionId: sourceEntry.getEncodedVersionId(),
+                                PartNumber: partObj.getPartNumber(),
+                            });
+                            // TODO: if err is 404, may need to ignore
+                            sourceReq.abort();
                             return done(err);
                         }
                         const res = {
@@ -410,7 +421,7 @@ class MultipleBackendTask extends ReplicateObject {
                     peer: this.destBackbeatHost,
                     error: err.message,
                 });
-                return doneOnce(err);
+                return doneOnce(err, destReq);
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);

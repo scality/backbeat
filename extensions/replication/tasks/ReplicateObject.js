@@ -105,8 +105,12 @@ class ReplicateObject extends BackbeatTask {
             actionFunc: done => this._getAndPutPartOnce(
                 sourceEntry, destEntry, part, partLogger, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
+            onRetryFunc: (err, req) => {
                 if (err.origin === 'target') {
+                    if (req) {
+                        // destReq aborted since picking a new host
+                        req.abort();
+                    }
                     this.destHosts.pickNextHost();
                     this._setupDestClients(this.targetRole, partLogger);
                 }
@@ -286,7 +290,23 @@ class ReplicateObject extends BackbeatTask {
         }
         const locations = sourceEntry.getReducedLocations();
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done);
+            this._getAndPutPart(sourceEntry, destEntry, part, log,
+            (err, res) => {
+                if (err) {
+                    const partObj = new ObjectMDLocation(part);
+                    const partNumber = partObj.getPartNumber();
+                    const sourceReq = this.S3source.getObject({
+                        Bucket: sourceEntry.getBucket(),
+                        Key: sourceEntry.getObjectKey(),
+                        VersionId: sourceEntry.getEncodedVersionId(),
+                        PartNumber: partNumber,
+                    });
+                    // here I can abort sourceReq because retry failed
+                    // TODO: if err is a 404, may need to ignore
+                    sourceReq.abort();
+                }
+                done(err, res);
+            });
         }, cb);
     }
 
@@ -354,7 +374,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message });
-                return doneOnce(err);
+                return doneOnce(err, destReq);
             }
             partObj.setDataLocation(data.Location[0]);
             return doneOnce(null, partObj.getValue());
