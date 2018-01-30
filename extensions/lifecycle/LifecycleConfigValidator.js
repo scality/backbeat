@@ -21,6 +21,12 @@ const joiSchema = {
         expiration: {
             enabled: joi.boolean().default(true),
         },
+        noncurrentVersionExpiration: {
+            enabled: joi.boolean().default(true),
+        },
+        abortIncompleteMultipartUpload: {
+            enabled: joi.boolean().default(true),
+        },
     },
 };
 

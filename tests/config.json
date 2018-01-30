@@ -2,6 +2,26 @@
     "zookeeper": {
         "connectionString": "127.0.0.1:2181"
     },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "transport": "http",
+        "accessKey": "accessKey1",
+        "secretKey": "verySecretKey1"
+    },
+    "auth": {
+        "type": "account",
+        "account": "bart",
+        "vault": {
+            "host": "127.0.0.1",
+            "port": 8500,
+            "adminPort": 8600,
+            "adminCredentialsFile": "../conf/authdata.json"
+        }
+    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -13,23 +33,39 @@
             "logName": "s3-recordlog"
         }
     },
-    "kafka": {
-        "hosts": "127.0.0.1:9092"
-    },
-    "s3": {
-        "host": "127.0.0.1",
-        "port": 8000,
-        "transport": "http",
-        "accessKey": "accessKey1",
-        "secretKey": "verySecretKey1"
-    },
     "extensions": {
         "replication": {
             "topic": "backbeat-test-replication",
             "groupId": "backbeat-test-replication-group"
         },
         "lifecycle": {
-            "zookeeperPath": "/backbeat/test/lifecycle"
+            "zookeeperPath": "/lifecycletest",
+            "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
+            "objectTasksTopic": "backbeat-test-dummy-object-task",
+            "conductor": {
+                "cronRule": "0 */5 * * * *"
+            },
+            "producer": {
+                "groupId": "backbeat-lifecycle-producer-test-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "consumer": {
+                "groupId": "backbeat-lifecycle-consumer-test-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
+                }
+            }
         }
     },
     "log": {
