@@ -51,8 +51,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
-           `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-           JSON.stringify(entry));
+                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
+                     JSON.stringify(entry));
     }
 }
 

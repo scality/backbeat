@@ -14,17 +14,15 @@ class QueueEntry {
      * @return {Object} - an object which inherits from
      *   {@link QueueEntry} base class
      */
-    constructor(bucket, objectVersionedKey, entryType, objMd) {
+    constructor(bucket, objectVersionedKey, objMd) {
         super(objMd);
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
         this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
-        this.entryType = entryType;
     }
 
     clone() {
-        return new QueueEntry(this.bucket, this.objectVersionedKey,
-            this.entryType, this);
+        return new QueueEntry(this.bucket, this.objectVersionedKey, this);
     }
 
     checkSanity() {
@@ -78,15 +76,6 @@ class QueueEntry {
     getObjectVersionedKey() {
         return this.objectVersionedKey;
     }
-
-    isObjectMasterKey() {
-        return isMasterKey(this.objectVersionedKey);
-    }
-
-    getEntryType() {
-        return this.entryType;
-    }
-
 
     getUserMetadata() {
         const metaHeaders = {};
