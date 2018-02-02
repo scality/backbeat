@@ -20,6 +20,9 @@ stages:
           retryFetch: True
           haltOnFailure: True
       - ShellCommand:
+          name: Npm install
+          command: npm install
+      - ShellCommand:
           name: run static analysis tools on markdown
           command: npm run --silent lint_md
       - ShellCommand:
