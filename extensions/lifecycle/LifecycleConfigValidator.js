@@ -6,6 +6,7 @@ const joiSchema = {
     objectTasksTopic: joi.string().required(),
     conductor: {
         cronRule: joi.string().required(),
+        concurrency: joi.number().greater(0).default(10),
     },
     producer: {
         groupId: joi.string().required(),

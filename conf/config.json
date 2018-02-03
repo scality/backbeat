@@ -86,7 +86,8 @@
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
-                "cronRule": "0 */5 * * * *"
+                "cronRule": "0 */5 * * * *",
+                "concurrency": 10
             },
             "producer": {
                 "groupId": "backbeat-lifecycle-producer-group",
