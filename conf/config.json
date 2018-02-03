@@ -23,7 +23,7 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "dmd",
+        "logSource": "bucketd",
         "bucketd": {
             "host": "127.0.0.1",
             "port": 9000
@@ -31,9 +31,25 @@
         "dmd": {
             "host": "127.0.0.1",
             "port": 9990
+        },
+        "mongo": {
+            "host": "127.0.0.1",
+            "port": 27018,
+            "writeConcern": "majority",
+            "replicaSet": "rs0",
+            "readPreference": "primary",
+            "database": "metadata"
         }
     },
     "extensions": {
+        "generic": {
+            "topic": "backbeat-generic"
+        },
+        "mongoProcessor": {
+            "topic": "backbeat-generic",
+            "groupId": "backbeat-mongo-processor-group",
+            "retryTimeoutS": 300
+        },
         "replication": {
             "source": {
                 "transport": "http",

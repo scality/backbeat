@@ -41,6 +41,13 @@ const joiSchema = {
         dmd: hostPortJoi.keys({
             logName: joi.string().default('s3-recordlog'),
         }).when('logSource', { is: 'dmd', then: joi.required() }),
+        mongo: hostPortJoi.keys({
+            logName: joi.string().default('s3-recordlog'),
+            writeConcern: joi.string().default('majority'),
+            replicaSet: joi.string().default(''),
+            readPreference: joi.string().default('primary'),
+            database: joi.string().default('metadata'),
+        }).when('logSource', { is: 'mongo', then: joi.required() }),
     },
     log: logJoi,
     extensions: joi.object(),

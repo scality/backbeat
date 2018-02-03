@@ -11,14 +11,14 @@ const RoundRobin = require('arsenal').network.RoundRobin;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
-const QueueEntry = require('../../../lib/models/QueueEntry');
+const QueueEntry = require('../../utils/QueueEntry');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const EchoBucket = require('../tasks/EchoBucket');
 
-const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
-const BucketQueueEntry = require('../utils/BucketQueueEntry');
+const ObjectQueueEntry = require('../../utils/ObjectQueueEntry');
+const BucketQueueEntry = require('../../utils/BucketQueueEntry');
 
 const {
     proxyVaultPath,

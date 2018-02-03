@@ -5,11 +5,21 @@ class BucketQueueEntry {
     /**
      * @constructor
      * @param {string} key - entry key in database
+     * @param {string} [value] - JSON string of value
      */
-    constructor(key) {
+    constructor(key, value) {
         const [ownerCanonicalID, bucketName] = key ? key.split(splitter) : [];
         this._ownerCanonicalID = ownerCanonicalID;
         this._bucket = bucketName;
+        this._bucketOwnerKey = key;
+        this._value = undefined;
+        if (value) {
+            try {
+                this._value = JSON.parse(value);
+            } catch (err) {
+                this._value = {};
+            }
+        }
     }
 
     checkSanity() {
@@ -32,6 +42,14 @@ class BucketQueueEntry {
 
     getOwnerCanonicalID() {
         return this._ownerCanonicalID;
+    }
+
+    getBucketOwnerKey() {
+        return this._bucketOwnerKey;
+    }
+
+    getValue() {
+        return this._value;
     }
 
     getLogInfo() {

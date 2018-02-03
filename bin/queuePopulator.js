@@ -20,16 +20,16 @@ werelogs.configure({ level: config.log.logLevel,
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState) {
     if (taskState.batchInProgress) {
-        log.warn('skipping replication batch: previous one still in progress');
+        log.warn('skipping batch: previous one still in progress');
         return undefined;
     }
-    log.debug('start queueing replication batch');
+    log.debug('start queueing batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
     queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
         taskState.batchInProgress = false;
         if (err) {
-            log.error('an error occurred during replication', {
+            log.error('an error occurred during populating', {
                 method: 'QueuePopulator::task.queueBatch',
                 error: err,
             });
@@ -37,7 +37,7 @@ function queueBatch(queuePopulator, taskState) {
         }
         const logFunc = (counters.some(counter => counter.readRecords > 0) ?
             log.info : log.debug).bind(log);
-        logFunc('replication batch finished', { counters });
+        logFunc('population batch finished', { counters });
         return undefined;
     });
     return undefined;
