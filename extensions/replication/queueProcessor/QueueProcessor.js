@@ -166,7 +166,7 @@ class QueueProcessor extends EventEmitter {
         producer.once('ready', () => {
             producer.removeAllListeners('error');
             producer.on('error', err => {
-                this.log.error('error from backbeat producer', {
+                this.logger.error('error from backbeat producer', {
                     topic: this.repConfig.replicationStatusTopic,
                     error: err,
                 });
