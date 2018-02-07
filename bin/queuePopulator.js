@@ -5,6 +5,7 @@ const werelogs = require('werelogs');
 
 const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
+const kafkaConfig = config.kafka;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
@@ -43,7 +44,8 @@ function queueBatch(queuePopulator, taskState) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, qpConfig, mConfig,
+const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
+    qpConfig, mConfig,
     rConfig, extConfigs);
 
 async.waterfall([

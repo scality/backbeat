@@ -28,15 +28,6 @@ const {
     metricsTypeProcessed,
 } = require('../constants');
 
-/**
-* Given that the largest object JSON from S3 is about 1.6 MB and adding some
-* padding to it, Backbeat replication topic is currently setup with a config
-* max.message.bytes.limit to 5MB. Consumers need to update their fetchMaxBytes
-* to get atleast 5MB put in the Kafka topic, adding a little extra bytes of
-* padding for approximation.
-*/
-const CONSUMER_FETCH_MAX_BYTES = 5000020;
-
 class QueueProcessor extends EventEmitter {
 
     /**
@@ -45,9 +36,9 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
-     * @param {Object} zkConfig - zookeeper configuration object
-     * @param {String} zkConfig.connectionString - zookeeper connection string
-     *   as "host:port[/chroot]"
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
@@ -69,10 +60,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, httpsConfig,
+    constructor(kafkaConfig, sourceConfig, destConfig, repConfig, httpsConfig,
                 site, mProducer) {
         super();
-        this.zkConfig = zkConfig;
+        this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
@@ -195,7 +186,7 @@ class QueueProcessor extends EventEmitter {
 
     _setupProducer(done) {
         const producer = new BackbeatProducer({
-            zookeeper: { connectionString: this.zkConfig.connectionString },
+            kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
         });
         producer.once('error', done);
@@ -271,43 +262,44 @@ class QueueProcessor extends EventEmitter {
                                  { error: err.message });
                 return undefined;
             }
-            if (!(options && options.disableConsumer)) {
-                const groupId =
-                    `${this.repConfig.queueProcessor.groupId}-${this.site}`;
-                this._consumer = new BackbeatConsumer({
-                    zookeeper: {
-                        connectionString: this.zkConfig.connectionString,
-                    },
-                    topic: this.repConfig.topic,
-                    groupId,
-                    concurrency: this.repConfig.queueProcessor.concurrency,
-                    queueProcessor: this.processKafkaEntry.bind(this),
-                    fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
-                });
-                this._consumer.on('error', () => {});
+            if (options && options.disableConsumer) {
+                this.emit('ready');
+                return undefined;
+            }
+            const groupId =
+                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+            this._consumer = new BackbeatConsumer({
+                kafka: { hosts: this.kafkaConfig.hosts },
+                topic: this.repConfig.topic,
+                groupId,
+                concurrency: this.repConfig.queueProcessor.concurrency,
+                queueProcessor: this.processKafkaEntry.bind(this),
+            });
+            this._consumer.on('error', () => {});
+            this._consumer.on('ready', () => {
                 this._consumer.subscribe();
-
-                this._consumer.on('metrics', data => {
-                    // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                    const filteredData = Object.keys(data).filter(key =>
-                        key === this.site).reduce((store, k) => {
-                            // eslint-disable-next-line no-param-reassign
-                            store[k] = data[this.site];
-                            return store;
-                        }, {});
-                    this._mProducer.publishMetrics(filteredData,
-                        metricsTypeProcessed, metricsExtension, err => {
-                            this.logger.trace('error occurred in publishing ' +
+                this.logger.info('queue processor is ready to consume ' +
+                                 'replication entries');
+                this.emit('ready');
+            });
+            this._consumer.on('metrics', data => {
+                // i.e. data = { my-site: { ops: 1, bytes: 124 } }
+                const filteredData = Object.keys(data).filter(key =>
+                    key === this.site).reduce((store, k) => {
+                        // eslint-disable-next-line no-param-reassign
+                        store[k] = data[this.site];
+                        return store;
+                    }, {});
+                this._mProducer.publishMetrics(filteredData,
+                    metricsTypeProcessed, metricsExtension, err => {
+                        this.logger.trace('error occurred in publishing ' +
                             'metrics', {
                                 error: err,
                                 method: 'QueueProcessor.start',
                             });
-                        });
-                });
-            }
-            this.logger.info('queue processor is ready to consume ' +
-                             'replication entries');
-            return this.emit('ready');
+                    });
+            });
+            return undefined;
         });
     }
 

@@ -6,7 +6,7 @@ const QueueProcessor = require('./QueueProcessor');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const config = require('../../../conf/Config');
-const zkConfig = config.zookeeper;
+const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
@@ -27,7 +27,7 @@ const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-const metricsProducer = new MetricsProducer(zkConfig, mConfig);
+const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
 metricsProducer.setupProducer(err => {
     if (err) {
         log.error('error starting metrics producer for queue processor', {
@@ -36,7 +36,7 @@ metricsProducer.setupProducer(err => {
         });
         return undefined;
     }
-    const queueProcessor = new QueueProcessor(zkConfig, sourceConfig,
+    const queueProcessor = new QueueProcessor(kafkaConfig, sourceConfig,
         destConfig, repConfig, httpsConfig, site, metricsProducer);
     return queueProcessor.start();
 });
