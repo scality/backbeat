@@ -17,13 +17,17 @@ werelogs.configure({ level: config.log.logLevel,
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState) {
     if (taskState.batchInProgress) {
+        console.log('taskState is', taskState);
         log.warn('skipping replication batch: previous one still in progress');
         return undefined;
     }
     log.debug('start queueing replication batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
+    console.log('MAXREAD, ', maxRead);
+    console.log('BEFORE GOING INTO PROCESS ALL LOG ENTRIES');
     queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
+        console.log('CALLBACK FROM PROCESS ALL LOG ENTRIES');
         taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during replication', {
