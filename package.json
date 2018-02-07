@@ -37,8 +37,9 @@
     "eslint-config-scality": "scality/Guidelines#71a059ad",
     "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
-    "kafka-node": "^2.2.0",
+    "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
+    "node-zookeeper-client": "^0.2.2",
     "uuid": "^3.1.0",
     "vaultclient": "scality/vaultclient#fbd9988d",
     "werelogs": "scality/werelogs#0ff7ec82"

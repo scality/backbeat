@@ -5,12 +5,12 @@ const werelogs = require('werelogs');
 const ReplicationStatusProcessor = require('./ReplicationStatusProcessor');
 
 const config = require('../../../conf/Config');
-const zkConfig = config.zookeeper;
+const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 
 const replicationStatusProcessor =
-          new ReplicationStatusProcessor(zkConfig, sourceConfig, repConfig);
+          new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
 
 werelogs.configure({ level: config.log.logLevel,
                      dump: config.log.dumpLevel });

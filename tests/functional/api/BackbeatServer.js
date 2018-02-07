@@ -1,7 +1,8 @@
 const assert = require('assert');
+const async = require('async');
 const http = require('http');
 const Redis = require('ioredis');
-const { Client, Producer } = require('kafka-node');
+const { Producer } = require('node-rdkafka');
 
 const { RedisClient } = require('arsenal').metrics;
 
@@ -60,16 +61,11 @@ function getRequest(path, done) {
 describe('Backbeat Server', () => {
     describe('healthcheck route', () => {
         let data;
+        let healthcheckTimer;
         let resCode;
-        before(done => {
-            const kafkaClient = new Client(config.zookeeper.connectionString,
-                'TestClient');
-            const testProducer = new Producer(kafkaClient);
-            testProducer.createTopics([
-                config.extensions.replication.topic,
-                config.extensions.replication.replicationStatusTopic,
-            ], false, () => {});
+        let testProducer;
 
+        function _doHealthcheckRequest(done) {
             const url = getUrl(defaultOptions, '/_/healthcheck');
 
             http.get(url, res => {
@@ -81,41 +77,80 @@ describe('Backbeat Server', () => {
                 });
                 res.on('end', () => {
                     data = JSON.parse(rawData);
-                    done();
+                    if (done) {
+                        // only set in before() processing
+                        done();
+                    }
                 });
             });
+        }
+
+        before(done => {
+            async.series([
+                next => {
+                    testProducer = new Producer({
+                        'metadata.broker.list': config.kafka.hosts,
+                    });
+                    testProducer.connect();
+                    testProducer.on('ready', () => next());
+                    testProducer.on('event.error', error => {
+                        assert.ifError(error);
+                    });
+                },
+                // create topics by fetching metadata from these topics
+                // (works if auto.create.topics.enabled is true)
+                next => testProducer.getMetadata({
+                    topic: config.extensions.replication.topic,
+                    timeout: 10000,
+                }, next),
+                next => testProducer.getMetadata({
+                    topic: config.extensions.replication.replicationStatusTopic,
+                    timeout: 10000,
+                }, next),
+                next => {
+                    _doHealthcheckRequest(next);
+                    // refresh healthcheck result, as after creating
+                    // topics they take some time to appear in the
+                    // healthcheck results
+                    healthcheckTimer = setInterval(_doHealthcheckRequest,
+                                                   2000);
+                },
+            ], done);
+        });
+
+        after(() => {
+            clearInterval(healthcheckTimer);
         });
 
         it('should get a response with data', done => {
-            assert(Object.keys(data).length > 0);
             assert.equal(resCode, 200);
+            assert(data);
             return done();
         });
 
         it('should have valid keys', done => {
-            const keys = [].concat(...data.map(d => Object.keys(d)));
-
-            assert(keys.includes('metadata'));
-            assert(keys.includes('internalConnections'));
-            return done();
-        });
-
-        it('should be healthy', done => {
-            // NOTE: isrHealth is not checked here because circleci
-            // kafka will have one ISR only. Maybe isrHealth should
-            // be a test for end-to-end
-            let internalConnections;
-            data.forEach(obj => {
-                if (Object.keys(obj).includes('internalConnections')) {
-                    internalConnections = obj.internalConnections;
+            assert(data.topics);
+            let timer = undefined;
+            function _checkValidKeys() {
+                const repTopic =
+                          data.topics[config.extensions.replication.topic];
+                if (!repTopic) {
+                    return undefined;
                 }
-            });
-            Object.keys(internalConnections).forEach(key => {
-                assert.ok(internalConnections[key]);
-            });
-
-            return done();
-        });
+                clearInterval(timer);
+                assert(Array.isArray(repTopic.partitions));
+                assert(data.internalConnections);
+                // NOTE: isrHealth is not checked here because circleci
+                // kafka will have one ISR only. Maybe isrHealth should
+                // be a test for end-to-end
+                assert.strictEqual(
+                    data.internalConnections.zookeeper.status, 'ok');
+                assert.strictEqual(
+                    data.internalConnections.kafkaProducer.status, 'ok');
+                return done();
+            }
+            timer = setInterval(_checkValidKeys, 1000);
+        }).timeout(20000);
     });
 
     describe('metrics routes', function dF() {
