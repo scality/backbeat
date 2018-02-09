@@ -89,10 +89,10 @@ In a new shell, connect to the zookeeper server with the ZooKeeper chroot
 zkCli -server localhost:2181/backbeat
 ```
 
-Create the `replication-populator` node:
+Create the `queue-populator` node:
 
 ```
-create /replication-populator my_data
+create /queue-populator null
 ```
 
 We may leave the zookeeper server now:
