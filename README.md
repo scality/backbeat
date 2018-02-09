@@ -62,22 +62,22 @@ echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bash_profile
 ```
 mkdir ~/kafka && \
 cd ~/kafka && \
-curl http://apache.claz.org/kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz | tar xvz && \
+curl http://apache.claz.org/kafka/0.11.0.0/kafka_2.11-0.11.0.2.tgz | tar xvz && \
 sed 's/zookeeper.connect=.*/zookeeper.connect=localhost:2181\/backbeat/' \
-kafka_2.11-0.11.0.0/config/server.properties > \
-kafka_2.11-0.11.0.0/config/server.properties.backbeat
+kafka_2.11-0.11.0.2/config/server.properties > \
+kafka_2.11-0.11.0.2/config/server.properties.backbeat
 ```
 
 Start the zookeeper server:
 
 ```
-zookeeper-server-start ~/kafka/kafka_2.11-0.11.0.0/config/zookeeper.properties
+zookeeper-server-start ~/kafka/kafka_2.11-0.11.0.2/config/zookeeper.properties
 ```
 
 In a new shell, start the kafka server:
 
 ```
-kafka-server-start ~/kafka/kafka_2.11-0.11.0.0/config/server.properties.backbeat
+kafka-server-start ~/kafka/kafka_2.11-0.11.0.2/config/server.properties.backbeat
 ```
 
 #### Create a zookeeper node and kafka topic
