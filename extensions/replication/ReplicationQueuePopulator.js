@@ -15,11 +15,12 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
+        console.log('ENTRY IN  HERE', entry);
         // FIXME: UNCOMMENT VITAL CODE
-        // if (!isMasterKey(entry.key)) {
-        return this._filterVersionedKey(entry);
-        // }
-        // return undefined;
+        if (!isMasterKey(entry.key)) {
+            return this._filterVersionedKey(entry);
+        }
+        return undefined;
     }
 
     _filterBucketOp(entry) {
@@ -45,9 +46,9 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             return;
         }
         // FIXME: UNCOMMENT VITAL CODE
-        // if (queueEntry.getReplicationStatus() !== 'PENDING') {
-        //     return;
-        // }
+        if (queueEntry.getReplicationStatus() !== 'PENDING') {
+            return;
+        }
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
