@@ -32,7 +32,7 @@ function queueBatch(queuePopulator, taskState) {
             });
             return undefined;
         }
-        const logFunc = (counters.some(counter => counter.readRecords > 0) ?
+        const logFunc = (counters.some(counter => Object.keys(counter.queuedEntries).length > 0) ?
             log.info : log.debug).bind(log);
         logFunc('replication batch finished', { counters });
         return undefined;

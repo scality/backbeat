@@ -19,6 +19,8 @@ assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
 
 const destConfig = Object.assign({}, repConfig.destination);
 destConfig.bootstrapList = bootstrapList;
+const { initManagement } = require('../../../lib/management');
+
 const queueProcessor = new QueueProcessor(zkConfig,
                                           sourceConfig, destConfig,
                                           repConfig, site);
@@ -26,4 +28,21 @@ const queueProcessor = new QueueProcessor(zkConfig,
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-queueProcessor.start();
+function initAndStart() {
+    initManagement(error => {
+        if (error) {
+            console.error('could not load managment db', error);
+            setTimeout(initAndStart, 5000);
+            return;
+        }
+        console.log('management init done');
+        queueProcessor.start();
+        // setInterval(initManagement, 5000, error => {
+        //     if (error) {
+        //         console.error('could not refresh management db', error);
+        //     }
+        // });
+    });
+}
+
+initAndStart();
