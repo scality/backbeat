@@ -8,6 +8,7 @@ COPY . /usr/src/app
 RUN apt-get update \
     && apt-get install -y jq python git build-essential --no-install-recommends \
     && npm install --production \
+    && npm install arsenal \
     && apt-get autoremove --purge -y python git build-essential \
     && rm -rf /var/lib/apt/lists/* \
     && npm cache clear \
