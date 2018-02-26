@@ -30,7 +30,7 @@ updates in a FIFO order.
 
 Please refer to the ****[Design document](/DESIGN.md)****
 
-- [CRR from CloudServer to AWS S3 workflow](/docs/crr-to-aws-s3.md)
+- [CRR from CloudServer to AWS S3 workflow](/docs/crr-to-public-cloud.md)
 
 ## QUICKSTART
 
