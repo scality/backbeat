@@ -51,6 +51,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(entry));
+
+        this._incrementMetrics(entry.bucket, queueEntry.getBytesMetric());
     }
 }
 

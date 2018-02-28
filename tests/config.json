@@ -16,6 +16,9 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "metrics": {
+        "topic": "backbeat-test-metrics"
+    },
     "s3": {
         "host": "127.0.0.1",
         "port": 8000,
@@ -32,5 +35,9 @@
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "redis": {
+        "name": "backbeat-test",
+        "password": ""
     }
 }
