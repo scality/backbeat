@@ -307,9 +307,6 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
-        // if (kafkaEntry.key && kafkaEntry.key.startsWith('deephealthcheck')) {
-        //     return process.nextTick(() => done());
-        // }
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.healthcheck) {
             return process.nextTick(() => done());
