@@ -11,7 +11,8 @@ bucket name, region, and credentials for AWS S3. This enables the multiple
 backend feature in CloudServer that Backbeat uses for CRR to a public cloud.
 
 Replication endpoints are defined in the config for both Backbeat and
-CloudServer in Federation's [group_vars/all](https://github.com/scality/Federation/blob/master/env/client-template/group_vars/all) file:
+CloudServer in Federation's [group_vars/all](https://github.com/scality/
+Federation/blob/master/env/client-template/group_vars/all) file:
 
 ```
 env_replication_endpoints:
@@ -38,16 +39,19 @@ bucket with replication enabled.
 
 * CloudServer receives the request and checks the storage class set in the
   bucket replication configuration (see the
-  `StorageClass` property
-  [here](https://docs.aws.amazon.com/AWSJavaScriptSDK/latest/AWS/S3.html#putBucketReplication-property)). If defined, this property is a comma-separated list of location
+  `StorageClass` property [here](https://docs.aws.amazon.com/
+  AWSJavaScriptSDK/latest/AWS/S3.html#putBucketReplication-property)).
+  If defined, this property is a comma-separated list of location
   constraints. For example, if replicating to two locations 'awsbackend' and
   'azurebackend' (defined in the [location
   configuration](https://github.com/scality/S3/blob/master/locationConfig.json)
   of [CloudServer](https://github.com/scality/S3)), `StorageClass` would take
   the form `'awsbackend,azurebackend'`)
 
-* Check the following in the `replicationEndpoints` value (defined in        [config.json](https://github.com/scality/backbeat/blob/master/conf/config.json)
-):
+* Check the following in the `replicationEndpoints` value (defined in
+    [config.json](https://github.com/scality/backbeat/blob/master/conf/
+config.json)):
+
     * The given storage class(es) must match a site name
     * If the site matches, then the site should either have a `type` or
       `servers` property
