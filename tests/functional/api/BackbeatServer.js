@@ -161,6 +161,10 @@ describe('Backbeat Server', () => {
         const OPS_DONE = 'test:bb:opsdone';
         const BYTES_DONE = 'test:bb:bytesdone';
 
+        const destconfig = config.extensions.replication.destination;
+        const site1 = destconfig.bootstrapList[0].site;
+        const site2 = destconfig.bootstrapList[1].site;
+
         let redisClient;
         let statsClient;
         let redis;
@@ -170,16 +174,21 @@ describe('Backbeat Server', () => {
             redisClient = new RedisClient(redisConfig, fakeLogger);
             statsClient = new StatsModel(redisClient, interval, expiry);
 
-            statsClient.reportNewRequest(OPS, 1725);
-            statsClient.reportNewRequest(BYTES, 219800);
-            statsClient.reportNewRequest(OPS_DONE, 450);
-            statsClient.reportNewRequest(BYTES_DONE, 102700);
+            statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
+            statsClient.reportNewRequest(`${site1}:${BYTES}`, 219800);
+            statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
+            statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 102700);
+
+            statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
+            statsClient.reportNewRequest(`${site2}:${BYTES}`, 294300);
+            statsClient.reportNewRequest(`${site2}:${OPS_DONE}`, 300);
+            statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 187400);
 
             done();
         });
 
         after(() => {
-            redis.keys('test:bb:*').then(keys => {
+            redis.keys('*:test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
                     pipeline.del(key);
@@ -271,8 +280,8 @@ describe('Backbeat Server', () => {
         });
 
         it('should get the right data for route: ' +
-        '/_/metrics/crr/all/backlog', done => {
-            getRequest('/_/metrics/crr/all/backlog', (err, res) => {
+        `/_/metrics/crr/${site1}/backlog`, done => {
+            getRequest(`/_/metrics/crr/${site1}/backlog`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
@@ -284,8 +293,21 @@ describe('Backbeat Server', () => {
         });
 
         it('should get the right data for route: ' +
-        '/_/metrics/crr/all/completions', done => {
-            getRequest('/_/metrics/crr/all/completions', (err, res) => {
+        '/_/metrics/crr/all/backlog', done => {
+            getRequest('/_/metrics/crr/all/backlog', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res[key].results.count, 1875);
+                // Backlog size = (BYTES - BYTES_DONE) / 1000
+                assert.equal(res[key].results.size, 224.0);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/completions`, done => {
+            getRequest(`/_/metrics/crr/${site1}/completions`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
@@ -297,8 +319,21 @@ describe('Backbeat Server', () => {
         });
 
         it('should get the right data for route: ' +
-        '/_/metrics/crr/all/throughput', done => {
-            getRequest('/_/metrics/crr/all/throughput', (err, res) => {
+        '/_/metrics/crr/all/completions', done => {
+            getRequest('/_/metrics/crr/all/completions', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_DONE
+                assert.equal(res[key].results.count, 750);
+                // Completions bytes = BYTES_DONE / 1000
+                assert.equal(res[key].results.size, 290.1);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/throughput`, done => {
+            getRequest(`/_/metrics/crr/${site1}/throughput`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
@@ -309,9 +344,22 @@ describe('Backbeat Server', () => {
             });
         });
 
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/throughput', done => {
+            getRequest('/_/metrics/crr/all/throughput', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res[key].results.count, 0.83);
+                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
+                assert.equal(res[key].results.size, 0.32);
+                done();
+            });
+        });
+
         it('should return all metrics for route: ' +
-        '/_/metrics/crr/all', done => {
-            getRequest('/_/metrics/crr/all', (err, res) => {
+        `/_/metrics/crr/${site1}`, done => {
+            getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
                 assert(keys.includes('backlog'));
@@ -335,6 +383,37 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.count, 0.5);
                 // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
                 assert.equal(res.throughput.results.size, 0.11);
+
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        '/_/metrics/crr/all', done => {
+            getRequest('/_/metrics/crr/all', (err, res) => {
+                assert.ifError(err);
+                const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+
+                assert(res.backlog.description);
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res.backlog.results.count, 1875);
+                // Backlog size = (BYTES - BYTES_DONE) / 1000
+                assert.equal(res.backlog.results.size, 224.0);
+
+                assert(res.completions.description);
+                // Completions count = OPS_DONE
+                assert.equal(res.completions.results.count, 750);
+                // Completions bytes = BYTES_DONE / 1000
+                assert.equal(res.completions.results.size, 290.1);
+
+                assert(res.throughput.description);
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res.throughput.results.count, 0.83);
+                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
+                assert.equal(res.throughput.results.size, 0.32);
 
                 done();
             });
