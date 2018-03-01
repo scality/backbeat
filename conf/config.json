@@ -101,6 +101,12 @@
             "rules": {
                 "expiration": {
                     "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
                 }
             }
         }
