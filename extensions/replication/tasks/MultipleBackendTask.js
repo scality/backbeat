@@ -7,6 +7,9 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
+const getExtMetrics = require('../utils/getExtMetrics');
+const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
+    require('../constants');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -177,7 +180,11 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            return doneOnce(null, data);
+            const extMetrics = getExtMetrics(this.site, partObj.getPartSize(),
+                sourceEntry);
+            return this.mProducer.publishMetrics(extMetrics,
+                metricsTypeCompleted, metricsExtension, () =>
+                doneOnce(null, data));
         });
     }
 
@@ -251,9 +258,13 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             }
             const locations = sourceEntry.getReducedLocations();
-            return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
-                this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
-                    log, (err, data) => {
+            const extMetrics = getExtMetrics(this.site,
+                sourceEntry.getContentLength(), sourceEntry);
+            return this.mProducer.publishMetrics(extMetrics,
+                metricsTypeQueued, metricsExtension, () =>
+                async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+                    this._getAndPutMPUPart(sourceEntry, destEntry, part,
+                    uploadId, log, (err, data) => {
                         if (err) {
                             return done(err);
                         }
@@ -315,7 +326,7 @@ class MultipleBackendTask extends ReplicateObject {
                         data.versionId);
                     return doneOnce();
                 });
-            });
+            }));
         });
     }
 
@@ -379,12 +390,13 @@ class MultipleBackendTask extends ReplicateObject {
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo() });
+        const size = part ? partObj.getPartSize() :
+            destEntry.getContentLength();
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerId(),
-            ContentLength: part ? partObj.getPartSize() :
-                destEntry.getContentLength(),
+            ContentLength: size,
             ContentMD5: part ? partObj.getPartETag() :
                 destEntry.getContentMd5(),
             StorageType: destEntry.getReplicationStorageType(),
@@ -414,7 +426,10 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
-            return doneOnce(null, data);
+            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
+            return this.mProducer.publishMetrics(extMetrics,
+                metricsTypeCompleted, metricsExtension, () =>
+                doneOnce(null, data));
         });
     }
 
@@ -528,8 +543,12 @@ class MultipleBackendTask extends ReplicateObject {
         if (locations.length === 0) {
             return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);
         }
-        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
+        const extMetrics = getExtMetrics(this.site,
+            sourceEntry.getContentLength(), sourceEntry);
+        return this.mProducer.publishMetrics(extMetrics,
+            metricsTypeQueued, metricsExtension, () =>
+            async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb));
     }
 
     _putDeleteMarker(sourceEntry, destEntry, log, cb) {

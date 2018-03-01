@@ -4,6 +4,12 @@ const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 
+const {
+    metricsExtension,
+    metricsTypeCompleted,
+    metricsTypeFailed,
+} = require('../constants');
+
 class UpdateReplicationStatus extends BackbeatTask {
     /**
      * Update a source object replication status from a kafka entry
@@ -70,6 +76,35 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
     }
 
+    /**
+     * Report CRR metrics
+     * @param {String} status - The replication status
+     * @param {ObjectQueueEntry} entry - updated object entry
+     * @param {String} site - site recently updated
+     * @return {undefined}
+     */
+    _reportMetrics(status, entry, site) {
+        const data = {};
+        const content = entry.getReplicationContent();
+        const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
+        data[site] = { ops: 1, bytes };
+
+        if (status === 'COMPLETED' || status === 'FAILED') {
+            const entryType = status === 'COMPLETED' ?
+                metricsTypeCompleted : metricsTypeFailed;
+
+            this.mProducer.publishMetrics(data, entryType, metricsExtension,
+            err => {
+                if (err) {
+                    this.logger.trace('error occurred in publishing metrics', {
+                        error: err,
+                        method: 'UpdateReplicationStatus._reportMetrics',
+                    });
+                }
+            });
+        }
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -110,6 +145,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                     replicationStatus:
                         updatedSourceEntry.getReplicationStatus(),
                 });
+
+                // Report to MetricsProducer with completed/failed metrics
+                this._reportMetrics(status, updatedSourceEntry, site);
+
                 return done();
             });
         });

@@ -19,29 +19,54 @@ describe('BackbeatAPI', () => {
     });
 
     it('should validate routes', () => {
+        const destconfig = config.extensions.replication.destination;
+        const { site } = destconfig.bootstrapList[0];
         // valid routes
         [
-            '/_/metrics/crr/all',
-            '/_/healthcheck',
-            '/_/metrics/crr/all/backlog',
-            '/_/metrics/crr/all/completions',
-            '/_/metrics/crr/all/throughput',
-        ].forEach(path => {
-            const req = new BackbeatRequest({ url: path });
+            { url: '/_/metrics/crr/all', method: 'GET' },
+            { url: '/_/healthcheck', method: 'GET' },
+            { url: '/_/metrics/crr/all/backlog', method: 'GET' },
+            { url: '/_/metrics/crr/all/completions', method: 'GET' },
+            { url: '/_/metrics/crr/all/failures', method: 'GET' },
+            { url: '/_/metrics/crr/all/throughput', method: 'GET' },
+            { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
+                method: 'GET' },
+            { url: '/_/crr/failed?mymarker', method: 'GET' },
+            // invalid params but will default to getting all buckets
+            { url: '/_/crr/failed/mybucket', method: 'GET' },
+            { url: '/_/crr/failed', method: 'POST' },
+            { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` +
+                '?versionId=test-myvId', method: 'GET' },
+            { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` +
+                '?versionId=test-myvId', method: 'GET' },
+        ].forEach(request => {
+            const req = new BackbeatRequest(request);
+            const routeError = bbapi.findValidRoute(req);
 
-            assert.ok(bbapi.isValidRoute(req));
+            assert.equal(routeError, null);
         });
 
         // invalid routes
         [
-            '/_/invalid/crr/all',
-            '/_/metrics/ext/all',
-            '/_/metrics/crr/test',
-            '/_/metrics/crr/all/backlo',
-            '/_/metrics/crr/all/completionss',
-        ].forEach(path => {
-            const req = new BackbeatRequest({ url: path });
-            assert.equal(bbapi.isValidRoute(req), false);
+            { url: '/_/invalid/crr/all', method: 'GET' },
+            { url: '/_/metrics/ext/all', method: 'GET' },
+            { url: '/_/metrics/crr/test', method: 'GET' },
+            { url: '/_/metrics/crr/all/backlo', method: 'GET' },
+            { url: '/_/metrics/crr/all/completionss', method: 'GET' },
+            { url: '/_/metrics/crr/all/failures', method: 'POST' },
+            { url: '/_/metrics/crr/all/fail', method: 'GET' },
+            { url: '/_/invalid/crr/all', method: 'GET' },
+            // // invalid http verb
+            { url: '/_/healthcheck', method: 'POST' },
+            { url: '/_/metrics/crr/unknown-site/throughput/mybucket/mykey' +
+                '?versionId=test-myvId', method: 'GET' },
+            { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
+                '?versionId=test-myvId', method: 'GET' },
+        ].forEach(request => {
+            const req = new BackbeatRequest(request);
+            const routeError = bbapi.findValidRoute(req);
+
+            assert(routeError);
         });
     });
 

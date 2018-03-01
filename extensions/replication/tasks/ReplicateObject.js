@@ -7,11 +7,14 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { attachReqUids } = require('../../../lib/clients/utils');
+const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const AccountCredentials =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
+const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
+    require('../constants');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -367,7 +370,11 @@ class ReplicateObject extends BackbeatTask {
                 return doneOnce(err);
             }
             partObj.setDataLocation(data.Location[0]);
-            return doneOnce(null, partObj.getValue());
+            const extMetrics = getExtMetrics(this.site,
+                partObj.getPartSize(), sourceEntry);
+            return this.mProducer.publishMetrics(extMetrics,
+                metricsTypeCompleted, metricsExtension, () =>
+                doneOnce(null, partObj.getValue()));
         });
     }
 
@@ -492,8 +499,12 @@ class ReplicateObject extends BackbeatTask {
             // Get data from source bucket and put it on the target bucket
             next => {
                 if (!mdOnly) {
-                    return this._getAndPutData(sourceEntry, destEntry, log,
-                        next);
+                    const extMetrics = getExtMetrics(this.site,
+                        sourceEntry.getContentLength(), sourceEntry);
+                    return this.mProducer.publishMetrics(extMetrics,
+                        metricsTypeQueued, metricsExtension, () =>
+                            this._getAndPutData(sourceEntry, destEntry, log,
+                                next));
                 }
                 return next(null, []);
             },
