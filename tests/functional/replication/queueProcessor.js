@@ -670,7 +670,7 @@ describe('queue processor functional tests with mocking', () => {
                       groupId: 'backbeat-func-test-group-id',
                   },
               }, 'sf');
-            replicationStatusProcessor.start();
+            replicationStatusProcessor.start({ createConsumer: false });
             replicationStatusProcessor.bootstrapKafkaConsumer(done);
         });
 
