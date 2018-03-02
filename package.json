@@ -9,6 +9,7 @@
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
     "lifecycle_conductor": "node extensions/lifecycle/conductor/service.js",
     "lifecycle_producer": "node extensions/lifecycle/lifecycleProducer/task.js",
+    "lifecycle_consumer": "node extensions/lifecycle/lifecycleConsumer/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive tests/functional",
     "bh_test": "mocha --recursive tests/behavior",
