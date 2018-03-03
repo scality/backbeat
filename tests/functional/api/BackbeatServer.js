@@ -154,8 +154,6 @@ describe('Backbeat Server', () => {
     });
 
     describe('metrics routes', () => {
-        const interval = 300;
-        const expiry = 900;
         const OPS = 'test:bb:ops';
         const BYTES = 'test:bb:bytes';
         const OPS_DONE = 'test:bb:opsdone';
@@ -172,7 +170,8 @@ describe('Backbeat Server', () => {
         before(done => {
             redis = new Redis();
             redisClient = new RedisClient(redisConfig, fakeLogger);
-            statsClient = new StatsModel(redisClient, interval, expiry);
+            statsClient = new StatsModel(redisClient, config.metrics.intervalS,
+                config.metrics.expiryS);
 
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
             statsClient.reportNewRequest(`${site1}:${BYTES}`, 219800);

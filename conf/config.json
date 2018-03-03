@@ -121,7 +121,9 @@
         "dumpLevel": "error"
     },
     "metrics": {
-        "topic": "backbeat-metrics"
+        "topic": "backbeat-metrics",
+        "intervalS": 300,
+        "expiryS": 900
     },
     "server": {
         "healthChecks": {
