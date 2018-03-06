@@ -95,25 +95,6 @@ class LifecycleProducer {
         return `${this._lcConfig.zookeeperPath}/run/queuedBuckets`;
     }
 
-    sendUnlockBucketEntry(bucketData) {
-        const entry = {
-            action: 'unlockBucket',
-            target: {
-                owner: bucketData.target.owner,
-                bucket: bucketData.target.bucket,
-            },
-            details: {},
-        };
-        this.sendObjectEntry(entry, err => {
-            if (!err) {
-                this._log.debug('sent unlock bucket entry for consumption', {
-                    method: 'LifecycleProducer._sendUnlockBucketEntry',
-                    entry,
-                });
-            }
-        });
-    }
-
     /**
      * Get the state variables of the current instance.
      * @return {Object} Object containing the state variables
@@ -122,7 +103,6 @@ class LifecycleProducer {
         return {
             sendBucketEntry: this.sendBucketEntry.bind(this),
             sendObjectEntry: this.sendObjectEntry.bind(this),
-            sendUnlockBucketEntry: this.sendUnlockBucketEntry.bind(this),
             enabledRules: this._lcConfig.rules,
             log: this._log,
         };
@@ -234,12 +214,9 @@ class LifecycleProducer {
                     owner,
                     error: err,
                 });
-                // end the bucket processing chain in case of error
-                this.sendUnlockBucketEntry(result);
                 return cb(err);
             }
             if (!this._shouldProcessConfig(config)) {
-                this.sendUnlockBucketEntry(result);
                 return cb();
             }
             this._log.info('scheduling new task for bucket lifecycle', {

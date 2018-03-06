@@ -76,10 +76,6 @@ class LifecycleObjectTask extends BackbeatTask {
         return done();
     }
 
-    getQueuedBucketsZkPath() {
-        return `${this.lcConfig.zookeeperPath}/run/queuedBuckets`;
-    }
-
     _executeDelete(entry, log, done) {
         const action = entry.action;
         const { bucket, key, version } = entry.target;
@@ -106,22 +102,6 @@ class LifecycleObjectTask extends BackbeatTask {
                         httpStatus: err.statusCode });
                 return done(err);
             }
-            return done();
-        });
-    }
-
-    _executeUnlockBucket(entry, log, done) {
-        const { owner, bucket } = entry.target;
-
-        const zkPath = `${this.getQueuedBucketsZkPath()}/${owner}:${bucket}`;
-        this.zkClient.remove(zkPath, -1, err => {
-            if (err) {
-                log.error('could not remove queued bucket node from zookeeper',
-                          { owner, bucket, zkPath, error: err.message });
-                return done(err);
-            }
-            log.debug('removed queued bucket node from zookeeper',
-                      { owner, bucket, zkPath });
             return done();
         });
     }
@@ -162,9 +142,6 @@ class LifecycleObjectTask extends BackbeatTask {
                 }
                 return done(err);
             });
-        }
-        if (action === 'unlockBucket') {
-            return this._executeUnlockBucket(entry, log, done);
         }
         log.info(`skipped unsupported action ${action}`, { entry });
         return process.nextTick(done);
