@@ -3,7 +3,7 @@
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const MongoClient = require('arsenal').storage
-    .metadata.MongoClientInterface;
+    .metadata.mongoclient.MongoClientInterface;
 const { usersBucket } = require('arsenal').constants;
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../utils/QueueEntry');

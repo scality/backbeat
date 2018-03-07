@@ -41,7 +41,8 @@ const joiSchema = {
         dmd: hostPortJoi.keys({
             logName: joi.string().default('s3-recordlog'),
         }).when('logSource', { is: 'dmd', then: joi.required() }),
-        mongo: hostPortJoi.keys({
+        mongo: joi.object({
+            replicaSetHosts: joi.string().default('localhost:27017'),
             logName: joi.string().default('s3-recordlog'),
             writeConcern: joi.string().default('majority'),
             replicaSet: joi.string().default(''),
