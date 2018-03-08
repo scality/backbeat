@@ -25,6 +25,7 @@ const {
     proxyIAMPath,
     metricsExtension,
     metricsTypeProcessed,
+    replicationBackends,
 } = require('../constants');
 
 class QueueProcessor extends EventEmitter {
@@ -321,7 +322,7 @@ class QueueProcessor extends EventEmitter {
             sourceEntry.getReplicationStorageClass().includes(this.site)) {
             const replicationEndpoint = this.destConfig.bootstrapList
                 .find(endpoint => endpoint.site === this.site);
-            if (['aws_s3', 'azure'].includes(replicationEndpoint.type)) {
+            if (replicationBackends.includes(replicationEndpoint.type)) {
                 task = new MultipleBackendTask(this);
             } else {
                 task = new ReplicateObject(this);
