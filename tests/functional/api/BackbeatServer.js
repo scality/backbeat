@@ -3,8 +3,9 @@ const http = require('http');
 const Redis = require('ioredis');
 const { Client, Producer } = require('kafka-node');
 
-const { RedisClient, StatsClient } = require('arsenal').metrics;
+const { RedisClient } = require('arsenal').metrics;
 
+const StatsModel = require('../../../lib/models/StatsModel');
 const config = require('../../config.json');
 const allRoutes = require('../../../lib/api/routes');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
@@ -133,7 +134,7 @@ describe('Backbeat Server', () => {
         before(done => {
             redis = new Redis();
             redisClient = new RedisClient(redisConfig, fakeLogger);
-            statsClient = new StatsClient(redisClient, interval, expiry);
+            statsClient = new StatsModel(redisClient, interval, expiry);
 
             statsClient.reportNewRequest(OPS, 1725);
             statsClient.reportNewRequest(BYTES, 219800);
