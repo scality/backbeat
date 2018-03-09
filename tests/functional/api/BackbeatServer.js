@@ -7,7 +7,6 @@ const { RedisClient } = require('arsenal').metrics;
 
 const StatsModel = require('../../../lib/models/StatsModel');
 const config = require('../../config.json');
-const allRoutes = require('../../../lib/api/routes');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
 
 const fakeLogger = {
@@ -145,7 +144,7 @@ describe('Backbeat Server', () => {
         });
 
         after(() => {
-            redis.keys('test:bb:*').then(keys => {
+            redis.keys('*:test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
                     pipeline.del(key);
@@ -154,64 +153,103 @@ describe('Backbeat Server', () => {
             });
         });
 
-        allRoutes.forEach(route => {
-            if (route.path.indexOf('healthcheck') === -1) {
-                it(`should get a 200 response for route: ${route.path}`,
-                done => {
-                    const url = getUrl(defaultOptions, route.path);
+        // TODO: refactor this
+        const allPaths = [
+            '/_/metrics/crr/all',
+            '/_/metrics/crr/all/backlog',
+            '/_/metrics/crr/all/completions',
+            '/_/metrics/crr/all/throughput',
+        ];
 
-                    http.get(url, res => {
-                        assert.equal(res.statusCode, 200);
-                        done();
-                    });
+        allPaths.forEach(path => {
+            it(`should get a 200 response for route: ${path}`,
+            done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 200);
+                    done();
                 });
+            });
 
-                it(`should get correct data keys for route: ${route.path}`,
-                done => {
-                    getRequest(route.path, (err, res) => {
-                        assert.ifError(err);
-                        const key = Object.keys(res)[0];
-                        assert(res[key].description);
-                        assert.equal(typeof res[key].description, 'string');
+            it(`should get correct data keys for route: ${path}`,
+            done => {
+                getRequest(path, (err, res) => {
+                    assert.ifError(err);
+                    const key = Object.keys(res)[0];
+                    assert(res[key].description);
+                    assert.equal(typeof res[key].description, 'string');
 
-                        assert(res[key].results);
-                        assert.deepEqual(Object.keys(res[key].results),
-                            ['count', 'size']);
-                        done();
-                    });
+                    assert(res[key].results);
+                    assert.deepEqual(Object.keys(res[key].results),
+                        ['count', 'size']);
+                    done();
                 });
-            }
+            });
         });
 
-        it('should get the right data for route: /_/metrics/backlog',
-        done => {
-            getRequest('/_/metrics/backlog', (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 1275);
-                assert.equal(res[key].results.size, 117.1);
+        it('should return an error for unknown site given', done => {
+            getRequest('/_/metrics/crr/wrong-site/completions', err => {
+                assert.equal(err.statusCode, 404);
+                assert.equal(err.statusMessage, 'Not Found');
                 done();
             });
         });
 
-        it('should get the right data for route: /_/metrics/completions',
-        done => {
-            getRequest('/_/metrics/completions', (err, res) => {
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/backlog', done => {
+            getRequest('/_/metrics/crr/all/backlog', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 450);
-                assert.equal(res[key].results.size, 102.7);
+                assert.equal(res[key].results.count, 1875);
+                assert.equal(res[key].results.size, 224);
                 done();
             });
         });
 
-        it('should get the right data for route: /_/metrics/throughput',
-        done => {
-            getRequest('/_/metrics/throughput', (err, res) => {
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/completions', done => {
+            getRequest('/_/metrics/crr/all/completions', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 0.5);
-                assert.equal(res[key].results.size, 0.11);
+                assert.equal(res[key].results.count, 750);
+                assert.equal(res[key].results.size, 290.1);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/throughput', done => {
+            getRequest('/_/metrics/crr/all/throughput', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                assert.equal(res[key].results.count, 0.83);
+                assert.equal(res[key].results.size, 0.32);
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        '/_/metrics/crr/all', done => {
+            getRequest('/_/metrics/crr/all', (err, res) => {
+                assert.ifError(err);
+                const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+
+                assert(res.backlog.description);
+                assert.equal(res.backlog.results.count, 1875);
+                assert.equal(res.backlog.results.size, 224);
+
+                assert(res.completions.description);
+                assert.equal(res.completions.results.count, 750);
+                assert.equal(res.completions.results.size, 290.1);
+
+                assert(res.throughput.description);
+                assert.equal(res.throughput.results.count, 0.83);
+                assert.equal(res.throughput.results.size, 0.32);
+
                 done();
             });
         });
