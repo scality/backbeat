@@ -11,7 +11,10 @@ const joiSchema = {
     producer: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
-        concurrency: joi.number().greater(0).default(10),
+        // a single producer task is already involving concurrency in
+        // the processing, no need to add more here to avoid
+        // overloading the system
+        concurrency: joi.number().greater(0).default(1),
     },
     consumer: {
         groupId: joi.string().required(),
