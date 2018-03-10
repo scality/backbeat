@@ -115,5 +115,15 @@
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
     }
 }
