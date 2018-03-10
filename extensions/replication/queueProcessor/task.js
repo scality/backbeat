@@ -28,14 +28,15 @@ const queueProcessor = new QueueProcessor(zkConfig,
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
+const logger = new werelogs.Logger('queueProcessorInit');
 function initAndStart() {
     initManagement(error => {
         if (error) {
-            console.error('could not load managment db', error);
+            logger.error('could not load managment db', error);
             setTimeout(initAndStart, 5000);
             return;
         }
-        console.log('management init done');
+        logger.info('management init done');
         queueProcessor.start();
         // setInterval(initManagement, 5000, error => {
         //     if (error) {

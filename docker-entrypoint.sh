@@ -51,7 +51,7 @@ if [[ "$EXTENSIONS_REPLICATION_DEST_AUTH_ACCOUNT" ]]; then
 fi
 
 if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko-target\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
 fi
 
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
