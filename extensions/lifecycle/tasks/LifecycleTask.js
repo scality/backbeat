@@ -23,7 +23,6 @@ class LifecycleTask extends BackbeatTask {
         const lpState = lp.getStateVars();
         super({ retryTimeoutS: RETRYTIMEOUTS });
         Object.assign(this, lpState);
-        this._publishedNextListingTask = false;
     }
 
     /**
@@ -66,7 +65,6 @@ class LifecycleTask extends BackbeatTask {
                                 'sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getObjectList',
                                 });
-                            this._publishedNextListingTask = true;
                         }
                         return next(null, data);
                     });
@@ -119,7 +117,6 @@ class LifecycleTask extends BackbeatTask {
                                 'sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getObjectVersions',
                                 });
-                            this._publishedNextListingTask = true;
                         }
                         return next(null, data);
                     });
@@ -176,7 +173,6 @@ class LifecycleTask extends BackbeatTask {
                                 'sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getMPUs',
                                 });
-                            this._publishedNextListingTask = true;
                         }
                         return next(null, data);
                     });
@@ -240,7 +236,6 @@ class LifecycleTask extends BackbeatTask {
                             method: 'LifecycleTask._compareMPUUploads',
                             entry,
                         });
-                        this._publishedNextListingTask = true;
                     }
                 });
             }
@@ -758,9 +753,6 @@ class LifecycleTask extends BackbeatTask {
                 bucket: bucketData.target.bucket,
                 owner: bucketData.target.owner,
             });
-            if (!this._publishedNextListingTask) {
-                this.sendUnlockBucketEntry(bucketData);
-            }
             return done(err);
         });
     }

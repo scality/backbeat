@@ -2,7 +2,6 @@
 
 const async = require('async');
 const schedule = require('node-schedule');
-const zookeeper = require('node-zookeeper-client');
 
 const Logger = require('werelogs').Logger;
 
@@ -75,38 +74,16 @@ class LifecycleConductor {
 
     _processBucket(ownerId, bucketName, done) {
         this.logger.debug('processing bucket', { ownerId, bucketName });
-        const zkPath =
-                  `${this.getQueuedBucketsZkPath()}/${ownerId}:${bucketName}`;
-        this._zkClient.create(
-            zkPath,
-            null,
-            zookeeper.ACL.OPEN_ACL_UNSAFE,
-            zookeeper.CreateMode.EPHEMERAL,
-            err => {
-                if (err) {
-                    if (err.getCode() ===
-                        zookeeper.Exception.NODE_EXISTS) {
-                        this.logger.debug(
-                            'bucket processing already queued',
-                            { ownerId, bucketName });
-                        return done(null, []); // no new kafka message
-                    }
-                    this.logger.error(
-                        'error creating zookeeper node',
-                        { zkPath, error: err.message });
-                    return done(err);
-                }
-                return done(null, [{
-                    message: JSON.stringify({
-                        action: 'processObjects',
-                        target: {
-                            bucket: bucketName,
-                            owner: ownerId,
-                        },
-                        details: {},
-                    }),
-                }]);
-            });
+        return process.nextTick(() => done(null, [{
+            message: JSON.stringify({
+                action: 'processObjects',
+                target: {
+                    bucket: bucketName,
+                    owner: ownerId,
+                },
+                details: {},
+            }),
+        }]));
     }
 
     processBuckets() {
