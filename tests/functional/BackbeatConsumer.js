@@ -1,7 +1,7 @@
 const assert = require('assert');
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
-const zookeeper = { connectionString: 'localhost:2181' };
+const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-consumer-spec';
 const groupId = `replication-group-${Math.random()}`;
 const messages = [
@@ -9,9 +9,7 @@ const messages = [
     { key: 'bar', message: 'world' },
     { key: 'qux', message: 'hi' },
 ];
-// skipping test suite for now, as tests are failing intermittently. Connect
-// event is not reliable enough to check if consumer is ready
-describe.skip('BackbeatConsumer', () => {
+describe('BackbeatConsumer', () => {
     let producer;
     let consumer;
     const consumedMessages = [];
@@ -19,7 +17,9 @@ describe.skip('BackbeatConsumer', () => {
         consumedMessages.push(message.value);
         process.nextTick(cb);
     }
-    before(done => {
+    before(function before(done) {
+        this.timeout(60000);
+
         let producerReady = false;
         let consumerReady = false;
         function _doneIfReady() {
@@ -27,30 +27,48 @@ describe.skip('BackbeatConsumer', () => {
                 done();
             }
         }
-        producer = new BackbeatProducer({ zookeeper, topic });
-        consumer = new BackbeatConsumer({ zookeeper, groupId, topic,
-            queueProcessor });
+        producer = new BackbeatProducer({ kafka: kafkaConf, topic,
+                                          pollIntervalMs: 100 });
+        consumer = new BackbeatConsumer({ kafka: kafkaConf, groupId, topic,
+                                          queueProcessor,
+                                          bootstrap: true });
         producer.on('ready', () => {
             producerReady = true;
             _doneIfReady();
         });
-        consumer.on('connect', () => {
+        consumer.on('ready', () => {
             consumerReady = true;
             _doneIfReady();
         });
     });
-    after(() => {
-        producer = null;
-        consumer = null;
-    });
-
-    it('should be able to read messages sent to the topic', done => {
-        producer.send(messages, () => {
-            consumer.subscribe().on('consumed', () => {
-                assert.deepStrictEqual(messages.map(e => e.message),
-                    consumedMessages);
+    after(done => {
+        producer.close(() => {
+            consumer.close(() => {
+                producer = null;
+                consumer = null;
                 done();
             });
         });
     });
+
+    it('should be able to read messages sent to the topic', done => {
+        let consumeCb = null;
+        let totalConsumed = 0;
+
+        consumer.subscribe();
+        consumer.on('consumed', messagesConsumed => {
+            totalConsumed += messagesConsumed;
+            assert(totalConsumed <= messages.length);
+            if (totalConsumed === messages.length) {
+                assert.deepStrictEqual(
+                    messages.map(e => e.message),
+                    consumedMessages.map(buffer => buffer.toString()));
+                consumeCb();
+            }
+        });
+        consumeCb = done;
+        producer.send(messages, err => {
+            assert.ifError(err);
+        });
+    }).timeout(30000);
 });

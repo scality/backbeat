@@ -13,15 +13,6 @@ const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 
 /**
-* Given that the largest object JSON from S3 is about 1.6 MB and adding some
-* padding to it, Backbeat replication topic is currently setup with a config
-* max.message.bytes.limit to 5MB. Consumers need to update their fetchMaxBytes
-* to get atleast 5MB put in the Kafka topic, adding a little extra bytes of
-* padding for approximation.
-*/
-const CONSUMER_FETCH_MAX_BYTES = 5000020;
-
-/**
  * @class ReplicationStatusProcessor
  *
  * @classdesc Background task that processes entries from the
@@ -32,9 +23,9 @@ class ReplicationStatusProcessor {
 
     /**
      * @constructor
-     * @param {Object} zkConfig - zookeeper configuration object
-     * @param {string} zkConfig.connectionString - zookeeper connection string
-     *   as "host:port[/chroot]"
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
@@ -49,8 +40,8 @@ class ReplicationStatusProcessor {
      *   number of seconds before giving up retries of an entry status
      *   update
      */
-    constructor(zkConfig, sourceConfig, repConfig) {
-        this.zkConfig = zkConfig;
+    constructor(kafkaConfig, sourceConfig, repConfig) {
+        this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
         this._consumer = null;
@@ -92,30 +83,31 @@ class ReplicationStatusProcessor {
     /**
      * Start kafka consumer
      *
-     * @param {object} [options] - options object
-     * @param {boolean} [options.createConsumer=true] - whether to
-     *   spawn the consumer now (TEST ONLY, set to false if calling
-     *   {@link bootstrapKafkaConsumer()})
+     * @param {object} [options] - options object (only used for tests
+     * for now)
+     * @param {function} [cb] - optional callback called when startup
+     * is complete
      * @return {undefined}
      */
-    start(options) {
+    start(options, cb) {
         this._consumer = new BackbeatConsumer({
-            zookeeper: { connectionString: this.zkConfig.connectionString },
+            kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
             groupId: this.repConfig.replicationStatusProcessor.groupId,
             concurrency:
             this.repConfig.replicationStatusProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
-            fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
-            createConsumer: (!options || options.createConsumer),
+            bootstrap: options && options.bootstrap,
         });
         this._consumer.on('error', () => {});
-        if (!options || options.createConsumer) {
+        this._consumer.on('ready', () => {
+            this.logger.info('replication status processor is ready to ' +
+                             'consume replication status entries');
             this._consumer.subscribe();
-        }
-
-        this.logger.info('replication status processor is ready to consume ' +
-                         'replication status entries');
+            if (cb) {
+                cb();
+            }
+        });
     }
 
     /**
@@ -161,25 +153,6 @@ class ReplicationStatusProcessor {
         this.logger.warning('skipping unknown source entry',
                             { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
-    }
-
-    /**
-     * Bootstrap kafka consumer by periodically sending bootstrap
-     * messages and wait until it's receiving newly produced messages
-     * in a timely fashion. ONLY USE FOR TESTING PURPOSE.
-     *
-     * @param {function} cb - callback when consumer is effectively
-     * receiving newly produced messages
-     * @return {undefined}
-     */
-    bootstrapKafkaConsumer(cb) {
-        this._consumer.bootstrap(err => {
-            if (err) {
-                return cb(err);
-            }
-            this._consumer.subscribe();
-            return cb();
-        });
     }
 }
 

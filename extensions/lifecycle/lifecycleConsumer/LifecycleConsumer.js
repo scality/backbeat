@@ -18,6 +18,9 @@ class LifecycleConsumer extends EventEmitter {
      * @param {Object} zkConfig - zookeeper configuration object
      * @param {String} zkConfig.connectionString - zookeeper connection string
      *  as "host:port[/chroot]"
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
      * @param {Object} lcConfig.consumer - kafka consumer object
@@ -33,10 +36,11 @@ class LifecycleConsumer extends EventEmitter {
      * @param {String} [transport="http"] - transport method ("http"
      *  or "https")
      */
-    constructor(zkConfig, lcConfig, s3Config, authConfig,
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, authConfig,
                 transport = 'http') {
         super();
         this.zkConfig = zkConfig;
+        this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
         this.s3Config = s3Config;
         this.authConfig = authConfig;
@@ -62,15 +66,18 @@ class LifecycleConsumer extends EventEmitter {
             zookeeper: {
                 connectionString: this.zkConfig.connectionString,
             },
+            kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.lcConfig.objectTasksTopic,
             groupId: this.lcConfig.consumer.groupId,
             concurrency: this.lcConfig.consumer.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
         });
         this._consumer.on('error', () => {});
-        this._consumer.subscribe();
-        this.logger.info('lifecycle consumer successfully started');
-        return this.emit('ready');
+        this._consumer.on('ready', () => {
+            this._consumer.subscribe();
+            this.logger.info('lifecycle consumer successfully started');
+            return this.emit('ready');
+        });
     }
 
 

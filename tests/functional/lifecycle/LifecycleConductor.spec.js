@@ -16,6 +16,9 @@ const zkConfig = {
         autoCreateNamespace: true,
     },
 };
+const kafkaConfig = {
+    hosts: '127.0.0.1:9092',
+};
 const lcConfig = {
     zookeeperPath: '/test/lifecycle',
     bucketTasksTopic: 'backbeat-lifecycle-bucket-tasks-spec',
@@ -36,9 +39,8 @@ const lcConfig = {
     },
 };
 
-const lcConductor = new LifecycleConductor(
-    { connectionString: zkConfig.zookeeper.connectionString },
-    lcConfig);
+const lcConductor = new LifecycleConductor(zkConfig.zookeeper,
+                                           kafkaConfig, lcConfig);
 
 const TIMEOUT = 120000;
 const CONSUMER_TIMEOUT = 60000;
@@ -64,17 +66,17 @@ describe('lifecycle conductor', function lifecycleConductor() {
             next => lcConductor.initZkPaths(next),
             next => {
                 consumer = new BackbeatTestConsumer({
-                    zookeeper: {
-                        connectionString: zkConfig.zookeeper.connectionString,
-                    },
+                    kafka: { hosts: kafkaConfig.hosts },
                     topic: lcConfig.bucketTasksTopic,
                     groupId: 'test-consumer-group',
                 });
-                consumer.bootstrap(next);
+                consumer.on('ready', next);
             },
             next => {
                 consumer.subscribe();
-                next();
+                // it seems the consumer needs some extra time to
+                // start consuming the first messages
+                setTimeout(next, 2000);
             },
         ], done);
     });
