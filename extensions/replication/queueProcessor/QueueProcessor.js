@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
+const async = require('async');
 const { EventEmitter } = require('events');
 
 const Logger = require('werelogs').Logger;
@@ -58,7 +59,7 @@ class QueueProcessor extends EventEmitter {
      *   replication
      * @param {String} site - site name
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, site) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig) {
         super();
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
@@ -69,8 +70,7 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
-        this.site = site;
-
+        this.site = '';
         this.echoMode = false;
 
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
@@ -236,7 +236,7 @@ class QueueProcessor extends EventEmitter {
             }
             if (!(options && options.disableConsumer)) {
                 const groupId =
-                    `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+                    `${this.repConfig.queueProcessor.groupId}`;
                 this._consumer = new BackbeatConsumer({
                     zookeeper: {
                         connectionString: this.zkConfig.connectionString,
@@ -299,15 +299,26 @@ class QueueProcessor extends EventEmitter {
                 task = new EchoBucket(this);
             }
             // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry &&
-            sourceEntry.getReplicationStorageClass().includes(this.site)) {
-            const replicationEndpoint = this.destConfig.bootstrapList
-                .find(endpoint => endpoint.site === this.site);
-            if (['aws_s3', 'azure'].includes(replicationEndpoint.type)) {
-                task = new MultipleBackendTask(this);
-            } else {
-                task = new ReplicateObject(this);
-            }
+        } else if (sourceEntry instanceof ObjectQueueEntry) {
+            const replicationStorageClass =
+                sourceEntry.getReplicationStorageClass();
+            const sites = replicationStorageClass.split(',');
+            return async.each(sites, (site, cb) => {
+                this.site = site;
+                const replicationEndpoint = this.destConfig.bootstrapList
+                    .find(endpoint => endpoint.site === this.site);
+                if (replicationEndpoint
+                    && ['aws_s3', 'azure', 'gcp']
+                    .includes(replicationEndpoint.type)) {
+                    task = new MultipleBackendTask(this);
+                } else {
+                    task = new ReplicateObject(this);
+                }
+                this.logger.debug('source entry is being pushed');
+                return this.taskScheduler.push({ task, entry: sourceEntry },
+                                               sourceEntry.getCanonicalKey(),
+                                               cb);
+            }, err => done(err));
         }
         if (task) {
             this.logger.debug('source entry is being pushed');
