@@ -26,6 +26,15 @@ if [[ "$QUEUE_POPULATOR_DMD_PORT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.dmd.port=\"$QUEUE_POPULATOR_DMD_PORT\""
 fi
 
+if [[ "$MONGODB_HOST" ]]; then
+   JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.logSource=\"mongo\""
+   JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.replicaSetHosts=\"$MONGODB_HOST\""
+fi
+
+if [[ "$MONGODB_DATABASE" ]]; then
+   JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.database=\"$MONGODB_DATABASE\""
+fi
+
 if [[ "$EXTENSIONS_REPLICATION_SOURCE_S3_HOST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.source.s3.host=\"$EXTENSIONS_REPLICATION_SOURCE_S3_HOST\""
 fi
