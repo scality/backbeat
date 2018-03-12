@@ -120,9 +120,21 @@ describe('lifecycle conductor', function lifecycleConductor() {
             next),
         next => {
             lcConductor.processBuckets();
-            // bucket1 and bucket2 are not expected because they are
-            // already in the queue
             consumer.expectUnorderedMessages([
+                {
+                    value: {
+                        action: 'processObjects',
+                        target: { bucket: 'bucket1', owner: 'owner1' },
+                        details: {},
+                    },
+                },
+                {
+                    value: {
+                        action: 'processObjects',
+                        target: { bucket: 'bucket2', owner: 'owner2' },
+                        details: {},
+                    },
+                },
                 {
                     value: {
                         action: 'processObjects',
