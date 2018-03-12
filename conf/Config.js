@@ -1,5 +1,7 @@
 'use strict'; // eslint-disable-line
 
+const { EventEmitter } = require('events');
+
 const fs = require('fs');
 const path = require('path');
 const joi = require('joi');
@@ -7,8 +9,19 @@ const joi = require('joi');
 const extensions = require('../extensions');
 const backbeatConfigJoi = require('./config.joi.js');
 
-class Config {
+const locationTypeMatch = {
+    'location-mem-v1': 'mem',
+    'location-file-v1': 'file',
+    'location-azure-v1': 'azure',
+    'location-do-spaces-v1': 'aws_s3',
+    'location-aws-s3-v1': 'aws_s3',
+    'location-wasabi-v1': 'aws_s3',
+    'location-gcp-v1': 'gcp',
+};
+
+class Config extends EventEmitter {
     constructor() {
+        super();
         /*
          * By default, the config file is "config.json" at the root.
          * It can be overridden using the BACKBEAT_CONFIG_FILE environment var.
@@ -47,6 +60,14 @@ class Config {
                 }
             });
         }
+        if (parsedConfig.extensions && parsedConfig.extensions.replication
+            && parsedConfig.extensions.replication.destination
+            && parsedConfig.extensions.replication.destination.bootstrapList) {
+            this.replicationEndpoints = parsedConfig.extensions.replication
+            .destination.bootstrapList;
+        } else {
+            this.replicationEndpoints = [];
+        }
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
     }
@@ -57,6 +78,18 @@ class Config {
 
     getConfigPath() {
         return this._configPath;
+    }
+
+    setReplicationEndpoints(locationConstraints) {
+        this.replicationEndpoints =
+        Object.keys(locationConstraints)
+        .map(key => ({ site: key, type:
+              locationTypeMatch[locationConstraints[key].locationType] }));
+        this.emit('replication-endpoints-update');
+    }
+
+    getReplicationEndpoints() {
+        return this.replicationEndpoints;
     }
 }
 

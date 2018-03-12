@@ -648,7 +648,7 @@ describe('queue processor functional tests with mocking', () => {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
               },
-            }, 'sf');
+            });
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
         // processor is ready, so that we ensure the replication
@@ -669,7 +669,7 @@ describe('queue processor functional tests with mocking', () => {
                       retryTimeoutS: 5,
                       groupId: 'backbeat-func-test-group-id',
                   },
-              }, 'sf');
+              });
             replicationStatusProcessor.start();
             replicationStatusProcessor.bootstrapKafkaConsumer(done);
         });

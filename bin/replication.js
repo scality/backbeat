@@ -36,7 +36,8 @@ function _createSetupReplication(command, options, log) {
     const targetCredentials =
               new SharedIniFileCredentials({ profile: targetProfile });
     const destinationEndpoint =
-        destination.bootstrapList.find(dest => Array.isArray(dest.servers));
+        config.getReplicationEndpoints()
+        .find(dest => Array.isArray(dest.servers));
     return new SetupReplication({
         source: {
             bucket: sourceBucket,
