@@ -29,6 +29,9 @@ class LifecycleConsumer extends EventEmitter {
      *  before giving up retries of an entry lifecycle action
      * @param {Number} lcConfig.consumer.concurrency - number of max allowed
      *  concurrent operations
+     * @param {Object} [lcConfig.backlogMetrics] - param object to
+     * publish backlog metrics to zookeeper (see {@link
+     * BackbeatConsumer} constructor)
      * @param {Object} s3Config - S3 configuration
      * @param {Object} s3Config.host - s3 endpoint host
      * @param {Number} s3Config.port - s3 endpoint port
@@ -71,6 +74,8 @@ class LifecycleConsumer extends EventEmitter {
             groupId: this.lcConfig.consumer.groupId,
             concurrency: this.lcConfig.consumer.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
+            autoCommit: true,
+            backlogMetrics: this.lcConfig.backlogMetrics,
         });
         this._consumer.on('error', () => {});
         this._consumer.on('ready', () => {

@@ -4,9 +4,16 @@ const joiSchema = {
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
     objectTasksTopic: joi.string().required(),
+    backlogMetrics: {
+        zkPath: joi.string().default('/lifecycle/run/backlog-metrics'),
+        intervalS: joi.number().default(60),
+    },
     conductor: {
         cronRule: joi.string().required(),
         concurrency: joi.number().greater(0).default(10),
+        backlogControl: joi.object({
+            enabled: joi.boolean().default(true),
+        }).default({ enabled: true }),
     },
     producer: {
         groupId: joi.string().required(),
