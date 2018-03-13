@@ -119,8 +119,8 @@ describe('Backbeat Server', () => {
     });
 
     describe('metrics routes', () => {
-        const interval = 100;
-        const expiry = 300;
+        const interval = 300;
+        const expiry = 900;
         const OPS = 'test:bb:ops';
         const BYTES = 'test:bb:bytes';
         const OPS_DONE = 'test:bb:opsdone';
@@ -134,10 +134,16 @@ describe('Backbeat Server', () => {
             redis = new Redis();
             redisClient = new RedisClient(redisConfig, fakeLogger);
             statsClient = new StatsClient(redisClient, interval, expiry);
+
+            statsClient.reportNewRequest(OPS, 1725);
+            statsClient.reportNewRequest(BYTES, 219800);
+            statsClient.reportNewRequest(OPS_DONE, 450);
+            statsClient.reportNewRequest(BYTES_DONE, 102700);
+
             done();
         });
 
-        afterEach(() => {
+        after(() => {
             redis.keys('test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
@@ -178,42 +184,33 @@ describe('Backbeat Server', () => {
 
         it('should get the right data for route: /_/metrics/backlog',
         done => {
-            statsClient.reportNewRequest(OPS, 5);
-            statsClient.reportNewRequest(BYTES, 7100);
-
             getRequest('/_/metrics/backlog', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 5);
-                assert.equal(res[key].results.size, 7.10);
+                assert.equal(res[key].results.count, 1275);
+                assert.equal(res[key].results.size, 117.1);
                 done();
             });
         });
 
         it('should get the right data for route: /_/metrics/completions',
         done => {
-            statsClient.reportNewRequest(OPS_DONE, 12);
-            statsClient.reportNewRequest(BYTES_DONE, 1970);
-
             getRequest('/_/metrics/completions', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 12);
-                assert.equal(res[key].results.size, 1.97);
+                assert.equal(res[key].results.count, 450);
+                assert.equal(res[key].results.size, 102.7);
                 done();
             });
         });
 
         it('should get the right data for route: /_/metrics/throughput',
         done => {
-            statsClient.reportNewRequest(OPS_DONE, 300);
-            statsClient.reportNewRequest(BYTES_DONE, 187400);
-
             getRequest('/_/metrics/throughput', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 0.33);
-                assert.equal(res[key].results.size, 0.21);
+                assert.equal(res[key].results.count, 0.5);
+                assert.equal(res[key].results.size, 0.11);
                 done();
             });
         });

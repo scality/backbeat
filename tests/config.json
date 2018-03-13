@@ -38,7 +38,13 @@
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
-            "groupId": "backbeat-test-replication-group"
+            "groupId": "backbeat-test-replication-group",
+            "destination": {
+                "bootstrapList": [
+                    { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
+                    { "site": "test-site-2", "type": "aws_s3" }
+                ]
+            }
         },
         "lifecycle": {
             "zookeeperPath": "/lifecycletest",
@@ -75,7 +81,7 @@
         "dumpLevel": "error"
     },
     "metrics": {
-        "topic": "backbeat-metrics"
+        "topic": "backbeat-test-metrics"
     },
     "server": {
         "healthChecks": {
