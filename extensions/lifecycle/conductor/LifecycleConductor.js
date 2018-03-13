@@ -2,7 +2,9 @@
 
 const async = require('async');
 const schedule = require('node-schedule');
+const zookeeper = require('node-zookeeper-client');
 
+const errors = require('arsenal').errors;
 const Logger = require('werelogs').Logger;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -31,8 +33,13 @@ class LifecycleConductor {
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle configuration object
+     * @param {String} lcConfig.zookeeperPath - base path for
+     * lifecycle nodes in zookeeper
      * @param {String} lcConfig.bucketTasksTopic - lifecycle
      *   bucket tasks topic name
+     * @param {String} [lcConfig.backlogMetrics] - backlog metrics
+     * config object to apply backpressure if backlog is non-null (see
+     * {@link BackbeatConsumer} constructor for params)
      * @param {String} lcConfig.conductor - config object specific to
      *   lifecycle conductor
      * @param {String} [lcConfig.conductor.cronRule="* * * * *"] -
@@ -70,6 +77,18 @@ class LifecycleConductor {
         return `${this.lcConfig.zookeeperPath}/run/queuedBuckets`;
     }
 
+    _getPartitionsOffsetsZkPath(topic) {
+        return `${this.lcConfig.backlogMetrics.zkPath}/${topic}`;
+    }
+
+    _getOffsetZkPath(topic, partition, offsetType, groupId) {
+        const basePath =
+                  `${this._getPartitionsOffsetsZkPath(topic)}/${partition}`;
+        return (offsetType === 'topic' ?
+                `${basePath}/topic` :
+                `${basePath}/consumers/${groupId}`);
+    }
+
     initZkPaths(cb) {
         async.each([this.getBucketsZkPath(),
                     this.getQueuedBucketsZkPath()],
@@ -94,6 +113,7 @@ class LifecycleConductor {
         this.logger.info('starting queue-buckets job');
         const zkBucketsPath = this.getBucketsZkPath();
         async.waterfall([
+            next => this._checkBackpressure(next),
             next => this._zkClient.getChildren(
                 zkBucketsPath,
                 null,
@@ -128,6 +148,99 @@ class LifecycleConductor {
                 return this._producer.send(entries, next);
             },
         ], () => {});
+    }
+
+    _checkBackpressure(done) {
+        if (!this.lcConfig.backlogMetrics) {
+            return process.nextTick(done);
+        }
+        return async.series([
+            next => this._checkBackpressureForTopic(
+                this.lcConfig.bucketTasksTopic,
+                this.lcConfig.producer.groupId, next),
+            next => this._checkBackpressureForTopic(
+                this.lcConfig.objectTasksTopic,
+                this.lcConfig.consumer.groupId, next),
+        ], err => done(err));
+    }
+
+    _readZkOffset(topic, partition, offsetType, groupId, done) {
+        const zkPath = this._getOffsetZkPath(topic, partition, offsetType,
+                                             groupId);
+        this._zkClient.getData(zkPath, (err, offsetData) => {
+            if (err) {
+                this.logger.error('error reading offset from zookeeper',
+                                  { topic, partition, offsetType,
+                                    error: err.message });
+                return done(err);
+            }
+            let offset;
+            try {
+                offset = JSON.parse(offsetData);
+            } catch (err) {
+                this.logger.error('malformed JSON data for offset',
+                                  { topic, partition, offsetType,
+                                    error: err.message });
+                return done(errors.InternalError);
+            }
+            if (!Number.isInteger(offset)) {
+                this.logger.error('offset not a number',
+                                  { topic, partition, offsetType });
+                return done(errors.InternalError);
+            }
+            return done(null, offset);
+        });
+    }
+
+    _checkBackpressureForTopic(topic, groupId, done) {
+        const partitionsZkPath = this._getPartitionsOffsetsZkPath(topic);
+        this._zkClient.getChildren(partitionsZkPath, (err, partitions) => {
+            if (err) {
+                if (err.getCode() === zookeeper.Exception.NO_NODE) {
+                    // no consumer has yet published his offset
+                    return done();
+                }
+                this.logger.error(
+                    'error getting list of consumer offsets from zookeeper',
+                    { topic, error: err.message });
+                return done(err);
+            }
+            return async.eachSeries(partitions, (partition, partitionDone) => {
+                let consumerOffset;
+                let topicOffset;
+                async.waterfall([
+                    next => this._readZkOffset(topic, partition,
+                                               'consumer', groupId, next),
+                    (offset, next) => {
+                        consumerOffset = offset;
+                        this._readZkOffset(topic, partition,
+                                           'topic', null, next);
+                    },
+                    (offset, next) => {
+                        topicOffset = offset;
+                        const backlog = topicOffset - consumerOffset;
+                        this.logger.debug(
+                            'backlog computed for consumer/topic',
+                            { topic, partition,
+                              consumerOffset, topicOffset, backlog });
+                        // No need to allow any backlog because the
+                        // conductor expects everything to be
+                        // processed in a single cycle before starting
+                        // another one.
+                        if (backlog <= 0) {
+                            // partition has been consumed timely enough
+                            return next();
+                        }
+                        this.logger.info(
+                            'skipping lifecycle processing cycle due to ' +
+                                'operation backlog still in progress',
+                            { topic, partition,
+                              consumerOffset, topicOffset, backlog });
+                        return next(errors.Throttling);
+                    },
+                ], partitionDone);
+            }, done);
+        });
     }
 
     /**
@@ -241,8 +354,7 @@ class LifecycleConductor {
     }
 
     /**
-     * Stop cron task (if started), stop kafka consumer and commit
-     * current offset
+     * Stop cron task (if started), stop kafka producer
      *
      * @param {function} done - callback
      * @return {undefined}

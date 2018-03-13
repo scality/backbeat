@@ -23,6 +23,10 @@ const lcConfig = {
     zookeeperPath: '/test/lifecycle',
     bucketTasksTopic: 'backbeat-lifecycle-bucket-tasks-spec',
     objectTasksTopic: 'backbeat-lifecycle-object-tasks-spec',
+    backlogMetrics: {
+        zkPath: '/test/lifecycle/backlog-metrics',
+        intervalS: 1,
+    },
     conductor: {
         cronRule: '*/5 * * * * *',
     },
