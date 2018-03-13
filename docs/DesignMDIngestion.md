@@ -2,10 +2,10 @@
 
 ## Description
 
-This is the design document for ingesting existing metadata into MongoDB.
+This is the design document discussing the ingestion process of existing metadata into Zenko with MongoDB.
 
 The current (primary) use case is to ingest existing metadata from the RING and
-S3 Connector; future use cases will include ingesting metadata from existing data
+S3 Connector; future use cases will include ingesting metadata from existing storage solutions
 on AWS or Azure.
 
 This specific development will allow Zenko instances to ingest existing metadata,
@@ -21,7 +21,7 @@ the sole metadata database.
 ## Design
 
 *Note: current design focuses primarily on RING and Zenko*
-Approach 1:
+Proposed approach 1:
 
 * Connect Zenko to the S3 Connector, and Backbeat will connect to each raft session
   and store a `log offset` (leading to total of 8 log offsets from raft log sessions
@@ -40,7 +40,7 @@ Approach 1:
   are formatted and processed, the new logs are parsed and added and continue to
   be updated in real time; remove/shutdown the metadata servers.
 
-Approach 2:
+Proposed approach 2:
 
 * Find the `log offset` in the raft logs, ingest the existing logs up until that
   point.
@@ -55,7 +55,7 @@ Approach 2:
 
 * MongoDB
 * Existing data/metadata
-* Backbeat
+* Backbeat (including Backbeat dependencies such as Zookeeper and Kafka)
 
 ## Operational Considerations
 
