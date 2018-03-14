@@ -2,26 +2,30 @@
 
 ## Description
 
-This is the design document discussing the ingestion process of existing metadata into Zenko with MongoDB.
+This is the design document discussing the ingestion process of existing metadata
+into Zenko with MongoDB.
 
 The current (primary) use case is to ingest existing metadata from the RING and
-S3 Connector; future use cases will include ingesting metadata from existing storage solutions
+S3 Connector; future use cases will include ingesting metadata from existing storage
+solutions
 on AWS or Azure.
 
-This specific development will allow Zenko instances to ingest existing metadata,
-moving the information from the raft logs completely and allowing MongoDB to be
-the sole metadata database.
+This specific development will allow Zenko instances to copy and ingest existing
+metadata,
+copying the information from the raft logs completely and allowing MongoDB to be
+a parallel metadata database.
 
 ## Requirements
 
-* Move all existing metadata from pre-existing storage solutions to MongoDB in Zenko.
+* Copy all existing metadata from pre-existing storage solutions to MongoDB in Zenko.
 
-* Replace the metadata servers with MongoDB.
+* Allow MongoDB to be used in parallel with the existing metadata servers with S3
+  Connector.
 
 ## Design
 
 *Note: current design focuses primarily on RING and Zenko*
-Proposed approach 1:
+The proposed design will be as follows:
 
 * Connect Zenko to the S3 Connector, and Backbeat will connect to each raft session
   and store a `log offset` (leading to total of 8 log offsets from raft log sessions
@@ -30,31 +34,16 @@ Proposed approach 1:
   on existing items in each bucket.
 * Each object is then listed to get the metadata, which will be properly formatted
   and sent to the queue populator in backbeat.
-* The queue populator passes each 'log' to the queue processor. The queue processor
-  will:
-  * Store the data in MongoDB
-  * Determine if the data needs to be replicated based on existing replication streams
-    * if yes, the data will be replicated from source to destination.
+* The queue populator adds the log to MongoDB
 
 * Once all the information up until the `log offset` from the existing raft logs
-  are formatted and processed, the new logs are parsed and added and continue to
-  be updated in real time; remove/shutdown the metadata servers.
-
-Proposed approach 2:
-
-* Find the `log offset` in the raft logs, ingest the existing logs up until that
-  point.
-* Upon startup, connect directly to MongoDB as well * so that the real-time operations
-  are recorded directly into MongoDB.
-* Ingest the existing logs as well, up until `log offset`.
-* Since MongoDB was being populated in real time with the most recent logs, we will
-  not have to continue reading from the `log offset`.
-* Once the ingestion of existing logs is complete, remove/shutdown the metadata servers.
+  are formatted and processed, the new logs starting from the `log offset` are parsed,
+  added and continue to be updated in real time.
 
 ## Dependencies
 
 * MongoDB
-* Existing data/metadata
+* Existing S3 Connector
 * Backbeat (including Backbeat dependencies such as Zookeeper and Kafka)
 
 ## Operational Considerations
@@ -66,8 +55,10 @@ To be determined.
 * One of the designs proposed was to replicate and ingest data from buckets, one
   bucket at a time. This would allow the user to customize which buckets to move
   to mongodb and replicate. This could cause some issues:
-  * Will require continued maintenance and support on both the old metadata servers
-    and new MongoDB backend, which defeats the purpose of migrating to and integrating
-    MongoDB.
+
+  * The metadata servers and the MongoDB backend will have to constantly communicate
+    and keep track of  which buckets have been replicated between one another.
+
   * We will have to come up with an efficient way of filtering logs, which will be
-    more time consuming that simply using the filter that is built in with MongoDB
+
+    more time consuming that simply using the filter that is built in with MongoDB.
