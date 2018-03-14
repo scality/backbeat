@@ -1,5 +1,6 @@
 const assert = require('assert');
 const async = require('async');
+const zookeeper = require('../../lib/clients/zookeeper');
 
 const AWS = require('aws-sdk');
 const S3 = AWS.S3;
@@ -17,11 +18,34 @@ const s3config = {
                                      testConfig.s3.secretKey),
 };
 
+/**
+ * Test whether a given zookeeper node path exists
+ * @param {Boolean} shouldExist - Whether the node should exist or not
+ * @param {Object} zkClient - The Zookeeper client
+ * @param {String} path - The Zookeeper data path to check for the node
+ * @param {Function} cb - The callback to call.
+ * @return {undefined}
+ */
+function doesZkNodeExist(shouldExist, zkClient, path, cb) {
+    return zkClient.exists(path, (err, stat) => {
+        if (err) {
+            return cb(err);
+        }
+        if (shouldExist) {
+            assert(stat, 'lifecycle data path was not pre-created');
+        } else {
+            assert(stat === null, 'lifecycle data path was pre-created');
+        }
+        return cb();
+    });
+}
+
 describe('queuePopulator', () => {
     let queuePopulator;
     let s3;
+    let zkClient;
 
-    before(function setup(done) {
+    beforeEach(function setup(done) {
         this.timeout(30000); // may take some time to keep up with the
                              // log entries
 
@@ -49,7 +73,6 @@ describe('queuePopulator', () => {
                             Rules: [{
                                 Destination: {
                                     Bucket: 'arn:aws:s3:::dummy-dest-bucket',
-                                    StorageClass: 'sf',
                                 },
                                 Prefix: '',
                                 Status: 'Enabled',
@@ -67,18 +90,54 @@ describe('queuePopulator', () => {
             next => {
                 queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
             },
+            (data, next) => {
+                const { connectionString } = testConfig.zookeeper;
+                zkClient = zookeeper.createClient(connectionString, {
+                    autoCreateNamespace: false,
+                });
+                zkClient.connect();
+                zkClient.once('error', next);
+                zkClient.once('ready', () => {
+                    // just in case there would be more 'error' events emitted
+                    zkClient.removeAllListeners('error');
+                    return next();
+                });
+            },
         ], err => {
             assert.ifError(err);
             done();
         });
     });
-    after(done => {
-        async.waterfall([
-            next => {
-                next();
-            },
-        ], done);
-    });
+
+    afterEach(done =>
+        s3.listObjectVersions({ Bucket: testBucket }, (err, data) => {
+            // Bucket was deleted in a test.
+            if (err && err.code === 'NoSuchBucket') {
+                return done();
+            }
+            if (err) {
+                return done(err);
+            }
+            return async.eachLimit(data.Versions, 10, (version, next) =>
+                s3.deleteObject({
+                    Bucket: testBucket,
+                    Key: version.Key,
+                    VersionId: version.VersionId,
+                }, next),
+            err => {
+                if (err) {
+                    return done(err);
+                }
+                return async.eachLimit(data.DeleteMarkers, 10,
+                    (deleteMarker, next) =>
+                        s3.deleteObject({
+                            Bucket: testBucket,
+                            Key: deleteMarker.Key,
+                            VersionId: deleteMarker.VersionId,
+                        }, next),
+                done);
+            });
+        }));
 
     it('processAllLogEntries with nothing to do', done => {
         queuePopulator.processAllLogEntries(
@@ -112,9 +171,19 @@ describe('queuePopulator', () => {
             done();
         });
     });
-    it('processAllLogEntries with an object deletion to replicate', done => {
+    it('processAllLogEntries with an object put and delete to replicate',
+    done => {
         async.waterfall([
             next => {
+                s3.putObject({ Bucket: testBucket,
+                    Key: 'keyToReplicate',
+                    Body: 'howdy',
+                    Tagging: 'mytag=mytagvalue' }, next);
+            },
+            (data, next) => {
+                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+            },
+            (counters, next) => {
                 s3.deleteObject({ Bucket: testBucket,
                     Key: 'keyToReplicate' }, next);
             },
@@ -170,6 +239,75 @@ describe('queuePopulator', () => {
         ], err => {
             assert.ifError(err);
             done();
+        });
+    });
+
+    describe('lifecycle extension', () => {
+        const { zookeeperPath } = testConfig.extensions.lifecycle;
+        const lifecycleZkPath = `${zookeeperPath}/data/buckets`;
+        const canonicalID =
+            '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
+        const zkBucketPath = `${lifecycleZkPath}/${canonicalID}:${testBucket}`;
+
+        it('should have pre-created the lifecycle data path', done =>
+            doesZkNodeExist(true, zkClient, lifecycleZkPath, done));
+
+        it('should not have created the lifecycle bucket data path', done =>
+            doesZkNodeExist(false, zkClient, zkBucketPath, done));
+
+        describe('buckets zookeeper node path', () => {
+            beforeEach(done =>
+                s3.putBucketLifecycle({
+                    Bucket: testBucket,
+                    LifecycleConfiguration: {
+                        Rules: [{
+                            Expiration: { Date: '2016-01-01T00:00:00.000Z' },
+                            ID: 'Delete 2014 logs in 2016.',
+                            Prefix: 'logs/2014/',
+                            Status: 'Enabled',
+                        }],
+                    },
+                }, done));
+
+            it('should have created the lifecycle bucket data path', done =>
+                queuePopulator.processAllLogEntries({ maxRead: 10 },
+                    (err, counters) => {
+                        if (err) {
+                            return done(err);
+                        }
+                        assert.strictEqual(counters[0].readEntries, 1);
+                        return doesZkNodeExist(true, zkClient, zkBucketPath,
+                            done);
+                    }));
+
+            it('should delete lifecycle bucket data path if bucket is deleted',
+            done => async.series([
+                next =>
+                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                next =>
+                    doesZkNodeExist(true, zkClient, zkBucketPath, next),
+                next =>
+                    s3.deleteBucket({ Bucket: testBucket }, next),
+                next =>
+                    queuePopulator.processAllLogEntries({ maxRead: 10 },
+                        next),
+                next =>
+                    doesZkNodeExist(false, zkClient, zkBucketPath, next),
+            ], done));
+
+            it('should delete lifecycle bucket data path if lifecycle config ' +
+            'is deleted', done => async.series([
+                next =>
+                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                next =>
+                    doesZkNodeExist(true, zkClient, zkBucketPath, next),
+                next =>
+                    s3.deleteBucketLifecycle({ Bucket: testBucket }, next),
+                next =>
+                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                next =>
+                    doesZkNodeExist(false, zkClient, zkBucketPath, next),
+            ], done));
         });
     });
 });

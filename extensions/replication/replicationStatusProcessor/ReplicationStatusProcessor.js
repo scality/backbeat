@@ -92,9 +92,13 @@ class ReplicationStatusProcessor {
     /**
      * Start kafka consumer
      *
+     * @param {object} [options] - options object
+     * @param {boolean} [options.createConsumer=true] - whether to
+     *   spawn the consumer now (TEST ONLY, set to false if calling
+     *   {@link bootstrapKafkaConsumer()})
      * @return {undefined}
      */
-    start() {
+    start(options) {
         this._consumer = new BackbeatConsumer({
             zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.repConfig.replicationStatusTopic,
@@ -103,9 +107,12 @@ class ReplicationStatusProcessor {
             this.repConfig.replicationStatusProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
             fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
+            createConsumer: (!options || options.createConsumer),
         });
         this._consumer.on('error', () => {});
-        this._consumer.subscribe();
+        if (!options || options.createConsumer) {
+            this._consumer.subscribe();
+        }
 
         this.logger.info('replication status processor is ready to consume ' +
                          'replication status entries');
@@ -166,7 +173,13 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     bootstrapKafkaConsumer(cb) {
-        this._consumer.bootstrap(cb);
+        this._consumer.bootstrap(err => {
+            if (err) {
+                return cb(err);
+            }
+            this._consumer.subscribe();
+            return cb();
+        });
     }
 }
 
