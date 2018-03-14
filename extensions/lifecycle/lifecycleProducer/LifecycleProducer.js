@@ -406,6 +406,28 @@ class LifecycleProducer {
             return undefined;
         });
     }
+
+    /**
+     * Close the lifecycle producer
+     * @param {function} cb - callback function
+     * @return {undefined}
+     */
+    close(cb) {
+        async.parallel([
+            done => {
+                this._log.debug('closing bucket tasks consumer');
+                this._consumer.close(done);
+            },
+            done => {
+                this._log.debug('closing bucket tasks producer');
+                this._bucketProducer.close(done);
+            },
+            done => {
+                this._log.debug('closing object tasks producer');
+                this._objectProducer.close(done);
+            },
+        ], () => cb());
+    }
 }
 
 module.exports = LifecycleProducer;
