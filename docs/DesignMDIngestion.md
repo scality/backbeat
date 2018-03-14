@@ -23,8 +23,6 @@ a parallel metadata database.
 
 ## Design
 
-*Note: current design focuses primarily on RING and Zenko*
-
 The proposed design will be as follows:
 
 * Connect Zenko to the S3 Connector, and Backbeat will connect to each raft session
