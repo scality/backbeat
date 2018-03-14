@@ -1,13 +1,12 @@
-# *Generic Metadata Ingestion*
+# Generic Metadata Ingestion to MongoDB
 
 ## Description
 
 This is the design document discussing the ingestion process of existing metadata
 into Zenko with MongoDB.
 
-The current (primary) use case is to ingest existing metadata from the RING and
-S3 Connector; future use cases will include ingesting metadata from existing storage
-solutions
+The primary use case is to ingest existing metadata from the RING and S3 Connector;
+future use cases will include ingesting metadata from existing storage solutions
 on AWS or Azure.
 
 This specific development will allow Zenko instances to copy and ingest existing
@@ -25,6 +24,7 @@ a parallel metadata database.
 ## Design
 
 *Note: current design focuses primarily on RING and Zenko*
+
 The proposed design will be as follows:
 
 * Connect Zenko to the S3 Connector, and Backbeat will connect to each raft session
@@ -34,7 +34,7 @@ The proposed design will be as follows:
   on existing items in each bucket.
 * Each object is then listed to get the metadata, which will be properly formatted
   and sent to the queue populator in backbeat.
-* The queue populator adds the log to MongoDB
+* The queue populator adds the log to MongoDB.
 
 * Once all the information up until the `log offset` from the existing raft logs
   are formatted and processed, the new logs starting from the `log offset` are parsed,
@@ -60,4 +60,4 @@ To be determined.
     and keep track of which buckets have been replicated between one another.
 
   * We will have to come up with an efficient way of filtering logs, which will be
-    more time consuming that simply using the filter that is built in with MongoDB.
+    more time consuming than simply using the filter that is built-in with MongoDB.
