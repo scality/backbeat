@@ -53,12 +53,11 @@ To be determined.
 ## Rejected Options
 
 * One of the designs proposed was to replicate and ingest data from buckets, one
-  bucket at a time. This would allow the user to customize which buckets to move
-  to mongodb and replicate. This could cause some issues:
+  bucket at a time. This would allow the user to customize which buckets to copy
+  metadata to MongoDB. This could cause some issues:
 
   * The metadata servers and the MongoDB backend will have to constantly communicate
-    and keep track of  which buckets have been replicated between one another.
+    and keep track of which buckets have been replicated between one another.
 
   * We will have to come up with an efficient way of filtering logs, which will be
-
     more time consuming that simply using the filter that is built in with MongoDB.
