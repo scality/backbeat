@@ -5,13 +5,14 @@ const LifecycleConsumer = require('./LifecycleConsumer');
 
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
+const kafkaConfig = config.kafka;
 const lcConfig = config.extensions.lifecycle;
 const s3Config = config.s3;
 const authConfig = config.auth;
 const transport = config.transport;
 
 const lifecycleConsumer = new LifecycleConsumer(
-    zkConfig, lcConfig, s3Config, authConfig, transport);
+    zkConfig, kafkaConfig, lcConfig, s3Config, authConfig, transport);
 
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });

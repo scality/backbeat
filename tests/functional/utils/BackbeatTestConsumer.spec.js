@@ -4,7 +4,7 @@ const async = require('async');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTestConsumer = require('../../utils/BackbeatTestConsumer');
 
-const TIMEOUT = 30000;
+const TIMEOUT = 60000;
 const TOPIC = 'backbeat-test-consumer-spec';
 const GROUP_ID = 'test-consumer-group';
 
@@ -19,11 +19,11 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
 
     this.timeout(TIMEOUT);
 
-    beforeEach(done => {
+    before(done => {
         async.series([
             next => {
                 producer = new BackbeatProducer({
-                    zookeeper: { connectionString: 'localhost:2181' },
+                    kafka: { hosts: 'localhost:9092' },
                     topic: TOPIC,
                 });
                 producer.once('error', next);
@@ -34,20 +34,22 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
             },
             next => {
                 consumer = new BackbeatTestConsumer({
-                    zookeeper: { connectionString: 'localhost:2181' },
+                    kafka: { hosts: 'localhost:9092' },
                     topic: TOPIC,
                     groupId: GROUP_ID,
                 });
-                consumer.bootstrap(next);
+                consumer.on('ready', next);
             },
             next => {
                 consumer.subscribe();
-                next();
+                // it seems the consumer needs some extra time to
+                // start consuming the first messages
+                setTimeout(next, 2000);
             },
         ], done);
     });
 
-    afterEach(done => {
+    after(done => {
         async.waterfall([
             next => producer.close(next),
             next => consumer.close(next),

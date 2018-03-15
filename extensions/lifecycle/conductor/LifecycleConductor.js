@@ -25,8 +25,11 @@ class LifecycleConductor {
     /**
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
-     * @param {string} zkConfig.connectionString - zookeeper connection string
-     *   as "host:port[/chroot]"
+     * @param {String} zkConfig.connectionString - zookeeper connection string
+     *  as "host:port[/chroot]"
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.bucketTasksTopic - lifecycle
      *   bucket tasks topic name
@@ -37,8 +40,9 @@ class LifecycleConductor {
      * @param {Number} [lcConfig.conductor.concurrency=10] - maximum
      *   number of concurrent bucket-to-kafka operations allowed
      */
-    constructor(zkConfig, lcConfig) {
+    constructor(zkConfig, kafkaConfig, lcConfig) {
         this.zkConfig = zkConfig;
+        this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
         this._cronRule =
             this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
@@ -140,13 +144,15 @@ class LifecycleConductor {
         return async.series([
             next => {
                 const producer = new BackbeatProducer({
-                    zookeeper: { connectionString:
-                                 this.zkConfig.connectionString },
+                    kafka: { hosts: this.kafkaConfig.hosts },
                     topic: this.lcConfig.bucketTasksTopic,
-                    keyedPartitioner: false,
                 });
                 producer.once('error', next);
                 producer.once('ready', () => {
+                    this.logger.debug(
+                        'producer is ready',
+                        { kafkaConfig: this.kafkaConfig,
+                          topic: this.lcConfig.bucketTasksTopic });
                     producer.removeAllListeners('error');
                     producer.on('error', err => {
                         this.logger.error('error from backbeat producer', {

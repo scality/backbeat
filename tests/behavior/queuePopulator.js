@@ -83,6 +83,7 @@ describe('queuePopulator', () => {
             (data, next) => {
                 queuePopulator = new QueuePopulator(
                     testConfig.zookeeper,
+                    testConfig.kafka,
                     testConfig.queuePopulator,
                     testConfig.extensions);
                 queuePopulator.open(next);

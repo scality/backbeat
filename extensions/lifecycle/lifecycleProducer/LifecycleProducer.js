@@ -13,7 +13,6 @@ const LifecycleTask = require('../tasks/LifecycleTask');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
 
-const CONSUMER_FETCH_MAX_BYTES = 5000020;
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
 /**
@@ -30,6 +29,9 @@ class LifecycleProducer {
     /**
      * Constructor of LifecycleProducer
      * @param {Object} zkConfig - zookeeper config
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle config
      * @param {Object} s3Config - s3 config
      * @param {String} s3Config.host - host ip
@@ -42,9 +44,11 @@ class LifecycleProducer {
      * @param {number} authConfig.vault.adminPort - vault admin port
      * @param {String} transport - http or https
      */
-    constructor(zkConfig, lcConfig, s3Config, authConfig, transport) {
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, authConfig,
+                transport) {
         this._log = new Logger('Backbeat:LifecycleProducer');
         this._zkConfig = zkConfig;
+        this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
         this._authConfig = authConfig;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
@@ -241,11 +245,8 @@ class LifecycleProducer {
      */
     _setupProducer(topic, cb) {
         const producer = new BackbeatProducer({
-            zookeeper: {
-                connectionString: this._zkConfig.connectionString,
-            },
+            kafka: { hosts: this._kafkaConfig.hosts },
             topic,
-            keyedPartitioner: false,
         });
         producer.once('error', cb);
         producer.once('ready', () => {
@@ -269,14 +270,16 @@ class LifecycleProducer {
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
             },
+            kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.producer.groupId,
             concurrency: this._lcConfig.producer.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
-            fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
         consumer.on('error', () => {});
-        consumer.subscribe();
+        consumer.on('ready', () => {
+            consumer.subscribe();
+        });
     }
 
     /**

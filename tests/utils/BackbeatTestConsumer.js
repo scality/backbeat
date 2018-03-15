@@ -8,7 +8,7 @@ class BackbeatTestConsumer extends BackbeatConsumer {
     constructor(config) {
         super(Object.assign({}, config,
                             { queueProcessor: function dummy() {},
-                              createConsumer: false }));
+                              bootstrap: true }));
         // hook queue processor function
         this._queueProcessor = this._processMessage.bind(this);
         this._expectVars = null;
@@ -17,14 +17,19 @@ class BackbeatTestConsumer extends BackbeatConsumer {
     _processMessage(message, done) {
         function _matchMessage(expectedMsg) {
             if (expectedMsg.key !== undefined) {
-                assert.deepStrictEqual(message.key, expectedMsg.key,
-                                       'unexpected message key');
+                assert.deepStrictEqual(
+                    message.key.toString(), expectedMsg.key,
+                    `unexpected message key ${message.key}, ` +
+                        `expected ${expectedMsg.key}`);
             }
             if (expectedMsg.value !== undefined) {
                 const parsedMsg = typeof expectedMsg.value === 'object' ?
-                          JSON.parse(message.value) : message.value;
-                assert.deepStrictEqual(parsedMsg, expectedMsg.value,
-                                       'unexpected message value');
+                          JSON.parse(message.value) :
+                          message.value.toString();
+                assert.deepStrictEqual(
+                    parsedMsg, expectedMsg.value,
+                    `unexpected message value ${parsedMsg}, ` +
+                        `expected ${expectedMsg.value}`);
             }
         }
 
