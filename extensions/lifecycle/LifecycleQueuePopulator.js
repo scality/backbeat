@@ -52,25 +52,31 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         const { zookeeperPath } = this.extConfig;
         const path = `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` +
             `${attributes.owner}:${attributes.name}`;
-        // Remove existing node if deleting the bucket or its configuration.
+
+        // FIXME disabled removal of existing node for now
+        //
+        // Rationale:
+        //
+        // From the raft log, we observe that bucket
+        // operations come from multiple raft sessions (observed
+        // bucket metadata for one bucket from sessions 1, 2 and 3),
+        // where the original expectation was that operations on one
+        // bucket came from only one raft session at a time.
+        //
+        // This means that we have no guarantee in which order we
+        // process operations on a single bucket, since raft sessions
+        // are processed independently by multiple queue
+        // populators. Because of time constraints on delivery we
+        // disable the removal of bucket nodes for now, but we should
+        // consider re-enabling removal with a correct method later.
         if (attributes.deleted ||
             attributes.lifecycleConfiguration === null) {
-            return this.zkClient.remove(path, err => {
-                if (err && err.name !== 'NO_NODE') {
-                    this.log.error('could not remove zookeeper node', {
-                        method: 'LifecycleQueuePopulator._updateZkBucketNode',
-                        zkPath: path,
-                        error: err,
-                    });
-                }
-                if (!err) {
-                    this.log.info(
-                        'removed lifecycle zookeeper watch node for bucket',
-                        { owner: attributes.owner,
-                          bucket: attributes.name });
-                }
-                return undefined;
-            });
+            this.log.debug(
+                'read bucket log entry with no lifecycle configuration, ' +
+                    'skipping',
+                { owner: attributes.owner,
+                  bucket: attributes.name });
+            return undefined;
         }
         return this.zkClient.create(path, err => {
             if (err && err.name !== 'NODE_EXISTS') {

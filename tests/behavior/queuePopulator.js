@@ -281,7 +281,8 @@ describe('queuePopulator', () => {
                             done);
                     }));
 
-            it('should delete lifecycle bucket data path if bucket is deleted',
+            it.skip('should delete lifecycle bucket data path if bucket ' +
+            'is deleted',
             done => async.series([
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
@@ -296,8 +297,8 @@ describe('queuePopulator', () => {
                     doesZkNodeExist(false, zkClient, zkBucketPath, next),
             ], done));
 
-            it('should delete lifecycle bucket data path if lifecycle config ' +
-            'is deleted', done => async.series([
+            it.skip('should delete lifecycle bucket data path if lifecycle ' +
+            'config is deleted', done => async.series([
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
                 next =>
