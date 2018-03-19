@@ -14,7 +14,7 @@ metadata,
 copying the information from the raft logs completely and allowing MongoDB to be
 a parallel metadata database.
 
-## Requirements
+## Purpose
 
 * Copy all existing metadata from pre-existing storage solutions to MongoDB in Zenko.
 
@@ -27,7 +27,7 @@ a parallel metadata database.
 The proposed design will be as follows:
 
 * First, determine if this is a fresh install of Zenko or an upgrade installation.
-    * This can be determined by checking if the zookeeper has stored a sequence ID.
+    * This can be determined by checking if Zookeeper has stored a sequence ID.
 * If this is a fresh install of Zenko, we will create a `snapshot`.
     * Record the last sequence ID from the metadata server that is part of the S3
       connector - this will serve as a marker that will be stored as a `log offset`
@@ -42,18 +42,29 @@ The proposed design will be as follows:
       Using the list of object keys, send a query directly to the metadata server
       with the `metadataWrapper` class in Arsenal.
         * This will get the JSON object for each object, which is put into kafka.
-* After finishing the `snapshot`, resume queueing from logs using the last stored
-  `sequence id` as the new starting point.
+* After finishing the `snapshot`, resume queueing from raft logs using the last
+  stored `sequence id` as the new starting point.
+
+With this design, Backbeat will include a new populator which reads from the Metadata
+server and queues the logs to Kafka. The consumer will not need to be changed.
 
 ## Dependencies
 
 * MongoDB
 * Existing S3 Connector
-* Backbeat (including Backbeat dependencies such as Zookeeper and Kafka)
+* Backbeat (including Backbeat dependencies, e.g. Zookeeper and Kafka)
 
-## Operational Considerations
+## Considerations
 
-To be determined.
+While taking the `snapshot` of the S3 Connector/RING, we will have to pause the
+consumer that will be writing to Mongo DB. This will be done via supervisord.
+
+## Background Information for Design
+
+* The `sequence ID` from Metadata Server will be in numerical order.
+* There will not be data that is put directly into the Zenko cloudserver - all
+  data will be sent to the S3 Connector, and logs will come from Metadata Server.
+* There will not be pre-existing data in the Mongo database.
 
 ## Rejected Options
 
@@ -66,3 +77,39 @@ To be determined.
 
   * We will have to come up with an efficient way of filtering logs, which will be
     more time consuming than simply using the filter that is built-in with MongoDB.
+
+## Diagram of work flow, to be updated
+
+```
+                    +-------------+
+                    |             |
+                    | Cloudserver |
+                    |             |
+                    +------+------+   Use S3 calls to
+                           |          list buckets and  +----------------------+
+                           |          objects that are  |                      |
+                           |          in the pre-       |     S3 Connector     |
+                           |          existing backend  |                      |
+                           |        +-----------------> | +------------------+ |
+                           |        |                   | |                  | |
+                           |        | <-----------------+ |  Metadata Server | |
+                  +-----------------+  Obtain list of   | |                  | |
+                  | +-------------+ |  object keys      | +--------^---------+ |
+                  | |             | |                   +----------------------+
++----------+      | |  Kafka      | |                              |
+|          | <------+             | |                              |
+| Mongo DB |      | +-------------+ |                              |
+|          |      | |             | +------------------------------+
++----------+   +-----+ Zookeeper  | |  Using the list of object keys,
+                  |  | |             | |  call the Metadata Server directly
+                  |  | +-------------+ |  to get JSON of each object
+                  |  |                 |
+                  |  |    Backbeat     |
+                  |  |                 |
+                  |  +-----------------+
+                  |
+                  |     On startup, check Zookeeper to
+                  +---> see if a 'sequence id' already
+                        exists.
+
+```
