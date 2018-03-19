@@ -39,6 +39,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         });
     }
 
+    _getBucketNodeZkPath(attributes) {
+        const { zookeeperPath } = this.extConfig;
+        return `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` +
+            `${attributes.owner}:${attributes.uid}:${attributes.name}`;
+    }
+
     /**
      * Create a new zookeeper node for any bucket that has a lifecycle
      * configuration. Remove the node if the bucket is deleted or the
@@ -46,12 +52,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @param {Object} attributes - bucket attributes from metadata log
      * @param {String} attributes.owner - canonical ID of the bucket owner
      * @param {String} attributes.name - bucket name
+     * @param {String} attributes.uid - bucket unique UID
      * @return {undefined}
      */
     _updateZkBucketNode(attributes) {
-        const { zookeeperPath } = this.extConfig;
-        const path = `${zookeeperPath}${LIFECYCLE_BUCKETS_ZK_PATH}/` +
-            `${attributes.owner}:${attributes.name}`;
+        const path = this._getBucketNodeZkPath(attributes);
         // Remove existing node if deleting the bucket or its configuration.
         if (attributes.deleted ||
             attributes.lifecycleConfiguration === null) {
