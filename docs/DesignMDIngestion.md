@@ -57,11 +57,6 @@ server and queues the logs to Kafka. The consumer will not need to be changed.
 * Existing S3 Connector
 * Backbeat (including Backbeat dependencies, e.g. Zookeeper and Kafka)
 
-## Considerations
-
-While ingestiong pre-existing metadata from the S3 Connector/RING, we will have
-to pause the consumer that will be writing to Mongo DB. This will be done via supervisord.
-
 ### Bucket/Object-Key Parity
 
 When ingesting pre-existing metadata, we will store all entries from one backend
