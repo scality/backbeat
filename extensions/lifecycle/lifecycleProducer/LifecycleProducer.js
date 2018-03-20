@@ -365,7 +365,6 @@ class LifecycleProducer {
      */
     start() {
         this._setupVaultClientCache();
-        this._setupConsumer();
         return async.parallel([
             // Set up producer to populate the lifecycle bucket task topic.
             next => this._setupProducer(this._lcConfig.bucketTasksTopic,
@@ -402,6 +401,7 @@ class LifecycleProducer {
                     method: 'LifecycleProducer.start',
                 });
             }
+            this._setupConsumer();
             this._log.info('lifecycle producer successfully started');
             return undefined;
         });
