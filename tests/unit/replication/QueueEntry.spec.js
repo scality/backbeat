@@ -3,7 +3,7 @@
 const assert = require('assert');
 
 const QueueEntry =
-          require('../../../extensions/replication/utils/QueueEntry');
+          require('../../../lib/models/QueueEntry');
 const kafkaEntry = require('../../utils/kafkaEntry');
 
 describe('QueueEntry helper class', () => {

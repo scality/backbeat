@@ -12,6 +12,10 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     filter(entry) {
+        if (entry.key === undefined) {
+            // bucket updates have no key in raft log
+            return undefined;
+        }
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
@@ -51,6 +55,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(entry));
+
+        this._incrementMetrics(entry.bucket, queueEntry.getBytesMetric());
     }
 }
 
