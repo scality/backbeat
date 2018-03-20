@@ -5,31 +5,32 @@
 This is the design document discussing the ingestion process of existing metadata
 into Zenko with MongoDB.
 
-The primary use case is to copy the existing metadata from the RING and S3 Connector
-and ingest into the MongoDB backend that is used with Zenko; future use cases will
-include copying metadata from existing storage solutions on AWS or Azure to MongoDB.
+The primary use case is to copy the existing metadata from the RING/S3 Connector
+and ingest into the MongoDB backend that is used with Zenko so that users can conduct
+metadata search; future use cases will include copying metadata from existing storage
+solutions on AWS or Azure to MongoDB for search.
 
 This specific development will allow Zenko instances to copy and ingest existing
-metadata,
-copying the information from the raft logs completely and allowing MongoDB to be
-a parallel metadata database.
+metadata, copying the information from the raft logs completely and syncing MongoDB
+to be a parallel metadata database.
 
 ## Purpose
 
-* Copy all existing metadata from pre-existing storage solutions to MongoDB in Zenko.
-
-* Allow MongoDB to be used in parallel with the existing metadata servers with S3
-  Connector, so that the primary metadata backend can be changed between the metadata
-  servers and the MongoDB backend.
+The primary purpose is to copy all existing metadata from pre-existing storage solutions
+to MongoDB in Zenko. This will allow users to search the metadata that is stored
+in MongoDB. This will also allow MongoDB to be used in parallel with the existing
+metadata servers with S3 Connector, so that the primary metadata backend can be
+changed between the metadata servers and the MongoDB backend.
 
 ## Design
 
 The proposed design will be as follows:
 
-* First, determine if this is a fresh install of Zenko or an upgrade installation.
+* First, on startup, determine if this is a fresh install of Zenko or an upgrade
+  installation.
     * This can be determined by checking if Zookeeper has stored a sequence ID.
-* If this is a fresh install of Zenko, we will create a pause the live log ingestion
-  to ingest previously existing metadata.
+* If this is a fresh install of Zenko, we will pause the live log processing to
+  ingest previously existing metadata.
     * Record the last sequence ID from the Metadata server (send a query using the
       `metadataWrapper`) that is part of the S3 connector - this will serve as a
       marker that will be stored as a `log offset` to bookmark the point between
@@ -60,6 +61,12 @@ server and queues the logs to Kafka. The consumer will not need to be changed.
 
 While ingestiong pre-existing metadata from the S3 Connector/RING, we will have
 to pause the consumer that will be writing to Mongo DB. This will be done via supervisord.
+
+### Bucket/Object-Key Parity
+
+When ingesting pre-existing metadata, we will store all entries from one backend
+location (in this case, the RING/S3 Connector) into one bucket (one collection within           
+MongoDB), with the names of each object prefixed with the name of the bucket.
 
 ## Background Information for Design
 
