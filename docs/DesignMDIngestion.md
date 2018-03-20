@@ -29,11 +29,11 @@ The proposed design will be as follows:
 * First, determine if this is a fresh install of Zenko or an upgrade installation.
     * This can be determined by checking if Zookeeper has stored a sequence ID.
 * If this is a fresh install of Zenko, we will create a `snapshot`.
-    * Record the last sequence ID from the metadata server that is part of the S3
-      connector - this will serve as a marker that will be stored as a `log offset`
-      to bookmark the point between logs that existed prior to the start of the
-      Zenko instance, and the point where new logs are added during the process
-      where the old logs are copied.
+    * Record the last sequence ID from the Metadata server (send a query using the
+      `metadataWrapper`) that is part of the S3 connector - this will serve as a
+      marker that will be stored as a `log offset` to bookmark the point between
+      logs that existed prior to the start of the Zenko instance, and the point
+      where new logs are added during the process where the old logs are copied.
     * From backbeat, we will use the S3 protocols to send the following requests
       to the S3 connector:
         * List all buckets that exist on the storage backend.
@@ -42,8 +42,9 @@ The proposed design will be as follows:
       Using the list of object keys, send a query directly to the metadata server
       with the `metadataWrapper` class in Arsenal.
         * This will get the JSON object for each object, which is put into kafka.
-* After finishing the `snapshot`, resume queueing from raft logs using the last
-  stored `sequence id` as the new starting point.
+* If the instance of Zenko is a fresh install or the `snapshot`process has completed,
+  resume queueing from raft logs using the last stored `sequence id` as the new
+  starting point.
 
 With this design, Backbeat will include a new populator which reads from the Metadata
 server and queues the logs to Kafka. The consumer will not need to be changed.
@@ -92,7 +93,7 @@ consumer that will be writing to Mongo DB. This will be done via supervisord.
                            |          existing backend  |                      |
                            |        +-----------------> | +------------------+ |
                            |        |                   | |                  | |
-                           v        | <-----------------+ |  Metadata Server | |
+                           v        | ----------------> | |  Metadata Server | |
                   +-----------------+  Obtain list of   | |                  | |
                   | +-------------+ |  object keys      | +--------^---------+ |
                   | |             | |                   +----------|-----------+
