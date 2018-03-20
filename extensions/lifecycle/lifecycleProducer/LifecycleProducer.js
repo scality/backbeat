@@ -33,6 +33,9 @@ class LifecycleProducer {
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle config
+     * @param {Object} [lcConfig.backlogMetrics] - param object to
+     * publish backlog metrics to zookeeper (see {@link
+     * BackbeatConsumer} constructor)
      * @param {Object} s3Config - s3 config
      * @param {String} s3Config.host - host ip
      * @param {String} s3Config.port - port
@@ -227,6 +230,7 @@ class LifecycleProducer {
                 method: 'LifecycleProducer._processBucketEntry',
                 bucket,
                 owner,
+                details: result.details,
             });
             return this._internalTaskScheduler.push({
                 task: new LifecycleTask(this),
@@ -275,6 +279,8 @@ class LifecycleProducer {
             groupId: this._lcConfig.producer.groupId,
             concurrency: this._lcConfig.producer.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
+            autoCommit: true,
+            backlogMetrics: this._lcConfig.backlogMetrics,
         });
         consumer.on('error', () => {});
         consumer.on('ready', () => {
