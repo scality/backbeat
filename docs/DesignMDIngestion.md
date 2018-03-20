@@ -28,7 +28,8 @@ The proposed design will be as follows:
 
 * First, determine if this is a fresh install of Zenko or an upgrade installation.
     * This can be determined by checking if Zookeeper has stored a sequence ID.
-* If this is a fresh install of Zenko, we will create a `snapshot`.
+* If this is a fresh install of Zenko, we will create a pause the live log ingestion
+  to ingest previously existing metadata.
     * Record the last sequence ID from the Metadata server (send a query using the
       `metadataWrapper`) that is part of the S3 connector - this will serve as a
       marker that will be stored as a `log offset` to bookmark the point between
@@ -42,7 +43,7 @@ The proposed design will be as follows:
       Using the list of object keys, send a query directly to the metadata server
       with the `metadataWrapper` class in Arsenal.
         * This will get the JSON object for each object, which is put into kafka.
-* If the instance of Zenko is a fresh install or the `snapshot`process has completed,
+* If the instance of Zenko is a fresh install or the ingestion process has completed,
   resume queueing from raft logs using the last stored `sequence id` as the new
   starting point.
 
@@ -57,8 +58,8 @@ server and queues the logs to Kafka. The consumer will not need to be changed.
 
 ## Considerations
 
-While taking the `snapshot` of the S3 Connector/RING, we will have to pause the
-consumer that will be writing to Mongo DB. This will be done via supervisord.
+While ingestiong pre-existing metadata from the S3 Connector/RING, we will have
+to pause the consumer that will be writing to Mongo DB. This will be done via supervisord.
 
 ## Background Information for Design
 
