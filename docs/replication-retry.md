@@ -18,7 +18,7 @@ See [Explanations](#explanations) for more detail.
 
 ## Definition of API
 
-* GET `/_/crr/list/failed/all`
+* GET `/_/crr/failed/all`
 
     This GET request retrieves a listing of all failed operations. This
     operation is useful if you're interested in whether any replication
@@ -35,7 +35,7 @@ See [Explanations](#explanations) for more detail.
     }]
     ```
 
-* GET `/_/crr/list/failed/<bucket>/<key>/<versionId>`
+* GET `/_/crr/failed/<bucket>/<key>/<versionId>`
 
     This GET request retrieves a listing of all failed operations for a specific
     object version. This operation is useful if you're interested in monitoring
@@ -52,28 +52,31 @@ See [Explanations](#explanations) for more detail.
     }]
     ```
 
-* POST `/_/crr/retry`
+* POST `/_/crr/failed/retry`
 
     This POST request retries a failed operation.
 
     Request Body:
 
     ```sh
-    {
+    [{
         bucket: <bucket>,
         key: <key>,
         versionId: <versionId>,
         site: <site>
-    }
+    }]
     ```
 
     Response:
 
     ```sh
-    {
+    [{
+        bucket: <bucket>,
+        key: <key>,
+        versionId: <versionId>,
         site: <site>,
         status: PENDING
-    }
+    }]
     ```
 
 ## Explanations
@@ -92,14 +95,14 @@ The value of the Redis key is the object's metadata at the time of failure.
 ### Listing
 
 When a GET request is received for the listing route (e.g.,
-`/_/crr/list/failed/all`), all Redis keys beginning with `backbeat:crr:failed`
-will be retrieved and sent as a response defined in [Definition of
+`/_/crr/failed/all`), all Redis keys beginning with `backbeat:crr:failed` will
+be retrieved and sent as a response defined in [Definition of
 API](#definition-of-api).
 
 ### Retry
 
-When a POST request is received for the retry route `/_/crr/retry` the following
-steps occur:
+When a POST request is received for the retry route `/_/crr/failed/retry` the
+following steps occur:
 
 1. Get the object's metadata stored by the Redis key (the schema of which is
    defined in [Redis](#redis)).
