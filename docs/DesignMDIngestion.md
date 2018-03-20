@@ -92,24 +92,24 @@ consumer that will be writing to Mongo DB. This will be done via supervisord.
                            |          existing backend  |                      |
                            |        +-----------------> | +------------------+ |
                            |        |                   | |                  | |
-                           |        | <-----------------+ |  Metadata Server | |
+                           v        | <-----------------+ |  Metadata Server | |
                   +-----------------+  Obtain list of   | |                  | |
                   | +-------------+ |  object keys      | +--------^---------+ |
-                  | |             | |                   +----------------------+
+                  | |             | |                   +----------|-----------+
 +----------+      | |  Kafka      | |                              |
 |          | <------+             | |                              |
 | Mongo DB |      | +-------------+ |                              |
 |          |      | |             | +------------------------------+
 +----------+   +-----+ Zookeeper  | |  Using the list of object keys,
-                  |  | |             | |  call the Metadata Server directly
-                  |  | +-------------+ |  to get JSON of each object
-                  |  |                 |
-                  |  |    Backbeat     |
-                  |  |                 |
-                  |  +-----------------+
-                  |
-                  |     On startup, check Zookeeper to
-                  +---> see if a 'sequence id' already
+               |  | |             | |  call the Metadata Server directly
+               |  | +-------------+ |  to get JSON of each object
+               |  |                 |
+               |  |    Backbeat     |
+               |  |                 |
+               |  +-----------------+
+               |
+               |     On startup, check Zookeeper to
+               +---> see if a 'sequence id' already
                         exists.
 
 ```
