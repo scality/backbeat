@@ -7,7 +7,7 @@ const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
-const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const QueuePopulator = require('../lib/queuePopulator/IngestionProducer');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -45,6 +45,7 @@ const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
 
 async.waterfall([
     done => queuePopulator.open(done),
+    done => queuePopulator.getRaftSessionBuckets(done),
     done => {
         const taskState = {
             batchInProgress: false,
