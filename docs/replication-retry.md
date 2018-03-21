@@ -1,10 +1,10 @@
-# Replication Retry
+# Cross-Region Replication (CRR) Retry
 
 ## Description
 
-This feature offers a way for users to monitor and retry failed replication
-operations. It enables users to retrieve a list of failed operations and retry
-specific replication operations.
+This feature offers a way for users to monitor and retry failed cross-region
+replication (CRR) operations. It enables users to retrieve a list of failed
+operations and retry specific CRR operations.
 
 ## Requirements
 
@@ -21,8 +21,8 @@ See [Explanations](#explanations) for more detail.
 * GET `/_/crr/failed/all`
 
     This GET request retrieves a listing of all failed operations. This
-    operation is useful if you're interested in whether any replication
-    operations have failed and want the entire listing.
+    operation is useful if you're interested in whether any CRR operations have
+    failed and want the entire listing.
 
     Response:
 
