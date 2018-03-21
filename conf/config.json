@@ -10,7 +10,7 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "dmd",
+        "logSource": "bucketd",
         "bucketd": {
             "host": "127.0.0.1",
             "port": 9000

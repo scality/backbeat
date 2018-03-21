@@ -6,7 +6,7 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/backbeat/test/queue-populator",
-        "logSource": "dmd",
+        "logSource": "bucketd",
         "dmd": {
             "host": "127.0.0.1",
             "port": 9990,
