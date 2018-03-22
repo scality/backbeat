@@ -52,7 +52,7 @@ See [Explanations](#explanations) for more detail.
     }]
     ```
 
-* POST `/_/crr/failed/retry`
+* POST `/_/crr/failed`
 
     This POST request retries a failed operation.
 
@@ -107,8 +107,8 @@ API](#definition-of-api).
 
 ### Retry
 
-When a POST request is received for the retry route `/_/crr/failed/retry` the
-following steps occur:
+When a POST request is received for the route `/_/crr/failed` the following 
+steps occur:
 
 1. Get the object's metadata stored by the Redis key (the schema of which is
    defined in [Redis](#redis)).
