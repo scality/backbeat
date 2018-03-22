@@ -13,7 +13,7 @@
         "logSource": "bucketd",
         "bucketd": {
             "host": "54.202.35.127",
-            "port": 8000
+            "port": 9000
         },
         "dmd": {
             "host": "127.0.0.1",
@@ -25,14 +25,14 @@
             "source": {
                 "transport": "http",
                 "s3": {
-                    "host": "127.0.0.1",
+                    "host": "54.202.35.127",
                     "port": 8000
                 },
                 "auth": {
                     "type": "account",
                     "account": "bart",
                     "vault": {
-                        "host": "127.0.0.1",
+                        "host": "54.202.35.127",
                         "port": 8500,
                         "adminPort": 8600
                     }
