@@ -12,8 +12,8 @@
         "zookeeperPath": "/queue-populator",
         "logSource": "bucketd",
         "bucketd": {
-            "host": "127.0.0.1",
-            "port": 9000
+            "host": "54.202.35.127",
+            "port": 8000
         },
         "dmd": {
             "host": "127.0.0.1",
