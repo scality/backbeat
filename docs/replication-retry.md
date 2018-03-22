@@ -86,7 +86,7 @@ See [Explanations](#explanations) for more detail.
 Redis will contain a hash with the key:
 
 ```
-backbeat:crr:failed
+bb:crr:failed
 ```
 
 The replication status processor sets a hash field for any backend with a FAILED
@@ -101,7 +101,7 @@ The value of the Redis hash field is the object's metadata at the time of failur
 ### Listing
 
 When a GET request is received for the listing route (e.g.,
-`/_/crr/failed`), all Redis keys beginning with `backbeat:crr:failed` will
+`/_/crr/failed`), all Redis keys beginning with `bb:crr:failed` will
 be retrieved and sent as a response defined in [Definition of
 API](#definition-of-api).
 
