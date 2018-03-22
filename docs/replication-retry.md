@@ -18,7 +18,7 @@ See [Explanations](#explanations) for more detail.
 
 ## Definition of API
 
-* GET `/_/crr/failed/all`
+* GET `/_/crr/failed`
 
     This GET request retrieves a listing of all failed operations. This
     operation is useful if you're interested in whether any CRR operations have
@@ -83,19 +83,25 @@ See [Explanations](#explanations) for more detail.
 
 ### Redis
 
-The replication status processor sets a Redis key for any backend with a FAILED
-status with the following key schema:
+Redis will contain a hash with the key:
 
-```sh
-backbeat:crr:failed:<bucket>:<key>:<versionId>:<site>
+```
+backbeat:crr:failed
 ```
 
-The value of the Redis key is the object's metadata at the time of failure.
+The replication status processor sets a hash field for any backend with a FAILED
+status using the following schema:
+
+```sh
+<bucket>:<key>:<versionId>:<site>
+```
+
+The value of the Redis hash field is the object's metadata at the time of failure.
 
 ### Listing
 
 When a GET request is received for the listing route (e.g.,
-`/_/crr/failed/all`), all Redis keys beginning with `backbeat:crr:failed` will
+`/_/crr/failed`), all Redis keys beginning with `backbeat:crr:failed` will
 be retrieved and sent as a response defined in [Definition of
 API](#definition-of-api).
 
