@@ -152,6 +152,32 @@
                 "members": {
                     "versionId": {
                         "type": "string"
+                    },
+                    "Location": {
+                        "type": "structure",
+                        "members": {
+                            "key": {
+                                "type": "string"
+                            },
+                            "size": {
+                                "type": "long"
+                            },
+                            "start": {
+                                "type": "long"
+                            },
+                            "dataStoreName": {
+                                "type": "string"
+                            },
+                            "dataStoreETag": {
+                                "type": "string"
+                            },
+                            "dataStoreType": {
+                                "type": "string"
+                            },
+                            "dataStoreVersionId": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
@@ -401,6 +427,32 @@
                 "members": {
                     "versionId": {
                         "type": "string"
+                    },
+                    "Location": {
+                        "type": "structure",
+                        "members": {
+                            "key": {
+                                "type": "string"
+                            },
+                            "size": {
+                                "type": "long"
+                            },
+                            "start": {
+                                "type": "long"
+                            },
+                            "dataStoreName": {
+                                "type": "string"
+                            },
+                            "dataStoreETag": {
+                                "type": "string"
+                            },
+                            "dataStoreType": {
+                                "type": "string"
+                            },
+                            "dataStoreVersionId": {
+                                "type": "string"
+                            }
+                        }
                     }
                 }
             }
@@ -565,6 +617,11 @@
                         "location": "header",
                         "locationName": "x-scal-replication-content",
                         "type": "string"
+                    },
+                    "DeleteOldLocation": {
+                        "location": "header",
+                        "locationName": "x-scal-delete-old-location",
+                        "type": "boolean"
                     }
                 },
                 "payload": "Body"

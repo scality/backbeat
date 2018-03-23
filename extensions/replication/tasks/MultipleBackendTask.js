@@ -313,7 +313,10 @@ class MultipleBackendTask extends ReplicateObject {
                     }
                     sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                         data.versionId);
-                    return doneOnce();
+                    // embed location in an array here because for MPU
+                    // we don't aggregate locations before returning
+                    // the result
+                    return doneOnce(null, [data.Location]);
                 });
             });
         });
@@ -414,7 +417,10 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
-            return doneOnce(null, data);
+            // this._getAndPutData() aggregates the locations into an
+            // array before returning the result, return a single
+            // location here
+            return doneOnce(null, data.Location);
         });
     }
 
@@ -586,8 +592,17 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 const content = sourceEntry.getReplicationContent();
                 if (content.includes('MPU')) {
-                    return this._getAndPutMultipartUpload(sourceEntry,
-                        destEntry, log, next);
+                    return this._getAndPutMultipartUpload(
+                        sourceEntry, destEntry, log, (err, location) => {
+                            if (err) {
+                                return next(err);
+                            }
+                            if (sourceEntry.getNonTransientLocation()
+                                === `PENDING:${this.site}`) {
+                                sourceEntry.setNonTransientLocation(location);
+                            }
+                            return next();
+                        });
                 }
                 if (content.includes('PUT_TAGGING')) {
                     return this._putObjectTagging(sourceEntry, destEntry,
@@ -597,7 +612,17 @@ class MultipleBackendTask extends ReplicateObject {
                     return this._deleteObjectTagging(sourceEntry, destEntry,
                         log, next);
                 }
-                return this._getAndPutData(sourceEntry, destEntry, log, next);
+                return this._getAndPutData(
+                    sourceEntry, destEntry, log, (err, location) => {
+                        if (err) {
+                            return next(err);
+                        }
+                        if (sourceEntry.getNonTransientLocation()
+                            === `PENDING:${this.site}`) {
+                            sourceEntry.setNonTransientLocation(location);
+                        }
+                        return next();
+                    });
             },
         ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
             log, done));
