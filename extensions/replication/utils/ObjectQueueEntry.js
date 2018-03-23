@@ -81,18 +81,6 @@ class ObjectQueueEntry extends ObjectMD {
         return `${this.getBucket()}/${this.getObjectKey()}`;
     }
 
-    /**
-     * Get total bytes of this object entry
-     * @return {number} total bytes
-     */
-    getBytesMetric() {
-        const locations = this.getReducedLocations();
-        if (locations) {
-            return locations.reduce((sum, item) => sum + item.size, 0);
-        }
-        return 0;
-    }
-
     getObjectKey() {
         return this.objectKey;
     }
