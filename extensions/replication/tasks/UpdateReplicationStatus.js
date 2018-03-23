@@ -223,6 +223,19 @@ class UpdateReplicationStatus extends BackbeatTask {
             updatedSourceEntry.setSite(site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(site));
+            if (Array.isArray(sourceEntry.getNonTransientLocation())) {
+                updatedSourceEntry.setNonTransientLocation(
+                    sourceEntry.getNonTransientLocation());
+            }
+            if (updatedSourceEntry.getReplicationStatus() === 'COMPLETED'
+                && Array.isArray(
+                    updatedSourceEntry.getNonTransientLocation())) {
+                // replace location by the non-transient cloud
+                // location on CRR global completion
+                updatedSourceEntry.setLocation(
+                    updatedSourceEntry.getNonTransientLocation());
+                updatedSourceEntry.setNonTransientLocation(undefined);
+            }
             return this._putMetadata(updatedSourceEntry, log, err => {
                 if (err) {
                     log.error('an error occurred when writing replication ' +
