@@ -8,7 +8,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const RETRYTIMEOUTS = 300;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-const MAX_KEYS = 1000;
+const MAX_KEYS = process.env.TEST_SWITCH ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 

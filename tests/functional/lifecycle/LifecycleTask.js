@@ -1,13 +1,22 @@
 const assert = require('assert');
-const uuid = require('uuid/v4');
-const util = require('util');
+const async = require('async');
+const AWS = require('aws-sdk');
 
-const { errors } = require('arsenal');
 const Logger = require('werelogs').Logger;
 
 const LifecycleTask = require('../../../extensions/lifecycle' +
     '/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
+const testConfig = require('../../config.json');
+
+const S3 = AWS.S3;
+const s3config = {
+    endpoint: `${testConfig.s3.transport}://` +
+        `${testConfig.s3.host}:${testConfig.s3.port}`,
+    s3ForcePathStyle: true,
+    credentials: new AWS.Credentials(testConfig.s3.accessKey,
+                                     testConfig.s3.secretKey),
+};
 
 /*
     NOTE:
@@ -33,444 +42,132 @@ FUTURE.setDate(FUTURE.getDate() + 5);
 
 const OWNER = 'testOwner';
 
-// NOTE: Since all S3 calls are only 'GET's, I decided to just go for mock
-//  S3 that defines all buckets and their conditions
-class S3Mock {
-    constructor() {
-        this.overrideMax = undefined;
+class S3Helper {
+    constructor(client) {
+        this.s3 = client;
+        this.bucket = undefined;
 
-        this.s3Storage = {
-            'test-expire': {
-                Objects: [
-                    {
-                        Key: 'expire-1',
-                        LastModified: PAST,
-                        StorageClass: 'STANDARD',
-                        Marker: uuid().replace(/-/g, ''),
-                        //
-                        TagSet: [],
-                    },
-                    {
-                        Key: 'expire-2',
-                        LastModified: CURRENT,
-                        StorageClass: 'STANDARD',
-                        Marker: uuid().replace(/-/g, ''),
-                        //
-                        TagSet: [
-                            { Key: 'key1', Value: 'value1' },
-                        ],
-                    },
-                    {
-                        Key: 'expire-3',
-                        LastModified: PAST,
-                        StorageClass: 'STANDARD',
-                        Marker: uuid().replace(/-/g, ''),
-                        //
-                        TagSet: [
-                            { Key: 'key1', Value: 'value1' },
-                            { Key: 'key2', Value: 'value2' },
-                        ],
-                    },
-                    {
-                        Key: 'expire-4',
-                        LastModified: FUTURE,
-                        StorageClass: 'STANDARD',
-                        Marker: uuid().replace(/-/g, ''),
-                        //
-                        TagSet: [
-                            { Key: 'key2', Value: 'value2' },
-                            { Key: 'key1', Value: 'value1' },
-                        ],
-                    },
-                    {
-                        Key: 'expire-5',
-                        LastModified: FUTURE,
-                        StorageClass: 'STANDARD',
-                        Marker: uuid().replace(/-/g, ''),
-                        //
-                        TagSet: [
-                            { Key: 'key2', Value: 'value2' },
-                        ],
-                    },
+        this._scenario = [
+            // 0. create objects: non-versioned, no tags, no prefix
+            {
+                keyNames: ['object-1', 'object-2', 'object-3'],
+                tags: ['key1=value1', 'key1=value1&key2=value2', 'key2=value2'],
+
+            },
+            // 1. create objects: non-versioned, tags, prefix
+            {
+                keyNames: [
+                    'test/obj-1', 'obj-2', 'test/obj-3',
+                    'atest/obj-4', 'testx/obj-5', 'test/obj-6',
+                    'obj-7', 'atest/obj-8', 'an-obj-9',
+                ],
+                tags: [
+                    'key1=value1', 'key1=value1', 'key1=value1&key2=value2',
+                    'key2=value2', 'key2=value2', 'key1=value1&key3=value3',
+                    'key3=value3', 'key3=value3', 'key4=value4',
                 ],
             },
-            // 'test-versioned-bucket': {
-            //     Versioning: { Status: 'Enabled' },
-            //     Versions: [
-            //         {
-            //             Key: 'a-key',
-            //             LastModified: PAST,
-            //             IsLatest: true,
-            //             StorageClass: 'STANDARD',
-            //             VersionId: uuid().replace(/-/g, ''),
-            //             //
-            //             KeyMarker: uuid().replace(/-/g, ''),
-            //             TagSet: [],
-            //         },
-            //     ],
-            // },
-            // 'test-mpu': {
-            //     Uploads: [
-            //         {
-            //             Initiated: PAST,
-            //             Key: 'first-upload',
-            //             StorageClass: 'STANDARD',
-            //             UploadId: uuid().replace(/-/g, ''),
-            //             //
-            //             KeyMarker: uuid().replace(/-/g, ''),
-            //         },
-            //     ],
-            // },
-        };
+        ];
     }
 
-    _noop() {}
-
-    getObjectCount(bucketName) {
-        return this.s3Storage[bucketName].Objects.length;
+    getBucket() {
+        return this.bucket;
     }
 
-    /**
-     * head object operation on either a version or object
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @param {string} params.Key - key
-     * @param {string} [params.VersionId] - optional version id
-     * @return {Object} wrapper to mock `send`
-     */
-    headObject(params) {
-        assert(params.Bucket);
-        assert(params.Key);
-
-        return {
-            send: this._headObjectHandler.bind(this, params),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    // Currently only care about returning `data.LastModified`
-    _headObjectHandler(params, cb) {
-        const bucket = this.s3Storage[params.Bucket];
-        if (!bucket) {
-            return cb(errors.NoSuchBucket);
-        }
-        if (params.VersionId) {
-            const version = bucket.Versions.find(v =>
-                v.VersionId === params.VersionId && v.Key === params.Key);
-            if (!version) {
-                return cb(errors.ObjNotFound);
-            }
-
-            const res = Object.assign({}, version);
-            delete res.TagSet;
-            return cb(null, res);
-        }
-        const obj = bucket.Objects.find(o => o.Key === params.Key);
-        if (!obj) {
-            return cb(errors.ObjNotFound);
-        }
-
-        const res = Object.assign({}, obj);
-        delete res.TagSet;
-        return cb(null, res);
-    }
-
-    /**
-     * get bucket versioning
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @return {Object} wrapper to mock `send`
-     */
-    getBucketVersioning(params) {
-        assert(params.Bucket);
-
-        return {
-            send: this._getBucketVersioningHandler.bind(this, params),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    _getBucketVersioningHandler(params, cb) {
-        const bucketVersioning = this.s3Storage[params.Bucket].Versioning;
-        return cb(null, bucketVersioning || {});
-    }
-
-    /**
-     * get an object or a versions tags
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @param {string} params.Key - key
-     * @param {string} [params.VersionId] - optional version id
-     * @return {Object} wrapper to mock `send`
-     */
-    getObjectTagging(params) {
-        assert(params.Bucket);
-        assert(params.Key);
-
-        return {
-            send: this._getObjectTaggingHandler.bind(this, params),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    _getObjectTaggingHandler(params, cb) {
-        const bucket = this.s3Storage[params.Bucket];
-        if (!bucket) {
-            return cb(errors.NoSuchBucket);
-        }
-        if (params.VersionId) {
-            if (!bucket.Versions) {
-                // TODO: verify this logic. Return empty array? or error?
-                return cb(null, { TagSet: [] });
-            }
-            const version = bucket.Versions.find(v =>
-                v.VersionId === params.VersionId && v.Key === params.Key);
-            if (!version) {
-                return cb(errors.ObjNotFound);
-            }
-
-            const res = { TagSet: version.TagSet };
-            return cb(null, res);
-        }
-        const obj = bucket.Objects.find(o => o.Key === params.Key);
-        if (!obj) {
-            return cb(errors.ObjNotFound);
-        }
-
-        const res = { TagSet: obj.TagSet };
-        return cb(null, res);
-    }
-
-    /**
-     * get all objects from bucket for given key
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @param {string} params.Key - key
-     * @return {Object} wrapper to mock `send`
-     */
-    listObjects(params) {
-        assert(params.Bucket);
-
-        // Override default MaxKeys from LifecycleTask
-        const newParams = params;
-        if (this.overrideMax) {
-            newParams.MaxKeys = this.overrideMax;
-        }
-
-        return {
-            send: this._listObjectsHandler.bind(this, newParams),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    _listObjectsHandler(params, cb) {
-        const bucket = this.s3Storage[params.Bucket];
-        if (!bucket) {
-            return cb(errors.NoSuchBucket);
-        }
-
-        const bucketObjs = bucket.Objects;
-        if (!bucketObjs || bucketObjs.length === 0) {
-            const res = { Contents: [] };
-            return cb(null, res);
-        }
-
-        let markerIdx = 0;
-        let maxIdx = params.MaxKeys;
-        if (params.Marker) {
-            markerIdx = bucketObjs.findIndex(o => o.Marker === params.Marker);
-            maxIdx = markerIdx + params.MaxKeys;
-        }
-
-        const IsTruncated = bucketObjs.length > maxIdx;
-        const Contents = bucketObjs.slice(markerIdx, maxIdx).map(o => {
-            const newObj = Object.assign({}, o);
-            delete newObj.TagSet;
-            return newObj;
+    setAndCreateBucket(name, cb) {
+        this.bucket = name;
+        this.s3.createBucket({
+            Bucket: name,
+        }, err => {
+            assert.ifError(err);
+            cb();
         });
-        const res = {
-            Contents,
-            IsTruncated,
-            NextMarker: IsTruncated ? this._findNextMarker(bucketObjs,
-                Contents[Contents.length - 1].Marker, 'Marker') : null,
-        };
-        return cb(null, res);
     }
 
-    /**
-     * get all versions from bucket
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @param {string} [params.KeyMarker] - optional key marker
-     * @param {string} [params.VersionIdMarker] - required if key marker exists
-     * @return {Object} wrapper to mock `send`
-     */
-    listObjectVersions(params) {
-        assert(params.Bucket);
-        if (params.VersionIdMarker || params.KeyMarker) {
-            assert(params.VersionIdMarker && params.KeyMarker);
-        }
-
-        // Override default MaxKeys from LifecycleTask
-        const newParams = params;
-        if (this.overrideMax) {
-            newParams.MaxKeys = this.overrideMax;
-        }
-
-        return {
-            send: this._listObjectVersionsHandler.bind(this, newParams),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    _listObjectVersionsHandler(params, cb) {
-        const bucket = this.s3Storage[params.Bucket];
-        if (!bucket) {
-            return cb(errors.NoSuchBucket);
-        }
-
-        const bucketVersions = bucket.Versions;
-        if (!bucketVersions || bucketVersions.length === 0) {
-            const res = { Versions: [] };
-            return cb(null, res);
-        }
-
-        let markerIdx = 0;
-        let maxIdx = params.MaxKeys;
-        if (params.KeyMarker) {
-            markerIdx = bucketVersions.findIndex(v =>
-                v.KeyMarker === params.KeyMarker &&
-                v.VersionId === params.VersionIdMarker);
-            if (markerIdx === -1) {
-                // wrong keymarker / versionidmarker combo
-                process.stdout.write('ALERT: Error in list object versions');
-                assert(false);
-            }
-            maxIdx = markerIdx + params.MaxKeys;
-        }
-
-        const IsTruncated = bucketVersions.length > maxIdx;
-        const Versions = bucketVersions.slice(markerIdx, maxIdx).map(v => {
-            const newVer = Object.assign({}, v);
-            delete newVer.TagSet;
-            delete newVer.KeyMarker;
-            return newVer;
+    createObjects(scenarioNumber, cb) {
+        async.forEachOf(this._scenario[scenarioNumber].keyNames,
+        (key, i, done) => {
+            this.s3.putObject({
+                Body: '',
+                Bucket: this.bucket,
+                Key: key,
+                Tagging: this._scenario[scenarioNumber].tags[i],
+            }, done);
+        }, err => {
+            assert.ifError(err);
+            return cb();
         });
-        const res = {
-            Versions,
-            IsTruncated,
-            NextKeyMarker: IsTruncated ? this._findNextMarker(bucketVersions,
-                Versions[Versions.length - 1].KeyMarker, 'KeyMarker') : null,
-            NextVersionIdMarker: IsTruncated ? this._findNextMarker(
-                bucketVersions, Versions[Versions.length - 1].VersionId,
-                'VersionId') : null,
+    }
+
+    createVersions() {
+        // first make bucket versioned
+        // then add objects of same name and maybe different name
+    }
+
+    emptyAndDeleteBucket(cb) {
+        // won't need to worry about 1k+ objects pagination
+        async.waterfall([
+            next => this.s3.getBucketVersioning({ Bucket: this.bucket }, next),
+            (data, next) => {
+                if (data.Status === 'Enabled' || data.Status === 'Suspended') {
+                    const list = [
+                        ...data.Versions.map(v => ({
+                            Key: v.Key,
+                            VersionId: v.VersionId,
+                        })),
+                        ...data.DeleteMarkers.map(dm => ({
+                            Key: dm.Key,
+                            VersionId: dm.VersionId,
+                        })),
+                    ];
+
+                    return this.s3.deleteObjects({
+                        Bucket: this.bucket,
+                        Delete: { Objects: list },
+                    }, next);
+                }
+                return process.nextTick(() => next(null));
+            },
+            next => this.s3.listObjects({ Bucket: this.bucket }, next),
+            (data, next) => {
+                const list = data.Contents.map(c => ({ Key: c.Key }));
+
+                return this.s3.deleteObjects({
+                    Bucket: this.bucket,
+                    Delete: { Objects: list },
+                }, next);
+            },
+            (data, next) => this.s3.deleteBucket({ Bucket: this.bucket }, next),
+        ], cb);
+    }
+
+    setBucketLifecycleConfigurations(rules, cb) {
+        const lcParams = {
+            Bucket: this.bucket,
+            LifecycleConfiguration: {
+                Rules: rules,
+            },
         };
-        return cb(null, res);
+        return this.s3.putBucketLifecycleConfiguration(lcParams, cb);
     }
 
     /**
-     * get all mpus from bucket
-     * @param {Object} params - parameters
-     * @param {string} params.Bucket - bucket name
-     * @param {string} [params.KeyMarker] - optional key marker
-     * @param {string} [params.UploadIdMarker] - required if key marker exists
-     * @return {Object} wrapper to mock `send`
-     */
-    listMultipartUploads(params) {
-        assert(params.Bucket);
-        if (params.KeyMarker || params.UploadIdMarker) {
-            assert(params.KeyMarker && params.UploadIdMarker);
-        }
-
-        // Override default MaxKeys from LifecycleTask
-        const newParams = params;
-        if (this.overrideMax) {
-            newParams.MaxKeys = this.overrideMax;
-        }
-
-        return {
-            send: this._listMultipartUploadsHandler.bind(this, newParams),
-            on: this._noop,
-            httpRequest: { headers: {} },
-        };
-    }
-
-    _listMultipartUploadsHandler(params, cb) {
-        process.stdout.write(util.inspect(params));
-        const bucket = this.s3Storage[params.Bucket];
-        if (!bucket) {
-            return cb(errors.NoSuchBucket);
-        }
-
-        const bucketUploads = bucket.Uploads;
-        if (!bucketUploads || bucketUploads.length === 0) {
-            const res = { Uploads: [] };
-            return cb(null, res);
-        }
-
-        let markerIdx = 0;
-        let maxIdx = params.MaxUploads;
-        if (params.KeyMarker) {
-            markerIdx = bucketUploads.findIndex(u =>
-                u.KeyMarker === params.KeyMarker &&
-                u.UploadId === params.UploadIdMarker);
-            if (markerIdx === -1) {
-                // wrong keymarker / uploadidmarker combo
-                process.stdout.write('ALERT: Error in list multipart uploads');
-                assert(false);
-            }
-            maxIdx = markerIdx + params.MaxUploads;
-        }
-
-        const IsTruncated = bucketUploads.length > maxIdx;
-        const Uploads = bucketUploads.slice(markerIdx, maxIdx).map(u => {
-            const upload = Object.assign({}, u);
-            delete upload.KeyMarker;
-            return upload;
-        });
-        const res = {
-            Uploads,
-            IsTruncated,
-            NextKeyMarker: IsTruncated ? this._findNextMarker(bucketUploads,
-                Uploads[Uploads.length - 1].KeyMarker, 'KeyMarker') : null,
-            NextUploadIdMarker: IsTruncated ? this._findNextMarker(
-                bucketUploads, Uploads[Uploads.length - 1].UploadId,
-                'UploadId') : null,
-        };
-        return cb(null, res);
-    }
-
-    // helper methods //
-
-    _findNextMarker(objs, marker, id) {
-        const curObjIdx = objs.findIndex(o => o[id] === marker);
-
-        if (curObjIdx === -1 || curObjIdx === objs.length - 1) {
-            // error in test
-            // Either object should not be `IsTruncated` or
-            // `Marker` cannot be found in list of objects
-            process.stdout.write('ALERT: Error in test functionality\n');
-            assert(false);
-        }
-        return objs[curObjIdx + 1][id];
-    }
-
-    /**
-     * set max keys or parts
-     * @param {number} max - max keys or parts in a listing
+     * build bucket configs and bucket objects based on a fixed scenario
+     * @param {array} rules - array of rules to add to bucket lifecycle configs
+     * @param {number} scenarioNumber - scenario to build
+     * @param {function} cb - callback(err)
      * @return {undefined}
      */
-    setMax(max) {
-        this.overrideMax = max;
-    }
-
-    resetMax() {
-        this.overrideMax = undefined;
+    buildScenario(rules, scenarioNumber, cb) {
+        async.waterfall([
+            next => this.setBucketLifecycleConfigurations(rules, next),
+            (data, next) => {
+                if (!this._scenario[scenarioNumber]) {
+                    return next(new Error('incorrect scenario number'));
+                }
+                return this.createObjects(scenarioNumber, next);
+            },
+        ], cb);
     }
 }
 
@@ -571,14 +268,33 @@ class LifecycleProducerMock {
     respectively in params.
 */
 
-describe('lifecycle producer functional tests with mocking', () => {
+function wrapProcessBucketEntry(bucketLCRules, bucketEntry,
+s3mock, params, cb) {
+    params.lcTask.processBucketEntry(bucketLCRules, bucketEntry,
+    s3mock, err => {
+        assert.ifError(err);
+        // eslint-disable-next-line
+        params.counter++;
+        const entries = params.lcp.getEntries();
+
+        if (params.counter === entries.bucket.length) {
+            return wrapProcessBucketEntry(bucketLCRules,
+                entries.bucket[entries.bucket.length - 1],
+                s3mock, params, cb);
+        }
+        // end of recursion
+        return cb(null, { count: params.lcp.getCount(), entries });
+    });
+}
+
+describe('lifecycle producer functional tests', () => {
     let lcp;
     let lcTask;
-    let s3mock;
+    let s3;
 
     before(() => {
         lcp = new LifecycleProducerMock();
-        s3mock = new S3Mock();
+        s3 = new S3(s3config);
     });
 
     // Example lifecycle configs
@@ -606,6 +322,8 @@ describe('lifecycle producer functional tests with mocking', () => {
     // },
 
     describe('non-versioned bucket tests', () => {
+        let s3Helper;
+
         before(() => {
             lcp.setBucketFxn((entry, cb) => {
                 lcp.incrementCount('bucket');
@@ -620,25 +338,102 @@ describe('lifecycle producer functional tests with mocking', () => {
                 // can assert entry stuff
                 return cb(null, true);
             }, () => {});
+
             lcTask = new LifecycleTask(lcp);
+            s3Helper = new S3Helper(s3);
         });
 
-        afterEach(() => {
+        afterEach(done => {
             lcp.reset();
-            s3mock.resetMax();
+
+            s3Helper.emptyAndDeleteBucket(err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('should verify changes in lifecycle rules will apply to the ' +
+        'correct objects', done => {
+            // kafka bucket entry
+            const bucketEntry = {
+                action: 'testing-nonversioned',
+                target: {
+                    bucket: 'test-bucket',
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket('test-bucket', next),
+                next => s3Helper.buildScenario([
+                    new Rule().addExpiration('Date', FUTURE).build(),
+                ], 0, next),
+                next => s3.getBucketLifecycleConfiguration({
+                    Bucket: 'test-bucket',
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.bucket, 0);
+                        assert.equal(data.count.object, 0);
+                        assert.deepStrictEqual(data.entries.object, []);
+                        next();
+                    });
+                },
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addExpiration('Date', PAST).build(),
+                ], next),
+                (data, next) => {
+                    s3.getBucketLifecycleConfiguration({
+                        Bucket: 'test-bucket',
+                    }, next);
+                },
+                (data, next) => {
+                    lcp.reset();
+                    params.counter = 0;
+
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.bucket, 0);
+                        assert.equal(data.count.object, 3);
+
+                        const expectedObjects = ['object-1', 'object-2',
+                            'object-3'];
+                        assert.deepStrictEqual(data.entries.object,
+                            expectedObjects);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+
+                done();
+            });
         });
 
         [
-            // basic expire with Date rule, no pagination, no tags
+            // expire: pagination, prefix
             {
                 message: 'should verify that EXPIRED objects are sent to ' +
-                    'object kafka topic with no pagination, no tags',
+                    'object kafka topic with pagination, with prefix',
                 bucketLCRules: [
                     new Rule().addID('task-1').addExpiration('Date', PAST)
-                        .build(),
+                        .addPrefix('test/').build(),
                 ],
+                // S3Helper.buildScenario, chooses type of objects to create
+                scenario: 1,
                 bucketEntry: {
-                    action: 'testing',
+                    action: 'testing-prefix',
                     target: {
                         bucket: 'test-expire',
                         owner: OWNER,
@@ -646,125 +441,100 @@ describe('lifecycle producer functional tests with mocking', () => {
                     details: {},
                 },
                 expected: {
-                    objects: ['expire-1', 'expire-2', 'expire-3',
-                        'expire-4', 'expire-5'],
-                    bucketCount: 0,
-                    objectCount: 5,
+                    objects: ['test/obj-1', 'test/obj-3', 'test/obj-6'],
+                    bucketCount: 2,
+                    objectCount: 3,
                 },
             },
-            // basic expire with 1 Day rule, pagination, tagging part 1
+            // expire: pagination, tagging
             {
                 message: 'should verify that EXPIRED objects are sent to ' +
-                    'object kafka topic with pagination, with tags: rule 1',
+                    'object kafka topic with pagination, with tags',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Days', 1)
+                    new Rule().addID('task-1').addExpiration('Date', PAST)
                         .addTag('key1', 'value1').build(),
                 ],
+                scenario: 1,
                 bucketEntry: {
-                    action: 'testing',
+                    action: 'testing-tagging',
                     target: {
                         bucket: 'test-expire',
                         owner: OWNER,
                     },
                     details: {},
                 },
-                setMax: 2,
                 expected: {
-                    objects: ['expire-2', 'expire-3'],
+                    objects: ['test/obj-1', 'obj-2', 'test/obj-3',
+                        'test/obj-6'],
+                    bucketCount: 2,
+                    objectCount: 4,
+                },
+            },
+            // expire: multiple bucket rules, pagination, tagging, prefix
+            {
+                message: 'should verify that multiple EXPIRED rules are ' +
+                    'properly being handled',
+                bucketLCRules: [
+                    new Rule().addID('task-1').addExpiration('Date', FUTURE)
+                        .build(),
+                    new Rule().addID('task-2').addExpiration('Date', FUTURE)
+                        .addTag('key1', 'value1').build(),
+                    new Rule().addID('task-3').addExpiration('Date', PAST)
+                        .addPrefix('test/').addTag('key3', 'value3').build(),
+                    new Rule().addID('task-4').disable()
+                        .addExpiration('Date', PAST).build(),
+                    new Rule().addID('task-5').addExpiration('Date', PAST)
+                        .addTag('key4', 'value4').build(),
+                ],
+                scenario: 1,
+                bucketEntry: {
+                    action: 'testing-multiple',
+                    target: {
+                        bucket: 'test-expire',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: ['test/obj-6', 'an-obj-9'],
                     bucketCount: 2,
                     objectCount: 2,
                 },
             },
-            // basic expire with 1 Day rule, pagination, tagging part 2
-            {
-                message: 'should verify that EXPIRED objects are sent to ' +
-                    'object kafka topic with pagination, with tags: rule 2',
-                bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Days', 1)
-                        .addTag('key2', 'value2').build(),
-                ],
-                bucketEntry: {
-                    action: 'testing',
-                    target: {
-                        bucket: 'test-expire',
-                        owner: OWNER,
-                    },
-                    details: {},
-                },
-                setMax: 3,
-                expected: {
-                    objects: ['expire-3'],
-                    bucketCount: 1,
-                    objectCount: 1,
-                },
-            },
-            // Multiple bucket expiration rules, no pagination, tagging
-            {
-                message: 'should verify that EXPIRED rules are properly ' +
-                    'being handled',
-                bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Days', 3)
-                        .addTag('key2', 'value2').build(),
-                    new Rule().addID('task-2').addExpiration('Days', 1)
-                        .addTag('key1', 'value1').addTag('key2', 'value2')
-                        .build(),
-                    new Rule().addID('task-3').addExpiration('Date', FUTURE)
-                        .build(),
-                ],
-                bucketEntry: {
-                    action: 'testing',
-                    target: {
-                        bucket: 'test-expire',
-                        owner: OWNER,
-                    },
-                    details: {},
-                },
-                expected: {
-                    objects: ['expire-3'],
-                    bucketCount: 0,
-                    objectCount: 1,
-                },
-            },
         ].forEach(item => {
             it(item.message, done => {
-                if (item.setMax) {
-                    s3mock.setMax(item.setMax);
-                }
-                let counter = 0;
-                function wrapProcessBucketEntry(bucketLCRules, bucketEntry,
-                s3mock, cb) {
-                    lcTask.processBucketEntry(bucketLCRules, bucketEntry,
-                    s3mock, err => {
-                        assert.ifError(err);
-                        counter++;
+                const params = {
+                    lcTask,
+                    lcp,
+                    counter: 0,
+                };
+                const bucket = item.bucketEntry.target.bucket;
+                async.waterfall([
+                    next => s3Helper.setAndCreateBucket(bucket, next),
+                    next => s3Helper.buildScenario(item.bucketLCRules,
+                        item.scenario, next),
+                    next => s3.getBucketLifecycleConfiguration({
+                        Bucket: bucket,
+                    }, next),
+                    (data, next) => {
+                        wrapProcessBucketEntry(data.Rules, item.bucketEntry, s3,
+                        params, (err, data) => {
+                            assert.ifError(err);
 
-                        const entries = lcp.getEntries();
-                        // console.log(entries)
-
-                        if (counter === entries.bucket.length) {
-                            return wrapProcessBucketEntry(bucketLCRules,
-                                entries.bucket[entries.bucket.length - 1],
-                                s3mock, cb);
-                        }
-                        return cb(null);
-                    });
-                }
-                wrapProcessBucketEntry(item.bucketLCRules, item.bucketEntry,
-                s3mock, err => {
+                            assert.equal(data.count.bucket,
+                                item.expected.bucketCount);
+                            assert.equal(data.count.object,
+                                item.expected.objectCount);
+                            assert.deepStrictEqual(data.entries.object.sort(),
+                                item.expected.objects.sort());
+                            next();
+                        });
+                    },
+                ], err => {
                     assert.ifError(err);
-
-                    const count = lcp.getCount();
-                    const entries = lcp.getEntries();
-
-                    const expectedObjects = item.expected.objects;
-
-                    assert.equal(count.bucket, item.expected.bucketCount);
-                    assert.equal(count.object, item.expected.objectCount);
-
-                    assert.deepStrictEqual(entries.object, expectedObjects);
                     done();
                 });
             });
         });
-    });
+    }); // end non-versioned describe block
 });
