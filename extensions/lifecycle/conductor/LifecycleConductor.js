@@ -135,8 +135,9 @@ class LifecycleConductor {
             (buckets, next) => async.concatLimit(
                 buckets, this._concurrency,
                 (bucket, done) => {
-                    const [ownerId, bucketName] = bucket.split(':');
-                    if (!ownerId || !bucketName) {
+                    const [ownerId, bucketUID, bucketName] =
+                              bucket.split(':');
+                    if (!ownerId || !bucketUID || !bucketName) {
                         this.logger.error(
                             'malformed zookeeper bucket entry, skipping',
                             { zkPath: zkBucketsPath, bucket });
