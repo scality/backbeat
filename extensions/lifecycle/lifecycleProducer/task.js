@@ -7,8 +7,17 @@ const { zookeeper, kafka, extensions, s3, auth, transport, log } =
 werelogs.configure({ level: log.logLevel,
                      dump: log.dumpLevel });
 
+const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
+
 const lifecycleProducer =
     new LifecycleProducer(zookeeper, kafka, extensions.lifecycle,
                           s3, auth, transport);
 
 lifecycleProducer.start();
+
+process.on('SIGTERM', () => {
+    logger.info('received SIGTERM, exiting');
+    lifecycleProducer.close(() => {
+        process.exit(0);
+    });
+});
