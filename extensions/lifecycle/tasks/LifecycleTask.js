@@ -250,12 +250,22 @@ class LifecycleTask extends BackbeatTask {
      * @return {array} list of all filtered rules that apply to `item`
      */
     _filterRules(bucketLCRules, item, objTags) {
+        /*
+            Bucket Tags must be included in the list of object tags.
+            So if a bucket tag with "key1/value1" exists, and an object with
+            "key1/value1, key2/value2" exists, this bucket lifecycle rules
+            apply on this object.
+
+            Vice versa, bucket rule is "key1/value1, key2/value2" and object
+            rule is "key1/value1", this buckets rule does not apply to this
+            object.
+        */
         function deepCompare(rTags, oTags) {
-            // check key lengths match
-            if (rTags.length !== oTags.length) {
+            // check to make sure object tags length matches or is greater
+            if (rTags.length > oTags.length) {
                 return false;
             }
-            // all key/value tags must match between the 2 sets
+            // all key/value tags of bucket rules must be within object tags
             for (let i = 0; i < rTags.length; i++) {
                 const oTag = oTags.find(pair => pair.Key === rTags[i].Key);
                 if (!oTag || rTags[i].Value !== oTag.Value) {
@@ -283,11 +293,7 @@ class LifecycleTask extends BackbeatTask {
             if (prefix && !item.Key.startsWith(prefix)) {
                 return false;
             }
-            if (objTags.TagSet.length > 1) {
-                // can only have one tag at this point in time
-                return false;
-            }
-            if (rule.Filter && rule.Filter.Tag && objTags.TagSet[0]) {
+            if (rule.Filter && rule.Filter.Tag && objTags.TagSet) {
                 return deepCompare([rule.Filter.Tag], objTags.TagSet);
             }
             return true;

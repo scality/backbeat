@@ -37,7 +37,7 @@ describe('lifecycle task helper methods', () => {
         lct = new LifecycleTask(lp);
     });
 
-    describe('_filterRules for listObjectsV2 contents',
+    describe('_filterRules for listObjects contents',
     () => {
         it('should filter out Status disabled rules', () => {
             const mBucketRules = [
@@ -146,7 +146,8 @@ describe('lifecycle task helper methods', () => {
                 new Rule().addID('task-7').addTag('tag2', 'val1')
                     .addTag('tag1', 'val1').addTag('tag3', 'val1').build(),
                 new Rule().addID('task-8').addTag('tag2', 'val1')
-                    .addTag('tag1', 'val1').addTag('tag3', 'val3').build(),
+                    .addTag('tag1', 'val1').addTag('tag3', 'false').build(),
+                new Rule().addID('task-9').build(),
             ];
             const item = {
                 Key: 'example-item',
@@ -157,15 +158,16 @@ describe('lifecycle task helper methods', () => {
                 { Key: 'tag2', Value: 'val1' },
             ] };
             const res1 = lct._filterRules(mBucketRules, item, objTags1);
-            assert.strictEqual(res1.length, 2);
-            assert.deepStrictEqual(getRuleIDs(res1), ['task-1', 'task-6']);
+            assert.strictEqual(res1.length, 5);
+            assert.deepStrictEqual(getRuleIDs(res1), ['task-1', 'task-2',
+                'task-3', 'task-6', 'task-9']);
 
             const objTags2 = { TagSet: [
                 { Key: 'tag2', Value: 'val1' },
             ] };
             const res2 = lct._filterRules(mBucketRules, item, objTags2);
-            assert.strictEqual(res2.length, 1);
-            assert.deepStrictEqual(getRuleIDs(res2), ['task-3']);
+            assert.strictEqual(res2.length, 2);
+            assert.deepStrictEqual(getRuleIDs(res2), ['task-3', 'task-9']);
 
             const objTags3 = { TagSet: [
                 { Key: 'tag2', Value: 'val1' },
@@ -173,9 +175,37 @@ describe('lifecycle task helper methods', () => {
                 { Key: 'tag3', Value: 'val1' },
             ] };
             const res3 = lct._filterRules(mBucketRules, item, objTags3);
-            assert.strictEqual(res3.length, 1);
-            assert.deepStrictEqual(getRuleIDs(res3), ['task-7']);
+            assert.strictEqual(res3.length, 6);
+            assert.deepStrictEqual(getRuleIDs(res3), ['task-1', 'task-2',
+                'task-3', 'task-6', 'task-7', 'task-9']);
         });
+    });
+
+    it('should filter correctly for an object with no tags', () => {
+        const mBucketRules = [
+            new Rule().addID('task-1').addTag('tag1', 'val1')
+                .addTag('tag2', 'val1').build(),
+            new Rule().addID('task-2').addTag('tag1', 'val1').build(),
+            new Rule().addID('task-3').addTag('tag2', 'val1').build(),
+            new Rule().addID('task-4').addTag('tag2', 'false').build(),
+            new Rule().addID('task-5').addTag('tag2', 'val1')
+                .addTag('tag1', 'false').build(),
+            new Rule().addID('task-6').addTag('tag2', 'val1')
+                .addTag('tag1', 'val1').build(),
+            new Rule().addID('task-7').addTag('tag2', 'val1')
+                .addTag('tag1', 'val1').addTag('tag3', 'val1').build(),
+            new Rule().addID('task-8').addTag('tag2', 'val1')
+                .addTag('tag1', 'val1').addTag('tag3', 'false').build(),
+            new Rule().addID('task-9').build(),
+        ];
+        const item = {
+            Key: 'example-item',
+            LastModified: CURRENT,
+        };
+        const objTags = { TagSet: [] };
+        const res = lct._filterRules(mBucketRules, item, objTags);
+        assert.strictEqual(res.length, 1);
+        assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
     });
 
     // describe('_filterRules for listObjectVersions versions',
