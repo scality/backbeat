@@ -2,9 +2,11 @@
 
 const http = require('http');
 const https = require('https');
+const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
+const { StatsModel } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
@@ -12,6 +14,11 @@ const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const {
+    getSortedSetMember,
+    getSortedSetKey,
+} = require('../../../lib/util/sortedSetHelper');
 
 /**
  * @class ReplicationStatusProcessor
@@ -73,6 +80,7 @@ class ReplicationStatusProcessor {
 
         this._setupVaultclientCache();
 
+        this._statsClient = new StatsModel(undefined);
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }
@@ -116,6 +124,7 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
+        this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
@@ -130,9 +139,7 @@ class ReplicationStatusProcessor {
             this.logger.info('replication status processor is ready to ' +
                              'consume replication status entries');
             this._consumer.subscribe();
-            if (cb) {
-                cb();
-            }
+            this._FailedCRRProducer.setupProducer(cb);
         });
     }
 
@@ -147,6 +154,37 @@ class ReplicationStatusProcessor {
             return setImmediate(done);
         }
         return this._consumer.close(done);
+    }
+
+    /**
+     * Push any failed entry to the "failed" topic.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @param {Function} cb - The callback function
+     * @return {undefined}
+     */
+    _pushFailedEntry(queueEntry, cb) {
+        const { status, backends } = queueEntry.getReplicationInfo();
+        if (status !== 'FAILED') {
+            return process.nextTick(cb);
+        }
+        const backend = backends.find(b =>
+            b.status === 'FAILED' && b.site === queueEntry.getSite());
+        if (backend) {
+            const bucket = queueEntry.getBucket();
+            const objectKey = queueEntry.getObjectKey();
+            const versionId = queueEntry.getEncodedVersionId();
+            const score = Date.now();
+            const { site } = backend;
+            const latestHour = this._statsClient.getSortedSetCurrentHour(score);
+            const message = {
+                key: getSortedSetKey(site, latestHour),
+                member: getSortedSetMember(bucket, objectKey, versionId),
+                score,
+            };
+            return this._FailedCRRProducer
+                .publishFailedCRREntry(JSON.stringify(message), cb);
+        }
+        return cb();
     }
 
     /**
@@ -171,13 +209,19 @@ class ReplicationStatusProcessor {
         if (sourceEntry instanceof ObjectQueueEntry) {
             task = new UpdateReplicationStatus(this);
         }
+        if (task && this.repConfig.monitorReplicationFailures) {
+            return async.parallel([
+                next => this._pushFailedEntry(sourceEntry, next),
+                next => this.taskScheduler.push({ task, entry: sourceEntry },
+                    sourceEntry.getCanonicalKey(), next),
+            ], done);
+        }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
-                                           sourceEntry.getCanonicalKey(),
-                                           done);
+                sourceEntry.getCanonicalKey(), done);
         }
-        this.logger.warning('skipping unknown source entry',
-                            { entry: sourceEntry.getLogInfo() });
+        this.logger.warn('skipping unknown source entry',
+                         { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 }

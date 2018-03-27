@@ -6,7 +6,7 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const ReplicateObject = require('./ReplicateObject');
-const attachReqUids = require('../utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 
 const MPU_CONC_LIMIT = 10;
 
