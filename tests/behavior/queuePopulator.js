@@ -40,6 +40,35 @@ function doesZkNodeExist(shouldExist, zkClient, path, cb) {
     });
 }
 
+/**
+ * Test whether a zookeeper bucket node with given bucket name exists
+ * @param {Boolean} shouldExist - Whether the node should exist or not
+ * @param {Object} zkClient - The Zookeeper client
+ * @param {String} bucketName - The name of the bucket to check in
+ * Zookeeper
+ * @param {Function} cb - The callback to call.
+ * @return {undefined}
+ */
+function doesBucketNodeExist(shouldExist, zkClient, bucketName, cb) {
+    const { zookeeperPath } = testConfig.extensions.lifecycle;
+    const lifecycleZkPath = `${zookeeperPath}/data/buckets`;
+    zkClient.getChildren(lifecycleZkPath, (err, children) => {
+        if (err) {
+            return cb(err);
+        }
+        const match = children.some(child => {
+            const name = child.split(':')[2];
+            return name === bucketName;
+        });
+        if (shouldExist) {
+            assert(match, 'lifecycle bucket node was not created');
+        } else {
+            assert(!match, 'lifecycle bucket node should not exist');
+        }
+        return cb();
+    });
+}
+
 describe('queuePopulator', () => {
     let queuePopulator;
     let s3;
@@ -246,15 +275,12 @@ describe('queuePopulator', () => {
     describe('lifecycle extension', () => {
         const { zookeeperPath } = testConfig.extensions.lifecycle;
         const lifecycleZkPath = `${zookeeperPath}/data/buckets`;
-        const canonicalID =
-            '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
-        const zkBucketPath = `${lifecycleZkPath}/${canonicalID}:${testBucket}`;
 
         it('should have pre-created the lifecycle data path', done =>
             doesZkNodeExist(true, zkClient, lifecycleZkPath, done));
 
         it('should not have created the lifecycle bucket data path', done =>
-            doesZkNodeExist(false, zkClient, zkBucketPath, done));
+            doesBucketNodeExist(false, zkClient, testBucket, done));
 
         describe('buckets zookeeper node path', () => {
             beforeEach(done =>
@@ -277,7 +303,7 @@ describe('queuePopulator', () => {
                             return done(err);
                         }
                         assert.strictEqual(counters[0].readEntries, 1);
-                        return doesZkNodeExist(true, zkClient, zkBucketPath,
+                        return doesBucketNodeExist(true, zkClient, testBucket,
                             done);
                     }));
 
@@ -286,14 +312,14 @@ describe('queuePopulator', () => {
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
                 next =>
-                    doesZkNodeExist(true, zkClient, zkBucketPath, next),
+                    doesBucketNodeExist(true, zkClient, testBucket, next),
                 next =>
                     s3.deleteBucket({ Bucket: testBucket }, next),
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 },
                         next),
                 next =>
-                    doesZkNodeExist(false, zkClient, zkBucketPath, next),
+                    doesBucketNodeExist(false, zkClient, testBucket, next),
             ], done));
 
             it('should delete lifecycle bucket data path if lifecycle config ' +
@@ -301,13 +327,13 @@ describe('queuePopulator', () => {
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
                 next =>
-                    doesZkNodeExist(true, zkClient, zkBucketPath, next),
+                    doesBucketNodeExist(true, zkClient, testBucket, next),
                 next =>
                     s3.deleteBucketLifecycle({ Bucket: testBucket }, next),
                 next =>
                     queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
                 next =>
-                    doesZkNodeExist(false, zkClient, zkBucketPath, next),
+                    doesBucketNodeExist(false, zkClient, testBucket, next),
             ], done));
         });
     });

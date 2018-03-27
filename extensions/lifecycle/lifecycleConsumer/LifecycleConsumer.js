@@ -85,6 +85,15 @@ class LifecycleConsumer extends EventEmitter {
         });
     }
 
+    /**
+     * Close the lifecycle consumer
+     * @param {function} cb - callback function
+     * @return {undefined}
+     */
+    close(cb) {
+        this.logger.debug('closing object tasks consumer');
+        this._consumer.close(cb);
+    }
 
     /**
      * Proceed to the lifecycle action of an object given a kafka

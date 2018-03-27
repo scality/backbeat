@@ -99,7 +99,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
     it('should populate queue from lifecycled bucket list ' +
     'in zookeeper', done => async.waterfall([
         next => async.each(
-            ['owner1:bucket1', 'owner2:bucket2'],
+            ['owner1:uid1:bucket1', 'owner2:uid2:bucket2'],
             (bucket, done) => zkClient.create(
                 `${lcConfig.zookeeperPath}/data/buckets/${bucket}`, done),
             next),
@@ -123,7 +123,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             ], CONSUMER_TIMEOUT, next);
         },
         next => async.each(
-            ['owner3:bucket3', 'owner4:bucket4'],
+            ['owner3:uid3:bucket3', 'owner4:uid4:bucket4'],
             (bucket, done) => zkClient.create(
                 `${lcConfig.zookeeperPath}/data/buckets/${bucket}`, done),
             next),
