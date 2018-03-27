@@ -31,7 +31,24 @@
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
+            "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
             "groupId": "backbeat-test-replication-group",
+            "source": {
+                "transport": "http",
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 7777
+                },
+                "auth": {
+                    "type": "account",
+                    "account": "bart",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 7778
+                    }
+                }
+            },
             "destination": {
                 "bootstrapList": [
                     { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
