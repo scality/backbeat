@@ -8,7 +8,11 @@ const { RedisClient } = require('arsenal').metrics;
 
 const StatsModel = require('../../../lib/models/StatsModel');
 const config = require('../../config.json');
+const { makePOSTRequest, getResponseBody } =
+    require('../utils/makePOSTRequest');
+const getKafkaEntry = require('../utils/getKafkaEntry');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
+const REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
 const fakeLogger = {
     trace: () => {},
@@ -25,6 +29,29 @@ const defaultOptions = {
 
 function getUrl(options, path) {
     return `http://${options.host}:${options.port}${path}`;
+}
+
+function setHash(redisClient, fields, cb) {
+    const cmds = fields.map(field => {
+        // eslint-disable-next-line no-unused-vars
+        const [bucket, key, versionId, site] = field.split(':');
+        const value = getKafkaEntry(bucket, key, site);
+        return ['hset', REDIS_KEY_FAILED_CRR, field, value];
+    });
+    redisClient.batch(cmds, cb);
+}
+
+function deleteHash(redisClient, cb) {
+    const cmds = ['del', REDIS_KEY_FAILED_CRR];
+    redisClient.batch([cmds], cb);
+}
+
+function makeRetryPOSTRequest(body, cb) {
+    const options = Object.assign({}, defaultOptions, {
+        method: 'POST',
+        path: '/_/crr/failed',
+    });
+    makePOSTRequest(options, body, cb);
 }
 
 function getRequest(path, done) {
@@ -191,16 +218,15 @@ describe('Backbeat Server', () => {
         });
 
         // TODO: refactor this
-        const allPaths = [
+        const metricsPaths = [
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/throughput',
         ];
 
-        allPaths.forEach(path => {
-            it(`should get a 200 response for route: ${path}`,
-            done => {
+        metricsPaths.forEach(path => {
+            it(`should get a 200 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
 
                 http.get(url, res => {
@@ -219,6 +245,38 @@ describe('Backbeat Server', () => {
                     assert(res[key].results);
                     assert.deepEqual(Object.keys(res[key].results),
                         ['count', 'size']);
+                    done();
+                });
+            });
+        });
+
+        const retryPaths = [
+            '/_/crr/failed',
+            '/_/crr/failed/test-bucket/test-key/test-versionId',
+        ];
+
+        retryPaths.forEach(path => {
+            it(`should get a 200 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 200);
+                    done();
+                });
+            });
+        });
+
+        const retryQueryPaths = [
+            '/_/crr/failed?marker=foo',
+            '/_/crr/failed?marker=',
+        ];
+
+        retryQueryPaths.forEach(path => {
+            it(`should get a 400 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 400);
                     done();
                 });
             });
@@ -267,6 +325,368 @@ describe('Backbeat Server', () => {
                 assert.equal(err.statusCode, 404);
                 assert.equal(err.statusMessage, 'Not Found');
                 done();
+            });
+        });
+
+        it('should get a 200 response for route: /_/crr/failed', done => {
+            const body = JSON.stringify([{
+                Bucket: 'bucket',
+                Key: 'key',
+                VersionId: 'versionId',
+                StorageClass: 'site',
+            }]);
+            makeRetryPOSTRequest(body, (err, res) => {
+                assert.ifError(err);
+                assert.strictEqual(res.statusCode, 200);
+                done();
+            });
+        });
+
+        const invalidPOSTRequestBodies = [
+            'a',
+            {},
+            [],
+            ['a'],
+            [{
+                // Missing Bucket property.
+                Key: 'b',
+                VersionId: 'c',
+                StorageClass: 'd',
+            }],
+            [{
+                // Missing Key property.
+                Bucket: 'a',
+                VersionId: 'c',
+                StorageClass: 'd',
+            }],
+            [{
+                // Missing VersionId property.
+                Bucket: 'a',
+                Key: 'b',
+                StorageClass: 'd',
+            }],
+            [{
+                // Missing StorageClass property.
+                Bucket: 'a',
+                Key: 'b',
+                VersionId: 'c',
+            }],
+        ];
+
+        invalidPOSTRequestBodies.forEach(body => {
+            const invalidBody = JSON.stringify(body);
+            it('should get a 400 response for route: /_/crr/failed when ' +
+            `given an invalid request body: ${invalidBody}`, done => {
+                makeRetryPOSTRequest(invalidBody, (err, res) => {
+                    assert.strictEqual(res.statusCode, 400);
+                    return getResponseBody(res, (err, resBody) => {
+                        assert.ifError(err);
+                        const body = JSON.parse(resBody);
+                        assert(body.MalformedPOSTRequest);
+                        return done();
+                    });
+                });
+            });
+        });
+
+        describe('Retry feature with Redis', () => {
+            // Version ID calculated from the mock object MD.
+            const testVersionId =
+                '393834373735353134343536313039393939393952473030312020313030';
+
+            afterEach(done => deleteHash(redisClient, done));
+
+            it('should get correct data for GET route: /_/crr/failed when no ' +
+            'hash key has been created', done => {
+                getRequest('/_/crr/failed', (err, res) => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(res, {
+                        IsTruncated: false,
+                        Versions: [],
+                    });
+                    done();
+                });
+            });
+
+            it('should get correct data for GET route: /_/crr/failed when ' +
+            'the hash has been created and there is one hash key', done => {
+                const key = 'test-bucket-1:test-key:test-versionId:test-site';
+                setHash(redisClient, [key], err => {
+                    assert.ifError(err);
+                    getRequest('/_/crr/failed?marker=0', (err, res) => {
+                        assert.ifError(err);
+                        assert.deepStrictEqual(res, {
+                            IsTruncated: false,
+                            Versions: [{
+                                Bucket: 'test-bucket-1',
+                                Key: 'test-key',
+                                VersionId: 'test-versionId',
+                                StorageClass: 'test-site',
+                                Size: 1,
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                            }],
+                        });
+                        done();
+                    });
+                });
+            });
+
+            it('should get correct data for GET route: /_/crr/failed when ' +
+            'the hash has been created and there are multiple hash keys',
+            done => {
+                const keys = [
+                    'test-bucket:test-key:test-versionId:test-site',
+                    'test-bucket-1:test-key-1:test-versionId-1:test-site-1',
+                    'test-bucket-2:test-key-2:test-versionId-2:test-site-2',
+                ];
+                setHash(redisClient, keys, err => {
+                    assert.ifError(err);
+                    getRequest('/_/crr/failed', (err, res) => {
+                        assert.ifError(err);
+                        assert.strictEqual(res.IsTruncated, false);
+                        assert.strictEqual(res.Versions.length, 3);
+                        // We cannot guarantee order because it depends on how
+                        // Redis fetches the keys.
+                        keys.forEach(k => {
+                            const [bucket, key, versionId, site] = k.split(':');
+                            assert(res.Versions.some(o => (
+                                o.Bucket === bucket &&
+                                o.Key === key &&
+                                o.VersionId === versionId &&
+                                o.StorageClass === site
+                            )));
+                        });
+                        done();
+                    });
+                });
+            });
+
+            it('should get correct data at scale for GET route: /_/crr/failed',
+            function f(done) {
+                this.timeout(30000);
+                async.timesLimit(2000, 10, (i, next) => {
+                    const keys = [
+                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-a`,
+                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-b`,
+                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-c`,
+                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-d`,
+                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-e`,
+                    ];
+                    setHash(redisClient, keys, next);
+                }, err => {
+                    assert.ifError(err);
+                    const keyCount = 2000 * 5;
+                    const scanCount = 1000;
+                    const set = new Set();
+                    let marker = 0;
+                    async.timesSeries(keyCount / scanCount, (i, next) =>
+                        getRequest(`/_/crr/failed?marker=${marker}`,
+                        (err, res) => {
+                            assert.ifError(err);
+                            res.Versions.forEach(version => {
+                                // Ensure we have no duplicate results.
+                                assert(!set.has(version.StorageClass));
+                                set.add(version.StorageClass);
+                            });
+                            if (i === (keyCount / scanCount) - 1) {
+                                assert.strictEqual(res.IsTruncated, false);
+                                assert.strictEqual(res.NextMarker, undefined);
+                                assert.strictEqual(set.size, keyCount);
+                                return next();
+                            }
+                            assert.strictEqual(res.IsTruncated, true);
+                            assert.strictEqual(
+                                typeof(res.NextMarker), 'number');
+                            marker = res.NextMarker;
+                            return next();
+                        }), done);
+                });
+            });
+
+            it('should get correct data for GET route: ' +
+            '/_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
+            done => {
+                getRequest('/_/crr/failed/test-bucket/test-key/test-versionId',
+                (err, res) => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(res, {
+                        IsTruncated: false,
+                        Versions: [],
+                    });
+                    done();
+                });
+            });
+
+            it('should get correct data for GET route: ' +
+            '/_/crr/failed/<bucket>/<key>/<versionId>', done => {
+                const keys = [
+                    'test-bucket:test-key:test-versionId:test-site',
+                    'test-bucket:test-key:test-versionId:test-site-2',
+                    'test-bucket-1:test-key-1:test-versionId-1:test-site',
+                ];
+                setHash(redisClient, keys, err => {
+                    assert.ifError(err);
+                    const route =
+                        '/_/crr/failed/test-bucket/test-key/test-versionId';
+                    return getRequest(route, (err, res) => {
+                        assert.ifError(err);
+                        assert.strictEqual(res.IsTruncated, false);
+                        assert.strictEqual(res.Versions.length, 2);
+                        const matchingkeys = [keys[0], keys[1]];
+                        matchingkeys.forEach(k => {
+                            const [bucket, key, versionId, site] = k.split(':');
+                            assert(res.Versions.some(o => (
+                                o.Bucket === bucket &&
+                                o.Key === key &&
+                                o.VersionId === versionId &&
+                                o.StorageClass === site
+                            )));
+                        });
+                        return done();
+                    });
+                });
+            });
+
+            it('should get correct data for GET route: /_/crr/failed when no ' +
+            'hash key has been matched', done => {
+                const body = JSON.stringify([{
+                    Bucket: 'bucket',
+                    Key: 'key',
+                    VersionId: 'versionId',
+                    StorageClass: 'site',
+                }]);
+                makeRetryPOSTRequest(body, (err, res) => {
+                    assert.ifError(err);
+                    getResponseBody(res, (err, resBody) => {
+                        assert.ifError(err);
+                        const body = JSON.parse(resBody);
+                        assert.deepStrictEqual(body, []);
+                        done();
+                    });
+                });
+            });
+
+            it('should get correct data for POST route: /_/crr/failed ' +
+            'when there are multiple matching hash keys', function f(done) {
+                this.timeout(10000);
+                const keys = [
+                    `test-bucket:test-key:${testVersionId}:test-site-1`,
+                    `test-bucket:test-key:${testVersionId}:test-site-2`,
+                    `test-bucket:test-key:${testVersionId}:test-site-3`,
+                ];
+                setHash(redisClient, keys, err => {
+                    assert.ifError(err);
+                    const body = JSON.stringify([{
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-1',
+                    }, {
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        // Should not be in response.
+                        StorageClass: 'test-site-unknown',
+                    }, {
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-2',
+                    }, {
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-3',
+                    }]);
+                    makeRetryPOSTRequest(body, (err, res) => {
+                        assert.ifError(err);
+                        getResponseBody(res, (err, resBody) => {
+                            assert.ifError(err);
+                            const body = JSON.parse(resBody);
+                            assert.deepStrictEqual(body, [{
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-1',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
+                            }, {
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-2',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
+                            }, {
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-3',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
+                            }]);
+                            done();
+                        });
+                    });
+                });
+            });
+
+            it('should get correct data at scale for POST route: /_/crr/failed',
+            function f(done) {
+                this.timeout(30000);
+                const reqBody = [];
+                async.timesLimit(10, 10, (i, next) => {
+                    reqBody.push({
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-a`,
+                    }, {
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-b`,
+                    }, {
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-c`,
+                    }, {
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-d`,
+                    }, {
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-e`,
+                    });
+                    const keys = [
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-a`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-b`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-c`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-d`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-e`,
+                    ];
+                    setHash(redisClient, keys, next);
+                }, err => {
+                    assert.ifError(err);
+                    const body = JSON.stringify(reqBody);
+                    assert.ifError(err);
+                    makeRetryPOSTRequest(body, (err, res) => {
+                        assert.ifError(err);
+                        getResponseBody(res, (err, resBody) => {
+                            assert.ifError(err);
+                            const body = JSON.parse(resBody);
+                            assert.strictEqual(body.length, 10 * 5);
+                            done();
+                        });
+                    });
+                });
             });
         });
 
@@ -351,7 +771,7 @@ describe('Backbeat Server', () => {
 
     it('should get a 405 method not allowed from invalid http verb', done => {
         const options = Object.assign({}, defaultOptions);
-        options.method = 'POST';
+        options.method = 'DELETE';
         options.path = '/_/healthcheck';
 
         const req = http.request(options, res => {

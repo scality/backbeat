@@ -135,6 +135,23 @@ class ObjectQueueEntry extends ObjectMD {
         return newEntry;
     }
 
+    toPendingEntry(site) {
+        return this.clone()
+            .setReplicationSiteStatus(site, 'PENDING')
+            .setReplicationStatus(_getGlobalReplicationStatus(this.getValue()));
+    }
+
+    toRetryEntry(site) {
+        return this.clone()
+            .setReplicationBackends([{
+                site,
+                status: 'PENDING',
+                dataStoreVersionId: '',
+            }])
+            .setReplicationStorageClass(site)
+            .setReplicationStatus('PENDING');
+    }
+
     toKafkaEntry(site) {
         return { key: encodeURIComponent(
             `${this.getBucket()}/${this.getObjectKey()}`),
