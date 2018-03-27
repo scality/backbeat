@@ -45,12 +45,37 @@ const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
 
 async.waterfall([
     done => queuePopulator.open(done),
-    done => queuePopulator.getRaftSessionBuckets(done),
+    done => queuePopulator.getRaftSessionBuckets(done, res => {
+        return done(null, res);
+    }),
+    (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
+    (bucketList, done) => {
+        console.log('getting list for each bucket');
+        return async.mapLimit(bucketList, 1, (bucket, cb) => {
+            const bucketName = bucket.bucket;
+            return async.mapLimit(bucket.objects, 10, (object, cb) => {
+                console.log('MAPPING');
+                return queuePopulator.getObjectMetadata(bucketName, object, (err, res) => {
+                    console.log('we got data');
+                    return cb(null, res);
+                });
+            }, (err, res) => {
+                return cb(err, { bucket: bucketName, objects: res });
+            });
+        }, (err, res) => {
+            console.log('we got this far');
+            console.log(res);
+            return done(err);
+        });
+    },
     done => {
+        console.log('scheduling job');
         const taskState = {
             batchInProgress: false,
         };
         schedule.scheduleJob(qpConfig.cronRule, () => {
+            console.log('queue populator');
+            console.log('task state');
             queueBatch(queuePopulator, taskState);
         });
         done();
