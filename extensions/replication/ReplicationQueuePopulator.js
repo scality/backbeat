@@ -55,9 +55,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const repSites = queueEntry.getReplicationInfo().backends;
 
         // for one-to-many
-        repSites.filter(entry => entry.status === 'PENDING').forEach(site => {
-            this._incrementMetrics(site, queueEntry.getContentLength());
-        });
+        repSites.filter(entry => entry.status === 'PENDING')
+            .forEach(backend => {
+                this._incrementMetrics(backend.site,
+                    queueEntry.getContentLength());
+            });
     }
 }
 
