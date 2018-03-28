@@ -9,7 +9,7 @@ RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
     && cat /tmp/*packages.list | xargs apt-get install -y \
     && pip install pip==9.0.1 \
     && rm -rf /var/lib/apt/lists/* \
-    && rm -f /tmp/packages.list
+    && rm -f /tmp/*packages.list
 
 #
 # Add user eve

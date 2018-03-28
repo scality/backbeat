@@ -47,6 +47,18 @@ class Config {
                 }
             });
         }
+        // whitelist IP, CIDR for health checks
+        const defaultHealthChecks = ['127.0.0.1/8', '::1'];
+        const healthChecks = parsedConfig.server.healthChecks;
+        healthChecks.allowFrom =
+            healthChecks.allowFrom.concat(defaultHealthChecks);
+
+        // default to standalone configuration if sentinel not setup
+        if (!parsedConfig.redis || !parsedConfig.redis.sentinels) {
+            this.redis = Object.assign({}, parsedConfig.redis,
+                { host: '127.0.0.1', port: 6379 });
+        }
+
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
     }

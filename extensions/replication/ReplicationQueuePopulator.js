@@ -12,6 +12,10 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     filter(entry) {
+        if (entry.key === undefined) {
+            // bucket updates have no key in raft log
+            return undefined;
+        }
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
@@ -51,6 +55,13 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(entry));
+
+        const repSites = queueEntry.getReplicationInfo().backends;
+
+        // for one-to-many
+        repSites.filter(entry => entry.status === 'PENDING').forEach(site => {
+            this._incrementMetrics(site, queueEntry.getContentLength());
+        });
     }
 }
 

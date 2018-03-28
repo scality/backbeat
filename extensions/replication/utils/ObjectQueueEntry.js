@@ -3,7 +3,10 @@ const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 
 function _extractVersionedBaseKey(key) {
-    return key.split(VID_SEP)[0];
+    if (key) {
+        return key.split(VID_SEP)[0];
+    }
+    return '';
 }
 
 function _getGlobalReplicationStatus(data) {

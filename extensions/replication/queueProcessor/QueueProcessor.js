@@ -11,7 +11,7 @@ const RoundRobin = require('arsenal').network.RoundRobin;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
-const QueueEntry = require('../utils/QueueEntry');
+const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
@@ -20,16 +20,12 @@ const EchoBucket = require('../tasks/EchoBucket');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const BucketQueueEntry = require('../utils/BucketQueueEntry');
 
-const { proxyVaultPath, proxyIAMPath } = require('../constants');
-
-/**
-* Given that the largest object JSON from S3 is about 1.6 MB and adding some
-* padding to it, Backbeat replication topic is currently setup with a config
-* max.message.bytes.limit to 5MB. Consumers need to update their fetchMaxBytes
-* to get atleast 5MB put in the Kafka topic, adding a little extra bytes of
-* padding for approximation.
-*/
-const CONSUMER_FETCH_MAX_BYTES = 5000020;
+const {
+    proxyVaultPath,
+    proxyIAMPath,
+    metricsExtension,
+    metricsTypeProcessed,
+} = require('../constants');
 
 class QueueProcessor extends EventEmitter {
 
@@ -39,9 +35,9 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
-     * @param {Object} zkConfig - zookeeper configuration object
-     * @param {string} zkConfig.connectionString - zookeeper connection string
-     *   as "host:port[/chroot]"
+     * @param {Object} kafkaConfig - kafka configuration object
+     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     *   as "host:port[,host:port...]"
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
@@ -57,10 +53,12 @@ class QueueProcessor extends EventEmitter {
      *   number of seconds before giving up retries of an entry
      *   replication
      * @param {String} site - site name
+     * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, site) {
+    constructor(kafkaConfig, sourceConfig, destConfig, repConfig, site,
+    mProducer) {
         super();
-        this.zkConfig = zkConfig;
+        this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
@@ -70,6 +68,7 @@ class QueueProcessor extends EventEmitter {
         this.replicationStatusProducer = null;
         this._consumer = null;
         this.site = site;
+        this._mProducer = mProducer;
 
         this.echoMode = false;
 
@@ -159,14 +158,14 @@ class QueueProcessor extends EventEmitter {
 
     _setupProducer(done) {
         const producer = new BackbeatProducer({
-            zookeeper: { connectionString: this.zkConfig.connectionString },
+            kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
         });
         producer.once('error', done);
         producer.once('ready', () => {
             producer.removeAllListeners('error');
             producer.on('error', err => {
-                this.log.error('error from backbeat producer', {
+                this.logger.error('error from backbeat producer', {
                     topic: this.repConfig.replicationStatusTopic,
                     error: err,
                 });
@@ -234,25 +233,44 @@ class QueueProcessor extends EventEmitter {
                                  { error: err.message });
                 return undefined;
             }
-            if (!(options && options.disableConsumer)) {
-                const groupId =
-                    `${this.repConfig.queueProcessor.groupId}-${this.site}`;
-                this._consumer = new BackbeatConsumer({
-                    zookeeper: {
-                        connectionString: this.zkConfig.connectionString,
-                    },
-                    topic: this.repConfig.topic,
-                    groupId,
-                    concurrency: this.repConfig.queueProcessor.concurrency,
-                    queueProcessor: this.processKafkaEntry.bind(this),
-                    fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
-                });
-                this._consumer.on('error', () => {});
-                this._consumer.subscribe();
+            if (options && options.disableConsumer) {
+                this.emit('ready');
+                return undefined;
             }
-            this.logger.info('queue processor is ready to consume ' +
-                             'replication entries');
-            return this.emit('ready');
+            const groupId =
+                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+            this._consumer = new BackbeatConsumer({
+                kafka: { hosts: this.kafkaConfig.hosts },
+                topic: this.repConfig.topic,
+                groupId,
+                concurrency: this.repConfig.queueProcessor.concurrency,
+                queueProcessor: this.processKafkaEntry.bind(this),
+            });
+            this._consumer.on('error', () => {});
+            this._consumer.on('ready', () => {
+                this._consumer.subscribe();
+                this.logger.info('queue processor is ready to consume ' +
+                                 'replication entries');
+                this.emit('ready');
+            });
+            this._consumer.on('metrics', data => {
+                // i.e. data = { my-site: { ops: 1, bytes: 124 } }
+                const filteredData = Object.keys(data).filter(key =>
+                    key === this.site).reduce((store, k) => {
+                        // eslint-disable-next-line no-param-reassign
+                        store[k] = data[this.site];
+                        return store;
+                    }, {});
+                this._mProducer.publishMetrics(filteredData,
+                    metricsTypeProcessed, metricsExtension, err => {
+                        this.logger.trace('error occurred in publishing ' +
+                            'metrics', {
+                                error: err,
+                                method: 'QueueProcessor.start',
+                            });
+                    });
+            });
+            return undefined;
         });
     }
 

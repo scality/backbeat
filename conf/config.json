@@ -6,6 +6,19 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "auth": {
+        "type": "account",
+        "account": "bart",
+        "vault": {
+            "host": "127.0.0.1",
+            "port": 8500,
+            "adminPort": 8600
+        }
+    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -67,10 +80,54 @@
                 "retryTimeoutS": 300,
                 "concurrency": 10
             }
+        },
+        "lifecycle": {
+            "zookeeperPath": "/lifecycle",
+            "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
+            "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+            "backlogMetrics": {
+                "zkPath": "/lifecycle/run/backlog-metrics",
+                "intervalS": 60
+            },
+            "conductor": {
+                "cronRule": "0 */5 * * * *",
+                "concurrency": 10
+            },
+            "producer": {
+                "groupId": "backbeat-lifecycle-producer-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "consumer": {
+                "groupId": "backbeat-lifecycle-consumer-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
+                }
+            }
         }
     },
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
     }
 }
