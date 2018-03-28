@@ -7,7 +7,7 @@ const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
-const QueuePopulator = require('../lib/queuePopulator/IngestionProducer');
+const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -42,6 +42,8 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
+
+console.log(queuePopulator);
 
 async.waterfall([
     done => queuePopulator.open(done),
