@@ -1,4 +1,5 @@
 const assert = require('assert');
+const async = require('async');
 const crypto = require('crypto');
 const http = require('http');
 const URL = require('url');
@@ -616,6 +617,10 @@ class S3Mock extends TestConfigurator {
     }
 }
 
+class MetricsMock {
+    publishMetrics() {}
+}
+
 /* eslint-enable max-len */
 
 describe('queue processor functional tests with mocking', () => {
@@ -628,8 +633,9 @@ describe('queue processor functional tests with mocking', () => {
         this.timeout(60000);
         const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
+
         queueProcessor = new QueueProcessor(
-            { connectionString: 'localhost:2181' },
+            { hosts: 'localhost:9092' },
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,
                     port: 7777 } },
@@ -648,7 +654,7 @@ describe('queue processor functional tests with mocking', () => {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
               },
-            });
+            }, new MetricsMock());
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
         // processor is ready, so that we ensure the replication
@@ -656,7 +662,7 @@ describe('queue processor functional tests with mocking', () => {
         // stuck waiting for entries.
         queueProcessor.on('ready', () => {
             replicationStatusProcessor = new ReplicationStatusProcessor(
-                { connectionString: 'localhost:2181' },
+                { hosts: 'localhost:9092' },
                 { auth: { type: 'role',
                           vault: { host: constants.source.vault,
                                    port: 7777 } },
@@ -671,7 +677,7 @@ describe('queue processor functional tests with mocking', () => {
                   },
               });
             replicationStatusProcessor.start();
-            replicationStatusProcessor.bootstrapKafkaConsumer(done);
+            replicationStatusProcessor.start({ bootstrap: true }, done);
         });
 
         s3mock = new S3Mock();
@@ -704,15 +710,19 @@ describe('queue processor functional tests with mocking', () => {
                     s3mock.setParam('nbParts', testCase.nbParts);
                 });
                 it('should complete a replication end-to-end', done => {
-                    s3mock.onPutSourceMd = done;
-
-                    queueProcessor.processKafkaEntry(
-                       s3mock.getParam('kafkaEntry'), err => {
-                           assert.ifError(err);
-                           assert.strictEqual(s3mock.hasPutTargetData,
-                                              testCase.nbParts > 0);
-                           assert(s3mock.hasPutTargetMd);
-                       });
+                    async.parallel([
+                        done => {
+                            s3mock.onPutSourceMd = done;
+                        },
+                        done => queueProcessor.processKafkaEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert.strictEqual(s3mock.hasPutTargetData,
+                                                   testCase.nbParts > 0);
+                                assert(s3mock.hasPutTargetMd);
+                                done();
+                            }),
+                    ], done);
                 });
             }));
 
@@ -720,14 +730,18 @@ describe('queue processor functional tests with mocking', () => {
             s3mock.setParam('nbParts', 2);
             s3mock.setParam('source.md.replicationInfo.content',
                             ['METADATA']);
-            s3mock.onPutSourceMd = done;
-
-            queueProcessor.processKafkaEntry(
-                s3mock.getParam('kafkaEntry'), err => {
-                    assert.ifError(err);
-                    assert.strictEqual(s3mock.hasPutTargetData, false);
-                    assert(s3mock.hasPutTargetMd);
-                });
+            async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, false);
+                        assert(s3mock.hasPutTargetMd);
+                        done();
+                    }),
+            ], done);
         });
 
         it('should retry with full replication if metadata-only returns ' +
@@ -738,14 +752,18 @@ describe('queue processor functional tests with mocking', () => {
             s3mock.installBackbeatErrorResponder('target.putMetadata',
                                                  errors.ObjNotFound,
                                                  { once: true });
-            s3mock.onPutSourceMd = done;
-
-            queueProcessor.processKafkaEntry(
-                s3mock.getParam('kafkaEntry'), err => {
-                    assert.ifError(err);
-                    assert.strictEqual(s3mock.hasPutTargetData, true);
-                    assert(s3mock.hasPutTargetMd);
-                });
+            async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessor.processKafkaEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        done();
+                    }),
+            ], done);
         });
     });
 
@@ -794,14 +812,19 @@ describe('queue processor functional tests with mocking', () => {
             'configuration', done => {
                 s3mock.setParam('replicationEnabled', false);
                 s3mock.setExpectedReplicationStatus('FAILED');
-                s3mock.onPutSourceMd = done;
 
-                queueProcessor.processKafkaEntry(
-                    s3mock.getParam('kafkaEntry'), err => {
-                        assert.ifError(err);
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                    });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessor.processKafkaEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            done();
+                        }),
+                ], done);
             });
 
             it('should fail if object misses dataStoreETag property', done => {
@@ -811,14 +834,19 @@ describe('queue processor functional tests with mocking', () => {
                                    s3mock.getParam('partsContents'),
                                    { doNotIncludeETag: true }));
                 s3mock.setExpectedReplicationStatus('FAILED');
-                s3mock.onPutSourceMd = done;
 
-                queueProcessor.processKafkaEntry(
-                    s3mock.getParam('kafkaEntry'), err => {
-                        assert.ifError(err);
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                    });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessor.processKafkaEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            done();
+                        }),
+                ], done);
             });
 
             ['getBucketReplication', 'getObject'].forEach(action => {
@@ -827,14 +855,19 @@ describe('queue processor functional tests with mocking', () => {
                     `from source S3 on ${action}`, done => {
                         s3mock.installS3ErrorResponder(
                             `source.s3.${action}`, error, { once: true });
-                        s3mock.onPutSourceMd = done;
 
-                        queueProcessor.processKafkaEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert(s3mock.hasPutTargetData);
-                                assert(s3mock.hasPutTargetMd);
-                            });
+                        async.parallel([
+                            done => {
+                                s3mock.onPutSourceMd = done;
+                            },
+                            done => queueProcessor.processKafkaEntry(
+                                s3mock.getParam('kafkaEntry'), err => {
+                                    assert.ifError(err);
+                                    assert(s3mock.hasPutTargetData);
+                                    assert(s3mock.hasPutTargetMd);
+                                    done();
+                                }),
+                        ], done);
                     });
                 });
             });
@@ -849,14 +882,19 @@ describe('queue processor functional tests with mocking', () => {
                             s3mock.installVaultErrorResponder(
                              `target.${action}`, err);
                             s3mock.setExpectedReplicationStatus('FAILED');
-                            s3mock.onPutSourceMd = done;
 
-                            queueProcessor.processKafkaEntry(
-                             s3mock.getParam('kafkaEntry'), error => {
-                                 assert.ifError(error);
-                                 assert(!s3mock.hasPutTargetData);
-                                 assert(!s3mock.hasPutTargetMd);
-                             });
+                            async.parallel([
+                                done => {
+                                    s3mock.onPutSourceMd = done;
+                                },
+                                done => queueProcessor.processKafkaEntry(
+                                    s3mock.getParam('kafkaEntry'), error => {
+                                        assert.ifError(error);
+                                        assert(!s3mock.hasPutTargetData);
+                                        assert(!s3mock.hasPutTargetMd);
+                                        done();
+                                    }),
+                            ], done);
                         });
                     });
                 });
@@ -868,19 +906,24 @@ describe('queue processor functional tests with mocking', () => {
                     `from target Vault on ${action}`, done => {
                         s3mock.installVaultErrorResponder(
                             `target.${action}`, error, { once: true });
-                        s3mock.onPutSourceMd = done;
 
-                        queueProcessor.processKafkaEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert(s3mock.hasPutTargetData);
-                                assert(s3mock.hasPutTargetMd);
-                                // should have retried on other host
-                                assert(s3mock.requestsPerHost['127.0.0.3']
-                                       > 0);
-                                assert(s3mock.requestsPerHost['127.0.0.4']
-                                       > 0);
-                            });
+                        async.parallel([
+                            done => {
+                                s3mock.onPutSourceMd = done;
+                            },
+                            done => queueProcessor.processKafkaEntry(
+                                s3mock.getParam('kafkaEntry'), err => {
+                                    assert.ifError(err);
+                                    assert(s3mock.hasPutTargetData);
+                                    assert(s3mock.hasPutTargetMd);
+                                    // should have retried on other host
+                                    assert(s3mock.requestsPerHost['127.0.0.3']
+                                           > 0);
+                                    assert(s3mock.requestsPerHost['127.0.0.4']
+                                           > 0);
+                                    done();
+                                }),
+                        ], done);
                     });
                 });
             });
@@ -894,13 +937,18 @@ describe('queue processor functional tests with mocking', () => {
                         s3mock.installS3ErrorResponder(`target.${action}`,
                                                        error);
                         s3mock.setExpectedReplicationStatus('FAILED');
-                        s3mock.onPutSourceMd = done;
 
-                        queueProcessor.processKafkaEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert(!s3mock.hasPutTargetMd);
-                            });
+                        async.parallel([
+                            done => {
+                                s3mock.onPutSourceMd = done;
+                            },
+                            done => queueProcessor.processKafkaEntry(
+                                s3mock.getParam('kafkaEntry'), err => {
+                                    assert.ifError(err);
+                                    assert(!s3mock.hasPutTargetMd);
+                                    done();
+                                }),
+                        ], done);
                     });
                 });
             });
@@ -911,19 +959,23 @@ describe('queue processor functional tests with mocking', () => {
                     `from target S3 on ${action}`, done => {
                         s3mock.installS3ErrorResponder(`target.${action}`,
                                                        error, { once: true });
-                        s3mock.onPutSourceMd = done;
-
-                        queueProcessor.processKafkaEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert(s3mock.hasPutTargetData);
-                                assert(s3mock.hasPutTargetMd);
-                                // should have retried on other host
-                                assert(s3mock.requestsPerHost['127.0.0.3']
-                                       > 0);
-                                assert(s3mock.requestsPerHost['127.0.0.4']
-                                       > 0);
-                            });
+                        async.parallel([
+                            done => {
+                                s3mock.onPutSourceMd = done;
+                            },
+                            done => queueProcessor.processKafkaEntry(
+                                s3mock.getParam('kafkaEntry'), err => {
+                                    assert.ifError(err);
+                                    assert(s3mock.hasPutTargetData);
+                                    assert(s3mock.hasPutTargetMd);
+                                    // should have retried on other host
+                                    assert(s3mock.requestsPerHost['127.0.0.3']
+                                           > 0);
+                                    assert(s3mock.requestsPerHost['127.0.0.4']
+                                           > 0);
+                                    done();
+                                }),
+                        ], done);
                     });
                 });
             });
@@ -935,14 +987,19 @@ describe('queue processor functional tests with mocking', () => {
                 s3mock.installS3ErrorResponder('source.s3.getObject',
                                                errors.InternalError);
                 s3mock.setExpectedReplicationStatus('FAILED');
-                s3mock.onPutSourceMd = done;
 
-                queueProcessor.processKafkaEntry(
-                    s3mock.getParam('kafkaEntry'), err => {
-                        assert.ifError(err);
-                        assert(!s3mock.hasPutTargetData);
-                        assert(!s3mock.hasPutTargetMd);
-                    });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessor.processKafkaEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            done();
+                        }),
+                ], done);
             });
         });
     });

@@ -17,4 +17,4 @@ RUN npm install --production \
 
 ENTRYPOINT ["/usr/src/app/docker-entrypoint.sh"]
 
-EXPOSE 8000
+EXPOSE 8900

@@ -8,6 +8,7 @@ machine:
         version: 6.9.5
     services:
         - docker
+        - redis
     environment:
         CXX: g++-4.9
 
@@ -21,4 +22,5 @@ test:
         - npm run --silent lint_md
         - npm run --silent lint
         - npm test
+        - TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
         - npm run ft_test

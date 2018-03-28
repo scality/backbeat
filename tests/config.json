@@ -1,6 +1,27 @@
 {
     "zookeeper": {
-        "connectionString": "127.0.0.1:2181"
+        "connectionString": "127.0.0.1:2181",
+        "autoCreateNamespace": true
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000,
+        "transport": "http",
+        "accessKey": "accessKey1",
+        "secretKey": "verySecretKey1"
+    },
+    "auth": {
+        "type": "account",
+        "account": "bart",
+        "vault": {
+            "host": "127.0.0.1",
+            "port": 8500,
+            "adminPort": 8600,
+            "adminCredentialsFile": "../conf/authdata.json"
+        }
     },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
@@ -17,24 +38,64 @@
             "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
         }
     },
-    "kafka": {
-        "hosts": "127.0.0.1:9092"
-    },
-    "s3": {
-        "host": "127.0.0.1",
-        "port": 8000,
-        "transport": "http",
-        "accessKey": "accessKey1",
-        "secretKey": "verySecretKey1"
-    },
     "extensions": {
         "replication": {
             "topic": "backbeat-test-replication",
-            "groupId": "backbeat-test-replication-group"
+            "replicationStatusTopic": "backbeat-test-replication-status",
+            "groupId": "backbeat-test-replication-group",
+            "destination": {
+                "bootstrapList": [
+                    { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
+                    { "site": "test-site-2", "type": "aws_s3" }
+                ]
+            }
+        },
+        "lifecycle": {
+            "zookeeperPath": "/lifecycletest",
+            "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
+            "objectTasksTopic": "backbeat-test-dummy-object-task",
+            "conductor": {
+                "cronRule": "0 */5 * * * *"
+            },
+            "producer": {
+                "groupId": "backbeat-lifecycle-producer-test-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "consumer": {
+                "groupId": "backbeat-lifecycle-consumer-test-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
+                }
+            }
         }
     },
     "log": {
         "logLevel": "info",
         "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-test-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
+    },
+    "redis": {
+        "name": "backbeat-test",
+        "password": ""
     }
 }

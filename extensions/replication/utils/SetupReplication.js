@@ -593,7 +593,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(err);
             }
             return cb(null, { sourceRoleArn: sourceRole.Arn,
-                              targetRoleArn: targetRole.Arn,
+                              targetRoleArn: targetRole && targetRole.Arn,
                               sourcePolicyArn, targetPolicyArn });
         });
     }

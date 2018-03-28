@@ -7,11 +7,16 @@
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
+    "lifecycle_conductor": "node extensions/lifecycle/conductor/service.js",
+    "lifecycle_producer": "node extensions/lifecycle/lifecycleProducer/task.js",
+    "lifecycle_consumer": "node extensions/lifecycle/lifecycleConsumer/task.js",
     "test": "mocha --recursive tests/unit",
-    "ft_test": "mocha --recursive tests/functional",
+    "ft_test": "mocha --recursive $(find tests/functional -name '*.js' ! -name 'BackbeatServer.js')",
+    "ft_server_test": "mocha tests/functional/api/BackbeatServer.js",
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
-    "lint_md": "mdlint $(git ls-files '*.md')"
+    "lint_md": "mdlint $(git ls-files '*.md')",
+    "start": "node index.js"
   },
   "repository": {
     "type": "git",
@@ -35,9 +40,10 @@
     "eslint-config-scality": "scality/Guidelines",
     "eslint-plugin-react": "^4.2.3",
     "joi": "^10.6",
-    "kafka-node": "^2.2.0",
     "node-forge": "^0.7.1",
+    "node-rdkafka": "^2.2.0",
     "node-schedule": "^1.2.0",
+    "node-zookeeper-client": "^0.2.2",
     "uuid": "^3.1.0",
     "vaultclient": "github:scality/vaultclient",
     "werelogs": "scality/werelogs"
