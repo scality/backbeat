@@ -43,8 +43,6 @@ function queueBatch(queuePopulator, taskState) {
 
 const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
 
-console.log(queuePopulator);
-
 async.waterfall([
     done => queuePopulator.open(done),
     done => queuePopulator.getRaftSessionBuckets(done, res => {
@@ -57,16 +55,41 @@ async.waterfall([
             const bucketName = bucket.bucket;
             return async.mapLimit(bucket.objects, 10, (object, cb) => {
                 console.log('MAPPING');
+                const objectKey = object.key;
                 return queuePopulator.getObjectMetadata(bucketName, object, (err, res) => {
-                    console.log('we got data');
+                    console.log('we got data', objectKey);
+                    res.key = objectKey;
                     return cb(null, res);
                 });
             }, (err, res) => {
+                console.log(typeof res);
+                console.log(typeof res);
+                console.log(typeof res);
+                console.log(typeof res);
+                console.log(typeof res);
+                console.log(typeof res);
+                console.log(res);
+                console.log('LENGTH OF RES', res.length);
+                console.log('LENGTH OF RES', res.length);
+                console.log('LENGTH OF RES', res.length);
+                console.log('LENGTH OF RES', res.length);
+                console.log('LENGTH OF RES', res.length);
+                console.log('LENGTH OF RES', res.length);
+                queuePopulator._extensions[0]._batch = res;
+                if (res.length > 0) {
+                    queuePopulator._extensions[0].filter(res, bucketName, res[0].key);
+                }
                 return cb(err, { bucket: bucketName, objects: res });
             });
         }, (err, res) => {
+            console.log('queue populator extensions');
+            console.log('queue populator extensions');
+            console.log('queue populator extensions');
+            console.log('queue populator extensions');
+            console.log('queue populator extensions');
+            console.log(queuePopulator._extensions);
+            console.log(queuePopulator._extensions[0].filter.toString());
             console.log('we got this far');
-            console.log(res);
             return done(err);
         });
     },
