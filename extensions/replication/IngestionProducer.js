@@ -57,12 +57,13 @@ class IngestionProducer extends QueuePopulatorExtension{
             done();
         });
     }
-
-    filter(entry, bucket, key) {
-        console.log('filtering entry!', bucket, key);
-        console.log(entry[0]);
-        this.publish(this.extConfig.topic, `${bucket}/${key}`, JSON.stringify(entry[0]));
-    }
+    //
+    // filter(entry, bucket, key) {
+    //     console.log('filtering entry!', bucket, key);
+    //     console.log(entry[0]);
+    //     this.publish(this.extConfig.topic, `${bucket}/${key}`,
+    //         JSON.stringify(entry[0]));
+    // }
 }
 
 

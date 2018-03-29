@@ -8,6 +8,9 @@ const zkConfig = config.zookeeper;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const RaftLogEntry = require('../extensions/replication/utils/RaftLogEntry');
+const ObjectQueueEntry = require('../extensions/replication/utils/ObjectQueueEntry');
+const BackbeatProducer = require('../lib/BackbeatProducer');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -42,7 +45,10 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
-
+const backbeatProducer = new BackbeatProducer({
+    zookeeper: { connectionString: 'localhost:2181/backbeat' },
+    topic: 'backbeat-replication',
+});
 async.waterfall([
     done => queuePopulator.open(done),
     done => queuePopulator.getRaftSessionBuckets(done, res => {
@@ -58,8 +64,7 @@ async.waterfall([
                 const objectKey = object.key;
                 return queuePopulator.getObjectMetadata(bucketName, object, (err, res) => {
                     console.log('we got data', objectKey);
-                    res.key = objectKey;
-                    return cb(null, res);
+                    return cb(null, { res, objectKey });
                 });
             }, (err, res) => {
                 console.log(typeof res);
@@ -75,21 +80,16 @@ async.waterfall([
                 console.log('LENGTH OF RES', res.length);
                 console.log('LENGTH OF RES', res.length);
                 console.log('LENGTH OF RES', res.length);
-                queuePopulator._extensions[0]._batch = res;
                 if (res.length > 0) {
-                    queuePopulator._extensions[0].filter(res, bucketName, res[0].key);
+                    console.log('bucketName, ', bucketName);
+                    console.log('objectKey', res[0].objectKey);
+                    const queueEntry = new RaftLogEntry();
+                    console.log('THIS IS THE QUEUE ENTRY', queueEntry.createPutEntry(bucketName, res[0].objectKey, res[0].res));
+                    backbeatProducer.send([(queueEntry.createPutEntry(bucketName, res[0].objectKey, res[0].res))], () => {});
                 }
                 return cb(err, { bucket: bucketName, objects: res });
             });
-        }, (err, res) => {
-            console.log('queue populator extensions');
-            console.log('queue populator extensions');
-            console.log('queue populator extensions');
-            console.log('queue populator extensions');
-            console.log('queue populator extensions');
-            console.log(queuePopulator._extensions);
-            console.log(queuePopulator._extensions[0].filter.toString());
-            console.log('we got this far');
+        }, err => {
             return done(err);
         });
     },

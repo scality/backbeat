@@ -37,7 +37,9 @@ class ObjectQueueEntry extends ObjectMD {
         super(objMd);
         this.bucket = bucket;
         this.objectVersionedKey = objectVersionedKey;
-        this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
+        // non-versioned objects do no have VID_SEP
+        this.objectKey = objectVersionedKey.includes(VID_SEP) ?
+            _extractVersionedBaseKey(objectVersionedKey) : objectVersionedKey;
         this.site = null;
     }
 
@@ -133,6 +135,7 @@ class ObjectQueueEntry extends ObjectMD {
     }
 
     toKafkaEntry(site) {
+        console.log('getting bucket in toKafkaEntry', this.getBucket());
         return { key: encodeURIComponent(
             `${this.getBucket()}/${this.getObjectKey()}`),
                  message: JSON.stringify({
