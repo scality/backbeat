@@ -35,18 +35,14 @@ metricsProducer.setupProducer(err => {
             log.info('management init done');
 
             const replicationEndpoints = config.getReplicationEndpoints();
-            const bootstrapList = replicationEndpoints.bootstrapList
-                .filter(item => item.site === site);
-            assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
-                'one of the replication endpoints defined');
 
             const destConfig = Object.assign({}, repConfig.destination);
-            destConfig.bootstrapList = bootstrapList;
+            destConfig.bootstrapList = replicationEndpoints;
 
-            const queueProcessor = new QueueProcessor(zkConfig, sourceConfig,
-                destConfig, repConfig, metricsProducer)
+            const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
+                sourceConfig, destConfig, repConfig, metricsProducer);
             queueProcessor.start();
         });
     }
-    initAndStart();
+    return initAndStart();
 });

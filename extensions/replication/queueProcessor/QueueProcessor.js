@@ -36,6 +36,7 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
+     * @param {Object} zkConfig - zookeeper configuration object
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -55,7 +56,8 @@ class QueueProcessor extends EventEmitter {
      *   replication
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, mProducer) {
+    constructor(zkConfig, kafkaConfig, sourceConfig, destConfig, repConfig,
+        mProducer) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
