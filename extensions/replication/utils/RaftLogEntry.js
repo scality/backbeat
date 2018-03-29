@@ -8,8 +8,8 @@ class RaftLogEntry {
     createPutBucketEntry(bucket) {
         return {
             type: 'put',
-            Bucket: '',
-            key: '',
+            Bucket: 'metastore',
+            key: bucket._name,
             Value: bucket.serialize(),
         };
     }
