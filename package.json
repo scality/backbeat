@@ -29,7 +29,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal#rel/7.4-beta",
+    "arsenal": "scality/Arsenal#ft/ZENKO-143-transient-source",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
