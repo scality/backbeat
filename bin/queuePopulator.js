@@ -50,44 +50,7 @@ async.waterfall([
         return done(null, res);
     }),
     (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
-    (bucketList, done) => {
-        console.log('getting list for each bucket');
-        return async.mapLimit(bucketList, 1, (bucket, cb) => {
-            const bucketName = bucket.bucket;
-            return async.mapLimit(bucket.objects, 10, (object, cb) => {
-                console.log('MAPPING');
-                const objectKey = object.key;
-                return queuePopulator.getObjectMetadata(bucketName, objectKey, (err, res) => {
-                    console.log('we got data', objectKey);
-                    return cb(null, { res, objectKey });
-                });
-            }, (err, res) => {
-                console.log(typeof res);
-                console.log(typeof res);
-                console.log(typeof res);
-                console.log(typeof res);
-                console.log(typeof res);
-                console.log(typeof res);
-                console.log(res);
-                console.log('LENGTH OF RES', res.length);
-                console.log('LENGTH OF RES', res.length);
-                console.log('LENGTH OF RES', res.length);
-                console.log('LENGTH OF RES', res.length);
-                console.log('LENGTH OF RES', res.length);
-                console.log('LENGTH OF RES', res.length);
-                if (res.length > 0) {
-                    console.log('bucketName, ', bucketName);
-                    console.log('objectKey', res[0].objectKey);
-                    const queueEntry = new RaftLogEntry();
-                    console.log('THIS IS THE QUEUE ENTRY', queueEntry.createPutEntry(bucketName, res[0].objectKey, res[0].res));
-                    backbeatProducer.send([(queueEntry.createPutEntry(bucketName, res[0].objectKey, res[0].res))], () => {});
-                }
-                return cb(err, { bucket: bucketName, objects: res });
-            });
-        }, err => {
-            return done(err);
-        });
-    },
+    (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
     done => {
         console.log('scheduling job');
         const taskState = {
