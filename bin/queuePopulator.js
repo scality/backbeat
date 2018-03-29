@@ -7,10 +7,8 @@ const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
-const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const QueuePopulator = require('../lib/queuePopulator/IngestionProducer');
 const RaftLogEntry = require('../extensions/replication/utils/RaftLogEntry');
-const ObjectQueueEntry = require('../extensions/replication/utils/ObjectQueueEntry');
-const BackbeatProducer = require('../lib/BackbeatProducer');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -45,10 +43,7 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, qpConfig, extConfigs);
-const backbeatProducer = new BackbeatProducer({
-    zookeeper: { connectionString: 'localhost:2181/backbeat' },
-    topic: 'backbeat-replication',
-});
+
 async.waterfall([
     done => queuePopulator.open(done),
     done => queuePopulator.getRaftSessionBuckets(done, res => {
@@ -62,7 +57,7 @@ async.waterfall([
             return async.mapLimit(bucket.objects, 10, (object, cb) => {
                 console.log('MAPPING');
                 const objectKey = object.key;
-                return queuePopulator.getObjectMetadata(bucketName, object, (err, res) => {
+                return queuePopulator.getObjectMetadata(bucketName, objectKey, (err, res) => {
                     console.log('we got data', objectKey);
                     return cb(null, { res, objectKey });
                 });
