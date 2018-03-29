@@ -49,6 +49,7 @@ async.waterfall([
     done => queuePopulator.getRaftSessionBuckets(done, res => {
         return done(null, res);
     }),
+    (bucketList, done) => queuePopulator.getBucketMd(bucketList, done),
     (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
     (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
     done => {
