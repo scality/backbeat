@@ -21,22 +21,41 @@ function _createSetupReplication(command, options, log) {
     const sourceProfile = options.sourceProfile;
     const targetProfile = options.targetProfile;
     const siteName = options.siteName;
-    const targetIsExternal = siteName !== undefined;
+
+    const { source, destination } = config.extensions.replication;
+
+    const targetIsExternal = destination.bootstrapList.find(dest =>
+        dest.site === siteName).type !== undefined;
+
+    // if there are multiple bootstrapList items with "servers" property
+    // and a site name is not provided, throw an error
+    const destinationEndpoints =
+        destination.bootstrapList.filter(dest => Array.isArray(dest.servers));
 
     // Required options
     if (!sourceBucket || !targetBucket ||
-        !sourceProfile || (!targetProfile && !targetIsExternal)) {
+    !sourceProfile || (!targetProfile && !targetIsExternal) ||
+    (destinationEndpoints.length > 1 && !siteName)) {
+        log.error('replication setup failed, missing arguments');
         program.commands.find(n => n._name === command).help();
         process.exit(1);
     }
 
-    const { source, destination } = config.extensions.replication;
     const sourceCredentials =
               new SharedIniFileCredentials({ profile: sourceProfile });
     const targetCredentials =
               new SharedIniFileCredentials({ profile: targetProfile });
-    const destinationEndpoint =
-        destination.bootstrapList.find(dest => Array.isArray(dest.servers));
+
+    // find destination endpoint if multiple cloud destinations
+    const destEndpoint = destinationEndpoints.find(dest =>
+        dest.site === siteName);
+    if (!destEndpoint) {
+        log.error('replication setup failed, multiple cloud server ' +
+            'destinations found and no site name was provided');
+        program.commands.find(n => n._name === command).help();
+        process.exit(1);
+    }
+
     return new SetupReplication({
         source: {
             bucket: sourceBucket,
@@ -49,7 +68,7 @@ function _createSetupReplication(command, options, log) {
             bucket: targetBucket,
             credentials: targetCredentials,
             hosts: targetIsExternal ?
-                undefined : new RoundRobin(destinationEndpoint.servers),
+                undefined : new RoundRobin(destEndpoint.servers),
             transport: destination.transport,
             isExternal: targetIsExternal,
             siteName,
@@ -69,7 +88,8 @@ program
     .option('--target-profile <name>', '[optional] target aws/credentials ' +
             'profile (optional if using external location)')
     .option('--site-name <name>', '[optional] the site name (required if ' +
-            'using external location)')
+            'using external location or multiple cloud server destinations ' +
+            'are configured)')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
         const s = _createSetupReplication('setup', options, log);
@@ -95,7 +115,8 @@ program
     .option('--target-profile <name>', '[optional] target aws/credentials ' +
             'profile (optional if using external location)')
     .option('--site-name <name>', '[optional] the site name (required if ' +
-            'using external location)')
+            'using external location or multiple cloud server destinations ' +
+            'are configured)')
     .action(options => {
         const log = new Logger('BackbeatSetup').newRequestLogger();
         const s = _createSetupReplication('validate', options, log);
