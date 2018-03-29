@@ -1,11 +1,13 @@
 'use strict'; // eslint-disable-line
 
+const async = require('async');
 const http = require('http');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const redisClient = require('../utils/getRedisClient')();
@@ -41,12 +43,16 @@ class ReplicationStatusProcessor {
      * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry status
      *   update
+     * @param {Object} gcConfig - garbage collection config object
+     * @param {String} gcConfig.topic - garbage collection kafka topic
      */
-    constructor(kafkaConfig, sourceConfig, repConfig) {
+    constructor(kafkaConfig, sourceConfig, repConfig, gcConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
+        this.gcConfig = gcConfig;
         this._consumer = null;
+        this._gcProducer = null;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -78,6 +84,7 @@ class ReplicationStatusProcessor {
             repConfig: this.repConfig,
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
+            gcProducer: this._gcProducer,
             logger: this.logger,
         };
     }
@@ -92,20 +99,35 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
-        this._consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
-            topic: this.repConfig.replicationStatusTopic,
-            groupId: this.repConfig.replicationStatusProcessor.groupId,
-            concurrency:
-            this.repConfig.replicationStatusProcessor.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-            bootstrap: options && options.bootstrap,
-        });
-        this._consumer.on('error', () => {});
-        this._consumer.on('ready', () => {
-            this.logger.info('replication status processor is ready to ' +
-                             'consume replication status entries');
-            this._consumer.subscribe();
+        async.parallel([
+            done => {
+                this._consumer = new BackbeatConsumer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.repConfig.replicationStatusTopic,
+                    groupId: this.repConfig.replicationStatusProcessor.groupId,
+                    concurrency:
+                    this.repConfig.replicationStatusProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    bootstrap: options && options.bootstrap,
+                });
+                this._consumer.on('error', () => {});
+                this._consumer.on('ready', () => {
+                    this._consumer.subscribe();
+                    done();
+                });
+            },
+            done => {
+                this._gcProducer = new BackbeatProducer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.gcConfig.topic,
+                    keyedPartitioner: false,
+                });
+                this._gcProducer.on('error', () => {});
+                this._gcProducer.on('ready', () => done());
+            },
+        ], () => {
+            this.logger.info('replication status processor is ready ' +
+                             'to consume replication status entries');
             if (cb) {
                 cb();
             }
@@ -113,16 +135,26 @@ class ReplicationStatusProcessor {
     }
 
     /**
-     * Stop kafka consumer and commit current offset
+     * Stop kafka consumer and producer and commit current consumer offset
      *
      * @param {function} done - callback
      * @return {undefined}
      */
-    stop(done) {
-        if (!this._consumer) {
-            return setImmediate(done);
-        }
-        return this._consumer.close(done);
+    stop(cb) {
+        return async.parallel([
+            done => {
+                if (!this._consumer) {
+                    return setImmediate(done);
+                }
+                return this._consumer.close(done);
+            },
+            done => {
+                if (!this._gcProducer) {
+                    return setImmediate(done);
+                }
+                return this._gcProducer.close(done);
+            },
+        ], cb);
     }
 
     /**

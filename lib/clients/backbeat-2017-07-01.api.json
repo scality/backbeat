@@ -672,6 +672,32 @@
                     }
                 }
             }
+        },
+        "BatchDelete": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/batchdelete"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                ],
+                "members": {
+                    "ContentType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Type"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                }
+            }
         }
     }
 }

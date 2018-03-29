@@ -235,6 +235,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 const msg = `unknown status in replication info: ${status}`;
                 return done(errors.InternalError.customizeDescription(msg));
             }
+            let locationsToDelete;
             updatedSourceEntry.setSite(site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(site));
@@ -248,6 +249,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     updatedSourceEntry.getNonTransientLocation())) {
                 // replace location by the non-transient cloud
                 // location on CRR global completion
+                locationsToDelete = updatedSourceEntry.getLocation();
                 updatedSourceEntry.setLocation(
                     updatedSourceEntry.getNonTransientLocation());
                 updatedSourceEntry.setNonTransientLocation(undefined);
@@ -270,7 +272,24 @@ class UpdateReplicationStatus extends BackbeatTask {
                     replicationStatus:
                         updatedSourceEntry.getReplicationStatus(),
                 });
-                return done();
+                if (locationsToDelete) {
+                    this.gcProducer.send([{
+                        message: JSON.stringify({
+                            action: 'gc',
+                            target: {
+                                owner: updatedSourceEntry.getOwnerId(),
+                                bucket: updatedSourceEntry.getBucket(),
+                                key: updatedSourceEntry.getObjectKey(),
+                                versionId: updatedSourceEntry.getVersionId(),
+                            },
+                            details: {
+                                locations: locationsToDelete,
+                            },
+                        }),
+                    }], done);
+                } else {
+                    return done();
+                }
             });
         });
     }

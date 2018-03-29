@@ -8,10 +8,11 @@ const config = require('../../../conf/Config');
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
+const gcConfig = config.gc;
 
 const { initManagement } = require('../../../lib/management');
-const replicationStatusProcessor =
-          new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
+const replicationStatusProcessor = new ReplicationStatusProcessor(
+    kafkaConfig, sourceConfig, repConfig, gcConfig);
 
 werelogs.configure({ level: config.log.logLevel,
      dump: config.log.dumpLevel });

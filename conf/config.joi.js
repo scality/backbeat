@@ -75,6 +75,9 @@ const joiSchema = {
             })
         ),
     },
+    gc: joi.object({
+        topic: joi.string().required(),
+    }).required(),
 };
 
 module.exports = joiSchema;
