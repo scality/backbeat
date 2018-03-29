@@ -81,17 +81,15 @@ class QueueProcessor extends EventEmitter {
 
         this._setupVaultclientCache();
 
-        // FIXME support multiple scality destination sites
-        if (Array.isArray(destConfig.bootstrapList)) {
-            destConfig.bootstrapList.forEach(dest => {
-                if (Array.isArray(dest.servers)) {
-                    this.destHosts =
-                        new RoundRobin(dest.servers, { defaultPort: 80 });
-                    if (dest.echo) {
-                        this._setupEcho();
-                    }
-                }
-            });
+        // support multiple scality destination sites
+        const bootstrapSite = destConfig.bootstrapList.find(b =>
+            b.site === site);
+        if (bootstrapSite && Array.isArray(bootstrapSite.servers)) {
+            this.destHosts = new RoundRobin(bootstrapSite.servers,
+                { defaultPort: 80 });
+            if (bootstrapSite.echo) {
+                this._setupEcho();
+            }
         }
 
         this.taskScheduler = new ReplicationTaskScheduler(
