@@ -14,6 +14,7 @@ const constants = {
         bytes: testIsOn ? 'test:bb:bytes' : 'bb:crr:bytes',
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:crr:opsdone',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:crr:bytesdone',
+        failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
 };
 
