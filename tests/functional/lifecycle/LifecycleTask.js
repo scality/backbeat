@@ -48,13 +48,13 @@ class S3Helper {
         this.bucket = undefined;
 
         this._scenario = [
-            // 0. create objects: non-versioned, no tags, no prefix
+            // 0. create objects: non-versioned, no pagination
             {
                 keyNames: ['object-1', 'object-2', 'object-3'],
                 tags: ['key1=value1', 'key1=value1&key2=value2', 'key2=value2'],
 
             },
-            // 1. create objects: non-versioned, tags, prefix
+            // 1. create objects: non-versioned, pagination, prefix
             {
                 keyNames: [
                     'test/obj-1', 'obj-2', 'test/obj-3',
@@ -187,9 +187,6 @@ class LifecycleProducerMock {
             },
         };
 
-        this.sendBucketEntry = null;
-        this.sendObjectEntry = null;
-
         this.sendCount = {
             bucket: 0,
             object: 0,
@@ -200,22 +197,16 @@ class LifecycleProducerMock {
         };
     }
 
-    setBucketFxn(fxn, cb) {
-        this.sendBucketEntry = fxn;
+    sendBucketEntry(entry, cb) {
+        this.sendCount.bucket++;
+        this.entries.bucket.push(entry);
         cb();
     }
 
-    setObjectFxn(fxn, cb) {
-        this.sendObjectEntry = fxn;
+    sendObjectEntry(entry, cb) {
+        this.sendCount.object++;
+        this.entries.object.push(entry.target.key);
         cb();
-    }
-
-    incrementCount(type) {
-        this.sendCount[type]++;
-    }
-
-    addEntry(type, entry) {
-        this.entries[type].push(entry);
     }
 
     getCount() {
@@ -226,22 +217,10 @@ class LifecycleProducerMock {
         return this.entries;
     }
 
-    disableRule(rule) {
-        if (this._lcConfig.rules[rule]) {
-            this._lcConfig.rules[rule].enabled = false;
-        }
-    }
-
-    enableRule(rule) {
-        if (this._lcConfig.rules[rule]) {
-            this._lcConfig.rules[rule].enabled = true;
-        }
-    }
-
     getStateVars() {
         return {
-            sendBucketEntry: this.sendBucketEntry,
-            sendObjectEntry: this.sendObjectEntry,
+            sendBucketEntry: this.sendBucketEntry.bind(this),
+            sendObjectEntry: this.sendObjectEntry.bind(this),
             removeBucketFromQueued: () => {},
             enabledRules: this._lcConfig.rules,
             log: this._log,
@@ -291,10 +270,13 @@ describe('lifecycle producer functional tests', () => {
     let lcp;
     let lcTask;
     let s3;
+    let s3Helper;
 
     before(() => {
         lcp = new LifecycleProducerMock();
         s3 = new S3(s3config);
+        lcTask = new LifecycleTask(lcp);
+        s3Helper = new S3Helper(s3);
     });
 
     // Example lifecycle configs
@@ -322,27 +304,6 @@ describe('lifecycle producer functional tests', () => {
     // },
 
     describe('non-versioned bucket tests', () => {
-        let s3Helper;
-
-        before(() => {
-            lcp.setBucketFxn((entry, cb) => {
-                lcp.incrementCount('bucket');
-                lcp.addEntry('bucket', entry);
-
-                return cb(null, true);
-            }, () => {});
-            lcp.setObjectFxn((entry, cb) => {
-                lcp.incrementCount('object');
-                lcp.addEntry('object', entry.target.key);
-
-                // can assert entry stuff
-                return cb(null, true);
-            }, () => {});
-
-            lcTask = new LifecycleTask(lcp);
-            s3Helper = new S3Helper(s3);
-        });
-
         afterEach(done => {
             lcp.reset();
 
