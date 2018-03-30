@@ -32,5 +32,9 @@ stages:
           name: run unit tests
           command: npm test
       - ShellCommand:
+          name: start s3 membackend server
+          command: npm run mem_backend &
+          workdir: node_modules/s3
+      - ShellCommand:
           name: run feature tests
           command: npm run ft_test
