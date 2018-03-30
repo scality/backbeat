@@ -64,10 +64,10 @@ class Config extends EventEmitter {
         if (parsedConfig.extensions && parsedConfig.extensions.replication
             && parsedConfig.extensions.replication.destination
             && parsedConfig.extensions.replication.destination.bootstrapList) {
-            this.replicationEndpoints = parsedConfig.extensions.replication
+            this.bootstrapList = parsedConfig.extensions.replication
             .destination.bootstrapList;
         } else {
-            this.replicationEndpoints = [];
+            this.bootstrapList = [];
         }
 
         // whitelist IP, CIDR for health checks
@@ -94,16 +94,16 @@ class Config extends EventEmitter {
         return this._configPath;
     }
 
-    setReplicationEndpoints(locationConstraints) {
-        this.replicationEndpoints =
+    setBootstrapList(locationConstraints) {
+        this.bootstrapList =
         Object.keys(locationConstraints)
         .map(key => ({ site: key, type:
               locationTypeMatch[locationConstraints[key].locationType] }));
-        this.emit('replication-endpoints-update');
+        this.emit('bootstrap-list-update');
     }
 
-    getReplicationEndpoints() {
-        return this.replicationEndpoints;
+    getBootstrapList() {
+        return this.bootstrapList;
     }
 }
 

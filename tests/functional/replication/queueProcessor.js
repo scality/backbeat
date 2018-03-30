@@ -635,6 +635,8 @@ describe('queue processor functional tests with mocking', () => {
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
 
         queueProcessor = new QueueProcessor(
+            { connectionString: '127.0.0.1:2181/backbeat',
+              autoCreateNamespace: false },
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,
@@ -676,7 +678,6 @@ describe('queue processor functional tests with mocking', () => {
                       groupId: 'backbeat-func-test-group-id',
                   },
               });
-            replicationStatusProcessor.start();
             replicationStatusProcessor.start({ bootstrap: true }, done);
         });
 
