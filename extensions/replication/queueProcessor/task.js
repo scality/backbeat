@@ -34,10 +34,10 @@ metricsProducer.setupProducer(err => {
             }
             log.info('management init done');
 
-            const replicationEndpoints = config.getReplicationEndpoints();
+            const bootstrapList = config.getBootstrapList();
 
             const destConfig = Object.assign({}, repConfig.destination);
-            destConfig.bootstrapList = replicationEndpoints;
+            destConfig.bootstrapList = bootstrapList;
 
             const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
                 sourceConfig, destConfig, repConfig, metricsProducer);
