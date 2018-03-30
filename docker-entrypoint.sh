@@ -18,6 +18,14 @@ if [[ "$KAFKA_HOSTS" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .kafka.hosts=\"$KAFKA_HOSTS\""
 fi
 
+if [[ "$REDIS_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.host=\"$REDIS_HOST\""
+fi
+
+if [[ "$REDIS_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=\"$REDIS_PORT\""
+fi
+
 if [[ "$QUEUE_POPULATOR_DMD_HOST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.dmd.host=\"$QUEUE_POPULATOR_DMD_HOST\""
 fi
