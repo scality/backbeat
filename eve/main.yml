@@ -33,7 +33,7 @@ stages:
           command: npm test
       - ShellCommand:
           name: start s3 membackend server
-          command: npm run run_my_s3
+          command: cd node_modules/s3 && npm run mem_backend
       - ShellCommand:
           name: run feature tests
           command: npm run ft_test

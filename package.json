@@ -16,7 +16,6 @@
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')",
-    "run_my_s3": "cd node_modules/s3 && npm run mem_backend & bash tests/utils/wait_for_local_port.bash 8000 40",
     "start": "node index.js"
   },
   "repository": {
