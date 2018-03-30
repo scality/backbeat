@@ -32,7 +32,7 @@ if [[ "$MONGODB_HOSTS" ]]; then
 fi
 
 if [[ "$MONGODB_RS" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .mongodb.replicaSet=\"$MONGODB_RS\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.replicaSet=\"$MONGODB_RS\""
 fi
 
 if [[ "$MONGODB_DATABASE" ]]; then
