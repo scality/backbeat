@@ -26,7 +26,7 @@
         "logSource": "bucketd",
         "bucketd": {
             "host": "54.202.35.127",
-            "port": 8000
+            "port": 9000
         },
         "dmd": {
             "host": "127.0.0.1",
