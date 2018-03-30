@@ -17,6 +17,7 @@ class QueueEntry {
      *   {@link QueueEntry} base class
      */
     static createFromKafkaEntry(kafkaEntry) {
+        console.log(kafkaEntry)
         try {
             const record = JSON.parse(kafkaEntry.value);
             if (record.bootstrapId) {

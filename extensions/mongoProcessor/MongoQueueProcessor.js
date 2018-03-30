@@ -69,16 +69,20 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     start() {
+        console.log('MQP', this.mongoProcessorConfig);
         this._consumer = new BackbeatConsumer({
-            zookeeper: { connectionString: this.zkConfig.connectionString },
+            // zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.mongoProcessorConfig.topic,
-            groupId: this.mongoProcessorConfig.groupId,
+            groupId: `${this.mongoProcessorConfig.groupId}13`,
             // Must always have concurrency of 1 so writes are in order
+            kafka: { hosts: '127.0.0.1:9092' },
             concurrency: 1,
             queueProcessor: this.processKafkaEntry.bind(this),
             fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
-        this._consumer.on('error', () => {});
+        this._consumer.on('error', (err) => {
+            console.log('ERR', err);
+        });
         this._consumer.subscribe();
 
         this.logger.info('mongo processor is ready to consume');
@@ -107,6 +111,7 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        console.log('kafkaEntry', kafkaEntry.toString(), JSON.stringify(kafkaEntry));
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
