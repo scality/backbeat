@@ -10,7 +10,7 @@ const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
-const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const QueuePopulator = require('../lib/queuePopulator/IngestionProducer');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -54,6 +54,8 @@ async.waterfall([
         return done(null, res);
     }),
     (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
+    (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
+    (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
     done => {
         const taskState = {
             batchInProgress: false,
