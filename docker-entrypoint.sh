@@ -75,6 +75,10 @@ if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
 fi
 
+if [[ "$HEALTHCHECKS_ALLOWFROM" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .server.healthChecks.allowFrom=[\"$HEALTHCHECKS_ALLOWFROM\"]"
+fi
+
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
     jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
     mv conf/config.json.tmp conf/config.json
