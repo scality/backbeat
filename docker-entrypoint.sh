@@ -18,6 +18,14 @@ if [[ "$KAFKA_HOSTS" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .kafka.hosts=\"$KAFKA_HOSTS\""
 fi
 
+if [[ "$REDIS_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.host=\"$REDIS_HOST\""
+fi
+
+if [[ "$REDIS_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=\"$REDIS_PORT\""
+fi
+
 if [[ "$QUEUE_POPULATOR_DMD_HOST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.dmd.host=\"$QUEUE_POPULATOR_DMD_HOST\""
 fi
@@ -65,6 +73,10 @@ fi
 
 if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
+fi
+
+if [[ "$HEALTHCHECKS_ALLOWFROM" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .server.healthChecks.allowFrom=[\"$HEALTHCHECKS_ALLOWFROM\"]"
 fi
 
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
