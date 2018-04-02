@@ -65,6 +65,11 @@ class MongoQueueProcessor {
      */
     start() {
         this.logger.info('starting mongo queue processor');
+        this._mongoClient.setup(err => {
+            if (err) {
+                this.logger.error('could not connect to MongoDB', { err });
+            }
+        });
         this._consumer = new BackbeatConsumer({
             // zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.mongoProcessorConfig.topic,
@@ -79,7 +84,6 @@ class MongoQueueProcessor {
             this.logger.error('ERR', { err });
         });
         this._consumer.subscribe();
-        this._mongoClient.setup(() => {});
         this.logger.info('mongo queue processor is ready to consume');
     }
 
