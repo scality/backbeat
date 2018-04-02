@@ -1,14 +1,31 @@
+const constants = require('../../constants');
 class RaftLogEntry {
     createPutEntry(bucket, objectKey, objectVal) {
-        return JSON.stringify({ type: 'put', bucket, key: objectKey, value: JSON.stringify(objectVal) });
+        return JSON.stringify({
+            type: 'put', bucket,
+            key: objectKey,
+            value: JSON.stringify(objectVal),
+        });
     }
 
     createPutBucketEntry(bucket) {
+        console.log('CREATEPUTBUCKETENTRY', bucket);
+        console.log(bucket.value);
+        console.log('JSON STRINGIFY', JSON.stringify(bucket.value));
         return JSON.stringify({
             type: 'put',
-            Bucket: 'metastore',
+            bucket: constants.usersBucket,
+            key: bucket.key,
+            value: JSON.stringify(bucket.value),
+        });
+    }
+
+    createPutBucketMdEntry(bucket) {
+        return JSON.stringify({
+            type: 'put',
+            bucket: bucket._name,
             key: bucket._name,
-            Value: bucket.serialize(),
+            value: bucket.serialize(),
         });
     }
 }

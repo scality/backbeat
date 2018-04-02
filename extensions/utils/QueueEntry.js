@@ -17,7 +17,9 @@ class QueueEntry {
      *   {@link QueueEntry} base class
      */
     static createFromKafkaEntry(kafkaEntry) {
-        console.log(kafkaEntry)
+        console.log('KAFKA ENTRY in QueueEntry', kafkaEntry);
+        console.log(JSON.stringify(kafkaEntry));
+        console.log(kafkaEntry.value.toString());
         try {
             const record = JSON.parse(kafkaEntry.value);
             if (record.bootstrapId) {
@@ -32,6 +34,7 @@ class QueueEntry {
                 entry = new BucketQueueEntry(record.key, record.value);
             } else if (record.value) {
                 const metadataVal = JSON.parse(record.value);
+                console.log('we found metadataVal', metadataVal);
                 if (metadataVal.mdBucketModelVersion) {
                     // it's bucket metadata
                     entry = new BucketMdQueueEntry(record.key, metadataVal);

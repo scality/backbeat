@@ -54,9 +54,9 @@ async.waterfall([
         return done(null, res);
     }),
     (bucketList, done) => queuePopulator.getBucketMd(bucketList, done),
-    (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
-    (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
-    done => {
+    // (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
+    // (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
+    (random, done) => {
         const taskState = {
             batchInProgress: false,
         };
