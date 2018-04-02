@@ -31,9 +31,13 @@ stages:
       - ShellCommand:
           name: run unit tests
           command: npm test
+      # - ShellCommand:
+      #     name: run server api functional tests
+      #     command: TEST_SWITCH=1 npm start && bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
       - ShellCommand:
-          name: start s3 membackend server
-          command: cd node_modules/s3 && npm run mem_backend
-      - ShellCommand:
-          name: run feature tests
-          command: npm run ft_test
+          name: run s3 server and run feature tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
+          workdir: '%(prop:builddir)s/build'
+      # - ShellCommand:
+      #     name: run feature tests
+      #     command: TEST_SWITCH=1 npm run ft_test

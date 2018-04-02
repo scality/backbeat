@@ -266,7 +266,7 @@ s3mock, params, cb) {
     });
 }
 
-describe('lifecycle producer functional tests', () => {
+describe('lifecycle producer functional', () => {
     let lcp;
     let lcTask;
     let s3;
@@ -313,7 +313,7 @@ describe('lifecycle producer functional tests', () => {
             });
         });
 
-        it('should verify changes in lifecycle rules will apply to the ' +
+        it.only('should verify changes in lifecycle rules will apply to the ' +
         'correct objects', done => {
             // kafka bucket entry
             const bucketEntry = {
