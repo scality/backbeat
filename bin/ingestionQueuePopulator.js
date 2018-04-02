@@ -10,7 +10,7 @@ const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
-const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const QueuePopulator = require('../lib/queuePopulator/IngestionProducer');
 const queueBatch = require('./utils').queueBatch;
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
@@ -24,6 +24,12 @@ const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
 
 async.waterfall([
     done => queuePopulator.open(done),
+    done => queuePopulator.getBuckets(done),
+    (bucketList, done) => queuePopulator.getBucketMd(bucketList, done),
+    (bucketList, done) => queuePopulator.getBucketObjects(bucketList, done),
+    (bucketList, done) => {
+        queuePopulator.getBucketObjectsMetadata(bucketList, done);
+    },
     done => {
         const taskState = {
             batchInProgress: false,
