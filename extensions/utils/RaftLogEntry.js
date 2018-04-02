@@ -1,6 +1,13 @@
 const constants = require('../../constants');
 
 class RaftLogEntry {
+
+    /**
+     * method to format an entry for object metadata
+     *
+     * @param {object} objectMd - object info to format entry
+     * @return {object} JSON.stringified entry value to be sent to kafka
+     */
     createPutEntry(objectMd) {
         return JSON.stringify({
             type: 'put',
@@ -10,6 +17,13 @@ class RaftLogEntry {
         });
     }
 
+    /**
+     * method to format an entry for a bucket - formatted as an object that is
+     * a part of the usersBucket
+     *
+     * @param {object} bucket - bucket info to format entry
+     * @return {object} formatted entry for bucket as an object
+     */
     createPutBucketEntry(bucket) {
         return JSON.stringify({
             type: 'put',
@@ -19,6 +33,12 @@ class RaftLogEntry {
         });
     }
 
+    /**
+     * method to format an entry for bucket metadadta
+     *
+     * @param {object} bucket - bucket info to format entry
+     * @return {object} formatted entry for bucket metadata
+     */
     createPutBucketMdEntry(bucket) {
         return JSON.stringify({
             type: 'put',
