@@ -55,11 +55,6 @@ class MongoQueueProcessor {
             new Logger('Backbeat:MongoProcessor');
         this.mongoClientConfig = mongoClientConfig;
         this.mongoClientConfig.logger = this.logger;
-        // FIXME: Right now creating a MongoClientInterface in arsenal
-        // does async stuff
-        // in the constructor and no cb provided. This is messy!!!
-        // There should be a setup function on the MongoClient Interface
-        // that is called in the start() function below.
         this._mongoClient = new MongoClient(this.mongoClientConfig);
     }
 

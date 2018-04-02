@@ -50,13 +50,13 @@ const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
 
 async.waterfall([
     done => queuePopulator.open(done),
-    done => queuePopulator.getRaftSessionBuckets(done, res => {
-        return done(null, res);
-    }),
+    done => queuePopulator.getBuckets(done),
     (bucketList, done) => queuePopulator.getBucketMd(bucketList, done),
-    // (bucketList, done) => queuePopulator.getRaftSessionBucketObjects(bucketList, done),
-    // (bucketList, done) => queuePopulator.getBucketObjectsMetadata(bucketList, done),
-    (random, done) => {
+    (bucketList, done) => queuePopulator.getBucketObjects(bucketList, done),
+    (bucketList, done) => {
+        queuePopulator.getBucketObjectsMetadata(bucketList, done);
+    },
+    done => {
         const taskState = {
             batchInProgress: false,
         };
