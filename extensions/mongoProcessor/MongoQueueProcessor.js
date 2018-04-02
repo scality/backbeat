@@ -69,7 +69,7 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     start() {
-        console.log('MQP', this.mongoProcessorConfig);
+        this.logger.info('starting mongo queue processor');
         this._consumer = new BackbeatConsumer({
             // zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.mongoProcessorConfig.topic,
@@ -80,12 +80,12 @@ class MongoQueueProcessor {
             queueProcessor: this.processKafkaEntry.bind(this),
             fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
-        this._consumer.on('error', (err) => {
-            console.log('ERR', err);
+        this._consumer.on('error', err => {
+            this.logger.error('ERR', { err });
         });
         this._consumer.subscribe();
         this._mongoClient.setup(() => {});
-        this.logger.info('mongo processor is ready to consume');
+        this.logger.info('mongo queue processor is ready to consume');
     }
 
     /**
