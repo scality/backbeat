@@ -1,11 +1,11 @@
 const assert = require('assert');
-const BucketInfo = require('arsenal').models.BucketInfo
+const BucketInfo = require('arsenal').modles.BucketInfo
 const RaftLogEntry = require('../../../extensions/utils/RaftLogEntry');
 const constants = require('../../../constants');
 
 
 const dummyObject = {
-
+    
 }
 
 const dummyBucket = {
@@ -53,10 +53,12 @@ const bucketMd = {
     _uid: undefined,
 };
 
-const dummyBucketMdObj = new BucketInfo(bucketMd._name, bucketMd._owner, bucketMd._ownerDisplayName,
-bucketMd._creationDate, bucketMd._mdBucketModelVersion, bucketMd._acl, bucketMd._transient,
-bucketMd._deleted, bucketMd._serverSideEncryption, bucketMd.versioningConfiguration,
-bucketMd._);
+const dummyBucketMdObj = new BucketInfo(bucketMd._name, bucketMd._owner,
+    bucketMd._ownerDisplayName, bucketMd._creationDate,
+    bucketMd._mdBucketModelVersion, bucketMd._acl, bucketMd._transient,
+    bucketMd._deleted, bucketMd._serverSideEncryption,
+    bucketMd.versioningConfiguration, bucketMd._locationContraint,
+    bucketMd._websiteConfiguration, bucketMd._cors, bucketMd._lifeCycle);
 
 describe('RaftLogEntry methods', () => {
     before(() => {
@@ -64,14 +66,14 @@ describe('RaftLogEntry methods', () => {
     });
 
     it('should properly format an entry for object metadata', () => {
-
+        const objectMdEntry = this.createEntry.createPutEntry(dummyObject);
     });
 
     it('should properly format an entry for bucket', () => {
-
+        
     });
 
     it('should properly format an entry for bucket metadata', () => {
-
+        
     });
 });

@@ -52,6 +52,7 @@ const joiSchema = {
             readPreference: joi.string().default('primary'),
             database: joi.string().default('metadata'),
         }).when('logSource', { is: 'mongo', then: joi.required() }),
+        ingestion: joi.array(),
     },
     log: logJoi,
     extensions: joi.object(),
