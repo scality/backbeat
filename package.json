@@ -5,7 +5,6 @@
   "main": "index.js",
   "scripts": {
     "queue_populator": "node bin/queuePopulator.js",
-    "ingest_queue_populator": "node bin/ingestionQueuePopulator",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
