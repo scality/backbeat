@@ -24,6 +24,10 @@ const ingestionProducer = new IngestionProducer(zkConfig, kafkaConfig,
 
 async.waterfall([
     done => ingestionProducer.open(done),
+    done => {
+        console.log(ingestionProducer.zkClient);
+        return done();
+    },
     done => ingestionProducer.getBuckets(done),
     (bucketList, done) => ingestionProducer.getBucketMd(bucketList, done),
     (bucketList, done) => ingestionProducer.getBucketObjects(bucketList, done),
