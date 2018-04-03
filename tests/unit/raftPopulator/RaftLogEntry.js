@@ -1,11 +1,11 @@
 const assert = require('assert');
-const BucketInfo = require('arsenal').modles.BucketInfo
+const BucketInfo = require('arsenal').models.BucketInfo
 const RaftLogEntry = require('../../../extensions/utils/RaftLogEntry');
 const constants = require('../../../constants');
 
 
 const dummyObject = {
-    
+
 }
 
 const dummyBucket = {
@@ -64,14 +64,14 @@ describe('RaftLogEntry methods', () => {
     });
 
     it('should properly format an entry for object metadata', () => {
-        
+
     });
 
     it('should properly format an entry for bucket', () => {
-        
+
     });
 
     it('should properly format an entry for bucket metadata', () => {
-        
+
     });
 });

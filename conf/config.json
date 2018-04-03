@@ -23,7 +23,7 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": ["bucketd", "ingestion"],
+        "logSource": ["mongo", "ingestion"],
         "bucketd": {
             "host": "54.202.35.127",
             "port": 9000
@@ -39,16 +39,7 @@
             "readPreference": "primary",
             "database": "metadata"
         },
-        "ingestion": [
-            {
-                "name": "source1",
-                "host": "",
-                "port": ""
-            },
-            {
-                "name": 
-            },
-        ]
+        "ingestion": [{ "name": "source1", "host": "localhost", "port": "9000"}]
     },
     "extensions": {
         "generic": {

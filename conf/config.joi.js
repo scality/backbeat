@@ -6,6 +6,9 @@ const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
 const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
 
+const logSourcesJoi = joi.array().items(joi.string().valid('bucketd', 'mongo',
+    'ingestion'));
+
 const joiSchema = {
     zookeeper: {
         connectionString: joi.string().required(),
@@ -35,7 +38,7 @@ const joiSchema = {
         cronRule: joi.string().required(),
         batchMaxRead: joi.number().default(10000),
         zookeeperPath: joi.string().required(),
-        logSource: joi.alternatives().try('bucketd', 'dmd').required(),
+        logSource: joi.alternatives().try(logSourcesJoi).required(),
         bucketd: hostPortJoi
             .when('logSource', { is: 'bucketd', then: joi.required() }),
         dmd: hostPortJoi.keys({
