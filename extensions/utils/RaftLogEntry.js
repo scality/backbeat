@@ -1,5 +1,6 @@
 const constants = require('../../constants');
 
+console.log('constants', constants);
 class RaftLogEntry {
 
     /**
@@ -9,12 +10,12 @@ class RaftLogEntry {
      * @return {object} JSON.stringified entry value to be sent to kafka
      */
     createPutEntry(objectMd) {
-        return JSON.stringify({
+        return {
             type: 'put',
             bucket: objectMd.bucketName,
             key: objectMd.objectKey,
             value: JSON.stringify(objectMd.res),
-        });
+        };
     }
 
     /**
@@ -25,12 +26,12 @@ class RaftLogEntry {
      * @return {object} formatted entry for bucket as an object
      */
     createPutBucketEntry(bucket) {
-        return JSON.stringify({
+        return {
             type: 'put',
             bucket: constants.usersBucket,
             key: bucket.key,
             value: JSON.stringify(bucket.value),
-        });
+        };
     }
 
     /**
@@ -40,12 +41,12 @@ class RaftLogEntry {
      * @return {object} formatted entry for bucket metadata
      */
     createPutBucketMdEntry(bucket) {
-        return JSON.stringify({
+        return {
             type: 'put',
             bucket: bucket._name,
             key: bucket._name,
             value: bucket.serialize(),
-        });
+        };
     }
 }
 

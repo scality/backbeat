@@ -65,8 +65,9 @@ class GenericQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        this.log.trace('publishing entry',
+        this.log.info('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
+        console.log('this.config.topic', this.config.topic);
         this.publish(this.config.topic,
                      `${entry.bucket}/${entry.key}`,
                      JSON.stringify(entry));
