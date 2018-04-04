@@ -120,7 +120,7 @@
                 "concurrency": 10
             },
             "rules": {
-                "expiration": {
+                 "expiration": {
                     "enabled": true
                 },
                 "noncurrentVersionExpiration": {
@@ -133,7 +133,7 @@
         }
     },
     "log": {
-        "logLevel": "debug",
+        "logLevel": "info",
         "dumpLevel": "error"
     },
     "metrics": {
