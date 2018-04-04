@@ -11,7 +11,7 @@ class GenericQueuePopulator extends QueuePopulatorExtension {
     createZkPath(cb, node) {
         console.log('creating paths');
         const { zookeeperPath } = this.extConfig;
-        const path = `/ingestion-producer/raft-id-dispatcher/provisions/${node}`;
+        const path = `/queue-populator/raft-id-dispatcher/provisions/${node}`;
         return this.zkClient.getData(path, err => {
             if (err) {
                 if (err.name !== 'NO_NODE') {

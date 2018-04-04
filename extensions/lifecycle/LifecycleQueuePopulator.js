@@ -102,8 +102,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        console.log('FILTER HAS BEEN CALLED');
-        console.log('here is the entry', entry);
         if (entry.type !== 'put' || entry.bucket === usersBucket ||
             (entry.key && entry.key.startsWith(mpuBucketPrefix))) {
             return undefined;
