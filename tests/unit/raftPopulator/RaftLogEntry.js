@@ -6,7 +6,7 @@ const constants = require('../../../constants');
 
 const dummyObject = {
     
-}
+};
 
 const dummyBucket = {
     key: '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8' +
