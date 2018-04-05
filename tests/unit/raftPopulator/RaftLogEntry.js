@@ -1,11 +1,49 @@
 const assert = require('assert');
-const BucketInfo = require('arsenal').modles.BucketInfo
+const BucketInfo = require('arsenal').models.BucketInfo;
 const RaftLogEntry = require('../../../extensions/utils/RaftLogEntry');
 const constants = require('../../../constants');
 
-
 const dummyObject = {
-    
+    res: {
+        'owner-display-name': 'test_1518720219',
+        'owner-id':
+            '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8',
+        'content-length': 0,
+        'content-md5': 'd41d8cd98f00b204e9800998ecf8427e',
+        'x-amz-version-id': 'null',
+        'x-amz-server-version-id': '',
+        'x-amz-storage-class': 'STANDARD',
+        'x-amz-server-side-encryption': '',
+        'x-amz-server-side-encryption-aws-kms-key-id': '',
+        'x-amz-server-side-encryption-customer-algorithm': '',
+        'x-amz-website-redirect-location': '',
+        'acl': {
+            Canned: 'private',
+            FULL_CONTROL: [],
+            WRITE_ACP: [],
+            READ: [],
+            READ_ACP: [],
+        },
+        'key': '',
+        'location': null,
+        'isDeleteMarker': false,
+        'tags': {},
+        'replicationInfo': {
+            status: '',
+            backends: [],
+            content: [],
+            destination: '',
+            storageClass: '',
+            role: '',
+            storageType: '',
+            dataStoreVersionId: '',
+        },
+        'dataStoreName': 'us-east-1',
+        'last-modified': '2018-02-16T22:43:37.174Z',
+        'md-model-version': 3,
+    },
+    objectKey: 'afternoon',
+    bucketName: 'xxxnewbucket',
 };
 
 const dummyBucket = {
@@ -67,13 +105,34 @@ describe('RaftLogEntry methods', () => {
 
     it('should properly format an entry for object metadata', () => {
         const objectMdEntry = this.createEntry.createPutEntry(dummyObject);
+        assert(objectMdEntry);
+        assert.strictEqual(objectMdEntry.type, 'put');
+        assert.strictEqual(objectMdEntry.bucket, dummyObject.bucketName);
+        assert.strictEqual(objectMdEntry.key, dummyObject.objectKey);
+        assert.strictEqual(typeof objectMdEntry.value, 'string');
+        assert.strictEqual(objectMdEntry.value,
+            JSON.stringify(dummyObject.res));
     });
 
     it('should properly format an entry for bucket', () => {
-        
+        const bucketEntry = this.createEntry.createPutBucketEntry(dummyBucket);
+        assert(bucketEntry);
+        assert.strictEqual(bucketEntry.type, 'put');
+        assert.strictEqual(bucketEntry.bucket, constants.usersBucket);
+        assert.strictEqual(bucketEntry.key, dummyBucket.key);
+        assert.strictEqual(typeof bucketEntry.value, 'string');
+        assert.strictEqual(bucketEntry.value,
+            JSON.stringify(dummyBucket.value));
     });
 
     it('should properly format an entry for bucket metadata', () => {
-        
+        const bucketMdEntry =
+            this.createEntry.createPutBucketMdEntry(dummyBucketMdObj);
+        assert(bucketMdEntry);
+        assert.strictEqual(bucketMdEntry.type, 'put');
+        assert.strictEqual(bucketMdEntry.bucket, dummyBucketMdObj._name);
+        assert.strictEqual(bucketMdEntry.key, dummyBucketMdObj._name);
+        assert.strictEqual(typeof bucketMdEntry.value, 'string');
+        assert.strictEqual(bucketMdEntry.value, dummyBucketMdObj.serialize());
     });
 });
