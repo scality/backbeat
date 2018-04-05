@@ -13,6 +13,7 @@
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js' ! -name 'BackbeatServer.js')",
     "ft_server_test": "mocha tests/functional/api/BackbeatServer.js",
+    "test_all_ft_test": "mocha --recursive tests/functional",
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')",
@@ -48,6 +49,7 @@
     "werelogs": "scality/werelogs#rel/7.4-beta"
   },
   "devDependencies": {
-    "mocha": "^3.3.0"
+    "mocha": "^3.3.0",
+    "s3": "scality/S3#rel/7.4-beta"
   }
 }
