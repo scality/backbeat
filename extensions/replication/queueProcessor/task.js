@@ -39,6 +39,10 @@ metricsProducer.setupProducer(err => {
             const destConfig = Object.assign({}, repConfig.destination);
             destConfig.bootstrapList = bootstrapList;
 
+            config.on('bootstrap-list-update', () => {
+                destConfig.bootstrapList = config.getBootstrapList();
+            });
+
             const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
                 sourceConfig, destConfig, repConfig, metricsProducer);
             queueProcessor.start();
