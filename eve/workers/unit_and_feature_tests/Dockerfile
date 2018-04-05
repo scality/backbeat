@@ -6,7 +6,6 @@ FROM spotify/kafka
 COPY ./backbeat_packages.list ./buildbot_worker_packages.list /tmp/
 
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
-    && apt-get update \
     && cat /tmp/*packages.list | xargs apt-get install -y \
     && pip install pip==9.0.1 \
     && rm -rf /var/lib/apt/lists/* \
