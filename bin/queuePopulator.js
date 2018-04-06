@@ -11,6 +11,7 @@ const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
+const iConfig = config.ingestion;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
@@ -25,8 +26,6 @@ if (process.argv[2] === 'ingestion') {
     assert(config.ingestion[process.argv[3]]);
 }
 
-qpConfig.logSource = process.argv[2];
-console.log(qpConfig);
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
     if (taskState.batchInProgress) {
         log.warn('skipping batch: previous one still in progress');
@@ -53,9 +52,8 @@ function queueBatch(queuePopulator, taskState, qpConfig, log) {
 }
 /* eslint-enable no-param-reassign */
 
-const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
-    qpConfig, mConfig,
-    rConfig, extConfigs);
+const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
+    mConfig, rConfig, extConfigs, process.argv[2], iConfig, process.argv[3]);
 
 async.waterfall([
     done => queuePopulator.open(done),
