@@ -25,7 +25,7 @@
         "zookeeperPath": "/queue-populator",
         "logSource": "bucketd",
         "bucketd": {
-            "host": "54.202.35.127",
+            "host": "localhost",
             "port": 9000
         },
         "dmd": {
@@ -43,7 +43,7 @@
     "validLogSources": ["mongo", "bucketd", "ingestion"],
     "ingestion": {
         "source1": {
-            "host": "54.202.35.127",
+            "host": "10.100.1.48",
             "port": "9000"
         }
     },
