@@ -30,7 +30,7 @@ class GenericQueuePopulator extends QueuePopulatorExtension {
                         });
                         return cb(err);
                     }
-                    return cb();
+                    // return cb();
                 });
             }
         });

@@ -12,6 +12,9 @@ const BucketQueueEntry = require('../utils/BucketQueueEntry');
 const BucketMdQueueEntry = require('../utils/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 
+// TODO - ADD PREFIX BASED ON SOURCE
+// april 6, 2018
+
 /**
 * Given that the largest object JSON from S3 is about 1.6 MB and adding some
 * padding to it, Backbeat replication topic is currently setup with a config

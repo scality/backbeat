@@ -42,10 +42,20 @@
     },
     "validLogSources": ["mongo", "bucketd", "ingestion"],
     "ingestion": {
-        "source1": {
-            "host": "10.100.1.48",
-            "port": "9000"
+        "zookeeperPath": "/ingestion",
+        "cronRule": "", // use same cron rule for all unless explicitly defined in sources
+        "sources": {
+            "source1": {
+                "zookeeperSuffix": "/source1",
+                "host": "54.202.35.127",
+                "port": "9000"
+            },
+            "source2": {
+                "zookeeperPath": "/ingestion",
+                "zookeeperSuffix": "/source1",
+            }
         }
+        
     },
     "extensions": {
         "generic": {
@@ -139,7 +149,7 @@
         }
     },
     "log": {
-        "logLevel": "debug",
+        "logLevel": "info",
         "dumpLevel": "error"
     },
     "metrics": {

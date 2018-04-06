@@ -11,7 +11,7 @@ const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
-const iConfig = config.ingestion;
+const ingestionConfig = config.ingestion;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
@@ -21,6 +21,7 @@ werelogs.configure({ level: config.log.logLevel,
 
 /* eslint-disable no-param-reassign */
 // checking for valid configuration
+// throw with a message "invalid argument: invalid ingesion source, invalid source"
 assert(config.validLogSources.includes(process.argv[2]));
 if (process.argv[2] === 'ingestion') {
     assert(config.ingestion[process.argv[3]]);
@@ -53,7 +54,7 @@ function queueBatch(queuePopulator, taskState, qpConfig, log) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
-    mConfig, rConfig, extConfigs, process.argv[2], iConfig, process.argv[3]);
+    mConfig, rConfig, extConfigs, ingestionConfig, process.argv[2], process.argv[3]);
 
 async.waterfall([
     done => queuePopulator.open(done),
@@ -61,6 +62,7 @@ async.waterfall([
         const taskState = {
             batchInProgress: false,
         };
+        // cron rule has to change if ingestion
         schedule.scheduleJob(qpConfig.cronRule, () => {
             queueBatch(queuePopulator, taskState, qpConfig, log);
         });
