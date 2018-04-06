@@ -6,8 +6,7 @@ const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
 const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
 
-const logSourcesJoi = joi.array().items(joi.string().valid('bucketd', 'mongo',
-    'ingestion'));
+const logSourcesJoi = joi.string().valid('bucketd', 'mongo', 'ingestion');
 
 const joiSchema = {
     zookeeper: {
@@ -54,6 +53,8 @@ const joiSchema = {
         }).when('logSource', { is: 'mongo', then: joi.required() }),
         ingestion: joi.array(),
     },
+    validLogSources: joi.array(),
+    ingestion: joi.object(),
     log: logJoi,
     extensions: joi.object(),
     metrics: {

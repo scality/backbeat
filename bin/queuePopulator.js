@@ -1,3 +1,4 @@
+const assert = require('assert');
 const async = require('async');
 const schedule = require('node-schedule');
 
@@ -18,6 +19,14 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
+// checking for valid configuration
+assert(config.validLogSources.includes(process.argv[2]));
+if (process.argv[2] === 'ingestion') {
+    assert(config.ingestion[process.argv[3]]);
+}
+
+qpConfig.logSource = process.argv[2];
+console.log(qpConfig);
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
     if (taskState.batchInProgress) {
         log.warn('skipping batch: previous one still in progress');
