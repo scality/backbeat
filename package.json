@@ -48,6 +48,7 @@
     "werelogs": "scality/werelogs#rel/7.4-beta"
   },
   "devDependencies": {
-    "mocha": "^3.3.0"
+    "mocha": "^3.3.0",
+    "s3": "scality/S3"
   }
 }

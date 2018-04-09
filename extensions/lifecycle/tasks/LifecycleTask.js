@@ -9,7 +9,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const RETRYTIMEOUTS = 300;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-const MAX_KEYS = 1000;
+const MAX_KEYS = process.env.TEST_SWITCH ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
@@ -530,12 +530,20 @@ class LifecycleTask extends BackbeatTask {
             async.waterfall([
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
-                    if (versioned) {
-                        return this._compareVersion(bucketData, obj,
-                            applicableRules, log, next);
+                    let rules = applicableRules;
+                    // Hijack for testing
+                    // Idea is to set any "Days" rule to `Days - 1`
+                    const testIsOn = process.env.TEST_SWITCH === '1';
+                    if (testIsOn) {
+                        rules = this._adjustRulesForTesting(rules);
                     }
-                    return this._compareObject(bucketData, obj,
-                        applicableRules, log, next);
+
+                    if (versioned) {
+                        return this._compareVersion(bucketData, obj, rules, log,
+                            next);
+                    }
+                    return this._compareObject(bucketData, obj, rules, log,
+                        next);
                 },
             ], cb);
         }, done);
@@ -636,7 +644,7 @@ class LifecycleTask extends BackbeatTask {
                         }
                     });
                 }
-                if (!alreadySent && rules.Expiration.Days &&
+                if (!alreadySent && rules.Expiration.Days !== undefined &&
                 daysSinceInitiated >= rules.Expiration.Days) {
                     alreadySent = true;
                     const entry = {
@@ -664,6 +672,37 @@ class LifecycleTask extends BackbeatTask {
 
             return done();
         });
+    }
+
+    /**
+     * Only to be used when testing (when process.env.TEST_SWITCH).
+     * The idea is to adjust any "Days" or "NoncurrentDays" rules so that rules
+     * set with 1 day should expire, but any days set with 2+ days will not.
+     * Since Days/NoncurrentDays cannot be set to 0, this is a way to set the
+     * rule and test methods are working as intended.
+     * @param {object} rules - applicable rules
+     * @return {object} adjusted rules object
+     */
+    _adjustRulesForTesting(rules) {
+        /* eslint-disable no-param-reassign */
+        if (rules.Expiration &&
+        rules.Expiration.Days) {
+            rules.Expiration.Days--;
+        }
+        const ncve = 'NoncurrentVersionExpiration';
+        const ncd = 'NoncurrentDays';
+        if (rules[ncve] &&
+        rules[ncve][ncd]) {
+            rules[ncve][ncd]--;
+        }
+        const aimu = 'AbortIncompleteMultipartUpload';
+        const dai = 'DaysAfterInitiation';
+        if (rules[aimu] &&
+        rules[aimu][dai]) {
+            rules[aimu][dai]--;
+        }
+        /* eslint-enable no-param-reassign */
+        return rules;
     }
 
     /**
@@ -698,7 +737,8 @@ class LifecycleTask extends BackbeatTask {
         const daysSinceInitiated = this._findDaysSince(new Date(staleDate));
         const ncve = 'NoncurrentVersionExpiration';
         const ncd = 'NoncurrentDays';
-        const doesNCVExpirationRuleApply = (rules[ncve] && rules[ncve][ncd] &&
+        const doesNCVExpirationRuleApply = (rules[ncve] &&
+            rules[ncve][ncd] !== undefined &&
             daysSinceInitiated >= rules[ncve][ncd]);
         if (doesNCVExpirationRuleApply) {
             const entry = {
@@ -753,7 +793,7 @@ class LifecycleTask extends BackbeatTask {
                 new Date(upload.Initiated));
             const abortRule = aRules.AbortIncompleteMultipartUpload;
             const doesAbortRuleApply = (abortRule &&
-                abortRule.DaysAfterInitiation &&
+                abortRule.DaysAfterInitiation !== undefined &&
                 daysSinceInitiated >= abortRule.DaysAfterInitiation);
             if (doesAbortRuleApply) {
                 log.debug('send mpu upload for aborting', {
