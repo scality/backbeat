@@ -21,10 +21,13 @@ werelogs.configure({ level: config.log.logLevel,
 
 /* eslint-disable no-param-reassign */
 // checking for valid configuration
-// throw with a message "invalid argument: invalid ingesion source, invalid source"
-assert(config.validLogSources.includes(process.argv[2]));
+// throw with a message "invalid argument:
+// invalid ingesion source, invalid source"
+assert(config.validLogSources.includes(process.argv[2]), 'invalid argument: ' +
+    'invalid log source');
 if (process.argv[2] === 'ingestion') {
-    assert(config.ingestion.sources[process.argv[3]]);
+    assert(config.ingestion.sources[process.argv[3]], 'invalid argument: ' +
+         'invalid ingestion source');
 }
 
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
@@ -63,7 +66,13 @@ async.waterfall([
             batchInProgress: false,
         };
         // cron rule has to change if ingestion
-        schedule.scheduleJob(qpConfig.cronRule, () => {
+        let cronRule = qpConfig.cronRule;
+        if (process.argv[2] === 'ingestion') {
+            cronRule = ingestionConfig.sources[process.argv[2]].cronRule ?
+                ingestionConfig.sources[process.argv[2]].cronRule :
+                ingestionConfig.cronRule;
+        }
+        schedule.scheduleJob(cronRule, () => {
             queueBatch(queuePopulator, taskState, qpConfig, log);
         });
         done();
