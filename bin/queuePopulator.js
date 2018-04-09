@@ -24,7 +24,7 @@ werelogs.configure({ level: config.log.logLevel,
 // throw with a message "invalid argument: invalid ingesion source, invalid source"
 assert(config.validLogSources.includes(process.argv[2]));
 if (process.argv[2] === 'ingestion') {
-    assert(config.ingestion[process.argv[3]]);
+    assert(config.ingestion.sources[process.argv[3]]);
 }
 
 function queueBatch(queuePopulator, taskState, qpConfig, log) {

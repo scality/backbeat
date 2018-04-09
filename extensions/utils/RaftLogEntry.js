@@ -28,7 +28,7 @@ class RaftLogEntry {
         return {
             type: 'put',
             bucket: constants.usersBucket,
-            key: bucket.db,
+            key: bucket,
             value: null,
         };
     }

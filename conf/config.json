@@ -43,16 +43,19 @@
     "validLogSources": ["mongo", "bucketd", "ingestion"],
     "ingestion": {
         "zookeeperPath": "/ingestion",
-        "cronRule": "", // use same cron rule for all unless explicitly defined in sources
+        "cronRule": "*/5 * * * * *",
         "sources": {
             "source1": {
+                "cronRule": "*/5 * * * * *",
                 "zookeeperSuffix": "/source1",
                 "host": "54.202.35.127",
-                "port": "9000"
+                "port": 9000
             },
             "source2": {
                 "zookeeperPath": "/ingestion",
                 "zookeeperSuffix": "/source1",
+                "host": "",
+                "port": 9000
             }
         }
         
