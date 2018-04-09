@@ -16,6 +16,9 @@ dependencies:
     override:
         - rm -rf node_modules
         - npm install
+    post:
+        - cd node_modules/s3 && npm run mem_backend: {background: true}
+
 test:
     override:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
@@ -23,4 +26,4 @@ test:
         - npm run --silent lint
         - npm test
         - TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
-        - npm run ft_test
+        - TEST_SWITCH=1 npm run ft_test
