@@ -68,8 +68,8 @@ async.waterfall([
         // cron rule has to change if ingestion
         let cronRule = qpConfig.cronRule;
         if (process.argv[2] === 'ingestion') {
-            cronRule = ingestionConfig.sources[process.argv[2]].cronRule ?
-                ingestionConfig.sources[process.argv[2]].cronRule :
+            cronRule = ingestionConfig.sources[process.argv[3]].cronRule ?
+                ingestionConfig.sources[process.argv[3]].cronRule :
                 ingestionConfig.cronRule;
         }
         schedule.scheduleJob(cronRule, () => {

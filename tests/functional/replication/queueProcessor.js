@@ -363,7 +363,7 @@ class S3Mock extends TestConfigurator {
 
         if (req.method === 'PUT' || req.method === 'POST') {
             const chunks = [];
-            req.on('data', chunk => chunks.push(chunk));
+            req.on('data', chunk => chunks.push(chu_getBucketReplicationnk));
             return req.on('end', () => {
                 const reqBody = Buffer.concat(chunks).toString();
                 if (req.method === 'POST') {
