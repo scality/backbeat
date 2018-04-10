@@ -49,22 +49,22 @@ class MetadataMock {
         const query = querystring.parse(req.query);
         const host = req.headers.host.split(':')[0];
         // this.requestsPerHost[host] += 1;
-        if(req.method !== 'GET') {
+        if (req.method !== 'GET') {
+            res.writeHead(501);
             return res.end(JSON.stringify({
                 error: 'mock server only supports GET requests',
             }));
         }
-        if(req.url === 'default/bucket/bucket1?listingType=Delimiter') {
+        if (req.url === 'default/bucket/bucket1?listingType=Delimiter') {
             console.log('listing objects in bucket');
+            res.writeHead(200);
             console.log(req.url);
             return res.end(JSON.stringify({
                 error: 'failed',
             }));
         } else if (req.url === '/_/raft_sessions/1/bucket') {
             console.log('getting buckets for raft session');
-            return res.end(JSON.stringify({
-                error: 'failed',
-            }));
+            return res.end(['bucket1']);
         } else if (req.url === '/default/attributes/bucket1') {
             console.log('getting bucket metadata');
             return res.end(JSON.stringify({
