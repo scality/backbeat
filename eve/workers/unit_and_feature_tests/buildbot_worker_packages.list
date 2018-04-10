@@ -7,4 +7,5 @@ python2.7-dev
 python-pip
 software-properties-common
 sudo
-
+lsof
+netcat
