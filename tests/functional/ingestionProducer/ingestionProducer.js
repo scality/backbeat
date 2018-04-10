@@ -100,16 +100,57 @@ class MetadataMock {
             console.log('stringify bucketMd', JSON.stringify(bucketMd));
             console.log('stringify dummyObj', dummyBucketMdObj.serialize());
             return res.end(dummyBucketMdObj.serialize());
-        } else if (req.url === 'default/bucket/bucket1?listingType=Delimiter') {
+        } else if (req.url === '/default/bucket/bucket1?listingType=Delimiter') {
             console.log('listing objects in bucket');
             console.log(req.url);
-            return res.end(JSON.stringify({
-                error: 'failed',
-            }));
+            const objectList = {
+                Contents: [
+                    { key: 'testobject1',
+                    value: JSON.stringify({
+                        'owner-display-name': 'test_1518720219',
+                        'owner-id':
+                            '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8',
+                        'content-length': 0,
+                        'content-md5': 'd41d8cd98f00b204e9800998ecf8427e',
+                        'x-amz-version-id': 'null',
+                        'x-amz-server-version-id': '',
+                        'x-amz-storage-class': 'STANDARD',
+                        'x-amz-server-side-encryption': '',
+                        'x-amz-server-side-encryption-aws-kms-key-id': '',
+                        'x-amz-server-side-encryption-customer-algorithm': '',
+                        'x-amz-website-redirect-location': '',
+                        'acl': {
+                            Canned: 'private',
+                            FULL_CONTROL: [],
+                            WRITE_ACP: [],
+                            READ: [],
+                            READ_ACP: [],
+                        },
+                        'key': '',
+                        'location': null,
+                        'isDeleteMarker': false,
+                        'tags': {},
+                        'replicationInfo': {
+                            status: '',
+                            backends: [],
+                            content: [],
+                            destination: '',
+                            storageClass: '',
+                            role: '',
+                            storageType: '',
+                            dataStoreVersionId: '',
+                        },
+                        'dataStoreName': 'us-east-1',
+                        'last-modified': '2018-02-16T22:43:37.174Z',
+                        'md-model-version': 3,
+                    }) },
+                ],
+            };
+            return res.end(JSON.stringify(objectList));
         } else if (req.url === '/default/bucket/bucket1/testobject1?') {
             console.log('getting object metadata');
             return res.end(JSON.stringify({
-                error: 'failed',
+                metadata: 'dogsAreGood',
             }));
         }
         return res.end(JSON.stringify({
@@ -129,6 +170,10 @@ describe.only('ingestion producer functional tests with mock', () => {
             (req, res) => metadataMock.onRequest(req, res));
         httpServer.listen(7778);
         done();
+        this.iProducer = new IngestionProducer({
+            bucketdBootstrap: ['localhost:7778'],
+            bucketdLog: undefined,
+        });
     });
 
     after(done => {
@@ -136,17 +181,26 @@ describe.only('ingestion producer functional tests with mock', () => {
         done();
     });
 
-    it('Sending a request', done => {
-        console.log('we made it');
-        const iProducer = new IngestionProducer({
-            bucketdBootstrap: ['localhost:7778'],
-            bucketdLog: undefined,
-        });
-
-        return iProducer.snapshot(1, (err, res) => {
-            console.log(err, res);
-            console.log('we are getting snapshot');
+    it('can generate a valid snapshot', done => {
+        return this.iProducer.snapshot(1, (err, res) => {
+            // we expect 3 logs - 2 logs for the bucket, and 1 log for the obj.
+            console.log(res);
+            assert.strictEqual(res.length, 3);
+            res.forEach(entry => {
+                assert(entry.type);
+                assert(entry.bucket);
+                assert(entry.key);
+                assert(entry.value || entry.value === null);
+            });
             return done();
         });
+    });
+
+    it('can send the snapshot to a generic producer', done => {
+        done();
+    });
+
+    it('can be consumed by MongoQueueProcessor', done => {
+        done();
     });
 });
