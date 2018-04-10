@@ -25,6 +25,7 @@ class RaftLogEntry {
      * @return {object} formatted entry for bucket as an object
      */
     createPutBucketEntry(bucket) {
+        console.log('creating put bucket entry in RaftLogEntry');
         return {
             type: 'put',
             bucket: constants.usersBucket,

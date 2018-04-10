@@ -1,43 +1,45 @@
 const async = require('async');
 const assert = require('assert');
+const fs = require('fs');
 const http = require('http');
 const querystring = require('querystring');
 const URL = require('url');
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
+const BucketInfo = require('arsenal').models.BucketInfo;
 
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
 
 class MetadataMock {
     constructor() {
-        this.log = new Logger('IngestionProducer:test:metadataMock');
-        const bucketList = ['bucket1', 'bucket2', 'bucket3'];
-        const routes = {
-            getBuckets: () => ({
-                method: 'GET',
-                path: '/_/raft_sessions/1/bucket',
-                handler: () => this._getBuckets,
-            }),
-            getBucketMd: () => ({
-                method: 'GET',
-                path: '/default/attributes/bucket1',
-                handler: () => this._getBucketMd,
-            }),
-            listObject: () => ({
-                method: 'GET',
-                path: '/default/bucket/bucket1?listingType=Delimiter',
-                handler: () => this._getBucketMd,
-            }),
-            getObjectMD: () => ({
-                method: 'GET',
-                
-            })
-        };
+        // this.log = new Logger('IngestionProducer:test:metadataMock');
+        // const bucketList = ['bucket1', 'bucket2', 'bucket3'];
+        // const routes = {
+        //     getBuckets: () => ({
+        //         method: 'GET',
+        //         path: '/_/raft_sessions/1/bucket',
+        //         handler: () => this._getBuckets,
+        //     }),
+        //     getBucketMd: () => ({
+        //         method: 'GET',
+        //         path: '/default/attributes/bucket1',
+        //         handler: () => this._getBucketMd,
+        //     }),
+        //     listObject: () => ({
+        //         method: 'GET',
+        //         path: '/default/bucket/bucket1?listingType=Delimiter',
+        //         handler: () => this._getBucketMd,
+        //     }),
+        //     getObjectMD: () => ({
+        //         method: 'GET',
+        //         
+        //     })
+        // };
         // const path = {
         //     '/_/raft_sessions/'
         // }
-        const params = {};
+        // const params = {};
     }
 
     onRequest(req, res) {
@@ -55,18 +57,52 @@ class MetadataMock {
                 error: 'mock server only supports GET requests',
             }));
         }
-        if (req.url === 'default/bucket/bucket1?listingType=Delimiter') {
-            console.log('listing objects in bucket');
-            res.writeHead(200);
-            console.log(req.url);
-            return res.end(JSON.stringify({
-                error: 'failed',
-            }));
-        } else if (req.url === '/_/raft_sessions/1/bucket') {
+        if (req.url === '/_/raft_sessions/1/bucket') {
             console.log('getting buckets for raft session');
-            return res.end(['bucket1']);
+            const value = ['bucket1'];
+            res.writeHead(200, { 'content-type': 'application/json' });
+            res.write(JSON.stringify(value));
+            // return res.end(JSON.stringify(value));
+            return res.end();
         } else if (req.url === '/default/attributes/bucket1') {
+            console.log('trying to grab md for bucket1');
+            const bucketMd = {
+                _acl: {
+                    Canned: 'private',
+                    FULL_CONTROL: [],
+                    WRITE: [],
+                    WRITE_ACP: [],
+                    READ: [],
+                    READ_ACP: [] },
+                _name: 'xxxfriday10',
+                _owner: '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8',
+                _ownerDisplayName: 'test_1518720219',
+                _creationDate: '2018-02-16T21:55:16.415Z',
+                _mdBucketModelVersion: 5,
+                _transient: false,
+                _deleted: false,
+                _serverSideEncryption: null,
+                _versioningConfiguration: null,
+                _locationConstraint: 'us-east-1',
+                _websiteConfiguration: null,
+                _replicationConfiguration: null,
+                _cors: null,
+                _lifecycleConfiguration: null,
+                _uid: undefined,
+            };
+            const dummyBucketMdObj = new BucketInfo(bucketMd._name, bucketMd._owner,
+                bucketMd._ownerDisplayName, bucketMd._creationDate,
+                bucketMd._mdBucketModelVersion, bucketMd._acl, bucketMd._transient,
+                bucketMd._deleted, bucketMd._serverSideEncryption,
+                bucketMd.versioningConfiguration, bucketMd._locationContraint,
+                bucketMd._websiteConfiguration, bucketMd._cors, bucketMd._lifeCycle);
             console.log('getting bucket metadata');
+            console.log('stringify bucketMd', JSON.stringify(bucketMd));
+            console.log('stringify dummyObj', dummyBucketMdObj.serialize());
+            return res.end(dummyBucketMdObj.serialize());
+        } else if (req.url === 'default/bucket/bucket1?listingType=Delimiter') {
+            console.log('listing objects in bucket');
+            console.log(req.url);
             return res.end(JSON.stringify({
                 error: 'failed',
             }));
