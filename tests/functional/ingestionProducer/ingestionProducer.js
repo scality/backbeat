@@ -7,9 +7,10 @@ const URL = require('url');
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 const BucketInfo = require('arsenal').models.BucketInfo;
-
+const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
+const testConfig = require('../../config.json');
 
 class MetadataMock {
     constructor() {
@@ -169,11 +170,16 @@ describe.only('ingestion producer functional tests with mock', () => {
         httpServer = http.createServer(
             (req, res) => metadataMock.onRequest(req, res));
         httpServer.listen(7778);
-        done();
         this.iProducer = new IngestionProducer({
             bucketdBootstrap: ['localhost:7778'],
             bucketdLog: undefined,
         });
+        this.queuePopulator = new QueuePopulator(
+            testConfig.zookeeper,
+            testConfig.kafka,
+            testConfig.queuePopulator,
+            testConfig.extensions);
+        done();
     });
 
     after(done => {
