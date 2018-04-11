@@ -78,10 +78,6 @@ class LifecycleConductor {
         return `${this.lcConfig.zookeeperPath}/data/conductor-job-dispatcher`;
     }
 
-    getQueuedBucketsZkPath() {
-        return `${this.lcConfig.zookeeperPath}/run/queuedBuckets`;
-    }
-
     _getPartitionsOffsetsZkPath(topic) {
         return `${this.lcConfig.backlogMetrics.zkPath}/${topic}`;
     }
@@ -95,8 +91,7 @@ class LifecycleConductor {
     }
 
     initZkPaths(cb) {
-        async.each([this.getBucketsZkPath(),
-                    this.getQueuedBucketsZkPath()],
+        async.each([this.getBucketsZkPath()],
                    (path, done) => this._zkClient.mkdirp(path, done), cb);
     }
 

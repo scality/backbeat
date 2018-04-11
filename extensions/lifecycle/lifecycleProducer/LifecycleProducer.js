@@ -98,10 +98,6 @@ class LifecycleProducer {
         this._bucketProducer.send(entries, cb);
     }
 
-    getQueuedBucketsZkPath() {
-        return `${this._lcConfig.zookeeperPath}/run/queuedBuckets`;
-    }
-
     /**
      * Get the state variables of the current instance.
      * @return {Object} Object containing the state variables

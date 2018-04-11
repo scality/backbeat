@@ -61,17 +61,17 @@ describe('lifecycle task helper methods', () => {
 
         it('should filter out unmatched prefixes', () => {
             const mBucketRules = [
-                new Rule().addID('task-1').addPrefix('atask').build(),
-                new Rule().addID('task-2').addPrefix('atasker').build(),
+                new Rule().addID('task-1').addPrefix('atask/').build(),
+                new Rule().addID('task-2').addPrefix('atasker/').build(),
                 new Rule().addID('task-3').addPrefix('cat-').build(),
-                new Rule().addID('task-4').addPrefix('xatask').build(),
-                new Rule().addID('task-5').addPrefix('atasr').build(),
-                new Rule().addID('task-6').addPrefix('Atask').build(),
-                new Rule().addID('task-7').addPrefix('atAsk').build(),
+                new Rule().addID('task-4').addPrefix('xatask/').build(),
+                new Rule().addID('task-5').addPrefix('atask').build(),
+                new Rule().addID('task-6').addPrefix('Atask/').build(),
+                new Rule().addID('task-7').addPrefix('atAsk/').build(),
                 new Rule().addID('task-8').build(),
             ];
             const item1 = {
-                Key: 'atasker-example-item',
+                Key: 'atask/example-item',
                 LastModified: CURRENT,
             };
             const item2 = {
@@ -82,9 +82,15 @@ describe('lifecycle task helper methods', () => {
 
             const res1 = lct._filterRules(mBucketRules, item1, objTags);
             assert.strictEqual(res1.length, 3);
-            const expRes1 = getRuleIDs(mBucketRules.filter(rule =>
-                (rule.Filter.Prefix && rule.Filter.Prefix.startsWith('atask'))
-                || !rule.Filter.Prefix));
+            const expRes1 = getRuleIDs(mBucketRules.filter(rule => {
+                if (!rule.Filter.Prefix) {
+                    return true;
+                }
+                if (item1.Key.startsWith(rule.Filter.Prefix)) {
+                    return true;
+                }
+                return false;
+            }));
             assert.deepStrictEqual(expRes1, getRuleIDs(res1));
 
             const res2 = lct._filterRules(mBucketRules, item2, objTags);
