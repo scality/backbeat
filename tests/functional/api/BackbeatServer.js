@@ -153,7 +153,9 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe('metrics routes', () => {
+    describe('metrics routes', function dF() {
+        this.timeout(10000);
+
         const interval = 300;
         const expiry = 900;
         const OPS = 'test:bb:ops';
@@ -216,8 +218,7 @@ describe('Backbeat Server', () => {
                 });
             });
 
-            it(`should get correct data keys for route: ${path}`,
-            done => {
+            it(`should get correct data keys for route: ${path}`, done => {
                 getRequest(path, (err, res) => {
                     assert.ifError(err);
                     const key = Object.keys(res)[0];
@@ -259,8 +260,7 @@ describe('Backbeat Server', () => {
         ];
 
         allWrongPaths.forEach(path => {
-            it(`should get a 404 response for route: ${path}`,
-            done => {
+            it(`should get a 404 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
 
                 http.get(url, res => {
