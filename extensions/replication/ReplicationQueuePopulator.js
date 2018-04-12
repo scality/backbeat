@@ -3,7 +3,7 @@ const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
-const ObjectQueueEntry = require('./utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -19,7 +19,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
-        if (!isMasterKey(entry.key)) {
+        if (entry.key && !isMasterKey(entry.key)) {
             return this._filterVersionedKey(entry);
         }
         return undefined;

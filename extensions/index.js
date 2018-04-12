@@ -5,7 +5,7 @@ const extensions = {};
 
 fs.readdirSync(__dirname).forEach(moduleDir => {
     const extStat = fs.statSync(path.join(__dirname, moduleDir));
-    if (extStat.isDirectory()) {
+    if (extStat.isDirectory() && moduleDir !== 'utils') {
         let indexStat;
         try {
             indexStat = fs.statSync(

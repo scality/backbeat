@@ -10,7 +10,7 @@ const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../utils/ObjectQueueEntry');
 
 /**
  * @class ReplicationStatusProcessor
