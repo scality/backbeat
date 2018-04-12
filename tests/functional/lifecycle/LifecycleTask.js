@@ -180,6 +180,22 @@ class S3Helper {
         });
     }
 
+    /**
+     * creates an mpu object and uploads parts
+     * @param {number} scenarioNumber - scenario number
+     * @param {function} cb - callback(err)
+     * @return {undefined}
+     */
+    createMPU(scenarioNumber, cb) {
+        const scenarioKeys = this._scenario[scenarioNumber].keyNames;
+        async.timesSeries(scenarioKeys.length, (n, next) => {
+            this.s3.createMultipartUpload({
+                Bucket: this.bucket,
+                Key: scenarioKeys[n],
+            }, next);
+        }, cb);
+    }
+
     emptyAndDeleteBucket(cb) {
         // won't need to worry about 1k+ objects pagination
         async.waterfall([
@@ -604,7 +620,7 @@ describe('lifecycle task functional tests', () => {
                     Bucket: 'test-bucket',
                 }, next),
                 (data, next) => {
-                    // Should not expire anything but paginates once
+                    // Should not expire anything
                     wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
                     params, (err, data) => {
                         assert.ifError(err);
@@ -786,4 +802,149 @@ describe('lifecycle task functional tests', () => {
             });
         });
     }); // end versioned describe block
+
+    describe('incomplete mpu objects', () => {
+        const bucketName = 'test-mpu-bucket';
+
+        before(done => {
+            s3Helper.setAndCreateBucket(bucketName, done);
+        });
+
+        afterEach(done => {
+            lcp.reset();
+
+            // cleanup existing mpu (if any)
+            s3.listMultipartUploads({ Bucket: bucketName }, (err, data) => {
+                assert.ifError(err);
+                async.eachLimit(data.Uploads, 1, (upload, next) => {
+                    s3.abortMultipartUpload({
+                        Bucket: bucketName,
+                        Key: upload.Key,
+                        UploadId: upload.UploadId,
+                    }, next);
+                }, err => {
+                    assert.ifError(err);
+
+                    done();
+                });
+            });
+        });
+
+        after(done => {
+            s3.deleteBucket({ Bucket: bucketName }, done);
+        });
+
+        it('should verify changes in lifecycle rules will apply', done => {
+            const bucketEntry = {
+                action: 'testing-abortmpu',
+                target: {
+                    bucket: bucketName,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+
+            async.waterfall([
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addAbortMPU(2).build(),
+                ], next),
+                (data, next) => s3Helper.createMPU(0, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucketName,
+                }, next),
+                (data, next) => {
+                    // should not expire anything
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+                    params, (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.bucket, 0);
+                        assert.equal(data.count.object, 0);
+                        assert.deepStrictEqual(data.entries.object, []);
+                        next();
+                    });
+                },
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addAbortMPU(1).build(),
+                ], next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucketName,
+                }, next),
+                (data, next) => {
+                    lcp.reset();
+                    params.counter = 0;
+
+                    // should abort
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+                    params, (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.bucket, 0);
+                        assert.equal(data.count.object, 3);
+
+                        const expected = ['object-1', 'object-2', 'object-3'];
+                        assert.deepStrictEqual(data.entries.object.sort(),
+                            expected);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('should verify that AbortIncompleteMultipartUpload rule applies ' +
+        'to correct objects with pagination and prefix', done => {
+            const bucketEntry = {
+                action: 'testing-abortmpu',
+                target: {
+                    bucket: bucketName,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+
+            async.waterfall([
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addID('rule-1').addPrefix('test/').addAbortMPU(1)
+                        .build(),
+                    new Rule().addID('rule-2').addPrefix('obj-').addAbortMPU(2)
+                        .build(),
+                ], next),
+                (data, next) => s3Helper.createMPU(1, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucketName,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+                    params, (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.bucket, 2);
+                        assert.equal(data.count.object, 3);
+
+                        const expected = ['test/obj-1', 'test/obj-3',
+                            'test/obj-6'];
+                        assert.deepStrictEqual(data.entries.object.sort(),
+                            expected);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+    }); // end incomplete mpu objects block
 });

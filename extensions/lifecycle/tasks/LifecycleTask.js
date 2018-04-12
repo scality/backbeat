@@ -201,8 +201,9 @@ class LifecycleTask extends BackbeatTask {
             if (err) {
                 return done(err);
             }
+
             this._compareMPUUploads(bucketData, bucketLCRules,
-                data.Uploads, log);
+                uploads, log);
             return done();
         });
     }
@@ -787,7 +788,14 @@ class LifecycleTask extends BackbeatTask {
             const noTags = { TagSet: [] };
             const filteredRules = this._filterRules(bucketLCRules, upload,
                 noTags);
-            const aRules = this._getApplicableRules(filteredRules);
+            let aRules = this._getApplicableRules(filteredRules);
+
+            // Hijack for testing
+            // Idea is to set any "Days" rule to `Days - 1`
+            const testIsOn = process.env.TEST_SWITCH === '1';
+            if (testIsOn) {
+                aRules = this._adjustRulesForTesting(aRules);
+            }
 
             const daysSinceInitiated = this._findDaysSince(
                 new Date(upload.Initiated));
@@ -883,7 +891,8 @@ class LifecycleTask extends BackbeatTask {
                     MaxUploads: MAX_KEYS,
                     KeyMarker: bucketData.details.uploadIdMarker &&
                         bucketData.details.keyMarker,
-                    UploadIdMarker: bucketData.details.uploadIdMarker,
+                    UploadIdMarker: bucketData.details.keyMarker &&
+                        bucketData.details.uploadIdMarker,
                 };
                 return this._getMPUs(bucketData, bucketLCRules,
                     mpuParams, log, cb);
