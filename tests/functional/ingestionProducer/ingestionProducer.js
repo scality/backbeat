@@ -1,6 +1,5 @@
 const async = require('async');
 const assert = require('assert');
-const fs = require('fs');
 // const Server = require('arsenal').network.http.server;
 const http = require('http');
 const querystring = require('querystring');
@@ -74,7 +73,7 @@ const objectList = {
         value: JSON.stringify({
             'owner-display-name': 'test_1518720219',
             'owner-id':
-                '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8',
+            '94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8',
             'content-length': 0,
             'content-md5': 'd41d8cd98f00b204e9800998ecf8427e',
             'x-amz-version-id': 'null',
