@@ -23,17 +23,51 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "dmd",
+        "logSource": "bucketd",
         "bucketd": {
-            "host": "127.0.0.1",
+            "host": "localhost",
             "port": 9000
         },
         "dmd": {
             "host": "127.0.0.1",
             "port": 9990
+        },
+        "mongo": {
+            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019",
+            "writeConcern": "majority",
+            "replicaSet": "rs0",
+            "readPreference": "primary",
+            "database": "metadata"
         }
     },
+    "validLogSources": ["mongo", "bucketd", "ingestion"],
+    "ingestion": {
+        "zookeeperPath": "/ingestion",
+        "cronRule": "*/5 * * * * *",
+        "sources": {
+            "source1": {
+                "cronRule": "*/5 * * * * *",
+                "zookeeperSuffix": "/source1",
+                "host": "54.202.35.127",
+                "port": 9000
+            },
+            "source2": {
+                "zookeeperSuffix": "/source2",
+                "host": "",
+                "port": 9000
+            }
+        }
+        
+    },
     "extensions": {
+        "ingestion": {
+            "topic": "backbeat-ingestion"
+        },
+        "mongoProcessor": {
+            "topic": "backbeat-ingestion",
+            "groupId": "backbeat-mongo-processor-group",
+            "retryTimeoutS": 300
+        },
         "replication": {
             "source": {
                 "transport": "http",
@@ -104,7 +138,7 @@
                 "concurrency": 10
             },
             "rules": {
-                "expiration": {
+                 "expiration": {
                     "enabled": true
                 },
                 "noncurrentVersionExpiration": {
