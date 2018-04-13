@@ -46,7 +46,8 @@
     "node-zookeeper-client": "^0.2.2",
     "uuid": "^3.1.0",
     "vaultclient": "github:scality/vaultclient",
-    "werelogs": "scality/werelogs"
+    "werelogs": "scality/werelogs",
+    "prom-client": "^10.2.3"
   },
   "devDependencies": {
     "mocha": "^3.3.0"
