@@ -26,6 +26,7 @@ const {
     proxyIAMPath,
     metricsExtension,
     metricsTypeProcessed,
+    replicationBackends,
 } = require('../constants');
 
 class QueueProcessor extends EventEmitter {
@@ -327,8 +328,7 @@ class QueueProcessor extends EventEmitter {
                 const replicationEndpoint = this.destConfig.bootstrapList
                     .find(endpoint => endpoint.site === this.site);
                 if (replicationEndpoint
-                    && ['aws_s3', 'azure', 'gcp']
-                    .includes(replicationEndpoint.type)) {
+                    && replicationBackends.includes(replicationEndpoint.type)) {
                     task = new MultipleBackendTask(this);
                 } else {
                     task = new ReplicateObject(this);

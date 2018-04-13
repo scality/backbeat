@@ -221,10 +221,18 @@ class UpdateReplicationStatus extends BackbeatTask {
                 return done(err);
             }
             const site = sourceEntry.getSite();
-            const updatedSourceEntry = sourceEntry
-                .getReplicationSiteStatus(site) === 'COMPLETED' ?
-                    refreshedEntry.toCompletedEntry(site) :
-                    refreshedEntry.toFailedEntry(site);
+            const status = sourceEntry.getReplicationSiteStatus(site);
+            let updatedSourceEntry;
+            if (status === 'COMPLETED') {
+                updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
+            } else if (status === 'FAILED') {
+                updatedSourceEntry = refreshedEntry.toFailedEntry(site);
+            } else if (status === 'PENDING') {
+                updatedSourceEntry = refreshedEntry.toPendingEntry(site);
+            } else {
+                const msg = `unknown status in replication info: ${status}`;
+                return done(errors.InternalError.customizeDescription(msg));
+            }
             updatedSourceEntry.setSite(site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(site));

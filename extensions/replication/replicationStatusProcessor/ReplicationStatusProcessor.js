@@ -8,9 +8,11 @@ const errors = require('arsenal').errors;
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
+const redisClient = require('../utils/getRedisClient')();
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const { redisKeys } = require('../constants');
 
 /**
  * @class ReplicationStatusProcessor
@@ -124,6 +126,41 @@ class ReplicationStatusProcessor {
     }
 
     /**
+     * Set the Redis hash key for each failed backend.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @param {Object} kafkaEntry - The kafka entry with the failed status.
+     * @param {Function} cb          [description]
+     * @return {undefined}
+     */
+    _setFailedKeys(queueEntry, kafkaEntry, cb) {
+        const { status, backends } = queueEntry.getReplicationInfo();
+        if (status !== 'FAILED') {
+            return process.nextTick(cb);
+        }
+        const bucket = queueEntry.getBucket();
+        const key = queueEntry.getObjectKey();
+        const versionId = queueEntry.getEncodedVersionId();
+        const fields = [];
+        backends.forEach(backend => {
+            const { status, site } = backend;
+            if (status !== 'FAILED') {
+                return undefined;
+            }
+            const field = `${bucket}:${key}:${versionId}:${site}`;
+            const value = JSON.parse(kafkaEntry.value);
+            return fields.push(field, JSON.stringify(value));
+        });
+        const cmds = ['hmset', redisKeys.failedCRR, ...fields];
+        return redisClient.batch([cmds], (err, res) => {
+            if (err) {
+                return cb(err);
+            }
+            const [cmdErr] = res[0];
+            return cb(cmdErr);
+        });
+    }
+
+    /**
      * Proceed with updating the replication status of an object given
      * a kafka replication status queue entry
      *
@@ -146,12 +183,18 @@ class ReplicationStatusProcessor {
             task = new UpdateReplicationStatus(this);
         }
         if (task) {
-            return this.taskScheduler.push({ task, entry: sourceEntry },
-                                           sourceEntry.getCanonicalKey(),
-                                           done);
+            return this._setFailedKeys(sourceEntry, kafkaEntry, err => {
+                if (err) {
+                    this.logger.error('error setting redis hash key', {
+                        error: err,
+                    });
+                }
+                return this.taskScheduler.push({ task, entry: sourceEntry },
+                    sourceEntry.getCanonicalKey(), done);
+            });
         }
-        this.logger.warning('skipping unknown source entry',
-                            { entry: sourceEntry.getLogInfo() });
+        this.logger.warn('skipping unknown source entry',
+                         { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 }
