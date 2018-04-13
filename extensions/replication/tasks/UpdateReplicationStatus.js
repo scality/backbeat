@@ -2,7 +2,7 @@ const errors = require('arsenal').errors;
 
 const config = require('../../../conf/Config');
 
-const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 const monitoringClient = require('../../../lib/clients/monitoringHandler');

@@ -3,7 +3,7 @@ const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
-const ObjectQueueEntry = require('./utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
