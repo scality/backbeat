@@ -1,4 +1,4 @@
-const constants = require('../../constants');
+const { usersBucket } = require('arsenal').constants;
 
 class RaftLogEntry {
 
@@ -27,7 +27,7 @@ class RaftLogEntry {
     createPutBucketEntry(bucket) {
         return {
             type: 'put',
-            bucket: constants.usersBucket,
+            bucket: usersBucket,
             key: bucket,
             value: null,
         };

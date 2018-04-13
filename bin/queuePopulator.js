@@ -57,7 +57,8 @@ function queueBatch(queuePopulator, taskState, qpConfig, log) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
-    mConfig, rConfig, extConfigs, ingestionConfig, process.argv[2], process.argv[3]);
+    mConfig, rConfig, extConfigs, ingestionConfig, process.argv[2],
+    process.argv[3]);
 
 async.waterfall([
     done => queuePopulator.open(done),
