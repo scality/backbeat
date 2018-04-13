@@ -69,7 +69,6 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
-        this.site = '';
         this._mProducer = mProducer;
 
         this.echoMode = false;
@@ -210,7 +209,6 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
-            site: this.site,
             logger: this.logger,
         };
     }
@@ -240,7 +238,7 @@ class QueueProcessor extends EventEmitter {
                 return undefined;
             }
             const groupId =
-                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+                `${this.repConfig.queueProcessor.groupId}`;
             this._consumer = new BackbeatConsumer({
                 kafka: { hosts: this.kafkaConfig.hosts },
                 topic: this.repConfig.topic,
@@ -257,13 +255,17 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                const filteredData = Object.keys(data).filter(key =>
-                    key === this.site).reduce((store, k) => {
-                        // eslint-disable-next-line no-param-reassign
-                        store[k] = data[this.site];
-                        return store;
-                    }, {});
-                this._mProducer.publishMetrics(filteredData,
+
+                // NOTE: No need to filter data since we are accepting
+                // multiple sites.
+
+                // const filteredData = Object.keys(data).filter(key =>
+                //     key === this.site).reduce((store, k) => {
+                //         // eslint-disable-next-line no-param-reassign
+                //         store[k] = data[this.site];
+                //         return store;
+                //     }, {});
+                this._mProducer.publishMetrics(data,
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
                             'metrics', {
@@ -324,23 +326,24 @@ class QueueProcessor extends EventEmitter {
                 sourceEntry.getReplicationStorageClass();
             const sites = replicationStorageClass.split(',');
             return async.each(sites, (site, cb) => {
-                this.site = site;
                 const replicationEndpoint = this.destConfig.bootstrapList
-                    .find(endpoint => endpoint.site === this.site);
+                    .find(endpoint => endpoint.site === site);
                 if (replicationEndpoint
                     && replicationBackends.includes(replicationEndpoint.type)) {
-                    task = new MultipleBackendTask(this);
+                    task = new MultipleBackendTask(this, site);
                 } else {
-                    task = new ReplicateObject(this);
+                    task = new ReplicateObject(this, site);
                 }
-                this.logger.debug('source entry is being pushed');
+                this.logger.debug('source entry is being pushed',
+                  { entry: sourceEntry.getLogInfo() });
                 return this.taskScheduler.push({ task, entry: sourceEntry },
                                                sourceEntry.getCanonicalKey(),
                                                cb);
             }, err => done(err));
         }
         if (task) {
-            this.logger.debug('source entry is being pushed');
+            this.logger.debug('source entry is being pushed',
+              { entry: sourceEntry.getLogInfo() });
             return this.taskScheduler.push({ task, entry: sourceEntry },
                                            sourceEntry.getCanonicalKey(),
                                            done);

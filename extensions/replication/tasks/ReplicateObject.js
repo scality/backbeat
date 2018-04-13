@@ -28,13 +28,15 @@ class ReplicateObject extends BackbeatTask {
      *
      * @constructor
      * @param {QueueProcessor} qp - queue processor instance
+     * @param {String} site - site used for replication
      */
-    constructor(qp) {
+    constructor(qp, site) {
         const qpState = qp.getStateVars();
         super({
             retryTimeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
         });
         Object.assign(this, qpState);
+        this.site = site;
 
         this.sourceRole = null;
         this.targetRole = null;

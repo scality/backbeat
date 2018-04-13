@@ -28,7 +28,8 @@ metricsProducer.setupProducer(err => {
     function initAndStart() {
         initManagement(error => {
             if (error) {
-                log.error('could not load managment db', error);
+                log.error('could not load management db',
+                  { error: error.message });
                 setTimeout(initAndStart, 5000);
                 return;
             }

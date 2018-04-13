@@ -16,11 +16,11 @@ const replicationStatusProcessor =
 werelogs.configure({ level: config.log.logLevel,
      dump: config.log.dumpLevel });
 
-const logger = new werelogs.Logger('replicationStatusProcessorInit');
+const logger = new werelogs.Logger('backbeat:ReplicationStatusProcessor:Init');
 function initAndStart() {
     initManagement(error => {
         if (error) {
-            logger.error('could not load managment db', error);
+            logger.error('could not load management db', error);
             setTimeout(initAndStart, 5000);
             return;
         }
