@@ -23,9 +23,9 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "mongo",
+        "logSource": "ingestion",
         "bucketd": {
-            "host": "127.0.0.1",
+            "host": "localhost",
             "port": 9000
         },
         "dmd": {
@@ -33,15 +33,33 @@
             "port": 9990
         },
         "mongo": {
-            "replicaSetHosts":
-                "localhost:27017,localhost:27018,localhost:27019",
+            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019",
             "writeConcern": "majority",
             "replicaSet": "rs0",
             "readPreference": "primary",
             "database": "metadata"
         }
     },
+    "ingestion": {
+        "zookeeperPath": "/ingestion",
+        "cronRule": "*/5 * * * * *",
+        "sources": [
+            {
+                "name": "scalitys3",
+                "cronRule": "*/5 * * * * *",
+                "zookeeperSuffix": "/scalitys3",
+                "host": "54.202.35.127",
+                "port": 9000,
+                "https": false,
+                "type": "scality",
+                "raftCount": 8
+            }
+        ]
+    },
     "extensions": {
+        "ingestion": {
+            "topic": "backbeat-ingestion"
+        },
         "replication": {
             "source": {
                 "transport": "http",
