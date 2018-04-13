@@ -202,6 +202,17 @@ class LifecycleTask extends BackbeatTask {
                 return done(err);
             }
 
+            // TODO:
+            //   Seeing a bug with listMultipartUploads, where when paginating,
+            //   the listing includes the last upload of the previous listing.
+            //   In the interest of time, will add the below to avoid the
+            //   overlap of uploads.
+            let uploads = data.Uploads;
+            if (bucketData.details.keyMarker &&
+            bucketData.details.uploadIdMarker) {
+                uploads = data.Uploads.slice(1);
+            }
+
             this._compareMPUUploads(bucketData, bucketLCRules,
                 uploads, log);
             return done();
