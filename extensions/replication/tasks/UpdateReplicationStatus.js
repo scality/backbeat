@@ -1,7 +1,7 @@
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 
-const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
