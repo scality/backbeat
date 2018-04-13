@@ -44,19 +44,25 @@
     "ingestion": {
         "zookeeperPath": "/ingestion",
         "cronRule": "*/5 * * * * *",
-        "sources": {
-            "source1": {
+        "sources": [
+            {
+                "name": "source1",
                 "cronRule": "*/5 * * * * *",
                 "zookeeperSuffix": "/source1",
                 "host": "54.202.35.127",
-                "port": 9000
+                "port": 9000,
+                "https": false,
+                "type": "scality",
+                "raftCount": 8
             },
-            "source2": {
+            {
+                "name": "source2",
                 "zookeeperSuffix": "/source2",
                 "host": "",
-                "port": 9000
+                "port": 9000,
+                "https": false
             }
-        }
+        ]
         
     },
     "extensions": {
