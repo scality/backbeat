@@ -51,10 +51,12 @@ const joiSchema = {
             readPreference: joi.string().default('primary'),
             database: joi.string().default('metadata'),
         }).when('logSource', { is: 'mongo', then: joi.required() }),
-        ingestion: joi.array(),
     },
-    validLogSources: joi.array(),
-    ingestion: joi.object(),
+    ingestion: joi.object({
+        sources: joi.array(),
+        zookeeperPath: joi.string().required(),
+        cronRule: joi.string().default('*/5 * * * * *'),
+    }),
     log: logJoi,
     extensions: joi.object(),
     metrics: {
