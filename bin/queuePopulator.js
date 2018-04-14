@@ -20,16 +20,6 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 /* eslint-disable no-param-reassign */
-// checking for valid configuration
-// throw with a message "invalid argument:
-// invalid ingesion source, invalid source"
-assert(config.validLogSources.includes(process.argv[2]), 'invalid argument: ' +
-    'invalid log source');
-if (process.argv[2] === 'ingestion') {
-    assert(config.ingestion.sources[process.argv[3]], 'invalid argument: ' +
-         'invalid ingestion source');
-}
-
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
     if (taskState.batchInProgress) {
         log.warn('skipping batch: previous one still in progress');
@@ -58,8 +48,7 @@ function queueBatch(queuePopulator, taskState, qpConfig, log) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
-    mConfig, rConfig, extConfigs, ingestionConfig, process.argv[2],
-    process.argv[3]);
+    mConfig, rConfig, extConfigs, ingestionConfig);
 
 async.waterfall([
     done => queuePopulator.open(done),

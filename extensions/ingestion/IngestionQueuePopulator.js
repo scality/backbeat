@@ -8,31 +8,39 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         this.config = params.config;
     }
 
-    createZkPath(cb, node, source) {
+    createZkPath(cb, source) {
         console.log('creating paths');
         const { zookeeperPath } = this.extConfig;
-        const path = `/ingestion/${source}/provisions/${node}`;
-        return this.zkClient.getData(path, err => {
-            if (err) {
-                if (err.name !== 'NO_NODE') {
-                    this.log.error('could not get zookeeper node path', {
-                        method: 'IngestionQueuePopulator.createZkPath',
-                        error: err,
-                    });
-                    return cb(err);
-                }
-                return this.zkClient.mkdirp(path, err => {
-                    if (err) {
-                        this.log.error('could not create path in zookeeper', {
+        const pathArray = [];
+        if (source.raftCount) {
+            for (let i = 1; i < source.raftCount; i++) {
+                const path = `/ingestion/${source.name}/provisions/${1}`;
+                pathArray.push(path);
+            }
+        }
+        pathArray.forEach(path => {
+            return this.zkClient.getData(path, err => {
+                if (err) {
+                    if (err.name !== 'NO_NODE') {
+                        this.log.error('could not get zookeeper node path', {
                             method: 'IngestionQueuePopulator.createZkPath',
-                            zookeeperPath,
                             error: err,
                         });
                         return cb(err);
                     }
-                    // return cb();
-                });
-            }
+                    return this.zkClient.mkdirp(path, err => {
+                        if (err) {
+                            this.log.error('could not create path in zookeeper', {
+                                method: 'IngestionQueuePopulator.createZkPath',
+                                zookeeperPath,
+                                error: err,
+                            });
+                            return cb(err);
+                        }
+                        // return cb();
+                    });
+                }
+            });
         });
     }
 
