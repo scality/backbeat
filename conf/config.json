@@ -23,7 +23,7 @@
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "bucketd",
+        "logSource": "ingestion",
         "bucketd": {
             "host": "localhost",
             "port": 9000
@@ -40,7 +40,6 @@
             "database": "metadata"
         }
     },
-    "validLogSources": ["mongo", "bucketd", "ingestion"],
     "ingestion": {
         "zookeeperPath": "/ingestion",
         "cronRule": "*/5 * * * * *",
@@ -60,7 +59,8 @@
                 "zookeeperSuffix": "/source2",
                 "host": "",
                 "port": 9000,
-                "https": false
+                "https": false,
+                "type": "aws"
             }
         ]
         
@@ -119,40 +119,6 @@
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10
-            }
-        },
-        "lifecycle": {
-            "zookeeperPath": "/lifecycle",
-            "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
-            "objectTasksTopic": "backbeat-lifecycle-object-tasks",
-            "backlogMetrics": {
-                "zkPath": "/lifecycle/run/backlog-metrics",
-                "intervalS": 60
-            },
-            "conductor": {
-                "cronRule": "0 */5 * * * *",
-                "concurrency": 10
-            },
-            "producer": {
-                "groupId": "backbeat-lifecycle-producer-group",
-                "retryTimeoutS": 300,
-                "concurrency": 10
-            },
-            "consumer": {
-                "groupId": "backbeat-lifecycle-consumer-group",
-                "retryTimeoutS": 300,
-                "concurrency": 10
-            },
-            "rules": {
-                 "expiration": {
-                    "enabled": true
-                },
-                "noncurrentVersionExpiration": {
-                    "enabled": true
-                },
-                "abortIncompleteMultipartUpload": {
-                    "enabled": true
-                }
             }
         }
     },
