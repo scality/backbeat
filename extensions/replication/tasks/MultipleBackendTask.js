@@ -9,6 +9,7 @@ const ReplicateObject = require('./ReplicateObject');
 const attachReqUids = require('../utils/attachReqUids');
 
 const MPU_CONC_LIMIT = 10;
+const MPU_GCP_MAX_PARTS = 1024;
 
 class MultipleBackendTask extends ReplicateObject {
 
@@ -108,16 +109,122 @@ class MultipleBackendTask extends ReplicateObject {
         }, cb);
     }
 
-    _getAndPutMPUPartOnce(sourceEntry, destEntry, part, uploadId, log, done) {
-        log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
+    /**
+     * This is a retry wrapper for calling _getRangeAndPutMPUPartOnce.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {ObjectQueueEntry} destEntry - The destination object entry
+     * @param {String} range - The range to get an object with
+     * @param {Number} partNumber - The part number for the current part
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _getRangeAndPutMPUPart(sourceEntry, destEntry, range, partNumber, uploadId,
+        log, cb) {
+        this.retry({
+            actionDesc: 'stream part data',
+            logFields: { entry: sourceEntry.getLogInfo() },
+            actionFunc: done => this._getRangeAndPutMPUPartOnce(sourceEntry,
+                destEntry, range, partNumber, uploadId, log, done),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, cb);
+    }
+
+    /**
+     * Get the ranged object, calculate the data's size, then put the part.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {ObjectQueueEntry} destEntry - The destination object entry
+     * @param {Object} range - The range to get an object with
+     * @param {Number} range.start - The start byte range
+     * @param {Number} range.end - The end byte range
+     * @param {Number} partNumber - The part number for the current part
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} done - The callback to call
+     * @return {undefined}
+     */
+    _getRangeAndPutMPUPartOnce(sourceEntry, destEntry, range, partNumber,
+        uploadId, log, done) {
+        log.debug('getting object range', {
+            entry: sourceEntry.getLogInfo(),
+            range,
+        });
         const doneOnce = jsutil.once(done);
-        const partObj = new ObjectMDLocation(part);
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: partObj.getPartNumber(),
+            Range: `bytes=${range.start}-${range.end}`,
         });
+        // Range is inclusive, hence + 1.
+        const size = range.end - range.start + 1;
+        return this._putMPUPart(sourceEntry, destEntry, sourceReq, size,
+            uploadId, partNumber, log, doneOnce);
+    }
+
+   /**
+    * Perform a multipart upload.
+    * @param {ObjectQueueEntry} sourceEntry - The source object entry
+    * @param {ObjectQueueEntry} destEntry - The destination object entry
+    * @param {String} uploadId - The upload ID of the initiated MPU
+    * @param {Stream} data - The incoming message of the get request
+    * @param {Werelogs} log - The logger instance
+    * @param {Function} doneOnce - The callback to call
+    * @return {undefined}
+    */
+    _completeMPU(sourceEntry, destEntry, uploadId, data, log, doneOnce) {
+        const destReq = this.backbeatSource.multipleBackendCompleteMPU({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            StorageType: destEntry.getReplicationStorageType(),
+            StorageClass: this.site,
+            VersionId: destEntry.getEncodedVersionId(),
+            UserMetaData: sourceEntry.getUserMetadata(),
+            ContentType: sourceEntry.getContentType(),
+            CacheControl: sourceEntry.getCacheControl() || undefined,
+            ContentDisposition: sourceEntry.getContentDisposition() ||
+                undefined,
+            ContentEncoding: sourceEntry.getContentEncoding() ||
+                undefined,
+            UploadId: uploadId,
+            Body: JSON.stringify(data),
+        });
+        attachReqUids(destReq, log);
+        return destReq.send((err, data) => {
+            if (err) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('an error occurred on completing MPU to S3', {
+                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return doneOnce(err);
+            }
+            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                data.versionId);
+            return doneOnce();
+        });
+    }
+
+    /**
+     * Get the ranged object, calculate the data's size, then put the part.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {ObjectQueueEntry} destEntry - The destination object entry
+     * @param {AWS.Request} sourceReq - The source request for getting data
+     * @param {Number} size - The size of the content
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Number} partNumber - The part number of the part
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} doneOnce - The callback to call
+     * @return {undefined}
+     */
+    _putMPUPart(sourceEntry, destEntry, sourceReq, size, uploadId, partNumber,
+        log, doneOnce) {
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
             // eslint-disable-next-line no-param-reassign
@@ -126,7 +233,7 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3', {
-                method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                method: 'MultipleBackendTask._putMPUPart',
                 entry: sourceEntry.getLogInfo(),
                 origin: 'source',
                 peer: this.sourceConfig.s3,
@@ -144,7 +251,7 @@ class MultipleBackendTask extends ReplicateObject {
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3', {
                 entry: destEntry.getLogInfo(),
-                method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                method: 'MultipleBackendTask._putMPUPart',
                 origin: 'source',
                 peer: this.sourceConfig.s3,
                 error: err.message,
@@ -156,10 +263,10 @@ class MultipleBackendTask extends ReplicateObject {
         const destReq = this.backbeatSource.multipleBackendPutMPUPart({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
-            ContentLength: partObj.getPartSize(),
+            ContentLength: size,
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            PartNumber: partObj.getPartNumber(),
+            PartNumber: partNumber,
             UploadId: uploadId,
             Body: incomingMsg,
         });
@@ -169,7 +276,7 @@ class MultipleBackendTask extends ReplicateObject {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on putting MPU part to S3', {
-                    method: 'MultipleBackendTask._getAndPutMPUPartOnce',
+                    method: 'MultipleBackendTask._putMPUPart',
                     entry: destEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -179,6 +286,32 @@ class MultipleBackendTask extends ReplicateObject {
             }
             return doneOnce(null, data);
         });
+    }
+
+    /**
+     * Get an object by its part number, then put the part.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {ObjectQueueEntry} destEntry - The destination object entry
+     * @param {Object} part - The single data location info
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} done - The callback to call
+     * @return {undefined}
+     */
+    _getAndPutMPUPartOnce(sourceEntry, destEntry, part, uploadId, log, done) {
+        log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
+        const doneOnce = jsutil.once(done);
+        const partObj = new ObjectMDLocation(part);
+        const sourceReq = this.S3source.getObject({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+            PartNumber: partObj.getPartNumber(),
+        });
+        const size = partObj.getPartSize();
+        const partNumber = partObj.getPartNumber();
+        return this._putMPUPart(sourceEntry, destEntry, sourceReq, size,
+            uploadId, partNumber, log, doneOnce);
     }
 
     _getAndPutMultipartUpload(sourceEntry, destEntry, part, uploadId, log, cb) {
@@ -229,6 +362,72 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
+    /**
+     * Get byte ranges for an object of the given content length, such that the
+     * range count does not exceed 1024 elements.
+     * @param {Number} contentLen - The content length of the whole object
+     * @return {Array} The array of byte ranges.
+     */
+    _getRanges(contentLen) {
+        // Creates ranges that have sizes that are powers of 2.
+        const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
+        const range = Math.ceil(pow / MPU_GCP_MAX_PARTS);
+        const ranges = [];
+        let start = 0;
+        let end = 0;
+        while (end < contentLen - 1) {
+            end = start + range - 1;
+            if (end < contentLen - 1) {
+                ranges.push({ start, end });
+                start = end + 1;
+            }
+        }
+        ranges.push({ start, end: contentLen - 1 });
+        return ranges;
+    }
+
+    /**
+     * Perform a multipart upload using ranged get object requests.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {ObjectQueueEntry} destEntry - The destination object entry
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} doneOnce - The callback to call
+     * @return {undefined}
+     */
+    _completeRangedMPU(sourceEntry, destEntry, uploadId, log, doneOnce) {
+        const ranges = this._getRanges(sourceEntry.getContentLength());
+        return async.timesLimit(ranges.length, MPU_CONC_LIMIT, (n, next) =>
+            this._getRangeAndPutMPUPart(sourceEntry, destEntry, ranges[n],
+                n + 1, uploadId, log, (err, data) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    const res = {
+                        PartNumber: [data.partNumber],
+                        ETag: [data.ETag],
+                    };
+                    return next(null, res);
+                }),
+            (err, data) => {
+                if (err) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'source';
+                    log.error('an error occurred on putting MPU part to S3', {
+                        method:
+                            'MultipleBackendTask._completeRangedMPU',
+                        entry: destEntry.getLogInfo(),
+                        origin: 'target',
+                        peer: this.destBackbeatHost,
+                        error: err.message,
+                    });
+                    return doneOnce(err);
+                }
+                return this._completeMPU(sourceEntry, destEntry, uploadId, data,
+                    log, doneOnce);
+            });
+    }
+
     _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
         const doneOnce = jsutil.once(cb);
         log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
@@ -251,6 +450,13 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             }
             const locations = sourceEntry.getReducedLocations();
+            // GCP storage type does not accept an MPU that is > 1024 parts, so
+            // we perform an MPU of <= 1024 parts.
+            if (this._getReplicationEndpointType() === 'gcp' &&
+                locations.length > MPU_GCP_MAX_PARTS) {
+                return this._completeRangedMPU(sourceEntry, destEntry,
+                    uploadId, log, doneOnce);
+            }
             return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
                 this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
                     log, (err, data) => {
@@ -280,41 +486,8 @@ class MultipleBackendTask extends ReplicateObject {
                     });
                     return doneOnce(err);
                 }
-                const destReq = this.backbeatSource.multipleBackendCompleteMPU({
-                    Bucket: destEntry.getBucket(),
-                    Key: destEntry.getObjectKey(),
-                    StorageType: destEntry.getReplicationStorageType(),
-                    StorageClass: this.site,
-                    VersionId: destEntry.getEncodedVersionId(),
-                    UserMetaData: sourceEntry.getUserMetadata(),
-                    ContentType: sourceEntry.getContentType(),
-                    CacheControl: sourceEntry.getCacheControl() || undefined,
-                    ContentDisposition: sourceEntry.getContentDisposition() ||
-                        undefined,
-                    ContentEncoding: sourceEntry.getContentEncoding() ||
-                        undefined,
-                    UploadId: uploadId,
-                    Body: JSON.stringify(data),
-                });
-                attachReqUids(destReq, log);
-                return destReq.send((err, data) => {
-                    if (err) {
-                        // eslint-disable-next-line no-param-reassign
-                        err.origin = 'source';
-                        log.error('an error occurred on completing MPU to S3', {
-                            method: 'MultipleBackendTask.' +
-                                '_getAndPutMultipartUploadOnce',
-                            entry: destEntry.getLogInfo(),
-                            origin: 'target',
-                            peer: this.destBackbeatHost,
-                            error: err.message,
-                        });
-                        return doneOnce(err);
-                    }
-                    sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                        data.versionId);
-                    return doneOnce();
-                });
+                return this._completeMPU(sourceEntry, destEntry, uploadId, data,
+                    log, doneOnce);
             });
         });
     }
