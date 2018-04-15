@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
+const { errors } = require('arsenal');
 
 const attachReqUids = require('../../replication/utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -8,13 +9,14 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const RETRYTIMEOUTS = 300;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-const MAX_KEYS = 1000;
+const MAX_KEYS = process.env.TEST_SWITCH ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
 class LifecycleTask extends BackbeatTask {
     /**
-     * Process a list of versioned or non-versioned objects
+     * Processes Kafka Bucket entries and determines if specific Lifecycle
+     * actions apply to an object, version of an object, or MPU.
      *
      * @constructor
      * @param {LifecycleProducer} lp - lifecycle producer instance
@@ -28,18 +30,27 @@ class LifecycleTask extends BackbeatTask {
     /**
      * Handles non-versioned objects
      * @param {object} bucketData - bucket data
-     * @param {object} params - params for AWS S3 `listObjects`
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectList(bucketData, params, log, done) {
+    _getObjectList(bucketData, bucketLCRules, log, done) {
+        const params = {
+            Bucket: bucketData.target.bucket,
+            MaxKeys: MAX_KEYS,
+        };
+        if (bucketData.details.marker) {
+            params.Marker = bucketData.details.marker;
+        }
+
         const req = this.s3target.listObjects(params);
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
                 if (err) {
                     log.error('error listing bucket objects', {
+                        method: 'LifecycleTask._getObjectList',
                         error: err,
                         bucket: params.Bucket,
                     });
@@ -59,78 +70,84 @@ class LifecycleTask extends BackbeatTask {
                     const entry = Object.assign({}, bucketData, {
                         details: { marker },
                     });
-                    return this.sendBucketEntry(entry, err => {
+                    this.sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
                                 'sent kafka entry for bucket consumption', {
                                     method: 'LifecycleTask._getObjectList',
                                 });
                         }
-                        return next(null, data);
                     });
                 }
-                return process.nextTick(() => next(null, data));
+
+                this._applyRulesToList(bucketData, bucketLCRules, data.Contents,
+                    log, false, next);
             },
-        ], (err, data) => {
-            if (err) {
-                return done(err);
-            }
-            return done(null, { Contents: data.Contents });
-        });
+        ], done);
     }
 
     /**
      * Handles versioned objects (both enabled and suspended)
      * @param {object} bucketData - bucket data
-     * @param {object} params - params for AWS S3 `listObjectVersions`
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectVersions(bucketData, params, log, done) {
-        const req = this.s3target.listObjectVersions(params);
-        attachReqUids(req, log);
-        async.waterfall([
-            next => req.send((err, data) => {
-                if (err) {
-                    log.error('error listing versioned bucket objects', {
-                        error: err,
-                        bucket: params.Bucket,
-                    });
-                    return next(err);
-                }
-                return next(null, data);
-            }),
-            (data, next) => {
-                if (data.IsTruncated) {
-                    // NOTE: this might only be needed if a LC rule defines
-                    //   a rule for processing NoncurrentVersion actions
-                    const entry = Object.assign({}, bucketData, {
-                        details: {
-                            keyMarker: data.NextKeyMarker,
-                            versionIdMarker: data.NextVersionIdMarker,
-                        },
-                    });
-                    return this.sendBucketEntry(entry, err => {
-                        if (!err) {
-                            log.debug(
-                                'sent kafka entry for bucket consumption', {
-                                    method: 'LifecycleTask._getObjectVersions',
-                                });
-                        }
-                        return next(null, data);
-                    });
-                }
-                return process.nextTick(() => next(null, data));
-            },
-        ], (err, data) => {
+    _getObjectVersions(bucketData, bucketLCRules, log, done) {
+        const paramDetails = {};
+
+        if (bucketData.details.versionIdMarker &&
+        bucketData.details.keyMarker) {
+            paramDetails.KeyMarker = bucketData.details.keyMarker;
+            paramDetails.VersionIdMarker = bucketData.details.versionIdMarker;
+        }
+
+        this._listVersions(bucketData, paramDetails, log, (err, data) => {
             if (err) {
+                // error already logged at source
                 return done(err);
             }
-            return done(null, {
-                Versions: data.Versions,
-                DeleteMarkers: data.DeleteMarkers,
-            });
+            // all versions including delete markers
+            const allVersions = this._mergeSortedVersionsAndDeleteMarkers(
+                data.Versions, data.DeleteMarkers);
+            // for all versions and delete markers, apply stale date property
+            const allVersionsWithStaleDate = this._applyVersionStaleDate(
+                bucketData.details, allVersions);
+
+            // sending bucket entry for checking next listing
+            if (data.IsTruncated && allVersions.length > 0) {
+                // Uses last version whether Version or DeleteMarker
+                const last = allVersions[allVersions.length - 1];
+                const entry = Object.assign({}, bucketData, {
+                    details: {
+                        keyMarker: data.NextKeyMarker,
+                        versionIdMarker: data.NextVersionIdMarker,
+                        prevDate: last.LastModified,
+                    },
+                });
+                this.sendBucketEntry(entry, err => {
+                    if (!err) {
+                        log.debug('sent kafka entry for bucket ' +
+                        'consumption', {
+                            method: 'LifecycleTask._getObjectVersions',
+                        });
+                    }
+                });
+            }
+
+            // if no versions to process, skip further processing for this
+            // batch
+            if (allVersionsWithStaleDate.length === 0) {
+                return done(null);
+            }
+
+            // for each version, get their relative rules, compare with
+            // bucket rules, match with `staleDate` to
+            // NoncurrentVersionExpiration Days and send expiration if
+            // rules all apply
+            return this._applyRulesToList(bucketData, bucketLCRules,
+                allVersionsWithStaleDate, log, true, done);
         });
     }
 
@@ -150,8 +167,9 @@ class LifecycleTask extends BackbeatTask {
             next => req.send((err, data) => {
                 if (err) {
                     log.error('error checking buckets MPUs', {
-                        method: 'LifecycleTask.processBucketEntry',
+                        method: 'LifecycleTask._getMPUs',
                         error: err,
+                        bucket: params.Bucket,
                     });
                     return next(err);
                 }
@@ -190,55 +208,115 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * For all incomplete MPU uploads, compare with rules (based only on prefix
-     * because no tags exist for incomplete MPU), and apply
-     * AbortIncompleteMultipartUpload rule (if any) on each upload
+     * Helper method to merge and sort Versions and DeleteMarkers lists
+     * @param {array} versions - versions list
+     * @param {array} deleteMarkers - delete markers list
+     * @return {array} merge sorted array
+     */
+    _mergeSortedVersionsAndDeleteMarkers(versions, deleteMarkers) {
+        const sortedList = [];
+        let vIdx = 0;
+        let dmIdx = 0;
+
+        while (vIdx < versions.length || dmIdx < deleteMarkers.length) {
+            if (versions[vIdx] === undefined) {
+                // versions list is empty, just need to merge remaining DM's
+                sortedList.push(deleteMarkers[dmIdx++]);
+            } else if (deleteMarkers[dmIdx] === undefined) {
+                // DM's list is empty, just need to merge remaining versions
+                sortedList.push(versions[vIdx++]);
+            } else if (versions[vIdx].Key !== deleteMarkers[dmIdx].Key) {
+                // 1. by Key name, alphabetical order sorted by ascii values
+                const isVKeyNewer = (versions[vIdx].Key <
+                    deleteMarkers[dmIdx].Key);
+                if (isVKeyNewer) {
+                    sortedList.push(versions[vIdx++]);
+                } else {
+                    sortedList.push(deleteMarkers[dmIdx++]);
+                }
+            } else {
+                // 2. by VersionId, lower number means newer
+                const isVersionVidNewer = (versions[vIdx].VersionId <
+                    deleteMarkers[dmIdx].VersionId);
+                if (isVersionVidNewer) {
+                    sortedList.push(versions[vIdx++]);
+                } else {
+                    sortedList.push(deleteMarkers[dmIdx++]);
+                }
+            }
+        }
+
+        return sortedList;
+    }
+
+    /**
+     * Helper method to apply a staleDate property to each Version and
+     * DeleteMarker
+     * @param {object} bucketDetails - details property from Kafka Bucket entry
+     * @param {string} [bucketDetails.keyMarker] - previous listing key name
+     * @param {string} [bucketDetails.prevDate] - previous listing LastModified
+     * @param {array} list - list of sorted versions and delete markers
+     * @return {array} an updated array of Versions and DeleteMarkers with
+     *   applied staleDate
+     */
+    _applyVersionStaleDate(bucketDetails, list) {
+        const appliedList = [];
+
+        for (let i = 0; i < list.length; i++) {
+            const dupe = Object.assign({}, list[i]);
+
+            if (dupe.IsLatest) {
+                // IsLatest version should not have a staleDate
+                dupe.staleDate = undefined;
+            } else if (i === 0) {
+                // first item in list. bucket details may apply
+                dupe.staleDate = (bucketDetails.keyMarker === dupe.Key) ?
+                    bucketDetails.prevDate : undefined;
+            } else {
+                dupe.staleDate = list[i - 1].LastModified;
+            }
+
+            appliedList.push(dupe);
+        }
+
+        return appliedList;
+    }
+
+    /**
+     * Wrapper for AWS S3 listObjectVersions
      * @param {object} bucketData - bucket data
-     * @param {array} bucketLCRules - array of bucket lifecycle rules
-     * @param {array} uploads - array of upload objects from
-     *   `listMultipartUploads`
+     * @param {object} paramDetails - any extra param details (i.e. key marker,
+     *   version id marker, prefix)
      * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - cb(error, dataList)
      * @return {undefined}
      */
-    _compareMPUUploads(bucketData, bucketLCRules, uploads, log) {
-        uploads.forEach(upload => {
-            const noTags = { TagSet: [] };
-            const filteredRules = this._filterRules(bucketLCRules, upload,
-                noTags);
-            const aRules = this._getApplicableRules(filteredRules);
+    _listVersions(bucketData, paramDetails, log, cb) {
+        const params = {
+            Bucket: bucketData.target.bucket,
+            MaxKeys: MAX_KEYS,
+        };
+        if (paramDetails.VersionIdMarker && paramDetails.KeyMarker) {
+            params.KeyMarker = paramDetails.KeyMarker;
+            params.VersionIdMarker = paramDetails.VersionIdMarker;
+        }
+        if (paramDetails.Prefix) {
+            params.Prefix = paramDetails.Prefix;
+        }
 
-            const timeDiff = (Date.now() - new Date(upload.Initiated));
-            const daysSinceInitiated = Math.floor(
-                timeDiff / (1000 * 60 * 60 * 24));
-            const abortRule = aRules.AbortIncompleteMultipartUpload;
-
-            if (abortRule && abortRule.DaysAfterInitiation &&
-            daysSinceInitiated >= abortRule.DaysAfterInitiation) {
-                log.debug('send mpu upload for aborting', {
-                    bucket: bucketData.target.bucket,
-                    method: 'LifecycleTask._compareMPUUploads',
-                    uploadId: upload.UploadId,
+        const req = this.s3target.listObjectVersions(params);
+        attachReqUids(req, log);
+        req.send((err, data) => {
+            if (err) {
+                log.error('error listing versioned bucket objects', {
+                    method: 'LifecycleTask._listVersions',
+                    error: err,
+                    bucket: params.Bucket,
+                    prefix: params.Prefix,
                 });
-                const entry = {
-                    action: 'deleteMPU',
-                    target: {
-                        owner: bucketData.target.owner,
-                        bucket: bucketData.target.bucket,
-                        key: upload.Key,
-                    },
-                    details: {
-                        UploadId: upload.UploadId,
-                    },
-                };
-                this.sendObjectEntry(entry, err => {
-                    if (!err) {
-                        log.debug('sent object entry for consumption', {
-                            method: 'LifecycleTask._compareMPUUploads',
-                            entry,
-                        });
-                    }
-                });
+                return cb(err);
             }
+            return cb(null, data);
         });
     }
 
@@ -376,6 +454,113 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Handles comparing rules for objects
+     * @param {object} bucketData - bucket data
+     * @param {object} bucketData.target - target bucket info
+     * @param {string} bucketData.target.bucket - bucket name
+     * @param {string} bucketData.target.owner - owner id
+     * @param {string} [bucketData.prefix] - prefix
+     * @param {string} [bucketData.details.keyMarker] - next key
+     *   marker for versioned buckets
+     * @param {string} [bucketData.details.versionIdMarker] - next
+     *   version id marker for versioned buckets
+     * @param {string} [bucketData.details.marker] - next
+     *   continuation token marker for non-versioned buckets
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {array} object - object or object version
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} done - callback(error, data)
+     * @return {undefined}
+     */
+    _getRules(bucketData, bucketLCRules, object, log, done) {
+        // if no ETag, Size, and StorageClass, then it is a Delete Marker
+        const isDeleteMarker = (
+            !Object.prototype.hasOwnProperty.call(object, 'ETag') &&
+            !Object.prototype.hasOwnProperty.call(object, 'Size') &&
+            !Object.prototype.hasOwnProperty.call(object, 'StorageClass'));
+        if (isDeleteMarker) {
+            // DeleteMarkers don't have any tags, so avoid calling
+            // `getObjectTagging` which will throw an error
+            const filterRules = this._filterRules(bucketLCRules, object, []);
+            return done(null, this._getApplicableRules(filterRules));
+        }
+
+        const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
+        if (object.VersionId) {
+            tagParams.VersionId = object.VersionId;
+        }
+
+        const req = this.s3target.getObjectTagging(tagParams);
+        attachReqUids(req, log);
+        return req.send((err, tags) => {
+            if (err) {
+                log.error('failed to get tags', {
+                    method: 'LifecycleTask._getRules',
+                    error: err,
+                    bucket: bucketData.target.bucket,
+                    objectKey: object.Key,
+                    objectVersion: object.VersionId,
+                });
+                return done(err);
+            }
+            // tags.TagSet === [{ Key: '', Value: '' }, ...]
+            const filterRules = this._filterRules(bucketLCRules, object, tags);
+
+            // reduce filteredRules to only get earliest dates
+            return done(null, this._getApplicableRules(filterRules));
+        });
+    }
+
+
+    /**
+     * Get rules and compare with each object or version
+     * @param {object} bucketData - bucket data
+     * @param {array} lcRules - array of bucket lifecycle rules
+     * @param {array} contents - list of objects or object versions
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {boolean} versioned - tells if contents are versioned list or not
+     * @param {function} done - callback(error, data)
+     * @return {undefined}
+     */
+    _applyRulesToList(bucketData, lcRules, contents, log, versioned, done) {
+        if (!contents.length) {
+            return done();
+        }
+        return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
+            async.waterfall([
+                next => this._getRules(bucketData, lcRules, obj, log, next),
+                (applicableRules, next) => {
+                    let rules = applicableRules;
+                    // Hijack for testing
+                    // Idea is to set any "Days" rule to `Days - 1`
+                    const testIsOn = process.env.TEST_SWITCH === '1';
+                    if (testIsOn) {
+                        rules = this._adjustRulesForTesting(rules);
+                    }
+
+                    if (versioned) {
+                        return this._compareVersion(bucketData, obj, rules, log,
+                            next);
+                    }
+                    return this._compareObject(bucketData, obj, rules, log,
+                        next);
+                },
+            ], cb);
+        }, done);
+    }
+
+    /**
+     * Helper method to get total Days passed since given date
+     * @param {Date} date - date object
+     * @return {number} Days passed
+     */
+    _findDaysSince(date) {
+        const now = Date.now();
+        const diff = now - date;
+        return Math.floor(diff / (1000 * 60 * 60 * 24));
+    }
+
+    /**
      * Compare a non-versioned object to most applicable rules
      * @param {object} bucketData - bucket data
      * @param {object} obj - single object from `listObjects`
@@ -390,6 +575,7 @@ class LifecycleTask extends BackbeatTask {
             Bucket: bucketData.target.bucket,
             Key: obj.Key,
         };
+        // Used by `IsLatest` version
         if (obj.VersionId) {
             params.VersionId = obj.VersionId;
         }
@@ -405,12 +591,8 @@ class LifecycleTask extends BackbeatTask {
                 });
                 return done(err);
             }
-            // TODO: consider `Date`
-            const objDate = new Date(data.LastModified);
-            const now = Date.now();
-            // time diff in ms
-            const diff = now - objDate;
-            const daysSinceInitiated = Math.floor(diff / (1000 * 60 * 60 * 24));
+            const daysSinceInitiated = this._findDaysSince(
+                new Date(data.LastModified));
 
             /* Example of `rules`
                 {
@@ -438,7 +620,8 @@ class LifecycleTask extends BackbeatTask {
 
             if (rules.Expiration) {
                 // TODO: Handle ExpiredObjectDeleteMarker
-                if (rules.Expiration.Date && rules.Expiration.Date < now) {
+                if (rules.Expiration.Date &&
+                rules.Expiration.Date < Date.now()) {
                     // expiration date passed for this object
                     alreadySent = true;
                     const entry = {
@@ -461,7 +644,7 @@ class LifecycleTask extends BackbeatTask {
                         }
                     });
                 }
-                if (!alreadySent && rules.Expiration.Days &&
+                if (!alreadySent && rules.Expiration.Days !== undefined &&
                 daysSinceInitiated >= rules.Expiration.Days) {
                     alreadySent = true;
                     const entry = {
@@ -492,130 +675,92 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Handles comparing rules for objects
+     * Only to be used when testing (when process.env.TEST_SWITCH).
+     * The idea is to adjust any "Days" or "NoncurrentDays" rules so that rules
+     * set with 1 day should expire, but any days set with 2+ days will not.
+     * Since Days/NoncurrentDays cannot be set to 0, this is a way to set the
+     * rule and test methods are working as intended.
+     * @param {object} rules - applicable rules
+     * @return {object} adjusted rules object
+     */
+    _adjustRulesForTesting(rules) {
+        /* eslint-disable no-param-reassign */
+        if (rules.Expiration &&
+        rules.Expiration.Days) {
+            rules.Expiration.Days--;
+        }
+        const ncve = 'NoncurrentVersionExpiration';
+        const ncd = 'NoncurrentDays';
+        if (rules[ncve] &&
+        rules[ncve][ncd]) {
+            rules[ncve][ncd]--;
+        }
+        const aimu = 'AbortIncompleteMultipartUpload';
+        const dai = 'DaysAfterInitiation';
+        if (rules[aimu] &&
+        rules[aimu][dai]) {
+            rules[aimu][dai]--;
+        }
+        /* eslint-enable no-param-reassign */
+        return rules;
+    }
+
+    /**
+     * Compare a version to most applicable rules
      * @param {object} bucketData - bucket data
-     * @param {object} bucketData.target - target bucket info
-     * @param {string} bucketData.target.bucket - bucket name
-     * @param {string} bucketData.target.owner - owner id
-     * @param {string} [bucketData.prefix] - prefix
-     * @param {string} [bucketData.details.keyMarker] - next key
-     *   marker for versioned buckets
-     * @param {string} [bucketData.details.versionIdMarker] - next
-     *   version id marker for versioned buckets
-     * @param {string} [bucketData.details.marker] - next
-     *   continuation token marker for non-versioned buckets
-     * @param {array} bucketLCRules - array of bucket lifecycle rules
-     * @param {array} object - object or object version
+     * @param {object} version - single version from `_getObjectVersions`
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getRules(bucketData, bucketLCRules, object, log, done) {
-        const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
-        if (object.VersionId) {
-            tagParams.VersionId = object.VersionId;
+    _compareVersion(bucketData, version, rules, log, done) {
+        // if version is latest, only expiration action applies
+        if (version.IsLatest) {
+            // TODO: handle unique cases for comparing expiration rule
+            return done();
         }
 
-        const req = this.s3target.getObjectTagging(tagParams);
-        attachReqUids(req, log);
-        return req.send((err, tags) => {
-            if (err) {
-                log.error('failed to get tags', {
-                    method: 'LifecycleTask._getRules',
-                    error: err,
+        const staleDate = version.staleDate;
+        if (!staleDate) {
+            // NOTE: this should never happen. Logging here for debug purposes
+            log.error('missing staleDate on the version', {
+                method: 'LifecycleTask._compareVersion',
+                bucket: bucketData.target.bucket,
+                versionId: version.VersionId,
+            });
+            const errMsg = 'an implementation error occurred: when comparing ' +
+                'lifecycle rules on a version, stale date was missing';
+            return done(errors.InternalError.customizeDescription(errMsg));
+        }
+
+        const daysSinceInitiated = this._findDaysSince(new Date(staleDate));
+        const ncve = 'NoncurrentVersionExpiration';
+        const ncd = 'NoncurrentDays';
+        const doesNCVExpirationRuleApply = (rules[ncve] &&
+            rules[ncve][ncd] !== undefined &&
+            daysSinceInitiated >= rules[ncve][ncd]);
+        if (doesNCVExpirationRuleApply) {
+            const entry = {
+                action: 'deleteObject',
+                target: {
+                    owner: bucketData.target.owner,
                     bucket: bucketData.target.bucket,
-                    objectKey: object.Key,
-                    objectVersion: object.VersionId,
-                });
-                return done(err);
-            }
-            // tags.TagSet === [{ Key: '', Value: '' }, ...]
-            const filterRules = this._filterRules(bucketLCRules, object, tags);
-
-            // reduce filteredRules to only get earliest dates
-            return done(null, this._getApplicableRules(filterRules));
-        });
-    }
-
-    _compareContents(bucketData, lcRules, contents, log, done) {
-        if (!contents) {
-            return done();
-        }
-        return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            async.waterfall([
-                next => this._getRules(bucketData, lcRules, obj, log, next),
-                (applicableRules, next) => this._compareObject(
-                    bucketData, obj, applicableRules, log, next),
-            ], cb);
-        }, done);
-    }
-
-    _compareVersions(bucketData, lcRules, versions, log, done) {
-        if (!versions) {
-            return done();
-        }
-        return async.eachLimit(versions, CONCURRENCY_DEFAULT, (version, cb) => {
-            async.waterfall([
-                next => this._getRules(bucketData, lcRules, version, log, next),
-                (applicableRules, next) => {
-                    // if version is latest, only expiration action applies
-                    if (version.IsLatest) {
-                        return this._compareObject(
-                            bucketData, version, applicableRules, log, next);
-                    }
-                    const req = this.s3target.headObject({
-                        Bucket: bucketData.target.bucket,
-                        Key: version.Key,
-                        VersionId: version.VersionId,
-                    });
-                    attachReqUids(req, log);
-                    return req.send((err, data) => {
-                        if (err) {
-                            log.error('failed to get object', {
-                                method: 'LifecycleTask._compareVersions',
-                                error: err,
-                                bucket: bucketData.target.bucket,
-                                objectKey: version.Key,
-                                versionId: version.VersionId,
-                            });
-                            return next(err);
-                        }
-                        const objDate = new Date(data.LastModified);
-                        const now = Date.now();
-                        // time diff in ms
-                        const diff = now - objDate;
-                        const daysSinceInitiated =
-                            Math.floor(diff / (1000 * 60 * 60 * 24));
-                        const ncve = 'NoncurrentVersionExpiration';
-                        const ncd = 'NoncurrentDays';
-                        if (applicableRules[ncve] &&
-                        applicableRules[ncve][ncd] &&
-                        daysSinceInitiated >= applicableRules[ncve][ncd]) {
-                            const entry = {
-                                action: 'deleteObject',
-                                target: {
-                                    owner: bucketData.target.owner,
-                                    bucket: bucketData.target.bucket,
-                                    key: version.Key,
-                                    version: data.VersionId,
-                                },
-                            };
-                            this.sendObjectEntry(entry, err => {
-                                if (!err) {
-                                    log.debug('sent object entry for ' +
-                                    'consumption', {
-                                        method: 'LifecycleTask.' +
-                                            '_compareVersions',
-                                        entry,
-                                    });
-                                }
-                            });
-                        }
-                        return next();
-                    });
+                    key: version.Key,
+                    version: version.VersionId,
                 },
-            ], cb);
-        }, done);
+            };
+            this.sendObjectEntry(entry, err => {
+                if (!err) {
+                    log.debug('sent object entry for ' +
+                    'consumption', {
+                        method: 'LifecycleTask._compareVersion',
+                        entry,
+                    });
+                }
+            });
+        }
+        return done();
     }
 
     _compareDeleteMarkers(bucketData, lcRules, deleteMarkers, versions,
@@ -625,18 +770,58 @@ class LifecycleTask extends BackbeatTask {
         return done();
     }
 
-    _compareWithLCRules(bucketData, bucketLCRules, data, log, cb) {
-        // These could be executed in parallel, but to have better
-        // control on how much parallelism we introduce overall we do
-        // these steps in series for now.
-        async.series([
-            done => this._compareContents(bucketData, bucketLCRules,
-                data.Contents, log, done),
-            done => this._compareVersions(bucketData, bucketLCRules,
-                data.Versions, log, done),
-            done => this._compareDeleteMarkers(bucketData, bucketLCRules,
-                data.DeleteMarkers, data.Versions, log, done),
-        ], cb);
+    /**
+     * For all incomplete MPU uploads, compare with rules (based only on prefix
+     * because no tags exist for incomplete MPU), and apply
+     * AbortIncompleteMultipartUpload rule (if any) on each upload
+     * @param {object} bucketData - bucket data
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {array} uploads - array of upload objects from
+     *   `listMultipartUploads`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {undefined}
+     */
+    _compareMPUUploads(bucketData, bucketLCRules, uploads, log) {
+        uploads.forEach(upload => {
+            // Tags do not apply to UploadParts
+            const noTags = { TagSet: [] };
+            const filteredRules = this._filterRules(bucketLCRules, upload,
+                noTags);
+            const aRules = this._getApplicableRules(filteredRules);
+
+            const daysSinceInitiated = this._findDaysSince(
+                new Date(upload.Initiated));
+            const abortRule = aRules.AbortIncompleteMultipartUpload;
+            const doesAbortRuleApply = (abortRule &&
+                abortRule.DaysAfterInitiation !== undefined &&
+                daysSinceInitiated >= abortRule.DaysAfterInitiation);
+            if (doesAbortRuleApply) {
+                log.debug('send mpu upload for aborting', {
+                    bucket: bucketData.target.bucket,
+                    method: 'LifecycleTask._compareMPUUploads',
+                    uploadId: upload.UploadId,
+                });
+                const entry = {
+                    action: 'deleteMPU',
+                    target: {
+                        owner: bucketData.target.owner,
+                        bucket: bucketData.target.bucket,
+                        key: upload.Key,
+                    },
+                    details: {
+                        UploadId: upload.UploadId,
+                    },
+                };
+                this.sendObjectEntry(entry, err => {
+                    if (!err) {
+                        log.debug('sent object entry for consumption', {
+                            method: 'LifecycleTask._compareMPUUploads',
+                            entry,
+                        });
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -649,10 +834,16 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} [bucketData.details.prefix] - prefix
      * @param {string} [bucketData.details.keyMarker] - next key
      *   marker for versioned buckets
-     * @param {string} [bucketData.details.versionIdMarker] - next
-     *   version id marker for versioned buckets
-     * @param {string} [bucketData.details.marker] - next
-     *   continuation token marker for non-versioned buckets
+     * @param {string} [bucketData.details.versionIdMarker] - next version id
+     *   marker for versioned buckets
+     * @param {string} [bucketData.details.marker] - next continuation token
+     *   marker for non-versioned buckets
+     * @param {string} [bucketData.details.uploadIdMarker] - ext upload id
+     *   marker for MPU
+     * @param {string} [bucketData.details.prevDate] - used specifically for
+     *   handling versioned buckets
+     * @param {string} [bucketData.details.objectName] - used specifically for
+     *   handling versioned buckets
      * @param {AWS.S3} s3target - s3 instance
      * @param {function} done - callback(error)
      * @return {undefined}
@@ -677,14 +868,12 @@ class LifecycleTask extends BackbeatTask {
             owner: bucketData.target.owner,
         });
 
-        // NOTE:
-        //  With the addition of mpu's, there was no easy way to handle
-        //  how to process entries w/ markers. Will need to rethink this and
-        //  refactor
-
-        // get all objects whether versioned, non-versioned, or mpu
+        // Initially, processing a Bucket entry should check mpu AND
+        // (versioned OR non-versioned) objects
         return async.series([
             cb => {
+                // if any of these markers exists on the Bucket entry, the entry
+                // is handling a specific request that is not an MPU request
                 if (bucketData.details.versionIdMarker ||
                 bucketData.details.marker) {
                     return cb();
@@ -700,14 +889,11 @@ class LifecycleTask extends BackbeatTask {
                     mpuParams, log, cb);
             },
             cb => {
+                // if this marker exists on the Bucket entry, the entry is
+                // handling an MPU request
                 if (bucketData.details.uploadIdMarker) {
                     return cb();
                 }
-
-                const params = {
-                    Bucket: bucketData.target.bucket,
-                    MaxKeys: MAX_KEYS,
-                };
 
                 return async.waterfall([
                     next => {
@@ -729,28 +915,13 @@ class LifecycleTask extends BackbeatTask {
                     (versioningStatus, next) => {
                         if (versioningStatus === 'Enabled' ||
                         versioningStatus === 'Suspended') {
-                            // handle versioned stuff
-                            if (bucketData.details.versionIdMarker &&
-                            bucketData.details.keyMarker) {
-                                params.KeyMarker =
-                                    bucketData.details.keyMarker;
-                                params.VersionIdMarker =
-                                    bucketData.details.versionIdMarker;
-                            }
-                            return this._getObjectVersions(bucketData, params,
-                                log, next);
+                            return this._getObjectVersions(bucketData,
+                                bucketLCRules, log, next);
                         }
-                        // handle non-versioned stuff
-                        if (bucketData.details.marker) {
-                            params.Marker =
-                                bucketData.details.marker;
-                        }
-                        return this._getObjectList(bucketData, params, log,
-                            next);
+
+                        return this._getObjectList(bucketData, bucketLCRules,
+                            log, next);
                     },
-                    // Got a list of objects or versions to process now..
-                    (data, next) => this._compareWithLCRules(bucketData,
-                        bucketLCRules, data, log, next),
                 ], cb);
             },
         ], err => {

@@ -185,6 +185,33 @@ describe('lifecycle task helper methods', () => {
             assert.deepStrictEqual(getRuleIDs(res3), ['task-1', 'task-2',
                 'task-3', 'task-6', 'task-7', 'task-9']);
         });
+
+        it('should filter correctly for an object with no tags', () => {
+            const mBucketRules = [
+                new Rule().addID('task-1').addTag('tag1', 'val1')
+                    .addTag('tag2', 'val1').build(),
+                new Rule().addID('task-2').addTag('tag1', 'val1').build(),
+                new Rule().addID('task-3').addTag('tag2', 'val1').build(),
+                new Rule().addID('task-4').addTag('tag2', 'false').build(),
+                new Rule().addID('task-5').addTag('tag2', 'val1')
+                    .addTag('tag1', 'false').build(),
+                new Rule().addID('task-6').addTag('tag2', 'val1')
+                    .addTag('tag1', 'val1').build(),
+                new Rule().addID('task-7').addTag('tag2', 'val1')
+                    .addTag('tag1', 'val1').addTag('tag3', 'val1').build(),
+                new Rule().addID('task-8').addTag('tag2', 'val1')
+                    .addTag('tag1', 'val1').addTag('tag3', 'false').build(),
+                new Rule().addID('task-9').build(),
+            ];
+            const item = {
+                Key: 'example-item',
+                LastModified: CURRENT,
+            };
+            const objTags = { TagSet: [] };
+            const res = lct._filterRules(mBucketRules, item, objTags);
+            assert.strictEqual(res.length, 1);
+            assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
+        });
     });
 
     it('should filter correctly for an object with no tags', () => {
@@ -213,11 +240,6 @@ describe('lifecycle task helper methods', () => {
         assert.strictEqual(res.length, 1);
         assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
     });
-
-    // describe('_filterRules for listObjectVersions versions',
-    // () => {
-    //     it('should ')
-    // });
 
     describe('_getApplicableRules', () => {
         it('should return earliest applicable expirations', () => {
@@ -265,6 +287,164 @@ describe('lifecycle task helper methods', () => {
                 res.AbortIncompleteMultipartUpload.DaysAfterInitiation, 4);
             assert.strictEqual(
                 res.NoncurrentVersionExpiration.NoncurrentDays, 3);
+        });
+    });
+
+    describe('_mergeSortedVersionsAndDeleteMarkers', () => {
+        it('should merge and sort arrays based on Key names and then by ' +
+        'LastModified times', () => {
+            // Both arrays should be sorted respective to their own arrays.
+            // This method should stable sort and merge both arrays
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831333639393939393952473030312020363035',
+                    IsLatest: true,
+                    LastModified: '2018-04-04T23:16:46.000Z',
+                },
+                // LastModified matches with a delete marker
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831343639393939393952473030312020363033',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831353939393939393952473030312020363032',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:41.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831363939393939393952473030312020363030',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:32.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    IsLatest: false,
+                    VersionId:
+                    '834373636323233323831343139393939393952473030312020363034',
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    IsLatest: false,
+                    VersionId:
+                    '834373636323233323831363439393939393952473030312020363031',
+                    LastModified: '2018-04-04T23:16:34.000Z',
+                },
+            ];
+
+            // Can only do this since I set VersionId in the expected order
+            // Normally, when dealing with multiple objects, we wouldn't be able
+            // to sort by just VersionId, since they could be intertwined.
+            const expected = [...versions, ...dms].sort((a, b) => (
+                a.VersionId > b.VersionId
+            ));
+            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
+
+            assert.deepStrictEqual(expected, res);
+        });
+    });
+
+    describe('_applyVersionStaleDate', () => {
+        const list = [
+            {
+                Key: 'obj-1',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353833',
+                IsLatest: true,
+                LastModified: '2018-04-04T23:16:46.000Z',
+            },
+            {
+                Key: 'obj-1',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353830',
+                IsLatest: false,
+                LastModified: '2018-04-04T23:16:44.000Z',
+            },
+            {
+                Key: 'obj-1',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353827',
+                IsLatest: false,
+                LastModified: '2018-04-04T23:16:41.000Z',
+            },
+            {
+                Key: 'obj-1',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353823',
+                IsLatest: false,
+                LastModified: '2018-04-04T23:16:32.000Z',
+            },
+            // intertwine version id's with second object
+            {
+                Key: 'obj-2',
+                IsLatest: true,
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353832',
+                LastModified: '2018-04-04T23:16:44.000Z',
+            },
+            {
+                Key: 'obj-2',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353831',
+                IsLatest: false,
+                LastModified: '2018-04-04T23:16:44.000Z',
+            },
+            {
+                Key: 'obj-2',
+                IsLatest: false,
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353825',
+                LastModified: '2018-04-04T23:16:34.000Z',
+            },
+            {
+                Key: 'obj-2',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353824',
+                IsLatest: false,
+                LastModified: '2018-04-04T23:16:19.000Z',
+            },
+        ];
+
+        it('should apply a staleDate property on each version on a list ' +
+        'of versions', () => {
+            const dupelist = list.map(i => Object.assign({}, i));
+            const bucketDetails = {};
+            const res = lct._applyVersionStaleDate(bucketDetails, dupelist);
+
+            assert(res.every(v => 'staleDate' in v));
+            for (let i = 0; i < res.length - 1; i++) {
+                if (res[i + 1].IsLatest) {
+                    assert.equal(res[i + 1].staleDate, undefined);
+                } else {
+                    assert.equal(res[i].LastModified, res[i + 1].staleDate);
+                }
+            }
+        });
+
+        it('should use bucket details if applies', () => {
+            const dupelist = list.map(i => Object.assign({}, i));
+
+            // override existing `IsLatest`
+            dupelist[0].IsLatest = false;
+
+            const bucketDetails = {
+                keyMarker: 'obj-1',
+                prevDate: '2018-04-04T23:16:55.000Z',
+            };
+            const res = lct._applyVersionStaleDate(bucketDetails, dupelist);
+
+            assert.equal(res[0].staleDate, '2018-04-04T23:16:55.000Z');
         });
     });
 });
