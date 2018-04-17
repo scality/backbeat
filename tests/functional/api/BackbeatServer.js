@@ -4,9 +4,8 @@ const http = require('http');
 const Redis = require('ioredis');
 const { Producer } = require('node-rdkafka');
 
-const { RedisClient } = require('arsenal').metrics;
+const { RedisClient, StatsModel } = require('arsenal').metrics;
 
-const StatsModel = require('../../../lib/models/StatsModel');
 const config = require('../../config.json');
 const { makePOSTRequest, getResponseBody } =
     require('../utils/makePOSTRequest');
