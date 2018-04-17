@@ -255,16 +255,6 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-
-                // NOTE: No need to filter data since we are accepting
-                // multiple sites.
-
-                // const filteredData = Object.keys(data).filter(key =>
-                //     key === this.site).reduce((store, k) => {
-                //         // eslint-disable-next-line no-param-reassign
-                //         store[k] = data[this.site];
-                //         return store;
-                //     }, {});
                 this._mProducer.publishMetrics(data,
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
