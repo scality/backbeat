@@ -30,7 +30,7 @@ describe('Ingest metadata to kafka', () => {
         //         metadataMock = new MetadataMock();
         //         httpServer = http.createServer((req, res) =>
         //             metadataMock.onRequest(req, res)).listen(7779);
-        //         return 
+        //         return
         //     },
         // ])
         this.kafkaConsumer = new kafka.KafkaConsumer(testKafkaConfig);
