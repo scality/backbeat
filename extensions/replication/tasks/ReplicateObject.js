@@ -6,10 +6,13 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const AccountCredentials =
-          require('../../../lib/credentials/AccountCredentials');
+const {
+    StaticFileAccountCredentials,
+    ProvisionedServiceAccountCredentials,
+} = require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
 
@@ -25,13 +28,15 @@ class ReplicateObject extends BackbeatTask {
      *
      * @constructor
      * @param {QueueProcessor} qp - queue processor instance
+     * @param {String} site - site used for replication
      */
-    constructor(qp) {
+    constructor(qp, site) {
         const qpState = qp.getStateVars();
         super({
             retryTimeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
         });
         Object.assign(this, qpState);
+        this.site = site;
 
         this.sourceRole = null;
         this.targetRole = null;
@@ -45,7 +50,10 @@ class ReplicateObject extends BackbeatTask {
 
     _createCredentials(where, authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new AccountCredentials(authConfig, log);
+            return new StaticFileAccountCredentials(authConfig, log);
+        }
+        if (authConfig.type === 'service') {
+            return new ProvisionedServiceAccountCredentials(authConfig, log);
         }
         let vaultclient;
         if (where === 'source') {

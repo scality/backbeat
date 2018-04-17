@@ -5,8 +5,10 @@ const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const attachReqUids = require('../utils/attachReqUids');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const AccountCredentials =
-          require('../../../lib/credentials/AccountCredentials');
+const {
+    StaticFileAccountCredentials,
+    ProvisionedServiceAccountCredentials,
+} = require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
 
@@ -33,7 +35,10 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     _createCredentials(authConfig, roleArn, log) {
         if (authConfig.type === 'account') {
-            return new AccountCredentials(authConfig, log);
+            return new StaticFileAccountCredentials(authConfig, log);
+        }
+        if (authConfig.type === 'service') {
+            return new ProvisionedServiceAccountCredentials(authConfig, log);
         }
         const vaultclient = this.vaultclientCache.getClient('source:s3');
         return new RoleCredentials(vaultclient, 'replication', roleArn, log);

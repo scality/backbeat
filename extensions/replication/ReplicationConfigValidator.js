@@ -11,7 +11,8 @@ const joiSchema = {
         transport: transportJoi,
         s3: hostPortJoi.required(),
         auth: joi.object({
-            type: joi.alternatives().try('account', 'role').required(),
+            type: joi.alternatives().try('account', 'role', 'service').
+                required(),
             account: joi.string()
                 .when('type', { is: 'account', then: joi.required() }),
             vault: joi.object({
@@ -29,7 +30,8 @@ const joiSchema = {
     destination: {
         transport: transportJoi,
         auth: joi.object({
-            type: joi.alternatives().try('account', 'role').required(),
+            type: joi.alternatives().try('account', 'role', 'service')
+                .required(),
             account: joi.string()
                 .when('type', { is: 'account', then: joi.required() }),
             vault: joi.object({

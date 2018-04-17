@@ -11,6 +11,7 @@ machine:
         - redis
     environment:
         CXX: g++-4.9
+        REMOTE_MANAGEMENT_DISABLE: 1
 
 dependencies:
     override:

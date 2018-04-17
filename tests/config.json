@@ -32,6 +32,10 @@
             "host": "127.0.0.1",
             "port": 9990,
             "logName": "s3-recordlog"
+        },
+        "mongo": {
+            "logName": "s3-recordlog",
+            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
         }
     },
     "extensions": {

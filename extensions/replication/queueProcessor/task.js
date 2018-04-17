@@ -1,26 +1,16 @@
 'use strict'; // eslint-disable-line
-const assert = require('assert');
 const werelogs = require('werelogs');
-
 const QueueProcessor = require('./QueueProcessor');
+const config = require('../../../conf/Config');
+const { initManagement } = require('../../../lib/management');
+
+const zkConfig = config.zookeeper;
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
-const config = require('../../../conf/Config');
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const mConfig = config.metrics;
-
-const site = process.argv[2];
-assert(site, 'QueueProcessor task must be started with a site as argument');
-
-const bootstrapList = repConfig.destination.bootstrapList
-    .filter(item => item.site === site);
-assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
-    'one of the replication endpoints defined');
-
-const destConfig = Object.assign({}, repConfig.destination);
-destConfig.bootstrapList = bootstrapList;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
@@ -35,7 +25,29 @@ metricsProducer.setupProducer(err => {
         });
         return undefined;
     }
-    const queueProcessor = new QueueProcessor(kafkaConfig, sourceConfig,
-        destConfig, repConfig, site, metricsProducer);
-    return queueProcessor.start();
+    function initAndStart() {
+        initManagement(error => {
+            if (error) {
+                log.error('could not load management db',
+                  { error: error.message });
+                setTimeout(initAndStart, 5000);
+                return;
+            }
+            log.info('management init done');
+
+            const bootstrapList = config.getBootstrapList();
+
+            const destConfig = Object.assign({}, repConfig.destination);
+            destConfig.bootstrapList = bootstrapList;
+
+            config.on('bootstrap-list-update', () => {
+                destConfig.bootstrapList = config.getBootstrapList();
+            });
+
+            const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
+                sourceConfig, destConfig, repConfig, metricsProducer);
+            queueProcessor.start();
+        });
+    }
+    return initAndStart();
 });

@@ -9,10 +9,24 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 
+const { initManagement } = require('../../../lib/management');
 const replicationStatusProcessor =
           new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
 
 werelogs.configure({ level: config.log.logLevel,
-                     dump: config.log.dumpLevel });
+     dump: config.log.dumpLevel });
 
-replicationStatusProcessor.start();
+const logger = new werelogs.Logger('backbeat:ReplicationStatusProcessor:Init');
+function initAndStart() {
+    initManagement(error => {
+        if (error) {
+            logger.error('could not load management db', error);
+            setTimeout(initAndStart, 5000);
+            return;
+        }
+        logger.info('management init done');
+        replicationStatusProcessor.start();
+    });
+}
+
+initAndStart();

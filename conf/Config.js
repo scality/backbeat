@@ -1,5 +1,7 @@
 'use strict'; // eslint-disable-line
 
+const { EventEmitter } = require('events');
+
 const fs = require('fs');
 const path = require('path');
 const joi = require('joi');
@@ -7,8 +9,19 @@ const joi = require('joi');
 const extensions = require('../extensions');
 const backbeatConfigJoi = require('./config.joi.js');
 
-class Config {
+const locationTypeMatch = {
+    'location-mem-v1': 'mem',
+    'location-file-v1': 'file',
+    'location-azure-v1': 'azure',
+    'location-do-spaces-v1': 'aws_s3',
+    'location-aws-s3-v1': 'aws_s3',
+    'location-wasabi-v1': 'aws_s3',
+    'location-gcp-v1': 'gcp',
+};
+
+class Config extends EventEmitter {
     constructor() {
+        super();
         /*
          * By default, the config file is "config.json" at the root.
          * It can be overridden using the BACKBEAT_CONFIG_FILE environment var.
@@ -47,6 +60,16 @@ class Config {
                 }
             });
         }
+
+        if (parsedConfig.extensions && parsedConfig.extensions.replication
+            && parsedConfig.extensions.replication.destination
+            && parsedConfig.extensions.replication.destination.bootstrapList) {
+            this.bootstrapList = parsedConfig.extensions.replication
+            .destination.bootstrapList;
+        } else {
+            this.bootstrapList = [];
+        }
+
         // whitelist IP, CIDR for health checks
         const defaultHealthChecks = ['127.0.0.1/8', '::1'];
         const healthChecks = parsedConfig.server.healthChecks;
@@ -69,6 +92,18 @@ class Config {
 
     getConfigPath() {
         return this._configPath;
+    }
+
+    setBootstrapList(locationConstraints) {
+        this.bootstrapList =
+        Object.keys(locationConstraints)
+        .map(key => ({ site: key, type:
+              locationTypeMatch[locationConstraints[key].locationType] }));
+        this.emit('bootstrap-list-update');
+    }
+
+    getBootstrapList() {
+        return this.bootstrapList;
     }
 }
 
