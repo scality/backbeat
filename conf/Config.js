@@ -17,6 +17,8 @@ const locationTypeMatch = {
     'location-aws-s3-v1': 'aws_s3',
     'location-wasabi-v1': 'aws_s3',
     'location-gcp-v1': 'gcp',
+    'location-scality-ring-s3-v1': 'aws_s3',
+    'location-ceph-radosgw-s3-v1': 'aws_s3',
 };
 
 class Config extends EventEmitter {
