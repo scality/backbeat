@@ -144,6 +144,9 @@ class MetadataMock {
             return res.end(JSON.stringify({
                 metadata: 'dogsAreGood',
             }));
+        } else if (/\/_\/raft_sessions\/[\d]*\/log\?begin=[\d]*&limit=[\d]*&targetLeader=false/.test(req.url)) {
+            console.log('getting raft logs from metadata mock!');
+            return res.end('fail');
         }
         return res.end(JSON.stringify({
             error: 'invalid path',

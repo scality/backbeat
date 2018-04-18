@@ -3,13 +3,15 @@ const assert = require('assert');
 const http = require('http');
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
+const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
-const MetadataMock = require('../../utils/MetadataMock');
+const testConfig = require('../../config.json');
+const MetadataMock = require('../../../utils/MockMetadataServer');
 
 const logger = new Logger('IngestionProducer:test:metadataMock');
 
-describe.only('ingestion producer functional tests with mock', () => {
+describe.only('ingestion producer unit tests with mock', () => {
     let httpServer;
     let metadataMock;
 
@@ -24,6 +26,11 @@ describe.only('ingestion producer functional tests with mock', () => {
             host: 'localhost:7778',
             port: 7778,
         });
+        this.queuePopulator = new QueuePopulator(
+            testConfig.zookeeper,
+            testConfig.kafka,
+            testConfig.queuePopulator,
+            testConfig.extensions);
         done();
     });
 
