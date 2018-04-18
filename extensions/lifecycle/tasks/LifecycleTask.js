@@ -80,8 +80,8 @@ class LifecycleTask extends BackbeatTask {
                     });
                 }
 
-                this._applyRulesToList(bucketData, bucketLCRules, data.Contents,
-                    log, false, next);
+                this._compareRulesToList(bucketData, bucketLCRules,
+                    data.Contents, log, false, next);
             },
         ], done);
     }
@@ -111,8 +111,8 @@ class LifecycleTask extends BackbeatTask {
             // all versions including delete markers
             const allVersions = this._mergeSortedVersionsAndDeleteMarkers(
                 data.Versions, data.DeleteMarkers);
-            // for all versions and delete markers, apply stale date property
-            const allVersionsWithStaleDate = this._applyVersionStaleDate(
+            // for all versions and delete markers, add stale date property
+            const allVersionsWithStaleDate = this._addStaleDateToVersions(
                 bucketData.details, allVersions);
 
             // sending bucket entry for checking next listing
@@ -146,7 +146,7 @@ class LifecycleTask extends BackbeatTask {
             // bucket rules, match with `staleDate` to
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
-            return this._applyRulesToList(bucketData, bucketLCRules,
+            return this._compareRulesToList(bucketData, bucketLCRules,
                 allVersionsWithStaleDate, log, true, done);
         });
     }
@@ -276,7 +276,7 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Helper method to apply a staleDate property to each Version and
+     * Helper method to add a staleDate property to each Version and
      * DeleteMarker
      * @param {object} bucketDetails - details property from Kafka Bucket entry
      * @param {string} [bucketDetails.keyMarker] - previous listing key name
@@ -285,7 +285,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {array} an updated array of Versions and DeleteMarkers with
      *   applied staleDate
      */
-    _applyVersionStaleDate(bucketDetails, list) {
+    _addStaleDateToVersions(bucketDetails, list) {
         const appliedList = [];
 
         for (let i = 0; i < list.length; i++) {
@@ -499,12 +499,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getRules(bucketData, bucketLCRules, object, log, done) {
-        // if no ETag, Size, and StorageClass, then it is a Delete Marker
-        const isDeleteMarker = (
-            !Object.prototype.hasOwnProperty.call(object, 'ETag') &&
-            !Object.prototype.hasOwnProperty.call(object, 'Size') &&
-            !Object.prototype.hasOwnProperty.call(object, 'StorageClass'));
-        if (isDeleteMarker) {
+        if (this._isDeleteMarker(object)) {
             // DeleteMarkers don't have any tags, so avoid calling
             // `getObjectTagging` which will throw an error
             const filterRules = this._filterRules(bucketLCRules, object, []);
@@ -548,7 +543,7 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _applyRulesToList(bucketData, lcRules, contents, log, versioned, done) {
+    _compareRulesToList(bucketData, lcRules, contents, log, versioned, done) {
         if (!contents.length) {
             return done();
         }
@@ -587,6 +582,126 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Helper method to determine if a version is a Delete Marker
+     * @param {Object} version - single version object
+     * @return {boolean} true/false
+     */
+    _isDeleteMarker(version) {
+        // if no ETag, Size, and StorageClass, then it is a Delete Marker
+        return (
+            !Object.prototype.hasOwnProperty.call(version, 'ETag') &&
+            !Object.prototype.hasOwnProperty.call(version, 'Size') &&
+            !Object.prototype.hasOwnProperty.call(version, 'StorageClass')
+        );
+    }
+
+    /**
+     * Helper method for Expiration.Date and Expiration.Days rules
+     * Check if Expiration rules apply on the object or version
+     * @param {object} bucketData - bucket data
+     * @param {object} obj - single object or version
+     * @param {string} obj.LastModified - last modified date of object
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {boolean} used to know if a rule has been applied already.
+     *   If this rule has been applied to the object or version, other rules
+     *   (i.e. transition) should not apply.
+     */
+    _checkAndApplyExpirationRule(bucketData, obj, rules, log) {
+        const daysSinceInitiated = this._findDaysSince(
+            new Date(obj.LastModified));
+
+        if (rules.Expiration.Date &&
+        rules.Expiration.Date < Date.now()) {
+            // expiration date passed for this object
+            const entry = {
+                action: 'deleteObject',
+                target: {
+                    owner: bucketData.target.owner,
+                    bucket: bucketData.target.bucket,
+                    key: obj.Key,
+                },
+                details: {
+                    lastModified: obj.LastModified,
+                },
+            };
+            this.sendObjectEntry(entry, err => {
+                if (!err) {
+                    log.debug('sent object entry for consumption', {
+                        method: 'LifecycleTask._compareObject',
+                        entry,
+                    });
+                }
+            });
+            return true;
+        }
+        if (rules.Expiration.Days !== undefined &&
+        daysSinceInitiated >= rules.Expiration.Days) {
+            const entry = {
+                action: 'deleteObject',
+                target: {
+                    owner: bucketData.target.owner,
+                    bucket: bucketData.target.bucket,
+                    key: obj.Key,
+                },
+                details: {
+                    lastModified: obj.LastModified,
+                },
+            };
+            this.sendObjectEntry(entry, err => {
+                if (!err) {
+                    log.debug('sent object entry for consumption', {
+                        method: 'LifecycleTask._compareObject',
+                        entry,
+                    });
+                }
+            });
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Helper method for NoncurrentVersionExpiration.NoncurrentDays rule
+     * Check if Noncurrent Expiration rule applies on the version
+     * @param {object} bucketData - bucket data
+     * @param {object} version - single non-current version
+     * @param {string} version.LastModified - last modified date of version
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {undefined}
+     */
+    _checkAndApplyNCVExpirationRule(bucketData, version, rules, log) {
+        const staleDate = version.staleDate;
+        const daysSinceInitiated = this._findDaysSince(new Date(staleDate));
+        const ncve = 'NoncurrentVersionExpiration';
+        const ncd = 'NoncurrentDays';
+        const doesNCVExpirationRuleApply = (rules[ncve] &&
+            rules[ncve][ncd] !== undefined &&
+            daysSinceInitiated >= rules[ncve][ncd]);
+        if (doesNCVExpirationRuleApply) {
+            const entry = {
+                action: 'deleteObject',
+                target: {
+                    owner: bucketData.target.owner,
+                    bucket: bucketData.target.bucket,
+                    key: version.Key,
+                    version: version.VersionId,
+                },
+            };
+            this.sendObjectEntry(entry, err => {
+                if (!err) {
+                    log.debug('sent object entry for ' +
+                    'consumption', {
+                        method: 'LifecycleTask._compareVersion',
+                        entry,
+                    });
+                }
+            });
+        }
+    }
+
+    /**
      * Compare a non-versioned object to most applicable rules
      * @param {object} bucketData - bucket data
      * @param {object} obj - single object from `listObjects`
@@ -617,24 +732,10 @@ class LifecycleTask extends BackbeatTask {
                 });
                 return done(err);
             }
-            const daysSinceInitiated = this._findDaysSince(
-                new Date(data.LastModified));
 
-            /* Example of `rules`
-                {
-                    Expiration: {
-                        Days: 5,
-                        Date: <DateObject>,
-                        ExpiredObjectDeleteMarker: true,
-                    },
-                    NoncurrentVersionExpiration: {
-                        NoncurrentDays: 2,
-                    },
-                    AbortIncompleteMultipartUpload: {
-                        DaysAfterInitiation: 4,
-                    }
-                }
-            */
+            const object = Object.assign({}, obj,
+                { LastModified: data.LastModified });
+
             // There is an order of importance in cases of conflicts
             // Expiration and NoncurrentVersionExpiration should be priority
             // AbortIncompleteMultipartUpload should run regardless since
@@ -642,57 +743,9 @@ class LifecycleTask extends BackbeatTask {
             // Transitions and NoncurrentVersionTransitions (which we don't
             // need to worry about this release) should only happen if
             // no expiration occurred
-            let alreadySent = false;
-
             if (rules.Expiration) {
-                // TODO: Handle ExpiredObjectDeleteMarker
-                if (rules.Expiration.Date &&
-                rules.Expiration.Date < Date.now()) {
-                    // expiration date passed for this object
-                    alreadySent = true;
-                    const entry = {
-                        action: 'deleteObject',
-                        target: {
-                            owner: bucketData.target.owner,
-                            bucket: bucketData.target.bucket,
-                            key: obj.Key,
-                        },
-                        details: {
-                            lastModified: data.LastModified,
-                        },
-                    };
-                    this.sendObjectEntry(entry, err => {
-                        if (!err) {
-                            log.debug('sent object entry for consumption', {
-                                method: 'LifecycleTask._compareObject',
-                                entry,
-                            });
-                        }
-                    });
-                }
-                if (!alreadySent && rules.Expiration.Days !== undefined &&
-                daysSinceInitiated >= rules.Expiration.Days) {
-                    alreadySent = true;
-                    const entry = {
-                        action: 'deleteObject',
-                        target: {
-                            owner: bucketData.target.owner,
-                            bucket: bucketData.target.bucket,
-                            key: obj.Key,
-                        },
-                        details: {
-                            lastModified: data.LastModified,
-                        },
-                    };
-                    this.sendObjectEntry(entry, err => {
-                        if (!err) {
-                            log.debug('sent object entry for consumption', {
-                                method: 'LifecycleTask._compareObject',
-                                entry,
-                            });
-                        }
-                    });
-                }
+                this._checkAndApplyExpirationRule(bucketData, object, rules,
+                    log);
             }
             // if (rules.Transitions && !alreadySent) {}
 
@@ -747,8 +800,7 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
 
-        const staleDate = version.staleDate;
-        if (!staleDate) {
+        if (!version.staleDate) {
             // NOTE: this should never happen. Logging here for debug purposes
             log.error('missing staleDate on the version', {
                 method: 'LifecycleTask._compareVersion',
@@ -760,39 +812,8 @@ class LifecycleTask extends BackbeatTask {
             return done(errors.InternalError.customizeDescription(errMsg));
         }
 
-        const daysSinceInitiated = this._findDaysSince(new Date(staleDate));
-        const ncve = 'NoncurrentVersionExpiration';
-        const ncd = 'NoncurrentDays';
-        const doesNCVExpirationRuleApply = (rules[ncve] &&
-            rules[ncve][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncve][ncd]);
-        if (doesNCVExpirationRuleApply) {
-            const entry = {
-                action: 'deleteObject',
-                target: {
-                    owner: bucketData.target.owner,
-                    bucket: bucketData.target.bucket,
-                    key: version.Key,
-                    version: version.VersionId,
-                },
-            };
-            this.sendObjectEntry(entry, err => {
-                if (!err) {
-                    log.debug('sent object entry for ' +
-                    'consumption', {
-                        method: 'LifecycleTask._compareVersion',
-                        entry,
-                    });
-                }
-            });
-        }
-        return done();
-    }
+        this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log);
 
-    _compareDeleteMarkers(bucketData, lcRules, deleteMarkers, versions,
-        log, done) {
-        // TODO: Issue with rule `Expiration.ExpiredObjectDeleteMarker`
-        // will be completed later
         return done();
     }
 
