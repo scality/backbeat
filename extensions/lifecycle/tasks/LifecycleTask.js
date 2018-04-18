@@ -81,7 +81,7 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 this._compareRulesToList(bucketData, bucketLCRules,
-                    data.Contents, log, false, next);
+                    data.Contents, log, 'Disabled', next);
             },
         ], done);
     }
@@ -90,11 +90,12 @@ class LifecycleTask extends BackbeatTask {
      * Handles versioned objects (both enabled and suspended)
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {string} versioningStatus - 'Enabled' or 'Suspended'
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectVersions(bucketData, bucketLCRules, log, done) {
+    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, log, done) {
         const paramDetails = {};
 
         if (bucketData.details.versionIdMarker &&
@@ -147,7 +148,7 @@ class LifecycleTask extends BackbeatTask {
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
             return this._compareRulesToList(bucketData, bucketLCRules,
-                allVersionsWithStaleDate, log, true, done);
+                allVersionsWithStaleDate, log, versioningStatus, done);
         });
     }
 
@@ -539,11 +540,12 @@ class LifecycleTask extends BackbeatTask {
      * @param {array} lcRules - array of bucket lifecycle rules
      * @param {array} contents - list of objects or object versions
      * @param {Logger.newRequestLogger} log - logger object
-     * @param {boolean} versioned - tells if contents are versioned list or not
+     * @param {string} versioningStatus - 'Enabled', 'Suspended', or 'Disabled'
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _compareRulesToList(bucketData, lcRules, contents, log, versioned, done) {
+    _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus,
+    done) {
         if (!contents.length) {
             return done();
         }
@@ -559,9 +561,10 @@ class LifecycleTask extends BackbeatTask {
                         rules = this._adjustRulesForTesting(rules);
                     }
 
-                    if (versioned) {
-                        return this._compareVersion(bucketData, obj, rules, log,
-                            next);
+                    if (versioningStatus === 'Enabled' ||
+                    versioningStatus === 'Suspended') {
+                        return this._compareVersion(bucketData, obj, rules,
+                            versioningStatus, log, next);
                     }
                     return this._compareObject(bucketData, obj, rules, log,
                         next);
@@ -659,6 +662,59 @@ class LifecycleTask extends BackbeatTask {
             return true;
         }
         return false;
+    }
+
+    /**
+     * Helper method for Expiration.ExpiredObjectDeleteMarker rule
+     * Check if ExpiredObjectDeleteMarker rule applies to the `IsLatest` delete
+     * marker
+     * @param {object} bucketData - bucket data
+     * @param {object} deleteMarker - single non-current version
+     * @param {string} deleteMarker.LastModified - last modified date
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} done - callback(error)
+     * @return {undefined}
+     */
+    _checkAndApplyEODMRule(bucketData, deleteMarker, rules, log, done) {
+        return this._listVersions(bucketData, { Prefix: deleteMarker.Key }, log,
+        (err, data) => {
+            if (err) {
+                // error already logged at source
+                return done(err);
+            }
+            const allVersions = [...data.Versions, ...data.DeleteMarkers];
+            const matchingNoncurrentKeys = allVersions.filter(v => (
+                v.Key === deleteMarker.Key && !v.IsLatest));
+
+            // if there are no other versions with the same Key as this DM,
+            // the ExpiredObjectDeleteMarker rule applies. Otherwise, no rule
+            // applies to this `IsLatest` DM
+            if (matchingNoncurrentKeys.length === 0) {
+                if (rules.Expiration.ExpiredObjectDeleteMarker) {
+                    const entry = {
+                        action: 'deleteObject',
+                        target: {
+                            owner: bucketData.target.owner,
+                            bucket: bucketData.target.bucket,
+                            key: deleteMarker.Key,
+                            version: deleteMarker.VersionId,
+                        },
+                    };
+                    this.sendObjectEntry(entry, err => {
+                        if (!err) {
+                            log.debug('sent object entry for ' +
+                            'consumption', {
+                                method: '',
+                                entry,
+                            });
+                        }
+                    });
+                }
+            }
+
+            return done();
+        });
     }
 
     /**
@@ -789,15 +845,16 @@ class LifecycleTask extends BackbeatTask {
      * @param {object} bucketData - bucket data
      * @param {object} version - single version from `_getObjectVersions`
      * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {string} versioningStatus - 'Enabled' or 'Suspended'
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _compareVersion(bucketData, version, rules, log, done) {
+    _compareVersion(bucketData, version, rules, versioningStatus, log, done) {
         // if version is latest, only expiration action applies
         if (version.IsLatest) {
-            // TODO: handle unique cases for comparing expiration rule
-            return done();
+            return this._compareIsLatestVersion(bucketData, version, rules,
+                versioningStatus, log, done);
         }
 
         if (!version.staleDate) {
@@ -815,6 +872,45 @@ class LifecycleTask extends BackbeatTask {
         this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log);
 
         return done();
+    }
+
+    /**
+     * Compare the `IsLatest` version to most applicable rules. Also handles
+     * the `ExpiredObjectDeleteMarker` lifecycle rule.
+     * @param {object} bucketData - bucket data
+     * @param {object} version - single version from `_getObjectVersions`
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {string} versioningStatus - 'Enabled' or 'Suspended'
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} done - callback(error)
+     * @return {undefined}
+     */
+    _compareIsLatestVersion(bucketData, version, rules, versioningStatus, log,
+    done) {
+        const isDeleteMarker = this._isDeleteMarker(version);
+
+        // 1. In a versioning-suspended bucket, create a DM with null as version
+        //    ID. Doesn't matter if IsLatest is a Version or DM
+        // 2. In a versioning-enabled bucket, if Version, apply expiration rule,
+        //    and add delete marker
+        if (versioningStatus === 'Suspended' ||
+        (versioningStatus === 'Enabled' && !isDeleteMarker)) {
+            // if Expiration rule exists, apply it here
+            if (rules.Expiration) {
+                this._checkAndApplyExpirationRule(bucketData, version, rules,
+                    log);
+            }
+            return done();
+        }
+
+        // All other cases below means versioningStatus === 'Enabled'
+
+        // 3. If DM, and has no other versions with the Key, and versioning is
+        //    enabled, the ExpiredObjectDeleteMarker rule applies.
+        // 4. If DM is current version and there are 1+ versions for that key,
+        //    no action is taken
+        return this._checkAndApplyEODMRule(bucketData, version, rules, log,
+            done);
     }
 
     /**
@@ -963,7 +1059,7 @@ class LifecycleTask extends BackbeatTask {
                         if (versioningStatus === 'Enabled' ||
                         versioningStatus === 'Suspended') {
                             return this._getObjectVersions(bucketData,
-                                bucketLCRules, log, next);
+                                bucketLCRules, versioningStatus, log, next);
                         }
 
                         return this._getObjectList(bucketData, bucketLCRules,
