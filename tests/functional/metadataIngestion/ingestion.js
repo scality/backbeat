@@ -10,6 +10,7 @@ const testConfig = require('./config.json');
 
 const testKafkaConfig = {
     'metadata.broker.list': 'localhost:9092',
+    'group.id': 'testid',
 };
 
 describe.only('Ingest metadata to kafka', () => {
@@ -26,8 +27,11 @@ describe.only('Ingest metadata to kafka', () => {
                 return next();
             },
             next => {
-                kafkaConsumer.connect();
-                return next();
+                kafkaConsumer.connect({ allTopics: true }, (err, res) => {
+                    console.log('attempting to connect to kafkaConsumer');
+                    console.log(err, res);
+                    return next(err);
+                });
             },
             next => {
                 metadataMock = new MetadataMock();
