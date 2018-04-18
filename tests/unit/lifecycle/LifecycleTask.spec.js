@@ -299,7 +299,7 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363035',
+                    '834373636323233323831333639393939393952473030312020363030',
                     IsLatest: true,
                     LastModified: '2018-04-04T23:16:46.000Z',
                 },
@@ -307,21 +307,21 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831343639393939393952473030312020363033',
+                    '834373636323233323831333639393939393952473030312020363035',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831353939393939393952473030312020363032',
+                    '834373636323233323831333639393939393952473030312020363040',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:41.000Z',
                 },
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831363939393939393952473030312020363030',
+                    '834373636323233323831333639393939393952473030312020363045',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:32.000Z',
                 },
@@ -331,14 +331,14 @@ describe('lifecycle task helper methods', () => {
                     Key: 'obj-1',
                     IsLatest: false,
                     VersionId:
-                    '834373636323233323831343139393939393952473030312020363034',
+                    '834373636323233323831333639393939393952473030312020363036',
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
                     IsLatest: false,
                     VersionId:
-                    '834373636323233323831363439393939393952473030312020363031',
+                    '834373636323233323831333639393939393952473030312020363042',
                     LastModified: '2018-04-04T23:16:34.000Z',
                 },
             ];
@@ -349,6 +349,46 @@ describe('lifecycle task helper methods', () => {
             const expected = [...versions, ...dms].sort((a, b) => (
                 a.VersionId > b.VersionId
             ));
+            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
+
+            assert.deepStrictEqual(expected, res);
+        });
+
+        it('should merge and sort arrays that include a null version id ' +
+        'version', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831343639393939393952473030312020363030',
+                    IsLatest: true,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    VersionId: 'null',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:46.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831343639393939393952473030312020363035',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '834373636323233323831343639393939393952473030312020363040',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:40.000Z',
+                },
+            ];
+
+            const expected = [versions[0], dms[0], versions[1], dms[1]];
             const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
 
             assert.deepStrictEqual(expected, res);

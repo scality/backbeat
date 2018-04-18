@@ -215,7 +215,9 @@ class LifecycleTask extends BackbeatTask {
      */
     _mergeSortedVersionsAndDeleteMarkers(versions, deleteMarkers) {
         const sortedList = [];
+        // Version index counter
         let vIdx = 0;
+        // Delete Marker index counter
         let dmIdx = 0;
 
         while (vIdx < versions.length || dmIdx < deleteMarkers.length) {
@@ -235,13 +237,37 @@ class LifecycleTask extends BackbeatTask {
                     sortedList.push(deleteMarkers[dmIdx++]);
                 }
             } else {
-                // 2. by VersionId, lower number means newer
+                //    NOTE: VersionId may be null
+                const nullVersion = (versions[vIdx].VersionId === 'null'
+                    || deleteMarkers[dmIdx].VersionId === 'null');
                 const isVersionVidNewer = (versions[vIdx].VersionId <
                     deleteMarkers[dmIdx].VersionId);
-                if (isVersionVidNewer) {
-                    sortedList.push(versions[vIdx++]);
+
+                // if there is a null version, handle accordingly
+                if (nullVersion) {
+                    const isVersionLastModifiedNewer =
+                        (new Date(versions[vIdx].LastModified) >
+                         new Date(deleteMarkers[dmIdx].LastModified));
+                    const isDMLastModifiedNewer =
+                        (new Date(deleteMarkers[dmIdx].LastModified) >
+                         new Date(versions[vIdx].LastModified));
+                     // 2. by LastModified, find newer
+                    if (isVersionLastModifiedNewer) {
+                        sortedList.push(versions[vIdx++]);
+                    } else if (isDMLastModifiedNewer) {
+                        sortedList.push(deleteMarkers[dmIdx++]);
+                    } else {
+                        // 3. choose one randomly since all conditions match
+                        // TODO: to be fixed
+                        sortedList.push(versions[vIdx++]);
+                    }
                 } else {
-                    sortedList.push(deleteMarkers[dmIdx++]);
+                    // 4. by VersionId, lower number means newer
+                    if (isVersionVidNewer) {
+                        sortedList.push(versions[vIdx++]);
+                    } else {
+                        sortedList.push(deleteMarkers[dmIdx++]);
+                    }
                 }
             }
         }
