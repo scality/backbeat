@@ -134,12 +134,7 @@ class S3Helper {
 
     createVersions(scenarioNumber, cb) {
         async.series([
-            next => this.s3.putBucketVersioning({
-                Bucket: this.bucket,
-                VersioningConfiguration: {
-                    Status: 'Enabled',
-                },
-            }, next),
+            next => this.setBucketVersioning('Enabled', next),
             next => this.createObjects(scenarioNumber, next),
         ], err => {
             assert.ifError(err);
@@ -148,12 +143,7 @@ class S3Helper {
     }
 
     createDeleteMarkers(scenarioNumber, cb) {
-        this.s3.putBucketVersioning({
-            Bucket: this.bucket,
-            VersioningConfiguration: {
-                Status: 'Enabled',
-            },
-        }, err => {
+        this.setBucketVersioning('Enabled', err => {
             assert.ifError(err);
 
             return async.eachOfLimit(this._scenario[scenarioNumber].keyNames, 1,
@@ -180,6 +170,21 @@ class S3Helper {
         });
     }
 
+    /**
+     * Helper method to set bucket versioning
+     * @param {string} status - 'Enabled' or 'Suspended'
+     * @param {function} cb - callback(error, response)
+     * @return {undefined}
+     */
+    setBucketVersioning(status, cb) {
+        this.s3.putBucketVersioning({
+            Bucket: this.bucket,
+            VersioningConfiguration: {
+                Status: status,
+            },
+        }, cb);
+    }
+
     emptyAndDeleteBucket(cb) {
         // won't need to worry about 1k+ objects pagination
         async.waterfall([
@@ -202,6 +207,10 @@ class S3Helper {
                                 VersionId: dm.VersionId,
                             })),
                         ];
+
+                        if (list.length === 0) {
+                            return next(null, null);
+                        }
 
                         return this.s3.deleteObjects({
                             Bucket: this.bucket,
