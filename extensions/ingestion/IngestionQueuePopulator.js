@@ -35,7 +35,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                                 zookeeperPath,
                                 error: err,
                             });
-                            return cb(err);
+                            // return cb(err);
                         }
                         // return cb();
                     });
