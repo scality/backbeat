@@ -9,22 +9,6 @@ function _extractVersionedBaseKey(key) {
     return '';
 }
 
-function _getGlobalReplicationStatus(data) {
-    // Check the global status relative to the other backends
-    if (Array.isArray(data.replicationInfo.backends)) {
-        const statuses = data.replicationInfo.backends.map(backend =>
-            backend.status);
-        // If any site replication failed, set the global status to FAILED.
-        if (statuses.includes('FAILED')) {
-            return 'FAILED';
-        }
-        if (statuses.includes('PENDING')) {
-            return 'PROCESSING';
-        }
-    }
-    return 'COMPLETED';
-}
-
 class ObjectQueueEntry extends ObjectMD {
 
     /**
@@ -112,18 +96,38 @@ class ObjectQueueEntry extends ObjectMD {
         };
     }
 
+    _getGlobalReplicationStatus() {
+        const data = this.getValue();
+        // Check the global status relative to the other backends
+        if (Array.isArray(data.replicationInfo.backends)) {
+            const statuses = data.replicationInfo.backends.map(
+                backend => backend.status);
+            // If any site replication failed, set the global status
+            // to FAILED.
+            if (statuses.includes('FAILED')) {
+                return 'FAILED';
+            }
+            if (statuses.includes('PENDING')) {
+                return 'PROCESSING';
+            }
+        }
+        return 'COMPLETED';
+    }
+
     toReplicaEntry(site) {
         const newEntry = this.clone();
-        newEntry.setBucket(this.getReplicationTargetBucket());
-        newEntry.setReplicationSiteStatus(site, 'REPLICA');
-        newEntry.setReplicationStatus('REPLICA');
+        newEntry
+            .setBucket(this.getReplicationTargetBucket())
+            .setReplicationSiteStatus(site, 'REPLICA')
+            .setReplicationStatus('REPLICA')
+            .setNonTransientLocation(undefined);
         return newEntry;
     }
 
     toCompletedEntry(site) {
         const newEntry = this.clone();
         newEntry.setReplicationSiteStatus(site, 'COMPLETED');
-        const status = _getGlobalReplicationStatus(this.getValue());
+        const status = this._getGlobalReplicationStatus();
         newEntry.setReplicationStatus(status);
         return newEntry;
     }

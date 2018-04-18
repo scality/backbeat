@@ -44,11 +44,12 @@ class UpdateReplicationStatus extends BackbeatTask {
         return new RoleCredentials(vaultclient, 'replication', roleArn, log);
     }
 
-    _putMetadata(entry, log, cb) {
+    _putMetadata(entry, log, options, cb) {
         this.retry({
             actionDesc: 'update metadata on source',
             logFields: { entry: entry.getLogInfo() },
-            actionFunc: done => this._putMetadataOnce(entry, log, done),
+            actionFunc: done => this._putMetadataOnce(entry, log, options,
+                                                      done),
             shouldRetryFunc: err => err.retryable,
             log,
         }, cb);
@@ -81,7 +82,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         return null;
     }
 
-    _putMetadataOnce(entry, log, cb) {
+    _putMetadataOnce(entry, log, options, cb) {
         log.debug('putting metadata',
                   { where: 'source', entry: entry.getLogInfo(),
                     replicationStatus: entry.getReplicationStatus() });
@@ -94,6 +95,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             Key: entry.getObjectKey(),
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
+            DeleteOldLocation: options && options.deleteOldLocation,
         });
         attachReqUids(req, log);
         req.send((err, data) => {
@@ -236,7 +238,22 @@ class UpdateReplicationStatus extends BackbeatTask {
             updatedSourceEntry.setSite(site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(site));
-            return this._putMetadata(updatedSourceEntry, log, err => {
+            if (Array.isArray(sourceEntry.getNonTransientLocation())) {
+                updatedSourceEntry.setNonTransientLocation(
+                    sourceEntry.getNonTransientLocation());
+            }
+            const options = {};
+            if (updatedSourceEntry.getReplicationStatus() === 'COMPLETED'
+                && Array.isArray(
+                    updatedSourceEntry.getNonTransientLocation())) {
+                // replace location by the non-transient cloud
+                // location on CRR global completion
+                updatedSourceEntry.setLocation(
+                    updatedSourceEntry.getNonTransientLocation());
+                updatedSourceEntry.setNonTransientLocation(undefined);
+                options.deleteOldLocation = true;
+            }
+            return this._putMetadata(updatedSourceEntry, log, options, err => {
                 if (err) {
                     log.error('an error occurred when writing replication ' +
                               'status',
