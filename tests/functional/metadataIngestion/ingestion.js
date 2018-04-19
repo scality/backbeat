@@ -84,7 +84,10 @@ describe.only('Ingest metadata to kafka', () => {
                 queuePopulator = new QueuePopulator(testConfig.zookeeper,
                 testConfig.kafka, testConfig.queuePopulator, testConfig.metrics,
                 testConfig.redis, testConfig.extensions, testConfig.ingestion);
-                return queuePopulator.open(next);
+                return queuePopulator.open((err, res) => {
+                    console.log('opening queue populator', err, res);
+                    return next();
+                });
             },
         ], done);
     });
