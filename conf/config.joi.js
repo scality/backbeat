@@ -46,6 +46,8 @@ const joiSchema = {
     extensions: joi.object(),
     metrics: {
         topic: joi.string().required(),
+        intervalS: joi.number().default(300),
+        expiryS: joi.number().default(900),
     },
     server: {
         healthChecks: joi.object({
