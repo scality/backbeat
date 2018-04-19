@@ -1,6 +1,7 @@
 const async = require('async');
 const http = require('http');
 const kafka = require('node-rdkafka');
+const zookeeper = require('../../../lib/clients/zookeeper');
 
 const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
@@ -13,12 +14,23 @@ const testKafkaConfig = {
     'group.id': 'testid',
 };
 
+const testZkPaths = [
+    '/backbeat',
+    '/backbeat/ingestion',
+    '/backbeat/ingestion/source1',
+    '/backbeat/ingestion/source1/raft-id-dispatcher',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/leaders',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/owners',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/1',
+];
+
 describe.only('Ingest metadata to kafka', () => {
     let metadataMock;
     let httpServer;
     let kafkaConsumer;
     let iProducer;
     let queuePopulator;
+    let zkClient;
 
     before(function before(done) {
         async.waterfall([
@@ -47,26 +59,34 @@ describe.only('Ingest metadata to kafka', () => {
                 return next();
             },
             next => {
+                zkClient = zookeeper.createClient('127.0.0.1:2181');
+                zkClient.connect();
+                zkClient.once('error', (err, res) => {
+                    console.log('error connecting to zookeeper');
+                    console.log(err, res);
+                    throw err;
+                });
+                zkClient.once('ready', (err, res) => {
+                    console.log('zkclient is ready');
+                    console.log(err, res);
+                    return next();
+                });
+            },
+            next => {
+                testZkPaths.forEach(path => {
+                    zkClient.mkdirp(path, (err, res) => {
+                        console.log('trying to mkdirp', err, res);
+                    });
+                });
+                return next();
+            },
+            next => {
                 queuePopulator = new QueuePopulator(testConfig.zookeeper,
                 testConfig.kafka, testConfig.queuePopulator, testConfig.metrics,
                 testConfig.redis, testConfig.extensions, testConfig.ingestion);
                 return queuePopulator.open(next);
             },
         ], done);
-        // this.kafkaConsumer = new kafka.KafkaConsumer(testKafkaConfig);
-        // this.kafkaConsumer.connect();
-        // metadataMock = new MetadataMock();
-        // httpServer = http.createServer(
-        //     (req, res) => metadataMock.onRequest(req, res)).listen(7779);
-        // this.iProducer = new IngestionProducer({
-        //     host: 'localhost:7779',
-        //     port: 7779,
-        // });
-        // this.queuePopulator = new QueuePopulator(
-        //     testConfig.zookeeper, testConfig.kafka, testConfig.queuePopulator,
-        //     testConfig.metrics, testConfig.redis, testConfig.extensions,
-        //     testConfig.ingestion);
-        // return this.queuePopulator.open(done);
     });
 
     after(done => {
@@ -76,14 +96,14 @@ describe.only('Ingest metadata to kafka', () => {
 
     it('should store metadata ingested from remote cloud backend', done => {
         return async.waterfall([
-            next => {
-                console.log('this.iProducer', iProducer);
-                next();
-            },
-            next => iProducer.snapshot(1, (err, res) => {
-                console.log('WE PRODUCED SNAPSHOT', res);
-                return next();
-            }),
+            // next => {
+            //     console.log('this.iProducer', iProducer);
+            //     next();
+            // },
+            // next => iProducer.snapshot(1, (err, res) => {
+            //     console.log('WE PRODUCED SNAPSHOT', res);
+            //     return next();
+            // }),
             next => {
                 console.log('WE WILL PROCESS ALL LOG ENTRIES NOW');
                 queuePopulator.processAllLogEntries({ maxRead: 10 },

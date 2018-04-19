@@ -6,6 +6,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.config = params.config;
+        console.log('INGESTIONQUEUEPOPULATOR');
     }
 
     createZkPath(cb, source) {
