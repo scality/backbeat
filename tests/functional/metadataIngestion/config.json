@@ -28,6 +28,11 @@
         "batchMaxRead": 10000,
         "zookeeperPath": "/backbeat/test/queue-populator",
         "logSource": "ingestion",
+        "bucketd": {
+            "host": "127.0.0.7",
+            "port": 7779,
+            "logName": "scality-log"
+        },
         "dmd": {
             "host": "127.0.0.1",
             "port": 9990,
@@ -46,11 +51,14 @@
                 "port": 7779,
                 "https": false,
                 "type": "scality",
-                "raftCount": 8
+                "raftCount": 1
             }
         ]
     },
     "extensions": {
+        "ingestion": {
+            "topic": "backbeat-ingestion"
+        },
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",

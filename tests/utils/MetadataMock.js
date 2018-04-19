@@ -148,6 +148,10 @@ class MetadataMock {
             console.log('getting raft logs from metadata mock!');
             return res.end('fail');
         }
+        //  else if() {
+        //     console.log('getting raft log offset');
+        //     return res.end(1);
+        // }
         return res.end(JSON.stringify({
             error: 'invalid path',
         }));
