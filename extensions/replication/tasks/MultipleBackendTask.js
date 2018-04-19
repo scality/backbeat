@@ -747,7 +747,7 @@ class MultipleBackendTask extends ReplicateObject {
 
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry(this.site);
+        const destEntry = sourceEntry.toMultipleBackendReplicaEntry(this.site);
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
         return async.waterfall([
