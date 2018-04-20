@@ -22,6 +22,13 @@ const testZkPaths = [
     '/backbeat/ingestion/source1/raft-id-dispatcher/leaders',
     '/backbeat/ingestion/source1/raft-id-dispatcher/owners',
     '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/1',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/2',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/3',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/4',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/5',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/6',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/7',
+    '/backbeat/ingestion/source1/raft-id-dispatcher/provisions/8',
 ];
 
 describe.only('Ingest metadata to kafka', () => {
@@ -73,19 +80,24 @@ describe.only('Ingest metadata to kafka', () => {
                 });
             },
             next => {
-                testZkPaths.forEach(path => {
-                    zkClient.mkdirp(path, (err, res) => {
+                return async.each(testZkPaths, (path, cb) => {
+                    return zkClient.mkdirp(path, (err, res) => {
                         console.log('trying to mkdirp', err, res);
+                        return cb(err, res);
                     });
-                });
-                return next();
+                }, next);
             },
             next => {
                 queuePopulator = new QueuePopulator(testConfig.zookeeper,
                 testConfig.kafka, testConfig.queuePopulator, testConfig.metrics,
                 testConfig.redis, testConfig.extensions, testConfig.ingestion);
-                return queuePopulator.open((err, res) => {
-                    console.log('opening queue populator', err, res);
+                // return queuePopulator.open((err, res) => {
+                //     console.log('opening queue populator', err, res);
+                //     return next();
+                // });
+                queuePopulator.open(() => {});
+                queuePopulator.on('logReady', (err, res) => {
+                    console.log('LOG IS READY');
                     return next();
                 });
             },

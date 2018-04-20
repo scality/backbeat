@@ -51,7 +51,7 @@
                 "port": 7779,
                 "https": false,
                 "type": "scality",
-                "raftCount": 1
+                "raftCount": 8
             }
         ]
     },
