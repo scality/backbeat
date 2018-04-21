@@ -99,6 +99,47 @@ const objectList = {
     ],
 };
 
+const mockLogs = [
+    {
+        type: 'put',
+        bucket: 'prom',
+        key: 'f6',
+        value: '{"owner-display-name":"test_1518720219","owner-id":' +
+        '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
+        '"content-length":0,"content-md5":"d41d8cd98f00b204e9800998ecf8427e",' +
+        '"x-amz-version-id":"null","x-amz-server-version-id":"",' +
+        '"x-amz-storage-class":"STANDARD","x-amz-server-side-encryption":"",' +
+        '"x-amz-server-side-encryption-aws-kms-key-id":"",' +
+        '"x-amz-server-side-encryption-customer-algorithm":"",' +
+        '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
+        '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
+        '"location":null,"isDeleteMarker":false,"tags":{},"replicationInfo":' +
+        '{"status":"","backends":[],"content":[],"destination":"",' +
+        '"storageClass":"","role":"","storageType":"","dataStoreVersionId":"' +
+        '"},"dataStoreName":"us-east-1","last-modified":' +
+        '"2018-02-20T03:13:43.273Z","md-model-version":3}',
+    },
+    {
+        type: 'put',
+        bucket: 'prom',
+        key: 'g4',
+        value: '{"owner-display-name":"test_1518720219","owner-id":' +
+        '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
+        '"content-length":0,"content-md5":"d41d8cd98f00b204e9800998ecf8427e",' +
+        '"x-amz-version-id":"null","x-amz-server-version-id":"",' +
+        '"x-amz-storage-class":"STANDARD","x-amz-server-side-encryption":"",' +
+        '"x-amz-server-side-encryption-aws-kms-key-id":"",' +
+        '"x-amz-server-side-encryption-customer-algorithm":"",' +
+        '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
+        '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
+        '"location":null,"isDeleteMarker":false,"tags":{},"replicationInfo":{' +
+        '"status":"","backends":[],"content":[],"destination":"","' +
+        'storageClass":"","role":"","storageType":"","dataStoreVersionId":' +
+        '""},"dataStoreName":"us-east-1","last-modified":' +
+        '"2018-02-20T04:47:20.359Z","md-model-version":3}',
+    },
+];
+
 class MetadataMock {
     onRequest(req, res) {
         console.log('RECEIVED REQUEST');
@@ -146,7 +187,9 @@ class MetadataMock {
             }));
         } else if (/\/_\/raft_sessions\/[\d]*\/log\?begin=[\d]*&limit=[\d]*&targetLeader=false/.test(req.url)) {
             console.log('getting raft logs from metadata mock!');
-            return res.end('fail');
+            return res.end(JSON.stringify({
+                mockLogs
+            }));
         }
         //  else if() {
         //     console.log('getting raft log offset');

@@ -45,6 +45,7 @@
         "cronRule": "*/5 * * * * *",
         "sources": [
             {
+                "prefix": "bucketPrefix1",
                 "name": "source1",
                 "cronRule": "*/5 * * * * *",
                 "zookeeperSuffix": "/source1",
@@ -55,6 +56,7 @@
                 "raftCount": 8
             },
             {
+                "prefix": "bucketPrefix2",
                 "name": "source2",
                 "zookeeperSuffix": "/source2",
                 "host": "",
