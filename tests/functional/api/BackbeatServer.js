@@ -543,6 +543,8 @@ describe('Backbeat Server', () => {
             const testVersionId =
                 '393834373735353134343536313039393939393952473030312020313030';
 
+            before(done => deleteHash(redisClient, done));
+
             afterEach(done => deleteHash(redisClient, done));
 
             it('should get correct data for GET route: /_/crr/failed when no ' +
