@@ -143,12 +143,12 @@ class ReplicationStatusProcessor {
         const fields = [];
         backends.forEach(backend => {
             const { status, site } = backend;
-            if (status !== 'FAILED') {
-                return undefined;
+            if (status === 'FAILED' && site === queueEntry.getSite()) {
+                const field = `${bucket}:${key}:${versionId}:${site}`;
+                const value = JSON.parse(kafkaEntry.value);
+                fields.push(field, JSON.stringify(value));
             }
-            const field = `${bucket}:${key}:${versionId}:${site}`;
-            const value = JSON.parse(kafkaEntry.value);
-            return fields.push(field, JSON.stringify(value));
+            return undefined;
         });
         const cmds = ['hmset', redisKeys.failedCRR, ...fields];
         return redisClient.batch([cmds], (err, res) => {
