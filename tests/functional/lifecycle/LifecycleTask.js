@@ -134,12 +134,7 @@ class S3Helper {
 
     createVersions(scenarioNumber, cb) {
         async.series([
-            next => this.s3.putBucketVersioning({
-                Bucket: this.bucket,
-                VersioningConfiguration: {
-                    Status: 'Enabled',
-                },
-            }, next),
+            next => this.setBucketVersioning('Enabled', next),
             next => this.createObjects(scenarioNumber, next),
         ], err => {
             assert.ifError(err);
@@ -148,12 +143,7 @@ class S3Helper {
     }
 
     createDeleteMarkers(scenarioNumber, cb) {
-        this.s3.putBucketVersioning({
-            Bucket: this.bucket,
-            VersioningConfiguration: {
-                Status: 'Enabled',
-            },
-        }, err => {
+        this.setBucketVersioning('Enabled', err => {
             assert.ifError(err);
 
             return async.eachOfLimit(this._scenario[scenarioNumber].keyNames, 1,
@@ -180,6 +170,21 @@ class S3Helper {
         });
     }
 
+    /**
+     * Helper method to set bucket versioning
+     * @param {string} status - 'Enabled' or 'Suspended'
+     * @param {function} cb - callback(error, response)
+     * @return {undefined}
+     */
+    setBucketVersioning(status, cb) {
+        this.s3.putBucketVersioning({
+            Bucket: this.bucket,
+            VersioningConfiguration: {
+                Status: status,
+            },
+        }, cb);
+    }
+
     emptyAndDeleteBucket(cb) {
         // won't need to worry about 1k+ objects pagination
         async.waterfall([
@@ -202,6 +207,10 @@ class S3Helper {
                                 VersionId: dm.VersionId,
                             })),
                         ];
+
+                        if (list.length === 0) {
+                            return next(null, null);
+                        }
 
                         return this.s3.deleteObjects({
                             Bucket: this.bucket,
@@ -475,6 +484,29 @@ describe('lifecycle task functional tests', () => {
                     objectCount: 3,
                 },
             },
+            // expire: basic test using Days
+            {
+                message: 'should verify the Expiration rule in Days ' +
+                    'are properly handled',
+                bucketLCRules: [
+                    new Rule().addID('task-1').addExpiration('Days', 1)
+                        .addPrefix('atest/').build(),
+                ],
+                scenario: 1,
+                bucketEntry: {
+                    action: 'testing-days-expiration',
+                    target: {
+                        bucket: 'test-expire',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: ['atest/obj-4', 'atest/obj-8'],
+                    bucketCount: 2,
+                    objectCount: 2,
+                },
+            },
             // expire: pagination, tagging
             {
                 message: 'should verify that EXPIRED objects are sent to ' +
@@ -642,6 +674,215 @@ describe('lifecycle task functional tests', () => {
             ], err => {
                 assert.ifError(err);
 
+                done();
+            });
+        });
+
+        it('should expire a version in a versioning enabled bucket using ' +
+        'basic expiration rule', done => {
+            const bucket = 'test-bucket';
+            const keyName = 'test-key1';
+            const bucketEntry = {
+                action: 'testing-islatest',
+                target: {
+                    bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addID('task-1')
+                        .addExpiration('Date', PAST)
+                        .build(),
+                ], next),
+                (data, next) => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3.putObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                    Body: '',
+                }, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.object, 1);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('should NOT expire a delete marker in a versioning enabled bucket ' +
+        'where there are at least 1 or more non-current versions', done => {
+            const bucket = 'test-bucket';
+            const bucketEntry = {
+                action: 'testing-islatest',
+                target: {
+                    bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addID('task-1').addExpiration('Date', PAST)
+                        .build(),
+                    new Rule().addID('task-2')
+                        .addExpiration('ExpiredObjectDeleteMarker', true)
+                        .build(),
+                ], next),
+                (data, next) => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3Helper.createDeleteMarkers(2, next),
+                next => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.object, 0);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('should apply ExpiredObjectDeleteMarker rule on only a delete ' +
+        'marker in a versioning enabled bucket with zero non-current versions',
+        done => {
+            const bucket = 'test-bucket';
+            const keyName = 'test-key-1';
+            const bucketEntry = {
+                action: 'testing-islatest',
+                target: {
+                    bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addID('task-1')
+                        .addExpiration('ExpiredObjectDeleteMarker', true)
+                        .build(),
+                ], next),
+                (data, next) => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3.putObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                    Body: '',
+                }, next),
+                // first create delete marker
+                (data, next) => s3.deleteObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                }, err => {
+                    assert.ifError(err);
+                    return next(null, data.VersionId);
+                }),
+                // delete only version so we are left with just a delete marker
+                (versionId, next) => s3.deleteObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                    VersionId: versionId,
+                }, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.object, 1);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('should expire a version or delete marker in a versioning ' +
+        'suspended bucket by applying basic expiration rule', done => {
+            const bucket = 'test-bucket';
+            const keyName = 'test-key1';
+            const bucketEntry = {
+                action: 'testing-islatest',
+                target: {
+                    bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations([
+                    new Rule().addID('task-1')
+                        .addExpiration('Date', PAST)
+                        .build(),
+                ], next),
+                (data, next) => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3.putObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                    Body: '',
+                }, next),
+                (data, next) => s3Helper.setBucketVersioning('Suspended', next),
+                (data, next) => s3.deleteObject({
+                    Bucket: bucket,
+                    Key: keyName,
+                }, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
+                    (err, data) => {
+                        assert.ifError(err);
+
+                        assert.equal(data.count.object, 1);
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
                 done();
             });
         });

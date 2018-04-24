@@ -395,7 +395,7 @@ describe('lifecycle task helper methods', () => {
         });
     });
 
-    describe('_applyVersionStaleDate', () => {
+    describe('_addStaleDateToVersions', () => {
         const list = [
             {
                 Key: 'obj-1',
@@ -460,7 +460,7 @@ describe('lifecycle task helper methods', () => {
         'of versions', () => {
             const dupelist = list.map(i => Object.assign({}, i));
             const bucketDetails = {};
-            const res = lct._applyVersionStaleDate(bucketDetails, dupelist);
+            const res = lct._addStaleDateToVersions(bucketDetails, dupelist);
 
             assert(res.every(v => 'staleDate' in v));
             for (let i = 0; i < res.length - 1; i++) {
@@ -482,7 +482,7 @@ describe('lifecycle task helper methods', () => {
                 keyMarker: 'obj-1',
                 prevDate: '2018-04-04T23:16:55.000Z',
             };
-            const res = lct._applyVersionStaleDate(bucketDetails, dupelist);
+            const res = lct._addStaleDateToVersions(bucketDetails, dupelist);
 
             assert.equal(res[0].staleDate, '2018-04-04T23:16:55.000Z');
         });
