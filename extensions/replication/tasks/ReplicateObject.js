@@ -142,7 +142,7 @@ class ReplicateObject extends BackbeatTask {
         const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
         return this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
-                this.log.error(
+                log.error(
                     'error publishing entry to replication status topic',
                     { method: 'ReplicateObject._publishReplicationStatus',
                       topic: this.repConfig.replicationStatusTopic,
