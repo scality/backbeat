@@ -18,21 +18,47 @@ See [Explanations](#explanations) for more detail.
 
 ## Definition of API
 
-* GET `/_/crr/failed`
+* GET `/_/crr/failed?marker=marker`
 
     This GET request retrieves a listing of all failed operations. This
     operation is useful if you're interested in whether any CRR operations have
     failed and want the entire listing.
 
-    Response:
+    Response that is not truncated:
 
     ```sh
-    [{
-        bucket: <bucket>,
-        key: <key>,
-        versionId: <versionId>,
-        site: <site>
-    }]
+    {
+        IsTruncated: false,
+        Versions: [{
+            Bucket: <bucket>,
+            Key: <key>,
+            VersionId: <version-id>,
+            StorageClass: <site>,
+            Size: <size>,
+            LastModified: <last-modified>,
+        }],
+        MaxKeys: 100,
+    }
+    ```
+
+    Response that is truncated:
+
+    ```sh
+    {
+        IsTruncated: true,
+        NextMarker: <next-marker>,
+        Versions: [{
+            Bucket: <bucket>,
+            Key: <key>,
+            VersionId: <version-id>,
+            StorageClass: <site>,
+            Size: <size>,
+            LastModified: <last-modified>,
+        },
+        ...
+        ],
+        MaxKeys: 100,
+    }
     ```
 
 * GET `/_/crr/failed/<bucket>/<key>/<versionId>`
@@ -44,12 +70,18 @@ See [Explanations](#explanations) for more detail.
     Response:
 
     ```sh
-    [{
-        bucket: <bucket>,
-        key: <key>,
-        versionId: <versionId>,
-        site: <site>
-    }]
+    {
+        IsTruncated: false,
+        Versions: [{
+            Bucket: <bucket>,
+            Key: <key>,
+            VersionId: <version-id>,
+            StorageClass: <site>,
+            Size: <size>,
+            LastModified: <last-modified>,
+        }],
+        MaxKeys: 100,
+    }
     ```
 
 * POST `/_/crr/failed`
@@ -59,24 +91,32 @@ See [Explanations](#explanations) for more detail.
     Request Body:
 
     ```sh
-    [{
-        bucket: <bucket>,
-        key: <key>,
-        versionId: <versionId>,
-        site: <site>
-    }]
+    {
+        Versions: [{
+            Bucket: <bucket>,
+            Key: <key>,
+            VersionId: <version-id>,
+            StorageClass: <site>,
+            Size: <size>,
+            LastModified: <last-modified>,
+        }]
+    }
     ```
 
     Response:
 
     ```sh
-    [{
-        bucket: <bucket>,
-        key: <key>,
-        versionId: <versionId>,
-        site: <site>,
-        status: PENDING
-    }]
+    {
+        Versions: [{
+            Bucket: <bucket>,
+            Key: <key>,
+            VersionId: <version-id>,
+            StorageClass: <site>,
+            Size: <size>,
+            LastModified: <last-modified>,
+            ReplicationStatus: 'PENDING',
+        }]
+    }
     ```
 
 ## Explanations
@@ -107,7 +147,7 @@ API](#definition-of-api).
 
 ### Retry
 
-When a POST request is received for the route `/_/crr/failed` the following 
+When a POST request is received for the route `/_/crr/failed` the following
 steps occur:
 
 1. Get the object's metadata stored by the Redis key (the schema of which is
