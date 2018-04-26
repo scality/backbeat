@@ -615,6 +615,46 @@
                     }
                 }
             }
+        },
+        "BatchDelete": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/batchdelete"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                ],
+                "members": {
+                    "ContentType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Content-Type"
+                    },
+                    "Locations": {
+                        "type": "list",
+                        "member": {
+                            "type": "structure",
+                            "required": [
+                                "key",
+                                "dataStoreName"
+                            ],
+                            "members": {
+                                "dataStoreName": {
+                                    "type": "string"
+                                },
+                                "key": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                }
+            }
         }
     }
 }
