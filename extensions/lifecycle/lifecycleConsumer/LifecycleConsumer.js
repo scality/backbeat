@@ -26,9 +26,9 @@ class LifecycleConsumer extends EventEmitter {
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
      * @param {Object} lcConfig.consumer - kafka consumer object
      * @param {String} lcConfig.consumer.groupId - kafka consumer group id
-     * @param {Number} lcConfig.consumer.retryTimeoutS - number of seconds
+     * @param {Number} [lcConfig.consumer.retryTimeoutS] - number of seconds
      *  before giving up retries of an entry lifecycle action
-     * @param {Number} lcConfig.consumer.concurrency - number of max allowed
+     * @param {Number} [lcConfig.consumer.concurrency] - number of max allowed
      *  concurrent operations
      * @param {Object} [lcConfig.backlogMetrics] - param object to
      * publish backlog metrics to zookeeper (see {@link
