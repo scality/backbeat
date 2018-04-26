@@ -3,7 +3,7 @@ const jsutil = require('arsenal').jsutil;
 
 const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
-const attachReqUids = require('../utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const {
     StaticFileAccountCredentials,
