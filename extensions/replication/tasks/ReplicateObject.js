@@ -6,7 +6,8 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
-const attachReqUids = require('../utils/attachReqUids');
+
+const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const AccountCredentials =
           require('../../../lib/credentials/AccountCredentials');
