@@ -36,8 +36,7 @@ See [Explanations](#explanations) for more detail.
             StorageClass: <site>,
             Size: <size>,
             LastModified: <last-modified>,
-        }],
-        MaxKeys: 100,
+        }]
     }
     ```
 
@@ -56,8 +55,7 @@ See [Explanations](#explanations) for more detail.
             LastModified: <last-modified>,
         },
         ...
-        ],
-        MaxKeys: 100,
+        ]
     }
     ```
 
@@ -79,44 +77,37 @@ See [Explanations](#explanations) for more detail.
             StorageClass: <site>,
             Size: <size>,
             LastModified: <last-modified>,
-        }],
-        MaxKeys: 100,
+        }]
     }
     ```
 
 * POST `/_/crr/failed`
 
-    This POST request retries a failed operation.
+    This POST request retries a set of failed operations.
 
     Request Body:
 
     ```sh
-    {
-        Versions: [{
-            Bucket: <bucket>,
-            Key: <key>,
-            VersionId: <version-id>,
-            StorageClass: <site>,
-            Size: <size>,
-            LastModified: <last-modified>,
-        }]
-    }
+    [{
+        Bucket: <bucket>,
+        Key: <key>,
+        VersionId: <version-id>,
+        StorageClass: <site>,
+    }]
     ```
 
     Response:
 
     ```sh
-    {
-        Versions: [{
-            Bucket: <bucket>,
-            Key: <key>,
-            VersionId: <version-id>,
-            StorageClass: <site>,
-            Size: <size>,
-            LastModified: <last-modified>,
-            ReplicationStatus: 'PENDING',
-        }]
-    }
+    [{
+        Bucket: <bucket>,
+        Key: <key>,
+        VersionId: <version-id>,
+        StorageClass: <site>,
+        Size: <size>,
+        LastModified: <last-modified>,
+        ReplicationStatus: 'PENDING',
+    }]
     ```
 
 ## Explanations
