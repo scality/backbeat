@@ -1,7 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
-const async = require('async');
 const { EventEmitter } = require('events');
 
 const Logger = require('werelogs').Logger;
@@ -56,9 +55,10 @@ class QueueProcessor extends EventEmitter {
      *   number of seconds before giving up retries of an entry
      *   replication
      * @param {MetricsProducer} mProducer - instance of metrics producer
+     * @param {String} site - site name
      */
     constructor(zkConfig, kafkaConfig, sourceConfig, destConfig, repConfig,
-        mProducer) {
+        mProducer, site) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -70,10 +70,12 @@ class QueueProcessor extends EventEmitter {
         this.replicationStatusProducer = null;
         this._consumer = null;
         this._mProducer = mProducer;
+        this.site = site;
 
         this.echoMode = false;
 
-        this.logger = new Logger('Backbeat:Replication:QueueProcessor');
+        this.logger = new Logger(
+            `Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // global variables
         // TODO: for SSL support, create HTTPS agents instead
@@ -210,6 +212,7 @@ class QueueProcessor extends EventEmitter {
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
             logger: this.logger,
+            site: this.site,
         };
     }
 
@@ -238,7 +241,7 @@ class QueueProcessor extends EventEmitter {
                 return undefined;
             }
             const groupId =
-                `${this.repConfig.queueProcessor.groupId}`;
+                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
             this._consumer = new BackbeatConsumer({
                 kafka: { hosts: this.kafkaConfig.hosts },
                 topic: this.repConfig.topic,
@@ -255,7 +258,9 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                this._mProducer.publishMetrics(data,
+                const filteredData = {};
+                filteredData[this.site] = data[this.site];
+                this._mProducer.publishMetrics(filteredData,
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
                             'metrics', {
@@ -315,21 +320,17 @@ class QueueProcessor extends EventEmitter {
             const replicationStorageClass =
                 sourceEntry.getReplicationStorageClass();
             const sites = replicationStorageClass.split(',');
-            return async.each(sites, (site, cb) => {
+
+            if (sites.includes(this.site)) {
                 const replicationEndpoint = this.destConfig.bootstrapList
-                    .find(endpoint => endpoint.site === site);
-                if (replicationEndpoint
-                    && replicationBackends.includes(replicationEndpoint.type)) {
-                    task = new MultipleBackendTask(this, site);
+                    .find(endpoint => endpoint.site === this.site);
+                if (replicationEndpoint &&
+                replicationBackends.includes(replicationEndpoint.type)) {
+                    task = new MultipleBackendTask(this);
                 } else {
-                    task = new ReplicateObject(this, site);
+                    task = new ReplicateObject(this);
                 }
-                this.logger.debug('source entry is being pushed',
-                  { entry: sourceEntry.getLogInfo() });
-                return this.taskScheduler.push({ task, entry: sourceEntry },
-                                               sourceEntry.getCanonicalKey(),
-                                               cb);
-            }, err => done(err));
+            }
         }
         if (task) {
             this.logger.debug('source entry is being pushed',
