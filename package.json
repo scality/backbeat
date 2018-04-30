@@ -50,6 +50,6 @@
   },
   "devDependencies": {
     "mocha": "^3.3.0",
-    "s3": "scality/S3"
+    "s3": "scality/S3#z/1.0"
   }
 }
