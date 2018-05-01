@@ -1,19 +1,20 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
+const async = require('async');
 const https = require('https');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const FailedCRRProducer =
+    require('../../../extensions/replication/failedCRR/FailedCRRProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
-const redisClient = require('../utils/getRedisClient')();
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
-const { redisKeys } = require('../constants');
 
 /**
  * @class ReplicationStatusProcessor
@@ -96,6 +97,7 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
+        this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
@@ -110,9 +112,7 @@ class ReplicationStatusProcessor {
             this.logger.info('replication status processor is ready to ' +
                              'consume replication status entries');
             this._consumer.subscribe();
-            if (cb) {
-                cb();
-            }
+            this._FailedCRRProducer.setupProducer(cb);
         });
     }
 
@@ -130,38 +130,32 @@ class ReplicationStatusProcessor {
     }
 
     /**
-     * Set the Redis hash key for each failed backend.
+     * Push any failed entry to the "failed" topic.
      * @param {QueueEntry} queueEntry - The queue entry with the failed status.
      * @param {Object} kafkaEntry - The kafka entry with the failed status.
-     * @param {Function} cb          [description]
+     * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _setFailedKeys(queueEntry, kafkaEntry, cb) {
+    _pushFailedEntry(queueEntry, kafkaEntry, cb) {
         const { status, backends } = queueEntry.getReplicationInfo();
         if (status !== 'FAILED') {
             return process.nextTick(cb);
         }
-        const bucket = queueEntry.getBucket();
-        const key = queueEntry.getObjectKey();
-        const versionId = queueEntry.getEncodedVersionId();
-        const fields = [];
-        backends.forEach(backend => {
-            const { status, site } = backend;
-            if (status === 'FAILED' && site === queueEntry.getSite()) {
-                const field = `${bucket}:${key}:${versionId}:${site}`;
-                const value = JSON.parse(kafkaEntry.value);
-                fields.push(field, JSON.stringify(value));
-            }
-            return undefined;
-        });
-        const cmds = ['hmset', redisKeys.failedCRR, ...fields];
-        return redisClient.batch([cmds], (err, res) => {
-            if (err) {
-                return cb(err);
-            }
-            const [cmdErr] = res[0];
-            return cb(cmdErr);
-        });
+        const backend = backends.find(b =>
+            b.status === 'FAILED' && b.site === queueEntry.getSite());
+        if (backend) {
+            const bucket = queueEntry.getBucket();
+            const key = queueEntry.getObjectKey();
+            const versionId = queueEntry.getEncodedVersionId();
+            const { site } = backend;
+            const message = {
+                field: `${bucket}:${key}:${versionId}:${site}`,
+                value: Buffer.from(kafkaEntry.value).toString(),
+            };
+            return this._FailedCRRProducer
+                .publishFailedCRREntry(JSON.stringify(message), cb);
+        }
+        return cb();
     }
 
     /**
@@ -187,15 +181,11 @@ class ReplicationStatusProcessor {
             task = new UpdateReplicationStatus(this);
         }
         if (task && this.repConfig.monitorReplicationFailures) {
-            return this._setFailedKeys(sourceEntry, kafkaEntry, err => {
-                if (err) {
-                    this.logger.error('error setting redis hash key', {
-                        error: err,
-                    });
-                }
-                return this.taskScheduler.push({ task, entry: sourceEntry },
-                    sourceEntry.getCanonicalKey(), done);
-            });
+            return async.parallel([
+                next => this._pushFailedEntry(sourceEntry, kafkaEntry, next),
+                next => this.taskScheduler.push({ task, entry: sourceEntry },
+                    sourceEntry.getCanonicalKey(), next),
+            ], done);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
