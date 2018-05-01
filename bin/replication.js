@@ -22,7 +22,12 @@ function _createSetupReplication(command, options, log) {
     const sourceProfile = options.sourceProfile;
     const targetProfile = options.targetProfile;
     const siteName = options.siteName;
-    const targetIsExternal = siteName !== undefined;
+
+    let targetIsExternal = siteName !== undefined;
+    if (command === 'multi-site-setup' && targetProfile) {
+        // need to create target zenko site bucket and role arn
+        targetIsExternal = false;
+    }
 
     // Required options
     if (!sourceBucket || !targetBucket ||
@@ -104,6 +109,73 @@ program.version(version);
             });
         });
 });
+
+program
+    .command('multi-site-setup')
+    .description('if a Zenko site is included as a replication endpoint for a' +
+        ' one-to-many setup, "target-bucket" and "target-profile" are needed')
+    .option('--source-bucket <name>', '[required] source bucket name')
+    .option('--source-profile <name>',
+            '[required] source aws/credentials profile')
+    .option('--target-bucket <name>', '[optional] necessary if adding a zenko' +
+            ' site as a replication endpoint')
+    .option('--target-profile <name>', '[optional] target aws/credentials ' +
+            'profile (necessary if adding a zenko site as a replication ' +
+            'endpoint)')
+    .option('--multi-sites <site1,site2,...>', '[required] comma separated ' +
+            'list of sites"')
+    .action(options => {
+        const log = new Logger('BackbeatSetup').newRequestLogger();
+        const sourceBucket = options.sourceBucket;
+        const sourceProfile = options.sourceProfile;
+        let targetBucket = options.targetBucket;
+        const targetProfile = options.targetProfile;
+        const multiSites = options.multiSites;
+
+        const destinationEndpoint = config.getBootstrapList()
+            .find(dest => Array.isArray(dest.servers));
+
+        const hasIncorrectMultiSites = !multiSites || multiSites.split(',')
+            .some(site => site.length === 0);
+        const hasValidOptionals = (targetBucket || targetProfile) ?
+            (!(!targetBucket || !targetProfile) && (!hasIncorrectMultiSites &&
+            multiSites.split(',').indexOf(destinationEndpoint.site) !== -1))
+            : true;
+
+        // Required options
+        if (!sourceBucket || !sourceProfile || !multiSites ||
+        hasIncorrectMultiSites || !hasValidOptionals) {
+            program.commands.find(n =>
+                n._name === 'multi-site-setup').outputHelp();
+            process.stdout.write('\n');
+            process.exit(1);
+        }
+
+        // if passed validations and no targetBucket defined, set to
+        // sourceBucket to pass validations in creation
+        if (!targetBucket) {
+            targetBucket = options.sourceBucket;
+        }
+
+        const s = _createSetupReplication('multi-site-setup', {
+            sourceBucket,
+            sourceProfile,
+            targetProfile,
+            siteName: multiSites,
+            targetBucket,
+        }, log);
+        s.setupReplication(err => {
+            if (err) {
+                log.error('replication setup failed', {
+                    errCode: err.code,
+                    error: err.message,
+                });
+                process.exit(1);
+            }
+            log.info('replication is correctly setup for multiple sites');
+            process.exit();
+        });
+    });
 
 const validCommands = program.commands.map(n => n._name);
 
