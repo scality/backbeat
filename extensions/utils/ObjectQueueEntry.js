@@ -124,6 +124,19 @@ class ObjectQueueEntry extends ObjectMD {
         return newEntry;
     }
 
+    /**
+     * Set the destination entry to have a REPLICA status and the bucket as the
+     * source bucket (used for context in CloudServers's multiple backend).
+     * @param {String} site - The replication site given in the configuration
+     * @return {ObjectQueueEntry} - The replica ObjectQueueEntry
+     */
+    toMultipleBackendReplicaEntry(site) {
+        return this.clone()
+            .setBucket(this.getBucket())
+            .setReplicationSiteStatus(site, 'REPLICA')
+            .setReplicationStatus('REPLICA');
+    }
+
     toCompletedEntry(site) {
         const newEntry = this.clone();
         newEntry.setReplicationSiteStatus(site, 'COMPLETED');
