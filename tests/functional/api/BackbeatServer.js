@@ -495,6 +495,44 @@ describe('Backbeat Server', () => {
             });
         });
 
+        describe('No metrics data in Redis', () => {
+            before(() => {
+                redis.keys('*:test:bb:*').then(keys => {
+                    const pipeline = redis.pipeline();
+                    keys.forEach(key => {
+                        pipeline.del(key);
+                    });
+                    return pipeline.exec();
+                });
+            });
+
+            it('should return a response even if redis data does not exist',
+            done => {
+                getRequest('/_/metrics/crr/all', (err, res) => {
+                    assert.ifError(err);
+
+                    const keys = Object.keys(res);
+                    assert(keys.includes('backlog'));
+                    assert(keys.includes('completions'));
+                    assert(keys.includes('throughput'));
+
+                    assert(res.backlog.description);
+                    assert.equal(res.backlog.results.count, 0);
+                    assert.equal(res.backlog.results.size, 0.00);
+
+                    assert(res.completions.description);
+                    assert.equal(res.completions.results.count, 0);
+                    assert.equal(res.completions.results.size, 0.00);
+
+                    assert(res.throughput.description);
+                    assert.equal(res.throughput.results.count, 0.00);
+                    assert.equal(res.throughput.results.size, 0.00);
+
+                    done();
+                });
+            });
+        });
+
         const invalidPOSTRequestBodies = [
             'a',
             {},
