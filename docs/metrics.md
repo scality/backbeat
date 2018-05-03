@@ -3,172 +3,107 @@
 Zenko Backbeat exposes various metric routes that return a response with an
 HTTP code.
 
-Metrics are currently available for the following service extensions:
-
-- Cross-Region Replication (CRR)
-- Metadata Ingestion
-
 ## Response Codes
 
 ```
 +----------+------------------------------------------------------------------+
 | Response | Details                                                          |
-+==========+==================================================================+
-|   200    | OK: success                                                      |
++==========|==================================================================+
+| 200      | OK: Success                                                      |
 +----------+------------------------------------------------------------------+
-|   403    | AccessDenied: request IP address must be defined in              |
-|          |   'conf/config.json' in field 'server.healthChecks.allowFrom'    |
-+----------+------------------------------------------------------------------+
-|   404    | RouteNotFound: route must be valid                               |
-+----------+------------------------------------------------------------------+
-|   405    | MethodNotAllowed: the HTTP verb must be a GET                    |
-+----------+------------------------------------------------------------------+
-|   500    | InternalError: this could be caused by one of several            |
-|          |   components: the api server, Kafka, Zookeeper, Redis, or one    |
-|          |   of the Producers for a topic topic                             |
+| 403      | AccessDenied: Requested IP address must be defined in            |
+|          | 'conf/config.json' in field 'server.healthChecks.allowFrom'      |
++----------|------------------------------------------------------------------+
+| 404      | RouteNotFound: Route must be valid.                              |
++----------|------------------------------------------------------------------+
+| 405      | MethodNotAllowed: The HTTP verb must be GET.                     |
++----------|------------------------------------------------------------------|
+| 500      | InternalError: This could be caused by one of several            |
+|          | components: the API server, Kafka, Zookeeper, Redis, or one of   |
+|          | the Producers for a topic.                                       |
 +----------+------------------------------------------------------------------+
 ```
 
 ## Routes
 
-Routes are organized as follows:
-`/_/backbeat/api/metrics/<extension-type>/<location-name/[<metric-type>]/[<bucket>]/[<key>]?[versionId=<version-id>]`
+Routes are organized as:
+
+`/_/metrics/<extension-type>/<site-name>/<metric-type>`
 
 Where:
 
-- `<extension-type>` currently supports only `crr` for replication metrics and
-   `ingestion` for ingestion metrics
-- `<location-name>` represents any current destination replication locations you
-   have defined. To display metrics for all locations, use `all`
-- `<metric-type>` is an optional field **only for replication metrics**. If you
-   specify a metric type, Backbeat returns the specified metric. If you omit it,
-   Backbeat returns all available metrics for the given extension and location.
-- `<bucket>` is an optional field. It carries the name of the bucket in which
-   the object is expected to exist.
-- `<key>` is an optional field. When getting CRR metrics for a particular object,
-   it contains the object's key.
-- `<version-id>` is an optional field. When getting CRR metrics for a particular
-   object, it contains the object's version ID.
+- `<extension-type>` can currently only support `crr` for replication metrics.
+- `<site-name>` represents any current sites you have defined. To display
+  metrics for all sites, use `all`.
+- `<metric-type>` is an optional field. Leaving this out retrieves all available
+  metrics for a given extension and site. Specifying a metric type returns the
+  metric specified.
 
-### `/_/backbeat/api/metrics/crr/<location-name>`
+### Site Name
 
-This route gathers all the metrics below, returning one JSON object for the
-specified extension type and location name.
+`/_/metrics/crr/<site-name>`
 
-### `/_/backbeat/api/metrics/<extension-type>/<location-name>/pending`
+This route returns all metrics below, formatted as one JSON object for the
+specified extension type and site name.
 
-Where `<extension-type>` can be one of the following extensions:
+### Backlog
 
-- Cross-Region Replication: `crr`
-- Metadata Ingestion: `ingestion`
+`/_/metrics/crr/<site-name>/backlog`
 
-This route returns the pending operations in number of objects for the specified
-extension type and location. In addition, for replication only, number of total
-bytes for the specified location is also provided.
+This route returns the replication backlog as a number of objects and a number
+of total MB for the specified extension type and site name. The replication
+backlog is the set of objects queued for replication to another site, but for
+which replication is not yet complete.
 
-This metric does not expire.
-
-**Example Output**:
-
-```
-"pending":{
-    "description":"Number of pending replication operations (count) and bytes
-    (size)",
-    "results":{
-        "count":"1",
-        "size":"1024"
-    }
-}
-```
-
-### `/_/backbeat/api/metrics/crr/<location-name>/backlog`
-
-This route returns the replication backlog in number of objects and number of
-total bytes for the specified extension type and location name. Replication
-backlog represents the objects that have been queued for replication to another
-location, but for which the replication task is not complete. If replication
-for an object fails, failed object metrics are considered backlog.
-
-**Example Output**:
+#### Example Output
 
 ```
 "backlog":{
     "description":"Number of incomplete replication operations (count) and
-    number of incomplete bytes transferred (size)",
+    number of incomplete MB transferred (size)",
     "results":{
-        "count":"1",
-        "size":"1024"
+        "count":4,
+        "size":"6.12"
     }
 }
 ```
 
-### `/_/backbeat/api/metrics/<extension-type>/<location-name>/completions`
+### Completions
 
-Where `<extension-type>` can be one of the following extensions:
+ `/_/metrics/crr/<site-name>/completions`
 
-- Cross-Region Replication: `crr`
-- Metadata Ingestion: `ingestion`
+This route returns replication completions as a number of objects and a number
+of total bytes (in MB) transferred for the specified extension type and site
+name. Completions are only collected up to an `EXPIRY` time, currently set to
+**15 minutes**.
 
-This route returns the completions in number of objects for the specified
-extension type and location. In addition, for replication only, number of total
-bytes transferred for the specified location is also provided.
-Completions are only collected up to an `EXPIRY` time, which is currently set
-to **24 hours**.
-
-**Example Output**:
+#### Example Output
 
 ```
 "completions":{
     "description":"Number of completed replication operations (count) and number
-    of bytes transferred (size) in the last 86400 seconds",
+    of MB transferred (size) in the last 900 seconds",
     "results":{
-        "count":"1",
-        "size":"1024"
+        "count":31,
+        "size":"47.04"
     }
 }
 ```
 
-### `/_/backbeat/api/metrics/crr/<location-name>/failures`
+### Throughput
 
-This route returns the replication failures in number of objects and number
-of total bytes for the specified extension type and location. Failures are
-collected only up to an `EXPIRY` time, currently set to a default
-**24 hours**.
+`/_/metrics/crr/<site-name>/throughput`
 
-**Example Output**:
+This route returns the current throughput in number of operations per second
+(or number of objects replicating per second) and number of total bytes (in MB)
+completing per second for the specified type and site name.
 
-```
-"failures":{
-    "description":"Number of failed replication operations (count) and bytes
-    (size) in the last 86400 seconds",
-    "results":{
-        "count":"1",
-        "size":"1024"
-    }
-}
-```
-
-### `/_/backbeat/api/metrics/<extension-type>/<location-name>/throughput`
-
-Where `<extension-type>` can be one of the following extensions:
-
-- Cross-Region Replication: `crr`
-- Metadata Ingestion: `ingestion`
-
-This route returns the current throughput in number of completed operations per
-second (or number of objects replicating per second) for the specified extension
-and location name. In addition, for replication only, number of total bytes
-completing per second for the specified location is also provided.
-
-Note throughput is averaged over the past 15 minutes of data collected so this
-metric is really an average throughput.
-
-**Example Output**:
+#### Example Output
 
 ```
 "throughput":{
     "description":"Current throughput for replication operations in ops/sec
-    (count) and bytes/sec (size) in the last 86400 seconds",
+    (count) and MB/sec (size)",
     "results":{
         "count":"0.00",
         "size":"0.00"
@@ -176,142 +111,44 @@ metric is really an average throughput.
 }
 ```
 
-### `/_/backbeat/api/metrics/crr/<site-name>/progress/<bucket>/<key>?versionId=<version-id>`
-
-This route returns replication progress in bytes transferred for the specified
-object.
-
-**Example Output**:
-
-```
-{
-    "description": "Number of bytes to be replicated (pending), number of bytes
-    transferred to the destination (completed), and percentage of the object
-    that has completed replication (progress)",
-    "pending": 1000000,
-    "completed": 3000000,
-    "progress": "75%"
-}
-```
-
-### `/_/backbeat/api/metrics/crr/<site-name>/throughput/<bucket>/<key>?versionId=<version-id>`
-
-This route returns the throughput in number of total bytes completing per second
-for the specified object.
-
-**Example Output**:
-
-```
-{
-    "description": "Current throughput for object replication in bytes/sec
-    (throughput)",
-    "throughput": "0.00"
-}
-```
-
 ## Design
 
-### Cross-Region Replication (CRR)
+For basic metrics, only four data points are collected:
 
-For basic metrics, eight data points are collected:
+- Number of operations (ops)
+- Number of completed operations (opsdone)
+- Number of bytes (bytes)
+- Number of completed bytes (bytesdone)
 
-- number of operations (ops)
-- number of pending operations (opspending)
-- number of completed operations (opsdone)
-- number of failed operations (opsfail)
-- number of bytes (bytes)
-- number of pending bytes (bytespending)
-- number of completed bytes (bytesdone)
-- number of failed bytes (bytesfail)
+To collect metrics, a separate Kafka Producer and Consumer (`MetricsProducer`
+and `MetricsConsumer`, respectively)—each using its own Kafka topic
+(default to "backbeat-metrics")—produce their own Kafka entries.
 
-To collect metrics, a separate Kafka Producer and Consumer pair
-(`MetricsProducer` and `MetricsConsumer`) using their own Kafka topic
-(default to "backbeat-metrics") produce their own Kafka entries.
-
-When a new CRR entry is sent to Kafka, a Kafka entry to the metrics topic
-is produced, indicating to increase `ops` and `bytes`. On consumption of this
-metrics entry, Redis keys are generated with the following schema:
-
-Site-level pending CRR metrics Redis key:
-`<site-name>:<default-metrics-key>:<opspending-or-bytespending>`
-
-Site-level CRR metrics Redis key:
+When a new CRR entry is sent to Kafka, the queue populator sends a Kafka
+entry to the metrics topic, signifying an increase in `ops` and `bytes`. On
+consuming this metrics entry, the MetricsConsumer generates Redis keys in
+the following format:
 `<site-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`
-
-Object-level CRR metrics Redis key:
-`<site-name>:<bucket-name>:<key-name>:<version-id>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`
-
-A normalized timestamp determines the time interval on which to set the data.
+where "normalized-timestamp" determines the interval to set the data on.
 The default metrics key ends with the type of data point it represents.
 
-When the CRR entry is consumed from Kafka, processed, and the metadata for
-replication status updated to a completed state (i.e. COMPLETED, FAILED),
-a Kafka entry is sent to the metrics topic indicating to increase `opsdone` and
-`bytesdone` if replication was successful or `opsfail` and `bytesfail` if
-replication was unsuccessful. Again, on consumption of this metrics entry,
-Redis keys are generated for their respective data points.
+When the queue processor's internal MetricsProducer consumes and processes
+the CRR entry from Kafka, it sends a Kafka entry to the metrics topic,
+incrementing `opsdone` and `bytesdone`. When the MetricsConsumer consumes
+this metrics entry, it generates Redis keys for the new data points.
 
 It is important to note that a `MetricsProducer` is initialized and producing
-to the metrics topic both when the CRR topic `BackbeatProducer` produces and
-sends a Kafka entry, and when the CRR topic `BackbeatConsumer` consumes and
-processes its Kafka entries. The `MetricsConsumer` processes these Kafka metrics
-entries and produces to Redis.
+to the metrics topic both when the `BackbeatProducer` CRR topic produces and
+sends a Kafka entry *and* when the `BackbeatConsumer` CRR topic consumes and
+processes its Kafka entries. The `MetricsConsumer` processes these
+Kafka metrics and produces them to Redis.
 
-A single-location CRR entry produces up to eight keys in total. The data points
-stored in Redis are saved in intervals (default of 5 minutes) and are available
-up to an expiry time (default of 24 hours), with the exception of pending keys
-which are not bound to an interval and do not expire.
-
-An object CRR entry creates one key. An initial key is set when the CRR
-operation begins, storing the total size of the object to be replicated. Then,
-for each part of the object that is transferred to the destination, another key
-is set (or incremented if a key already exists for the current timestamp) to
-reflect the number of bytes that have completed replication. The data points
-stored in Redis are saved in intervals (default of 5 minutes) and are available
-up to an expiry time (default of 24 hours).
-
-Throughput for object CRR entries are available up to an expiry time (default of
-15 minutes). Object CRR throughput is the average bytes transferred per second
-within the latest 15 minutes.
+A single-site CRR entry produces four keys. The data points stored
+in Redis are saved in intervals (default: 5 minutes) and are available up to
+an expiry time (default: 15 minutes).
 
 A `BackbeatServer` (default port 8900) and `BackbeatAPI` expose these metrics
-stored in Redis by querying based on the prepended Redis keys. Using these data
-points, we can calculate simple metrics like backlog, number of completions,
-progress, throughput, etc.
+stored in Redis by querying based on the prepended Redis keys. This data
+enables calculation of simple metrics like backlog, completion count,
+and throughput.
 
-### Metadata Ingestion
-
-Only the number of operations pending and operations completed are collected
-for ingestion.
-
-To collect metrics, a separate Kafka Producer and Consumer pair
-(`MetricsProducer` and `MetricsConsumer`) using their own Kafka topic
-(default to "backbeat-metrics") produce their own Kafka entries.
-
-When a new ingestion entry is sent to Kafka, a Kafka entry to the metrics topic
-is produced, indicating to increase `opsPending`. On consumption and completion
-of processing this ingestion entry, another Kafka entry is sent to the metrics
-topic, indicated to decrease `opsPending` and increase `opsDone`.
-
-On consumption of metrics entries, Redis keys are generated with the following
-schema:
-
-Site-level Ingestion metrics Redis key for completions:
-`<site-name>:<default-metrics-key>:opsDone:<normalized-timestamp>`
-
-Site-level Ingestion metrics Redis key for pending:
-`<site-name>:<default-metrics-key>:pending`
-
-Pending keys do not expire and do not have a timestamp.
-
-A normalized timestamp determines the time interval on which to set the data.
-The default metrics key ends with the type of data point it represents.
-
-Using the number of operations completed, we can determine ingested object
-completions and determine an average (default over 15 minutes) throughput of
-operations per second.
-
-A `BackbeatServer` (default port 8900) and `BackbeatAPI` expose these metrics
-stored in Redis by querying based on the prepended Redis keys. Using these data
-points, we can calculate simple metrics like backlog, number of completions,
-progress, throughput, etc.
