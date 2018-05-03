@@ -1,22 +1,22 @@
 # Using Backbeat
 
-## Manually setup replication
+## Manually Set Up Replication
 
-This guide walks through the steps to manually setup replication on a source
+This guide walks through the steps to set up replication manually on a source
 and target environment.
 
 It assumes:
 
 * A source environment at `http://node1`
 * A target environment at `http://node6`
-* An AWS profile `backbeat-source` in the region 'us-east-1'
-* An AWS profile `backbeat-target` in the region 'us-east-1'
+* An AWS profile `backbeat-source` in the 'us-east-1' region
+* An AWS profile `backbeat-target` in the 'us-east-1' region
 * That we want to set up a bucket `source-bucket` to replicate to another bucket
   `target-bucket`
 
-### Create roles
+### Create Roles
 
-Create a file backbeat-role-trust-policy.json with the following content:
+Create a file, backbeat-role-trust-policy.json, with the following content:
 
 ```sh
 {
@@ -33,8 +33,8 @@ Create a file backbeat-role-trust-policy.json with the following content:
 }
 ```
 
-In the next steps, note that we will need to later reference the Amazon Resource
-Name (ARN) value from the output of each command.
+The next steps use the Amazon Resource Name (ARN) value
+from each command's output.
 
 Create the role on the source environment:
 
@@ -46,7 +46,7 @@ aws iam create-role \
 --profile backbeat-source
 ```
 
-Output will look something like:
+The output will resemble:
 
 ```sh
 {
@@ -71,7 +71,7 @@ aws iam create-role \
 --profile backbeat-target
 ```
 
-Output will look something like:
+This output will resemble:
 
 ```sh
 {
@@ -86,15 +86,15 @@ Output will look something like:
 }
 ```
 
-Now, save each role's ARN value from the output of the commands above (the field
-`Arn`). These will be needed to setup the replication configuration on a bucket
+Save each role's ARN value from the above commands' output (the field
+`Arn`). These are required to set up the replication configuration on a bucket
 in a later step. In this example, the source role ARN is
 `arn:aws:iam::668546647514:role/SourceRoleForS3Replication` and the target role
 ARN is `arn:aws:iam::779657758625:role/TargetRoleForS3Replication`.
 
-### Create and attach policies
+### Create and Attach Policies
 
-Create a file S3-role-permissions-policy.json with the following content:
+Create an S3-role-permissions-policy.json file with the following content:
 
 ```sh
 {
@@ -132,8 +132,8 @@ Create a file S3-role-permissions-policy.json with the following content:
 }
 ```
 
-In the next steps, note that we will need to later reference the Amazon Resource
-Name (ARN) value from the output of each command.
+The next steps use the Amazon Resource Name (ARN) value
+from each command's output.
 
 Create the policy on the source environment:
 
@@ -145,7 +145,7 @@ aws iam create-policy \
 --profile backbeat-source
 ```
 
-Output will look something like:
+The output will resemble:
 
 ```sh
 {
@@ -163,7 +163,7 @@ Output will look something like:
 }
 ```
 
-Now, using the ARN of the policy (the field `Arn`), attach the policy to the
+Use the policy's ARN (in the `Arn` field) to attach the policy to the
 source role:
 
 ```sh
@@ -184,7 +184,7 @@ aws iam create-policy \
 --profile backbeat-target
 ```
 
-Output will look something like:
+The output will resemble:
 
 ```sh
 {
@@ -202,7 +202,7 @@ Output will look something like:
 }
 ```
 
-Now, using the ARN of the policy (the field `Arn`), attach the policy to the
+Use the policy's ARN (the `Arn` field) to attach the policy to the
 target role:
 
 ```sh
@@ -213,7 +213,7 @@ aws iam attach-role-policy \
 --profile backbeat-target
 ```
 
-### Create and configure buckets
+### Create and Configure Buckets
 
 Create the buckets:
 
@@ -243,11 +243,11 @@ aws s3api put-bucket-versioning \
 --profile backbeat-target
 ```
 
-Now, using our role ARNs we will define a replication configuration for the
-source bucket. In the configuration, the `Role` field takes the form of a comma
-separated string `"<source-role-ARN>,<target-role-ARN>"`. See the example below.
+Define a replication configuration for the source bucket using role ARNs,
+formatting the `Role` field as a comma-separated string:
+`"<source-role-ARN>,<target-role-ARN>"`. See the example below.
 
-Create a file replication-configuration.json with the following content:
+Create a replication-configuration.json file with the following content:
 
 ```sh
 {
@@ -274,7 +274,7 @@ aws s3api put-bucket-replication \
 --profile backbeat-source
 ```
 
-### Replicate an object
+### Replicate an Object
 
 Put an object to replicate:
 
@@ -286,7 +286,8 @@ aws s3api put-object \
 --profile backbeat-source
 ```
 
-After some time, the object should have the `ReplicationStatus` 'COMPLETED'.
+After some time, the object's `ReplicationStatus` will be 'COMPLETED'.
+
 Confirm that the object has been replicated:
 
 ```sh
@@ -297,7 +298,7 @@ aws s3api head-object \
 --profile backbeat-source
 ```
 
-Now the target object should have the `ReplicationStatus` 'REPLICA':
+Confirm that the target object's `ReplicationStatus` is 'REPLICA':
 
 ```sh
 aws s3api head-object \
