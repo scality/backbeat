@@ -1,6 +1,6 @@
-# Assumptions
+# QUICKSTART
 
-This quickstart guide assumes the following:
+This guide assumes the following:
 
 * MacOS
 * `brew` is installed (get it [here](https://brew.sh/))
@@ -8,9 +8,9 @@ This quickstart guide assumes the following:
 * `npm` is installed (version 3.10.10)
 * `aws` is installed (version 1.11.1)
 
-# Run Kafka and ZooKeeper
+## Run Kafka and ZooKeeper
 
-## Install Kafka and ZooKeeper
+### Install Kafka and ZooKeeper
 
 ```
 brew install kafka && brew install zookeeper
@@ -23,7 +23,7 @@ your homebrew programs are installed):
 echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bash_profile
 ```
 
-## Start Kafka and ZooKeeper Servers
+### Start Kafka and ZooKeeper Servers
 
 ```
 mkdir ~/kafka && \
@@ -46,7 +46,7 @@ In a new shell, start the Kafka server:
 kafka-server-start ~/kafka/kafka_2.11-0.11.0.0/config/server.properties.backbeat
 ```
 
-## Create a ZooKeeper Node and a Kafka Topic
+### Create a ZooKeeper Node and a Kafka Topic
 
 In a new shell, connect to the ZooKeeper server with the ZooKeeper chroot
 `/backbeat` path:
@@ -77,11 +77,11 @@ kafka-topics --create \
 --topic backbeat-replication
 ```
 
-## Run Scality Components
+### Run Scality Components
 
-### Start Vault and Scality S3 Servers
+#### Start Vault and Scality S3 Servers
 
-Start the Vault server (This requires access to the private Vault repository):
+Start the Vault server (this requires access to the private Vault repository):
 
 ```
 git clone https://github.com/scality/Vault ~/replication/vault && \
@@ -100,7 +100,7 @@ npm i && \
 S3BACKEND=file S3VAULT=scality npm start
 ```
 
-### Set Up Replication with Backbeat
+#### Set Up Replication with Backbeat
 
 In a new shell, clone Backbeat:
 
@@ -177,10 +177,9 @@ In a new shell, run Backbeat's queue processor:
 npm --prefix ~/replication/backbeat run queue_processor
 ```
 
-You are now ready to put data on `source-bucket` and watch it replicate to
-`target-bucket`!
+Data put on `source-bucket` now replicates to `target-bucket`.
 
-Put an object on the `source-bucket`:
+Put an object in `source-bucket`:
 
 ```
 echo 'content to be replicated' > replication_contents && \
@@ -216,9 +215,8 @@ aws s3api head-object \
 ```
 
 After some time, the object's "ReplicationStatus" will be "REPLICA".
-:smiley_cat:
 
-## Structure
+### Structure
 
 The `$HOME` directory now contains the following directories:
 
