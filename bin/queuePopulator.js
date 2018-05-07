@@ -56,8 +56,8 @@ async.waterfall([
         };
         // cron rule has to change if ingestion
         let cronRule = qpConfig.cronRule;
-        if (ingestionConfig && ingestionConfig.cronRule) {
-            cronRule = ingestionConfig.cronRule;
+        if (extConfigs.ingestion && extConfigs.ingestion.cronRule) {
+            cronRule = extConfigs.ingestion.cronRule;
         }
         schedule.scheduleJob(cronRule, () => {
             queueBatch(queuePopulator, taskState, qpConfig, log);

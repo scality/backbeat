@@ -52,11 +52,6 @@ const joiSchema = {
             database: joi.string().default('metadata'),
         }).when('logSource', { is: 'mongo', then: joi.required() }),
     },
-    ingestion: joi.object({
-        sources: joi.array(),
-        zookeeperPath: joi.string().required(),
-        cronRule: joi.string().default('*/5 * * * * *'),
-    }),
     log: logJoi,
     extensions: joi.object(),
     metrics: {

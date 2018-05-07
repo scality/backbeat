@@ -33,10 +33,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                         });
                         return cb(err);
                     }
-                    return cb();
+                    // return cb();
                 });
             }
-            return cb();
+            // return cb();
         });
     }
 
