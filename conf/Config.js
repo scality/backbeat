@@ -23,6 +23,7 @@ const locationTypeMatch = {
 
 class Config extends EventEmitter {
     constructor() {
+        console.log('config has been called');
         super();
         /*
          * By default, the config file is "config.json" at the root.
