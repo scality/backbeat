@@ -840,15 +840,19 @@ describe('Backbeat Server', () => {
             });
         });
 
-        it('should return a response even if redis data does not exist',
-        done => {
-            redis.keys('*:test:bb:*').then(keys => {
-                const pipeline = redis.pipeline();
-                keys.forEach(key => {
-                    pipeline.del(key);
+        describe('No metrics data in Redis', () => {
+            before(() => {
+                redis.keys('*:test:bb:*').then(keys => {
+                    const pipeline = redis.pipeline();
+                    keys.forEach(key => {
+                        pipeline.del(key);
+                    });
+                    return pipeline.exec();
                 });
-                pipeline.exec();
+            });
 
+            it('should return a response even if redis data does not exist',
+            done => {
                 getRequest('/_/metrics/crr/all', (err, res) => {
                     assert.ifError(err);
 
