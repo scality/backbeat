@@ -37,6 +37,7 @@ const joiSchema = {
         zookeeperPath: joi.string().required(),
 
         logSource: joi.alternatives().try('bucketd', 'dmd', 'mongo').required(),
+        subscribeToLogSourceDispatcher: joi.boolean().default(false),
         bucketd: hostPortJoi
             .when('logSource', { is: 'bucketd', then: joi.required() }),
         dmd: hostPortJoi.keys({
