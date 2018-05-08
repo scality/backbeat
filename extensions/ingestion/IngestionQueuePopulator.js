@@ -38,7 +38,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                     });
                     return next(err);
                 }
-                // return next();
+                return next();
             });
         }), cb);
     }

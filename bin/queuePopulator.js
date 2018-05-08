@@ -19,7 +19,6 @@ werelogs.configure({ level: config.log.logLevel,
 
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
-    console.log('QUEUEING BATCH!');
     if (taskState.batchInProgress) {
         log.warn('skipping batch: previous one still in progress');
         return undefined;
