@@ -10,7 +10,6 @@ const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
-const ingestionConfig = config.ingestion;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
@@ -20,6 +19,7 @@ werelogs.configure({ level: config.log.logLevel,
 
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState, qpConfig, log) {
+    console.log('QUEUEING BATCH!');
     if (taskState.batchInProgress) {
         log.warn('skipping batch: previous one still in progress');
         return undefined;
@@ -47,7 +47,7 @@ function queueBatch(queuePopulator, taskState, qpConfig, log) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
-    mConfig, rConfig, extConfigs, ingestionConfig);
+    mConfig, rConfig, extConfigs);
 
 async.waterfall([
     done => queuePopulator.open(done),
@@ -57,8 +57,8 @@ async.waterfall([
         };
         // cron rule has to change if ingestion
         let cronRule = qpConfig.cronRule;
-        if (ingestionConfig && ingestionConfig.cronRule) {
-            cronRule = ingestionConfig.cronRule;
+        if (extConfigs.ingestion && extConfigs.ingestion.cronRule) {
+            cronRule = extConfigs.ingestion.cronRule;
         }
         schedule.scheduleJob(cronRule, () => {
             queueBatch(queuePopulator, taskState, qpConfig, log);
