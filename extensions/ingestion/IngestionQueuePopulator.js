@@ -7,17 +7,19 @@ const zookeeper = require('../../lib/clients/zookeeper');
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
-        console.log('PARAMS', params);
+        this.qpConfig = params.qpConfig;
         this.params = params;
         this.config = params.config;
         this.ingestionPopulator = [];
     }
 
     setIngestionPopulator(cb, source) {
-        console.log('SOURCE', source);
+        this._setupZookeeper(() => {});
+        this.params.zkClient = this.zkClient;
         for (let i = 1; i <= source.raftCount; i++) {
             this.ingestionPopulator.push(new IngestionPopulator(this.params, i, source));
         }
+        return cb();
         // this.ingestionPopulator = new IngestionPopulator(this.params, source);
     }
 
@@ -31,8 +33,14 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             }
         }
 
-        console.log('WE ARE CREATING ZK PATHS');
         return async.waterfall([
+            fin => {
+                return async.eachSeries(this.ingestionPopulator, (populator, next) => {
+                    populator.populateIngestion({}, () => {
+                        return next();
+                    })
+                }, fin);
+            },
             fin => async.each(pathArray, (path, next) =>
             this.zkClient.getData(path, err => {
                 if (err) {
@@ -56,19 +64,12 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                     // return next();
                 });
             }), fin),
-            fin => {
-                console.log('INGESTION POPULATOR', IngestionPopulator);
-                this.ingestionPopulator.populateIngestion({}, (err, res) => {
-                    console.log('WE ARE POPULATING WITH INGESTION');
-                    return fin(err, res);
-                });
-            },
         ], cb);
     }
 
 
     _setupZookeeper(done) {
-        const populatorZkPath = this.qpConfig.zookeeperPath;
+        const populatorZkPath = this.config.zookeeperPath;
         const zookeeperUrl =
             `${this.zkConfig.connectionString}${populatorZkPath}`;
         this.log.info('opening zookeeper connection for persisting ' +
