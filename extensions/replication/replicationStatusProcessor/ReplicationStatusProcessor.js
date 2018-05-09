@@ -182,7 +182,7 @@ class ReplicationStatusProcessor {
         if (sourceEntry instanceof ObjectQueueEntry) {
             task = new UpdateReplicationStatus(this);
         }
-        if (task) {
+        if (task && this.repConfig.monitorReplicationFailures) {
             return this._setFailedKeys(sourceEntry, kafkaEntry, err => {
                 if (err) {
                     this.logger.error('error setting redis hash key', {
@@ -192,6 +192,10 @@ class ReplicationStatusProcessor {
                 return this.taskScheduler.push({ task, entry: sourceEntry },
                     sourceEntry.getCanonicalKey(), done);
             });
+        }
+        if (task) {
+            return this.taskScheduler.push({ task, entry: sourceEntry },
+                sourceEntry.getCanonicalKey(), done);
         }
         this.logger.warn('skipping unknown source entry',
                          { entry: sourceEntry.getLogInfo() });
