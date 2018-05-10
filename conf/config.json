@@ -48,6 +48,7 @@
             "sources": [
                 {
                     "name": "source1",
+                    "prefix": "source1_prefix",
                     "cronRule": "*/5 * * * * *",
                     "zookeeperSuffix": "/source1",
                     "host": "54.202.35.127",
