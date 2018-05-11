@@ -76,7 +76,7 @@ class MongoQueueProcessor {
         this._consumer = new BackbeatConsumer({
             // zookeeper: { connectionString: this.zkConfig.connectionString },
             topic: this.mongoProcessorConfig.topic,
-            groupId: `${this.mongoProcessorConfig.groupId}36`,
+            groupId: `${this.mongoProcessorConfig.groupId}1`,
             // Must always have concurrency of 1 so writes are in order
             kafka: { hosts: '127.0.0.1:9092' },
             concurrency: 1,
@@ -86,7 +86,10 @@ class MongoQueueProcessor {
         this._consumer.on('error', err => {
             this.logger.error('ERR', { err });
         });
-        this._consumer.subscribe();
+        this._consumer.on('ready', err => {
+            console.log(err);
+            this._consumer.subscribe();
+        });
         this.logger.info('mongo queue processor is ready to consume');
     }
 
