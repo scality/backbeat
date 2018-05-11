@@ -10,9 +10,10 @@ class RaftLogEntry {
      * @return {object} JSON.stringified entry value to be sent to kafka
      */
     createPutEntry(objectMd, bucketPrefix) {
+        // objectMd.res['owner-id'] = '';
         return {
             type: 'put',
-            bucket: `${bucketPrefix}_${objectMd.bucketName}`,
+            bucket: `${bucketPrefix}-${objectMd.bucketName}`,
             key: objectMd.objectKey,
             value: JSON.stringify(objectMd.res),
         };
@@ -30,7 +31,7 @@ class RaftLogEntry {
         return {
             type: 'put',
             bucket: usersBucket,
-            key: `${bucketPrefix}_${bucket}`,
+            key: `${bucketPrefix}-${bucket}`,
             value: null,
         };
     }
@@ -43,10 +44,11 @@ class RaftLogEntry {
      * @return {object} formatted entry for bucket metadata
      */
     createPutBucketMdEntry(bucket, bucketPrefix) {
+        // bucket._owner = '';
         return {
             type: 'put',
-            bucket: `${bucketPrefix}_${bucket._name}`,
-            key: `${bucketPrefix}_${bucket._name}`,
+            bucket: `${bucketPrefix}-${bucket._name}`,
+            key: `${bucketPrefix}-${bucket._name}`,
             value: bucket.serialize(),
         };
     }
