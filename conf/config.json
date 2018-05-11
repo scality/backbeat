@@ -48,10 +48,20 @@
             "sources": [
                 {
                     "name": "source1",
-                    "prefix": "source1_prefix",
+                    "prefix": "demo1",
                     "cronRule": "*/5 * * * * *",
                     "zookeeperSuffix": "/source1",
-                    "host": "54.202.35.127",
+                    "host": "localhost",
+                    "port": 9001,
+                    "https": false,
+                    "type": "scality",
+                    "raftCount": 8
+                },
+                {
+                    "name": "source2",
+                    "prefix": "demo2",
+                    "zookeeperSuffix": "/source2",
+                    "host": "localhost",
                     "port": 9000,
                     "https": false,
                     "type": "scality",
