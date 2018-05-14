@@ -9,7 +9,8 @@ const { RedisClient, StatsModel } = require('arsenal').metrics;
 const config = require('../../config.json');
 const { makePOSTRequest, getResponseBody } =
     require('../utils/makePOSTRequest');
-const getKafkaEntry = require('../utils/getKafkaEntry');
+const S3Mock = require('../utils/S3Mock');
+const VaultMock = require('../utils/VaultMock');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
 const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
@@ -32,9 +33,7 @@ function getUrl(options, path) {
 
 function setKey(redisClient, keys, cb) {
     const cmds = keys.map(key => {
-        // eslint-disable-next-line no-unused-vars
-        const [bucket, objectKey, versionId, site] = key.split(':');
-        const value = getKafkaEntry(bucket, objectKey, site);
+        const value = 'arn:aws:iam::604563867484:test-role';
         return ['set', `${TEST_REDIS_KEY_FAILED_CRR}:${key}`, value];
     });
     redisClient.batch(cmds, cb);
@@ -206,7 +205,8 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe('metrics routes', () => {
+    describe('API routes', function dF() {
+        this.timeout(10000);
         const interval = 300;
         const expiry = 900;
         const OPS = 'test:bb:ops';
@@ -226,6 +226,12 @@ describe('Backbeat Server', () => {
             redis = new Redis();
             redisClient = new RedisClient(redisConfig, fakeLogger);
             statsClient = new StatsModel(redisClient, interval, expiry);
+            const s3Mock = new S3Mock();
+            const vaultMock = new VaultMock();
+            http.createServer((req, res) => s3Mock.onRequest(req, res))
+                .listen(config.extensions.replication.source.s3.port);
+            http.createServer((req, res) => vaultMock.onRequest(req, res))
+                .listen(config.extensions.replication.source.auth.vault.port);
 
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
             statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
@@ -543,16 +549,20 @@ describe('Backbeat Server', () => {
         });
 
         it('should get a 200 response for route: /_/crr/failed', done => {
-            const body = JSON.stringify([{
-                Bucket: 'bucket',
-                Key: 'key',
-                VersionId: 'versionId',
-                StorageClass: 'site',
-            }]);
-            makeRetryPOSTRequest(body, (err, res) => {
+            const keys = ['test-bucket:test-key:test-versionId:test-site'];
+            setKey(redisClient, keys, err => {
                 assert.ifError(err);
-                assert.strictEqual(res.statusCode, 200);
-                done();
+                const body = JSON.stringify([{
+                    Bucket: 'test-bucket',
+                    Key: 'test-key',
+                    VersionId: 'test-versionId',
+                    StorageClass: 'test-site',
+                }]);
+                return makeRetryPOSTRequest(body, (err, res) => {
+                    assert.ifError(err);
+                    assert.strictEqual(res.statusCode, 200);
+                    done();
+                });
             });
         });
 
@@ -599,7 +609,7 @@ describe('Backbeat Server', () => {
         describe('Retry feature with Redis', () => {
             // Version ID calculated from the mock object MD.
             const testVersionId =
-                '393834373735353134343536313039393939393952473030312020313030';
+                '39383530303038363133343437313939393939395247303031202030';
 
             before(done => deleteKeys(redisClient, done));
 
@@ -770,7 +780,7 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when no ' +
-            'key key has been matched', done => {
+            'key has been matched', done => {
                 const body = JSON.stringify([{
                     Bucket: 'bucket',
                     Key: 'key',
