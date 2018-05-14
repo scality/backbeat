@@ -155,11 +155,10 @@ class ReplicationStatusProcessor {
     /**
      * Push any failed entry to the "failed" topic.
      * @param {QueueEntry} queueEntry - The queue entry with the failed status.
-     * @param {Object} kafkaEntry - The kafka entry with the failed status.
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _pushFailedEntry(queueEntry, kafkaEntry, cb) {
+    _pushFailedEntry(queueEntry, cb) {
         const { status, backends } = queueEntry.getReplicationInfo();
         if (status !== 'FAILED') {
             return process.nextTick(cb);
@@ -171,10 +170,11 @@ class ReplicationStatusProcessor {
             const key = queueEntry.getObjectKey();
             const versionId = queueEntry.getEncodedVersionId();
             const { site } = backend;
+            const roles = queueEntry.getReplicationRoles();
+            const value = roles.split(',')[0]; // The source IAM role.
             const message = {
-                key: `${redisKeys.failedCRR}:` +
-                    `${bucket}:${key}:${versionId}:${site}`,
-                value: Buffer.from(kafkaEntry.value).toString(),
+                key: getFailedCRRKey(bucket, key, versionId, site),
+                value,
             };
             return this._FailedCRRProducer
                 .publishFailedCRREntry(JSON.stringify(message), cb);
@@ -206,7 +206,7 @@ class ReplicationStatusProcessor {
         }
         if (task && this.repConfig.monitorReplicationFailures) {
             return async.parallel([
-                next => this._pushFailedEntry(sourceEntry, kafkaEntry, next),
+                next => this._pushFailedEntry(sourceEntry, next),
                 next => this.taskScheduler.push({ task, entry: sourceEntry },
                     sourceEntry.getCanonicalKey(), next),
             ], done);
