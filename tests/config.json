@@ -45,6 +45,20 @@
             "monitorReplicationFailures": true,
             "monitorReplicationFailureExpiryTimeS": 86400,
             "groupId": "backbeat-test-replication-group",
+            "source": {
+                "transport": "http",
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 7777
+                },
+                "auth": {
+                    "type": "role",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 7778
+                    }
+                }
+            },
             "destination": {
                 "bootstrapList": [
                     { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
