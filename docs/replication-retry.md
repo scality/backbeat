@@ -117,8 +117,21 @@ See [Explanations](#explanations) for more detail.
 
 ### Redis
 
-The replication status processor sets a Redis key for any backend with a FAILED
-status (the key has a configurable expiry time, the default of which is 24 hours) using the following schema:
+The replication status processor pushes a Kafka entry to a topic dedicated for
+queuing failed replication operations. It does so for each site with a FAILED
+status.
+
+Each Kafka entry takes the following form:
+
+```
+{
+    key: <bucket>:<key>:<versionId>:<site>
+}
+```
+
+A Kafka consumer is subscribed to the topic. For each entry consumed, a Redis
+key is set using the following schema (the key has a configurable expiry time,
+the default of which is 24 hours):
 
 ```
 bb:crr:failed:<bucket>:<key>:<versionId>:<site>
@@ -174,11 +187,11 @@ The following diagram shows the above steps in the context of a successful retry
   will overwrite the destination master version if replicating to a public
   cloud.
 
-* Using Redis' [SCAN](https://redis.io/commands/scan)), with a default
+* Using Redis' [SCAN](https://redis.io/commands/scan), with a default
   [COUNT](https://redis.io/commands/scan#the-count-option) of 1000, allows us to
   search for particular key matches and search all keys. However,
   [SCAN](https://redis.io/commands/scan) does not guarantee any number of
-  elements being returned at each iteration. Consequently, we cannot guarantee a
+  elements being returned at each iteration so we cannot guarantee a
   pre-defined number of failed version in the response listing.
 
 ## Rejected Options
@@ -193,3 +206,9 @@ The following diagram shows the above steps in the context of a successful retry
 * Using a hash or list data structure in Redis to store the keys. While
   potentially more memory efficient, we want to leverage Redis' expiry feature
   which is not supported for these data types.
+
+* Setting the key immediately in Redis in the replication status processor. We
+  have opted instead to push the key to a dedicated topic and have a consumer of
+  that topic handle setting the Redis key. This design decouples the replication
+  status processor from Redis, allowing for a reliable history of failed
+  operations in the case that the Redis server is offline.
