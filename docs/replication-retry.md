@@ -81,6 +81,9 @@ See [Explanations](#explanations) for more detail.
     }
     ```
 
+    NOTE: The marker query parameter is not supported for this route because we
+    anticipate that any replication rule will not include more than 1000 sites.
+
 * POST `/_/crr/failed`
 
     This POST request retries a set of failed operations.
@@ -114,47 +117,48 @@ See [Explanations](#explanations) for more detail.
 
 ### Redis
 
-Redis will contain a hash with the key:
-
-```
-bb:crr:failed
-```
-
-The replication status processor sets a hash field for any backend with a FAILED
+The replication status processor sets a Redis key for any backend with a FAILED
 status using the following schema:
 
-```sh
-<bucket>:<key>:<versionId>:<site>
+```
+bb:crr:failed:<bucket>:<key>:<versionId>:<site>
 ```
 
-The value of the Redis hash field is the object's metadata at the time of failure.
+The key has a configurable expiry time, the default of which is 24 hours.
+
+TODO: Insert failure scenario schema diagram.
 
 ### Listing
 
-When a GET request is received for the listing route (e.g.,
-`/_/crr/failed`), all Redis keys beginning with `bb:crr:failed` will
-be retrieved and sent as a response defined in [Definition of
-API](#definition-of-api).
+When a GET request is received for the list all route (i.e. `/_/crr/failed`),
+all Redis keys beginning with `bb:crr:failed` will be retrieved and sent as a
+response defined in [Definition of API](#definition-of-api).
+
+When a GET request is received for the list version route (i.e.
+`/_/crr/failed/<bucket>/<key>/<versionId>`), all Redis keys beginning with
+`bb:crr:failed:<bucket>:<key>:<versionId>` will be retrieved and sent as a
+response defined in [Definition of API](#definition-of-api).
 
 ### Retry
 
 When a POST request is received for the route `/_/crr/failed` the following
 steps occur:
 
-1. Get the object's metadata stored by the Redis key (the schema of which is
-   defined in [Redis](#redis)).
+1. Get the object version's metadata from S3's GET metadata route.
 
-2. Delete the Redis key for the operation which is being retried.
-
-3. Push a new Kafka entry to the replication status topic with the source
+2. Push a new Kafka entry to the replication status topic with the source
    object's metadata site status set to PENDING. This will cause the replication
    status processor to update the source object's metadata to indicate the
    site's replication status is now PENDING.
 
-4. Push a new Kafka entry to the replication topic with the source object's
+3. Push a new Kafka entry to the replication topic with the source object's
    metadata site status set to PENDING. This will cause the replication
    processor responsible for performing operations for the given site to attempt
    the replication operation again.
+
+4. Delete the Redis key for the operation which is being retried.
+
+TODO: Insert Retry scenario schema diagram.
 
 ## Dependencies
 
@@ -168,7 +172,22 @@ steps occur:
   will overwrite the destination master version if replicating to a public
   cloud.
 
+* Using Redis' [SCAN](https://redis.io/commands/scan)), with a default
+  [COUNT](https://redis.io/commands/scan#the-count-option) of 1000, allows us to
+  search for particular key matches and search all keys. However,
+  [SCAN](https://redis.io/commands/scan) does not guarantee any number of
+  elements being returned at each iteration. Consequently, we cannot guarantee a
+  pre-defined number of failed version in the response listing.
+
 ## Rejected Options
 
 * Creating Zookeeper nodes with the failed object's metadata for maintaining the
   list of failed entries instead of using Redis.
+
+* Storing the failed object metadata as the value of the Redis key. While this
+  approach avoids an additional HTTP call to S3, the memory usage improvement in
+  Redis is significant.
+
+* Using a hash or list data structure in Redis to store the keys. While
+  potentially more memory efficient, we want to leverage Redis' expiry feature
+  which is not supported for these data types.
