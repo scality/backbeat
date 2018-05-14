@@ -118,15 +118,15 @@ See [Explanations](#explanations) for more detail.
 ### Redis
 
 The replication status processor sets a Redis key for any backend with a FAILED
-status using the following schema:
+status (the key has a configurable expiry time, the default of which is 24 hours) using the following schema:
 
 ```
 bb:crr:failed:<bucket>:<key>:<versionId>:<site>
 ```
 
-The key has a configurable expiry time, the default of which is 24 hours.
+The following diagram shows the steps leading up to setting the key in Redis.
 
-TODO: Insert failure scenario schema diagram.
+![design](/res/object-failure-scenario.png)
 
 ### Listing
 
@@ -158,7 +158,9 @@ steps occur:
 
 4. Delete the Redis key for the operation which is being retried.
 
-TODO: Insert Retry scenario schema diagram.
+The following diagram shows the above steps in the context of a successful retry.
+
+![design](/res/object-retry-scenario.png)
 
 ## Dependencies
 
