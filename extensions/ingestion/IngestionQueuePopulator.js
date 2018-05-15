@@ -12,6 +12,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     createZkPath(cb, source) {
         const { zookeeperPath } = this.extConfig;
         const pathArray = [];
+        this.bucketPrefix = source.prefix ? source.prefix : source.prefix.name;
         if (source.raftCount) {
             for (let i = 1; i <= source.raftCount; i++) {
                 const path = `/ingestion/${source.name}/provisions/${i}`;
@@ -72,6 +73,9 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         if (!entry.bucket) {
             this.log.trace('skipping entry because missing bucket name');
             return;
+        }
+        if (!entry.bucket.startsWith(`${this.prefix}-`)) {
+            entry.bucket = `${this.prefix}-${entry.bucket}`;
         }
         this.log.info('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
