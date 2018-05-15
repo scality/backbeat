@@ -25,16 +25,16 @@ class RaftLogEntry {
      * a part of the usersBucket
      *
      * @param {object} bucket - bucket info to format entry
-     * @param {string} bucketPrefix - prefix for bucketname to avoid name clash
+     * @param {object} res - bucket info
      * @return {object} formatted entry for bucket as an object
      */
-    createPutBucketEntry(bucket) {
+    createPutBucketEntry(bucket, res) {
         return {
             type: 'put',
             bucket: usersBucket,
-            // key: `${bucketPrefix}-${bucket}`,
-            key: bucket,
-            value: null,
+            // key: `${bucketPrefix}-${bucket}`;
+            key: `${res._owner}..|..${bucket}`,
+            value: res._creationDate,
         };
     }
 
