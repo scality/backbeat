@@ -50,7 +50,7 @@ class RaftLogEntry {
         return {
             type: 'put',
             // bucket: `${bucketPrefix}-${bucket._name}`,
-            bucket: bucket._name
+            bucket: bucket._name,
             // key: `${bucketPrefix}-${bucket._name}`,
             key: bucket._name,
             value: bucket.serialize(),
