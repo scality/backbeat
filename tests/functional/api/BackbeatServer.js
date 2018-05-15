@@ -138,9 +138,9 @@ describe('Backbeat Server', () => {
             statsClient = new StatsModel(redisClient, interval, expiry);
 
             statsClient.reportNewRequest(OPS, 1725);
-            statsClient.reportNewRequest(BYTES, 219800);
+            statsClient.reportNewRequest(BYTES, 2198);
             statsClient.reportNewRequest(OPS_DONE, 450);
-            statsClient.reportNewRequest(BYTES_DONE, 102700);
+            statsClient.reportNewRequest(BYTES_DONE, 1027);
 
             done();
         });
@@ -242,8 +242,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1275);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res[key].results.size, 117.1);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 1171);
                 done();
             });
         });
@@ -255,8 +255,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 450);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res[key].results.size, 102.7);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 1027);
                 done();
             });
         });
@@ -268,8 +268,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.5);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res[key].results.size, 0.11);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res[key].results.size, 1.14);
                 done();
             });
         });
@@ -286,20 +286,20 @@ describe('Backbeat Server', () => {
                 assert(res.backlog.description);
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res.backlog.results.count, 1275);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res.backlog.results.size, 117.1);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res.backlog.results.size, 1171);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 450);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res.completions.results.size, 102.7);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res.completions.results.size, 1027);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.5);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res.throughput.results.size, 0.11);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res.throughput.results.size, 1.14);
 
                 done();
             });
