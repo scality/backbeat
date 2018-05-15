@@ -57,7 +57,7 @@ describe('BackbeatAPI', () => {
                 },
                 // bytes
                 {
-                    requests: [100000, 0, 0, 100000],
+                    requests: [1024, 0, 0, 1024],
                     errors: [0, 0, 0, 0],
                 },
             ]);
@@ -77,7 +77,7 @@ describe('BackbeatAPI', () => {
             // over double its size. This can only happen when interval time has
             // just reset and the just-expired interval data fully applies
             assert(count >= 0.03 && count <= 0.06);
-            assert(size >= 0.11 && size <= 0.22);
+            assert(size >= 1.14 && size <= 2.28);
         });
     });
 });
