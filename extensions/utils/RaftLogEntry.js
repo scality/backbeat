@@ -9,12 +9,13 @@ class RaftLogEntry {
      * @param {string} bucketPrefix - prefix for bucketname to avoid name clash
      * @return {object} JSON.stringified entry value to be sent to kafka
      */
-    createPutEntry(objectMd) {
+    createPutEntry(objectMd, bucketPrefix) {
+        // TODO: substitue canonical id;
         // objectMd.res['owner-id'] = '';
         return {
             type: 'put',
-            // bucket: `${bucketPrefix}-${objectMd.bucketName}`,
-            bucket: objectMd.bucketName,
+            bucket: `${bucketPrefix}-${objectMd.bucketName}`,
+            // bucket: objectMd.bucketName,
             key: objectMd.objectKey,
             value: JSON.stringify(objectMd.res),
         };
@@ -29,12 +30,14 @@ class RaftLogEntry {
      * @param {string} bucketPrefix - prefix for bucketname to avoid name clash
      * @return {object} formatted entry for bucket as an object
      */
-    createPutBucketEntry(bucket, res) {
+    createPutBucketEntry(bucket, res, bucketPrefix) {
+        // TODO: substitute canonical id;
+        // res._owner = '';
         return {
             type: 'put',
             bucket: usersBucket,
-            // key: `${bucketPrefix}-${res._owner}..|..${bucket}`,
-            key: `${res._owner}..|..${bucket}`,
+            key: `${res._owner}..|..${bucketPrefix}-${bucket}`,
+            // key: `${res._owner}..|..${bucket}`,
             value: res._creationDate,
         };
     }
@@ -46,14 +49,15 @@ class RaftLogEntry {
      * @param {string} bucketPrefix - prefix for bucketname to avoid name clash
      * @return {object} formatted entry for bucket metadata
      */
-    createPutBucketMdEntry(bucket) {
+    createPutBucketMdEntry(bucket, bucketPrefix) {
+        // TODO: substitute canonical id;
         // bucket._owner = '';
         return {
             type: 'put',
-            // bucket: `${bucketPrefix}-${bucket._name}`,
-            bucket: bucket._name,
-            // key: `${bucketPrefix}-${bucket._name}`,
-            key: bucket._name,
+            bucket: `${bucketPrefix}-${bucket._name}`,
+            // bucket: bucket._name,
+            key: `${bucketPrefix}-${bucket._name}`,
+            // key: bucket._name,
             value: bucket.serialize(),
         };
     }
