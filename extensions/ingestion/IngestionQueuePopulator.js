@@ -74,8 +74,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        if (!entry.bucket.startsWith(`${this.prefix}-`)) {
-            entry.bucket = `${this.prefix}-${entry.bucket}`;
+        if (!entry.bucket.startsWith(`${this.bucketPrefix}-`)) {
+            entry.bucket = `${this.bucketPrefix}-${entry.bucket}`;
         }
         this.log.info('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
