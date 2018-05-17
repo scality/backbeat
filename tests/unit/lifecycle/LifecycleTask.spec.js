@@ -12,6 +12,28 @@ const CURRENT = new Date(2018, 1, 10);
 // 5 days after CURRENT
 const FUTURE = new Date(2018, 1, 15);
 
+const fakeLogger = {
+    trace: () => {},
+    error: () => {},
+    info: () => {},
+    debug: () => {},
+};
+
+// LifecycleProducer mini Mock
+const lp = {
+    getStateVars: () => (
+        {
+            enabledRules: {
+                expiration: { enabled: true },
+                transitions: { enabled: true },
+                noncurrentVersionTransitions: { enabled: true },
+                noncurrentVersionExpiration: { enabled: true },
+                abortIncompleteMultipartUpload: { enabled: true },
+            },
+        }
+    ),
+};
+
 // get all rule ID's
 function getRuleIDs(rules) {
     return rules.map(rule => rule.ID).sort();
@@ -21,19 +43,6 @@ describe('lifecycle task helper methods', () => {
     let lct;
 
     before(() => {
-        const lp = {
-            getStateVars: () => (
-                {
-                    enabledRules: {
-                        expiration: { enabled: true },
-                        transitions: { enabled: true },
-                        noncurrentVersionTransitions: { enabled: true },
-                        noncurrentVersionExpiration: { enabled: true },
-                        abortIncompleteMultipartUpload: { enabled: true },
-                    },
-                }
-            ),
-        };
         lct = new LifecycleTask(lp);
     });
 
@@ -485,6 +494,82 @@ describe('lifecycle task helper methods', () => {
             const res = lct._addStaleDateToVersions(bucketDetails, dupelist);
 
             assert.equal(res[0].staleDate, '2018-04-04T23:16:55.000Z');
+        });
+    });
+
+    describe('_checkAndApplyEODMRule', () => {
+        let lct2;
+
+        const bucketData = {
+            target: {
+                owner: 'test-user',
+                bucket: 'test-bucket',
+            },
+        };
+        const deleteMarker = {
+            Key: 'test-key',
+            VersionId:
+            '834373731313631393339313839393939393952473030312020353820',
+        };
+        const listOfVersions = [
+            {
+                IsLatest: false,
+                Key: 'another-test-key',
+                VersionId:
+                '834373731313631393339313839393939393952473030312020353815',
+            },
+        ];
+
+        before(() => {
+            // overwrite sendObjectEntry to read entry sent
+            class LifecycleTaskMock extends LifecycleTask {
+                sendObjectEntry(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        it('should NOT send any entry to Kafka when Expiration rule is not ' +
+        'enabled', () => {
+            const rules = {};
+
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
+            listOfVersions, rules, fakeLogger, err => {
+                assert.ifError(err);
+
+                const latestEntry = lct2.getLatestEntry();
+                assert.equal(latestEntry, undefined);
+            });
+        });
+
+        it('should send an entry to Kafka when ExpiredObjectDeleteMarker is ' +
+        ' enabled and conditions are all met', () => {
+            const rules = {
+                Expiration: { ExpiredObjectDeleteMarker: true },
+            };
+
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
+            listOfVersions, rules, fakeLogger, err => {
+                assert.ifError(err);
+
+                const latestEntry = lct2.getLatestEntry();
+
+                const expectedTarget = Object.assign({}, bucketData.target, {
+                    key: deleteMarker.Key,
+                    version: deleteMarker.VersionId,
+                });
+                const expected = {
+                    action: 'deleteObject',
+                    target: expectedTarget,
+                };
+                assert.deepStrictEqual(latestEntry, expected);
+            });
         });
     });
 });

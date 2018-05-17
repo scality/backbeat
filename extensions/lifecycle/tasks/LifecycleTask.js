@@ -711,7 +711,7 @@ class LifecycleTask extends BackbeatTask {
                 // if there are no other versions with the same Key as this DM,
                 // the ExpiredObjectDeleteMarker rule applies. Otherwise, no
                 // rule applies to this `IsLatest` DM
-                if (matchingNoncurrentKeys.length === 0 &&
+                if (matchingNoncurrentKeys.length === 0 && rules.Expiration &&
                 rules.Expiration.ExpiredObjectDeleteMarker) {
                     const entry = {
                         action: 'deleteObject',
