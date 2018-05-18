@@ -89,6 +89,10 @@ class ObjectQueueEntry extends ObjectMD {
         return this.objectVersionedKey;
     }
 
+    isVersion() {
+        return this.getObjectKey() === this.getObjectVersionedKey();
+    }
+
     getUserMetadata() {
         const metaHeaders = {};
         const data = this.getValue();

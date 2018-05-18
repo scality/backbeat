@@ -11,7 +11,7 @@ const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const redisClient = require('../utils/getRedisClient')();
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../utils/ObjectQueueEntry');
 const { redisKeys } = require('../constants');
 
 /**
