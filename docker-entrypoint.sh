@@ -72,7 +72,11 @@ if [[ "$EXTENSIONS_REPLICATION_DEST_AUTH_ACCOUNT" ]]; then
 fi
 
 if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
+    if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE" ]]; then
+        JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}, $EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST_MORE]"
+    else
+        JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
+    fi
 fi
 
 if [[ "$HEALTHCHECKS_ALLOWFROM" ]]; then
@@ -129,6 +133,11 @@ fi
 
 if [[ "$AUTH_ACCOUNT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .auth.account=\"$AUTH_ACCOUNT\""
+fi
+
+if [[ "$EXTENSIONS_REPLICATION_ACCOUNTS" ]]; then
+    jq ". | .accounts += [$EXTENSIONS_REPLICATION_ACCOUNTS]" conf/authdata.json > conf/autdata.json.tmp
+    mv conf/authdata.json.tmp conf/authdata.json
 fi
 
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
