@@ -22,6 +22,7 @@ class LifecycleConsumer extends EventEmitter {
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle configuration object
+     * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
      * @param {Object} lcConfig.consumer - kafka consumer object
      * @param {String} lcConfig.consumer.groupId - kafka consumer group id
@@ -35,18 +36,17 @@ class LifecycleConsumer extends EventEmitter {
      * @param {Object} s3Config - S3 configuration
      * @param {Object} s3Config.host - s3 endpoint host
      * @param {Number} s3Config.port - s3 endpoint port
-     * @param {Object} authConfig - authentication info on source
      * @param {String} [transport="http"] - transport method ("http"
      *  or "https")
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, authConfig,
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config,
                 transport = 'http') {
         super();
         this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
+        this.authConfig = lcConfig.auth;
         this.s3Config = s3Config;
-        this.authConfig = authConfig;
         this._transport = transport;
         this._consumer = null;
 
