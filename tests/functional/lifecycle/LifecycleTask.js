@@ -359,7 +359,9 @@ s3mock, params, cb) {
     });
 }
 
-describe('lifecycle task functional tests', () => {
+describe('lifecycle task functional tests', function dF() {
+    this.timeout(10000);
+
     let lcp;
     let lcTask;
     let s3;
