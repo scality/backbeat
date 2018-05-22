@@ -10,15 +10,6 @@
         "host": "127.0.0.1",
         "port": 8000
     },
-    "auth": {
-        "type": "account",
-        "account": "bart",
-        "vault": {
-            "host": "127.0.0.1",
-            "port": 8500,
-            "adminPort": 8600
-        }
-    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -90,6 +81,15 @@
             }
         },
         "lifecycle": {
+            "auth": {
+                "type": "service",
+                "account": "service-lifecycle",
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8500,
+                    "adminPort": 8600
+                }
+            },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",

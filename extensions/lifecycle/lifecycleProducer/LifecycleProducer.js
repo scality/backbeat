@@ -10,6 +10,10 @@ const { errors } = require('arsenal');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const LifecycleTask = require('../tasks/LifecycleTask');
+const {
+    StaticFileAccountCredentials,
+    ProvisionedServiceAccountCredentials,
+} = require('../../../lib/credentials/AccountCredentials');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
 
@@ -33,27 +37,20 @@ class LifecycleProducer {
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle config
+     * @param {Object} lcConfig.auth - authentication info
      * @param {Object} [lcConfig.backlogMetrics] - param object to
      * publish backlog metrics to zookeeper (see {@link
      * BackbeatConsumer} constructor)
      * @param {Object} s3Config - s3 config
      * @param {String} s3Config.host - host ip
      * @param {String} s3Config.port - port
-     * @param {Object} authConfig - auth config
-     * @param {String} [authConfig.account] - account name
-     * @param {Object} [authConfig.vault] - vault details
-     * @param {String} authConfig.vault.host - vault host ip
-     * @param {number} authConfig.vault.port - vault port
-     * @param {number} authConfig.vault.adminPort - vault admin port
      * @param {String} transport - http or https
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, authConfig,
-                transport) {
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport) {
         this._log = new Logger('Backbeat:LifecycleProducer');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
-        this._authConfig = authConfig;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
         this._transport = transport;
         this._bucketProducer = null;
@@ -285,11 +282,24 @@ class LifecycleProducer {
     }
 
     /**
+     * Set up the credentials (service account credentials or provided
+     * by vault depending on config)
+     * @return {undefined}
+     */
+    _setupCredentials() {
+        const { type } = this._lcConfig.auth;
+        if (type === 'vault') {
+            return this._setupVaultClientCache();
+        }
+        return undefined;
+    }
+
+    /**
      * Set up the vault client cache for making requests to vault.
      * @return {undefined}
      */
     _setupVaultClientCache() {
-        const { vault } = this._authConfig;
+        const { vault } = this._lcConfig.auth;
         const { host, port, adminPort, adminCredentialsFile } = vault;
         const adminCredsJSON = fs.readFileSync(adminCredentialsFile);
         const adminCredsObj = JSON.parse(adminCredsJSON);
@@ -321,6 +331,29 @@ class LifecycleProducer {
         if (cachedAccountCreds) {
             return process.nextTick(() => cb(null, cachedAccountCreds));
         }
+        const { type } = this._lcConfig.auth;
+        if (type === 'account') {
+            this.accountCredsCache[canonicalId] =
+                new StaticFileAccountCredentials(this._lcConfig.auth,
+                                                 this._log);
+            return process.nextTick(
+                () => cb(null, this.accountCredsCache[canonicalId]));
+        }
+        if (type === 'service') {
+            this.accountCredsCache[canonicalId] =
+                new ProvisionedServiceAccountCredentials(this._lcConfig.auth,
+                                                         this._log);
+            return process.nextTick(
+                () => cb(null, this.accountCredsCache[canonicalId]));
+        }
+        if (type === 'vault') {
+            return this._generateVaultAdminCredentials(canonicalId, cb);
+        }
+        return cb(errors.InternalError.customizeDescription(
+            `invalid auth type ${type}`));
+    }
+
+    _generateVaultAdminCredentials(canonicalId, cb) {
         const vaultClient = this._vaultClientCache.getClient('lifecycle:s3');
         const vaultAdmin = this._vaultClientCache.getClient('lifecycle:admin');
         return async.waterfall([
@@ -366,7 +399,7 @@ class LifecycleProducer {
      * @return {undefined}
      */
     start() {
-        this._setupVaultClientCache();
+        this._setupCredentials();
         return async.parallel([
             // Set up producer to populate the lifecycle bucket task topic.
             next => this._setupProducer(this._lcConfig.bucketTasksTopic,

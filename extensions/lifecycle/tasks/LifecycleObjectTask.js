@@ -1,7 +1,12 @@
+const async = require('async');
 const AWS = require('aws-sdk');
 
+const errors = require('arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const async = require('async');
+const {
+    StaticFileAccountCredentials,
+    ProvisionedServiceAccountCredentials,
+} = require('../../../lib/credentials/AccountCredentials');
 const getVaultCredentials =
     require('../../../lib/credentials/getVaultCredentials');
 const attachReqUids =
@@ -24,17 +29,37 @@ class LifecycleObjectTask extends BackbeatTask {
         this.accountCredsCache = {};
     }
 
-    _getCredentials(canonicalId, cb) {
+    _getCredentials(canonicalId, log, cb) {
         const cachedCreds = this.accountCredsCache[canonicalId];
         if (cachedCreds) {
             return process.nextTick(() => cb(null, cachedCreds));
         }
-        return getVaultCredentials(this.authConfig, canonicalId, 'lifecycle',
-        (err, accountCreds) => cb(err, accountCreds));
+        const { type } = this.lcConfig.auth;
+        if (type === 'account') {
+            this.accountCredsCache[canonicalId] =
+                new StaticFileAccountCredentials(this.lcConfig.auth, log);
+            return process.nextTick(
+                () => cb(null, this.accountCredsCache[canonicalId]));
+        }
+        if (type === 'service') {
+            this.accountCredsCache[canonicalId] =
+                new ProvisionedServiceAccountCredentials(
+                    this.lcConfig.auth, log);
+            return process.nextTick(
+                () => cb(null, this.accountCredsCache[canonicalId]));
+        }
+        if (type === 'vault') {
+            return getVaultCredentials(
+                this.authConfig, canonicalId, 'lifecycle',
+                (err, accountCreds) => cb(err, accountCreds));
+        }
+        return process.nextTick(
+            () => cb(errors.InternalError.customizeDescription(
+                `invalid auth type ${type}`)));
     }
 
     _setupClients(canonicalId, log, done) {
-        this._getCredentials(canonicalId, (err, accountCreds) => {
+        this._getCredentials(canonicalId, log, (err, accountCreds) => {
             if (err) {
                 log.error('error generating new access key', {
                     error: err.message,

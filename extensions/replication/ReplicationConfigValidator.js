@@ -14,7 +14,8 @@ const joiSchema = {
             type: joi.alternatives().try('account', 'role', 'service').
                 required(),
             account: joi.string()
-                .when('type', { is: 'account', then: joi.required() }),
+                .when('type', { is: 'account', then: joi.required() })
+                .when('type', { is: 'service', then: joi.required() }),
             vault: joi.object({
                 host: joi.string().required(),
                 port: joi.number().greater(0).required(),

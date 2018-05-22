@@ -16,21 +16,6 @@ const joiSchema = {
     },
     transport: transportJoi,
     s3: hostPortJoi.required(),
-    auth: joi.object({
-        type: joi.alternatives().try('account', 'vault').required(),
-        account: joi.string()
-            .when('type', { is: 'account', then: joi.required() }),
-        vault: joi.object({
-            host: joi.string().required(),
-            port: joi.number().greater(0).required(),
-            adminPort: joi.number().greater(0)
-                .when('adminCredentialsFile', {
-                    is: joi.exist(),
-                    then: joi.required(),
-                }),
-            adminCredentialsFile: joi.string().optional(),
-        }).when('type', { is: 'vault', then: joi.required() }),
-    }).required(),
     queuePopulator: {
         cronRule: joi.string().required(),
         batchMaxRead: joi.number().default(10000),
