@@ -14,6 +14,7 @@ const joiSchema = {
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
+        useZookeeperDispatcher: joi.boolean().default(false),
     },
     producer: {
         groupId: joi.string().required(),

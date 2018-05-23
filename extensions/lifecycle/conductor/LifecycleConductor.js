@@ -310,8 +310,57 @@ class LifecycleConductor {
         ], done);
     }
 
+    _subscribeToZookeeperDispatcher() {
+        this.logger.debug('connecting to job dispatcher');
+        const jobDispatcherZkPath = this.getJobDispatcherZkPath();
+        this._jobDispatcher = new ProvisionDispatcher({
+            connectionString:
+            `${this.zkConfig.connectionString}${jobDispatcherZkPath}`,
+        });
+        this._jobDispatcher.subscribe((err, items) => {
+            if (err) {
+                this.logger.error('error during job provisioning',
+                                  { error: err.message });
+                return undefined;
+            }
+            this._isActive = false;
+            items.forEach(job => {
+                this.logger.info('conductor job provisioned',
+                                 { job });
+                if (job === 'queue-buckets') {
+                    this._isActive = true;
+                }
+            });
+            if (this._isActive) {
+                this._startCronJob();
+            } else {
+                this._stopCronJob();
+                this.logger.info('no active job provisioned, idling');
+            }
+            return undefined;
+        });
+    }
+
+    _startCronJob() {
+        if (!this._cronJob) {
+            this.logger.info('starting bucket queueing cron job',
+                             { cronRule: this._cronRule });
+            this._cronJob = schedule.scheduleJob(
+                this._cronRule,
+                this.processBuckets.bind(this));
+        }
+    }
+
+    _stopCronJob() {
+        if (this._cronJob) {
+            this.logger.info('stopping bucket queueing cron job');
+            this._cronJob.cancel();
+            this._cronJob = null;
+        }
+    }
+
     /**
-     * Start the cron jobkafka producer
+     * Start the cron job kafka producer
      *
      * @param {function} done - callback
      * @return {undefined}
@@ -326,42 +375,11 @@ class LifecycleConductor {
             if (err) {
                 return done(err);
             }
-            this.logger.debug('connecting to job dispatcher');
-            const jobDispatcherZkPath = this.getJobDispatcherZkPath();
-            this._jobDispatcher = new ProvisionDispatcher({
-                connectionString:
-                `${this.zkConfig.connectionString}${jobDispatcherZkPath}`,
-            });
-            this._jobDispatcher.subscribe((err, items) => {
-                if (err) {
-                    this.logger.error('error during job provisioning',
-                                      { error: err.message });
-                    return undefined;
-                }
-                this._isActive = false;
-                items.forEach(job => {
-                    this.logger.info('conductor job provisioned',
-                                     { job });
-                    if (job === 'queue-buckets') {
-                        this._isActive = true;
-                    }
-                });
-                if (this._isActive && !this._cronJob) {
-                    this.logger.info('starting bucket queueing cron job',
-                                     { cronRule: this._cronRule });
-                    this._cronJob = schedule.scheduleJob(
-                        this._cronRule,
-                        this.processBuckets.bind(this));
-                } else if (!this._isActive && this._cronJob) {
-                    this.logger.info('stopping bucket queueing cron job');
-                    this._cronJob.cancel();
-                    this._cronJob = null;
-                }
-                if (!this._isActive) {
-                    this.logger.info('no active job provisioned, idling');
-                }
-                return undefined;
-            });
+            if (this.lcConfig.conductor.useZookeeperDispatcher) {
+                this._subscribeToZookeeperDispatcher();
+            } else {
+                this._startCronJob();
+            }
             return done();
         });
     }
@@ -373,11 +391,7 @@ class LifecycleConductor {
      * @return {undefined}
      */
     stop(done) {
-        if (this._cronJob) {
-            this.logger.info('stopping bucket queueing cron job');
-            this._cronJob.cancel();
-            this._cronJob = null;
-        }
+        this._stopCronJob();
         async.series([
             next => {
                 if (!this._jobDispatcher) {
