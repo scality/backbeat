@@ -74,7 +74,8 @@ class QueueProcessor extends EventEmitter {
 
         this.echoMode = false;
 
-        this.logger = new Logger('Backbeat:Replication:QueueProcessor');
+        this.logger = new Logger(
+            `Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // global variables
         // TODO: for SSL support, create HTTPS agents instead
