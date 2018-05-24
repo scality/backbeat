@@ -9,8 +9,6 @@ const Logger = require('werelogs').Logger;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
-const ProvisionDispatcher =
-          require('../../../lib/provisioning/ProvisionDispatcher');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -63,7 +61,6 @@ class LifecycleConductor {
         this._zkClient = null;
         this._started = false;
         this._isActive = false;
-        this._jobDispatcher = null;
         this._cronJob = null;
         this._totalProcessingCycles = 0;
 
@@ -72,10 +69,6 @@ class LifecycleConductor {
 
     getBucketsZkPath() {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
-    }
-
-    getJobDispatcherZkPath() {
-        return `${this.lcConfig.zookeeperPath}/data/conductor-job-dispatcher`;
     }
 
     _getPartitionsOffsetsZkPath(topic) {
@@ -310,37 +303,6 @@ class LifecycleConductor {
         ], done);
     }
 
-    _subscribeToZookeeperDispatcher() {
-        this.logger.debug('connecting to job dispatcher');
-        const jobDispatcherZkPath = this.getJobDispatcherZkPath();
-        this._jobDispatcher = new ProvisionDispatcher({
-            connectionString:
-            `${this.zkConfig.connectionString}${jobDispatcherZkPath}`,
-        });
-        this._jobDispatcher.subscribe((err, items) => {
-            if (err) {
-                this.logger.error('error during job provisioning',
-                                  { error: err.message });
-                return undefined;
-            }
-            this._isActive = false;
-            items.forEach(job => {
-                this.logger.info('conductor job provisioned',
-                                 { job });
-                if (job === 'queue-buckets') {
-                    this._isActive = true;
-                }
-            });
-            if (this._isActive) {
-                this._startCronJob();
-            } else {
-                this._stopCronJob();
-                this.logger.info('no active job provisioned, idling');
-            }
-            return undefined;
-        });
-    }
-
     _startCronJob() {
         if (!this._cronJob) {
             this.logger.info('starting bucket queueing cron job',
@@ -375,11 +337,7 @@ class LifecycleConductor {
             if (err) {
                 return done(err);
             }
-            if (this.lcConfig.conductor.useZookeeperDispatcher) {
-                this._subscribeToZookeeperDispatcher();
-            } else {
-                this._startCronJob();
-            }
+            this._startCronJob();
             return done();
         });
     }
@@ -393,13 +351,6 @@ class LifecycleConductor {
     stop(done) {
         this._stopCronJob();
         async.series([
-            next => {
-                if (!this._jobDispatcher) {
-                    return process.nextTick(next);
-                }
-                this.logger.debug('unsubscribing to job dispatcher');
-                return this._jobDispatcher.unsubscribe(next);
-            },
             next => {
                 if (!this._producer) {
                     return process.nextTick(next);
