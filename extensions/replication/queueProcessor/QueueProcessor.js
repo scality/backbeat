@@ -257,13 +257,7 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                const filteredData = Object.keys(data).filter(key =>
-                    key === this.site).reduce((store, k) => {
-                        // eslint-disable-next-line no-param-reassign
-                        store[k] = data[this.site];
-                        return store;
-                    }, {});
-                this._mProducer.publishMetrics(filteredData,
+                this._mProducer.publishMetrics(data[this.site],
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
                             'metrics', {
@@ -319,15 +313,20 @@ class QueueProcessor extends EventEmitter {
                 task = new EchoBucket(this);
             }
             // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry &&
-        sourceEntry.getReplicationStorageClass().includes(this.site)) {
-            const replicationEndpoint = this.destConfig.bootstrapList
-                .find(endpoint => endpoint.site === this.site);
-            if (replicationEndpoint &&
-            replicationBackends.includes(replicationEndpoint.type)) {
-                task = new MultipleBackendTask(this);
-            } else {
-                task = new ReplicateObject(this);
+        } else if (sourceEntry instanceof ObjectQueueEntry) {
+            const replicationStorageClass =
+                sourceEntry.getReplicationStorageClass();
+            const sites = replicationStorageClass.split(',');
+
+            if (sites.includes(this.site)) {
+                const replicationEndpoint = this.destConfig.bootstrapList
+                    .find(endpoint => endpoint.site === this.site);
+                if (replicationEndpoint &&
+                replicationBackends.includes(replicationEndpoint.type)) {
+                    task = new MultipleBackendTask(this);
+                } else {
+                    task = new ReplicateObject(this);
+                }
             }
         }
         if (task) {
