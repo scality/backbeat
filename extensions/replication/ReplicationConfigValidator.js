@@ -50,6 +50,7 @@ const joiSchema = {
     },
     topic: joi.string().required(),
     replicationStatusTopic: joi.string().required(),
+    monitorReplicationFailures: joi.boolean().default(true),
     queueProcessor: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
