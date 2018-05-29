@@ -78,6 +78,8 @@
             },
             "topic": "backbeat-replication",
             "replicationStatusTopic": "backbeat-replication-status",
+            "replicationFailedTopic": "backbeat-replication-failed",
+            "monitorReplicationFailures": true,
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
