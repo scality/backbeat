@@ -6,7 +6,6 @@ const redisClient = require('../../replication/utils/getRedisClient')();
 const FailedCRRProducer = require('./FailedCRRProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const redisKeys = require('../constants').redisKeys;
 const config = require('../../../conf/Config');
 
 // BackbeatConsumer constant defaults
@@ -18,6 +17,7 @@ class FailedCRRConsumer {
      * Create the retry consumer.
      */
     constructor() {
+        this._repConfig = config.extensions.replication;
         this._kafkaConfig = config.kafka;
         this._topic = config.extensions.replication.replicationFailedTopic;
         this.logger = new Logger('Backbeat:FailedCRRConsumer');
@@ -77,7 +77,7 @@ class FailedCRRConsumer {
             log.end();
             return cb();
         }
-        return this._setRedisHash(data, kafkaEntry, log, cb);
+        return this._setRedisKey(data, kafkaEntry, log, cb);
     }
 
     /**
@@ -90,11 +90,11 @@ class FailedCRRConsumer {
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _setRedisHash(data, kafkaEntry, log, cb) {
+    _setRedisKey(data, kafkaEntry, log, cb) {
         this._backbeatTask.retry({
             actionDesc: 'set redis key',
             logFields: {},
-            actionFunc: done => this._setRedisHashOnce(data, log, done),
+            actionFunc: done => this._setRedisKeyOnce(data, log, done),
             shouldRetryFunc: err => err.retryable,
             log,
         }, err => {
@@ -110,14 +110,16 @@ class FailedCRRConsumer {
 
     /**
      * Attempt to set the Redis hash.
-     * @param {Object} data - The field and value for the Redis hash
+     * @param {Object} data - The key and value for the Redis key
      * @param {Werelogs} log - The werelogs logger
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _setRedisHashOnce(data, log, cb) {
-        const cmds = ['hmset', redisKeys.failedCRR, [data.field, data.value]];
-        return redisClient.batch([cmds], (err, res) => {
+    _setRedisKeyOnce(data, log, cb) {
+        const { key, value } = data;
+        const expiry = this._repConfig.monitorReplicationFailureExpiryTimeS;
+        const cmd = ['set', key, value, 'EX', expiry];
+        return redisClient.batch([cmd], (err, res) => {
             if (err) {
                 return cb({ retryable: true });
             }
