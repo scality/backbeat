@@ -54,6 +54,7 @@
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed",
             "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,

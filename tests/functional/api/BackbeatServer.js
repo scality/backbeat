@@ -12,7 +12,7 @@ const { makePOSTRequest, getResponseBody } =
     require('../utils/makePOSTRequest');
 const getKafkaEntry = require('../utils/getKafkaEntry');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
-const REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
+const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
 const fakeLogger = {
     trace: () => {},
@@ -31,19 +31,23 @@ function getUrl(options, path) {
     return `http://${options.host}:${options.port}${path}`;
 }
 
-function setHash(redisClient, fields, cb) {
-    const cmds = fields.map(field => {
+function setKey(redisClient, keys, cb) {
+    const cmds = keys.map(key => {
         // eslint-disable-next-line no-unused-vars
-        const [bucket, key, versionId, site] = field.split(':');
-        const value = getKafkaEntry(bucket, key, site);
-        return ['hset', REDIS_KEY_FAILED_CRR, field, value];
+        const [bucket, objectKey, versionId, site] = key.split(':');
+        const value = getKafkaEntry(bucket, objectKey, site);
+        return ['set', `${TEST_REDIS_KEY_FAILED_CRR}:${key}`, value];
     });
     redisClient.batch(cmds, cb);
 }
 
-function deleteHash(redisClient, cb) {
-    const cmds = ['del', REDIS_KEY_FAILED_CRR];
-    redisClient.batch([cmds], cb);
+function setDummyKey(redisClient, keys, cb) {
+    const cmds = keys.map(key => ['set', key, 'null']);
+    redisClient.batch(cmds, cb);
+}
+
+function deleteKeys(redisClient, cb) {
+    redisClient.batch([['flushall']], cb);
 }
 
 function makeRetryPOSTRequest(body, cb) {
@@ -394,10 +398,12 @@ describe('Backbeat Server', () => {
             const testVersionId =
                 '393834373735353134343536313039393939393952473030312020313030';
 
-            afterEach(done => deleteHash(redisClient, done));
+            before(done => deleteKeys(redisClient, done));
+
+            afterEach(done => deleteKeys(redisClient, done));
 
             it('should get correct data for GET route: /_/crr/failed when no ' +
-            'hash key has been created', done => {
+            'key has been created', done => {
                 getRequest('/_/crr/failed', (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
@@ -409,9 +415,9 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when ' +
-            'the hash has been created and there is one hash key', done => {
-                const key = 'test-bucket-1:test-key:test-versionId:test-site';
-                setHash(redisClient, [key], err => {
+            'the key has been created and there is one key', done => {
+                const key = `test-bucket-1:test-key:${testVersionId}:test-site`;
+                setKey(redisClient, [key], err => {
                     assert.ifError(err);
                     getRequest('/_/crr/failed?marker=0', (err, res) => {
                         assert.ifError(err);
@@ -420,7 +426,7 @@ describe('Backbeat Server', () => {
                             Versions: [{
                                 Bucket: 'test-bucket-1',
                                 Key: 'test-key',
-                                VersionId: 'test-versionId',
+                                VersionId: testVersionId,
                                 StorageClass: 'test-site',
                                 Size: 1,
                                 LastModified: '2018-03-30T22:22:34.384Z',
@@ -432,14 +438,14 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when ' +
-            'the hash has been created and there are multiple hash keys',
+            'the key has been created and there are multiple key keys',
             done => {
                 const keys = [
                     'test-bucket:test-key:test-versionId:test-site',
                     'test-bucket-1:test-key-1:test-versionId-1:test-site-1',
                     'test-bucket-2:test-key-2:test-versionId-2:test-site-2',
                 ];
-                setHash(redisClient, keys, err => {
+                setKey(redisClient, keys, err => {
                     assert.ifError(err);
                     getRequest('/_/crr/failed', (err, res) => {
                         assert.ifError(err);
@@ -448,11 +454,12 @@ describe('Backbeat Server', () => {
                         // We cannot guarantee order because it depends on how
                         // Redis fetches the keys.
                         keys.forEach(k => {
+                            // eslint-disable-next-line no-unused-vars
                             const [bucket, key, versionId, site] = k.split(':');
                             assert(res.Versions.some(o => (
                                 o.Bucket === bucket &&
                                 o.Key === key &&
-                                o.VersionId === versionId &&
+                                o.VersionId === testVersionId &&
                                 o.StorageClass === site
                             )));
                         });
@@ -464,42 +471,53 @@ describe('Backbeat Server', () => {
             it('should get correct data at scale for GET route: /_/crr/failed',
             function f(done) {
                 this.timeout(30000);
-                async.timesLimit(2000, 10, (i, next) => {
-                    const keys = [
-                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-a`,
-                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-b`,
-                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-c`,
-                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-d`,
-                        `bucket-${i}:key-${i}:versionId-${i}:site-${i}-e`,
-                    ];
-                    setHash(redisClient, keys, next);
+                // Set non-matching keys so that recursive condition is met.
+                async.timesLimit(500, 10, (i, next) => {
+                    const keys = ['a', 'b', 'c', 'd', 'e'];
+                    setDummyKey(redisClient, keys, next);
                 }, err => {
-                    assert.ifError(err);
-                    const keyCount = 2000 * 5;
-                    const scanCount = 1000;
-                    const set = new Set();
-                    let marker = 0;
-                    async.timesSeries(keyCount / scanCount, (i, next) =>
-                        getRequest(`/_/crr/failed?marker=${marker}`,
-                        (err, res) => {
-                            assert.ifError(err);
-                            res.Versions.forEach(version => {
-                                // Ensure we have no duplicate results.
-                                assert(!set.has(version.StorageClass));
-                                set.add(version.StorageClass);
-                            });
-                            if (i === (keyCount / scanCount) - 1) {
-                                assert.strictEqual(res.IsTruncated, false);
-                                assert.strictEqual(res.NextMarker, undefined);
-                                assert.strictEqual(set.size, keyCount);
+                    if (err) {
+                        return done(err);
+                    }
+                    return async.timesLimit(2000, 10, (i, next) => {
+                        const keys = [
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-a`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-b`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-c`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-d`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-e`,
+                        ];
+                        setKey(redisClient, keys, next);
+                    }, err => {
+                        assert.ifError(err);
+                        const dummyKeyCount = 500 * 5;
+                        const keyCount = 2000 * 5;
+                        const scanCount = 1000;
+                        const reqCount = (keyCount + dummyKeyCount) / scanCount;
+                        const set = new Set();
+                        let marker = 0;
+                        async.timesSeries(reqCount, (i, next) =>
+                            getRequest(`/_/crr/failed?marker=${marker}`,
+                            (err, res) => {
+                                assert.ifError(err);
+                                res.Versions.forEach(version => {
+                                    // Ensure we have no duplicate results.
+                                    assert(!set.has(version.StorageClass));
+                                    set.add(version.StorageClass);
+                                });
+                                if (res.IsTruncated === false) {
+                                    assert.strictEqual(res.NextMarker,
+                                        undefined);
+                                    assert.strictEqual(set.size, keyCount);
+                                    return done();
+                                }
+                                assert.strictEqual(res.IsTruncated, true);
+                                assert.strictEqual(
+                                    typeof(res.NextMarker), 'number');
+                                marker = res.NextMarker;
                                 return next();
-                            }
-                            assert.strictEqual(res.IsTruncated, true);
-                            assert.strictEqual(
-                                typeof(res.NextMarker), 'number');
-                            marker = res.NextMarker;
-                            return next();
-                        }), done);
+                            }), done);
+                    });
                 });
             });
 
@@ -524,7 +542,7 @@ describe('Backbeat Server', () => {
                     'test-bucket:test-key:test-versionId:test-site-2',
                     'test-bucket-1:test-key-1:test-versionId-1:test-site',
                 ];
-                setHash(redisClient, keys, err => {
+                setKey(redisClient, keys, err => {
                     assert.ifError(err);
                     const route =
                         '/_/crr/failed/test-bucket/test-key/test-versionId';
@@ -534,11 +552,12 @@ describe('Backbeat Server', () => {
                         assert.strictEqual(res.Versions.length, 2);
                         const matchingkeys = [keys[0], keys[1]];
                         matchingkeys.forEach(k => {
+                            // eslint-disable-next-line no-unused-vars
                             const [bucket, key, versionId, site] = k.split(':');
                             assert(res.Versions.some(o => (
                                 o.Bucket === bucket &&
                                 o.Key === key &&
-                                o.VersionId === versionId &&
+                                o.VersionId === testVersionId &&
                                 o.StorageClass === site
                             )));
                         });
@@ -548,7 +567,7 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when no ' +
-            'hash key has been matched', done => {
+            'key key has been matched', done => {
                 const body = JSON.stringify([{
                     Bucket: 'bucket',
                     Key: 'key',
@@ -567,14 +586,14 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for POST route: /_/crr/failed ' +
-            'when there are multiple matching hash keys', function f(done) {
+            'when there are multiple matching key keys', function f(done) {
                 this.timeout(10000);
                 const keys = [
                     `test-bucket:test-key:${testVersionId}:test-site-1`,
                     `test-bucket:test-key:${testVersionId}:test-site-2`,
                     `test-bucket:test-key:${testVersionId}:test-site-3`,
                 ];
-                setHash(redisClient, keys, err => {
+                setKey(redisClient, keys, err => {
                     assert.ifError(err);
                     const body = JSON.stringify([{
                         Bucket: 'test-bucket',
@@ -672,7 +691,7 @@ describe('Backbeat Server', () => {
                         `bucket-${i}:key-${i}:${testVersionId}:site-${i}-d`,
                         `bucket-${i}:key-${i}:${testVersionId}:site-${i}-e`,
                     ];
-                    setHash(redisClient, keys, next);
+                    setKey(redisClient, keys, next);
                 }, err => {
                     assert.ifError(err);
                     const body = JSON.stringify(reqBody);
