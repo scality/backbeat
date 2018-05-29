@@ -3,7 +3,7 @@
 const async = require('async');
 const { errors } = require('arsenal');
 
-const attachReqUids = require('../../replication/utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 
 const RETRYTIMEOUTS = 300;
