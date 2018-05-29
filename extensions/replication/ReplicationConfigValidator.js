@@ -6,6 +6,8 @@ const { hostPortJoi, bootstrapListJoi, adminCredsJoi } =
 const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
 
+const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
+
 const joiSchema = {
     source: {
         transport: transportJoi,
@@ -52,6 +54,8 @@ const joiSchema = {
     replicationStatusTopic: joi.string().required(),
     monitorReplicationFailures: joi.boolean().default(true),
     replicationFailedTopic: joi.string().required(),
+    monitorReplicationFailureExpiryTimeS:
+        joi.number().default(CRR_FAILURE_EXPIRY),
     queueProcessor: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
