@@ -1,8 +1,9 @@
-const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
+const { mpuBucketPrefix } = require('arsenal').constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 const safeJsonParse = require('./util/safeJsonParse');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
+const METASTORE = '__metastore';
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
@@ -102,28 +103,21 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        if (entry.type !== 'put' || entry.bucket === usersBucket ||
+        // We're only interested by bucket updates, which are all part
+        // of METASTORE namespace in mongodb log
+        if (entry.bucket !== METASTORE || entry.type !== 'put' ||
             (entry.key && entry.key.startsWith(mpuBucketPrefix))) {
             return undefined;
         }
         const { error, result } = safeJsonParse(entry.value);
         if (error) {
-            this.log.error('could not parse raft log entry',
+            this.log.error('could not parse mongo log entry',
                            { value: entry.value, error });
             return undefined;
         }
-        const { attributes } = result;
-        if (attributes !== undefined) {
-            const { error, result } = safeJsonParse(attributes);
-            if (error) {
-                this.log.error('could not parse attributes in raft log entry',
-                               { attributes, error });
-                return undefined;
-            }
-            const { lifecycleConfiguration } = result;
-            if (lifecycleConfiguration !== undefined) {
-                return this._updateZkBucketNode(result);
-            }
+        const { lifecycleConfiguration } = result;
+        if (lifecycleConfiguration !== undefined) {
+            return this._updateZkBucketNode(result);
         }
         return undefined;
     }

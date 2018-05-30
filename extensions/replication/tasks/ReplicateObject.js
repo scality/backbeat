@@ -7,12 +7,10 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 
-const attachReqUids = require('../utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const {
-    StaticFileAccountCredentials,
-    ProvisionedServiceAccountCredentials,
-} = require('../../../lib/credentials/AccountCredentials');
+const { getAccountCredentials } =
+          require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
 
@@ -49,11 +47,9 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _createCredentials(where, authConfig, roleArn, log) {
-        if (authConfig.type === 'account') {
-            return new StaticFileAccountCredentials(authConfig, log);
-        }
-        if (authConfig.type === 'service') {
-            return new ProvisionedServiceAccountCredentials(authConfig, log);
+        const accountCredentials = getAccountCredentials(authConfig, log);
+        if (accountCredentials) {
+            return accountCredentials;
         }
         let vaultclient;
         if (where === 'source') {
@@ -150,7 +146,7 @@ class ReplicateObject extends BackbeatTask {
         const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
         return this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
-                this.log.error(
+                log.error(
                     'error publishing entry to replication status topic',
                     { method: 'ReplicateObject._publishReplicationStatus',
                       topic: this.repConfig.replicationStatusTopic,

@@ -45,4 +45,39 @@ describe('BackbeatAPI', () => {
             assert.equal(bbapi.isValidRoute(req), false);
         });
     });
+
+    it('should calculate the average throughput through redis intervals',
+    () => {
+        bbapi._getData = function overwriteGetData(details, data, cb) {
+            return cb(null, [
+                // ops
+                {
+                    requests: [25, 0, 0, 25],
+                    errors: [0, 0, 0, 0],
+                },
+                // bytes
+                {
+                    requests: [1024, 0, 0, 1024],
+                    errors: [0, 0, 0, 0],
+                },
+            ]);
+        };
+
+        bbapi.getThroughput('', (err, data) => {
+            assert.ifError(err);
+
+            assert(data.throughput);
+            assert(data.throughput.description);
+            assert(data.throughput.results);
+
+            const results = data.throughput.results;
+            const count = Number.parseFloat(results.count);
+            const size = Number.parseFloat(results.size);
+            // count must be at least 0.03 given the first interval and never be
+            // over double its size. This can only happen when interval time has
+            // just reset and the just-expired interval data fully applies
+            assert(count >= 0.03 && count <= 0.06);
+            assert(size >= 1.14 && size <= 2.28);
+        });
+    });
 });

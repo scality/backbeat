@@ -79,6 +79,58 @@ if [[ "$HEALTHCHECKS_ALLOWFROM" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .server.healthChecks.allowFrom=[\"$HEALTHCHECKS_ALLOWFROM\"]"
 fi
 
+if [[ "$EXTENSIONS_LIFECYCLE_ZOOKEEPER_PATH" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.zookeeperPath=\"$EXTENSIONS_LIFECYCLE_ZOOKEEPER_PATH\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.bucketTasksTopic=\"$EXTENSIONS_LIFECYCLE_BUCKET_TASK_TOPIC\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_OBJECT_TASK_TOPIC" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.objectTasksTopic=\"$EXTENSIONS_LIFECYCLE_OBJECT_TASK_TOPIC\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_BACKLOG_METRICS_ZKPATH" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.backlogMetrics.zkPath=\"$EXTENSIONS_LIFECYCLE_BACKLOG_METRICS_ZKPATH\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_BACKLOG_METRICS_INTERVALS" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.backlogMetrics.intervalS=\"$EXTENSIONS_LIFECYCLE_BACKLOG_METRICS_INTERVALS\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_CONDUCTOR_CRONRULE" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.conductor.cronRule=\"$EXTENSIONS_LIFECYCLE_CONDUCTOR_CRONRULE\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_PRODUCER_GROUP_ID" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.producer.groupId=\"$EXTENSIONS_LIFECYCLE_PRODUCER_GROUP_ID\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_CONSUMER_GROUP_ID" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.consumer.groupId=\"$EXTENSIONS_LIFECYCLE_CONSUMER_GROUP_ID\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_RULES_EXPIRATION_ENABLED" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.rules.expiration.enabled=\"$EXTENSIONS_LIFECYCLE_RULES_EXPIRATION_ENABLED\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_RULES_NC_VERSION_EXPIRATION_ENABLED" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.rules.noncurrentVersionExpiration.enabled=\"$EXTENSIONS_LIFECYCLE_RULES_NC_VERSION_EXPIRATION_ENABLED\""
+fi
+
+if [[ "$EXTENSIONS_LIFECYCLE_RULES_ABORT_INCOMPLETE_MPU_ENABLED" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.rules.abortIncompleteMultipartUpload.enabled=\"$EXTENSIONS_LIFECYCLE_RULES_ABORT_INCOMPLETE_MPU_ENABLED\""
+fi
+
+if [[ "$AUTH_TYPE" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .auth.type=\"$AUTH_TYPE\""
+fi
+
+if [[ "$AUTH_ACCOUNT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .auth.account=\"$AUTH_ACCOUNT\""
+fi
+
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
     jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
     mv conf/config.json.tmp conf/config.json

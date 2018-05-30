@@ -4,8 +4,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const async = require('async');
 const getVaultCredentials =
     require('../../../lib/credentials/getVaultCredentials');
-const attachReqUids =
-    require('../../replication/utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 
 
 class LifecycleObjectTask extends BackbeatTask {
