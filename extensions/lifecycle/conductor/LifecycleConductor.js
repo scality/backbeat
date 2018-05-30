@@ -9,8 +9,6 @@ const Logger = require('werelogs').Logger;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
-const ProvisionDispatcher =
-          require('../../../lib/provisioning/ProvisionDispatcher');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -62,8 +60,6 @@ class LifecycleConductor {
         this._producer = null;
         this._zkClient = null;
         this._started = false;
-        this._isActive = false;
-        this._jobDispatcher = null;
         this._cronJob = null;
         this._totalProcessingCycles = 0;
 
@@ -72,10 +68,6 @@ class LifecycleConductor {
 
     getBucketsZkPath() {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
-    }
-
-    getJobDispatcherZkPath() {
-        return `${this.lcConfig.zookeeperPath}/data/conductor-job-dispatcher`;
     }
 
     _getPartitionsOffsetsZkPath(topic) {
@@ -310,8 +302,26 @@ class LifecycleConductor {
         ], done);
     }
 
+    _startCronJob() {
+        if (!this._cronJob) {
+            this.logger.info('starting bucket queueing cron job',
+                             { cronRule: this._cronRule });
+            this._cronJob = schedule.scheduleJob(
+                this._cronRule,
+                this.processBuckets.bind(this));
+        }
+    }
+
+    _stopCronJob() {
+        if (this._cronJob) {
+            this.logger.info('stopping bucket queueing cron job');
+            this._cronJob.cancel();
+            this._cronJob = null;
+        }
+    }
+
     /**
-     * Start the cron jobkafka producer
+     * Start the cron job kafka producer
      *
      * @param {function} done - callback
      * @return {undefined}
@@ -326,42 +336,7 @@ class LifecycleConductor {
             if (err) {
                 return done(err);
             }
-            this.logger.debug('connecting to job dispatcher');
-            const jobDispatcherZkPath = this.getJobDispatcherZkPath();
-            this._jobDispatcher = new ProvisionDispatcher({
-                connectionString:
-                `${this.zkConfig.connectionString}${jobDispatcherZkPath}`,
-            });
-            this._jobDispatcher.subscribe((err, items) => {
-                if (err) {
-                    this.logger.error('error during job provisioning',
-                                      { error: err.message });
-                    return undefined;
-                }
-                this._isActive = false;
-                items.forEach(job => {
-                    this.logger.info('conductor job provisioned',
-                                     { job });
-                    if (job === 'queue-buckets') {
-                        this._isActive = true;
-                    }
-                });
-                if (this._isActive && !this._cronJob) {
-                    this.logger.info('starting bucket queueing cron job',
-                                     { cronRule: this._cronRule });
-                    this._cronJob = schedule.scheduleJob(
-                        this._cronRule,
-                        this.processBuckets.bind(this));
-                } else if (!this._isActive && this._cronJob) {
-                    this.logger.info('stopping bucket queueing cron job');
-                    this._cronJob.cancel();
-                    this._cronJob = null;
-                }
-                if (!this._isActive) {
-                    this.logger.info('no active job provisioned, idling');
-                }
-                return undefined;
-            });
+            this._startCronJob();
             return done();
         });
     }
@@ -373,19 +348,8 @@ class LifecycleConductor {
      * @return {undefined}
      */
     stop(done) {
-        if (this._cronJob) {
-            this.logger.info('stopping bucket queueing cron job');
-            this._cronJob.cancel();
-            this._cronJob = null;
-        }
+        this._stopCronJob();
         async.series([
-            next => {
-                if (!this._jobDispatcher) {
-                    return process.nextTick(next);
-                }
-                this.logger.debug('unsubscribing to job dispatcher');
-                return this._jobDispatcher.unsubscribe(next);
-            },
             next => {
                 if (!this._producer) {
                     return process.nextTick(next);

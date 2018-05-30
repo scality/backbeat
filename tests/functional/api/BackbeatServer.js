@@ -203,14 +203,14 @@ describe('Backbeat Server', () => {
             statsClient = new StatsModel(redisClient, interval, expiry);
 
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
-            statsClient.reportNewRequest(`${site1}:${BYTES}`, 219800);
+            statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
             statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
-            statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 102700);
+            statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
 
             statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
-            statsClient.reportNewRequest(`${site2}:${BYTES}`, 294300);
+            statsClient.reportNewRequest(`${site2}:${BYTES}`, 2943);
             statsClient.reportNewRequest(`${site2}:${OPS_DONE}`, 300);
-            statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 187400);
+            statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
 
             done();
         });
@@ -274,6 +274,22 @@ describe('Backbeat Server', () => {
             });
         });
 
+        const retryQueryPaths = [
+            '/_/crr/failed?marker=foo',
+            '/_/crr/failed?marker=',
+        ];
+
+        retryQueryPaths.forEach(path => {
+            it(`should get a 400 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 400);
+                    done();
+                });
+            });
+        });
+
         // TODO: refactor this
         const allWrongPaths = [
             // general wrong paths
@@ -322,10 +338,10 @@ describe('Backbeat Server', () => {
 
         it('should get a 200 response for route: /_/crr/failed', done => {
             const body = JSON.stringify([{
-                bucket: 'bucket',
-                key: 'key',
-                versionId: 'versionId',
-                site: 'site',
+                Bucket: 'bucket',
+                Key: 'key',
+                VersionId: 'versionId',
+                StorageClass: 'site',
             }]);
             makeRetryPOSTRequest(body, (err, res) => {
                 assert.ifError(err);
@@ -340,28 +356,28 @@ describe('Backbeat Server', () => {
             [],
             ['a'],
             [{
-                // Missing bucket property.
-                key: 'b',
-                versionId: 'c',
-                site: 'd',
+                // Missing Bucket property.
+                Key: 'b',
+                VersionId: 'c',
+                StorageClass: 'd',
             }],
             [{
-                // Missing key property.
-                bucket: 'a',
-                versionId: 'c',
-                site: 'd',
+                // Missing Key property.
+                Bucket: 'a',
+                VersionId: 'c',
+                StorageClass: 'd',
             }],
             [{
-                // Missing versionId property.
-                bucket: 'a',
-                key: 'b',
-                site: 'd',
+                // Missing VersionId property.
+                Bucket: 'a',
+                Key: 'b',
+                StorageClass: 'd',
             }],
             [{
-                // Missing site property.
-                bucket: 'a',
-                key: 'b',
-                versionId: 'c',
+                // Missing StorageClass property.
+                Bucket: 'a',
+                Key: 'b',
+                VersionId: 'c',
             }],
         ];
 
@@ -394,24 +410,32 @@ describe('Backbeat Server', () => {
             'hash key has been created', done => {
                 getRequest('/_/crr/failed', (err, res) => {
                     assert.ifError(err);
-                    assert.deepStrictEqual(res, []);
+                    assert.deepStrictEqual(res, {
+                        IsTruncated: false,
+                        Versions: [],
+                    });
                     done();
                 });
             });
 
             it('should get correct data for GET route: /_/crr/failed when ' +
             'the hash has been created and there is one hash key', done => {
-                const key = 'test-bucket:test-key:test-versionId:test-site';
+                const key = 'test-bucket-1:test-key:test-versionId:test-site';
                 setHash(redisClient, [key], err => {
                     assert.ifError(err);
-                    getRequest('/_/crr/failed', (err, res) => {
+                    getRequest('/_/crr/failed?marker=0', (err, res) => {
                         assert.ifError(err);
-                        assert.deepStrictEqual(res, [{
-                            bucket: 'test-bucket',
-                            key: 'test-key',
-                            versionId: 'test-versionId',
-                            site: 'test-site',
-                        }]);
+                        assert.deepStrictEqual(res, {
+                            IsTruncated: false,
+                            Versions: [{
+                                Bucket: 'test-bucket-1',
+                                Key: 'test-key',
+                                VersionId: 'test-versionId',
+                                StorageClass: 'test-site',
+                                Size: 1,
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                            }],
+                        });
                         done();
                     });
                 });
@@ -429,16 +453,17 @@ describe('Backbeat Server', () => {
                     assert.ifError(err);
                     getRequest('/_/crr/failed', (err, res) => {
                         assert.ifError(err);
-                        assert.strictEqual(res.length, 3);
+                        assert.strictEqual(res.IsTruncated, false);
+                        assert.strictEqual(res.Versions.length, 3);
                         // We cannot guarantee order because it depends on how
                         // Redis fetches the keys.
                         keys.forEach(k => {
                             const [bucket, key, versionId, site] = k.split(':');
-                            assert(res.some(o => (
-                                o.bucket === bucket &&
-                                o.key === key &&
-                                o.versionId === versionId &&
-                                o.site === site
+                            assert(res.Versions.some(o => (
+                                o.Bucket === bucket &&
+                                o.Key === key &&
+                                o.VersionId === versionId &&
+                                o.StorageClass === site
                             )));
                         });
                         done();
@@ -460,11 +485,31 @@ describe('Backbeat Server', () => {
                     setHash(redisClient, keys, next);
                 }, err => {
                     assert.ifError(err);
-                    getRequest('/_/crr/failed', (err, res) => {
-                        assert.ifError(err);
-                        assert.strictEqual(res.length, 2000 * 5);
-                        done();
-                    });
+                    const keyCount = 2000 * 5;
+                    const scanCount = 1000;
+                    const set = new Set();
+                    let marker = 0;
+                    async.timesSeries(keyCount / scanCount, (i, next) =>
+                        getRequest(`/_/crr/failed?marker=${marker}`,
+                        (err, res) => {
+                            assert.ifError(err);
+                            res.Versions.forEach(version => {
+                                // Ensure we have no duplicate results.
+                                assert(!set.has(version.StorageClass));
+                                set.add(version.StorageClass);
+                            });
+                            if (i === (keyCount / scanCount) - 1) {
+                                assert.strictEqual(res.IsTruncated, false);
+                                assert.strictEqual(res.NextMarker, undefined);
+                                assert.strictEqual(set.size, keyCount);
+                                return next();
+                            }
+                            assert.strictEqual(res.IsTruncated, true);
+                            assert.strictEqual(
+                                typeof(res.NextMarker), 'number');
+                            marker = res.NextMarker;
+                            return next();
+                        }), done);
                 });
             });
 
@@ -474,7 +519,10 @@ describe('Backbeat Server', () => {
                 getRequest('/_/crr/failed/test-bucket/test-key/test-versionId',
                 (err, res) => {
                     assert.ifError(err);
-                    assert.deepStrictEqual(res, []);
+                    assert.deepStrictEqual(res, {
+                        IsTruncated: false,
+                        Versions: [],
+                    });
                     done();
                 });
             });
@@ -492,17 +540,16 @@ describe('Backbeat Server', () => {
                         '/_/crr/failed/test-bucket/test-key/test-versionId';
                     return getRequest(route, (err, res) => {
                         assert.ifError(err);
-                        assert.strictEqual(res.length, 2);
-                        // We cannot guarantee order because it depends on how
-                        // Redis fetches the keys.
+                        assert.strictEqual(res.IsTruncated, false);
+                        assert.strictEqual(res.Versions.length, 2);
                         const matchingkeys = [keys[0], keys[1]];
                         matchingkeys.forEach(k => {
                             const [bucket, key, versionId, site] = k.split(':');
-                            assert(res.some(o => (
-                                o.bucket === bucket &&
-                                o.key === key &&
-                                o.versionId === versionId &&
-                                o.site === site
+                            assert(res.Versions.some(o => (
+                                o.Bucket === bucket &&
+                                o.Key === key &&
+                                o.VersionId === versionId &&
+                                o.StorageClass === site
                             )));
                         });
                         return done();
@@ -513,10 +560,10 @@ describe('Backbeat Server', () => {
             it('should get correct data for GET route: /_/crr/failed when no ' +
             'hash key has been matched', done => {
                 const body = JSON.stringify([{
-                    bucket: 'bucket',
-                    key: 'key',
-                    versionId: 'versionId',
-                    site: 'site',
+                    Bucket: 'bucket',
+                    Key: 'key',
+                    VersionId: 'versionId',
+                    StorageClass: 'site',
                 }]);
                 makeRetryPOSTRequest(body, (err, res) => {
                     assert.ifError(err);
@@ -540,25 +587,26 @@ describe('Backbeat Server', () => {
                 setHash(redisClient, keys, err => {
                     assert.ifError(err);
                     const body = JSON.stringify([{
-                        bucket: 'test-bucket',
-                        key: 'test-key',
-                        versionId: testVersionId,
-                        site: 'test-site-1',
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-1',
                     }, {
-                        bucket: 'test-bucket',
-                        key: 'test-key',
-                        versionId: testVersionId,
-                        site: 'test-site-unknown', // Should not be in response.
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        // Should not be in response.
+                        StorageClass: 'test-site-unknown',
                     }, {
-                        bucket: 'test-bucket',
-                        key: 'test-key',
-                        versionId: testVersionId,
-                        site: 'test-site-2',
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-2',
                     }, {
-                        bucket: 'test-bucket',
-                        key: 'test-key',
-                        versionId: testVersionId,
-                        site: 'test-site-3',
+                        Bucket: 'test-bucket',
+                        Key: 'test-key',
+                        VersionId: testVersionId,
+                        StorageClass: 'test-site-3',
                     }]);
                     makeRetryPOSTRequest(body, (err, res) => {
                         assert.ifError(err);
@@ -566,23 +614,29 @@ describe('Backbeat Server', () => {
                             assert.ifError(err);
                             const body = JSON.parse(resBody);
                             assert.deepStrictEqual(body, [{
-                                bucket: 'test-bucket',
-                                key: 'test-key',
-                                versionId: testVersionId,
-                                site: 'test-site-1',
-                                status: 'PENDING',
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-1',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
                             }, {
-                                bucket: 'test-bucket',
-                                key: 'test-key',
-                                versionId: testVersionId,
-                                site: 'test-site-2',
-                                status: 'PENDING',
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-2',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
                             }, {
-                                bucket: 'test-bucket',
-                                key: 'test-key',
-                                versionId: testVersionId,
-                                site: 'test-site-3',
-                                status: 'PENDING',
+                                Bucket: 'test-bucket',
+                                Key: 'test-key',
+                                VersionId: testVersionId,
+                                StorageClass: 'test-site-3',
+                                ReplicationStatus: 'PENDING',
+                                LastModified: '2018-03-30T22:22:34.384Z',
+                                Size: 1,
                             }]);
                             done();
                         });
@@ -596,30 +650,30 @@ describe('Backbeat Server', () => {
                 const reqBody = [];
                 async.timesLimit(10, 10, (i, next) => {
                     reqBody.push({
-                        bucket: `bucket-${i}`,
-                        key: `key-${i}`,
-                        versionId: testVersionId,
-                        site: `site-${i}-a`,
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-a`,
                     }, {
-                        bucket: `bucket-${i}`,
-                        key: `key-${i}`,
-                        versionId: testVersionId,
-                        site: `site-${i}-b`,
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-b`,
                     }, {
-                        bucket: `bucket-${i}`,
-                        key: `key-${i}`,
-                        versionId: testVersionId,
-                        site: `site-${i}-c`,
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-c`,
                     }, {
-                        bucket: `bucket-${i}`,
-                        key: `key-${i}`,
-                        versionId: testVersionId,
-                        site: `site-${i}-d`,
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-d`,
                     }, {
-                        bucket: `bucket-${i}`,
-                        key: `key-${i}`,
-                        versionId: testVersionId,
-                        site: `site-${i}-e`,
+                        Bucket: `bucket-${i}`,
+                        Key: `key-${i}`,
+                        VersionId: testVersionId,
+                        StorageClass: `site-${i}-e`,
                     });
                     const keys = [
                         `bucket-${i}:key-${i}:${testVersionId}:site-${i}-a`,
@@ -653,8 +707,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1275);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res[key].results.size, 117.1);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 1171);
                 done();
             });
         });
@@ -666,8 +720,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1875);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res[key].results.size, 224.0);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 2240);
                 done();
             });
         });
@@ -679,8 +733,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 450);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res[key].results.size, 102.7);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 1027);
                 done();
             });
         });
@@ -692,8 +746,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 750);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res[key].results.size, 290.1);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 2901);
                 done();
             });
         });
@@ -705,8 +759,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.5);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res[key].results.size, 0.11);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res[key].results.size, 1.14);
                 done();
             });
         });
@@ -718,8 +772,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.83);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res[key].results.size, 0.32);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res[key].results.size, 3.22);
                 done();
             });
         });
@@ -736,20 +790,20 @@ describe('Backbeat Server', () => {
                 assert(res.backlog.description);
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res.backlog.results.count, 1275);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res.backlog.results.size, 117.1);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res.backlog.results.size, 1171);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 450);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res.completions.results.size, 102.7);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res.completions.results.size, 1027);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.5);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res.throughput.results.size, 0.11);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res.throughput.results.size, 1.14);
 
                 done();
             });
@@ -767,20 +821,20 @@ describe('Backbeat Server', () => {
                 assert(res.backlog.description);
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res.backlog.results.count, 1875);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res.backlog.results.size, 224.0);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res.backlog.results.size, 2240);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 750);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res.completions.results.size, 290.1);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res.completions.results.size, 2901);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.83);
-                // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res.throughput.results.size, 0.32);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res.throughput.results.size, 3.22);
 
                 done();
             });

@@ -42,6 +42,7 @@
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
+            "monitorReplicationFailures": true,
             "groupId": "backbeat-test-replication-group",
             "destination": {
                 "bootstrapList": [

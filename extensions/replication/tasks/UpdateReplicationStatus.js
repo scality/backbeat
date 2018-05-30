@@ -3,12 +3,10 @@ const jsutil = require('arsenal').jsutil;
 
 const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
-const attachReqUids = require('../utils/attachReqUids');
+const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const {
-    StaticFileAccountCredentials,
-    ProvisionedServiceAccountCredentials,
-} = require('../../../lib/credentials/AccountCredentials');
+const { getAccountCredentials } =
+          require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
 
@@ -34,11 +32,9 @@ class UpdateReplicationStatus extends BackbeatTask {
     }
 
     _createCredentials(authConfig, roleArn, log) {
-        if (authConfig.type === 'account') {
-            return new StaticFileAccountCredentials(authConfig, log);
-        }
-        if (authConfig.type === 'service') {
-            return new ProvisionedServiceAccountCredentials(authConfig, log);
+        const accountCredentials = getAccountCredentials(authConfig, log);
+        if (accountCredentials) {
+            return accountCredentials;
         }
         const vaultclient = this.vaultclientCache.getClient('source:s3');
         return new RoleCredentials(vaultclient, 'replication', roleArn, log);
