@@ -26,7 +26,7 @@ writes to one or more destinations asynchronously and updates statuses
 to *COMPLETED* on the source when done.
 
 We are going to keep this core behavior, but introduce the notion of
-*transient source* as a temporary primary location for a new object,
+**transient source** as a temporary primary location for a new object,
 until the CRR completes the processing of this object.
 
 The following will then happen when an object is put to a location
@@ -36,35 +36,30 @@ which is configured as being a transient source:
   being a transient source, then the put status is returned as usual,
 
 * CRR processors will transfer the object asynchronously to all CRR
-  targets set through replication API (also as usual),
+  targets set through replication API (also as usual), with help from
+  the GET location header ensuring reads are done from the transient
+  source location (i.e the RING), overriding the *preferred read
+  location*.
 
-* finally, once all CRR targets have been processed, the object
-  location will be altered to be the preferred (default) CRR target
-  location, and the transient data will be deleted asynchronously by a
-  garbage collection process.
+* finally, once all CRR targets have been processed, the transient
+  data will be deleted asynchronously by a garbage collection
+  process. Reads from users will still happen on the *preferred read
+  location*.
 
 If for some reason the CRR cannot be completed to some backends, the
 data will be held on the transient source, and the data will still be
-readable from both the transient source natively and from the
-successful CRR targets, either requesting directly the public cloud or
-through a CloudServer GET specifying the preferred location in a
-header. Once CRR is eventually completed successfully to all backends
-(either through automatic or manually-triggered retries), the
-transient source data will be removed.
+read from either the *preferred read location* if CRR was successful
+on it, or from the transient source.
+
+Once CRR has eventually completed successfully to all backends (either
+through automatic or manually-triggered retries), the transient source
+data will be garbage-collected, and the object will not be readable
+anymore from the transient source (we may update metadata to reflect
+this but should not be strictly required).
 
 ### Detailed design
 
 Here are the changes per component:
-
-#### Cloudserver
-
-Cloudserver is updated to support the new `isTransient` attribute of
-location constraints:
-
-* When receiving a PUT, if the location constraint that applies has a
-  `isTransient` config attribute set to `true`, it will specify in the
-  replication info of the object the one CRR location that is the
-  future non-transient location of the object.
 
 #### Triggers in kafka messages
 
@@ -102,19 +97,22 @@ consumed by other processes in the future.
 We are changing the message format for the replication status
 processor, because:
 
+* it will help transitioning to a more generic metadata updator
+  process, with a set of possible actions to execute sequentially on
+  metadata of an object (e.g. for lifecycle transitions support)
+
 * it allows extensibility, where the current format does not (it's
   basically a raw copy of object metadata)
 
 * it will reduce significantly the message size, because it's not
   necessary to include the whole metadata as only a small set of
-  fields are needed
+  fields are needed (metadata is read from the source in all cases)
 
-Example format of a new format CRR status message containing a
-location trigger:
+Example format of a CRR status update message:
 
 ```json
 {
-    "action": "updateReplicationSiteStatus",
+    "action": "updateReplicationStatus",
     "target": {
         "owner": "ownerID",
         "bucket": "bucketname",
@@ -125,24 +123,7 @@ location trigger:
         "site": "awsbackend",
         "dataStoreVersionId": "AWS-42abc",
         "replicationSiteStatus": "COMPLETED"
-    },
-    "triggers": [
-        {
-            "on": "replicationCompleted",
-            "do": {
-                "action": "transitionLocation",
-                "target": {
-                    "owner": "ownerID",
-                    "bucket": "bucketname",
-                    "key": "objectkey",
-                    "version": "objectversion"
-                },
-                "details": {
-                    "site": "azurebackend"
-                }
-            }
-        }
-    ]
+    }
 }
 ```
 
@@ -150,48 +131,25 @@ location trigger:
 
 ##### CRR replication queue processor
 
-The replication queue processor knows when one CRR location is going
-to be the default location for the object after CRR is complete, by
-looking at the replication info extended by cloudserver for transient
-source support.
-
 Once the CRR target is written, the processor publishes to the
-backbeat-replication-status topic as usual, but it adds a trigger to
-the messages with a "transition" action and a "replicationCompleted"
-condition.
+backbeat-replication-status topic a message to update the replication
+status, in the new format (see [Message format](#message-format)).
 
-The format of the published messages changes in two ways:
-
-* We're no longer publishing the whole object's metadata, but only the
-  info necessary to locate the object and do the necessary action, so
-  the S3 request params etc.
-
-* We add a new "triggers" attribute containing triggers information.
+We're no longer publishing the whole object's metadata, but only the
+info necessary to locate the object and do the necessary action, so
+the S3 request params etc.
 
 ##### CRR replication status processor
 
-Two main changes on the CRR status processor:
+* It handles the new format of messages to execute the specified
+  actions on metadata (only the currently supported action for now
+  which is "updateReplicationStatus"). TBD: keep backward
+  compatibility with the old format (is it needed?)
 
-* It handles a new kind of kafka messages that do not contain the full
-  object metadata anymore, but only the info necessary to locate the
-  object and do the necessary action.
-
-* Its role is extended to apply triggers bound to messages in the new
-  format.
-
-TBD: keep backward compatibility with the old format (is it needed?) -
-It will not be possible to attach triggers to the old format though.
-
-For now it implements the "transition" action, and checks the
-"replicationCompleted" condition.
-
-The transition action asks for changing the location of the object to
-a particular location (the trigger details contain info about the new
-target location).
-
-The transition action also publishes a message to the `backbeat-gc`
-queue to delete the old data location on success to write the source
-metadata.
+* When the global status for an object is *COMPLETED* and the metadata
+  update was successful, it will also check the configuration of the
+  location: if transient, it will send a message to the
+  **backbeat-gc** queue with the transient data locations to delete.
 
 ##### Garbage collector
 
@@ -205,7 +163,12 @@ other processes (e.g. for MPU).
 
 #### Zenko deployment with Kubernetes
 
-TBD
+* The garbage collector is a new service on its own.
+
+* Still relies on CRR service for the rest of processing
+
+* We introduce a new environment variable to control the "isTransient"
+  location property that has to be configurable by a user.
 
 ## Contract provided
 
@@ -248,7 +211,8 @@ cases:
 To tackle this issue, we'll introduce a storage limit on the transient
 source used storage space as a whole, above which new writes will be
 refused until the transient source used space diminishes below a
-certain threshold. This will be done as a separate feature though.
+certain threshold. This will be done as a separate feature though, and
+will be using the Orbit API for statistics gathering.
 
 ## Rejected Options
 
