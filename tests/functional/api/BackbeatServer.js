@@ -574,12 +574,6 @@ describe('Backbeat Server', () => {
                 StorageClass: 'd',
             }],
             [{
-                // Missing VersionId property.
-                Bucket: 'a',
-                Key: 'b',
-                StorageClass: 'd',
-            }],
-            [{
                 // Missing StorageClass property.
                 Bucket: 'a',
                 Key: 'b',
