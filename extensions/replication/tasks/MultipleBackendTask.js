@@ -155,7 +155,8 @@ class MultipleBackendTask extends ReplicateObject {
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId:
+                sourceEntry.getVersionId() && sourceEntry.getEncodedVersionId(),
             Range: `bytes=${range.start}-${range.end}`,
         });
         // Range is inclusive, hence + 1.
@@ -180,7 +181,8 @@ class MultipleBackendTask extends ReplicateObject {
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: destEntry.getEncodedVersionId(),
+            VersionId:
+                destEntry.getVersionId() && destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
@@ -305,7 +307,8 @@ class MultipleBackendTask extends ReplicateObject {
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId:
+                sourceEntry.getVersionId() && sourceEntry.getEncodedVersionId(),
             PartNumber: partObj.getPartNumber(),
         });
         const size = partObj.getPartSize();
@@ -336,7 +339,8 @@ class MultipleBackendTask extends ReplicateObject {
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: destEntry.getEncodedVersionId(),
+            VersionId:
+                destEntry.getVersionId() && destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
@@ -499,7 +503,8 @@ class MultipleBackendTask extends ReplicateObject {
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId:
+                sourceEntry.getVersionId() && sourceEntry.getEncodedVersionId(),
             PartNumber: part ? partObj.getPartNumber() : undefined,
         });
         attachReqUids(sourceReq, log);
@@ -562,7 +567,8 @@ class MultipleBackendTask extends ReplicateObject {
                 destEntry.getContentMd5(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: destEntry.getEncodedVersionId(),
+            VersionId:
+                destEntry.getVersionId() && destEntry.getEncodedVersionId(),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType() || undefined,
             CacheControl: sourceEntry.getCacheControl() || undefined,

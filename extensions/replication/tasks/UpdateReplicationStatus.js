@@ -161,7 +161,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         const req = this.backbeatSource.getMetadata({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
-            VersionId: entry.getEncodedVersionId(),
+            VersionId: entry.getVersionId() && entry.getEncodedVersionId(),
         });
         attachReqUids(req, log);
         req.send((err, data) => {

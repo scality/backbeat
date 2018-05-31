@@ -19,10 +19,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
-        if (!isMasterKey(entry.key)) {
-            return this._filterVersionedKey(entry);
-        }
-        return undefined;
+        return this._filterKeyOp(entry);
     }
 
     _filterBucketOp(entry) {
@@ -36,7 +33,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                      entry.bucket, JSON.stringify(entry));
     }
 
-    _filterVersionedKey(entry) {
+    _filterKeyOp(entry) {
         if (entry.type !== 'put') {
             return;
         }

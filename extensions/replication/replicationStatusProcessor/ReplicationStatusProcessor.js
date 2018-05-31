@@ -142,7 +142,11 @@ class ReplicationStatusProcessor {
         if (backend) {
             const bucket = queueEntry.getBucket();
             const key = queueEntry.getObjectKey();
-            const versionId = queueEntry.getEncodedVersionId();
+            // If the original CRR was on a bucket without versioning enabled
+            // (i.e. an NFS bucket), maintain the Redis key schema by using
+            // and empty string.
+            const versionId = queueEntry.getVersionId() ?
+                queueEntry.getEncodedVersionId() : '';
             const { site } = backend;
             const message = {
                 field: `${bucket}:${key}:${versionId}:${site}`,

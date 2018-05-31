@@ -301,7 +301,8 @@ class ReplicateObject extends BackbeatTask {
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId: sourceEntry.getVersionId() &&
+                sourceEntry.getEncodedVersionId(),
             PartNumber: partNumber,
         });
         attachReqUids(sourceReq, log);
