@@ -14,6 +14,7 @@ const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const { redisKeys } = require('../constants');
 
 /**
  * @class ReplicationStatusProcessor
@@ -145,7 +146,8 @@ class ReplicationStatusProcessor {
             const versionId = queueEntry.getEncodedVersionId();
             const { site } = backend;
             const message = {
-                field: `${bucket}:${key}:${versionId}:${site}`,
+                key: `${redisKeys.failedCRR}:` +
+                    `${bucket}:${key}:${versionId}:${site}`,
                 value: Buffer.from(kafkaEntry.value).toString(),
             };
             return this._FailedCRRProducer

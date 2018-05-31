@@ -43,6 +43,7 @@
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
             "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
             "groupId": "backbeat-test-replication-group",
             "destination": {
                 "bootstrapList": [
