@@ -18,7 +18,10 @@ werelogs.configure({ level: config.log.logLevel,
 
 const logger = new werelogs.Logger('backbeat:ReplicationStatusProcessor:Init');
 function initAndStart() {
-    initManagement(error => {
+    initManagement({
+        serviceName: 'replication',
+        serviceAccount: sourceConfig.auth.account,
+    }, error => {
         if (error) {
             logger.error('could not load management db', error);
             setTimeout(initAndStart, 5000);

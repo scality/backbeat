@@ -6,6 +6,15 @@ set -e
 # modifying config.json
 JQ_FILTERS_CONFIG="."
 
+if [[ "$LOG_LEVEL" ]]; then
+    if [[ "$LOG_LEVEL" == "info" || "$LOG_LEVEL" == "debug" || "$LOG_LEVEL" == "trace" ]]; then
+        JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .log.logLevel=\"$LOG_LEVEL\""
+        echo "Log level has been modified to $LOG_LEVEL"
+    else
+        echo "The log level you provided is incorrect (info/debug/trace)"
+    fi
+fi
+
 if [[ "$ZOOKEEPER_AUTO_CREATE_NAMESPACE" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .zookeeper.autoCreateNamespace=true"
 fi
@@ -45,6 +54,14 @@ fi
 
 if [[ "$MONGODB_DATABASE" ]]; then
    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.database=\"$MONGODB_DATABASE\""
+fi
+
+if [[ "$S3_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.host=\"$S3_HOST\""
+fi
+
+if [[ "$S3_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.port=\"$S3_PORT\""
 fi
 
 if [[ "$EXTENSIONS_REPLICATION_SOURCE_S3_HOST" ]]; then
@@ -123,12 +140,12 @@ if [[ "$EXTENSIONS_LIFECYCLE_RULES_ABORT_INCOMPLETE_MPU_ENABLED" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.rules.abortIncompleteMultipartUpload.enabled=\"$EXTENSIONS_LIFECYCLE_RULES_ABORT_INCOMPLETE_MPU_ENABLED\""
 fi
 
-if [[ "$AUTH_TYPE" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .auth.type=\"$AUTH_TYPE\""
+if [[ "$EXTENSIONS_LIFECYCLE_AUTH_TYPE" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.auth.type=\"$EXTENSIONS_LIFECYCLE_AUTH_TYPE\""
 fi
 
-if [[ "$AUTH_ACCOUNT" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .auth.account=\"$AUTH_ACCOUNT\""
+if [[ "$EXTENSIONS_LIFECYCLE_AUTH_ACCOUNT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.auth.account=\"$EXTENSIONS_LIFECYCLE_AUTH_ACCOUNT\""
 fi
 
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
