@@ -50,7 +50,7 @@ describe('MultipleBackendTask', () => {
             });
         });
 
-        it(`should get <= 1024 ranges for part count 1025-10000`, () => {
+        it('should get <= 1024 ranges for part count 1025-10000', () => {
             Array.from(Array(10000 - 1024).keys()).forEach(n => {
                 const count = n + 1025;
                 const ranges = task._getRanges(count * partSize);
