@@ -23,8 +23,8 @@ dependencies:
 test:
     override:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
-        - npm run --silent lint_md
-        - npm run --silent lint
+        - npm run --silent lint_md -- --max-warnings 0
+        - npm run --silent lint -- --max-warnings 0
         - npm test
         - TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
         - TEST_SWITCH=1 npm run ft_test
