@@ -516,14 +516,12 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _handleReplicationOutcome(err, sourceEntry, destEntry, log, done) {
-        let status;
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                       'replication status as COMPLETED',
                       { entry: sourceEntry.getLogInfo() });
-            status = 'COMPLETED';
-            return this._publishReplicationStatus(sourceEntry, status, { log },
-                done);
+            return this._publishReplicationStatus(sourceEntry, 'COMPLETED',
+                { log }, done);
         }
         if (err.BadRole ||
             (err.origin === 'source' &&
@@ -555,8 +553,7 @@ class ReplicateObject extends BackbeatTask {
             { failMethod: err.method,
                 entry: sourceEntry.getLogInfo(),
                 error: err.description });
-        status = 'FAILED';
-        return this._publishReplicationStatus(sourceEntry, status,
+        return this._publishReplicationStatus(sourceEntry, 'FAILED',
             { log, reason: err.description }, done);
     }
 }
