@@ -7,13 +7,13 @@ const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const FailedCRRProducer =
-    require('../../../extensions/replication/failedCRR/FailedCRRProducer');
+const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const getFailedCRRKey = require('../../../lib/util/getFailedCRRKey');
 
 /**
@@ -49,6 +49,7 @@ class ReplicationStatusProcessor {
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
         this._consumer = null;
+        this._gcProducer = null;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -80,6 +81,7 @@ class ReplicationStatusProcessor {
             repConfig: this.repConfig,
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
+            gcProducer: this._gcProducer,
             logger: this.logger,
         };
     }
@@ -94,30 +96,41 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
-        let consumerReady = false;
-        this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
-        this._consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
-            topic: this.repConfig.replicationStatusTopic,
-            groupId: this.repConfig.replicationStatusProcessor.groupId,
-            concurrency:
-            this.repConfig.replicationStatusProcessor.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-            bootstrap: options && options.bootstrap,
-        });
-        this._consumer.on('error', () => {
-            if (!consumerReady) {
-                this.logger.fatal('error starting a backbeat consumer');
-                process.exit(1);
-            }
-        });
-        this._consumer.on('ready', () => {
-            consumerReady = true;
-            this.logger.info('replication status processor is ready to ' +
-                             'consume replication status entries');
-            this._consumer.subscribe();
-            this._FailedCRRProducer.setupProducer(cb);
-        });
+        async.parallel([
+            done => {
+                this._failedCRRProducer = new FailedCRRProducer();
+                this._failedCRRProducer.setupProducer(done);
+            },
+            done => {
+                this._gcProducer = new GarbageCollectorProducer();
+                this._gcProducer.setupProducer(done);
+            },
+            done => {
+                let consumerReady = false;
+                this._consumer = new BackbeatConsumer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.repConfig.replicationStatusTopic,
+                    groupId: this.repConfig.replicationStatusProcessor.groupId,
+                    concurrency:
+                    this.repConfig.replicationStatusProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    bootstrap: options && options.bootstrap,
+                });
+                this._consumer.on('error', () => {
+                    if (!consumerReady) {
+                        this.logger.fatal('error starting a backbeat consumer');
+                        process.exit(1);
+                    }
+                });
+                this._consumer.on('ready', () => {
+                    consumerReady = true;
+                    this.logger.info('replication status processor is ready ' +
+                                     'to consume replication status entries');
+                    this._consumer.subscribe();
+                    done();
+                });
+            },
+        ], cb);
     }
 
     /**
@@ -156,7 +169,7 @@ class ReplicationStatusProcessor {
                 key: getFailedCRRKey(bucket, key, versionId, site),
                 value: Buffer.from(kafkaEntry.value).toString(),
             };
-            return this._FailedCRRProducer
+            return this._failedCRRProducer
                 .publishFailedCRREntry(JSON.stringify(message), cb);
         }
         return cb();

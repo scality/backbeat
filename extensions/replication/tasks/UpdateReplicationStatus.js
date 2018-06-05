@@ -1,6 +1,8 @@
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 
+const config = require('../../../conf/Config');
+
 const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -249,6 +251,15 @@ class UpdateReplicationStatus extends BackbeatTask {
                     replicationStatus:
                         updatedSourceEntry.getReplicationStatus(),
                 });
+                if (config.getIsTransientLocation(
+                    updatedSourceEntry.getDataStoreName()) &&
+                    updatedSourceEntry.getReplicationStatus()
+                    === 'COMPLETED') {
+                    // schedule garbage-collection of transient data
+                    // locations array
+                    return this.gcProducer.publishDeleteDataEntry(
+                        updatedSourceEntry.getReducedLocations(), done);
+                }
                 return done();
             });
         });

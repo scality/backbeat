@@ -87,6 +87,8 @@ class Config extends EventEmitter {
 
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
+
+        this.transientLocations = {};
     }
 
     getBasePath() {
@@ -108,6 +110,14 @@ class Config extends EventEmitter {
     getBootstrapList() {
         monitoringClient.crrSiteCount.set(this.bootstrapList.length);
         return this.bootstrapList;
+    }
+
+    setIsTransientLocation(locationName, isTransient) {
+        this.transientLocations[locationName] = isTransient;
+    }
+
+    getIsTransientLocation(locationName) {
+        return this.transientLocations[locationName] || false;
     }
 }
 
