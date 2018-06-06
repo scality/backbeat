@@ -2,8 +2,8 @@
 version: 0.2
 
 branches:
-  default:
-    stage: pre-merge
+  feature/*, improvement/*, bugfix/*, w/*, q/*, hotfix/*, ft/*, bf/*, chore/*, docs/*:
+    stage: "pre-merge"
 
 stages:
   pre-merge:
