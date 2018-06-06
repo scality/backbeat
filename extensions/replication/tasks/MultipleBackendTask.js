@@ -152,11 +152,12 @@ class MultipleBackendTask extends ReplicateObject {
             range,
         });
         const doneOnce = jsutil.once(done);
-        const sourceReq = this.S3source.getObject({
+        const sourceReq = this.backbeatSource.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             Range: `bytes=${range.start}-${range.end}`,
+            LocationConstraint: sourceEntry.getDataStoreName(),
         });
         // Range is inclusive, hence + 1.
         const size = range.end - range.start + 1;
@@ -302,11 +303,12 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
         const partObj = new ObjectMDLocation(part);
-        const sourceReq = this.S3source.getObject({
+        const sourceReq = this.backbeatSource.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: partObj.getPartNumber(),
+            LocationConstraint: sourceEntry.getDataStoreName(),
         });
         const size = partObj.getPartSize();
         const partNumber = partObj.getPartNumber();
@@ -496,11 +498,12 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
         const partObj = part ? new ObjectMDLocation(part) : undefined;
-        const sourceReq = this.S3source.getObject({
+        const sourceReq = this.backbeatSource.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: part ? partObj.getPartNumber() : undefined,
+            LocationConstraint: sourceEntry.getDataStoreName(),
         });
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
