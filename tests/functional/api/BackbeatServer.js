@@ -89,6 +89,29 @@ function getRequest(path, done) {
 }
 
 describe('Backbeat Server', () => {
+    it('should get a 404 route not found error response', () => {
+        const url = getUrl(defaultOptions, '/_/invalidpath');
+
+        http.get(url, res => {
+            assert.equal(res.statusCode, 404);
+        });
+    });
+
+    it('should get a 405 method not allowed from invalid http verb', done => {
+        const options = Object.assign({}, defaultOptions);
+        options.method = 'DELETE';
+        options.path = '/_/healthcheck';
+
+        const req = http.request(options, res => {
+            assert.equal(res.statusCode, 405);
+        });
+        req.on('error', err => {
+            assert.ifError(err);
+        });
+        req.end();
+        done();
+    });
+
     describe('healthcheck route', () => {
         let data;
         let healthcheckTimer;
@@ -183,9 +206,7 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe('metrics routes', function dF() {
-        this.timeout(10000);
-
+    describe('metrics routes', () => {
         const interval = 300;
         const expiry = 900;
         const OPS = 'test:bb:ops';
@@ -229,14 +250,12 @@ describe('Backbeat Server', () => {
             });
         });
 
-        // TODO: refactor this
         const metricsPaths = [
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/throughput',
         ];
-
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -262,39 +281,6 @@ describe('Backbeat Server', () => {
             });
         });
 
-        const retryPaths = [
-            '/_/crr/failed',
-            '/_/crr/failed/test-bucket/test-key/test-versionId',
-        ];
-
-        retryPaths.forEach(path => {
-            it(`should get a 200 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 200);
-                    done();
-                });
-            });
-        });
-
-        const retryQueryPaths = [
-            '/_/crr/failed?marker=foo',
-            '/_/crr/failed?marker=',
-        ];
-
-        retryQueryPaths.forEach(path => {
-            it(`should get a 400 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 400);
-                    done();
-                });
-            });
-        });
-
-        // TODO: refactor this
         const allWrongPaths = [
             // general wrong paths
             '/',
@@ -319,7 +305,6 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
         ];
-
         allWrongPaths.forEach(path => {
             it(`should get a 404 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -337,6 +322,223 @@ describe('Backbeat Server', () => {
                 assert.equal(err.statusCode, 404);
                 assert.equal(err.statusMessage, 'Not Found');
                 done();
+            });
+        });
+
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/backlog`, done => {
+            getRequest(`/_/metrics/crr/${site1}/backlog`, (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res[key].results.count, 1275);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 1171);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/backlog', done => {
+            getRequest('/_/metrics/crr/all/backlog', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res[key].results.count, 1875);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 2240);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/completions`, done => {
+            getRequest(`/_/metrics/crr/${site1}/completions`, (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_DONE
+                assert.equal(res[key].results.count, 450);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 1027);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/completions', done => {
+            getRequest('/_/metrics/crr/all/completions', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_DONE
+                assert.equal(res[key].results.count, 750);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 2901);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/throughput`, done => {
+            getRequest(`/_/metrics/crr/${site1}/throughput`, (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res[key].results.count, 0.5);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res[key].results.size, 1.14);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/throughput', done => {
+            getRequest('/_/metrics/crr/all/throughput', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res[key].results.count, 0.83);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res[key].results.size, 3.22);
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        `/_/metrics/crr/${site1}`, done => {
+            getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
+                assert.ifError(err);
+                const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+
+                assert(res.backlog.description);
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res.backlog.results.count, 1275);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res.backlog.results.size, 1171);
+
+                assert(res.completions.description);
+                // Completions count = OPS_DONE
+                assert.equal(res.completions.results.count, 450);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res.completions.results.size, 1027);
+
+                assert(res.throughput.description);
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res.throughput.results.count, 0.5);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res.throughput.results.size, 1.14);
+
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        '/_/metrics/crr/all', done => {
+            getRequest('/_/metrics/crr/all', (err, res) => {
+                assert.ifError(err);
+                const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+
+                assert(res.backlog.description);
+                // Backlog count = OPS - OPS_DONE
+                assert.equal(res.backlog.results.count, 1875);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res.backlog.results.size, 2240);
+
+                assert(res.completions.description);
+                // Completions count = OPS_DONE
+                assert.equal(res.completions.results.count, 750);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res.completions.results.size, 2901);
+
+                assert(res.throughput.description);
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res.throughput.results.count, 0.83);
+                // Throughput bytes = BYTES_DONE / EXPIRY
+                assert.equal(res.throughput.results.size, 3.22);
+
+                done();
+            });
+        });
+
+        describe('No metrics data in Redis', () => {
+            before(() => {
+                redis.keys('*:test:bb:*').then(keys => {
+                    const pipeline = redis.pipeline();
+                    keys.forEach(key => {
+                        pipeline.del(key);
+                    });
+                    return pipeline.exec();
+                });
+            });
+
+            it('should return a response even if redis data does not exist',
+            done => {
+                getRequest('/_/metrics/crr/all', (err, res) => {
+                    assert.ifError(err);
+
+                    const keys = Object.keys(res);
+                    assert(keys.includes('backlog'));
+                    assert(keys.includes('completions'));
+                    assert(keys.includes('throughput'));
+
+                    assert(res.backlog.description);
+                    assert.equal(res.backlog.results.count, 0);
+                    assert.equal(res.backlog.results.size, 0.00);
+
+                    assert(res.completions.description);
+                    assert.equal(res.completions.results.count, 0);
+                    assert.equal(res.completions.results.size, 0.00);
+
+                    assert(res.throughput.description);
+                    assert.equal(res.throughput.results.count, 0.00);
+                    assert.equal(res.throughput.results.size, 0.00);
+
+                    done();
+                });
+            });
+        });
+    });
+
+    describe('CRR Retry routes', () => {
+        let redisClient;
+
+        before(() => {
+            redisClient = new RedisClient(redisConfig, fakeLogger);
+        });
+
+        const retryPaths = [
+            '/_/crr/failed',
+            '/_/crr/failed/test-bucket/test-key/test-versionId',
+        ];
+        retryPaths.forEach(path => {
+            it(`should get a 200 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 200);
+                    done();
+                });
+            });
+        });
+
+        const retryQueryPaths = [
+            '/_/crr/failed?marker=foo',
+            '/_/crr/failed?marker=',
+        ];
+        retryQueryPaths.forEach(path => {
+            it(`should get a 400 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 400);
+                    done();
+                });
             });
         });
 
@@ -384,7 +586,6 @@ describe('Backbeat Server', () => {
                 VersionId: 'c',
             }],
         ];
-
         invalidPOSTRequestBodies.forEach(body => {
             const invalidBody = JSON.stringify(body);
             it('should get a 400 response for route: /_/crr/failed when ' +
@@ -594,8 +795,7 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for POST route: /_/crr/failed ' +
-            'when there are multiple matching key keys', function f(done) {
-                this.timeout(10000);
+            'when there are multiple matching key keys', done => {
                 const keys = [
                     `test-bucket:test-key:${testVersionId}:test-site-1`,
                     `test-bucket:test-key:${testVersionId}:test-site-2`,
@@ -716,206 +916,5 @@ describe('Backbeat Server', () => {
                 });
             });
         });
-
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/backlog`, done => {
-            getRequest(`/_/metrics/crr/${site1}/backlog`, (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res[key].results.count, 1275);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res[key].results.size, 1171);
-                done();
-            });
-        });
-
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/backlog', done => {
-            getRequest('/_/metrics/crr/all/backlog', (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res[key].results.count, 1875);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res[key].results.size, 2240);
-                done();
-            });
-        });
-
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/completions`, done => {
-            getRequest(`/_/metrics/crr/${site1}/completions`, (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Completions count = OPS_DONE
-                assert.equal(res[key].results.count, 450);
-                // Completions bytes = BYTES_DONE
-                assert.equal(res[key].results.size, 1027);
-                done();
-            });
-        });
-
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/completions', done => {
-            getRequest('/_/metrics/crr/all/completions', (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Completions count = OPS_DONE
-                assert.equal(res[key].results.count, 750);
-                // Completions bytes = BYTES_DONE
-                assert.equal(res[key].results.size, 2901);
-                done();
-            });
-        });
-
-        it('should get the right data for route: ' +
-        `/_/metrics/crr/${site1}/throughput`, done => {
-            getRequest(`/_/metrics/crr/${site1}/throughput`, (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Throughput count = OPS_DONE / EXPIRY
-                assert.equal(res[key].results.count, 0.5);
-                // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res[key].results.size, 1.14);
-                done();
-            });
-        });
-
-        it('should get the right data for route: ' +
-        '/_/metrics/crr/all/throughput', done => {
-            getRequest('/_/metrics/crr/all/throughput', (err, res) => {
-                assert.ifError(err);
-                const key = Object.keys(res)[0];
-                // Throughput count = OPS_DONE / EXPIRY
-                assert.equal(res[key].results.count, 0.83);
-                // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res[key].results.size, 3.22);
-                done();
-            });
-        });
-
-        it('should return all metrics for route: ' +
-        `/_/metrics/crr/${site1}`, done => {
-            getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
-                assert.ifError(err);
-                const keys = Object.keys(res);
-                assert(keys.includes('backlog'));
-                assert(keys.includes('completions'));
-                assert(keys.includes('throughput'));
-
-                assert(res.backlog.description);
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res.backlog.results.count, 1275);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res.backlog.results.size, 1171);
-
-                assert(res.completions.description);
-                // Completions count = OPS_DONE
-                assert.equal(res.completions.results.count, 450);
-                // Completions bytes = BYTES_DONE
-                assert.equal(res.completions.results.size, 1027);
-
-                assert(res.throughput.description);
-                // Throughput count = OPS_DONE / EXPIRY
-                assert.equal(res.throughput.results.count, 0.5);
-                // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res.throughput.results.size, 1.14);
-
-                done();
-            });
-        });
-
-        it('should return all metrics for route: ' +
-        '/_/metrics/crr/all', done => {
-            getRequest('/_/metrics/crr/all', (err, res) => {
-                assert.ifError(err);
-                const keys = Object.keys(res);
-                assert(keys.includes('backlog'));
-                assert(keys.includes('completions'));
-                assert(keys.includes('throughput'));
-
-                assert(res.backlog.description);
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res.backlog.results.count, 1875);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res.backlog.results.size, 2240);
-
-                assert(res.completions.description);
-                // Completions count = OPS_DONE
-                assert.equal(res.completions.results.count, 750);
-                // Completions bytes = BYTES_DONE
-                assert.equal(res.completions.results.size, 2901);
-
-                assert(res.throughput.description);
-                // Throughput count = OPS_DONE / EXPIRY
-                assert.equal(res.throughput.results.count, 0.83);
-                // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res.throughput.results.size, 3.22);
-
-                done();
-            });
-        });
-
-        describe('No metrics data in Redis', () => {
-            before(() => {
-                redis.keys('*:test:bb:*').then(keys => {
-                    const pipeline = redis.pipeline();
-                    keys.forEach(key => {
-                        pipeline.del(key);
-                    });
-                    return pipeline.exec();
-                });
-            });
-
-            it('should return a response even if redis data does not exist',
-            done => {
-                getRequest('/_/metrics/crr/all', (err, res) => {
-                    assert.ifError(err);
-
-                    const keys = Object.keys(res);
-                    assert(keys.includes('backlog'));
-                    assert(keys.includes('completions'));
-                    assert(keys.includes('throughput'));
-
-                    assert(res.backlog.description);
-                    assert.equal(res.backlog.results.count, 0);
-                    assert.equal(res.backlog.results.size, 0.00);
-
-                    assert(res.completions.description);
-                    assert.equal(res.completions.results.count, 0);
-                    assert.equal(res.completions.results.size, 0.00);
-
-                    assert(res.throughput.description);
-                    assert.equal(res.throughput.results.count, 0.00);
-                    assert.equal(res.throughput.results.size, 0.00);
-
-                    done();
-                });
-            });
-        });
-    });
-
-    it('should get a 404 route not found error response', () => {
-        const url = getUrl(defaultOptions, '/_/invalidpath');
-
-        http.get(url, res => {
-            assert.equal(res.statusCode, 404);
-        });
-    });
-
-    it('should get a 405 method not allowed from invalid http verb', done => {
-        const options = Object.assign({}, defaultOptions);
-        options.method = 'DELETE';
-        options.path = '/_/healthcheck';
-
-        const req = http.request(options, res => {
-            assert.equal(res.statusCode, 405);
-        });
-        req.on('error', err => {
-            assert.ifError(err);
-        });
-        req.end();
-        done();
     });
 });
