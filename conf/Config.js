@@ -98,10 +98,10 @@ class Config extends EventEmitter {
     }
 
     setBootstrapList(locationConstraints) {
-        this.bootstrapList =
-        Object.keys(locationConstraints)
-        .map(key => ({ site: key, type:
-              locationTypeMatch[locationConstraints[key].locationType] }));
+        this.bootstrapList = Object.keys(locationConstraints).map(key => ({
+            site: key,
+            type: locationTypeMatch[locationConstraints[key].locationType],
+        }));
         this.emit('bootstrap-list-update');
     }
 

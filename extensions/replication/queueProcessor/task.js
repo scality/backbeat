@@ -1,5 +1,7 @@
 'use strict'; // eslint-disable-line
+
 const werelogs = require('werelogs');
+
 const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../conf/Config');
 const { initManagement } = require('../../../lib/management');
@@ -49,9 +51,13 @@ metricsProducer.setupProducer(err => {
                 destConfig.bootstrapList = config.getBootstrapList();
             });
 
-            const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
-                sourceConfig, destConfig, repConfig, metricsProducer);
-            queueProcessor.start();
+            // Start QueueProcessor for each site
+            const siteNames = bootstrapList.map(i => i.site);
+            siteNames.forEach(site => {
+                const queueProcessor = new QueueProcessor(zkConfig, kafkaConfig,
+                    sourceConfig, destConfig, repConfig, metricsProducer, site);
+                queueProcessor.start();
+            });
         });
     }
     return initAndStart();
