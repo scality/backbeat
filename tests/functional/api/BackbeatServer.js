@@ -90,6 +90,29 @@ function getRequest(path, done) {
 }
 
 describe('Backbeat Server', () => {
+    it('should get a 404 route not found error response', () => {
+        const url = getUrl(defaultOptions, '/_/invalidpath');
+
+        http.get(url, res => {
+            assert.equal(res.statusCode, 404);
+        });
+    });
+
+    it('should get a 405 method not allowed from invalid http verb', done => {
+        const options = Object.assign({}, defaultOptions);
+        options.method = 'DELETE';
+        options.path = '/_/healthcheck';
+
+        const req = http.request(options, res => {
+            assert.equal(res.statusCode, 405);
+        });
+        req.on('error', err => {
+            assert.ifError(err);
+        });
+        req.end();
+        done();
+    });
+
     describe('healthcheck route', () => {
         let data;
         let healthcheckTimer;
@@ -184,9 +207,7 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe('metrics routes', function dF() {
-        this.timeout(10000);
-
+    describe('metrics routes', () => {
         const interval = 300;
         const expiry = 900;
         const OPS = 'test:bb:ops';
@@ -230,14 +251,12 @@ describe('Backbeat Server', () => {
             });
         });
 
-        // TODO: refactor this
         const metricsPaths = [
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/throughput',
         ];
-
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -263,39 +282,6 @@ describe('Backbeat Server', () => {
             });
         });
 
-        const retryPaths = [
-            '/_/crr/failed',
-            '/_/crr/failed/test-bucket/test-key/test-versionId',
-        ];
-
-        retryPaths.forEach(path => {
-            it(`should get a 200 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 200);
-                    done();
-                });
-            });
-        });
-
-        const retryQueryPaths = [
-            '/_/crr/failed?marker=foo',
-            '/_/crr/failed?marker=',
-        ];
-
-        retryQueryPaths.forEach(path => {
-            it(`should get a 400 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 400);
-                    done();
-                });
-            });
-        });
-
-        // TODO: refactor this
         const allWrongPaths = [
             // general wrong paths
             '/',
@@ -320,7 +306,6 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
         ];
-
         allWrongPaths.forEach(path => {
             it(`should get a 404 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -349,7 +334,7 @@ describe('Backbeat Server', () => {
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1275);
                 // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res[key].results.size, 117100);
+                assert.equal(res[key].results.size, 1171);
                 done();
             });
         });
@@ -361,8 +346,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1875);
-                // Backlog size = (BYTES - BYTES_DONE)
-                assert.equal(res[key].results.size, 224000);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 2240);
                 done();
             });
         });
@@ -375,7 +360,7 @@ describe('Backbeat Server', () => {
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 450);
                 // Completions bytes = BYTES_DONE
-                assert.equal(res[key].results.size, 102700);
+                assert.equal(res[key].results.size, 1027);
                 done();
             });
         });
@@ -388,7 +373,7 @@ describe('Backbeat Server', () => {
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 750);
                 // Completions bytes = BYTES_DONE
-                assert.equal(res[key].results.size, 290100);
+                assert.equal(res[key].results.size, 2901);
                 done();
             });
         });
@@ -401,7 +386,7 @@ describe('Backbeat Server', () => {
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.5);
                 // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res[key].results.size, 114.11);
+                assert.equal(res[key].results.size, 1.14);
                 done();
             });
         });
@@ -414,7 +399,7 @@ describe('Backbeat Server', () => {
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.83);
                 // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res[key].results.size, 322.33);
+                assert.equal(res[key].results.size, 3.22);
                 done();
             });
         });
@@ -432,19 +417,19 @@ describe('Backbeat Server', () => {
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res.backlog.results.count, 1275);
                 // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res.backlog.results.size, 117100);
+                assert.equal(res.backlog.results.size, 1171);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 450);
                 // Completions bytes = BYTES_DONE
-                assert.equal(res.completions.results.size, 102700);
+                assert.equal(res.completions.results.size, 1027);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.5);
                 // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res.throughput.results.size, 114.11);
+                assert.equal(res.throughput.results.size, 1.14);
 
                 done();
             });
@@ -463,34 +448,20 @@ describe('Backbeat Server', () => {
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res.backlog.results.count, 1875);
                 // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res.backlog.results.size, 224000);
+                assert.equal(res.backlog.results.size, 2240);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 750);
                 // Completions bytes = BYTES_DONE
-                assert.equal(res.completions.results.size, 290100);
+                assert.equal(res.completions.results.size, 2901);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.83);
                 // Throughput bytes = BYTES_DONE / EXPIRY
-                assert.equal(res.throughput.results.size, 322.33);
+                assert.equal(res.throughput.results.size, 3.22);
 
-                done();
-            });
-        });
-
-        it('should get a 200 response for route: /_/crr/failed', done => {
-            const body = JSON.stringify([{
-                Bucket: 'bucket',
-                Key: 'key',
-                VersionId: 'versionId',
-                StorageClass: 'site',
-            }]);
-            makeRetryPOSTRequest(body, (err, res) => {
-                assert.ifError(err);
-                assert.strictEqual(res.statusCode, 200);
                 done();
             });
         });
@@ -532,6 +503,58 @@ describe('Backbeat Server', () => {
                 });
             });
         });
+    });
+
+    describe('CRR Retry routes', () => {
+        let redisClient;
+
+        before(() => {
+            redisClient = new RedisClient(redisConfig, fakeLogger);
+        });
+
+        const retryPaths = [
+            '/_/crr/failed',
+            '/_/crr/failed/test-bucket/test-key/test-versionId',
+        ];
+        retryPaths.forEach(path => {
+            it(`should get a 200 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 200);
+                    done();
+                });
+            });
+        });
+
+        const retryQueryPaths = [
+            '/_/crr/failed?marker=foo',
+            '/_/crr/failed?marker=',
+        ];
+        retryQueryPaths.forEach(path => {
+            it(`should get a 400 response for route: ${path}`, done => {
+                const url = getUrl(defaultOptions, path);
+
+                http.get(url, res => {
+                    assert.equal(res.statusCode, 400);
+                    done();
+                });
+            });
+        });
+
+        it('should get a 200 response for route: /_/crr/failed', done => {
+            const body = JSON.stringify([{
+                Bucket: 'bucket',
+                Key: 'key',
+                VersionId: 'versionId',
+                StorageClass: 'site',
+            }]);
+            makeRetryPOSTRequest(body, (err, res) => {
+                assert.ifError(err);
+                assert.strictEqual(res.statusCode, 200);
+                done();
+            });
+        });
 
         const invalidPOSTRequestBodies = [
             'a',
@@ -563,7 +586,6 @@ describe('Backbeat Server', () => {
                 VersionId: 'c',
             }],
         ];
-
         invalidPOSTRequestBodies.forEach(body => {
             const invalidBody = JSON.stringify(body);
             it('should get a 400 response for route: /_/crr/failed when ' +
@@ -773,8 +795,7 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for POST route: /_/crr/failed ' +
-            'when there are multiple matching key keys', function f(done) {
-                this.timeout(10000);
+            'when there are multiple matching key keys', done => {
                 const keys = [
                     `test-bucket:test-key:${testVersionId}:test-site-1`,
                     `test-bucket:test-key:${testVersionId}:test-site-2`,
@@ -895,28 +916,5 @@ describe('Backbeat Server', () => {
                 });
             });
         });
-    });
-
-    it('should get a 404 route not found error response', () => {
-        const url = getUrl(defaultOptions, '/_/invalidpath');
-
-        http.get(url, res => {
-            assert.equal(res.statusCode, 404);
-        });
-    });
-
-    it('should get a 405 method not allowed from invalid http verb', done => {
-        const options = Object.assign({}, defaultOptions);
-        options.method = 'DELETE';
-        options.path = '/_/healthcheck';
-
-        const req = http.request(options, res => {
-            assert.equal(res.statusCode, 405);
-        });
-        req.on('error', err => {
-            assert.ifError(err);
-        });
-        req.end();
-        done();
     });
 });
