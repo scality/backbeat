@@ -35,3 +35,26 @@ stages:
           name: run s3 server and run feature tests
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
           workdir: '%(prop:builddir)s/build'
+  nightly:
+    worker:
+      type: docker
+      path: eve/workers/nightly_build
+    steps:
+      - Git:
+          name: Fetch source
+          repourl: '%(prop:git_reference)'
+          shallow: True
+          retryFetch: True
+          haltOnFailure: True
+      - ShellCommand:
+          name: Build docker image
+          workdir: '%(prop:builddir)s/build'
+          command: docker build -t scality/backbeat:%(prop:image_tag) .
+      - ShellCommand:
+          name: Push docker image
+          command: docker push scality/backbeat:%(prop:image_tag)
+          haltOnFailure: True
+      - ShellCommand:
+          name: Run integration test
+          command: 'true'
+          haltOnFailure: True
