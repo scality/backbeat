@@ -108,6 +108,29 @@ describe('Backbeat Server', () => {
         redisClient = new RedisClient(redisConfig, fakeLogger);
     });
 
+    it('should get a 404 route not found error response', () => {
+        const url = getUrl(defaultOptions, '/_/invalidpath');
+
+        http.get(url, res => {
+            assert.equal(res.statusCode, 404);
+        });
+    });
+
+    it('should get a 405 method not allowed from invalid http verb', done => {
+        const options = Object.assign({}, defaultOptions);
+        options.method = 'DELETE';
+        options.path = '/_/healthcheck';
+
+        const req = http.request(options, res => {
+            assert.equal(res.statusCode, 405);
+        });
+        req.on('error', err => {
+            assert.ifError(err);
+        });
+        req.end();
+        done();
+    });
+
     describe('healthcheck route', () => {
         let data;
         let healthcheckTimer;
@@ -279,14 +302,12 @@ describe('Backbeat Server', () => {
             });
         });
 
-        // TODO: refactor this
         const metricsPaths = [
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/throughput',
         ];
-
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -312,39 +333,6 @@ describe('Backbeat Server', () => {
             });
         });
 
-        const retryPaths = [
-            '/_/crr/failed',
-            '/_/crr/failed/test-bucket/test-key/test-versionId',
-        ];
-
-        retryPaths.forEach(path => {
-            it(`should get a 200 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 200);
-                    done();
-                });
-            });
-        });
-
-        const retryQueryPaths = [
-            '/_/crr/failed?marker=foo',
-            '/_/crr/failed?marker=',
-        ];
-
-        retryQueryPaths.forEach(path => {
-            it(`should get a 400 response for route: ${path}`, done => {
-                const url = getUrl(defaultOptions, path);
-
-                http.get(url, res => {
-                    assert.equal(res.statusCode, 400);
-                    done();
-                });
-            });
-        });
-
-        // TODO: refactor this
         const allWrongPaths = [
             // general wrong paths
             '/',
@@ -369,7 +357,6 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
         ];
-
         allWrongPaths.forEach(path => {
             it(`should get a 404 response for route: ${path}`, done => {
                 const url = getUrl(defaultOptions, path);
@@ -410,8 +397,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Backlog count = OPS - OPS_DONE
                 assert.equal(res[key].results.count, 1875);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res[key].results.size, 224.0);
+                // Backlog size = BYTES - BYTES_DONE
+                assert.equal(res[key].results.size, 2240);
                 done();
             });
         });
@@ -436,8 +423,8 @@ describe('Backbeat Server', () => {
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
                 assert.equal(res[key].results.count, 750);
-                // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res[key].results.size, 290.1);
+                // Completions bytes = BYTES_DONE
+                assert.equal(res[key].results.size, 2901);
                 done();
             });
         });
@@ -649,7 +636,6 @@ describe('Backbeat Server', () => {
                 VersionId: 'c',
             }],
         ];
-
         invalidPOSTRequestBodies.forEach(body => {
             const invalidBody = JSON.stringify(body);
             it('should get a 400 response for route: /_/crr/failed when ' +
@@ -1193,28 +1179,5 @@ describe('Backbeat Server', () => {
                 });
             });
         });
-    });
-
-    it('should get a 404 route not found error response', () => {
-        const url = getUrl(defaultOptions, '/_/invalidpath');
-
-        http.get(url, res => {
-            assert.equal(res.statusCode, 404);
-        });
-    });
-
-    it('should get a 405 method not allowed from invalid http verb', done => {
-        const options = Object.assign({}, defaultOptions);
-        options.method = 'DELETE';
-        options.path = '/_/healthcheck';
-
-        const req = http.request(options, res => {
-            assert.equal(res.statusCode, 405);
-        });
-        req.on('error', err => {
-            assert.ifError(err);
-        });
-        req.end();
-        done();
     });
 });
