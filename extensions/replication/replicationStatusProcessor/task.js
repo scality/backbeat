@@ -9,7 +9,7 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 
-const { initManagement } = require('../../../lib/management');
+const { initManagement } = require('../../../lib/management/index');
 const replicationStatusProcessor =
           new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
 
