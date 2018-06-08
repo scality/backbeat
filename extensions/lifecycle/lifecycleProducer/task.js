@@ -1,6 +1,6 @@
 'use strict'; // eslint-disable-line
 const werelogs = require('werelogs');
-const { initManagement } = require('../../../lib/management');
+const { initManagement } = require('../../../lib/management/index');
 const LifecycleProducer = require('./LifecycleProducer');
 const { zookeeper, kafka, extensions, s3, transport, log } =
       require('../../../conf/Config');

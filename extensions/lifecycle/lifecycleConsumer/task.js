@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 const werelogs = require('werelogs');
 
-const { initManagement } = require('../../../lib/management');
+const { initManagement } = require('../../../lib/management/index');
 const LifecycleConsumer = require('./LifecycleConsumer');
 
 const config = require('../../../conf/Config');
