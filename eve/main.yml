@@ -2,18 +2,31 @@
 version: 0.2
 
 branches:
-  feature/*, improvement/*, bugfix/*, w/*, q/*, hotfix/*, ft/*, bf/*, chore/*, docs/*:
+  feature/*, improvement/*, bugfix/*, w/*, q/*, hotfix/*:
     stage: "pre-merge"
+  development/*:
+    stage: "post-merge"
+
 
 stages:
   pre-merge:
-    worker:
+    worker: &pod
+      type: kube_pod
+      path: eve/workers/pod.yml
+    steps:
+    - TriggerStages:
+        name: trigger all the tests
+        stage_names:
+        - run-tests
+        - docker-build
+  run-tests:
+    worker: &workspace
       type: docker
       path: eve/workers/unit_and_feature_tests
       volumes:
         - '/home/eve/workspace'
     steps:
-      - Git:
+      - Git: &git
           name: fetch source
           repourl: '%(prop:git_reference)s'
           shallow: True
@@ -35,3 +48,23 @@ stages:
           name: run s3 server and run feature tests
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
           workdir: '%(prop:builddir)s/build'
+
+  docker-build:
+    worker:
+      type: kube_pod
+      path: eve/workers/pod.yml
+    steps:
+      - Git: *git
+      - ShellCommand: &docker_build
+          name: Docker build
+          command: docker build -t zenko/backbeat:nightly .
+
+  post-merge:
+    worker:
+      type: kube_pod
+      path: eve/workers/pod.yml
+    steps:
+      - Git: *git
+      - ShellCommand: *docker_build
+      # - ShellCommand: &docker_login waiting for RELENG
+      # - ShellCommand: &docker_push Waiting for RELENG
