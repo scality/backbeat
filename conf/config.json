@@ -52,17 +52,7 @@
                     "cronRule": "*/5 * * * * *",
                     "zookeeperSuffix": "/source1",
                     "host": "localhost",
-                    "port": 9000,
-                    "https": false,
-                    "type": "scality",
-                    "raftCount": 8
-                },
-                {
-                    "name": "source2",
-                    "prefix": "demo2",
-                    "zookeeperSuffix": "/source2",
-                    "host": "localhost",
-                    "port": 9001,
+                    "port": 8000,
                     "https": false,
                     "type": "scality",
                     "raftCount": 8

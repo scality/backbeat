@@ -619,16 +619,18 @@
         "GetRaftBuckets": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/backbeat/raftmetadata/{LogId}/bucket"
+                "requestUri": "/_/metadata/listbuckets/{LogId}"
             },
             "input": {
                 "type": "structure",
                 "required": [
                     "LogId"
                 ],
-                "LogId": {
-                    "location": "uri",
-                    "locationName": "LogId"
+                "members": {
+                    "LogId": {
+                        "location": "uri",
+                        "locationName": "LogId"
+                    }    
                 }
             },
             "output": {
@@ -643,21 +645,18 @@
         "GetBucketMetadata": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/backbeat/raftmetadata/{LogId}/bucket/{Bucket}"
+                "requestUri": "/_/metadata/getbucket/{Bucket}"
             },
             "input": {
                 "type": "structure",
                 "required": [
-                    "LogId",
                     "Bucket"
                 ],
-                "LogId": {
-                    "location": "uri",
-                    "locationName": "LogId"
-                },
-                "Bucket": {
-                    "location": "uri",
-                    "locationName": "Bucket"
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }    
                 }
             },
             "output": {
@@ -672,21 +671,18 @@
         "GetObjectList": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/backbeat/raftmetadata/{LogId}/bucket/{Bucket}/object"
+                "requestUri": "/_/metadata/listobjects/{Bucket}"
             },
             "input": {
                 "type": "structure",
                 "required": [
-                    "LogId",
                     "Bucket"
                 ],
-                "LogId": {
-                    "location": "uri",
-                    "locationName": "Bucket"
-                },
-                "Bucket": {
-                    "location": "Uri",
-                    "locationName": "Bucket"
+                "members": {
+                    "Bucket": {
+                        "location": "Uri",
+                        "locationName": "Bucket"
+                    }    
                 }
             },
             "output": {
@@ -701,26 +697,23 @@
         "GetObjectMetadata": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/backbeat/raftmetadata/{LogId}/bucket/{Bucket}/object/{Key+}"
+                "requestUri": "/_/metadata/getobject/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",
                 "required": [
-                    "LogId",
                     "Bucket",
                     "Key"
                 ],
-                "LogId": {
-                    "location": "uri",
-                    "locationName": "LogId"
-                },
-                "Bucket": {
-                    "location": "uri",
-                    "locationName": "Bucket"
-                },
-                "Key": {
-                    "location": "uri",
-                    "locationName": "Key"
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    }    
                 }
             },
             "output": {
