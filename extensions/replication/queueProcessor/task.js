@@ -4,8 +4,8 @@ const werelogs = require('werelogs');
 
 const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../conf/Config');
-const { initManagement } = require('../../../lib/management');
-const { applyReplicationState } = require('../management');
+const { initManagement } = require('../../../lib/management/index');
+const { applyBucketReplicationWorkflows } = require('../management');
 
 const zkConfig = config.zookeeper;
 const MetricsProducer = require('../../../lib/MetricsProducer');
@@ -34,7 +34,7 @@ metricsProducer.setupProducer(err => {
         initManagement({
             serviceName: 'replication',
             serviceAccount: sourceConfig.auth.account,
-            applyState: applyReplicationState,
+            applyBucketWorkflows: applyBucketReplicationWorkflows,
         }, error => {
             if (error) {
                 log.error('could not load management db',

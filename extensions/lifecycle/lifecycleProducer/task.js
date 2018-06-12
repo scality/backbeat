@@ -1,7 +1,8 @@
 'use strict'; // eslint-disable-line
 const werelogs = require('werelogs');
-const { initManagement } = require('../../../lib/management');
+const { initManagement } = require('../../../lib/management/index');
 const LifecycleProducer = require('./LifecycleProducer');
+const { applyBucketLifecycleWorkflows } = require('../management');
 const { zookeeper, kafka, extensions, s3, transport, log } =
       require('../../../conf/Config');
 
@@ -18,6 +19,7 @@ function initAndStart() {
     initManagement({
         serviceName: 'lifecycle',
         serviceAccount: extensions.lifecycle.auth.account,
+        applyBucketWorkflows: applyBucketLifecycleWorkflows,
     }, error => {
         if (error) {
             logger.error('could not load management db',
