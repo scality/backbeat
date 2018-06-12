@@ -65,6 +65,7 @@ class LifecycleConsumer extends EventEmitter {
      * @return {undefined}
      */
     start() {
+        let consumerReady = false;
         this._consumer = new BackbeatConsumer({
             zookeeper: {
                 connectionString: this.zkConfig.connectionString,
@@ -77,8 +78,14 @@ class LifecycleConsumer extends EventEmitter {
             autoCommit: true,
             backlogMetrics: this.lcConfig.backlogMetrics,
         });
-        this._consumer.on('error', () => {});
+        this._consumer.on('error', () => {
+            if (!consumerReady) {
+                this.logger.fatal('error starting lifecycle consumer');
+                process.exit(1);
+            }
+        });
         this._consumer.on('ready', () => {
+            consumerReady = true;
             this._consumer.subscribe();
             this.logger.info('lifecycle consumer successfully started');
             return this.emit('ready');
