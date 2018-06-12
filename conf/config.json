@@ -125,6 +125,18 @@
                     "enabled": true
                 }
             }
+        },
+        "gc": {
+            "topic": "backbeat-gc",
+            "auth": {
+                "type": "service",
+                "account": "service-gc"
+            },
+            "consumer": {
+                "groupId": "backbeat-gc-consumer-group",
+                "retryTimeoutS": 300,
+                "concurrency": 10
+            }
         }
     },
     "log": {
