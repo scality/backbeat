@@ -18,7 +18,7 @@ dependencies:
         - rm -rf node_modules
         - npm install
     post:
-        - cd node_modules/s3 && npm run mem_backend: {background: true}
+        - cd node_modules/cloudserver && npm run mem_backend: {background: true}
 
 test:
     override:

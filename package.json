@@ -51,6 +51,6 @@
   },
   "devDependencies": {
     "mocha": "^3.3.0",
-    "s3": "scality/S3#development/8.0"
+    "cloudserver": "scality/S3#development/8.0"
   }
 }
