@@ -33,6 +33,24 @@
         }
     },
     "extensions": {
+        "ingestion": {
+            "topic": "backbeat-ingestion",
+            "zookeeperPath": "/ingestion",
+            "cronRule": "*/5 * * * * *",
+            "sources": [
+                {
+                    "name": "source1",
+                    "prefix": "source1",
+                    "cronRule": "*/5 * * * * *",
+                    "zookeeperSuffix": "/source1",
+                    "host": "localhost",
+                    "port": 8000,
+                    "https": false,
+                    "type": "scality",
+                    "raftCount": 8
+                }
+            ]
+        },
         "replication": {
             "source": {
                 "transport": "http",
