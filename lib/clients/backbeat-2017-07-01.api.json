@@ -615,6 +615,307 @@
                     }
                 }
             }
+        },
+        "GetRaftBuckets": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/listbuckets/{LogId}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "LogId"
+                ],
+                "members": {
+                    "LogId": {
+                        "location": "uri",
+                        "locationName": "LogId"
+                    }
+                }
+            },
+            "output": {
+                "type": "list",
+                "member": {
+                    "type": "string"
+                }
+            }
+        },
+        "GetBucketMetadata": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/getbucket/{Bucket}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }
+                }
+            },
+            "output": {
+                "shape": "BucketMD"
+            }
+        },
+        "GetObjectList": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/listobjects/{Bucket}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }
+                }
+            },
+            "output": {
+                "shape": "ObjectMDListResponse"
+            }
+        },
+        "GetObjectMetadata": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/getobject/{Bucket}/{Key+}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    }
+                }
+            },
+            "output": {
+                "type": "map",
+                "key": {},
+                "value": {}
+            }
+        }
+    },
+    "shapes": {
+        "ObjectMDListResponse": {
+            "type": "structure",
+            "members": {
+                "Contents": {
+                    "shape": "ObjectMDList"
+                }
+            }
+        },
+        "ObjectMDList": {
+            "type": "list",
+            "member": {
+                "shape": "ObjectMD"
+            }
+        },
+        "ObjectMD": {
+            "type": "structure",
+            "members": {
+                "key": {
+                    "type": "string"
+                },
+                "value": {
+                    "type": "string"
+                }
+            }
+        },
+        "BucketMD": {
+            "type": "structure",
+            "members": {
+                "acl": {
+                    "shape": "AclObj"
+                },
+                "name": {
+                    "type": "string"
+                },
+                "owner": {
+                    "type": "string"
+                },
+                "ownerDisplayName": {
+                    "type": "string"
+                },
+                "creationDate": {
+                    "type": "string"
+                },
+                "mdBucketModelVersion": {
+                    "type": "integer"
+                },
+                "transient": {
+                    "type": "boolean"
+                },
+                "deleted": {
+                    "type": "boolean"
+                },
+                "serverSideEncryption": {
+                    "shape": "ServerSideEncryption"
+                },
+                "versioningConfiguration": {
+                    "shape": "VersioningConfigurationObj"
+                },
+                "locationConstraint": {
+                    "type": "string"
+                },
+                "readLocationConstraint": {
+                    "type": "string"
+                },
+                "cors": {
+                    "shape": "CorsListObj"
+                },
+                "replicationConfiguration": {
+                    "shape": "ReplicationConfigurationObj"
+                },
+                "lifecycleConfiguration": {
+                    "shape": "LifecycleConfigurationObj"
+                },
+                "uid": {
+                    "type": "string"
+                }
+            }
+        },
+        "ServerSideEncryption": {
+            "type": "map",
+            "key": {},
+            "value": {}
+        },
+        "CorsListObj": {
+            "type": "list",
+            "member": {
+                "shape": "CorsObj"
+            }
+        },
+        "CorsObj": {
+            "type": "map",
+            "key": {},
+            "value": {}
+        },
+        "VersioningConfigurationObj": {
+            "type": "map",
+            "key": {},
+            "vallue": {}
+        },
+        "ReplicationConfigurationObj": {
+            "type": "map",
+            "key": {},
+            "value": {}
+        },
+        "RepRuleObj": {
+            "type": "structure",
+            "members": {
+                "Destination": {
+                    "type": "structure",
+                    "members": {
+                        "Bucket": {
+                            "type": "string"
+                        }
+                    }
+                },
+                "Prefix": {
+                    "type": "string"
+                },
+                "Status": {
+                    "type": "string",
+                    "enum": [
+                        "Enabled",
+                        "Disabled"
+                    ]
+                },
+                "ID": {
+                    "type": "string"
+                }
+            }
+        },
+        "LifecycleConfigurationObj": {
+            "type": "structure",
+            "members": {
+                "Rules": {
+                    "type": "list",
+                    "member": {
+                        "shape": "LCRuleObj"
+                    }
+                }
+            }
+        },
+        "LCRuleObj": {
+            "type": "structure",
+            "members": {
+                "ID": {
+                    "type": "string"
+                },
+                "Status": {
+                    "type": "string",
+                    "enum": [
+                        "Enabled",
+                        "Disabled"
+                    ]
+                },
+                "Prefix": {
+                    "type": "string"
+                },
+                "Expiration": {
+                    "type": "structure",
+                    "members": {
+                        "Days": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
+        },
+        "AclObj": {
+            "type": "structure",
+            "members": {
+                "Canned": {
+                    "type": "string"
+                },
+                "FULL_CONTROL": {
+                    "type": "list",
+                    "member": {
+                        "type": "string"
+                    }
+                },
+                "WRITE": {
+                    "type": "list",
+                    "member": {
+                        "type": "string"
+                    }
+                },
+                "WRITE_ACP": {
+                    "type": "list",
+                    "member": {
+                        "type": "string"
+                    }
+                },
+                "READ": {
+                    "type": "list",
+                    "member": {
+                        "type": "string"
+                    }
+                },
+                "READ_ACP": {
+                    "type": "list",
+                    "member": {
+                        "type": "string"
+                    }
+                }
+            }
         }
     }
 }
