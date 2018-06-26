@@ -136,6 +136,10 @@ class LifecycleConsumer extends EventEmitter {
         };
     }
 
+    isReady() {
+        return this._consumer.isReady();
+    }
+
 }
 
 module.exports = LifecycleConsumer;

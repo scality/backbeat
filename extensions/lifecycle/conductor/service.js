@@ -3,6 +3,7 @@
 const werelogs = require('werelogs');
 
 const LifecycleConductor = require('./LifecycleConductor');
+const { HealthProbeServer } = require('arsenal').network.probe;
 
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
@@ -14,6 +15,10 @@ const lcConductor = new LifecycleConductor(zkConfig, kafkaConfig, lcConfig);
 werelogs.configure({ level: config.log.logLevel,
                      dump: config.log.dumpLevel });
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Conductor:service');
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
 
 lcConductor.start(err => {
     if (err) {
@@ -21,6 +26,15 @@ lcConductor.start(err => {
                      { error: err.message });
         return undefined;
     }
+    healthServer.onReadyCheck(log => {
+        if (lcConductor.isReady()) {
+            return true;
+        }
+        log.error('LifecycleConductor is not ready!');
+        return false;
+    });
+    logger.info('Starting HealthProbe server');
+    healthServer.start();
     logger.info('lifecycle conductor process is running');
     return undefined;
 });

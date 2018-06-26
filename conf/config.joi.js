@@ -64,6 +64,10 @@ const joiSchema = {
             })
         ),
     },
+    healthcheckServer: joi.object({
+        bindAddress: joi.string().default('127.0.0.1'),
+        port: joi.number().default(4042),
+    }).required(),
 };
 
 module.exports = joiSchema;

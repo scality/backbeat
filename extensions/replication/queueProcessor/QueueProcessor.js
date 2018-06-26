@@ -353,6 +353,12 @@ class QueueProcessor extends EventEmitter {
                           { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
+
+    isReady() {
+        return this.replicationStatusProducer && this._consumer &&
+            this.replicationStatusProducer.isReady() &&
+            this._consumer.isReady();
+    }
 }
 
 module.exports = QueueProcessor;
