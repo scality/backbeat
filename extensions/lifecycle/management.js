@@ -29,23 +29,32 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
     const cfg = config.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
     console.log('bucketName!!!', bucketName);
-    console.log('workflows!!!', workflows);
     const params = {
         Bucket: bucketName,
         LifecycleConfiguration: {
-            Rules: workflows.map(wf => ({
-                Expiration: {
-                    Days: wf.currentVersionTriggerDelayDays,
-                },
-                ID: wf.workflowId,
-                Filter: {
-                    Prefix: wf.filter ? wf.filter.objectKeyPrefix : undefined,
-                },
-                Status: wf.enabled ? 'Enabled' : 'Disabled',
-                NoncurrentVersionExpiration: {
-                    NoncurrentDays: wf.previousVersionTriggerDelayDays,
-                },
-            })),
+            Rules: workflows.map(wf => {
+                const workflow = {
+                    ID: wf.workflowId,
+                    Status: wf.enabled ? 'Enabled' : 'Disabled',
+                };
+                if (wf.currentVersionTriggerDelayDays) {
+                    workflow.Expiration = {
+                        Days: wf.currentVersionTriggerDelayDays,
+                    };
+                }
+                if (wf.filter && wf.filter.objectKeyPrefix) {
+                    workflow.Filter = {
+                        Prefix: wf.filter.objectKeyPrefix,
+                    };
+                }
+                if (wf.previousVersionTriggerDelayDays) {
+                    workflow.NoncurrentVersionExpiration = {
+                        NoncurrentDays: wf.previousVersionTriggerDelayDays,
+                    };
+                }
+                console.log('workflow!!!!', workflow);
+                return workflow;
+            }),
         },
     };
     getS3Client(endpoint).putBucketLifecycleConfiguration(params, err => {
