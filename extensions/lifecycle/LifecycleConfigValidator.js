@@ -1,6 +1,4 @@
 const joi = require('joi');
-const { hostPortJoi } =
-    require('../../lib/config/configItems.joi.js');
 
 const joiSchema = {
     zookeeperPath: joi.string().required(),
@@ -57,9 +55,6 @@ const joiSchema = {
         abortIncompleteMultipartUpload: {
             enabled: joi.boolean().default(true),
         },
-    },
-    source: {
-        s3: hostPortJoi.required(),
     },
 };
 

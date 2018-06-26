@@ -28,7 +28,6 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
     logger.debug('updating lifecycle configuration');
     const cfg = config.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
-    console.log('bucketName!!!', bucketName);
     const params = {
         Bucket: bucketName,
         LifecycleConfiguration: {
@@ -52,7 +51,6 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
                         NoncurrentDays: wf.previousVersionTriggerDelayDays,
                     };
                 }
-                console.log('workflow!!!!', workflow);
                 return workflow;
             }),
         },
@@ -69,7 +67,7 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
 
 function deleteLifecycleConfiguration(bucketName, cb) {
     logger.debug('deleting lifecycle configuration');
-    const cfg = config.extensions.lifecycle.source.s3;
+    const cfg = config.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
 
     const params = {
