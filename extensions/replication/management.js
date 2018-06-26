@@ -52,7 +52,13 @@ function installReplicationConfiguration(bucketName, endpoint, workflows, cb) {
                 Destination: {
                     Bucket: `arn:aws:s3:::${wf.source.bucketName}`,
                     StorageClass: wf.destination.locations
-                        .map(location => location.name)
+                        .map(location => {
+                            if (wf.destination.preferredReadLocation
+                                === location.name) {
+                                return `${location.name}:preferred_read`;
+                            }
+                            return location.name;
+                        })
                         .join(','),
                 },
                 Prefix: wf.source.prefix || '',
