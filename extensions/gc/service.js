@@ -9,6 +9,7 @@ const kafkaConfig = config.kafka;
 const s3Config = config.s3;
 const gcConfig = config.extensions.gc;
 const transport = config.transport;
+const { HealthProbeServer } = require('arsenal').network.probe;
 
 const { initManagement } = require('../../lib/management');
 const garbageCollector = new GarbageCollector({
@@ -16,6 +17,11 @@ const garbageCollector = new GarbageCollector({
     s3Config,
     gcConfig,
     transport,
+});
+
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
 });
 
 werelogs.configure({ level: config.log.logLevel,
@@ -41,6 +47,15 @@ function initAndStart() {
                 logger.info('garbage collector is running');
             }
         });
+        healthServer.onReadyCheck(log => {
+            if (garbageCollector.isReady()) {
+                return true;
+            }
+            log.error('GarbageCollector is not ready!');
+            return false;
+        });
+        logger.info('Starting HealthProbe server');
+        healthServer.start();
     });
 }
 

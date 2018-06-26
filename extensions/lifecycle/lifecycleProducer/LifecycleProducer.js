@@ -262,7 +262,7 @@ class LifecycleProducer {
      */
     _setupConsumer() {
         let consumerReady = false;
-        const consumer = new BackbeatConsumer({
+        this._consumer = new BackbeatConsumer({
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
             },
@@ -274,7 +274,7 @@ class LifecycleProducer {
             autoCommit: true,
             backlogMetrics: this._lcConfig.backlogMetrics,
         });
-        consumer.on('error', err => {
+        this._consumer.on('error', err => {
             if (!consumerReady) {
                 this._log.fatal('unable to start lifecycle consumer', {
                     error: err,
@@ -283,9 +283,9 @@ class LifecycleProducer {
                 process.exit(1);
             }
         });
-        consumer.on('ready', () => {
+        this._consumer.on('ready', () => {
             consumerReady = true;
-            consumer.subscribe();
+            this._consumer.subscribe();
         });
     }
 
@@ -463,6 +463,12 @@ class LifecycleProducer {
                 this._objectProducer.close(done);
             },
         ], () => cb());
+    }
+
+    isReady() {
+        return this._bucketProducer.isReady() &&
+               this._objectProducer.isReady() &&
+               this._consumer.isReady();
     }
 }
 

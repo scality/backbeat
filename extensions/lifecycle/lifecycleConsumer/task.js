@@ -3,6 +3,7 @@ const werelogs = require('werelogs');
 
 const { initManagement } = require('../../../lib/management/index');
 const LifecycleConsumer = require('./LifecycleConsumer');
+const { HealthProbeServer } = require('arsenal').network.probe;
 
 const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
@@ -15,6 +16,11 @@ const log = new werelogs.Logger('Backbeat:Lifecycle:Consumer');
 
 const lifecycleConsumer = new LifecycleConsumer(
     zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
 
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
@@ -31,6 +37,15 @@ function initAndStart() {
             return;
         }
         log.info('management init done');
+        healthServer.onReadyCheck(log => {
+            if (lifecycleConsumer.isReady()) {
+                return true;
+            }
+            log.error('LifecycleConductor is not ready!');
+            return false;
+        });
+        log.info('Starting HealthProbe server');
+        healthServer.start();
 
         lifecycleConsumer.start();
     });

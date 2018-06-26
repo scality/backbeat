@@ -2,18 +2,24 @@
 const werelogs = require('werelogs');
 const { initManagement } = require('../../../lib/management/index');
 const LifecycleProducer = require('./LifecycleProducer');
+const { HealthProbeServer } = require('arsenal').network.probe;
 const { applyBucketLifecycleWorkflows } = require('../management');
-const { zookeeper, kafka, extensions, s3, transport, log } =
-      require('../../../conf/Config');
+const { zookeeper, kafka, extensions, s3, transport, log, healthcheckServer } =
+    require('../../../conf/Config');
 
 werelogs.configure({ level: log.logLevel,
-                     dump: log.dumpLevel });
+    dump: log.dumpLevel });
 
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
 const lifecycleProducer =
     new LifecycleProducer(zookeeper, kafka, extensions.lifecycle,
-                          s3, transport);
+        s3, transport);
+
+const healthServer = new HealthProbeServer({
+    bindAddress: healthcheckServer.bindAddress,
+    port: healthcheckServer.port,
+});
 
 function initAndStart() {
     initManagement({
@@ -23,11 +29,20 @@ function initAndStart() {
     }, error => {
         if (error) {
             logger.error('could not load management db',
-                         { error: error.message });
+                { error: error.message });
             setTimeout(initAndStart, 5000);
             return;
         }
         logger.info('management init done');
+        healthServer.onReadyCheck(log => {
+            if (lifecycleProducer.isReady()) {
+                return true;
+            }
+            log.error('LifecycleProducer is not ready!');
+            return false;
+        });
+        logger.info('Starting HealthProbe server');
+        healthServer.start();
 
         lifecycleProducer.start();
     });

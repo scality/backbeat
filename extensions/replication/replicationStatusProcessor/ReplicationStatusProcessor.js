@@ -199,6 +199,10 @@ class ReplicationStatusProcessor {
                          { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
+
+    isReady() {
+        return this._consumer.isReady() && this._FailedCRRProducer.isReady();
+    }
 }
 
 module.exports = ReplicationStatusProcessor;
