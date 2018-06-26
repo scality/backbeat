@@ -56,6 +56,10 @@ class FailedCRRProducer {
             return cb();
         });
     }
+
+    isReady() {
+        return this._producer.isReady();
+    }
 }
 
 module.exports = FailedCRRProducer;

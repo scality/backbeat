@@ -71,7 +71,7 @@ async.waterfall([
     done => {
         healthServer.onReadyCheck(log => {
             const state = queuePopulator.zkStatus();
-            if (state.code === zookeeper.State.SYNC_CONNECTED) {
+            if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
                 return true;
             }
             log.error(`Zookeeper is not connected! ${state}`);
