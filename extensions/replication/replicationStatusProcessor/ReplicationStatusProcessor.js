@@ -214,7 +214,8 @@ class ReplicationStatusProcessor {
     }
 
     isReady() {
-        return this._consumer.isReady() && this._FailedCRRProducer.isReady();
+        return this._consumer && this._consumer.isReady() &&
+            this._failedCRRProducer && this._failedCRRProducer.isReady();
     }
 }
 

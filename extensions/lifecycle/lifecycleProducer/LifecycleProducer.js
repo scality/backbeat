@@ -466,9 +466,9 @@ class LifecycleProducer {
     }
 
     isReady() {
-        return this._bucketProducer.isReady() &&
-               this._objectProducer.isReady() &&
-               this._consumer.isReady();
+        return this._bucketProducer && this._bucketProducer.isReady() &&
+               this._objectProducer && this._objectProducer.isReady() &&
+               this._consumer && this._consumer.isReady();
     }
 }
 

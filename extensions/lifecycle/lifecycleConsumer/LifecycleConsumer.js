@@ -137,7 +137,7 @@ class LifecycleConsumer extends EventEmitter {
     }
 
     isReady() {
-        return this._consumer.isReady();
+        return this._consumer && this._consumer.isReady();
     }
 
 }

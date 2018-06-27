@@ -368,8 +368,8 @@ class LifecycleConductor {
     }
 
     isReady() {
-        const state = this._zkClient.getState();
-        return this._producer.isReady() && state &&
+        const state = this._zkClient && this._zkClient.getState();
+        return this._producer && this._producer.isReady() && state &&
             state.code === zookeeper.State.SYNC_CONNECTED.code;
     }
 }

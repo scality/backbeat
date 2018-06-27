@@ -58,7 +58,7 @@ class FailedCRRProducer {
     }
 
     isReady() {
-        return this._producer.isReady();
+        return this._producer && this._producer.isReady();
     }
 }
 
