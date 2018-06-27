@@ -115,6 +115,10 @@ class GarbageCollector extends EventEmitter {
             logger: this._logger,
         };
     }
+
+    isReady() {
+        return this._consumer.isReady();
+    }
 }
 
 module.exports = GarbageCollector;

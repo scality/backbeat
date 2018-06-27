@@ -6,6 +6,9 @@ const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
 const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
 
+const logSourcesJoi = joi.string().valid('bucketd', 'mongo', 'ingestion',
+    'dmd');
+
 const joiSchema = {
     zookeeper: {
         connectionString: joi.string().required(),
@@ -21,7 +24,7 @@ const joiSchema = {
         batchMaxRead: joi.number().default(10000),
         zookeeperPath: joi.string().required(),
 
-        logSource: joi.alternatives().try('bucketd', 'dmd', 'mongo').required(),
+        logSource: joi.alternatives().try(logSourcesJoi).required(),
         subscribeToLogSourceDispatcher: joi.boolean().default(false),
         bucketd: hostPortJoi
             .when('logSource', { is: 'bucketd', then: joi.required() }),
@@ -61,6 +64,10 @@ const joiSchema = {
             })
         ),
     },
+    healthcheckServer: joi.object({
+        bindAddress: joi.string().default('127.0.0.1'),
+        port: joi.number().default(4042),
+    }).required(),
 };
 
 module.exports = joiSchema;

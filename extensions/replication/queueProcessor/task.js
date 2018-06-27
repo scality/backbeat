@@ -6,6 +6,7 @@ const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../conf/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
+const { HealthProbeServer } = require('arsenal').network.probe;
 
 const zkConfig = config.zookeeper;
 const MetricsProducer = require('../../../lib/MetricsProducer');
@@ -16,8 +17,15 @@ const sourceConfig = repConfig.source;
 const mConfig = config.metrics;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
-werelogs.configure({ level: config.log.logLevel,
-    dump: config.log.dumpLevel });
+werelogs.configure({
+    level: config.log.logLevel,
+    dump: config.log.dumpLevel,
+});
+
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
 
 const activeQProcessors = {};
 
@@ -38,7 +46,7 @@ metricsProducer.setupProducer(err => {
         }, error => {
             if (error) {
                 log.error('could not load management db',
-                  { error: error.message });
+                    { error: error.message });
                 setTimeout(initAndStart, 5000);
                 return;
             }
@@ -80,6 +88,18 @@ metricsProducer.setupProducer(err => {
                     metricsProducer, site);
                 activeQProcessors[site].start();
             });
+            healthServer.onReadyCheck(() => {
+                let passed = true;
+                Object.keys(activeQProcessors).forEach(site => {
+                    if (!activeQProcessors[site].isReady()) {
+                        passed = false;
+                        log.error(`QueueProcessor for ${site} is not ready!`);
+                    }
+                });
+                return passed;
+            });
+            log.info('Starting HealthProbe server');
+            healthServer.start();
         });
     }
     return initAndStart();

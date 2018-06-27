@@ -10,8 +10,15 @@ const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 
 const { initManagement } = require('../../../lib/management/index');
+const { HealthProbeServer } = require('arsenal').network.probe;
+
 const replicationStatusProcessor =
           new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
+
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
 
 werelogs.configure({ level: config.log.logLevel,
      dump: config.log.dumpLevel });
@@ -27,6 +34,15 @@ function initAndStart() {
             setTimeout(initAndStart, 5000);
             return;
         }
+        healthServer.onReadyCheck(log => {
+            if (replicationStatusProcessor.isReady()) {
+                return true;
+            }
+            log.error('ReplicationStatusProcessor is not ready!');
+            return false;
+        });
+        logger.info('Starting HealthProbe server');
+        healthServer.start();
         logger.info('management init done');
         replicationStatusProcessor.start();
     });
