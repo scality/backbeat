@@ -101,6 +101,16 @@ describe('BackbeatRequest helper class', () => {
             const details2 = req2.getRouteDetails();
             // should default to 'all' if none specified
             assert.strictEqual(details2.site, 'all');
+
+            const req3 = new BackbeatRequest({
+                url: '/_/crr/status',
+                method: 'GET',
+            });
+            const details3 = req3.getRouteDetails();
+
+            assert.strictEqual(details3.extension, 'crr');
+            assert.strictEqual(details3.status, 'status');
+            assert.strictEqual(details3.site, 'all');
         });
     });
 

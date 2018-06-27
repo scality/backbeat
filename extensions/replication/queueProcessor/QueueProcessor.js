@@ -1,5 +1,6 @@
 'use strict'; // eslint-disable-line
 
+const async = require('async');
 const http = require('http');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
@@ -21,6 +22,9 @@ const EchoBucket = require('../tasks/EchoBucket');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const BucketQueueEntry = require('../utils/BucketQueueEntry');
 
+const { zookeeperReplicationNamespace } = require('../constants');
+const ZK_CRR_STATE_PATH = '/state';
+
 const {
     proxyVaultPath,
     proxyIAMPath,
@@ -37,9 +41,9 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
-     * @param {Object} zkConfig - zookeeper configuration object
+     * @param {node-zookeeper-client.Client} zkClient - zookeeper client
      * @param {Object} kafkaConfig - kafka configuration object
-     * @param {string} kafkaConfig.hosts - list of kafka brokers
+     * @param {String} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
@@ -59,9 +63,10 @@ class QueueProcessor extends EventEmitter {
      * @param {MetricsProducer} mProducer - instance of metrics producer
      * @param {String} site - site name
      */
-    constructor(zkConfig, kafkaConfig, sourceConfig, destConfig, repConfig,
+    constructor(zkClient, kafkaConfig, sourceConfig, destConfig, repConfig,
         redisConfig, mProducer, site) {
         super();
+        this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -203,6 +208,12 @@ class QueueProcessor extends EventEmitter {
         this.accountCredsCache = {};
     }
 
+    /**
+     * Setup the Redis Subscriber which listens for actions from other processes
+     * (i.e. BackbeatAPI for pause/resume)
+     * @param {object} redisConfig - redis configs
+     * @return {undefined}
+     */
     _setupRedis(redisConfig) {
         // redis pub/sub for pause/resume
         const redis = new Redis(redisConfig);
@@ -242,8 +253,22 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _pauseService() {
-        this._consumer.pause(this.site);
-        this.logger.info(`paused replication for location: ${this.site}`);
+        const enabled = this._consumer.getServiceStatus();
+        if (enabled) {
+            // if currently resumed/active, attempt to pause
+            this._updateZkServiceStatus(err => {
+                if (err) {
+                    this.logger.trace('error occurred saving state to ' +
+                    'zookeeper', {
+                        method: 'QueueProcessor._pauseService',
+                    });
+                } else {
+                    this._consumer.pause(this.site);
+                    this.logger.info('paused replication for location: ' +
+                        `${this.site}`);
+                }
+            });
+        }
     }
 
     /**
@@ -251,8 +276,77 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _resumeService() {
-        this._consumer.resume(this.site);
-        this.logger.info(`resumed replication for location: ${this.site}`);
+        const enabled = this._consumer.getServiceStatus();
+        if (!enabled) {
+            // if currently paused, attempt to resume
+            this._updateZkServiceStatus(err => {
+                if (err) {
+                    this.logger.trace('error occurred saving state to ' +
+                    'zookeeper', {
+                        method: 'QueueProcessor._resumeService',
+                    });
+                } else {
+                    this._consumer.resume(this.site);
+                    this.logger.info('resumed replication for location: ' +
+                    `${this.site}`);
+                }
+            });
+        }
+    }
+
+    _getZkSiteNode() {
+        return `${zookeeperReplicationNamespace}${ZK_CRR_STATE_PATH}/` +
+            `${this.site}`;
+    }
+
+    /**
+     * Update Kafka consumer status in zookeeper for this site-defined
+     * QueueProcessor
+     * @param {Function} cb - callback(error)
+     * @return {undefined}
+     */
+    _updateZkServiceStatus(cb) {
+        const path = this._getZkSiteNode();
+        const enabled = this._consumer.getServiceStatus();
+        async.waterfall([
+            next => this.zkClient.getData(path, (err, data) => {
+                if (err) {
+                    this.logger.error('could not get state from zookeeper', {
+                        method: 'QueueProcessor._updateZkServiceStatus',
+                        zookeeperPath: path,
+                        error: err.message,
+                    });
+                    return next(err);
+                }
+                try {
+                    const state = JSON.parse(data.toString());
+                    // set revised status
+                    state.paused = !enabled;
+                    const bufferedData = Buffer.from(JSON.stringify(state));
+                    return next(null, bufferedData);
+                } catch (err) {
+                    this.logger.error('could not parse state data from ' +
+                    'zookeeper', {
+                        method: 'QueueProcessor._updateZkServiceStatus',
+                        zookeeperPath: path,
+                        error: err,
+                    });
+                    return next(err);
+                }
+            }),
+            (data, next) => this.zkClient.setData(path, data, err => {
+                if (err) {
+                    this.logger.error('could not save state data in ' +
+                    'zookeeper', {
+                        method: 'QueueProcessor._updateZkServiceStatus',
+                        zookeeperPath: path,
+                        error: err,
+                    });
+                    return next(err);
+                }
+                return next();
+            }),
+        ], cb);
     }
 
     getStateVars() {
@@ -282,6 +376,7 @@ class QueueProcessor extends EventEmitter {
      * @param {boolean} [options.disableConsumer] - true to disable
      *   startup of consumer (for testing: one has to call
      *   processQueueEntry() explicitly)
+     * @param {boolean} [options.paused] - if true, kafka consumer is paused
      * @return {undefined}
      */
     start(options) {
@@ -314,7 +409,9 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('ready', () => {
                 consumerReady = true;
-                this._consumer.subscribe();
+                const paused = options && options.paused;
+                this._consumer.subscribe(paused);
+
                 this.logger.info('queue processor is ready to consume ' +
                                  'replication entries');
                 this.emit('ready');

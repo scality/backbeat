@@ -3,6 +3,7 @@ const async = require('async');
 const http = require('http');
 const Redis = require('ioredis');
 const { Producer } = require('node-rdkafka');
+const zookeeper = require('node-zookeeper-client');
 
 const { RedisClient, StatsModel } = require('arsenal').metrics;
 
@@ -12,6 +13,9 @@ const { makePOSTRequest, getResponseBody } =
 const getKafkaEntry = require('../utils/getKafkaEntry');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
 const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
+
+const ZK_TEST_CRR_STATE_PATH = '/backbeattest/state';
+const EPHEMERAL_NODE = 1;
 
 const fakeLogger = {
     trace: () => {},
@@ -920,27 +924,70 @@ describe('Backbeat Server', () => {
         let channel1;
         let channel2;
 
+        let zkClient;
+
         const emptyBody = '';
         const crrConfigs = config.extensions.replication;
         const crrTopic = crrConfigs.topic;
-        const crrSites = crrConfigs.destination.bootstrapList.map(i =>
-            i.site);
+        const destconfig = crrConfigs.destination;
 
-        before(() => {
+        const firstSite = destconfig.bootstrapList[0].site;
+        const secondSite = destconfig.bootstrapList[1].site;
+
+        function setupZkClient(cb) {
+            const { connectionString } = config.zookeeper;
+            zkClient = zookeeper.createClient(connectionString);
+            zkClient.connect();
+            zkClient.once('connected', () => {
+                async.series([
+                    next => zkClient.mkdirp(ZK_TEST_CRR_STATE_PATH, err => {
+                        if (err && err.name !== 'NODE_EXISTS') {
+                            return next(err);
+                        }
+                        return next();
+                    }),
+                    next => {
+                        // emulate first site to be active (not paused)
+                        const path = `${ZK_TEST_CRR_STATE_PATH}/${firstSite}`;
+                        const data =
+                            Buffer.from(JSON.stringify({ paused: false }));
+                        zkClient.create(path, data, EPHEMERAL_NODE, next);
+                    },
+                    next => {
+                        // emulate second site to be paused
+                        const path = `${ZK_TEST_CRR_STATE_PATH}/${secondSite}`;
+                        const data =
+                            Buffer.from(JSON.stringify({ paused: true }));
+                        zkClient.create(path, data, EPHEMERAL_NODE, next);
+                    },
+                ], err => {
+                    if (err) {
+                        process.stdout.write('error occurred in zookeeper ' +
+                        'setup for CRR pause/resume');
+                        return cb(err);
+                    }
+                    return cb();
+                });
+            });
+        }
+
+        before(done => {
             redis1 = new Redis();
             redis2 = new Redis();
 
-            channel1 = `${crrTopic}-${crrSites[0]}`;
+            channel1 = `${crrTopic}-${firstSite}`;
             redis1.subscribe(channel1, err => assert.ifError(err));
             redis1.on('message', (channel, message) => {
                 cache1.push({ channel, message });
             });
 
-            channel2 = `${crrTopic}-${crrSites[1]}`;
+            channel2 = `${crrTopic}-${secondSite}`;
             redis2.subscribe(channel2, err => assert.ifError(err));
             redis2.on('message', (channel, message) => {
                 cache2.push({ channel, message });
             });
+
+            setupZkClient(done);
         });
 
         afterEach(() => {
@@ -948,10 +995,20 @@ describe('Backbeat Server', () => {
             cache2 = [];
         });
 
+        after(() => {
+            if (zkClient) {
+                zkClient.close();
+                zkClient = null;
+            }
+        });
+
         const validRequests = [
             { path: '/_/crr/pause', method: 'POST' },
             { path: '/_/crr/resume', method: 'POST' },
-            { path: `/_/crr/resume/${crrSites[0]}`, method: 'POST' },
+            { path: '/_/crr/resume/all', method: 'POST' },
+            { path: `/_/crr/resume/${firstSite}`, method: 'POST' },
+            { path: '/_/crr/status', method: 'GET' },
+            { path: `/_/crr/status/${firstSite}`, method: 'GET' },
         ];
         validRequests.forEach(entry => {
             it(`should get a 200 response for route: ${entry.path}`, done => {
@@ -970,7 +1027,8 @@ describe('Backbeat Server', () => {
         const invalidRequests = [
             { path: '/_/crr/pause/invalid-site', method: 'POST' },
             { path: '/_/crr/resume/invalid-site', method: 'POST' },
-            { path: '/_/crr/resume/all', method: 'GET' },
+            { path: '/_/crr/status', method: 'POST' },
+            { path: '/_/crr/status/invalid-site', method: 'GET' },
         ];
         invalidRequests.forEach(entry => {
             it(`should get a 404 response for route: ${entry.path}`, done => {
@@ -1037,6 +1095,19 @@ describe('Backbeat Server', () => {
                     assert.deepStrictEqual(message2, expected);
                     done();
                 }, 1000);
+            });
+        });
+
+        it('should receive a status request on all site channels from route ' +
+        '/_/crr/status', done => {
+            getRequest('/_/crr/status', (err, res) => {
+                assert.ifError(err);
+                const expected = {
+                    'test-site-1': 'enabled',
+                    'test-site-2': 'disabled',
+                };
+                assert.deepStrictEqual(expected, res);
+                done();
             });
         });
     });
