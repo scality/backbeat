@@ -32,6 +32,8 @@ describe('BackbeatAPI', () => {
             // invalid params but will default to getting all buckets
             { url: '/_/crr/failed/mybucket', method: 'GET' },
             { url: '/_/crr/failed', method: 'POST' },
+            { url: '/_/crr/pause', method: 'POST' },
+            { url: '/_/crr/resume', method: 'POST' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
@@ -47,9 +49,12 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/all/backlo', method: 'GET' },
             { url: '/_/metrics/crr/all/completionss', method: 'GET' },
             { url: '/_/invalid/crr/all', method: 'GET' },
+            { url: '/_/metrics/pause/all', method: 'GET' },
             // // invalid http verb
             { url: '/_/healthcheck', method: 'POST' },
             { url: '/_/monitoring/metrics', method: 'POST' },
+            { url: '/_/crr/pause', method: 'GET' },
+            { url: '/_/crr/resume', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);

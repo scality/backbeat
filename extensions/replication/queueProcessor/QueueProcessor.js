@@ -2,6 +2,7 @@
 
 const http = require('http');
 const { EventEmitter } = require('events');
+const Redis = require('ioredis');
 
 const Logger = require('werelogs').Logger;
 
@@ -54,11 +55,12 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
+     * @param {Object} redisConfig - redis configuration
      * @param {MetricsProducer} mProducer - instance of metrics producer
      * @param {String} site - site name
      */
     constructor(zkConfig, kafkaConfig, sourceConfig, destConfig, repConfig,
-        mProducer, site) {
+        redisConfig, mProducer, site) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -83,6 +85,7 @@ class QueueProcessor extends EventEmitter {
         this.destHTTPAgent = new http.Agent({ keepAlive: true });
 
         this._setupVaultclientCache();
+        this._setupRedis(redisConfig);
 
         // FIXME support multiple scality destination sites
         if (Array.isArray(destConfig.bootstrapList)) {
@@ -198,6 +201,58 @@ class QueueProcessor extends EventEmitter {
         }
         this.echoMode = true;
         this.accountCredsCache = {};
+    }
+
+    _setupRedis(redisConfig) {
+        // redis pub/sub for pause/resume
+        const redis = new Redis(redisConfig);
+        // redis subscribe to site specific channel
+        const channelName = `${this.repConfig.topic}-${this.site}`;
+        redis.subscribe(channelName, err => {
+            if (err) {
+                this.logger.fatal('queue processor failed to subscribe to ' +
+                                  `crr redis channel for location ${this.site}`,
+                                  { method: 'QueueProcessor.constructor',
+                                    error: err });
+                process.exit(1);
+            }
+            redis.on('message', (channel, message) => {
+                const validActions = {
+                    pauseService: this._pauseService.bind(this),
+                    resumeService: this._resumeService.bind(this),
+                };
+                try {
+                    const { action } = JSON.parse(message);
+                    const cmd = validActions[action];
+                    if (channel === channelName && typeof cmd === 'function') {
+                        cmd();
+                    }
+                } catch (e) {
+                    this.logger.error('error parsing redis sub message', {
+                        method: 'QueueProcessor._setupRedis',
+                        error: e,
+                    });
+                }
+            });
+        });
+    }
+
+    /**
+     * Pause replication consumers
+     * @return {undefined}
+     */
+    _pauseService() {
+        this._consumer.pause(this.site);
+        this.logger.info(`paused replication for location: ${this.site}`);
+    }
+
+    /**
+     * Resume replication consumers
+     * @return {undefined}
+     */
+    _resumeService() {
+        this._consumer.resume(this.site);
+        this.logger.info(`resumed replication for location: ${this.site}`);
     }
 
     getStateVars() {

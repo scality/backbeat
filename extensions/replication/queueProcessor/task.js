@@ -15,6 +15,7 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const mConfig = config.metrics;
+const redisConfig = config.redis;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -69,7 +70,7 @@ metricsProducer.setupProducer(err => {
                         if (!activeSites.includes(site)) {
                             activeQProcessors[site] = new QueueProcessor(
                                 zkConfig, kafkaConfig, sourceConfig, destConfig,
-                                repConfig, metricsProducer, site);
+                                repConfig, redisConfig, metricsProducer, site);
                             activeQProcessors[site].start();
                         }
                     } else {
@@ -85,7 +86,7 @@ metricsProducer.setupProducer(err => {
             siteNames.forEach(site => {
                 activeQProcessors[site] = new QueueProcessor(zkConfig,
                     kafkaConfig, sourceConfig, destConfig, repConfig,
-                    metricsProducer, site);
+                    redisConfig, metricsProducer, site);
                 activeQProcessors[site].start();
             });
             healthServer.onReadyCheck(() => {

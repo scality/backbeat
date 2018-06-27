@@ -240,13 +240,13 @@ describe('Backbeat Server', () => {
             done();
         });
 
-        after(() => {
+        after(done => {
             redis.keys('*:test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
                     pipeline.del(key);
                 });
-                return pipeline.exec();
+                pipeline.exec(done);
             });
         });
 
@@ -467,13 +467,13 @@ describe('Backbeat Server', () => {
         });
 
         describe('No metrics data in Redis', () => {
-            before(() => {
+            before(done => {
                 redis.keys('*:test:bb:*').then(keys => {
                     const pipeline = redis.pipeline();
                     keys.forEach(key => {
                         pipeline.del(key);
                     });
-                    return pipeline.exec();
+                    pipeline.exec(done);
                 });
             });
 
@@ -908,6 +908,135 @@ describe('Backbeat Server', () => {
                         });
                     });
                 });
+            });
+        });
+    });
+
+    describe('CRR Pause/Resume service routes', () => {
+        let redis1;
+        let redis2;
+        let cache1 = [];
+        let cache2 = [];
+        let channel1;
+        let channel2;
+
+        const emptyBody = '';
+        const crrConfigs = config.extensions.replication;
+        const crrTopic = crrConfigs.topic;
+        const crrSites = crrConfigs.destination.bootstrapList.map(i =>
+            i.site);
+
+        before(() => {
+            redis1 = new Redis();
+            redis2 = new Redis();
+
+            channel1 = `${crrTopic}-${crrSites[0]}`;
+            redis1.subscribe(channel1, err => assert.ifError(err));
+            redis1.on('message', (channel, message) => {
+                cache1.push({ channel, message });
+            });
+
+            channel2 = `${crrTopic}-${crrSites[1]}`;
+            redis2.subscribe(channel2, err => assert.ifError(err));
+            redis2.on('message', (channel, message) => {
+                cache2.push({ channel, message });
+            });
+        });
+
+        afterEach(() => {
+            cache1 = [];
+            cache2 = [];
+        });
+
+        const validRequests = [
+            { path: '/_/crr/pause', method: 'POST' },
+            { path: '/_/crr/resume', method: 'POST' },
+            { path: `/_/crr/resume/${crrSites[0]}`, method: 'POST' },
+        ];
+        validRequests.forEach(entry => {
+            it(`should get a 200 response for route: ${entry.path}`, done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: entry.method,
+                    path: entry.path,
+                });
+                const req = http.request(options, res => {
+                    assert.equal(res.statusCode, 200);
+                    done();
+                });
+                req.end();
+            });
+        });
+
+        const invalidRequests = [
+            { path: '/_/crr/pause/invalid-site', method: 'POST' },
+            { path: '/_/crr/resume/invalid-site', method: 'POST' },
+            { path: '/_/crr/resume/all', method: 'GET' },
+        ];
+        invalidRequests.forEach(entry => {
+            it(`should get a 404 response for route: ${entry.path}`, done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: entry.method,
+                    path: entry.path,
+                });
+                const req = http.request(options, res => {
+                    assert.equal(res.statusCode, 404);
+                    assert.equal(res.statusMessage, 'Not Found');
+                    assert.equal(cache1.length, 0);
+                    assert.equal(cache2.length, 0);
+                    done();
+                });
+                req.end();
+            });
+        });
+
+        it('should receive a pause request on all site channels from route ' +
+        '/_/crr/pause', done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'POST',
+                path: '/_/crr/pause',
+            });
+            makePOSTRequest(options, emptyBody, err => {
+                assert.ifError(err);
+
+                setTimeout(() => {
+                    assert.strictEqual(cache1.length, 1);
+                    assert.strictEqual(cache2.length, 1);
+
+                    assert.deepStrictEqual(cache1[0].channel, channel1);
+                    assert.deepStrictEqual(cache2[0].channel, channel2);
+
+                    const message1 = JSON.parse(cache1[0].message);
+                    const message2 = JSON.parse(cache2[0].message);
+                    const expected = { action: 'pauseService' };
+                    assert.deepStrictEqual(message1, expected);
+                    assert.deepStrictEqual(message2, expected);
+                    done();
+                }, 1000);
+            });
+        });
+
+        it('should receive a resume request on all site channels from route ' +
+        '/_/crr/resume', done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'POST',
+                path: '/_/crr/resume',
+            });
+            makePOSTRequest(options, emptyBody, err => {
+                assert.ifError(err);
+
+                setTimeout(() => {
+                    assert.strictEqual(cache1.length, 1);
+                    assert.strictEqual(cache2.length, 1);
+                    assert.deepStrictEqual(cache1[0].channel, channel1);
+                    assert.deepStrictEqual(cache2[0].channel, channel2);
+
+                    const message1 = JSON.parse(cache1[0].message);
+                    const message2 = JSON.parse(cache2[0].message);
+                    const expected = { action: 'resumeService' };
+                    assert.deepStrictEqual(message1, expected);
+                    assert.deepStrictEqual(message2, expected);
+                    done();
+                }, 1000);
             });
         });
     });

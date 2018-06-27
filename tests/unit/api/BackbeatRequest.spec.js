@@ -74,12 +74,33 @@ describe('BackbeatRequest helper class', () => {
         'details', () => {
             const req = new BackbeatRequest({
                 url: '/_/monitoring/metrics',
-                method: 'GET',
+                method: 'POST',
             });
             const details = req.getRouteDetails();
 
             assert.strictEqual(details.category, 'monitoring');
             assert.strictEqual(details.type, 'metrics');
+        });
+
+        it('should parse crr pause/resume routes and store internally as ' +
+        'route details', () => {
+            const req = new BackbeatRequest({
+                url: '/_/crr/pause/mysite',
+                method: 'POST',
+            });
+            const details = req.getRouteDetails();
+
+            assert.strictEqual(details.extension, 'crr');
+            assert.strictEqual(details.status, 'pause');
+            assert.strictEqual(details.site, 'mysite');
+
+            const req2 = new BackbeatRequest({
+                url: '/_/crr/pause',
+                method: 'POST',
+            });
+            const details2 = req2.getRouteDetails();
+            // should default to 'all' if none specified
+            assert.strictEqual(details2.site, 'all');
         });
     });
 
