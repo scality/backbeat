@@ -44,7 +44,7 @@ describe('ingestion producer unit tests with mock', () => {
     });
 
     it('should be able to grab list of buckets for each raft session', done => {
-        this.iProducer._getBuckets(1, (err, res) => {
+        this.iProducer._getBuckets('1', (err, res) => {
             assert.ifError(err);
             assert(res);
             assert.strictEqual(res.length, 2);
@@ -86,7 +86,7 @@ describe('ingestion producer unit tests with mock', () => {
     });
 
     it('can generate a valid snapshot', done => {
-        this.iProducer.snapshot(1, (err, res) => {
+        this.iProducer.snapshot('1', (err, res) => {
             // we expect 6 logs from the MockMetadataServer: 2 buckets with 2
             // logs per bucket, and 1 object in each bucket with 1 log entry
             assert.strictEqual(res.length, 6);
