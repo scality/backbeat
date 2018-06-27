@@ -28,13 +28,31 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
     logger.debug('updating lifecycle configuration');
     const cfg = config.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
-
     const params = {
         Bucket: bucketName,
         LifecycleConfiguration: {
-            // TODO this is where the translation from Orbit config
-            // to lifecycle config shall occur
-            Rules: workflows.map(wf => wf),
+            Rules: workflows.map(wf => {
+                const workflow = {
+                    ID: wf.workflowId,
+                    Status: wf.enabled ? 'Enabled' : 'Disabled',
+                };
+                if (wf.currentVersionTriggerDelayDays) {
+                    workflow.Expiration = {
+                        Days: wf.currentVersionTriggerDelayDays,
+                    };
+                }
+                if (wf.filter && wf.filter.objectKeyPrefix) {
+                    workflow.Filter = {
+                        Prefix: wf.filter.objectKeyPrefix,
+                    };
+                }
+                if (wf.previousVersionTriggerDelayDays) {
+                    workflow.NoncurrentVersionExpiration = {
+                        NoncurrentDays: wf.previousVersionTriggerDelayDays,
+                    };
+                }
+                return workflow;
+            }),
         },
     };
     getS3Client(endpoint).putBucketLifecycleConfiguration(params, err => {
@@ -49,7 +67,7 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
 
 function deleteLifecycleConfiguration(bucketName, cb) {
     logger.debug('deleting lifecycle configuration');
-    const cfg = config.extensions.lifecycle.source.s3;
+    const cfg = config.s3;
     const endpoint = `${cfg.host}:${cfg.port}`;
 
     const params = {
