@@ -16,7 +16,7 @@ describe('BackbeatConsumer', () => {
     let zookeeper;
     let producer;
     let consumer;
-    const consumedMessages = [];
+    let consumedMessages = [];
     function queueProcessor(message, cb) {
         consumedMessages.push(message.value);
         process.nextTick(cb);
@@ -58,6 +58,10 @@ describe('BackbeatConsumer', () => {
             consumerReady = true;
             _doneIfReady();
         });
+    });
+    afterEach(() => {
+        consumedMessages = [];
+        consumer.removeAllListeners('consumed');
     });
     after(function after(done) {
         this.timeout(10000);
@@ -118,6 +122,64 @@ describe('BackbeatConsumer', () => {
         consumeCb = done;
         producer.send(messages, err => {
             assert.ifError(err);
+        });
+    }).timeout(30000);
+
+    it('should not consume messages when paused and when resumed, consume ' +
+    'messages from the previous offset', done => {
+        let totalConsumed = 0;
+        const kafkaConsumer = consumer._consumer;
+        consumer.subscribe();
+
+        async.series([
+            next => {
+                assert.equal(kafkaConsumer.subscription().length, 1);
+                consumer.on('consumed', messagesConsumed => {
+                    totalConsumed += messagesConsumed;
+                    if (totalConsumed === 1) {
+                        consumer.pause();
+                        next();
+                    }
+                });
+                producer.send([messages[0]], err => {
+                    assert.ifError(err);
+                });
+            },
+            next => {
+                assert.equal(kafkaConsumer.subscription().length, 0);
+                consumer.on('consumed', messagesConsumed => {
+                    totalConsumed += messagesConsumed;
+                    // should not consume when paused
+                    return next(
+                        new Error('expected consumer to be paused, messages ' +
+                            'were still consumed')
+                        );
+                });
+                // wait 5 seconds to see if any messages were consumed
+                setTimeout(() => {
+                    consumer.removeAllListeners('consumed');
+                    assert.equal(totalConsumed, 1);
+                    return next();
+                }, 5000);
+                producer.send(messages, err => {
+                    assert.ifError(err);
+                });
+            },
+            next => {
+                consumer.resume();
+                assert.equal(kafkaConsumer.subscription().length, 1);
+                consumer.on('consumed', messagesConsumed => {
+                    totalConsumed += messagesConsumed;
+                    if (totalConsumed === messages.length + 1) {
+                        next();
+                    }
+                });
+            },
+        ], err => {
+            assert.ifError(err);
+            // when resumed, the messages are read from previous offset
+            assert.equal(totalConsumed, 4);
+            done();
         });
     }).timeout(30000);
 });

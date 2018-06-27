@@ -656,7 +656,10 @@ describe('queue processor functional tests with mocking', () => {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
               },
-          }, new MetricsMock(), 'sf');
+            },
+            { host: '127.0.0.1',
+              port: 6379 },
+            new MetricsMock(), 'sf');
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
         // processor is ready, so that we ensure the replication
