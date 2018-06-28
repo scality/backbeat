@@ -30,16 +30,12 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal#development/8.0",
+    "arsenal": "scality/Arsenal#9e66fda",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#development/8.0",
+    "bucketclient": "scality/bucketclient#5aa99d7",
     "commander": "^2.11.0",
-    "eslint": "^2.4.0",
-    "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#development/8.0",
-    "eslint-plugin-react": "^4.2.3",
     "ioredis": "^3.2.2",
     "joi": "^10.6",
     "node-forge": "^0.7.1",
@@ -48,11 +44,15 @@
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
-    "vaultclient": "github:scality/vaultclient#development/8.0",
-    "werelogs": "scality/werelogs#development/8.0"
+    "vaultclient": "github:scality/vaultclient#754b6e1",
+    "werelogs": "scality/werelogs#74b121b"
   },
   "devDependencies": {
+    "eslint": "^2.4.0",
+    "eslint-config-airbnb": "^6.0.0",
+    "eslint-config-scality": "scality/Guidelines#0a771c2",
+    "eslint-plugin-react": "^4.2.3",
     "mocha": "^3.3.0",
-    "cloudserver": "scality/S3#development/8.0"
+    "cloudserver": "scality/S3#1691eae"
   }
 }
