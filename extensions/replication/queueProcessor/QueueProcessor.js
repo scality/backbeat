@@ -4,6 +4,7 @@ const async = require('async');
 const http = require('http');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
+const schedule = require('node-schedule');
 
 const Logger = require('werelogs').Logger;
 
@@ -76,6 +77,7 @@ class QueueProcessor extends EventEmitter {
         this.site = site;
 
         this.echoMode = false;
+        this.scheduledResume = null;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -229,10 +231,10 @@ class QueueProcessor extends EventEmitter {
                     resumeService: this._resumeService.bind(this),
                 };
                 try {
-                    const { action } = JSON.parse(message);
+                    const { action, date } = JSON.parse(message);
                     const cmd = validActions[action];
                     if (channel === channelName && typeof cmd === 'function') {
-                        cmd();
+                        cmd(date);
                     }
                 } catch (e) {
                     this.logger.error('error parsing redis sub message', {
@@ -252,7 +254,7 @@ class QueueProcessor extends EventEmitter {
         const enabled = this._consumer.getServiceStatus();
         if (enabled) {
             // if currently resumed/active, attempt to pause
-            this._updateZkServiceStatus(err => {
+            this._updateZkStateNode('paused', true, err => {
                 if (err) {
                     this.logger.trace('error occurred saving state to ' +
                     'zookeeper', {
@@ -269,13 +271,18 @@ class QueueProcessor extends EventEmitter {
 
     /**
      * Resume replication consumers
+     * @param {Date} [date] - optional date object for scheduling resume
      * @return {undefined}
      */
-    _resumeService() {
+    _resumeService(date) {
         const enabled = this._consumer.getServiceStatus();
-        if (!enabled) {
+        const now = new Date();
+        if (date && now < new Date(date)) {
+            // if date is in the future, attempt to schedule job
+            this.scheduleResume(date);
+        } else if (!enabled) {
             // if currently paused, attempt to resume
-            this._updateZkServiceStatus(err => {
+            this._updateZkStateNode('paused', false, err => {
                 if (err) {
                     this.logger.trace('error occurred saving state to ' +
                     'zookeeper', {
@@ -284,7 +291,7 @@ class QueueProcessor extends EventEmitter {
                 } else {
                     this._consumer.resume(this.site);
                     this.logger.info('resumed replication for location: ' +
-                    `${this.site}`);
+                        `${this.site}`);
                 }
             });
         }
@@ -296,14 +303,14 @@ class QueueProcessor extends EventEmitter {
     }
 
     /**
-     * Update Kafka consumer status in zookeeper for this site-defined
-     * QueueProcessor
+     * Update zookeeper state node for this site-defined QueueProcessor
+     * @param {String} key - key name to store in zk state node
+     * @param {String|Boolean} value - value
      * @param {Function} cb - callback(error)
      * @return {undefined}
      */
-    _updateZkServiceStatus(cb) {
+    _updateZkStateNode(key, value, cb) {
         const path = this._getZkSiteNode();
-        const enabled = this._consumer.getServiceStatus();
         async.waterfall([
             next => this.zkClient.getData(path, (err, data) => {
                 if (err) {
@@ -317,7 +324,7 @@ class QueueProcessor extends EventEmitter {
                 try {
                     const state = JSON.parse(data.toString());
                     // set revised status
-                    state.paused = !enabled;
+                    state[key] = value;
                     const bufferedData = Buffer.from(JSON.stringify(state));
                     return next(null, bufferedData);
                 } catch (err) {
@@ -343,6 +350,34 @@ class QueueProcessor extends EventEmitter {
                 return next();
             }),
         ], cb);
+    }
+
+    scheduleResume(date) {
+        this._updateZkStateNode('scheduledResume', date, err => {
+            if (err) {
+                this.logger.trace('error occurred saving state to zookeeper', {
+                    method: 'QueueProcessor.scheduleResume',
+                });
+            } else {
+                this.scheduledResume = schedule.scheduleJob(date, () => {
+                    this.scheduledResume = null;
+                    this._updateZkStateNode('scheduledResume', null,
+                    err => {
+                        if (err) {
+                            this.logger.error('error occurred saving state ' +
+                            'to zookeeper', {
+                                method: 'QueueProcessor.scheduleResume',
+                            });
+                        } else {
+                            this._resumeService();
+                        }
+                    });
+                });
+                this.logger.info('scheduled CRR resume', {
+                    scheduleTime: date.toString(),
+                });
+            }
+        });
     }
 
     getStateVars() {
@@ -417,8 +452,28 @@ class QueueProcessor extends EventEmitter {
     }
 
     /**
-     * Stop kafka producer and consumer and commit current consumer
-     * offset
+     * Cleanup zookeeper node if the site has been removed as a location
+     * @param {function} cb - callback(error)
+     * @return {undefined}
+     */
+    removeZkState(cb) {
+        const path = this._getZkSiteNode();
+        this.zkClient.remove(path, err => {
+            if (err && err.name !== 'NO_NODE') {
+                this.logger.error('failed removing zookeeper state node', {
+                    method: 'QueueProcessor.removeZkState',
+                    zookeeperPath: path,
+                    error: err,
+                });
+                return cb(err);
+            }
+            return cb();
+        });
+    }
+
+    /**
+     * Stop kafka producer and consumer, commit current consumer offset, and
+     * remove any zookeeper state for this instance
      *
      * @param {function} done - callback
      * @return {undefined}

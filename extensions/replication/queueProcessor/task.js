@@ -37,14 +37,54 @@ function getCRRStateZkPath() {
 }
 
 /**
+ * A scheduled resume is where consumers for a given site are paused and are
+ * scheduled to be resumed at a later date.
+ * If any scheduled resumes exist for a given site, the date is saved within
+ * zookeeper. On startup, we schedule resume jobs to renew prior state.
+ * If date in zookeeper has not expired, schedule the job. If date expired,
+ * resume automatically for the site, and update the "status" node.
+ * @param {QueueProcessor} qp - queue processor instance
+ * @param {Object} data - zookeeper state json data
+ * @param {node-zookeeper-client.Client} zkClient - zookeeper client
+ * @param {String} site - name of location site
+ * @param {Function} cb - callback(error, updatedState) where updatedState is
+ *   an optional, set as true if the schedule resume date has expired
+ * @return {undefined}
+ */
+function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
+    const scheduleDate = new Date(data.scheduledResume);
+    const hasExpired = new Date() >= scheduleDate;
+    if (hasExpired) {
+        // if date expired, resume automatically for the site.
+        // remove schedule resume data in zookeeper
+        const path = `${getCRRStateZkPath()}/${site}`;
+        const d = JSON.stringify({ paused: false });
+        return zkClient.setData(path, Buffer.from(d), err => {
+            if (err) {
+                log.fatal('could not set zookeeper status node', {
+                    method: 'QueueProcessor:task',
+                    zookeeperPath: path,
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            return cb(null, { paused: false });
+        });
+    }
+    qp.scheduleResume(scheduleDate);
+    return cb();
+}
+
+/**
  * On startup and when replication sites change, create necessary zookeeper
  * status node to save persistent state.
+ * @param {QueueProcessor} qp - queue processor instance
  * @param {node-zookeeper-client.Client} zkClient - zookeeper client
  * @param {String} site - replication site name
  * @param {Function} done - callback(error, status) where status is a boolean
  * @return {undefined}
  */
-function setupZkSiteNode(zkClient, site, done) {
+function setupZkSiteNode(qp, zkClient, site, done) {
     const path = `${getCRRStateZkPath()}/${site}`;
     const data = JSON.stringify({ paused: false });
     zkClient.create(path, Buffer.from(data), err => {
@@ -58,8 +98,12 @@ function setupZkSiteNode(zkClient, site, done) {
                     return done(err);
                 }
                 try {
-                    const paused = JSON.parse(data.toString()).paused;
-                    return done(null, paused);
+                    const d = JSON.parse(data.toString());
+                    if (d.scheduledResume) {
+                        return checkAndApplyScheduleResume(qp, d, zkClient,
+                            site, done);
+                    }
+                    return done(null, d);
                 } catch (e) {
                     log.fatal('error setting state for queue processor', {
                         method: 'QueueProcessor:task',
@@ -78,11 +122,9 @@ function setupZkSiteNode(zkClient, site, done) {
             });
             return done(err);
         }
-        // paused is false
-        return done(null, false);
+        return done(null, { paused: false });
     });
 }
-
 
 function initAndStart(zkClient) {
     initManagement({
@@ -113,22 +155,28 @@ function initAndStart(zkClient) {
             async.each(allSites, (site, next) => {
                 if (updatedSites.includes(site)) {
                     if (!activeSites.includes(site)) {
-                        activeQProcessors[site] = new QueueProcessor(
+                        const qp = new QueueProcessor(
                             zkClient, kafkaConfig, sourceConfig, destConfig,
                             repConfig, redisConfig, site);
-                        setupZkSiteNode(zkClient, site, (err, paused) => {
+                        activeQProcessors[site] = qp;
+                        setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
                                 return next(err);
                             }
-                            activeQProcessors[site].start({ paused });
+                            qp.start({ paused: data.paused });
                             return next();
                         });
                     }
                 } else {
                     // this site is no longer in bootstrapList
-                    activeQProcessors[site].stop(() => {});
-                    delete activeQProcessors[site];
-                    next();
+                    activeQProcessors[site].removeZkState(err => {
+                        if (err) {
+                            return next(err);
+                        }
+                        activeQProcessors[site].stop(() => {});
+                        delete activeQProcessors[site];
+                        return next();
+                    });
                 }
             }, err => {
                 if (err) {
@@ -140,14 +188,15 @@ function initAndStart(zkClient) {
         // Start QueueProcessor for each site
         const siteNames = bootstrapList.map(i => i.site);
         async.each(siteNames, (site, next) => {
-            activeQProcessors[site] = new QueueProcessor(zkClient,
+            const qp = new QueueProcessor(zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
                 redisConfig, site);
-            return setupZkSiteNode(zkClient, site, (err, paused) => {
+            activeQProcessors[site] = qp;
+            return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {
                     return next(err);
                 }
-                activeQProcessors[site].start({ paused });
+                qp.start({ paused: data.paused });
                 return next();
             });
         }, err => {
