@@ -45,6 +45,8 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
                     workflow.Filter = {
                         Prefix: wf.filter.objectKeyPrefix,
                     };
+                } else {
+                    workflow.Filter = {};
                 }
                 if (wf.previousVersionTriggerDelayDays) {
                     workflow.NoncurrentVersionExpiration = {
