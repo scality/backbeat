@@ -650,7 +650,8 @@ describe('queue processor functional tests with mocking', () => {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
               },
-            }, {
+            },
+            { topic: 'metrics-test-topic' }, {
             }, {
             }, 'sf');
         queueProcessor.start({ disableConsumer: true });
@@ -678,7 +679,6 @@ describe('queue processor functional tests with mocking', () => {
                 { topic: 'metrics-test-topic' });
             replicationStatusProcessor.start({ bootstrap: true }, done);
         });
-
         s3mock = new S3Mock();
         httpServer = http.createServer(
             (req, res) => s3mock.onRequest(req, res));
