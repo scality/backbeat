@@ -25,6 +25,7 @@ const EchoBucket = require('../tasks/EchoBucket');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
+const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const { zookeeperReplicationNamespace } = require('../constants');
 const ZK_CRR_STATE_PATH = '/state';
@@ -62,10 +63,12 @@ class QueueProcessor extends EventEmitter {
      *   number of seconds before giving up retries of an entry
      *   replication
      * @param {Object} redisConfig - redis configuration
+     * @param {Object} mConfig - metrics config
+     * @param {String} mConfig.topic - metrics config kafka topic
      * @param {String} site - site name
      */
     constructor(zkClient, kafkaConfig, sourceConfig, destConfig, repConfig,
-        redisConfig, site) {
+        redisConfig, mConfig, site) {
         super();
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
@@ -77,7 +80,9 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
+        this._mProducer = null;
         this.site = site;
+        this.mConfig = mConfig;
 
         this.echoMode = false;
         this.scheduledResume = null;
@@ -395,6 +400,7 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
+            mProducer: this._mProducer,
             logger: this.logger,
             site: this.site,
         };
@@ -415,43 +421,51 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     start(options) {
-        this._setupProducer(err => {
-            let consumerReady = false;
+        this._mProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
+        return this._mProducer.setupProducer(err => {
             if (err) {
-                this.logger.info('error setting up kafka producer',
+                this.logger.info('error setting up metrics producer',
                                  { error: err.message });
                 return undefined;
             }
-            if (options && options.disableConsumer) {
-                this.emit('ready');
-                return undefined;
-            }
-            const groupId =
-                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
-            this._consumer = new BackbeatConsumer({
-                kafka: { hosts: this.kafkaConfig.hosts },
-                topic: this.repConfig.topic,
-                groupId,
-                concurrency: this.repConfig.queueProcessor.concurrency,
-                queueProcessor: this.processKafkaEntry.bind(this),
-            });
-            this._consumer.on('error', () => {
-                if (!consumerReady) {
-                    this.logger.fatal('queue processor failed to start a ' +
-                                   'backbeat consumer');
-                    process.exit(1);
+            return this._setupProducer(err => {
+                let consumerReady = false;
+                if (err) {
+                    this.logger.info('error setting up kafka producer',
+                                     { error: err.message });
+                    return undefined;
                 }
-            });
-            this._consumer.on('ready', () => {
-                consumerReady = true;
-                const paused = options && options.paused;
-                this._consumer.subscribe(paused);
+                if (options && options.disableConsumer) {
+                    this.emit('ready');
+                    return undefined;
+                }
+                const groupId =
+                    `${this.repConfig.queueProcessor.groupId}-${this.site}`;
+                this._consumer = new BackbeatConsumer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.repConfig.topic,
+                    groupId,
+                    concurrency: this.repConfig.queueProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                });
+                this._consumer.on('error', () => {
+                    if (!consumerReady) {
+                        this.logger.fatal('queue processor failed to start a ' +
+                                       'backbeat consumer');
+                        process.exit(1);
+                    }
+                });
+                this._consumer.on('ready', () => {
+                    consumerReady = true;
+                    const paused = options && options.paused;
+                    this._consumer.subscribe(paused);
 
-                this.logger.info('queue processor is ready to consume ' +
-                                 'replication entries');
-                this.emit('ready');
+                    this.logger.info('queue processor is ready to consume ' +
+                                     'replication entries');
+                    this.emit('ready');
+                });
+                return undefined;
             });
-            return undefined;
         });
     }
 

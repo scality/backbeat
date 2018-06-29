@@ -215,10 +215,15 @@ describe('Backbeat Server', () => {
         const expiry = 900;
         const OPS = 'test:bb:ops';
         const BYTES = 'test:bb:bytes';
+        const OBJECT_BYTES = 'test:bb:object:bytes';
         const OPS_DONE = 'test:bb:opsdone';
+        const OBJECT_BYTES_DONE = 'test:bb:object:bytesdone';
         const OPS_FAIL = 'test:bb:opsfail';
         const BYTES_DONE = 'test:bb:bytesdone';
         const BYTES_FAIL = 'test:bb:bytesfail';
+        const BUCKET_NAME = 'test-bucket';
+        const OBJECT_KEY = 'test/object-key';
+        const VERSION_ID = 'test-version-id';
 
         const destconfig = config.extensions.replication.destination;
         const site1 = destconfig.bootstrapList[0].site;
@@ -241,9 +246,13 @@ describe('Backbeat Server', () => {
 
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
             statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
+            statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` +
+                `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES}`, 100);
             statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
             statsClient.reportNewRequest(`${site1}:${OPS_FAIL}`, 150);
             statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
+            statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` +
+                `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES_DONE}`, 50);
             statsClient.reportNewRequest(`${site1}:${BYTES_FAIL}`, 375);
 
             statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
@@ -272,6 +281,10 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/failures',
             '/_/metrics/crr/all/throughput',
+            `/_/metrics/crr/${site1}/progress/bucket/object?versionId=version`,
+            `/_/metrics/crr/${site1}/throughput/bucket/object` +
+                '?versionId=version',
+
         ];
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
@@ -286,14 +299,34 @@ describe('Backbeat Server', () => {
             it(`should get correct data keys for route: ${path}`, done => {
                 getRequest(path, (err, res) => {
                     assert.ifError(err);
+                    // Object-level throughput route.
+                    if (res.description && res.throughput) {
+                        assert.deepEqual(Object.keys(res), ['description',
+                            'throughput']);
+                        assert.equal(typeof res.description, 'string');
+                        assert.equal(typeof res.throughput, 'string');
+                        return done();
+                    }
+                    // Object-level progress route.
+                    if (res.description && res.progress) {
+                        assert.deepEqual(Object.keys(res), ['description',
+                            'pending', 'completed', 'progress']);
+                        assert.equal(typeof res.description, 'string');
+                        assert.equal(typeof res.pending, 'number');
+                        assert.equal(typeof res.completed, 'number');
+                        assert.equal(typeof res.progress, 'string');
+                        return done();
+                    }
+                    // Site-level metrics routes.
                     const key = Object.keys(res)[0];
                     assert(res[key].description);
                     assert.equal(typeof res[key].description, 'string');
-
-                    assert(res[key].results);
-                    assert.deepEqual(Object.keys(res[key].results),
-                        ['count', 'size']);
-                    done();
+                    if (res[key].results) {
+                        assert(res[key].results);
+                        assert.deepEqual(Object.keys(res[key].results),
+                            ['count', 'size']);
+                    }
+                    return done();
                 });
             });
         });
@@ -321,6 +354,15 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/completionss',
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
+            `/_/metrics/crr/${site1}/progresss`,
+            // given bucket without object key
+            `/_/metrics/crr/${site1}/progress/bucket`,
+            `/_/metrics/crr/${site1}/progress/bucket/`,
+            `/_/metrics/crr/${site1}/throughput/bucket`,
+            `/_/metrics/crr/${site1}/throughput/bucket/`,
+            // given bucket without version ID
+            `/_/metrics/crr/${site1}/progress/bucket/object`,
+            `/_/metrics/crr/${site1}/progress/bucket/object?versionId=`,
         ];
         allWrongPaths.forEach(path => {
             it(`should get a 404 response for route: ${path}`, done => {
@@ -509,6 +551,30 @@ describe('Backbeat Server', () => {
             });
         });
 
+        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
+            `/progress/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
+            done =>
+            getRequest(`/_/metrics/crr/${site1}/progress/${BUCKET_NAME}/` +
+                `${OBJECT_KEY}?versionId=${VERSION_ID}`, (err, res) => {
+                assert.ifError(err);
+                assert(res.description);
+                assert.strictEqual(res.pending, 50);
+                assert.strictEqual(res.completed, 50);
+                assert.strictEqual(res.progress, '50%');
+                done();
+            }));
+
+        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
+            `/throughput/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
+            done =>
+            getRequest(`/_/metrics/crr/${site1}/throughput/${BUCKET_NAME}/` +
+                `${OBJECT_KEY}?versionId=${VERSION_ID}`, (err, res) => {
+                assert.ifError(err);
+                assert(res.description);
+                assert.strictEqual(res.throughput, '0.06');
+                done();
+            }));
+
         describe('No metrics data in Redis', () => {
             before(done => {
                 redis.keys('*:test:bb:*').then(keys => {
@@ -520,8 +586,8 @@ describe('Backbeat Server', () => {
                 });
             });
 
-            it('should return a response even if redis data does not exist',
-            done => {
+            it('should return a response even if redis data does not exist: ' +
+            'all CRR metrics', done => {
                 getRequest('/_/metrics/crr/all', (err, res) => {
                     assert.ifError(err);
 
@@ -545,6 +611,36 @@ describe('Backbeat Server', () => {
                     done();
                 });
             });
+
+            it('should return a response even if redis data does not exist: ' +
+            'object progress CRR metrics', done =>
+                getRequest(`/_/metrics/crr/${site1}/progress/bucket/object` +
+                    '?versionId=version', (err, res) => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(res, {
+                        description: 'Number of bytes to be replicated ' +
+                            '(pending), number of bytes transferred to the ' +
+                            'destination (completed), and percentage of the ' +
+                            'object that has completed replication (progress)',
+                        pending: 0,
+                        completed: 0,
+                        progress: '0%',
+                    });
+                    done();
+                }));
+
+            it('should return a response even if redis data does not exist: ' +
+            'object throughput CRR metrics', done =>
+                getRequest(`/_/metrics/crr/${site1}/throughput/bucket/object` +
+                    '?versionId=version', (err, res) => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(res, {
+                        description: 'Current throughput for object ' +
+                            'replication in bytes/sec (throughput)',
+                        throughput: '0.00',
+                    });
+                    done();
+                }));
         });
     });
 

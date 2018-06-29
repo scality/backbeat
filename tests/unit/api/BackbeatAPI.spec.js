@@ -19,6 +19,8 @@ describe('BackbeatAPI', () => {
     });
 
     it('should validate routes', () => {
+        const destconfig = config.extensions.replication.destination;
+        const { site } = destconfig.bootstrapList[0];
         // valid routes
         [
             { url: '/_/metrics/crr/all', method: 'GET' },
@@ -39,6 +41,10 @@ describe('BackbeatAPI', () => {
             { url: '/_/crr/resume/all/schedule', method: 'POST' },
             { url: '/_/crr/resume', method: 'GET' },
             { url: '/_/crr/status', method: 'GET' },
+            { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` +
+                '?versionId=test-myvId', method: 'GET' },
+            { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` +
+                '?versionId=test-myvId', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
@@ -62,6 +68,10 @@ describe('BackbeatAPI', () => {
             { url: '/_/monitoring/metrics', method: 'POST' },
             { url: '/_/crr/pause', method: 'GET' },
             { url: '/_/crr/status', method: 'POST' },
+            { url: '/_/metrics/crr/unknown-site/throughput/mybucket/mykey' +
+                '?versionId=test-myvId', method: 'GET' },
+            { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
+                '?versionId=test-myvId', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);

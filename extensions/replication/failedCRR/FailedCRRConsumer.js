@@ -1,4 +1,5 @@
 'use strict'; // eslint-disable-line strict
+const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const redisClient = require('../../replication/utils/getRedisClient')();
@@ -87,7 +88,53 @@ class FailedCRRConsumer {
             log.end();
             return cb();
         }
-        return this._setRedisKey(data, kafkaEntry, log, cb);
+        return async.series([
+            next => this._removePreexistingKeys(data, err => {
+                if (err) {
+                    this.logger.error('error deleting preexisting CRR object ' +
+                    'metrics redis keys', {
+                        method: 'FailedCRRConsumer.processKafkaEntry',
+                        error: err,
+                    });
+                }
+                return next();
+            }),
+            next => this._setRedisKey(data, kafkaEntry, log, next),
+        ], cb);
+    }
+
+    /**
+     * Delete any pre-existing object CRR metrics keys. This way the object
+     * metrics during the retry will not be affected by the prior attempt.
+     * @param {Object} data - The kafka entry value
+     * @param {Function} cb - callback to call
+     * @return {undefined}
+     */
+    _removePreexistingKeys(data, cb) {
+        // eslint-disable-next-line no-unused-vars
+        const [service, extension, status, bucketName, objectKey, versionId,
+            site] = data.key.split(':');
+        // CRR object-level metrics key schema.
+        const queryString = `${site}:${bucketName}:${objectKey}:${versionId}:` +
+            `${service}:${extension}:*`;
+        return redisClient.scan(queryString, undefined, (err, keys) => {
+            if (err) {
+                return cb(err);
+            }
+            if (keys === 0) {
+                return cb();
+            }
+            return redisClient.batch([['del', ...keys]], (err, res) => {
+                if (err) {
+                    return cb(err);
+                }
+                const [cmdErr] = res[0];
+                if (cmdErr) {
+                    return cb(cmdErr);
+                }
+                return cb();
+            });
+        });
     }
 
     /**

@@ -655,6 +655,7 @@ describe('queue processor functional tests with mocking', () => {
             },
             { host: '127.0.0.1',
               port: 6379 },
+            { topic: 'metrics-test-topic' },
             'sf');
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
@@ -680,7 +681,6 @@ describe('queue processor functional tests with mocking', () => {
                 { topic: 'metrics-test-topic' });
             replicationStatusProcessor.start({ bootstrap: true }, done);
         });
-
         s3mock = new S3Mock();
         httpServer = http.createServer(
             (req, res) => s3mock.onRequest(req, res));
