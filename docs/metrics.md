@@ -27,35 +27,37 @@ HTTP code.
 ## Routes
 
 Routes are organized in the following fashion:
-`/_/metrics/<extension-type>/<site-name>/<metric-type>`
+`/_/metrics/<extension-type>/<location-name>/<metric-type>`
 
 Where:
 
 - `<extension-type>` can currently only support `crr` for replication metrics
-- `<site-name>` represents any current sites you have defined. If you would like
-  metrics displayed for all sites, use `all`
+- `<location-name>` represents any current destination replication locations you
+  have defined. If you would like metrics displayed for all locations, use `all`
 - `<metric-type>` is an optional field. Leaving this out will get all metrics
-  available for given extension and site. If you specify a metric type, you will
-  get the metric specified.
+  available for given extension and location. If you specify a metric type, you
+  will get the metric specified.
 
-### `/_/metrics/crr/<site-name>`
+### `/_/metrics/crr/<location-name>`
 
 This route gathers all the metrics below and returns as one JSON object for the
-specified extension type and site name.
+specified extension type and locations name.
 
-### `/_/metrics/crr/<site-name>/backlog`
+### `/_/metrics/crr/<location-name>/backlog`
 
 This route returns the replication backlog in number of objects and number of
-total MB for the specified extension type and site name. Replication backlog
-represents the objects that have been queued up to be replicated to another
-site, but the replication task has not been completed yet for that object.
+total bytes for the specified extension type and location name. Replication
+backlog represents the objects that have been queued up to be replicated to
+another location, but the replication task has not been completed yet for that
+object. If replication failed for an object, the failed objects metrics are
+considered backlog.
 
 **Example Output**:
 
 ```
 "backlog":{
     "description":"Number of incomplete replication operations (count) and
-    number of incomplete MB transferred (size)",
+    number of incomplete bytes transferred (size)",
     "results":{
         "count":4,
         "size":"6.12"
@@ -63,10 +65,10 @@ site, but the replication task has not been completed yet for that object.
 }
 ```
 
-### `/_/metrics/crr/<site-name>/completions`
+### `/_/metrics/crr/<location-name>/completions`
 
 This route returns the replication completions in number of objects and number
-of total MB transferred for the specified extension type and site name.
+of total bytes transferred for the specified extension type and location.
 Completions are only collected up to an `EXPIRY` time, which is currently set
 to **15 minutes**.
 
@@ -75,7 +77,7 @@ to **15 minutes**.
 ```
 "completions":{
     "description":"Number of completed replication operations (count) and number
-    of MB transferred (size) in the last 900 seconds",
+    of bytes transferred (size) in the last 900 seconds",
     "results":{
         "count":31,
         "size":"47.04"
@@ -83,18 +85,38 @@ to **15 minutes**.
 }
 ```
 
-### `/_/metrics/crr/<site-name>/throughput`
+### `/_/metrics/crr/<location-name>/failures`
 
-This route returns the current throughput in number of operations per second
-(or number of objects replicating per second) and number of total MB completing
-per second for the specified type and site name.
+This route returns the replication failures in number of objects and number
+of total bytes for the specified extension type and location.
+Failures are only collected up to an `EXPIRY` time, which is currently set to
+**15 minutes**.
+
+**Example Output**:
+
+```
+"failures":{
+    "description":"Number of failed replication operations (count) and bytes
+    (size) in the last 900 seconds",
+    "results":{
+        "count":"5",
+        "size":"10.12"
+    }
+}
+```
+
+### `/_/metrics/crr/<location-name>/throughput`
+
+This route returns the current throughput in number of completed operations per
+second (or number of objects replicating per second) and number of total bytes
+completing per second for the specified type and location name.
 
 **Example Output**:
 
 ```
 "throughput":{
     "description":"Current throughput for replication operations in ops/sec
-    (count) and MB/sec (size)",
+    (count) and bytes/sec (size)",
     "results":{
         "count":"0.00",
         "size":"0.00"
@@ -104,12 +126,14 @@ per second for the specified type and site name.
 
 ## Design
 
-For basic metrics, only 4 data points are collected:
+For basic metrics, 6 data points are collected:
 
 - number of operations (ops)
 - number of completed operations (opsdone)
+- number of failed operations (opsfail)
 - number of bytes (bytes)
 - number of completed bytes (bytesdone)
+- number of failed bytes (bytesfail)
 
 In order to collect metrics, a separate Kafka Producer and Consumer
 (`MetricsProducer` and `MetricsConsumer`, respective) using its own Kafka topic
@@ -118,14 +142,16 @@ In order to collect metrics, a separate Kafka Producer and Consumer
 When a new CRR entry is sent to Kafka, a Kafka entry to the metrics topic will
 be produced indicating to increase `ops` and `bytes`. On consumption of this
 metrics entry, Redis keys will be generated following a format similar to:
-`<site-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`.
+`<location-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`.
 Normalized timestamp is used to determine in which time interval to set the data
 on. The default metrics key will end with the type of data point it represents.
 
-When the CRR entry is consumed from Kafka and processed, a Kafka entry is sent
-to the metrics topic indicating to increase `opsdone` and `bytesdone`. Again,
-on consumption of this metrics entry, Redis keys will be generated for their
-respective data points.
+When the CRR entry is consumed from Kafka, processed, and the metadata for
+replication status is updated to a completed state (i.e. COMPLETED, FAILED),
+a Kafka entry is sent to the metrics topic indicating to increase `opsdone` and
+`bytesdone` if replication was successful or `opsfail` and `bytesfail` if
+replication was not successful. Again, on consumption of this metrics entry,
+Redis keys will be generated for their respective data points.
 
 It is important to note that a `MetricsProducer` is initialized and producing
 to the metrics topic both when the CRR topic `BackbeatProducer` produces and
@@ -133,9 +159,9 @@ sends a Kafka entry, and when the CRR topic `BackbeatConsumer` consumes and
 processes its respective Kafka entries. The `MetricsConsumer` will process these
 Kafka metrics entries and produce to Redis.
 
-A single site CRR entry should produce 4 keys in total. The data points stored
-in Redis are saved in intervals (default of 5 minutes) and are available up to
-an expiry time (default of 15 minutes).
+A single location CRR entry should produce 4 keys in total. The data points
+stored in Redis are saved in intervals (default of 5 minutes) and are available
+up to an expiry time (default of 15 minutes).
 
 A `BackbeatServer` (default port 8900) and `BackbeatAPI` expose these metrics
 stored in Redis by querying based on the prepended Redis keys. Using these
