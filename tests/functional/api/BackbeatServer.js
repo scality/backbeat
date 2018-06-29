@@ -232,7 +232,9 @@ describe('Backbeat Server', () => {
         const OPS = 'test:bb:ops';
         const BYTES = 'test:bb:bytes';
         const OPS_DONE = 'test:bb:opsdone';
+        const OPS_FAIL = 'test:bb:opsfail';
         const BYTES_DONE = 'test:bb:bytesdone';
+        const BYTES_FAIL = 'test:bb:bytesfail';
 
         // Needed in-case failures set expires during tests
         const testStartTime = Date.now();
@@ -251,12 +253,16 @@ describe('Backbeat Server', () => {
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
             statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
             statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
+            statsClient.reportNewRequest(`${site1}:${OPS_FAIL}`, 150);
             statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
+            statsClient.reportNewRequest(`${site1}:${BYTES_FAIL}`, 375);
 
             statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
             statsClient.reportNewRequest(`${site2}:${BYTES}`, 2943);
             statsClient.reportNewRequest(`${site2}:${OPS_DONE}`, 300);
+            statsClient.reportNewRequest(`${site2}:${OPS_FAIL}`, 55);
             statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
+            statsClient.reportNewRequest(`${site2}:${BYTES_FAIL}`, 575);
 
             const testVersionId =
                 '3938353030303836313334343731393939393939524730303120203';
@@ -306,6 +312,7 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
+            '/_/metrics/crr/all/failures',
             '/_/metrics/crr/all/throughput',
         ];
         metricsPaths.forEach(path => {
@@ -425,6 +432,32 @@ describe('Backbeat Server', () => {
                 assert.equal(res[key].results.count, 750);
                 // Completions bytes = BYTES_DONE
                 assert.equal(res[key].results.size, 2901);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/failures`, done => {
+            getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_FAIL
+                assert.equal(res[key].results.count, 150);
+                // Completions bytes = BYTES_FAIL
+                assert.equal(res[key].results.size, 375);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/failures', done => {
+            getRequest('/_/metrics/crr/all/failures', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_FAIL
+                assert.equal(res[key].results.count, 205);
+                // Completions bytes = BYTES_FAIL
+                assert.equal(res[key].results.size, 950);
                 done();
             });
         });
