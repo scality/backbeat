@@ -4,6 +4,11 @@ const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 
+const {
+    metricsExtension,
+    metricsTypeProcessed,
+} = require('../constants');
+
 class UpdateReplicationStatus extends BackbeatTask {
     /**
      * Update a source object replication status from a kafka entry
@@ -70,6 +75,30 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
     }
 
+    /**
+     * Report CRR metrics
+     * @param {ObjectQueueEntry} entry - updated object entry
+     * @param {String} site - site recently updated
+     * @return {undefined}
+     */
+    _reportMetrics(entry, site) {
+        const status = entry.getReplicationSiteStatus(site);
+        if (status === 'COMPLETED' || status === 'FAILED') {
+            const data = {};
+            const bytes = entry.getContentLength();
+            data[site] = { ops: 1, bytes };
+            this.mProducer.publishMetrics(data, metricsTypeProcessed,
+            metricsExtension, err => {
+                if (err) {
+                    this.logger.trace('error occurred in publishing metrics', {
+                        error: err,
+                        method: 'UpdateReplicationStatus._reportMetrics',
+                    });
+                }
+            });
+        }
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -110,6 +139,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                     replicationStatus:
                         updatedSourceEntry.getReplicationStatus(),
                 });
+
+                // Report to MetricsProducer with completed/failed metrics
+                this._reportMetrics(updatedSourceEntry, site);
+
                 return done();
             });
         });

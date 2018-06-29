@@ -24,8 +24,6 @@ const BucketQueueEntry = require('../utils/BucketQueueEntry');
 const {
     proxyVaultPath,
     proxyIAMPath,
-    metricsExtension,
-    metricsTypeProcessed,
     replicationBackends,
 } = require('../constants');
 
@@ -58,11 +56,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
-     * @param {MetricsProducer} mProducer - instance of metrics producer
      * @param {String} site - site name
      */
     constructor(kafkaConfig, sourceConfig, destConfig, repConfig, httpsConfig,
-                mProducer, site) {
+        site) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -74,7 +71,6 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
-        this._mProducer = mProducer;
         this.site = site;
 
         this.echoMode = false;
@@ -283,21 +279,6 @@ class QueueProcessor extends EventEmitter {
                 this.logger.info('queue processor is ready to consume ' +
                                  'replication entries');
                 this.emit('ready');
-            });
-            this._consumer.on('metrics', data => {
-                // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                if (data[this.site]) {
-                    const filteredData = {};
-                    filteredData[this.site] = data[this.site];
-                    this._mProducer.publishMetrics(filteredData,
-                        metricsTypeProcessed, metricsExtension, err => {
-                            this.logger.trace('error occurred in publishing ' +
-                                'metrics', {
-                                    error: err,
-                                    method: 'QueueProcessor.start',
-                                });
-                        });
-                }
             });
             return undefined;
         });

@@ -15,6 +15,7 @@ const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const getFailedCRRKey = require('../../../lib/util/getFailedCRRKey');
+const MetricsProducer = require('../../../lib/MetricsProducer');
 
 /**
  * @class ReplicationStatusProcessor
@@ -43,12 +44,16 @@ class ReplicationStatusProcessor {
      * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry status
      *   update
+     * @param {Object} mConfig - metrics config
+     * @param {String} mConfig.topic - metrics config kafka topic
      */
-    constructor(kafkaConfig, sourceConfig, repConfig) {
+    constructor(kafkaConfig, sourceConfig, repConfig, mConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
+        this.mConfig = mConfig;
         this._consumer = null;
+        this._mProducer = null;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -83,6 +88,7 @@ class ReplicationStatusProcessor {
             repConfig: this.repConfig,
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
+            mProducer: this._mProducer,
             logger: this.logger,
         };
     }
@@ -97,30 +103,42 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
-        let consumerReady = false;
-        this._FailedCRRProducer = new FailedCRRProducer();
-        this._consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
-            topic: this.repConfig.replicationStatusTopic,
-            groupId: this.repConfig.replicationStatusProcessor.groupId,
-            concurrency:
-            this.repConfig.replicationStatusProcessor.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-            bootstrap: options && options.bootstrap,
-        });
-        this._consumer.on('error', () => {
-            if (!consumerReady) {
-                this.logger.fatal('error starting a backbeat consumer');
-                process.exit(1);
-            }
-        });
-        this._consumer.on('ready', () => {
-            consumerReady = true;
-            this.logger.info('replication status processor is ready to ' +
-                             'consume replication status entries');
-            this._consumer.subscribe();
-            this._FailedCRRProducer.setupProducer(cb);
-        });
+        async.parallel([
+            done => {
+                this._failedCRRProducer = new FailedCRRProducer();
+                this._failedCRRProducer.setupProducer(done);
+            },
+            done => {
+                this._mProducer = new MetricsProducer(this.kafkaConfig,
+                    this.mConfig);
+                this._mProducer.setupProducer(done);
+            },
+            done => {
+                let consumerReady = false;
+                this._consumer = new BackbeatConsumer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.repConfig.replicationStatusTopic,
+                    groupId: this.repConfig.replicationStatusProcessor.groupId,
+                    concurrency:
+                    this.repConfig.replicationStatusProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    bootstrap: options && options.bootstrap,
+                });
+                this._consumer.on('error', () => {
+                    if (!consumerReady) {
+                        this.logger.fatal('error starting a backbeat consumer');
+                        process.exit(1);
+                    }
+                });
+                this._consumer.on('ready', () => {
+                    consumerReady = true;
+                    this.logger.info('replication status processor is ready ' +
+                                     'to consume replication status entries');
+                    this._consumer.subscribe();
+                    done();
+                });
+            },
+        ], cb);
     }
 
     /**
