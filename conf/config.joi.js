@@ -64,6 +64,11 @@ const joiSchema = {
             })
         ),
     },
+    localCache: {
+        host: joi.string().default('localhost'),
+        port: joi.number().default(6379),
+        password: joi.string(),
+    },
     healthcheckServer: joi.object({
         bindAddress: joi.string().default('127.0.0.1'),
         port: joi.number().default(4042),
