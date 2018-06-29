@@ -8,12 +8,13 @@ const config = require('../../../conf/Config');
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
+const mConfig = config.metrics;
 
 const { initManagement } = require('../../../lib/management/index');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
-const replicationStatusProcessor =
-          new ReplicationStatusProcessor(kafkaConfig, sourceConfig, repConfig);
+const replicationStatusProcessor = new ReplicationStatusProcessor(kafkaConfig,
+    sourceConfig, repConfig, mConfig);
 
 const healthServer = new HealthProbeServer({
     bindAddress: config.healthcheckServer.bindAddress,

@@ -15,6 +15,7 @@ const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const getFailedCRRKey = require('../../../lib/util/getFailedCRRKey');
+const MetricsProducer = require('../../../lib/MetricsProducer');
 
 /**
  * @class ReplicationStatusProcessor
@@ -43,13 +44,17 @@ class ReplicationStatusProcessor {
      * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry status
      *   update
+     * @param {Object} mConfig - metrics config
+     * @param {String} mConfig.topic - metrics config kafka topic
      */
-    constructor(kafkaConfig, sourceConfig, repConfig) {
+    constructor(kafkaConfig, sourceConfig, repConfig, mConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
+        this.mConfig = mConfig;
         this._consumer = null;
         this._gcProducer = null;
+        this._mProducer = null;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -82,6 +87,7 @@ class ReplicationStatusProcessor {
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             gcProducer: this._gcProducer,
+            mProducer: this._mProducer,
             logger: this.logger,
         };
     }
@@ -104,6 +110,11 @@ class ReplicationStatusProcessor {
             done => {
                 this._gcProducer = new GarbageCollectorProducer();
                 this._gcProducer.setupProducer(done);
+            },
+            done => {
+                this._mProducer = new MetricsProducer(this.kafkaConfig,
+                    this.mConfig);
+                this._mProducer.setupProducer(done);
             },
             done => {
                 let consumerReady = false;
