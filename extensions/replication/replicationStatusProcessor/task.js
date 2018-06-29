@@ -9,9 +9,10 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const internalHttpsConfig = config.internalHttps;
+const mConfig = config.metrics;
 
 const replicationStatusProcessor = new ReplicationStatusProcessor(
-    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig);
+    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig);
 
 werelogs.configure({ level: config.log.logLevel,
                      dump: config.log.dumpLevel });

@@ -24,8 +24,6 @@ const BucketQueueEntry = require('../utils/BucketQueueEntry');
 const {
     proxyVaultPath,
     proxyIAMPath,
-    metricsExtension,
-    metricsTypeProcessed,
 } = require('../constants');
 
 class QueueProcessor extends EventEmitter {
@@ -48,6 +46,11 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.topic - replication topic name
      * @param {String} repConfig.queueProcessor - config object
      *   specific to queue processor
+     * @param {String} repConfig.queueProcessor.groupId - kafka
+     *   consumer group ID
+     * @param {String} repConfig.queueProcessor.retryTimeoutS -
+     *   number of seconds before giving up retries of an entry
+     *   replication
      * @param {Object} [httpsConfig] - destination SSL termination
      *   HTTPS configuration object
      * @param {String} [httpsConfig.key] - client private key in PEM format
@@ -61,16 +64,10 @@ class QueueProcessor extends EventEmitter {
      *   in PEM format
      * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
      *   in PEM format
-     * @param {String} repConfig.queueProcessor.groupId - kafka
-     *   consumer group ID
-     * @param {String} repConfig.queueProcessor.retryTimeoutS -
-     *   number of seconds before giving up retries of an entry
-     *   replication
      * @param {String} site - site name
-     * @param {MetricsProducer} mProducer - instance of metrics producer
      */
     constructor(kafkaConfig, sourceConfig, destConfig, repConfig,
-                httpsConfig, internalHttpsConfig, site, mProducer) {
+                httpsConfig, internalHttpsConfig, site) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -84,7 +81,6 @@ class QueueProcessor extends EventEmitter {
         this.replicationStatusProducer = null;
         this._consumer = null;
         this.site = site;
-        this._mProducer = mProducer;
 
         this.echoMode = false;
 
@@ -315,21 +311,6 @@ class QueueProcessor extends EventEmitter {
                 this.logger.info('queue processor is ready to consume ' +
                                  'replication entries');
                 this.emit('ready');
-            });
-            this._consumer.on('metrics', data => {
-                // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                if (data[this.site]) {
-                    const filteredData = {};
-                    filteredData[this.site] = data[this.site];
-                    this._mProducer.publishMetrics(filteredData,
-                        metricsTypeProcessed, metricsExtension, err => {
-                            this.logger.trace('error occurred in publishing ' +
-                                'metrics', {
-                                    error: err,
-                                    method: 'QueueProcessor.start',
-                                });
-                        });
-                }
             });
             return undefined;
         });
