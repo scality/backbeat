@@ -59,7 +59,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
 
         const repSites = queueEntry.getReplicationInfo().backends;
 
-        // for one-to-many
+        // record replication metrics by site
         repSites.filter(entry => entry.status === 'PENDING')
             .forEach(backend => {
                 this._incrementMetrics(backend.site,
