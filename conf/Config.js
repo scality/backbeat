@@ -85,6 +85,14 @@ class Config extends EventEmitter {
                 { host: '127.0.0.1', port: 6379 });
         }
 
+        if (parsedConfig.localCache) {
+            this.localCache = {
+                host: config.localCache.host,
+                port: config.localCache.port,
+                password: config.localCache.password,
+            };
+        }
+
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
 
