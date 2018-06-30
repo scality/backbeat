@@ -6,6 +6,7 @@
   "scripts": {
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "ingestion_populator": "node bin/ingestion.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
     "lifecycle_conductor": "node extensions/lifecycle/conductor/service.js",
     "lifecycle_producer": "node extensions/lifecycle/lifecycleProducer/task.js",
@@ -34,7 +35,7 @@
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#5aa99d7",
+    "bucketclient": "scality/bucketclient#520d164",
     "commander": "^2.11.0",
     "ioredis": "^3.2.2",
     "joi": "^10.6",
