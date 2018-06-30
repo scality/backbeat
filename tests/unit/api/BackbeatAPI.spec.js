@@ -35,6 +35,8 @@ describe('BackbeatAPI', () => {
             { url: '/_/crr/failed', method: 'POST' },
             { url: '/_/crr/pause', method: 'POST' },
             { url: '/_/crr/resume', method: 'POST' },
+            { url: '/_/crr/resume/all/schedule', method: 'POST' },
+            { url: '/_/crr/resume', method: 'GET' },
             { url: '/_/crr/status', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);

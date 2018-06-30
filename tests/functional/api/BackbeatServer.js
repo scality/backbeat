@@ -977,6 +977,9 @@ describe('Backbeat Server', () => {
         const firstSite = destconfig.bootstrapList[0].site;
         const secondSite = destconfig.bootstrapList[1].site;
 
+        const futureDate = new Date();
+        futureDate.setHours(futureDate.getHours() + 5);
+
         function setupZkClient(cb) {
             const { connectionString } = config.zookeeper;
             zkClient = zookeeper.createClient(connectionString);
@@ -999,8 +1002,10 @@ describe('Backbeat Server', () => {
                     next => {
                         // emulate second site to be paused
                         const path = `${ZK_TEST_CRR_STATE_PATH}/${secondSite}`;
-                        const data =
-                            Buffer.from(JSON.stringify({ paused: true }));
+                        const data = Buffer.from(JSON.stringify({
+                            paused: true,
+                            scheduledResume: futureDate.toString(),
+                        }));
                         zkClient.create(path, data, EPHEMERAL_NODE, next);
                     },
                 ], err => {
@@ -1052,6 +1057,7 @@ describe('Backbeat Server', () => {
             { path: `/_/crr/resume/${firstSite}`, method: 'POST' },
             { path: '/_/crr/status', method: 'GET' },
             { path: `/_/crr/status/${firstSite}`, method: 'GET' },
+            { path: '/_/crr/resume/all', method: 'GET' },
         ];
         validRequests.forEach(entry => {
             it(`should get a 200 response for route: ${entry.path}`, done => {
@@ -1116,6 +1122,29 @@ describe('Backbeat Server', () => {
             });
         });
 
+        it('should receive a pause request on specified site from route ' +
+        `/_/crr/pause/${firstSite}`, done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'POST',
+                path: `/_/crr/pause/${firstSite}`,
+            });
+            makePOSTRequest(options, emptyBody, err => {
+                assert.ifError(err);
+
+                setTimeout(() => {
+                    assert.strictEqual(cache1.length, 1);
+                    assert.strictEqual(cache2.length, 0);
+
+                    assert.deepStrictEqual(cache1[0].channel, channel1);
+
+                    const message = JSON.parse(cache1[0].message);
+                    const expected = { action: 'pauseService' };
+                    assert.deepStrictEqual(message, expected);
+                    done();
+                }, 1000);
+            });
+        });
+
         it('should receive a resume request on all site channels from route ' +
         '/_/crr/resume', done => {
             const options = Object.assign({}, defaultOptions, {
@@ -1136,6 +1165,78 @@ describe('Backbeat Server', () => {
                     const expected = { action: 'resumeService' };
                     assert.deepStrictEqual(message1, expected);
                     assert.deepStrictEqual(message2, expected);
+                    done();
+                }, 1000);
+            });
+        });
+
+        it('should get scheduled resume jobs for all sites using route ' +
+        '/_/crr/resume/all/schedule', done => {
+            getRequest('/_/crr/resume/all/schedule', (err, res) => {
+                assert.ifError(err);
+                const expected = {
+                    'test-site-1': 'none',
+                    'test-site-2': futureDate.toString(),
+                };
+                assert.deepStrictEqual(expected, res);
+                done();
+            });
+        });
+
+        it('should receive a scheduled resume request with specified hours ' +
+        `from route /_/crr/resume/${firstSite}/schedule`, done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'POST',
+                path: `/_/crr/resume/${firstSite}/schedule`,
+            });
+            const body = JSON.stringify({ hours: 1 });
+            makePOSTRequest(options, body, (err, res) => {
+                assert.ifError(err);
+                getResponseBody(res, err => {
+                    assert.ifError(err);
+
+                    assert.strictEqual(cache1.length, 1);
+                    assert.deepStrictEqual(cache1[0].channel, channel1);
+
+                    const message = JSON.parse(cache1[0].message);
+                    assert.equal('resumeService', message.action);
+
+                    const date = new Date();
+                    const scheduleDate = new Date(message.date);
+                    assert(scheduleDate > date);
+
+                    // make sure the scheduled time does not exceed expected
+                    const millisecondPerHour = 60 * 60 * 1000;
+                    assert(scheduleDate - date <= millisecondPerHour);
+                    done();
+                });
+            });
+        });
+
+        it('should receive a scheduled resume request without specified ' +
+        `hours from route /_/crr/resume/${firstSite}/schedule`, done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'POST',
+                path: `/_/crr/resume/${firstSite}/schedule`,
+            });
+            makePOSTRequest(options, emptyBody, err => {
+                assert.ifError(err);
+
+                setTimeout(() => {
+                    assert.strictEqual(cache1.length, 1);
+                    assert.deepStrictEqual(cache1[0].channel, channel1);
+
+                    const message = JSON.parse(cache1[0].message);
+                    assert.equal('resumeService', message.action);
+
+                    const date = new Date();
+                    const scheduleDate = new Date(message.date);
+                    assert(scheduleDate > date);
+
+                    // make sure scheduled time between 5 and 6 hours from now
+                    const millisecondPerHour = 60 * 60 * 1000;
+                    assert((scheduleDate - date <= millisecondPerHour * 6) &&
+                           (scheduleDate - date) >= millisecondPerHour * 5);
                     done();
                 }, 1000);
             });

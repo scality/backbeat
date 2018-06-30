@@ -5,6 +5,11 @@
 This feature offers a way for users to manually pause and resume cross-region
 replication (CRR) operations by storage locations.
 
+Users may also choose to resume CRR operations for a given storage location by a
+specified number of hours from the current time. This is particularly useful
+for cases where the user knows a destination location will be down for a
+certain amount of time and would like to schedule a time to resume CRR.
+
 ## Design
 
 A RESTful API will expose methods for users to pause and resume cross-region
@@ -82,6 +87,23 @@ entries from its last offset.
     {}
     ```
 
+* GET `/_/crr/resume/<location-name>`
+
+    This GET request checks if the given location has a scheduled cross-region
+    replication resume job. If a resume job is scheduled, you will see the
+    expected date when the resume occurs.
+
+    You may specify "all" as the `<location-name>` to get all scheduled resume
+    jobs, if any.
+
+    Response:
+    ```json
+    {
+        "location1": "2018-06-28T05:40:20.600Z",
+        "location2": "none"
+    }
+    ```
+
 * POST `/_/crr/resume`
 
     This POST request is to manually resume the cross-region replication
@@ -94,9 +116,33 @@ entries from its last offset.
 
 * POST `/_/crr/resume/<location-name>`
 
-    This POST request is to manually resume the cross-region replication
+    This POST request is to manually resume the cross-region replication service
+    for a specified location configured as a destination replication endpoint.
+
+    Response:
+    ```json
+    {}
+    ```
+
+* POST `/_/crr/resume/<location-name>/schedule`
+
+    This POST request is to schedule resuming the cross-region replication
     service for a specified location configured as a destination replication
-    endpoint.
+    endpoint. You may specify "all" as a location name in order to schedule
+    a resume for all available destination locations.
+
+    Providing a POST request body object with an `hours` key and a valid
+    integer value will schedule a resume to occur by given hours.
+
+    If no request body is provided for this route, a default of 6 hours is
+    applied.
+
+    Request Body Example:
+    ```json
+    {
+        "hours": 6
+    }
+    ```
 
     Response:
     ```json
