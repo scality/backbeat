@@ -3,7 +3,8 @@
 const testIsOn = process.env.TEST_SWITCH === '1';
 
 const constants = {
-    zookeeperReplicationNamespace: '/backbeat/replication',
+    zookeeperReplicationNamespace:
+        testIsOn ? '/backbeattest' : '/backbeat/replication',
     proxyVaultPath: '/_/backbeat/vault',
     proxyIAMPath: '/_/backbeat/iam',
     metricsExtension: 'crr',

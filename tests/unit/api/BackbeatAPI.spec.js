@@ -34,6 +34,7 @@ describe('BackbeatAPI', () => {
             { url: '/_/crr/failed', method: 'POST' },
             { url: '/_/crr/pause', method: 'POST' },
             { url: '/_/crr/resume', method: 'POST' },
+            { url: '/_/crr/status', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
@@ -54,7 +55,7 @@ describe('BackbeatAPI', () => {
             { url: '/_/healthcheck', method: 'POST' },
             { url: '/_/monitoring/metrics', method: 'POST' },
             { url: '/_/crr/pause', method: 'GET' },
-            { url: '/_/crr/resume', method: 'GET' },
+            { url: '/_/crr/status', method: 'POST' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);

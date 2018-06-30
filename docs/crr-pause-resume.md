@@ -11,7 +11,7 @@ A RESTful API will expose methods for users to pause and resume cross-region
 replication operations.
 
 Redis offers a pub/sub function. We will utilize this function to propagate
-requests to all active CRR Kafka Consumers on all nodes with backbeat
+requests to all active CRR Kafka Consumers on all nodes that have backbeat
 containers setup for replication.
 
 We want to pause and resume the CRR service at the lowest level (in our case,
@@ -23,16 +23,44 @@ consumed by the Kafka Consumer and are being processed for replication will
 continue to finish replication and will not be paused.
 
 The API will have a Redis instance publishing messages to a specific channel.
-All CRR Kafka Consumers will subscribe to this channel and complete any given
-valid requests.
+QueueProcessors will subscribe to this channel, and on receiving a request
+to pause or resume CRR, will notify all of their BackbeatConsumers to perform
+the action if applicable. If an action occurred, the QueueProcessor will receive
+an update on the current status of each Consumer. Based on the global status of
+a location, the status will be updated in Zookeeper if a change has occurred.
 
-When a Kafka Consumer pauses, the Consumer is still kept alive and maintains
-any internal state, including offset. The Consumer will no longer be
-subscribed to the CRR topic, so will no longer try consuming any entries.
-When the paused Consumer is resumed, it will again resume consuming entries
-from its last offset.
+It is important to note, when a Consumer pauses, the Consumer process is still
+kept alive and maintains any internal state, including offset. The Consumer will
+no longer be subscribed to the CRR topic, so will no longer try consuming any
+entries. When the paused Consumer is resumed, it will again resume consuming
+entries from its last offset.
 
 ## Definition of API
+
+* GET `/_/crr/status`
+
+    This GET request checks if cross-region replication is enabled or not for
+    all locations configured as destination replication endpoints.
+
+    Response:
+    ```json
+    {
+        "location1": "disabled",
+        "location2": "enabled"
+    }
+    ```
+
+* GET `/_/crr/status/<location-name>`
+
+    This GET request checks if cross-region replication is enabled or not for
+    a specified location configured as a destination replication endpoint.
+
+    Response:
+    ```json
+    {
+        "<location-name>": "enabled"
+    }
+    ```
 
 * POST `/_/crr/pause`
 
@@ -40,7 +68,7 @@ from its last offset.
     for all locations configured as destination replication endpoints.
 
     Response:
-    ```sh
+    ```json
     {}
     ```
 
@@ -50,7 +78,7 @@ from its last offset.
     for a specified location configured as a destination replication endpoint.
 
     Response:
-    ```sh
+    ```json
     {}
     ```
 
@@ -60,7 +88,7 @@ from its last offset.
     service for all locations configured as destination replication endpoints.
 
     Response:
-    ```sh
+    ```json
     {}
     ```
 
@@ -71,6 +99,6 @@ from its last offset.
     endpoint.
 
     Response:
-    ```sh
+    ```json
     {}
     ```
