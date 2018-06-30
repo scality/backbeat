@@ -25,6 +25,7 @@ describe('BackbeatAPI', () => {
             { url: '/_/healthcheck', method: 'GET' },
             { url: '/_/metrics/crr/all/backlog', method: 'GET' },
             { url: '/_/metrics/crr/all/completions', method: 'GET' },
+            { url: '/_/metrics/crr/all/failures', method: 'GET' },
             { url: '/_/metrics/crr/all/throughput', method: 'GET' },
             { url: '/_/monitoring/metrics', method: 'GET' },
             { url: '/_/crr/failed/mybucket/mykey/vId', method: 'GET' },
@@ -49,6 +50,8 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/test', method: 'GET' },
             { url: '/_/metrics/crr/all/backlo', method: 'GET' },
             { url: '/_/metrics/crr/all/completionss', method: 'GET' },
+            { url: '/_/metrics/crr/all/failures', method: 'POST' },
+            { url: '/_/metrics/crr/all/fail', method: 'GET' },
             { url: '/_/invalid/crr/all', method: 'GET' },
             { url: '/_/metrics/pause/all', method: 'GET' },
             // // invalid http verb

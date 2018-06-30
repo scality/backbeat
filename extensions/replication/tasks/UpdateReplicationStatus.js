@@ -9,7 +9,8 @@ const monitoringClient = require('../../../lib/clients/monitoringHandler');
 
 const {
     metricsExtension,
-    metricsTypeProcessed,
+    metricsTypeCompleted,
+    metricsTypeFailed,
 } = require('../constants');
 
 class UpdateReplicationStatus extends BackbeatTask {
@@ -86,12 +87,16 @@ class UpdateReplicationStatus extends BackbeatTask {
      */
     _reportMetrics(entry, site) {
         const status = entry.getReplicationSiteStatus(site);
+        const data = {};
+        const bytes = entry.getContentLength();
+        data[site] = { ops: 1, bytes };
+
         if (status === 'COMPLETED' || status === 'FAILED') {
-            const data = {};
-            const bytes = entry.getContentLength();
-            data[site] = { ops: 1, bytes };
-            this.mProducer.publishMetrics(data, metricsTypeProcessed,
-            metricsExtension, err => {
+            const entryType = status === 'COMPLETED' ?
+                metricsTypeCompleted : metricsTypeFailed;
+
+            this.mProducer.publishMetrics(data, entryType, metricsExtension,
+            err => {
                 if (err) {
                     this.logger.trace('error occurred in publishing metrics', {
                         error: err,
@@ -99,6 +104,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     });
                 }
             });
+            // TODO: promclient metrics can now report failed metrics. add here
             monitoringClient.crrOpDone.inc();
             monitoringClient.crrBytesDone.inc(bytes);
         }
