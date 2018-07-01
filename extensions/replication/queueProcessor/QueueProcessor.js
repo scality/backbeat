@@ -20,8 +20,8 @@ const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const EchoBucket = require('../tasks/EchoBucket');
 
-const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
-const BucketQueueEntry = require('../utils/BucketQueueEntry');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 
 const { zookeeperReplicationNamespace } = require('../constants');
 const ZK_CRR_STATE_PATH = '/state';
