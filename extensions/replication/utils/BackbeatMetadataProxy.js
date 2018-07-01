@@ -74,7 +74,7 @@ class BackbeatMetadataProxy extends BackbeatTask {
                     return cb(err);
                 }
                 log.error('an error occurred when putting metadata to S3',
-                    { method: 'UpdateReplicationStatus._putMetadataOnce',
+                    { method: 'BackbeatMetadataProxy._putMetadataOnce',
                       entry: entry.getLogInfo(),
                       origin: 'source',
                       peer: this.sourceConfig.s3,
@@ -99,7 +99,7 @@ class BackbeatMetadataProxy extends BackbeatTask {
         log.debug('getting metadata', {
             where: 'source',
             entry: params,
-            method: 'ReplicateObject._getMetadataOnce',
+            method: 'BackbeatMetadataProxy._getMetadataOnce',
         });
 
         const cbOnce = jsutil.once(cb);
@@ -118,7 +118,7 @@ class BackbeatMetadataProxy extends BackbeatTask {
                     return cbOnce(err);
                 }
                 log.error('an error occurred when getting metadata from S3', {
-                    method: 'ReplicateObject._getMetadataOnce',
+                    method: 'BackbeatMetadataProxy._getMetadataOnce',
                     entry: params.logInfo,
                     origin: 'source',
                     error: err,
