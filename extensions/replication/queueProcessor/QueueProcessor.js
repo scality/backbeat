@@ -11,6 +11,7 @@ const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const RoundRobin = require('arsenal').network.RoundRobin;
 
+const config = require('../../../conf/Config');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
@@ -88,7 +89,7 @@ class QueueProcessor extends EventEmitter {
         this.destHTTPAgent = new http.Agent({ keepAlive: true });
 
         this._setupVaultclientCache();
-        this._setupRedis(redisConfig);
+        this._setupRedis();
 
         // FIXME support multiple scality destination sites
         if (Array.isArray(destConfig.bootstrapList)) {
@@ -209,12 +210,13 @@ class QueueProcessor extends EventEmitter {
     /**
      * Setup the Redis Subscriber which listens for actions from other processes
      * (i.e. BackbeatAPI for pause/resume)
-     * @param {object} redisConfig - redis configs
      * @return {undefined}
      */
-    _setupRedis(redisConfig) {
+    _setupRedis() {
+        // TODO: cleanup
+        const localCache = config.localCache;
         // redis pub/sub for pause/resume
-        const redis = new Redis(redisConfig);
+        const redis = new Redis(localCache);
         // redis subscribe to site specific channel
         const channelName = `${this.repConfig.topic}-${this.site}`;
         redis.subscribe(channelName, err => {
