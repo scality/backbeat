@@ -27,7 +27,7 @@ HTTP code.
 ## Routes
 
 Routes are organized in the following fashion:
-`/_/metrics/<extension-type>/<site-name>/<metric-type>/<bucket>/<key>`
+`/_/metrics/<extension-type>/<site-name>/<metric-type>/<bucket>/<key>/<version-id>`
 
 Where:
 
@@ -37,10 +37,12 @@ Where:
 - `<metric-type>` is an optional field. Leaving this out will get all metrics
   available for given extension and site. If you specify a metric type, you will
   get the metric specified.
-- `<bucket>` is an optional field, but is required if also specifying a key. If
-  provided, it is the name of the bucket in which the object exists.
+- `<bucket>` is an optional field. If provided, it is the name of the bucket in
+  which the object exists.
 - `<key>` is an optional field. If provided, it is the object's key when getting
   CRR metrics for a particular object.
+- `<version-id>` is an optional field. If provided, it is the object's version
+  ID when getting CRR metrics for a particular object.
 
 ### `/_/metrics/crr/<site-name>`
 
@@ -106,7 +108,7 @@ per second for the specified type and site name.
 }
 ```
 
-### `/_/metrics/crr/<site-name>/progress/<bucket>/<key>`
+### `/_/metrics/crr/<site-name>/progress/<bucket>/<key>/<version-id>`
 
 This route returns replication progress in total MB transferred for the
 specified object.
@@ -115,16 +117,16 @@ specified object.
 
 ```
 {
-    "description": "Number of MB to be replicated (pending), number of MB
+    "description": "Number of bytes to be replicated (pending), number of bytes
     transferred to the destination (completed), and percentage of the object
     that has completed replication (progress)",
-    "pending": 13,
-    "completed": 47,
-    "progress": "78%"
+    "pending": 1000000,
+    "completed": 3000000,
+    "progress": "75%"
 }
 ```
 
-### `/_/metrics/crr/<site-name>/throughput/<bucket>/<key>`
+### `/_/metrics/crr/<site-name>/throughput/<bucket>/<key>/<version-id>`
 
 This route returns the throughput in number MB completing per second for the
 specified object.
@@ -133,9 +135,9 @@ specified object.
 
 ```
 {
-    "description": "Current throughput for object replication in MB/sec
+    "description": "Current throughput for object replication in bytes/sec
     (throughput)",
-    "throughput": 1
+    "throughput": "0.00"
 }
 ```
 
@@ -154,8 +156,14 @@ In order to collect metrics, a separate Kafka Producer and Consumer
 
 When a new CRR entry is sent to Kafka, a Kafka entry to the metrics topic will
 be produced indicating to increase `ops` and `bytes`. On consumption of this
-metrics entry, Redis keys will be generated following a format similar to:
-`<site-name>:<bucket-name>:<key-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`.
+metrics entry, Redis keys will be generated with the following schema:
+
+Site-level CRR metrics Redis key:
+`<site-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`
+
+Object-level CRR metrics Redis key:
+`<site-name>:<bucket-name>:<key-name>:<version-id>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`
+
 Normalized timestamp is used to determine in which time interval to set the data
 on. The default metrics key will end with the type of data point it represents.
 
@@ -174,12 +182,16 @@ A single site CRR entry should produce 4 keys in total. The data points stored
 in Redis are saved in intervals (default of 5 minutes) and are available up to
 an expiry time (default of 15 minutes).
 
-An object CRR entry produces a single key. An initial key is set when the CRR
-operation begins that stores the total size of the object to be replicated.
-Then, for each part of the object that completes replication, another key is set
-to reflect the total size of parts that have completed replication. The data
-points stored in Redis are saved in intervals (default of 5 minutes) and are
-available up to an expiry time (default of 24 hours).
+An object CRR entry creates one key. An initial key is set when the CRR
+operation begins, storing the total size of the object to be replicated. Then,
+for each part of the object that is transferred to the destination, another key
+is set (or incremented) to reflect the number of bytes that have completed
+replication. The data points stored in Redis are saved in intervals (default of
+5 minutes) and are available up to an expiry time (default of 24 hours).
+
+Throughput for object CRR entries are available up to an expiry time (default of
+15 minutes). Object CRR throughput is the average bytes transferred per second
+within the latest 15 minutes.
 
 A `BackbeatServer` (default port 8900) and `BackbeatAPI` expose these metrics
 stored in Redis by querying based on the prepended Redis keys. Using these data
