@@ -519,8 +519,12 @@ class QueueProcessor extends EventEmitter {
         } else if (sourceEntry instanceof ObjectQueueEntry) {
             const replicationStorageClass =
                 sourceEntry.getReplicationStorageClass();
-            const sites = replicationStorageClass.split(',');
-
+            const sites = replicationStorageClass.split(',').map(s => {
+                if (s.endsWith(':preferred_read')) {
+                    return s.split(':')[0];
+                }
+                return s;
+            });
             if (sites.includes(this.site)) {
                 const replicationEndpoint = this.destConfig.bootstrapList
                     .find(endpoint => endpoint.site === this.site);
