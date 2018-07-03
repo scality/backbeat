@@ -553,7 +553,7 @@ describe('Backbeat Server', () => {
 
         const retryPaths = [
             '/_/crr/failed',
-            '/_/crr/failed/test-bucket/test-key/test-versionId',
+            '/_/crr/failed/test-bucket/test-key?versionId=test-versionId',
         ];
         retryPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
@@ -774,9 +774,11 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: ' +
-            '/_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
+            '/_/crr/failed/<bucket>/<key>?versionId=<versionId> when there ' +
+            'is no key',
             done => {
-                getRequest('/_/crr/failed/test-bucket/test-key/test-versionId',
+                getRequest('/_/crr/failed/test-bucket/test-key?' +
+                    'versionId=test-versionId',
                 (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
@@ -788,16 +790,16 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: ' +
-            '/_/crr/failed/<bucket>/<key>/<versionId>', done => {
+            '/_/crr/failed/<bucket>/<key>?versionId=<versionId>', done => {
                 const keys = [
-                    'test-bucket:test-key:test-versionId:test-site',
-                    'test-bucket:test-key:test-versionId:test-site-2',
-                    'test-bucket-1:test-key-1:test-versionId-1:test-site',
+                    'test-bucket:test-key/a:test-versionId:test-site',
+                    'test-bucket:test-key/a:test-versionId:test-site-2',
+                    'test-bucket-1:test-key-1/a:test-versionId-1:test-site',
                 ];
                 setKey(redisClient, keys, err => {
                     assert.ifError(err);
-                    const route =
-                        '/_/crr/failed/test-bucket/test-key/test-versionId';
+                    const route = '/_/crr/failed/test-bucket/test-key/a?' +
+                        'versionId=test-versionId';
                     return getRequest(route, (err, res) => {
                         assert.ifError(err);
                         assert.strictEqual(res.IsTruncated, false);
