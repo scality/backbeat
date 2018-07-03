@@ -59,7 +59,7 @@ See [Explanations](#explanations) for more detail.
     }
     ```
 
-* GET `/_/crr/failed/<bucket>/<key>/<versionId>`
+* GET `/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`
 
     This GET request retrieves a listing of all failed operations for a specific
     object version. This operation is useful if you're interested in monitoring
