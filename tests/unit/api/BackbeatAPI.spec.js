@@ -28,7 +28,8 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/all/failures', method: 'GET' },
             { url: '/_/metrics/crr/all/throughput', method: 'GET' },
             { url: '/_/monitoring/metrics', method: 'GET' },
-            { url: '/_/crr/failed/mybucket/mykey/vId', method: 'GET' },
+            { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
+                method: 'GET' },
             { url: '/_/crr/failed?mymarker', method: 'GET' },
             // invalid params but will default to getting all buckets
             { url: '/_/crr/failed/mybucket', method: 'GET' },
