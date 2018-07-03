@@ -17,6 +17,8 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
+const getLocationsFromStorageClass =
+    require('../utils/getLocationsFromStorageClass');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const EchoBucket = require('../tasks/EchoBucket');
@@ -519,12 +521,7 @@ class QueueProcessor extends EventEmitter {
         } else if (sourceEntry instanceof ObjectQueueEntry) {
             const replicationStorageClass =
                 sourceEntry.getReplicationStorageClass();
-            const sites = replicationStorageClass.split(',').map(s => {
-                if (s.endsWith(':preferred_read')) {
-                    return s.split(':')[0];
-                }
-                return s;
-            });
+            const sites = getLocationsFromStorageClass(replicationStorageClass);
             if (sites.includes(this.site)) {
                 const replicationEndpoint = this.destConfig.bootstrapList
                     .find(endpoint => endpoint.site === this.site);
