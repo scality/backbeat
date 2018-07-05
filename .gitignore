@@ -12,3 +12,6 @@ coverage
 
 # Dependencies
 node_modules
+
+# Redis
+*.rdb
