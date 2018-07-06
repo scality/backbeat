@@ -39,14 +39,6 @@ function initAndStart() {
             return;
         }
         logger.info('management init done');
-        garbageCollector.start(err => {
-            if (err) {
-                logger.error('error during garbage collector initialization',
-                             { error: err.message });
-            } else {
-                logger.info('garbage collector is running');
-            }
-        });
         healthServer.onReadyCheck(log => {
             if (garbageCollector.isReady()) {
                 return true;
@@ -56,6 +48,14 @@ function initAndStart() {
         });
         logger.info('Starting HealthProbe server');
         healthServer.start();
+        garbageCollector.start(err => {
+            if (err) {
+                logger.error('error during garbage collector initialization',
+                             { error: err.message });
+            } else {
+                logger.info('garbage collector is running');
+            }
+        });
     });
 }
 
