@@ -121,7 +121,7 @@ class FailedCRRConsumer {
             if (err) {
                 return cb(err);
             }
-            if (keys === 0) {
+            if (keys.length === 0) {
                 return cb();
             }
             return redisClient.batch([['del', ...keys]], (err, res) => {
