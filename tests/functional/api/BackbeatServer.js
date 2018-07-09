@@ -743,6 +743,7 @@ describe('Backbeat Server', () => {
             // Version ID calculated from the mock object MD.
             const testVersionId =
                 '39383530303038363133343437313939393939395247303031202030';
+            const testTimestamp = '0123456789';
 
             before(done => deleteKeys(redisClient, done));
 
@@ -762,7 +763,8 @@ describe('Backbeat Server', () => {
 
             it('should get correct data for GET route: /_/crr/failed when ' +
             'the key has been created and there is one key', done => {
-                const key = `test-bucket-1:test-key:${testVersionId}:test-site`;
+                const key = `test-bucket-1:test-key:${testVersionId}:` +
+                    `test-site:${testTimestamp}`;
                 setKey(redisClient, [key], err => {
                     assert.ifError(err);
                     getRequest('/_/crr/failed?marker=0', (err, res) => {
@@ -784,12 +786,15 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when ' +
-            'the key has been created and there are multiple key keys',
+            'the key has been created and there are multiple keys',
             done => {
                 const keys = [
-                    'test-bucket:test-key:test-versionId:test-site',
-                    'test-bucket-1:test-key-1:test-versionId-1:test-site-1',
-                    'test-bucket-2:test-key-2:test-versionId-2:test-site-2',
+                    'test-bucket:test-key:test-versionId:test-site:' +
+                        `${testTimestamp}`,
+                    'test-bucket-1:test-key-1:test-versionId-1:test-site-1:' +
+                        `${testTimestamp}`,
+                    'test-bucket-2:test-key-2:test-versionId-2:test-site-2:' +
+                        `${testTimestamp}`,
                 ];
                 setKey(redisClient, keys, err => {
                     assert.ifError(err);
@@ -827,11 +832,16 @@ describe('Backbeat Server', () => {
                     }
                     return async.timesLimit(2000, 10, (i, next) => {
                         const keys = [
-                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-a`,
-                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-b`,
-                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-c`,
-                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-d`,
-                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-e`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-a:` +
+                                `${testTimestamp}`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-b:` +
+                                `${testTimestamp}`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-c:` +
+                                `${testTimestamp}`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-d:` +
+                                `${testTimestamp}`,
+                            `bucket-${i}:key-${i}:versionId-${i}:site-${i}-e:` +
+                                `${testTimestamp}`,
                         ];
                         setKey(redisClient, keys, next);
                     }, err => {
@@ -886,9 +896,12 @@ describe('Backbeat Server', () => {
             it('should get correct data for GET route: ' +
             '/_/crr/failed/<bucket>/<key>?versionId=<versionId>', done => {
                 const keys = [
-                    'test-bucket:test-key/a:test-versionId:test-site',
-                    'test-bucket:test-key/a:test-versionId:test-site-2',
-                    'test-bucket-1:test-key-1/a:test-versionId-1:test-site',
+                    'test-bucket:test-key/a:test-versionId:test-site:' +
+                        `${testTimestamp}`,
+                    'test-bucket:test-key/a:test-versionId:test-site-2:' +
+                        `${testTimestamp}`,
+                    'test-bucket-1:test-key-1/a:test-versionId-1:test-site:' +
+                        `${testTimestamp}`,
                 ];
                 setKey(redisClient, keys, err => {
                     assert.ifError(err);
@@ -934,11 +947,14 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for POST route: /_/crr/failed ' +
-            'when there are multiple matching key keys', done => {
+            'when there are multiple matching keys', done => {
                 const keys = [
-                    `test-bucket:test-key:${testVersionId}:test-site-1`,
-                    `test-bucket:test-key:${testVersionId}:test-site-2`,
-                    `test-bucket:test-key:${testVersionId}:test-site-3`,
+                    `test-bucket:test-key:${testVersionId}:test-site-1:` +
+                        `${testTimestamp}`,
+                    `test-bucket:test-key:${testVersionId}:test-site-2:` +
+                        `${testTimestamp}`,
+                    `test-bucket:test-key:${testVersionId}:test-site-3:` +
+                        `${testTimestamp}`,
                 ];
                 setKey(redisClient, keys, err => {
                     assert.ifError(err);
@@ -1032,11 +1048,16 @@ describe('Backbeat Server', () => {
                         StorageClass: `site-${i}-e`,
                     });
                     const keys = [
-                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-a`,
-                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-b`,
-                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-c`,
-                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-d`,
-                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-e`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-a:` +
+                            `${testTimestamp}`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-b:` +
+                            `${testTimestamp}`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-c:` +
+                            `${testTimestamp}`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-d:` +
+                            `${testTimestamp}`,
+                        `bucket-${i}:key-${i}:${testVersionId}:site-${i}-e:` +
+                            `${testTimestamp}`,
                     ];
                     setKey(redisClient, keys, next);
                 }, err => {

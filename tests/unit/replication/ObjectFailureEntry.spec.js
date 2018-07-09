@@ -4,7 +4,8 @@ const ObjectFailureEntry =
     require('../../../extensions/replication/utils/ObjectFailureEntry');
 
 describe('ObjectFailureEntry helper class', () => {
-    const key = 'bb:crr:failed:test-bucket:test-key:test-versionId:test-site';
+    const key = 'bb:crr:failed:test-bucket:test-key:test-versionId:test-site:' +
+        '0123456789';
     const role = 'arn:aws:iam::604563867484:test-role';
     const entry = new ObjectFailureEntry(key, role);
 
@@ -32,7 +33,10 @@ describe('ObjectFailureEntry helper class', () => {
     it('should get the site', () =>
         assert.strictEqual(entry.getSite(), 'test-site'));
 
-    it('should get the replicationr oles', () =>
+    it('should get the timestamp', () =>
+        assert.strictEqual(entry.getTimestamp(), '0123456789'));
+
+    it('should get the replication roles', () =>
         assert.strictEqual(entry.getReplicationRoles(), role));
 
     it('should get the log info', () =>

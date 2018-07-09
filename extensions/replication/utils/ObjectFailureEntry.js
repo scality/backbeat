@@ -16,7 +16,7 @@ class ObjectFailureEntry {
             schema.shift(); // Test keys are prefixed with 'test:'.
         }
         const [service, extension, status, bucket, objectKey, encodedVersionId,
-            site] = schema;
+            site, timestamp] = schema;
         this.service = service;
         this.extension = extension;
         this.status = status;
@@ -24,7 +24,12 @@ class ObjectFailureEntry {
         this.objectKey = objectKey;
         this.encodedVersionId = encodedVersionId;
         this.site = site;
+        this.timestamp = timestamp;
         this.sourceRole = role;
+    }
+
+    getTimestamp() {
+        return this.timestamp;
     }
 
     getRedisKey() {

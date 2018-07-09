@@ -5,6 +5,7 @@ const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
+const { StatsModel } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
@@ -16,6 +17,9 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const getFailedCRRKey = require('../../../lib/util/getFailedCRRKey');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+
+// StatsClient constant default for site metrics
+const INTERVAL = 300; // 5 minutes;
 
 /**
  * @class ReplicationStatusProcessor
@@ -65,6 +69,9 @@ class ReplicationStatusProcessor {
 
         this._setupVaultclientCache();
 
+        const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
+        this._statsClient = new StatsModel(undefined, INTERVAL,
+            (monitorReplicationFailureExpiryTimeS + INTERVAL));
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }
@@ -177,8 +184,11 @@ class ReplicationStatusProcessor {
             const { site } = backend;
             const roles = queueEntry.getReplicationRoles();
             const value = roles.split(',')[0]; // The source IAM role.
+            const failedCRRKey = getFailedCRRKey(bucket, key, versionId, site);
+            const keyWithTimestamp = this._statsClient.buildKey(failedCRRKey,
+                new Date());
             const message = {
-                key: getFailedCRRKey(bucket, key, versionId, site),
+                key: keyWithTimestamp,
                 value,
             };
             return this._failedCRRProducer
