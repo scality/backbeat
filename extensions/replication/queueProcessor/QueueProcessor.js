@@ -560,9 +560,10 @@ class QueueProcessor extends EventEmitter {
     }
 
     isReady() {
-        return this.replicationStatusProducer && this._consumer &&
-            this.replicationStatusProducer.isReady() &&
-            this._consumer.isReady();
+        const rsp = this.replicationStatusProducer &&
+            this.replicationStatusProducer.isReady();
+        const cs = this._consumer && this._consumer.isReady();
+        return rsp && cs;
     }
 }
 
