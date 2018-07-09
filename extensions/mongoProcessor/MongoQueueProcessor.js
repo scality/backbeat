@@ -59,17 +59,25 @@ class MongoQueueProcessor {
         this._mongoClient.setup(err => {
             if (err) {
                 this.logger.error('could not connect to MongoDB', { err });
-                return undefined;
+                process.exit(1);
             }
+            let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
                 groupId: `${this.mongoProcessorConfig.groupId}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
-            return this._consumer.on('ready', () => {
+            this._consumer.on('error', () => {
+                if (!consumerReady) {
+                    this.logger.fatal('error starting mongo queue processor');
+                    process.exit(1);
+                }
+            });
+            this._consumer.on('ready', () => {
+                consumerReady = true;
                 this._consumer.subscribe();
-                this.logger.info('mongo queue processor is ready to consume');
+                this.logger.info('mongo queue processor is ready');
             });
         });
     }
