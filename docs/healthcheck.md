@@ -1,6 +1,6 @@
 # Zenko Backbeat Healthcheck
 
-Zenko Backbeat exposes a healthcheck route which return a response with an HTTP
+Zenko Backbeat exposes a healthcheck route that returns a response with an HTTP
 code.
 
 ## Response Codes
@@ -26,12 +26,12 @@ code.
 
 ## Routes
 
-### `/_/healthcheck`
+### `/_/backbeat/api/healthcheck`
 
 Basic healthchecks return details on the health of Kafka and its topics.
 
-If no HTTP response error, the structure of the response is an object with two
-main keys: topics and internalConnections.
+If the response is not an HTTP error, it is structured as an object with two
+main keys: *topics* and *internalConnections*.
 
 The `topics` key returns details on the Kafka CRR topic only. The `name` field
 returns the Kafka topic name, and the `partitions` field returns details of each
@@ -56,9 +56,9 @@ topics: {
 ```
 
 The `internalConnections` key returns general details on the health of the
-system as a whole. The `isrHealth` checks if the minimum in-sync replicas for
-every partition is met, the `zookeeper` field checks if zookeeper is running
-properly, and the `kafkaProducer` field checks the health of all Kafka Producers
+system as a whole. `isrHealth` checks if the minimum in-sync replicas for every
+partition is met. The `zookeeper` field checks if ZooKeeper is running
+properly. The `kafkaProducer` field checks the health of all Kafka Producers
 for every topic.
 
 The `zookeeper` details field provides a status code and status name provided
@@ -82,7 +82,8 @@ internalConnections: {
 ```
 
 **Example Output**:
-(NOTE: some sections in the example below are contracted to reduce redundancy)
+
+(**Note:** The following example is redacted for brevity.)
 
 ```
 {
