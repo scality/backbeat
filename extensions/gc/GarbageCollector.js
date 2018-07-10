@@ -65,6 +65,7 @@ class GarbageCollector extends EventEmitter {
      * @return {undefined}
      */
     start() {
+        let consumerReady = false;
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._gcConfig.topic,
@@ -72,8 +73,15 @@ class GarbageCollector extends EventEmitter {
             concurrency: this._gcConfig.consumer.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
         });
-        this._consumer.on('error', () => {});
+        this._consumer.on('error', () => {
+            if (!consumerReady) {
+                this._logger.error('garbage collector failed to start the ' +
+                                   'kafka consumer');
+                process.exit(1);
+            }
+        });
         this._consumer.on('ready', () => {
+            consumerReady = true;
             this._consumer.subscribe();
             this._logger.info('garbage collector service successfully started');
             return this.emit('ready');

@@ -24,7 +24,7 @@ lcConductor.start(err => {
     if (err) {
         logger.error('error during lifecycle conductor initialization',
                      { error: err.message });
-        return undefined;
+        process.exit(1);
     }
     healthServer.onReadyCheck(log => {
         if (lcConductor.isReady()) {

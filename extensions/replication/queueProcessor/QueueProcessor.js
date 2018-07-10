@@ -426,14 +426,14 @@ class QueueProcessor extends EventEmitter {
             if (err) {
                 this.logger.info('error setting up metrics producer',
                                  { error: err.message });
-                return undefined;
+                process.exit(1);
             }
             return this._setupProducer(err => {
                 let consumerReady = false;
                 if (err) {
                     this.logger.info('error setting up kafka producer',
                                      { error: err.message });
-                    return undefined;
+                    process.exit(1);
                 }
                 if (options && options.disableConsumer) {
                     this.emit('ready');
