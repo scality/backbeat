@@ -44,12 +44,12 @@ Where:
 - `<version-id>` is an optional field. When getting CRR metrics for a particular
    object, it contains the object's version ID.
 
-### `/_/backbeat/api/<location-name>`
+### `/_/backbeat/api/metrics/crr/<location-name>`
 
 This route gathers all the metrics below, returning one JSON object for the
 specified extension type and location name.
 
-### `/_/backbeat/api/<location-name>/backlog`
+### `/_/backbeat/api/metrics/crr/<location-name>/backlog`
 
 This route returns the replication backlog in number of objects and number of
 total bytes for the specified extension type and location name. Replication
@@ -70,7 +70,7 @@ for an object fails, failed object metrics are considered backlog.
 }
 ```
 
-### `/_/backbeat/api/<location-name>/completions`
+### `/_/backbeat/api/metrics/crr/<location-name>/completions`
 
 This route returns the replication completions in number of objects and number
 of total bytes transferred for the specified extension type and location.
@@ -90,7 +90,7 @@ to **15 minutes**.
 }
 ```
 
-### `/_/backbeat/api/<location-name>/failures`
+### `/_/backbeat/api/metrics/crr/<location-name>/failures`
 
 This route returns the replication failures in number of objects and number
 of total bytes for the specified extension type and location. Failures are
@@ -110,7 +110,7 @@ collected only up to an `EXPIRY` time, currently set to a default
 }
 ```
 
-### `/_/backbeat/api/<location-name>/throughput`
+### `/_/backbeat/api/metrics/crr/<location-name>/throughput`
 
 This route returns the current throughput in number of completed operations per
 second (or number of objects replicating per second) and number of total bytes
@@ -129,7 +129,7 @@ completing per second for the specified type and location name.
 }
 ```
 
-### `/_/backbeat/api/<site-name>/progress/<bucket>/<key>?versionId=<version-id>`
+### `/_/backbeat/api/metrics/crr/<site-name>/progress/<bucket>/<key>?versionId=<version-id>`
 
 This route returns replication progress in bytes transferred for the specified
 object.
@@ -147,7 +147,7 @@ object.
 }
 ```
 
-### `/_/backbeat/api/<site-name>/throughput/<bucket>/<key>?versionId=<version-id>`
+### `/_/backbeat/api/metrics/crr/<site-name>/throughput/<bucket>/<key>?versionId=<version-id>`
 
 This route returns the throughput in number of total bytes completing per second
 for the specified object.
