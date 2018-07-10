@@ -24,4 +24,25 @@ describe('backbeatProducer', () => {
         });
         assert.strictEqual(backbeatProducer._messageMaxBytes, 1000);
     });
+
+    it('should use default topic name without prefix', () => {
+        const backbeatProducer = new BackbeatProducer({
+            kafka,
+            topic: 'my-test-topic',
+        });
+        assert.strictEqual(backbeatProducer._topic, 'my-test-topic');
+    });
+
+    it('should use default topic name with prefix', () => {
+        process.env.KAFKA_TOPIC_PREFIX = 'testing.';
+        const backbeatProducer = new BackbeatProducer({
+            kafka,
+            topic: 'my-test-topic',
+        });
+        assert.strictEqual(backbeatProducer._topic, 'testing.my-test-topic');
+    });
+
+    afterEach(() => {
+        process.env.KAFKA_TOPIC_PREFIX = '';
+    });
 });
