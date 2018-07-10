@@ -62,7 +62,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        this.log.info('publishing entry',
+        this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
         this.publish(this.config.topic,
                      `${entry.bucket}/${entry.key}`,
