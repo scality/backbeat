@@ -27,7 +27,7 @@ HTTP code.
 ## Routes
 
 Routes are organized as follows:
-`/_/backbeat/api/<extension-type>/<location-name/[<metric-type>]/[<bucket>]/[<key>]?[versionId=<version-id>]`
+`/_/backbeat/api/metrics/crr/<extension-type>/<location-name/[<metric-type>]/[<bucket>]/[<key>]?[versionId=<version-id>]`
 
 Where:
 
