@@ -82,6 +82,7 @@ internalConnections: {
 ```
 
 **Example Output**:
+
 (**Note:** The following example is redacted for brevity.)
 
 ```
