@@ -9,7 +9,7 @@ killandsleep () {
 }
 
 # run backbeat server
-TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
+npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
 
 killandsleep 8900
 

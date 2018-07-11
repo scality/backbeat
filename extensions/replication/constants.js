@@ -1,6 +1,6 @@
 'use strict'; // eslint-disable-line
 
-const testIsOn = process.env.TEST_SWITCH === '1';
+const testIsOn = process.env.CI === 'true';
 
 const constants = {
     zookeeperReplicationNamespace: '/backbeat/replication',

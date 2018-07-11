@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const runServer = require('./lib/api/BackbeatServer');
 
-const Config = process.env.TEST_SWITCH !== '1' ? require('./conf/Config') :
+const Config = process.env.CI !== 'true' ? require('./conf/Config') :
     require('./tests/config.json');
 
 const Logger = werelogs.Logger;

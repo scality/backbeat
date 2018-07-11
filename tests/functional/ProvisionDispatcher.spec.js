@@ -10,15 +10,13 @@ const ProvisionDispatcher =
 
 const ZK_TEST_PATH = '/tests/prov-test';
 
-// FIXME: those tests should be fixed and re-enabled on CircleCI.
-
-describe.skip('provision dispatcher based on zookeeper recipes',
+describe('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
     const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
     let clients = [];
 
-    this.timeout(10000);
+    this.timeout(60000);
 
     before(done => {
         const zkClient = zookeeper.createClient('localhost:2181');
@@ -58,7 +56,6 @@ function testDispatch() {
     done => {
         const subscriptionLists = [];
         let nSubscriptionLists = 0;
-        const doneOnce = jsutil.once(done);
 
         function checkResult() {
             subscriptionLists.sort();
@@ -73,6 +70,10 @@ function testDispatch() {
                 }
             }
         }
+        const checkOnce = jsutil.once(() => {
+            checkResult();
+            done();
+        });
         function subscribeClient(i) {
             clients[i].subscribe((err, items) => {
                 assert.ifError(err);
@@ -83,10 +84,7 @@ function testDispatch() {
                 if (nSubscriptionLists === provisionList.length) {
                     // wait a bit to fail if there are new calls
                     // changing monitored provisions from this point
-                    setTimeout(() => {
-                        checkResult();
-                        doneOnce();
-                    }, 1000);
+                    setTimeout(checkOnce, 5000);
                 }
             });
         }
