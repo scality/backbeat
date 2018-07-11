@@ -1,0 +1,16 @@
+version: 2
+jobs:
+    build:
+        docker:
+            - image: circleci/node:6
+            - image: circleci/redis
+        steps:
+            - run: echo 'export CXX=g++-4.9' >> $BASH_ENV
+            - run: rm -rf node_modules && npm install
+            - run: docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
+            - run: npm run --silent lint_md
+            - run: npm run --silent lint
+            - run: npm test
+            - run: TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
+            - run: npm run ft_test
+
