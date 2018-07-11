@@ -7,42 +7,39 @@ replication (CRR) operations by storage locations.
 
 Users may also choose to resume CRR operations for a given storage location by a
 specified number of hours from the current time. This is particularly useful
-for cases where the user knows a destination location will be down for a
-certain amount of time and would like to schedule a time to resume CRR.
+when the user knows a destination location will be down for a certain time and
+wants to schedule a time to resume CRR.
 
 ## Design
 
-A RESTful API will expose methods for users to pause and resume cross-region
+The RESTful API exposes methods for users to pause and resume cross-region
 replication operations.
 
-Redis offers a pub/sub function. We will utilize this function to propagate
-requests to all active CRR Kafka Consumers on all nodes that have backbeat
-containers setup for replication.
+Redis’s pub/sub function propagates requests to all active CRR Kafka Consumers
+on all nodes that have Backbeat containers set up for replication.
 
-We want to pause and resume the CRR service at the lowest level (in our case,
-pause and resume all Kafka Consumers subscribed to the CRR topic). We want to
-perform these actions at the lowest level in order to stop processing any
-replication entries that might have already been populated by Kafka but have yet
-to be consumed and queued for replication. Any entries that have already been
-consumed by the Kafka Consumer and are being processed for replication will
-continue to finish replication and will not be paused.
+Backbeat's design allows pausing and resuming the CRR service at the lowest
+level (pause and resume all Kafka Consumers subscribed to the CRR topic) to
+stop processing any replication entries that might have already been populated
+by Kafka but have yet to be consumed and queued for replication. Any entries
+already consumed by the Kafka Consumer and being processed for replication
+finish replication and are not paused.
 
-The API will have a Redis instance publishing messages to a specific channel.
-QueueProcessors will subscribe to this channel, and on receiving a request
-to pause or resume CRR, will notify all of their BackbeatConsumers to perform
-the action if applicable. If an action occurred, the QueueProcessor will receive
-an update on the current status of each Consumer. Based on the global status of
-a location, the status will be updated in Zookeeper if a change has occurred.
+The API has a Redis instance publishing messages to a specific channel. Queue
+processors subscribe to this channel, and on receiving a request to pause or
+resume CRR, notify all their Backbeat consumers to perform the action, if
+applicable. If an action occurs, the queue processor receives an update on the
+current status of each consumer. Based on the global status of a location, the
+status is updated in ZooKeeper if a change has occurred.
 
-It is important to note, when a Consumer pauses, the Consumer process is still
-kept alive and maintains any internal state, including offset. The Consumer will
-no longer be subscribed to the CRR topic, so will no longer try consuming any
-entries. When the paused Consumer is resumed, it will again resume consuming
-entries from its last offset.
+When a consumer pauses, the consumer process is kept alive and maintains any
+internal state, including offset. The consumer is no longer subscribed to the
+CRR topic, so no longer tries to consume any entries. When the paused consumer
+is resumed, it again resumes consuming entries from its last offset.
 
 ## Definition of API
 
-* GET `/_/crr/status`
+* GET `/_/backbeat/api/crr/status`
 
     This GET request checks if cross-region replication is enabled or not for
     all locations configured as destination replication endpoints.
@@ -55,7 +52,7 @@ entries from its last offset.
     }
     ```
 
-* GET `/_/crr/status/<location-name>`
+* GET `/_/backbeat/api/crr/status/<location-name>`
 
     This GET request checks if cross-region replication is enabled or not for
     a specified location configured as a destination replication endpoint.
@@ -67,7 +64,7 @@ entries from its last offset.
     }
     ```
 
-* POST `/_/crr/pause`
+* POST `/_/backbeat/api/crr/pause`
 
     This POST request is to manually pause the cross-region replication service
     for all locations configured as destination replication endpoints.
@@ -77,7 +74,7 @@ entries from its last offset.
     {}
     ```
 
-* POST `/_/crr/pause/<location-name>`
+* POST `/_/backbeat/api/crr/pause/<location-name>`
 
     This POST request is to manually pause the cross-region replication service
     for a specified location configured as a destination replication endpoint.
@@ -87,7 +84,7 @@ entries from its last offset.
     {}
     ```
 
-* GET `/_/crr/resume/<location-name>`
+* GET `/_/backbeat/api/crr/resume/<location-name>`
 
     This GET request checks if the given location has a scheduled cross-region
     replication resume job. If a resume job is scheduled, you will see the
@@ -104,7 +101,7 @@ entries from its last offset.
     }
     ```
 
-* POST `/_/crr/resume`
+* POST `/_/backbeat/api/crr/resume`
 
     This POST request is to manually resume the cross-region replication
     service for all locations configured as destination replication endpoints.
@@ -114,25 +111,25 @@ entries from its last offset.
     {}
     ```
 
-* POST `/_/crr/resume/<location-name>`
+* POST `/_/backbeat/api/crr/resume/<location-name>`
 
-    This POST request is to manually resume the cross-region replication service
-    for a specified location configured as a destination replication endpoint.
+    This is a POST request to resume cross-region replication to a specified
+    location configured as a destination replication endpoint.
 
     Response:
     ```json
     {}
     ```
 
-* POST `/_/crr/resume/<location-name>/schedule`
+* POST `/_/backbeat/api/crr/resume/<location-name>/schedule`
 
-    This POST request is to schedule resuming the cross-region replication
-    service for a specified location configured as a destination replication
-    endpoint. You may specify "all" as a location name in order to schedule
-    a resume for all available destination locations.
+    This is a POST request to schedule resuming cross-region replication
+    to a specified location configured as a destination replication endpoint.
+    Specify "all" as a location name to schedule a resume for all available
+    destinations.
 
     Providing a POST request body object with an `hours` key and a valid
-    integer value will schedule a resume to occur by given hours.
+    integer value schedules a resume to occur in the given number of hours.
 
     If no request body is provided for this route, a default of 6 hours is
     applied.
