@@ -44,6 +44,6 @@
     "werelogs": "scality/werelogs#0ff7ec82"
   },
   "devDependencies": {
-    "mocha": "^3.3.0"
+    "mocha": "^5.2.0"
   }
 }
