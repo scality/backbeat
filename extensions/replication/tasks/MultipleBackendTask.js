@@ -101,17 +101,6 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
-    _getAndPutMPUPart(sourceEntry, destEntry, part, uploadId, log, cb) {
-        this.retry({
-            actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo() },
-            actionFunc: done => this._getAndPutMPUPartOnce(sourceEntry,
-                destEntry, part, uploadId, log, done),
-            shouldRetryFunc: err => err.retryable,
-            log,
-        }, cb);
-    }
-
     /**
      * This is a retry wrapper for calling _getRangeAndPutMPUPartOnce.
      * @param {ObjectQueueEntry} sourceEntry - The source object entry
@@ -201,7 +190,7 @@ class MultipleBackendTask extends ReplicateObject {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on completing MPU to S3', {
-                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    method: 'MultipleBackendTask._completeMPU',
                     entry: destEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -295,33 +284,6 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
-    /**
-     * Get an object by its part number, then put the part.
-     * @param {ObjectQueueEntry} sourceEntry - The source object entry
-     * @param {ObjectQueueEntry} destEntry - The destination object entry
-     * @param {Object} part - The single data location info
-     * @param {String} uploadId - The upload ID of the initiated MPU
-     * @param {Werelogs} log - The logger instance
-     * @param {Function} done - The callback to call
-     * @return {undefined}
-     */
-    _getAndPutMPUPartOnce(sourceEntry, destEntry, part, uploadId, log, done) {
-        log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
-        const doneOnce = jsutil.once(done);
-        const partObj = new ObjectMDLocation(part);
-        const sourceReq = this.backbeatSource.getObject({
-            Bucket: sourceEntry.getBucket(),
-            Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: partObj.getPartNumber(),
-            LocationConstraint: sourceEntry.getDataStoreName(),
-        });
-        const size = partObj.getPartSize();
-        const partNumber = partObj.getPartNumber();
-        return this._putMPUPart(sourceEntry, destEntry, sourceReq, size,
-            uploadId, partNumber, log, doneOnce);
-    }
-
     _getAndPutMultipartUpload(sourceEntry, destEntry, part, uploadId, log, cb) {
         this.retry({
             actionDesc: 'stream part data',
@@ -358,7 +320,7 @@ class MultipleBackendTask extends ReplicateObject {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on initating MPU to S3', {
-                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
+                    method: 'MultipleBackendTask._initiateMPU',
                     entry: destEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -372,14 +334,30 @@ class MultipleBackendTask extends ReplicateObject {
 
     /**
      * Get byte ranges for an object of the given content length, such that the
-     * range count does not exceed 1024 elements.
+     * range count does not exceed 1024 parts if replicating to GCP or does not
+     * exceed 10000 parts otherwise. This method also optimizes for the
+     * subsquent range requests by returning ranges that are sized as powers of
+     * two (aside from the last part).
      * @param {Number} contentLen - The content length of the whole object
+     * @param {Boolean} isGCP - Whether the object is being replicated to GCP
      * @return {Array} The array of byte ranges.
      */
-    _getRanges(contentLen) {
-        // Creates ranges that have sizes that are powers of 2.
+    _getRanges(contentLen, isGCP) {
+        // 5MB min part size rounded up to the nearest power of two is 8388608.
+        let partCount = Math.pow(2,
+            Math.ceil(Math.log(contentLen / 8388608) / Math.log(2)));
+        // The GCP storage type does not accept an MPU that is > 1024 parts, so
+        // we perform an MPU of <= 1024 parts if replicating to a GCP location.
+        // Otherwise, we use a max part count of 8192 which is the AWS max part
+        // count of 10000 rounded down to the nearest power of two. The AWS max
+        // part size is 5GB, so an MPU of 8192 parts allows for reaching the AWS
+        // max object size of 5T.
+        const maxPartCount = isGCP ? MPU_GCP_MAX_PARTS : 8192;
+        if (partCount > maxPartCount) {
+            partCount = maxPartCount;
+        }
         const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
-        const range = Math.ceil(pow / MPU_GCP_MAX_PARTS);
+        const range = Math.ceil(pow / partCount);
         const ranges = [];
         let start = 0;
         let end = 0;
@@ -404,7 +382,8 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _completeRangedMPU(sourceEntry, destEntry, uploadId, log, doneOnce) {
-        const ranges = this._getRanges(sourceEntry.getContentLength());
+        const isGCP = this._getReplicationEndpointType() === 'gcp';
+        const ranges = this._getRanges(sourceEntry.getContentLength(), isGCP);
         return async.timesLimit(ranges.length, MPU_CONC_LIMIT, (n, next) =>
             this._getRangeAndPutMPUPart(sourceEntry, destEntry, ranges[n],
                 n + 1, uploadId, log, (err, data) => {
@@ -439,68 +418,16 @@ class MultipleBackendTask extends ReplicateObject {
     _getAndPutMultipartUploadOnce(sourceEntry, destEntry, log, cb) {
         const doneOnce = jsutil.once(cb);
         log.debug('replicating MPU data', { entry: sourceEntry.getLogInfo() });
-        const missingDataStoreETag = sourceEntry.getLocation().some(part => {
-            const partObj = new ObjectMDLocation(part);
-            return partObj.getDataStoreETag() === undefined;
-        });
-        if (missingDataStoreETag) {
-            log.error('cannot replicate object without dataStoreETag property',
-                {
-                    method: 'MultipleBackendTask._getAndPutMultipartUploadOnce',
-                    entry: sourceEntry.getLogInfo(),
-                });
-            return cb(errors.InvalidObjectState);
-        }
-
         return this._initiateMPU(sourceEntry, destEntry, log,
         (err, uploadId) => {
             if (err) {
                 return doneOnce(err);
             }
-            const locations = sourceEntry.getReducedLocations();
-            // GCP storage type does not accept an MPU that is > 1024 parts, so
-            // we perform an MPU of <= 1024 parts.
-            if (this._getReplicationEndpointType() === 'gcp' &&
-                locations.length > MPU_GCP_MAX_PARTS) {
-                return this._completeRangedMPU(sourceEntry, destEntry,
-                    uploadId, log, doneOnce);
-            }
             const extMetrics = getExtMetrics(this.site,
                 sourceEntry.getContentLength(), sourceEntry);
-            return this.mProducer.publishMetrics(extMetrics,
-                metricsTypeQueued, metricsExtension, () =>
-                async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
-                    this._getAndPutMPUPart(sourceEntry, destEntry, part,
-                    uploadId, log, (err, data) => {
-                        if (err) {
-                            return done(err);
-                        }
-                        const res = {
-                            PartNumber: [data.partNumber],
-                            ETag: [data.ETag],
-                        };
-                        if (this._getReplicationEndpointType() === 'azure') {
-                            res.NumberSubParts = [data.numberSubParts];
-                        }
-                        return done(null, res);
-                    }),
-            (err, data) => {
-                if (err) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('an error occurred on putting MPU part to S3', {
-                        method:
-                            'MultipleBackendTask._getAndPutMultipartUploadOnce',
-                        entry: destEntry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                    });
-                    return doneOnce(err);
-                }
-                return this._completeMPU(sourceEntry, destEntry, uploadId, data,
-                    log, doneOnce);
-            }));
+            return this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
+                metricsExtension, () => this._completeRangedMPU(sourceEntry,
+                    destEntry, uploadId, log, doneOnce));
         });
     }
 
