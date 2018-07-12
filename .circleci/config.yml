@@ -1,11 +1,11 @@
 version: 2
 jobs:
     build:
-        machine: true
         docker:
             - image: circleci/node:6
             - image: circleci/redis
         steps:
+            - setup_remote_docker
             - run: echo 'export CXX=g++-4.9' >> $BASH_ENV
             - run: rm -rf node_modules && npm install
             - run: docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
