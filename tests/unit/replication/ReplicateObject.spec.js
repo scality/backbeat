@@ -1,12 +1,12 @@
 const assert = require('assert');
-const MultipleBackendTask =
-    require('../../../extensions/replication/tasks/MultipleBackendTask');
+const ReplicateObject =
+    require('../../../extensions/replication/tasks/ReplicateObject');
 
 const partSize = 1024 * 1024 * 1024 + 1;
 const MPU_GCP_MAX_PARTS = 1024;
 
-describe('MultipleBackendTask', () => {
-    const task = new MultipleBackendTask({
+describe('ReplicateObject', () => {
+    const task = new ReplicateObject({
         getStateVars: () => ({
             repConfig: {
                 queueProcessor: {

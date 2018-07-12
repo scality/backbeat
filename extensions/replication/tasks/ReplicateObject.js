@@ -14,10 +14,11 @@ const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const { metricsExtension, metricsTypeQueued, metricsTypeCompleted,
+    replicationBackends } = require('../constants');
 
 const MPU_CONC_LIMIT = 10;
+const MPU_GCP_MAX_PARTS = 1024;
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
@@ -102,13 +103,15 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
-    _getAndPutPart(sourceEntry, destEntry, part, log, cb) {
+    _getDataAndPutPart(params, log, cb) {
+        const { sourceEntry, part, range } = params;
         const partLogger = this.logger.newRequestLogger(log.getUids());
         this.retry({
             actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo(), part },
-            actionFunc: done => this._getAndPutPartOnce(
-                sourceEntry, destEntry, part, partLogger, done),
+            logFields: { entry: sourceEntry.getLogInfo(), part, range },
+            actionFunc: (range ?
+                done => this._getRangeAndPutPartOnce(params, log, done) :
+                done => this._getPartAndPutPartOnce(params, log, done)),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
                 if (err.origin === 'target') {
@@ -277,34 +280,107 @@ class ReplicateObject extends BackbeatTask {
             });
     }
 
+    /**
+     * Get byte ranges for an object of the given content length, such that the
+     * range count does not exceed 1024 parts if replicating to GCP or does not
+     * exceed 10000 parts otherwise. This method also optimizes for the
+     * subsquent range requests by returning ranges that are sized as powers of
+     * two (aside from the last part).
+     * @param {Number} contentLen - The content length of the whole object
+     * @param {Boolean} isGCP - Whether the object is being replicated to GCP
+     * @return {Array} The array of byte ranges.
+     */
+    _getRanges(contentLen, isGCP) {
+        // 5MB min part size rounded up to the nearest power of two is 8388608.
+        let partCount = Math.pow(2,
+            Math.ceil(Math.log(contentLen / 8388608) / Math.log(2)));
+        // The GCP storage type does not accept an MPU that is > 1024 parts, so
+        // we perform an MPU of <= 1024 parts if replicating to a GCP location.
+        // Otherwise, we use a max part count of 8192 which is the AWS max part
+        // count of 10000 rounded down to the nearest power of two. The AWS max
+        // part size is 5GB, so an MPU of 8192 parts allows for reaching the AWS
+        // max object size of 5T.
+        const maxPartCount = isGCP ? MPU_GCP_MAX_PARTS : 8192;
+        if (partCount > maxPartCount) {
+            partCount = maxPartCount;
+        }
+        const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
+        const range = Math.ceil(pow / partCount);
+        const ranges = [];
+        let start = 0;
+        let end = 0;
+        while (end < contentLen - 1) {
+            end = start + range - 1;
+            if (end < contentLen - 1) {
+                ranges.push({ start, end });
+                start = end + 1;
+            }
+        }
+        ranges.push({ start, end: contentLen - 1 });
+        return ranges;
+    }
+
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
+        const isExternalMD = sourceEntry.getLocation().find(part => {
+            const partObj = new ObjectMDLocation(part);
+            const dataStoreType = partObj.getDataStoreType();
+            return replicationBackends.includes(dataStoreType);
+        });
+        if (isExternalMD) {
+            const contentLength = sourceEntry.getContentLength();
+            const ranges = this._getRanges(contentLength, false);
+            return async.eachLimit(ranges, MPU_CONC_LIMIT, (range, done) => {
+                const params = { sourceEntry, destEntry, range };
+                return this._getDataAndPutPart(params, log, done);
+            }, err => cb(err, null));
+        }
         if (sourceEntry.getLocation().some(part => {
             const partObj = new ObjectMDLocation(part);
             return partObj.getDataStoreETag() === undefined;
         })) {
             log.error('cannot replicate object without dataStoreETag ' +
-                      'property',
-                      { method: 'ReplicateObject._getAndPutData',
-                        entry: sourceEntry.getLogInfo() });
+                'property',
+                { method: 'ReplicateObject._getAndPutData',
+                  entry: sourceEntry.getLogInfo() });
             return cb(errors.InvalidObjectState);
         }
         const locations = sourceEntry.getReducedLocations();
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done);
+            const params = { sourceEntry, destEntry, part };
+            return this._getDataAndPutPart(params, log, done);
         }, cb);
     }
 
-    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
-        const doneOnce = jsutil.once(done);
-        const partObj = new ObjectMDLocation(part);
-        const partNumber = partObj.getPartNumber();
+    _getRangeAndPutPartOnce(params, log, done) {
+        const { sourceEntry, range } = params;
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: partNumber,
+            Range: `bytes=${range.start}-${range.end}`,
         });
+        Object.assign(params, { sourceReq });
+        return this._putPartOnce(params, log, done);
+    }
+
+    _getPartAndPutPartOnce(params, log, done) {
+        const { sourceEntry, part } = params;
+        const partObj = new ObjectMDLocation(part);
+        const sourceReq = this.S3source.getObject({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+            PartNumber: partObj.getPartNumber(),
+        });
+        Object.assign(params, { partObj, sourceReq });
+        return this._putPartOnce(params, log, done);
+    }
+
+    _putPartOnce(params, log, done) {
+        const { sourceReq, sourceEntry, destEntry, part, partObj, range } =
+            params;
+        const doneOnce = jsutil.once(done);
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
             // eslint-disable-next-line no-param-reassign
@@ -313,7 +389,7 @@ class ReplicateObject extends BackbeatTask {
                 return doneOnce(err);
             }
             log.error('an error occurred on getObject from S3',
-                { method: 'ReplicateObject._getAndPutPartOnce',
+                { method: 'ReplicateObject._putPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     part,
                     origin: 'source',
@@ -330,7 +406,7 @@ class ReplicateObject extends BackbeatTask {
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             log.error('an error occurred when streaming data from S3',
-                { method: 'ReplicateObject._getAndPutPartOnce',
+                { method: 'ReplicateObject._putPartOnce',
                     entry: destEntry.getLogInfo(),
                     part,
                     origin: 'source',
@@ -338,13 +414,20 @@ class ReplicateObject extends BackbeatTask {
                     error: err.message });
             return doneOnce(err);
         });
-        log.debug('putting data', { entry: destEntry.getLogInfo(), part });
+        log.debug('putting data', {
+            entry: destEntry.getLogInfo(),
+            part,
+            range,
+        });
+        const size = range ?
+            range.end - range.start + 1 : partObj.getPartSize();
         const destReq = this.backbeatDest.putData({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerId(),
-            ContentLength: partObj.getPartSize(),
-            ContentMD5: partObj.getPartETag(),
+            ContentLength: size,
+            // Is this needed, or is it just used to validate the object?
+            // ContentMD5: partObj.getPartETag(),
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
@@ -353,20 +436,25 @@ class ReplicateObject extends BackbeatTask {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
                 log.error('an error occurred on putData to S3',
-                    { method: 'ReplicateObject._getAndPutPartOnce',
+                    { method: 'ReplicateObject._putPartOnce',
                         entry: destEntry.getLogInfo(),
                         part,
+                        range,
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message });
                 return doneOnce(err);
             }
-            partObj.setDataLocation(data.Location[0]);
-            const extMetrics = getExtMetrics(this.site,
-                partObj.getPartSize(), sourceEntry);
+            let locationVal = null;
+            if (partObj) {
+                locationVal = partObj
+                    .setDataLocation(data.Location[0])
+                    .getValue();
+            }
+            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
             return this.mProducer.publishMetrics(extMetrics,
                 metricsTypeCompleted, metricsExtension, () =>
-                doneOnce(null, partObj.getValue()));
+                doneOnce(null, locationVal));
         });
     }
 
@@ -503,7 +591,9 @@ class ReplicateObject extends BackbeatTask {
             // update location, replication status and put metadata in
             // target bucket
             (location, next) => {
-                destEntry.setLocation(location);
+                if (location) {
+                    destEntry.setLocation(location);
+                }
                 this._putMetadata(destEntry, mdOnly, log, next);
             },
         ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,

@@ -12,7 +12,6 @@ const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
 
 const MPU_CONC_LIMIT = 10;
-const MPU_GCP_MAX_PARTS = 1024;
 
 class MultipleBackendTask extends ReplicateObject {
 
@@ -330,46 +329,6 @@ class MultipleBackendTask extends ReplicateObject {
             }
             return cb(null, data.uploadId);
         });
-    }
-
-    /**
-     * Get byte ranges for an object of the given content length, such that the
-     * range count does not exceed 1024 parts if replicating to GCP or does not
-     * exceed 10000 parts otherwise. This method also optimizes for the
-     * subsquent range requests by returning ranges that are sized as powers of
-     * two (aside from the last part).
-     * @param {Number} contentLen - The content length of the whole object
-     * @param {Boolean} isGCP - Whether the object is being replicated to GCP
-     * @return {Array} The array of byte ranges.
-     */
-    _getRanges(contentLen, isGCP) {
-        // 5MB min part size rounded up to the nearest power of two is 8388608.
-        let partCount = Math.pow(2,
-            Math.ceil(Math.log(contentLen / 8388608) / Math.log(2)));
-        // The GCP storage type does not accept an MPU that is > 1024 parts, so
-        // we perform an MPU of <= 1024 parts if replicating to a GCP location.
-        // Otherwise, we use a max part count of 8192 which is the AWS max part
-        // count of 10000 rounded down to the nearest power of two. The AWS max
-        // part size is 5GB, so an MPU of 8192 parts allows for reaching the AWS
-        // max object size of 5T.
-        const maxPartCount = isGCP ? MPU_GCP_MAX_PARTS : 8192;
-        if (partCount > maxPartCount) {
-            partCount = maxPartCount;
-        }
-        const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
-        const range = Math.ceil(pow / partCount);
-        const ranges = [];
-        let start = 0;
-        let end = 0;
-        while (end < contentLen - 1) {
-            end = start + range - 1;
-            if (end < contentLen - 1) {
-                ranges.push({ start, end });
-                start = end + 1;
-            }
-        }
-        ranges.push({ start, end: contentLen - 1 });
-        return ranges;
     }
 
     /**
