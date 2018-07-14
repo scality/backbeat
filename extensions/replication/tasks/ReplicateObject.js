@@ -340,9 +340,9 @@ class ReplicateObject extends BackbeatTask {
             return partObj.getDataStoreETag() === undefined;
         })) {
             log.error('cannot replicate object without dataStoreETag ' +
-                'property',
-                { method: 'ReplicateObject._getAndPutData',
-                  entry: sourceEntry.getLogInfo() });
+                      'property',
+                      { method: 'ReplicateObject._getAndPutData',
+                        entry: sourceEntry.getLogInfo() });
             return cb(errors.InvalidObjectState);
         }
         const locations = sourceEntry.getReducedLocations();
@@ -426,8 +426,6 @@ class ReplicateObject extends BackbeatTask {
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerId(),
             ContentLength: size,
-            // Is this needed, or is it just used to validate the object?
-            // ContentMD5: partObj.getPartETag(),
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
