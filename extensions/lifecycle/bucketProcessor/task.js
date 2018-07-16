@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 const werelogs = require('werelogs');
 const { initManagement } = require('../../../lib/management/index');
-const LifecycleProducer = require('./LifecycleBucketProcessor');
+const LifecycleBucketProcessor = require('./LifecycleBucketProcessor');
 const { HealthProbeServer } = require('arsenal').network.probe;
 const { applyBucketLifecycleWorkflows } = require('../management');
 const { zookeeper, kafka, extensions, s3, transport, log, healthcheckServer } =
@@ -12,8 +12,8 @@ werelogs.configure({ level: log.logLevel,
 
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
-const lifecycleProducer =
-    new LifecycleProducer(zookeeper, kafka, extensions.lifecycle,
+const bucketProcessor =
+    new LifecycleBucketProcessor(zookeeper, kafka, extensions.lifecycle,
         s3, transport);
 
 const healthServer = new HealthProbeServer({
@@ -35,16 +35,16 @@ function initAndStart() {
         }
         logger.info('management init done');
         healthServer.onReadyCheck(log => {
-            if (lifecycleProducer.isReady()) {
+            if (bucketProcessor.isReady()) {
                 return true;
             }
-            log.error('LifecycleProducer is not ready!');
+            log.error('LifecycleBucketProcessor is not ready!');
             return false;
         });
         logger.info('Starting HealthProbe server');
         healthServer.start();
 
-        lifecycleProducer.start();
+        bucketProcessor.start();
     });
 }
 
@@ -52,7 +52,7 @@ initAndStart();
 
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');
-    lifecycleProducer.close(() => {
+    bucketProcessor.close(() => {
         process.exit(0);
     });
 });

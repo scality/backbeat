@@ -19,7 +19,7 @@ const fakeLogger = {
     debug: () => {},
 };
 
-// LifecycleProducer mini Mock
+// LifecycleBucketProcessor mini Mock
 const lp = {
     getStateVars: () => (
         {

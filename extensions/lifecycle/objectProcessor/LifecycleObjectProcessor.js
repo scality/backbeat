@@ -8,7 +8,7 @@ const { errors } = require('arsenal');
 const LifecycleObjectTask = require('../tasks/LifecycleObjectTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 
-class LifecycleConsumer extends EventEmitter {
+class LifecycleObjectProcessor extends EventEmitter {
 
     /**
      * Create a kafka consumer to read lifecycle actions from queue
@@ -142,4 +142,4 @@ class LifecycleConsumer extends EventEmitter {
 
 }
 
-module.exports = LifecycleConsumer;
+module.exports = LifecycleObjectProcessor;

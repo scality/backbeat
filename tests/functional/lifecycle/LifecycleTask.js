@@ -262,9 +262,10 @@ class S3Helper {
     }
 }
 
-class LifecycleProducerMock {
+class LifecycleBucketProcessorMock {
     constructor() {
-        this._log = new Logger('LifecycleProducer:test:LifecycleProducerMock');
+        this._log = new Logger(
+            'LifecycleBucketProcessor:test:LifecycleBucketProcessorMock');
 
         // TODO: only added current working features
         this._lcConfig = {
@@ -368,7 +369,7 @@ describe('lifecycle task functional tests', function dF() {
     let s3Helper;
 
     before(() => {
-        lcp = new LifecycleProducerMock();
+        lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
         s3Helper = new S3Helper(s3);

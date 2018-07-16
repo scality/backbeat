@@ -2,7 +2,7 @@
 const werelogs = require('werelogs');
 
 const { initManagement } = require('../../../lib/management/index');
-const LifecycleConsumer = require('./LifecycleObjectProcessor');
+const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
 const config = require('../../../conf/Config');
@@ -14,7 +14,7 @@ const transport = config.transport;
 
 const log = new werelogs.Logger('Backbeat:Lifecycle:Consumer');
 
-const lifecycleConsumer = new LifecycleConsumer(
+const objectProcessor = new LifecycleObjectProcessor(
     zkConfig, kafkaConfig, lcConfig, s3Config, transport);
 
 const healthServer = new HealthProbeServer({
@@ -38,7 +38,7 @@ function initAndStart() {
         }
         log.info('management init done');
         healthServer.onReadyCheck(log => {
-            if (lifecycleConsumer.isReady()) {
+            if (objectProcessor.isReady()) {
                 return true;
             }
             log.error('LifecycleConductor is not ready!');
@@ -47,7 +47,7 @@ function initAndStart() {
         log.info('Starting HealthProbe server');
         healthServer.start();
 
-        lifecycleConsumer.start();
+        objectProcessor.start();
     });
 }
 
@@ -55,7 +55,7 @@ initAndStart();
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    lifecycleConsumer.close(() => {
+    objectProcessor.close(() => {
         process.exit(0);
     });
 });
