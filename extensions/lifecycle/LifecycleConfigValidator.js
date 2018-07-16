@@ -32,7 +32,7 @@ const joiSchema = {
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
     },
-    producer: {
+    bucketProcessor: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         // a single producer task is already involving concurrency in
@@ -40,7 +40,7 @@ const joiSchema = {
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
     },
-    consumer: {
+    objectProcessor: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         concurrency: joi.number().greater(0).default(10),

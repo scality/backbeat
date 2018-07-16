@@ -39,6 +39,12 @@ class LifecycleBucketProcessor {
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle config
      * @param {Object} lcConfig.auth - authentication info
+     * @param {String} lcConfig.bucketTasksTopic - lifecycle bucket topic name
+     * @param {Object} lcConfig.bucketProcessor - kafka consumer object
+     * @param {String} lcConfig.bucketProcessor.groupId - kafka
+     * consumer group id
+     * @param {Number} [lcConfig.bucketProcessor.concurrency] - number
+     *  of max allowed concurrent operations
      * @param {Object} [lcConfig.backlogMetrics] - param object to
      * publish backlog metrics to zookeeper (see {@link
      * BackbeatConsumer} constructor)
@@ -48,7 +54,7 @@ class LifecycleBucketProcessor {
      * @param {String} transport - http or https
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport) {
-        this._log = new Logger('Backbeat:LifecycleBucketProcessor');
+        this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
@@ -62,7 +68,7 @@ class LifecycleBucketProcessor {
         this._internalTaskScheduler = async.queue((ctx, cb) => {
             const { task, rules, value, s3target } = ctx;
             return task.processBucketEntry(rules, value, s3target, cb);
-        }, this._lcConfig.producer.concurrency);
+        }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
         this._internalTaskScheduler.drain(err => {
@@ -271,8 +277,8 @@ class LifecycleBucketProcessor {
             },
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._lcConfig.bucketTasksTopic,
-            groupId: this._lcConfig.producer.groupId,
-            concurrency: this._lcConfig.producer.concurrency,
+            groupId: this._lcConfig.bucketProcessor.groupId,
+            concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
             autoCommit: true,
             backlogMetrics: this._lcConfig.backlogMetrics,
@@ -323,8 +329,8 @@ class LifecycleBucketProcessor {
                 .setPort('lifecycle:admin', adminPort)
                 .loadAdminCredentials('lifecycle:admin', accessKey, secretKey);
         } else {
-            throw new Error('Lifecycle producer not properly configured: ' +
-                'missing credentials for Vault admin client');
+            throw new Error('Lifecycle bucket processor not properly ' +
+                'configured: missing credentials for Vault admin client');
         }
         this._vaultClientCache
             .setHost('lifecycle:s3', host)
@@ -441,13 +447,13 @@ class LifecycleBucketProcessor {
                 process.exit(1);
             }
             this._setupConsumer();
-            this._log.info('lifecycle producer successfully started');
+            this._log.info('lifecycle bucket processor successfully started');
             return undefined;
         });
     }
 
     /**
-     * Close the lifecycle producer
+     * Close the lifecycle bucket processor
      * @param {function} cb - callback function
      * @return {undefined}
      */

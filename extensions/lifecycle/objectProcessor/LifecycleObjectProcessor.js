@@ -30,12 +30,11 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
-     * @param {Object} lcConfig.consumer - kafka consumer object
-     * @param {String} lcConfig.consumer.groupId - kafka consumer group id
-     * @param {Number} [lcConfig.consumer.retryTimeoutS] - number of seconds
-     *  before giving up retries of an entry lifecycle action
-     * @param {Number} [lcConfig.consumer.concurrency] - number of max allowed
-     *  concurrent operations
+     * @param {Object} lcConfig.objectProcessor - kafka consumer object
+     * @param {String} lcConfig.objectProcessor.groupId - kafka
+     * consumer group id
+     * @param {Number} [lcConfig.objectProcessor.concurrency] - number
+     *  of max allowed concurrent operations
      * @param {Object} [lcConfig.backlogMetrics] - param object to
      * publish backlog metrics to zookeeper (see {@link
      * BackbeatConsumer} constructor)
@@ -56,7 +55,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._transport = transport;
         this._consumer = null;
 
-        this.logger = new Logger('Backbeat:Lifecycle:ObjectConsumer');
+        this.logger = new Logger('Backbeat:Lifecycle:ObjectProcessor');
 
         // global variables
         // TODO: for SSL support, create HTTPS agents instead
@@ -78,22 +77,22 @@ class LifecycleObjectProcessor extends EventEmitter {
             },
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.lcConfig.objectTasksTopic,
-            groupId: this.lcConfig.consumer.groupId,
-            concurrency: this.lcConfig.consumer.concurrency,
+            groupId: this.lcConfig.objectProcessor.groupId,
+            concurrency: this.lcConfig.objectProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
             autoCommit: true,
             backlogMetrics: this.lcConfig.backlogMetrics,
         });
         this._consumer.on('error', () => {
             if (!consumerReady) {
-                this.logger.fatal('error starting lifecycle consumer');
+                this.logger.fatal('error starting lifecycle object processor');
                 process.exit(1);
             }
         });
         this._consumer.on('ready', () => {
             consumerReady = true;
             this._consumer.subscribe();
-            this.logger.info('lifecycle consumer successfully started');
+            this.logger.info('lifecycle object processor successfully started');
             return this.emit('ready');
         });
     }
