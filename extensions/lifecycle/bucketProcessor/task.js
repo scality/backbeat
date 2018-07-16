@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 const werelogs = require('werelogs');
 const { initManagement } = require('../../../lib/management/index');
-const LifecycleProducer = require('./LifecycleProducer');
+const LifecycleProducer = require('./LifecycleBucketProcessor');
 const { HealthProbeServer } = require('arsenal').network.probe;
 const { applyBucketLifecycleWorkflows } = require('../management');
 const { zookeeper, kafka, extensions, s3, transport, log, healthcheckServer } =

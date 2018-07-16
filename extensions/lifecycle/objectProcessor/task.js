@@ -2,7 +2,7 @@
 const werelogs = require('werelogs');
 
 const { initManagement } = require('../../../lib/management/index');
-const LifecycleConsumer = require('./LifecycleConsumer');
+const LifecycleConsumer = require('./LifecycleObjectProcessor');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
 const config = require('../../../conf/Config');
