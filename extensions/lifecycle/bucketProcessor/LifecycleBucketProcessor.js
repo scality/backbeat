@@ -20,16 +20,19 @@ const PROCESS_OBJECTS_ACTION = 'processObjects';
 /**
  * @class LifecycleBucketProcessor
  *
- * @classdesc Handles consuming entries from the bucket topic and sending those
- * entries to be processed by the lifecycle task. Once processed, the entry is
- * sent to the object topic for another consumer to perform the lifecycle
- * operation (e.g., expiration) on the object. If another listing is required on
- * the bucket (i.e., the listing is truncated), an entry is pushed to the bucket
- * topic for the next round of processing.
+ * @classdesc Handles consuming entries from the bucket tasks topic
+ * and producing lifecycle messages to trigger actions for objects
+ * that qualify to lifecycle rules.
+ *
+ * If another listing is required on the bucket (i.e., the listing is
+ * truncated), an entry is pushed to the bucket topic for the next
+ * round of processing.
  */
 class LifecycleBucketProcessor {
     /**
      * Constructor of LifecycleBucketProcessor
+     *
+     * @constructor
      * @param {Object} zkConfig - zookeeper config
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers

@@ -8,11 +8,17 @@ const { errors } = require('arsenal');
 const LifecycleObjectTask = require('../tasks/LifecycleObjectTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 
+/**
+ * @class LifecycleObjectProcessor
+ *
+ * @classdesc Handles consuming entries from the object tasks topic
+ * and executing the expiration actions on the local CloudServer
+ * endpoint using the S3 API.
+ */
 class LifecycleObjectProcessor extends EventEmitter {
 
     /**
-     * Create a kafka consumer to read lifecycle actions from queue
-     * and perform them on a target S3 endpoint.
+     * Constructor of LifecycleObjectProcessor
      *
      * @constructor
      * @param {Object} zkConfig - zookeeper configuration object
