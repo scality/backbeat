@@ -31,7 +31,7 @@ const s3config = {
     not pass.
     Also, when using rules that require Days/NoncurrentDays/DaysAfterInitiation,
     XML rule restrictions don't allow "0" day rules to be applied. So when
-    testing, always use ENV `TEST_SWITCH` and LifecycleTask will expire based
+    testing, always use ENV `CI=true` and LifecycleTask will expire based
     on 1 Day rules. Applying 2+ Days should mean the object(s) should not
     expire.
 */
