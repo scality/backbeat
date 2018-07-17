@@ -9,7 +9,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const RETRYTIMEOUTS = 300;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-const MAX_KEYS = process.env.TEST_SWITCH ? 3 : 1000;
+const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
@@ -557,7 +557,7 @@ class LifecycleTask extends BackbeatTask {
                     let rules = applicableRules;
                     // Hijack for testing
                     // Idea is to set any "Days" rule to `Days - 1`
-                    const testIsOn = process.env.TEST_SWITCH === '1';
+                    const testIsOn = process.env.CI === 'true';
                     if (testIsOn) {
                         rules = this._adjustRulesForTesting(rules);
                     }
@@ -830,7 +830,7 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Only to be used when testing (when process.env.TEST_SWITCH).
+     * Only to be used when testing (when process.env.CI is true).
      * The idea is to adjust any "Days" or "NoncurrentDays" rules so that rules
      * set with 1 day should expire, but any days set with 2+ days will not.
      * Since Days/NoncurrentDays cannot be set to 0, this is a way to set the
@@ -966,7 +966,7 @@ class LifecycleTask extends BackbeatTask {
 
             // Hijack for testing
             // Idea is to set any "Days" rule to `Days - 1`
-            const testIsOn = process.env.TEST_SWITCH === '1';
+            const testIsOn = process.env.CI === 'true';
             if (testIsOn) {
                 aRules = this._adjustRulesForTesting(aRules);
             }
