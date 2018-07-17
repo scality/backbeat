@@ -9,12 +9,12 @@ killandsleep () {
 }
 
 # run s3 mem_backend
-cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash 8000 40 && TEST_SWITCH=1 npm run ft_test
+cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash 8000 40 && npm run ft_test
 
 killandsleep 8000
 
 # run backbeat server
-TEST_SWITCH=1 npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
+npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
 
 killandsleep 8900
 
