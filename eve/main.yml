@@ -35,6 +35,10 @@ stages:
           name: run s3 server tests
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
           workdir: '%(prop:builddir)s/build'
+          env:
+            CI: "true"
       - ShellCommand:
           name: run feature tests
           command: npm run ft_test
+          env:
+            CI: "true"
