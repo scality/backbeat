@@ -162,10 +162,10 @@ class LifecycleConductor {
         return async.series([
             next => this._controlBacklogForTopic(
                 this.lcConfig.bucketTasksTopic,
-                this.lcConfig.producer.groupId, next),
+                this.lcConfig.bucketProcessor.groupId, next),
             next => this._controlBacklogForTopic(
                 this.lcConfig.objectTasksTopic,
-                this.lcConfig.consumer.groupId, next),
+                this.lcConfig.objectProcessor.groupId, next),
         ], err => done(err));
     }
 

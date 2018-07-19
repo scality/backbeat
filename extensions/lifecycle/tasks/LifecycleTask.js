@@ -19,7 +19,7 @@ class LifecycleTask extends BackbeatTask {
      * actions apply to an object, version of an object, or MPU.
      *
      * @constructor
-     * @param {LifecycleProducer} lp - lifecycle producer instance
+     * @param {LifecycleBucketProcessor} lp - lifecycle producer instance
      */
     constructor(lp) {
         const lpState = lp.getStateVars();

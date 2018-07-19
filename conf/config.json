@@ -127,13 +127,13 @@
                 "cronRule": "0 */5 * * * *",
                 "concurrency": 10
             },
-            "producer": {
-                "groupId": "backbeat-lifecycle-producer-group",
+            "bucketProcessor": {
+                "groupId": "backbeat-lifecycle-bucket-processor-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10
             },
-            "consumer": {
-                "groupId": "backbeat-lifecycle-consumer-group",
+            "objectProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10
             },

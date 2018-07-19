@@ -18,24 +18,33 @@ const safeJsonParse = require('../util/safeJsonParse');
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
 /**
- * @class LifecycleProducer
+ * @class LifecycleBucketProcessor
  *
- * @classdesc Handles consuming entries from the bucket topic and sending those
- * entries to be processed by the lifecycle task. Once processed, the entry is
- * sent to the object topic for another consumer to perform the lifecycle
- * operation (e.g., expiration) on the object. If another listing is required on
- * the bucket (i.e., the listing is truncated), an entry is pushed to the bucket
- * topic for the next round of processing.
+ * @classdesc Handles consuming entries from the bucket tasks topic
+ * and producing lifecycle messages to trigger actions for objects
+ * that qualify to lifecycle rules.
+ *
+ * If another listing is required on the bucket (i.e., the listing is
+ * truncated), an entry is pushed to the bucket topic for the next
+ * round of processing.
  */
-class LifecycleProducer {
+class LifecycleBucketProcessor {
     /**
-     * Constructor of LifecycleProducer
+     * Constructor of LifecycleBucketProcessor
+     *
+     * @constructor
      * @param {Object} zkConfig - zookeeper config
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
      * @param {Object} lcConfig - lifecycle config
      * @param {Object} lcConfig.auth - authentication info
+     * @param {String} lcConfig.bucketTasksTopic - lifecycle bucket topic name
+     * @param {Object} lcConfig.bucketProcessor - kafka consumer object
+     * @param {String} lcConfig.bucketProcessor.groupId - kafka
+     * consumer group id
+     * @param {Number} [lcConfig.bucketProcessor.concurrency] - number
+     *  of max allowed concurrent operations
      * @param {Object} [lcConfig.backlogMetrics] - param object to
      * publish backlog metrics to zookeeper (see {@link
      * BackbeatConsumer} constructor)
@@ -45,7 +54,7 @@ class LifecycleProducer {
      * @param {String} transport - http or https
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport) {
-        this._log = new Logger('Backbeat:LifecycleProducer');
+        this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
@@ -59,7 +68,7 @@ class LifecycleProducer {
         this._internalTaskScheduler = async.queue((ctx, cb) => {
             const { task, rules, value, s3target } = ctx;
             return task.processBucketEntry(rules, value, s3target, cb);
-        }, this._lcConfig.producer.concurrency);
+        }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
         this._internalTaskScheduler.drain(err => {
@@ -175,7 +184,7 @@ class LifecycleProducer {
         }
         if (typeof result.target !== 'object') {
             this._log.error('malformed kafka bucket entry', {
-                method: 'LifecycleProducer._processBucketEntry',
+                method: 'LifecycleBucketProcessor._processBucketEntry',
                 entry: result,
             });
             return process.nextTick(() => cb(errors.InternalError));
@@ -183,14 +192,14 @@ class LifecycleProducer {
         const { bucket, owner } = result.target;
         if (!bucket || !owner) {
             this._log.error('kafka bucket entry missing required fields', {
-                method: 'LifecycleProducer._processBucketEntry',
+                method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
         this._log.debug('processing bucket entry', {
-            method: 'LifecycleProducer._processBucketEntry',
+            method: 'LifecycleBucketProcessor._processBucketEntry',
             bucket,
             owner,
         });
@@ -207,7 +216,7 @@ class LifecycleProducer {
         ], (err, config, s3) => {
             if (err) {
                 this._log.error('error getting bucket lifecycle config', {
-                    method: 'LifecycleProducer._processBucketEntry',
+                    method: 'LifecycleBucketProcessor._processBucketEntry',
                     bucket,
                     owner,
                     error: err,
@@ -218,7 +227,7 @@ class LifecycleProducer {
                 return cb();
             }
             this._log.info('scheduling new task for bucket lifecycle', {
-                method: 'LifecycleProducer._processBucketEntry',
+                method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
                 details: result.details,
@@ -268,8 +277,8 @@ class LifecycleProducer {
             },
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._lcConfig.bucketTasksTopic,
-            groupId: this._lcConfig.producer.groupId,
-            concurrency: this._lcConfig.producer.concurrency,
+            groupId: this._lcConfig.bucketProcessor.groupId,
+            concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
             autoCommit: true,
             backlogMetrics: this._lcConfig.backlogMetrics,
@@ -278,7 +287,7 @@ class LifecycleProducer {
             if (!consumerReady) {
                 this._log.fatal('unable to start lifecycle consumer', {
                     error: err,
-                    method: 'LifecycleProducer._setupConsumer',
+                    method: 'LifecycleBucketProcessor._setupConsumer',
                 });
                 process.exit(1);
             }
@@ -320,8 +329,8 @@ class LifecycleProducer {
                 .setPort('lifecycle:admin', adminPort)
                 .loadAdminCredentials('lifecycle:admin', accessKey, secretKey);
         } else {
-            throw new Error('Lifecycle producer not properly configured: ' +
-                'missing credentials for Vault admin client');
+            throw new Error('Lifecycle bucket processor not properly ' +
+                'configured: missing credentials for Vault admin client');
         }
         this._vaultClientCache
             .setHost('lifecycle:s3', host)
@@ -386,7 +395,7 @@ class LifecycleProducer {
             if (err) {
                 this._log.error('error generating new access key', {
                     error: err.message,
-                    method: 'LifecycleProducer._getAccountCredentials',
+                    method: 'LifecycleBucketProcessor._getAccountCredentials',
                 });
                 return cb(err);
             }
@@ -408,7 +417,7 @@ class LifecycleProducer {
                         this._log.error('error setting up kafka producer for ' +
                         'bucket task', {
                             error: err.message,
-                            method: 'LifecycleProducer.start',
+                            method: 'LifecycleBucketProcessor.start',
                         });
                         return next(err);
                     }
@@ -422,7 +431,7 @@ class LifecycleProducer {
                         this._log.error('error setting up kafka producer for ' +
                         'object task', {
                             error: err.message,
-                            method: 'LifecycleProducer.start',
+                            method: 'LifecycleBucketProcessor.start',
                         });
                         return next(err);
                     }
@@ -433,18 +442,18 @@ class LifecycleProducer {
             if (err) {
                 this._log.error('error setting up kafka clients', {
                     error: err,
-                    method: 'LifecycleProducer.start',
+                    method: 'LifecycleBucketProcessor.start',
                 });
                 process.exit(1);
             }
             this._setupConsumer();
-            this._log.info('lifecycle producer successfully started');
+            this._log.info('lifecycle bucket processor successfully started');
             return undefined;
         });
     }
 
     /**
-     * Close the lifecycle producer
+     * Close the lifecycle bucket processor
      * @param {function} cb - callback function
      * @return {undefined}
      */
@@ -472,4 +481,4 @@ class LifecycleProducer {
     }
 }
 
-module.exports = LifecycleProducer;
+module.exports = LifecycleBucketProcessor;
