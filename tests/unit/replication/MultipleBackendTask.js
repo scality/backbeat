@@ -180,6 +180,21 @@ describe('MultipleBackendTask', () => {
             });
         });
 
+        it('should get single part count for GCP', () => {
+            const contentLength = (1024 * 1024) * 5;
+            const ranges = task._getRanges(contentLength, true);
+            assert(ranges.length === 1);
+        });
+
+        it('should use GCP calculation for ranges exceeding 512MB * 1024',
+        () => {
+            const contentLength = ((1024 * 1024) * 512) * 1024;
+            let ranges = task._getRanges(contentLength, true);
+            assert(ranges.length === 1024);
+            ranges = task._getRanges(contentLength + 1, true);
+            assert(ranges.length === 513);
+        });
+
         it('should get <= 1024 ranges for part count 1025-10000', () => {
             const partSize = 1024 * 1024 * 1024 + 1;
             Array.from(Array(10000 - 1024).keys()).forEach(n => {

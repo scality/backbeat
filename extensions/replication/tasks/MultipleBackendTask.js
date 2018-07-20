@@ -341,8 +341,12 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {Number} The range size to use
      */
     _getGCPRangeSize(contentLen) {
-        const pow = Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
-        const rangeSize = Math.ceil(pow / MPU_GCP_MAX_PARTS);
+        let rangeSize = this._getRangeSize(contentLen);
+        if (contentLen / rangeSize > MPU_GCP_MAX_PARTS) {
+            const pow =
+                Math.pow(2, Math.ceil(Math.log(contentLen) / Math.log(2)));
+            rangeSize = Math.ceil(pow / MPU_GCP_MAX_PARTS);
+        }
         return rangeSize;
     }
 
