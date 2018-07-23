@@ -423,6 +423,7 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _completeRangedMPU(sourceEntry, destEntry, uploadId, log, doneOnce) {
         const isGCP = this._getReplicationEndpointType() === 'gcp';
+        const isAzure = this._getReplicationEndpointType() === 'azure';
         const ranges = this._getRanges(sourceEntry.getContentLength(), isGCP);
         return async.timesLimit(ranges.length, MPU_CONC_LIMIT, (n, next) =>
             this._getRangeAndPutMPUPart(sourceEntry, destEntry, ranges[n],
@@ -434,6 +435,9 @@ class MultipleBackendTask extends ReplicateObject {
                         PartNumber: [data.partNumber],
                         ETag: [data.ETag],
                     };
+                    if (isAzure) {
+                        res.NumberSubParts = [data.numberSubParts];
+                    }
                     return next(null, res);
                 }),
             (err, data) => {
