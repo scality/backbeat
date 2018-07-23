@@ -385,22 +385,22 @@ class LifecycleTask extends BackbeatTask {
             if (rule.Status === 'Disabled') {
                 return false;
             }
-            if (rule.Filter && rule.Filter.And) {
-                // multiple tags or prefix w/ tag(s)
-                const prefix = rule.Filter.And.Prefix;
-                if (prefix && !item.Key.startsWith(prefix)) {
-                    return false;
-                }
-                return deepCompare(rule.Filter.And.Tags, objTags.TagSet);
-            }
-            // only one prefix or one tag to compare in this rule
+            // check all locations where prefix could possibly be
             const prefix = rule.Prefix ||
-                (rule.Filter && rule.Filter.Prefix);
+                  (rule.Filter && (rule.Filter.And ?
+                                   rule.Filter.And.Prefix :
+                                   rule.Filter.Prefix));
             if (prefix && !item.Key.startsWith(prefix)) {
                 return false;
             }
-            if (rule.Filter && rule.Filter.Tag && objTags.TagSet) {
-                return deepCompare([rule.Filter.Tag], objTags.TagSet);
+            if (!rule.Filter) {
+                return true;
+            }
+            const tags = rule.Filter.And ?
+                  rule.Filter.And.Tags :
+                  (rule.Filter.Tag && [rule.Filter.Tag]);
+            if (tags && !deepCompare(tags, objTags.TagSet || [])) {
+                return false;
             }
             return true;
         });
