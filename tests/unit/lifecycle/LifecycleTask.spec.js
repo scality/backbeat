@@ -217,37 +217,13 @@ describe('lifecycle task helper methods', () => {
                 LastModified: CURRENT,
             };
             const objTags = { TagSet: [] };
-            const res = lct._filterRules(mBucketRules, item, objTags);
-            assert.strictEqual(res.length, 1);
-            assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
+            const objNoTagSet = {};
+            [objTags, objNoTagSet].forEach(obj => {
+                const res = lct._filterRules(mBucketRules, item, obj);
+                assert.strictEqual(res.length, 1);
+                assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
+            });
         });
-    });
-
-    it('should filter correctly for an object with no tags', () => {
-        const mBucketRules = [
-            new Rule().addID('task-1').addTag('tag1', 'val1')
-                .addTag('tag2', 'val1').build(),
-            new Rule().addID('task-2').addTag('tag1', 'val1').build(),
-            new Rule().addID('task-3').addTag('tag2', 'val1').build(),
-            new Rule().addID('task-4').addTag('tag2', 'false').build(),
-            new Rule().addID('task-5').addTag('tag2', 'val1')
-                .addTag('tag1', 'false').build(),
-            new Rule().addID('task-6').addTag('tag2', 'val1')
-                .addTag('tag1', 'val1').build(),
-            new Rule().addID('task-7').addTag('tag2', 'val1')
-                .addTag('tag1', 'val1').addTag('tag3', 'val1').build(),
-            new Rule().addID('task-8').addTag('tag2', 'val1')
-                .addTag('tag1', 'val1').addTag('tag3', 'false').build(),
-            new Rule().addID('task-9').build(),
-        ];
-        const item = {
-            Key: 'example-item',
-            LastModified: CURRENT,
-        };
-        const objTags = { TagSet: [] };
-        const res = lct._filterRules(mBucketRules, item, objTags);
-        assert.strictEqual(res.length, 1);
-        assert.deepStrictEqual(getRuleIDs(res), ['task-9']);
     });
 
     describe('_getApplicableRules', () => {
