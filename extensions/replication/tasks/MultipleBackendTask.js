@@ -144,16 +144,19 @@ class MultipleBackendTask extends ReplicateObject {
             range,
         });
         const doneOnce = jsutil.once(done);
-        const sourceReq = this.backbeatSource.getObject({
-            Bucket: sourceEntry.getBucket(),
-            Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
-            // A 0-byte part has no range.
-            Range: range && `bytes=${range.start}-${range.end}`,
-            LocationConstraint: sourceEntry.getDataStoreName(),
-        });
         // A 0-byte object has no range, otherwise range is inclusive.
         const size = range ? range.end - range.start + 1 : 0;
+        let sourceReq = null;
+        if (size !== 0) {
+            sourceReq = this.backbeatSource.getObject({
+                Bucket: sourceEntry.getBucket(),
+                Key: sourceEntry.getObjectKey(),
+                VersionId: sourceEntry.getEncodedVersionId(),
+                // A 0-byte part has no range.
+                Range: range && `bytes=${range.start}-${range.end}`,
+                LocationConstraint: sourceEntry.getDataStoreName(),
+            });
+        }
         return this._putMPUPart(sourceEntry, destEntry, sourceReq, size,
             uploadId, partNumber, log, doneOnce);
     }
