@@ -9,7 +9,7 @@ const kafkaConfig = config.kafka;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
-const rLocalCacheConfig = config.localCache;
+const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 const zookeeper = require('node-zookeeper-client');
 
@@ -48,7 +48,7 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
-    qpConfig, mConfig, rLocalCacheConfig, extConfigs);
+    qpConfig, mConfig, rConfig, extConfigs);
 
 const healthServer = new HealthProbeServer({
     bindAddress: config.healthcheckServer.bindAddress,
