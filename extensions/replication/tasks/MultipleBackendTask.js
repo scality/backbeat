@@ -144,16 +144,19 @@ class MultipleBackendTask extends ReplicateObject {
             range,
         });
         const doneOnce = jsutil.once(done);
-        const sourceReq = this.backbeatSource.getObject({
-            Bucket: sourceEntry.getBucket(),
-            Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
-            // A 0-byte part has no range.
-            Range: range && `bytes=${range.start}-${range.end}`,
-            LocationConstraint: sourceEntry.getDataStoreName(),
-        });
         // A 0-byte object has no range, otherwise range is inclusive.
         const size = range ? range.end - range.start + 1 : 0;
+        let sourceReq = null;
+        if (size !== 0) {
+            sourceReq = this.backbeatSource.getObject({
+                Bucket: sourceEntry.getBucket(),
+                Key: sourceEntry.getObjectKey(),
+                VersionId: sourceEntry.getEncodedVersionId(),
+                // A 0-byte part has no range.
+                Range: range && `bytes=${range.start}-${range.end}`,
+                LocationConstraint: sourceEntry.getDataStoreName(),
+            });
+        }
         return this._putMPUPart(sourceEntry, destEntry, sourceReq, size,
             uploadId, partNumber, log, doneOnce);
     }
@@ -219,40 +222,43 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _putMPUPart(sourceEntry, destEntry, sourceReq, size, uploadId, partNumber,
         log, doneOnce) {
-        attachReqUids(sourceReq, log);
-        sourceReq.on('error', err => {
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            if (err.statusCode === 404) {
+        let incomingMsg = null;
+        if (sourceReq) {
+            attachReqUids(sourceReq, log);
+            sourceReq.on('error', err => {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.statusCode === 404) {
+                    return doneOnce(err);
+                }
+                log.error('an error occurred on getObject from S3', {
+                    method: 'MultipleBackendTask._putMPUPart',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    httpStatus: err.statusCode,
+                });
                 return doneOnce(err);
-            }
-            log.error('an error occurred on getObject from S3', {
-                method: 'MultipleBackendTask._putMPUPart',
-                entry: sourceEntry.getLogInfo(),
-                origin: 'source',
-                peer: this.sourceConfig.s3,
-                error: err.message,
-                httpStatus: err.statusCode,
             });
-            return doneOnce(err);
-        });
-        const incomingMsg = sourceReq.createReadStream();
-        incomingMsg.on('error', err => {
-            if (err.statusCode === 404) {
-                return doneOnce(errors.ObjNotFound);
-            }
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            log.error('an error occurred when streaming data from S3', {
-                entry: destEntry.getLogInfo(),
-                method: 'MultipleBackendTask._putMPUPart',
-                origin: 'source',
-                peer: this.sourceConfig.s3,
-                error: err.message,
+            incomingMsg = sourceReq.createReadStream();
+            incomingMsg.on('error', err => {
+                if (err.statusCode === 404) {
+                    return doneOnce(errors.ObjNotFound);
+                }
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('an error occurred when streaming data from S3', {
+                    entry: destEntry.getLogInfo(),
+                    method: 'MultipleBackendTask._putMPUPart',
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                });
+                return doneOnce(err);
             });
-            return doneOnce(err);
-        });
-        log.debug('putting data', { entry: destEntry.getLogInfo() });
+            log.debug('putting data', { entry: destEntry.getLogInfo() });
+        }
 
         const destReq = this.backbeatSource.multipleBackendPutMPUPart({
             Bucket: destEntry.getBucket(),
@@ -479,19 +485,33 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
         const partObj = part ? new ObjectMDLocation(part) : undefined;
-        const sourceReq = this.backbeatSource.getObject({
-            Bucket: sourceEntry.getBucket(),
-            Key: sourceEntry.getObjectKey(),
-            VersionId: sourceEntry.getEncodedVersionId(),
-            PartNumber: part ? partObj.getPartNumber() : undefined,
-            LocationConstraint: sourceEntry.getDataStoreName(),
-        });
-        attachReqUids(sourceReq, log);
-        sourceReq.on('error', err => {
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            if (err.statusCode === 404) {
-                log.error('the source object was not found', {
+        const size = part ? partObj.getPartSize() :
+            destEntry.getContentLength();
+        let incomingMsg = null;
+        if (size !== 0) {
+            const sourceReq = this.backbeatSource.getObject({
+                Bucket: sourceEntry.getBucket(),
+                Key: sourceEntry.getObjectKey(),
+                VersionId: sourceEntry.getEncodedVersionId(),
+                PartNumber: part ? partObj.getPartNumber() : undefined,
+                LocationConstraint: sourceEntry.getDataStoreName(),
+            });
+            attachReqUids(sourceReq, log);
+            sourceReq.on('error', err => {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.statusCode === 404) {
+                    log.error('the source object was not found', {
+                        method: 'MultipleBackendTask._getAndPutPartOnce',
+                        entry: sourceEntry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
+                        error: err.message,
+                        httpStatus: err.statusCode,
+                    });
+                    return doneOnce(err);
+                }
+                log.error('an error occurred on getObject from S3', {
                     method: 'MultipleBackendTask._getAndPutPartOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
@@ -500,44 +520,33 @@ class MultipleBackendTask extends ReplicateObject {
                     httpStatus: err.statusCode,
                 });
                 return doneOnce(err);
-            }
-            log.error('an error occurred on getObject from S3', {
-                method: 'MultipleBackendTask._getAndPutPartOnce',
-                entry: sourceEntry.getLogInfo(),
-                origin: 'source',
-                peer: this.sourceConfig.s3,
-                error: err.message,
-                httpStatus: err.statusCode,
             });
-            return doneOnce(err);
-        });
-        const incomingMsg = sourceReq.createReadStream();
-        incomingMsg.on('error', err => {
-            if (err.statusCode === 404) {
-                log.error('the source object was not found', {
+            incomingMsg = sourceReq.createReadStream();
+            incomingMsg.on('error', err => {
+                if (err.statusCode === 404) {
+                    log.error('the source object was not found', {
+                        method: 'MultipleBackendTask._getAndPutPartOnce',
+                        entry: sourceEntry.getLogInfo(),
+                        origin: 'source',
+                        peer: this.sourceConfig.s3,
+                        error: err.message,
+                        httpStatus: err.statusCode,
+                    });
+                    return doneOnce(errors.ObjNotFound);
+                }
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('an error occurred when streaming data from S3', {
+                    entry: destEntry.getLogInfo(),
                     method: 'MultipleBackendTask._getAndPutPartOnce',
-                    entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message,
-                    httpStatus: err.statusCode,
                 });
-                return doneOnce(errors.ObjNotFound);
-            }
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            log.error('an error occurred when streaming data from S3', {
-                entry: destEntry.getLogInfo(),
-                method: 'MultipleBackendTask._getAndPutPartOnce',
-                origin: 'source',
-                peer: this.sourceConfig.s3,
-                error: err.message,
+                return doneOnce(err);
             });
-            return doneOnce(err);
-        });
-        log.debug('putting data', { entry: destEntry.getLogInfo() });
-        const size = part ? partObj.getPartSize() :
-            destEntry.getContentLength();
+            log.debug('putting data', { entry: destEntry.getLogInfo() });
+        }
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
