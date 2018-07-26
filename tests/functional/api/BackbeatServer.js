@@ -1311,24 +1311,23 @@ describe('Backbeat Server', () => {
             const body = JSON.stringify({ hours: 1 });
             makePOSTRequest(options, body, (err, res) => {
                 assert.ifError(err);
-                getResponseBody(res, err => {
-                    assert.ifError(err);
+                setTimeout(() => {
+                    getResponseBody(res, err => {
+                        assert.ifError(err);
 
-                    assert.strictEqual(cache1.length, 1);
-                    assert.deepStrictEqual(cache1[0].channel, channel1);
-
-                    const message = JSON.parse(cache1[0].message);
-                    assert.equal('resumeService', message.action);
-
-                    const date = new Date();
-                    const scheduleDate = new Date(message.date);
-                    assert(scheduleDate > date);
-
-                    // make sure the scheduled time does not exceed expected
-                    const millisecondPerHour = 60 * 60 * 1000;
-                    assert(scheduleDate - date <= millisecondPerHour);
-                    done();
-                });
+                        assert.strictEqual(cache1.length, 1);
+                        assert.deepStrictEqual(cache1[0].channel, channel1);
+                        const message = JSON.parse(cache1[0].message);
+                        assert.equal('resumeService', message.action);
+                        const date = new Date();
+                        const scheduleDate = new Date(message.date);
+                        assert(scheduleDate > date);
+                        // make sure the scheduled time does not exceed expected
+                        const millisecondPerHour = 60 * 60 * 1000;
+                        assert(scheduleDate - date <= millisecondPerHour);
+                        done();
+                    });
+                }, 1000);
             });
         });
 
