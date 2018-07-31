@@ -260,6 +260,34 @@ class S3Helper {
         };
         return this.s3.putBucketLifecycleConfiguration(lcParams, cb);
     }
+
+    setupEODM(bucket, key, cb) {
+        async.waterfall([
+            next => this.setAndCreateBucket(bucket, next),
+            next => this.setBucketVersioning('Enabled', next),
+            (data, next) => this.s3.putObject({
+                Bucket: bucket,
+                Key: key,
+                Body: '',
+            }, next),
+            // first create delete marker
+            (data, next) => this.s3.deleteObject({
+                Bucket: bucket,
+                Key: key,
+            }, err => {
+                if (err) {
+                    return next(err);
+                }
+                return next(null, data.VersionId);
+            }),
+            // delete only version so we are left with just a delete marker
+            (versionId, next) => this.s3.deleteObject({
+                Bucket: bucket,
+                Key: key,
+                VersionId: versionId,
+            }, next),
+        ], cb);
+    }
 }
 
 class LifecycleBucketProcessorMock {
@@ -790,66 +818,100 @@ describe('lifecycle task functional tests', function dF() {
             });
         });
 
-        it('should apply ExpiredObjectDeleteMarker rule on only a delete ' +
-        'marker in a versioning enabled bucket with zero non-current versions',
-        done => {
-            const bucket = 'test-bucket';
-            const keyName = 'test-key-1';
-            const bucketEntry = {
-                action: 'testing-islatest',
-                target: {
-                    bucket,
-                    owner: OWNER,
-                },
-                details: {},
-            };
-            const params = {
-                lcTask,
-                lcp,
-                counter: 0,
-            };
-            async.waterfall([
-                next => s3Helper.setAndCreateBucket(bucket, next),
-                next => s3Helper.setBucketLifecycleConfigurations([
+        [
+            {
+                message: 'should apply ExpiredObjectDeleteMarker rule on ' +
+                    'only a delete marker in a versioning enabled bucket ' +
+                    'with zero non-current versions',
+                bucketLCRules: [
                     new Rule().addID('task-1')
                         .addExpiration('ExpiredObjectDeleteMarker', true)
                         .build(),
-                ], next),
-                (data, next) => s3Helper.setBucketVersioning('Enabled', next),
-                (data, next) => s3.putObject({
-                    Bucket: bucket,
-                    Key: keyName,
-                    Body: '',
-                }, next),
-                // first create delete marker
-                (data, next) => s3.deleteObject({
-                    Bucket: bucket,
-                    Key: keyName,
-                }, err => {
-                    assert.ifError(err);
-                    return next(null, data.VersionId);
-                }),
-                // delete only version so we are left with just a delete marker
-                (versionId, next) => s3.deleteObject({
-                    Bucket: bucket,
-                    Key: keyName,
-                    VersionId: versionId,
-                }, next),
-                (data, next) => s3.getBucketLifecycleConfiguration({
-                    Bucket: bucket,
-                }, next),
-                (data, next) => {
-                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params,
-                    (err, data) => {
-                        assert.ifError(err);
-
-                        assert.equal(data.count.object, 1);
-                        next();
-                    });
+                ],
+                owner: OWNER,
+                expected: {
+                    objectCount: 1,
                 },
-            ], err => {
-                assert.ifError(err);
-                done();
+            },
+            {
+                message: 'should implicitly apply ExpiredObjectDeleteMarker ' +
+                    'rule when a valid and applicable EXPIRATION rule is ' +
+                    'set, EODM is not false, and owner is Lifecycle service ' +
+                    'account',
+                bucketLCRules: [
+                    new Rule().addID('task-1')
+                        .addExpiration('Days', 1).build(),
+                ],
+                owner: `${OWNER}/lifecycle`,
+                expected: {
+                    objectCount: 1,
+                },
+            },
+            {
+                message: 'should not apply ExpiredObjectDeleteMarker rule ' +
+                    'when a valid and applicable EXPIRATION rule is set, ' +
+                    'EODM is not false, and owner is NOT a Lifecycle ' +
+                    'service account',
+                bucketLCRules: [
+                    new Rule().addID('task-1')
+                        .addExpiration('Days', 1).build(),
+                ],
+                owner: OWNER,
+                expected: {
+                    objectCount: 0,
+                },
+            },
+            {
+                message: 'should not apply ExpiredObjectDeleteMarker rule ' +
+                    'when EODM is set to false',
+                bucketLCRules: [
+                    new Rule().addID('task-1')
+                        .addExpiration('ExpiredObjectDeleteMarker', false)
+                        .build(),
+                ],
+                owner: `${OWNER}/lifecycle`,
+                expected: {
+                    objectCount: 0,
+                },
+            },
+        ].forEach(item => {
+            it(item.message, done => {
+                const bucket = 'test-bucket';
+                const keyName = 'test-key';
+                const bucketEntry = {
+                    action: 'testing-eodm',
+                    target: {
+                        bucket,
+                        owner: item.owner,
+                    },
+                    details: {},
+                };
+                const params = {
+                    lcTask,
+                    lcp,
+                    counter: 0,
+                };
+                async.waterfall([
+                    next => s3Helper.setupEODM(bucket, keyName, next),
+                    (data, next) => s3Helper.setBucketLifecycleConfigurations(
+                        item.bucketLCRules, next),
+                    (data, next) => s3.getBucketLifecycleConfiguration({
+                        Bucket: bucket,
+                    }, next),
+                    (data, next) => {
+                        wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+                        params, (err, data) => {
+                            assert.ifError(err);
+
+                            assert.equal(data.count.object,
+                                item.expected.objectCount);
+                            next();
+                        });
+                    },
+                ], err => {
+                    assert.ifError(err);
+                    done();
+                });
             });
         });
 
