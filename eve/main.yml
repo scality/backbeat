@@ -55,7 +55,12 @@ stages:
             CI_AUTH_TYPE: "role"
             BACKBEAT_CONFIG_FILE: "tests/config.roleAuth.json"
       - ShellCommand:
-          name: run feature tests
+          name: run backbeat lib feature tests
+          command: npm run ft_test:lib
+          env:
+            CI: "true"
+      - ShellCommand:
+          name: run backbeat replication feature tests
           command: npm run ft_test:replication
           env:
             CI: "true"
