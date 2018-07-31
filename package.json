@@ -9,6 +9,7 @@
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js')",
+    "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js')",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js",
     "ft_test:api:retry": "mocha tests/functional/api/retry.js",
     "bh_test": "mocha --recursive tests/behavior",
