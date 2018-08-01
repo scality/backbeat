@@ -38,6 +38,7 @@
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient#520d164",
     "commander": "^2.11.0",
+    "fcntl": "github:scality/node-fcntl",
     "ioredis": "^3.2.2",
     "joi": "^10.6",
     "node-forge": "^0.7.1",
