@@ -76,14 +76,14 @@ considered backlog.
 This route returns the replication completions in number of objects and number
 of total bytes transferred for the specified extension type and location.
 Completions are only collected up to an `EXPIRY` time, which is currently set
-to **15 minutes**.
+to **24 hours**.
 
 **Example Output**:
 
 ```
 "completions":{
     "description":"Number of completed replication operations (count) and number
-    of bytes transferred (size) in the last 900 seconds",
+    of bytes transferred (size) in the last 86400 seconds",
     "results":{
         "count":31,
         "size":"47.04"
@@ -94,16 +94,16 @@ to **15 minutes**.
 ### `/_/metrics/crr/<location-name>/failures`
 
 This route returns the replication failures in number of objects and number
-of total bytes for the specified extension type and location.
-Failures are only collected up to an `EXPIRY` time, which is currently set to
-**15 minutes**.
+of total bytes for the specified extension type and location. Failures are
+collected only up to an `EXPIRY` time, currently set to a default
+**24 hours**.
 
 **Example Output**:
 
 ```
 "failures":{
     "description":"Number of failed replication operations (count) and bytes
-    (size) in the last 900 seconds",
+    (size) in the last 86400 seconds",
     "results":{
         "count":"5",
         "size":"10.12"
@@ -116,6 +116,9 @@ Failures are only collected up to an `EXPIRY` time, which is currently set to
 This route returns the current throughput in number of completed operations per
 second (or number of objects replicating per second) and number of total bytes
 completing per second for the specified type and location name.
+
+Note throughput is averaged over the past 15 minutes of data collected so this
+metric is really an average throughput.
 
 **Example Output**:
 
@@ -204,9 +207,9 @@ sends a Kafka entry, and when the CRR topic `BackbeatConsumer` consumes and
 processes its respective Kafka entries. The `MetricsConsumer` will process these
 Kafka metrics entries and produce to Redis.
 
-A single location CRR entry should produce 4 keys in total. The data points
+A single-location CRR entry produces up to six keys in total. The data points
 stored in Redis are saved in intervals (default of 5 minutes) and are available
-up to an expiry time (default of 15 minutes).
+up to an expiry time (default of 24 hours).
 
 An object CRR entry creates one key. An initial key is set when the CRR
 operation begins, storing the total size of the object to be replicated. Then,
