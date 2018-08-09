@@ -148,9 +148,9 @@ all Redis keys beginning with `bb:crr:failed` will be retrieved and sent as a
 response defined in [Definition of API](#definition-of-api).
 
 When a GET request is received for the list version route (i.e.
-`/_/crr/failed/<bucket>/<key>/<versionId>`), all Redis keys beginning with
-`bb:crr:failed:<bucket>:<key>:<versionId>` will be retrieved and sent as a
-response defined in [Definition of API](#definition-of-api).
+`/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`), all Redis
+keys beginning with `bb:crr:failed:<bucket>:<key>:<versionId>` will be retrieved
+and sent as a response defined in [Definition of API](#definition-of-api).
 
 ### Retry
 
