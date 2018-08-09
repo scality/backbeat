@@ -18,7 +18,7 @@ See [Explanations](#explanations) for more detail.
 
 ## Definition of API
 
-* GET `/_/crr/failed?marker=marker`
+* GET `/_/backbeat/api/_/crr/failed?marker=marker`
 
     This GET request retrieves a listing of all failed operations. This
     operation is useful if you're interested in whether any CRR operations have
@@ -59,7 +59,7 @@ See [Explanations](#explanations) for more detail.
     }
     ```
 
-* GET `/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`
+* GET `/_/backbeat/api/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`
 
     This GET request retrieves a listing of all failed operations for a specific
     object version. This operation is useful if you're interested in monitoring
@@ -84,7 +84,7 @@ See [Explanations](#explanations) for more detail.
     NOTE: The marker query parameter is not supported for this route because we
     anticipate that any replication rule will not include more than 1000 sites.
 
-* POST `/_/crr/failed`
+* POST `/_/backbeat/api/_/crr/failed`
 
     This POST request retries a set of failed operations.
 
@@ -143,19 +143,21 @@ The following diagram shows the steps leading up to setting the key in Redis.
 
 ### Listing
 
-When a GET request is received for the list all route (i.e. `/_/crr/failed`),
-all Redis keys beginning with `bb:crr:failed` will be retrieved and sent as a
-response defined in [Definition of API](#definition-of-api).
+When a GET request is received for the list all route (i.e.
+`/_/backbeat/api/_/crr/failed`), all Redis keys beginning with `bb:crr:failed`
+will be retrieved and sent as a response defined in [Definition of
+API](#definition-of-api).
 
 When a GET request is received for the list version route (i.e.
-`/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`), all Redis
-keys beginning with `bb:crr:failed:<bucket>:<key>:<versionId>` will be retrieved
-and sent as a response defined in [Definition of API](#definition-of-api).
+`/_/backbeat/api/_/crr/failed?bucket=<bucket>&key=<key>&version-id=<version-id>`),
+all Redis keys beginning with `bb:crr:failed:<bucket>:<key>:<versionId>` will be
+retrieved and sent as a response defined in [Definition of
+API](#definition-of-api).
 
 ### Retry
 
-When a POST request is received for the route `/_/crr/failed` the following
-steps occur:
+When a POST request is received for the route `/_/backbeat/api/_/crr/failed` the
+following steps occur:
 
 1. Get the object version's metadata from S3's GET metadata route.
 
@@ -171,7 +173,8 @@ steps occur:
 
 4. Delete the Redis key for the operation which is being retried.
 
-The following diagram shows the above steps in the context of a successful retry.
+The following diagram shows the above steps in the context of a successful
+retry.
 
 ![design](/res/object-retry-scenario.png)
 
