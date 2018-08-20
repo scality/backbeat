@@ -61,6 +61,8 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
+     * @param {String} repConfig.queueProcessor.fromOffset - kafka consumer
+     *   topic-level configuration (auto.offset.reset)
      * @param {Object} redisConfig - redis configuration
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
@@ -444,6 +446,7 @@ class QueueProcessor extends EventEmitter {
                     topic: this.repConfig.topic,
                     groupId,
                     concurrency: this.repConfig.queueProcessor.concurrency,
+                    fromOffset: this.repConfig.queueProcessor.fromOffset,
                     queueProcessor: this.processKafkaEntry.bind(this),
                 });
                 this._consumer.on('error', () => {

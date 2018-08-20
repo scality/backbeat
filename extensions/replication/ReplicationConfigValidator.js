@@ -61,6 +61,7 @@ const joiSchema = {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         concurrency: joi.number().greater(0).default(10),
+        fromOffset: joi.string().required(),
     },
     replicationStatusProcessor: {
         groupId: joi.string().required(),
