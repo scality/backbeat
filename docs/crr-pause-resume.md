@@ -1,4 +1,4 @@
-# Cross-Region Replication (CRR) Manual Pause and Resume
+# Cross-Region Replication (CRR) Pause and Resume
 
 ## Description
 
@@ -140,6 +140,19 @@ is resumed, it again resumes consuming entries from its last offset.
         "hours": 6
     }
     ```
+
+    Response:
+    ```json
+    {}
+    ```
+
+* DELETE `/_/backbeat/api/crr/resume/<location-name>/schedule`
+
+    This is a DELETE request to remove a scheduled resume for cross-region
+    replication to a specified location configured as a destination replication
+    endpoint.
+    Specify "all" as a location name to make this request to all available
+    destinations.
 
     Response:
     ```json

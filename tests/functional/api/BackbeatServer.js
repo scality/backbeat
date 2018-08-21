@@ -91,6 +91,12 @@ function getRequest(path, done) {
     req.end();
 }
 
+function makeDELETERequest(options, body, cb) {
+    const req = http.request(options, res => cb(null, res));
+    req.on('error', err => cb(err));
+    req.end(body);
+}
+
 describe('Backbeat Server', () => {
     it('should get a 404 route not found error response', () => {
         const url = getUrl(defaultOptions, '/_/invalidpath');
@@ -1357,6 +1363,30 @@ describe('Backbeat Server', () => {
                            (scheduleDate - date) >= millisecondPerHour * 5);
                     done();
                 }, 1000);
+            });
+        });
+
+        it('should remove a scheduled resume request when receiving a DELETE ' +
+        `request to route /_/crr/resume/${secondSite}/schedule`, done => {
+            const options = Object.assign({}, defaultOptions, {
+                method: 'DELETE',
+                path: `/_/crr/resume/${secondSite}/schedule`,
+            });
+            makeDELETERequest(options, '', (err, res) => {
+                assert.ifError(err);
+
+                setTimeout(() => {
+                    getResponseBody(res, err => {
+                        assert.ifError(err);
+
+                        assert.strictEqual(cache2.length, 1);
+
+                        const message = JSON.parse(cache2[0].message);
+                        assert.equal('deleteScheduledResumeService',
+                            message.action);
+                        done();
+                    });
+                });
             });
         });
 
