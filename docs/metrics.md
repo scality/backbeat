@@ -47,7 +47,26 @@ Where:
 ### `/_/metrics/crr/<location-name>`
 
 This route gathers all the metrics below and returns as one JSON object for the
-specified extension type and locations name.
+specified extension type and location name.
+
+### `/_/metrics/crr/<location-name>/pending`
+
+This route returns the pending operations in number of objects and number
+of total bytes for the specified extension type and location. This metric does
+not expire.
+
+**Example Output**:
+
+```
+"pending":{
+    "description":"Number of pending replication operations (count) and bytes
+    (size)",
+    "results":{
+        "count":"1",
+        "size":"1024"
+    }
+}
+```
 
 ### `/_/metrics/crr/<location-name>/backlog`
 
@@ -65,8 +84,8 @@ considered backlog.
     "description":"Number of incomplete replication operations (count) and
     number of incomplete bytes transferred (size)",
     "results":{
-        "count":4,
-        "size":"6.12"
+        "count":"1",
+        "size":"1024"
     }
 }
 ```
@@ -85,8 +104,8 @@ to **24 hours**.
     "description":"Number of completed replication operations (count) and number
     of bytes transferred (size) in the last 86400 seconds",
     "results":{
-        "count":31,
-        "size":"47.04"
+        "count":"1",
+        "size":"1024"
     }
 }
 ```
@@ -105,8 +124,8 @@ collected only up to an `EXPIRY` time, currently set to a default
     "description":"Number of failed replication operations (count) and bytes
     (size) in the last 86400 seconds",
     "results":{
-        "count":"5",
-        "size":"10.12"
+        "count":"1",
+        "size":"1024"
     }
 }
 ```
@@ -168,12 +187,14 @@ for the specified object.
 
 ## Design
 
-For basic metrics, 6 data points are collected:
+For basic metrics, eight data points are collected:
 
 - number of operations (ops)
+- number of pending operations (opspending)
 - number of completed operations (opsdone)
 - number of failed operations (opsfail)
 - number of bytes (bytes)
+- number of pending bytes (bytespending)
 - number of completed bytes (bytesdone)
 - number of failed bytes (bytesfail)
 
@@ -184,6 +205,9 @@ In order to collect metrics, a separate Kafka Producer and Consumer
 When a new CRR entry is sent to Kafka, a Kafka entry to the metrics topic will
 be produced indicating to increase `ops` and `bytes`. On consumption of this
 metrics entry, Redis keys will be generated with the following schema:
+
+Site-level pending CRR metrics Redis key:
+`<site-name>:<default-metrics-key>:<opspending-or-bytespending>`
 
 Site-level CRR metrics Redis key:
 `<site-name>:<default-metrics-key>:<ops-or-bytes>:<normalized-timestamp>`
@@ -207,9 +231,10 @@ sends a Kafka entry, and when the CRR topic `BackbeatConsumer` consumes and
 processes its respective Kafka entries. The `MetricsConsumer` will process these
 Kafka metrics entries and produce to Redis.
 
-A single-location CRR entry produces up to six keys in total. The data points
+A single-location CRR entry produces up to eight keys in total. The data points
 stored in Redis are saved in intervals (default of 5 minutes) and are available
-up to an expiry time (default of 24 hours).
+up to an expiry time (default of 24 hours), with the exception of pending keys
+which are not bound to an interval and do not expire.
 
 An object CRR entry creates one key. An initial key is set when the CRR
 operation begins, storing the total size of the object to be replicated. Then,
