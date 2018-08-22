@@ -8,8 +8,8 @@ const zookeeper = require('node-zookeeper-client');
 const { RedisClient, StatsModel } = require('arsenal').metrics;
 
 const config = require('../../config.json');
-const { makePOSTRequest, getResponseBody } =
-    require('../utils/makePOSTRequest');
+const { makeRequest, getResponseBody } =
+    require('../utils/makeRequest');
 const S3Mock = require('../utils/S3Mock');
 const VaultMock = require('../utils/VaultMock');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
@@ -57,7 +57,7 @@ function makeRetryPOSTRequest(body, cb) {
         method: 'POST',
         path: '/_/crr/failed',
     });
-    makePOSTRequest(options, body, cb);
+    makeRequest(options, body, cb);
 }
 
 function getRequest(path, done) {
@@ -89,12 +89,6 @@ function getRequest(path, done) {
     });
     req.on('error', err => done(err));
     req.end();
-}
-
-function makeDELETERequest(options, body, cb) {
-    const req = http.request(options, res => cb(null, res));
-    req.on('error', err => cb(err));
-    req.end(body);
 }
 
 describe('Backbeat Server', () => {
@@ -1227,7 +1221,7 @@ describe('Backbeat Server', () => {
                 method: 'POST',
                 path: '/_/crr/pause',
             });
-            makePOSTRequest(options, emptyBody, err => {
+            makeRequest(options, emptyBody, err => {
                 assert.ifError(err);
 
                 setTimeout(() => {
@@ -1253,7 +1247,7 @@ describe('Backbeat Server', () => {
                 method: 'POST',
                 path: `/_/crr/pause/${firstSite}`,
             });
-            makePOSTRequest(options, emptyBody, err => {
+            makeRequest(options, emptyBody, err => {
                 assert.ifError(err);
 
                 setTimeout(() => {
@@ -1276,7 +1270,7 @@ describe('Backbeat Server', () => {
                 method: 'POST',
                 path: '/_/crr/resume',
             });
-            makePOSTRequest(options, emptyBody, err => {
+            makeRequest(options, emptyBody, err => {
                 assert.ifError(err);
 
                 setTimeout(() => {
@@ -1315,7 +1309,7 @@ describe('Backbeat Server', () => {
                 path: `/_/crr/resume/${firstSite}/schedule`,
             });
             const body = JSON.stringify({ hours: 1 });
-            makePOSTRequest(options, body, (err, res) => {
+            makeRequest(options, body, (err, res) => {
                 assert.ifError(err);
                 setTimeout(() => {
                     getResponseBody(res, err => {
@@ -1343,7 +1337,7 @@ describe('Backbeat Server', () => {
                 method: 'POST',
                 path: `/_/crr/resume/${firstSite}/schedule`,
             });
-            makePOSTRequest(options, emptyBody, err => {
+            makeRequest(options, emptyBody, err => {
                 assert.ifError(err);
 
                 setTimeout(() => {
@@ -1372,7 +1366,7 @@ describe('Backbeat Server', () => {
                 method: 'DELETE',
                 path: `/_/crr/resume/${secondSite}/schedule`,
             });
-            makeDELETERequest(options, '', (err, res) => {
+            makeRequest(options, emptyBody, (err, res) => {
                 assert.ifError(err);
 
                 setTimeout(() => {

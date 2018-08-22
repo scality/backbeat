@@ -1,6 +1,6 @@
 const http = require('http');
 
-function makePOSTRequest(options, body, cb) {
+function makeRequest(options, body, cb) {
     const req = http.request(options, res => cb(null, res));
     req.on('error', err => cb(err));
     req.end(body);
@@ -14,4 +14,4 @@ function getResponseBody(res, cb) {
     res.on('error', err => cb(err));
 }
 
-module.exports = { makePOSTRequest, getResponseBody };
+module.exports = { makeRequest, getResponseBody };
