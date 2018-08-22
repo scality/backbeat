@@ -221,6 +221,8 @@ describe('Backbeat Server', () => {
         const OPS_FAIL = 'test:bb:opsfail';
         const BYTES_DONE = 'test:bb:bytesdone';
         const BYTES_FAIL = 'test:bb:bytesfail';
+        const OPS_PENDING = 'test:bb:opspending';
+        const BYTES_PENDING = 'test:bb:bytespending';
         const BUCKET_NAME = 'test-bucket';
         const OBJECT_KEY = 'test/object-key';
         const VERSION_ID = 'test-version-id';
@@ -261,8 +263,14 @@ describe('Backbeat Server', () => {
             statsClient.reportNewRequest(`${site2}:${OPS_FAIL}`, 55);
             statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
             statsClient.reportNewRequest(`${site2}:${BYTES_FAIL}`, 575);
-
-            done();
+            return async.parallel([
+                next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
+                next => redisClient.incrby(`${site1}:${BYTES_PENDING}`, 1024,
+                    next),
+                next => redisClient.incrby(`${site2}:${OPS_PENDING}`, 2, next),
+                next => redisClient.incrby(`${site2}:${BYTES_PENDING}`, 1024,
+                    next),
+            ], done);
         });
 
         after(done => {
@@ -281,10 +289,10 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/failures',
             '/_/metrics/crr/all/throughput',
+            '/_/metrics/crr/all/pending',
             `/_/metrics/crr/${site1}/progress/bucket/object?versionId=version`,
             `/_/metrics/crr/${site1}/throughput/bucket/object` +
                 '?versionId=version',
-
         ];
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
@@ -354,6 +362,8 @@ describe('Backbeat Server', () => {
             '/_/metrics/crr/all/completionss',
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
+            '/_/metrics/crr/all/pendin',
+            '/_/metrics/crr/all/pendings',
             `/_/metrics/crr/${site1}/progresss`,
             // given bucket without object key
             `/_/metrics/crr/${site1}/progress/bucket`,
@@ -489,6 +499,28 @@ describe('Backbeat Server', () => {
             });
         });
 
+        it('should get the right data for route: ' +
+        `/_/metrics/crr/${site1}/pending`, done => {
+            getRequest(`/_/metrics/crr/${site1}/pending`, (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                assert.equal(res[key].results.count, 2);
+                assert.equal(res[key].results.size, 1024);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        '/_/metrics/crr/all/pending', done => {
+            getRequest('/_/metrics/crr/all/pending', (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                assert.equal(res[key].results.count, 4);
+                assert.equal(res[key].results.size, 2048);
+                done();
+            });
+        });
+
         it('should return all metrics for route: ' +
         `/_/metrics/crr/${site1}`, done => {
             getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
@@ -497,6 +529,7 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
+                assert(keys.includes('pending'));
 
                 assert(res.backlog.description);
                 // Backlog count = OPS - OPS_DONE
@@ -516,6 +549,10 @@ describe('Backbeat Server', () => {
                 // Throughput bytes = BYTES_DONE / EXPIRY
                 assert.equal(res.throughput.results.size, 1.14);
 
+                assert(res.pending.description);
+                assert.equal(res.pending.results.count, 2);
+                assert.equal(res.pending.results.size, 1024);
+
                 done();
             });
         });
@@ -528,6 +565,7 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
+                assert(keys.includes('pending'));
 
                 assert(res.backlog.description);
                 // Backlog count = OPS - OPS_DONE
@@ -547,6 +585,9 @@ describe('Backbeat Server', () => {
                 // Throughput bytes = BYTES_DONE / EXPIRY
                 assert.equal(res.throughput.results.size, 3.22);
 
+                assert(res.pending.description);
+                assert.equal(res.pending.results.count, 4);
+                assert.equal(res.pending.results.size, 2048);
                 done();
             });
         });
@@ -595,19 +636,23 @@ describe('Backbeat Server', () => {
                     assert(keys.includes('backlog'));
                     assert(keys.includes('completions'));
                     assert(keys.includes('throughput'));
+                    assert(keys.includes('pending'));
 
                     assert(res.backlog.description);
                     assert.equal(res.backlog.results.count, 0);
-                    assert.equal(res.backlog.results.size, 0.00);
+                    assert.equal(res.backlog.results.size, 0);
 
                     assert(res.completions.description);
                     assert.equal(res.completions.results.count, 0);
-                    assert.equal(res.completions.results.size, 0.00);
+                    assert.equal(res.completions.results.size, 0);
 
                     assert(res.throughput.description);
-                    assert.equal(res.throughput.results.count, 0.00);
-                    assert.equal(res.throughput.results.size, 0.00);
+                    assert.equal(res.throughput.results.count, 0);
+                    assert.equal(res.throughput.results.size, 0);
 
+                    assert(res.pending.description);
+                    assert.equal(res.pending.results.count, 0);
+                    assert.equal(res.pending.results.size, 0);
                     done();
                 });
             });
