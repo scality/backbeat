@@ -69,6 +69,9 @@ is resumed, it again resumes consuming entries from its last offset.
     This POST request is to manually pause the cross-region replication service
     for all locations configured as destination replication endpoints.
 
+    Please note a manual pause will cause any active scheduled resumes for given
+    locations to be cancelled.
+
     Response:
     ```json
     {}
@@ -78,6 +81,9 @@ is resumed, it again resumes consuming entries from its last offset.
 
     This POST request is to manually pause the cross-region replication service
     for a specified location configured as a destination replication endpoint.
+
+    Please note a manual pause will cause any active scheduled resumes for given
+    locations to be cancelled.
 
     Response:
     ```json
@@ -106,6 +112,9 @@ is resumed, it again resumes consuming entries from its last offset.
     This POST request is to manually resume the cross-region replication
     service for all locations configured as destination replication endpoints.
 
+    Please note a manual resume will cause any active scheduled resumes for
+    given locations to be cancelled.
+
     Response:
     ```json
     {}
@@ -115,6 +124,9 @@ is resumed, it again resumes consuming entries from its last offset.
 
     This is a POST request to resume cross-region replication to a specified
     location configured as a destination replication endpoint.
+
+    Please note a manual resume will cause any active scheduled resumes for
+    given locations to be cancelled.
 
     Response:
     ```json
