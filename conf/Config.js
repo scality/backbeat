@@ -79,6 +79,17 @@ class Config extends EventEmitter {
         healthChecks.allowFrom =
             healthChecks.allowFrom.concat(defaultHealthChecks);
 
+        if (parsedConfig.redis &&
+          typeof parsedConfig.redis.sentinels === 'string') {
+            const redisConf = { sentinels: [], name: parsedConfig.redis.name };
+            parsedConfig.redis.sentinels.split(',').forEach(item => {
+                const [host, port] = item.split(':');
+                redisConf.sentinels.push({ host,
+                    port: Number.parseInt(port, 10) });
+            });
+            parsedConfig.redis = redisConf;
+        }
+
         // default to standalone configuration if sentinel not setup
         if (!parsedConfig.redis || !parsedConfig.redis.sentinels) {
             this.redis = Object.assign({}, parsedConfig.redis,

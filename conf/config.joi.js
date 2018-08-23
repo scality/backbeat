@@ -57,11 +57,11 @@ const joiSchema = {
         port: joi.number().default(6379),
         name: joi.string().default('backbeat'),
         password: joi.string().default('').allow(''),
-        sentinels: joi.array().items(
+        sentinels: joi.alternatives([joi.string(), joi.array().items(
             joi.object({
                 host: joi.string().required(),
                 port: joi.number().required(),
-            })
+            }))]
         ),
     },
     localCache: {
