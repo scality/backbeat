@@ -273,6 +273,7 @@ class QueueProcessor extends EventEmitter {
                     this._consumer.pause(this.site);
                     this.logger.info('paused replication for location: ' +
                         `${this.site}`);
+                    this._deleteScheduledResumeService();
                 }
             });
         }
@@ -301,6 +302,7 @@ class QueueProcessor extends EventEmitter {
                     this._consumer.resume(this.site);
                     this.logger.info('resumed replication for location: ' +
                         `${this.site}`);
+                    this._deleteScheduledResumeService();
                 }
             });
         }
@@ -320,9 +322,6 @@ class QueueProcessor extends EventEmitter {
                 this.scheduledResume.cancel();
                 this.scheduledResume = null;
                 this.logger.info('deleted scheduled CRR resume for location:' +
-                    ` ${this.site}`);
-            } else {
-                this.logger.info('no scheduled CRR resume for location: ' +
                     ` ${this.site}`);
             }
         });
