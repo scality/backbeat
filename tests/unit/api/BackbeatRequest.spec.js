@@ -34,6 +34,15 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details2.type, 'backlog');
         });
 
+        it('should have a default content-type of application/json', () => {
+            const req = new BackbeatRequest({
+                url: '/_/metrics/crr/all',
+                method: 'GET',
+            });
+
+            assert.strictEqual(req.getContentType(), 'application/json');
+        });
+
         it('should parse crr failed routes and store internally as route ' +
         'details', () => {
             const req = new BackbeatRequest({
@@ -77,9 +86,12 @@ describe('BackbeatRequest helper class', () => {
                 method: 'POST',
             });
             const details = req.getRouteDetails();
+            const contentType = req.getContentType();
 
             assert.strictEqual(details.category, 'monitoring');
             assert.strictEqual(details.type, 'metrics');
+            // expect promclient data to be returned as 'text/plain'
+            assert.notStrictEqual(contentType !== 'application/json');
         });
 
         it('should parse crr pause/resume routes and store internally as ' +
