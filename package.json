@@ -32,7 +32,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal#9f742d4",
+    "arsenal": "scality/Arsenal#7088812",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
