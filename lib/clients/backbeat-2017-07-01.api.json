@@ -870,6 +870,9 @@
                                 },
                                 "key": {
                                     "type": "string"
+                                },
+                                "size": {
+                                    "type": "integer"
                                 }
                             }
                         }

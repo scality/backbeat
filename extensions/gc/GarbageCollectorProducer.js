@@ -49,6 +49,7 @@ class GarbageCollectorProducer {
      * @param {string} dataLocations[].key - data location key
      * @param {string} dataLocations[].dataStoreName - data location
      *   constraint name
+     * @param {number} dataLocations[].size - object size in bytes
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
@@ -59,11 +60,15 @@ class GarbageCollectorProducer {
                 locations: dataLocations.map(location => ({
                     key: location.key,
                     dataStoreName: location.dataStoreName,
+                    size: location.size,
                 })),
             },
         }) }], err => {
             if (err) {
-                this._log.error('error publishing GC.deleteData entry');
+                this._log.error('error publishing GC.deleteData entry', {
+                    error: err,
+                    method: 'GarbageCollectorProducer.publishDeleteDataEntry',
+                });
             }
             return cb(err);
         });

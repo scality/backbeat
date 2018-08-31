@@ -69,6 +69,7 @@ describe('garbage collector', () => {
         expectBatchDeleteLocations = [{
             key: 'foo',
             dataStoreName: 'ds',
+            size: 10,
         }];
         gcTask.processQueueEntry({
             action: 'deleteData',
