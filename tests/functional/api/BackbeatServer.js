@@ -441,10 +441,9 @@ describe('Backbeat Server', () => {
             getRequest(`/_/metrics/crr/${site1}/backlog`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res[key].results.count, 1275);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res[key].results.size, 1171);
+                // Backlog now uses pending metrics
+                assert.equal(res[key].results.count, 2);
+                assert.equal(res[key].results.size, 1024);
                 done();
             });
         });
@@ -454,10 +453,9 @@ describe('Backbeat Server', () => {
             getRequest('/_/metrics/crr/all/backlog', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res[key].results.count, 1875);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res[key].results.size, 2240);
+                // Backlog now uses pending metrics
+                assert.equal(res[key].results.count, 4);
+                assert.equal(res[key].results.size, 2048);
                 done();
             });
         });
@@ -493,9 +491,9 @@ describe('Backbeat Server', () => {
             getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Completions count = OPS_FAIL
+                // Failures count = OPS_FAIL
                 assert.equal(res[key].results.count, 150);
-                // Completions bytes = BYTES_FAIL
+                // Failures bytes = BYTES_FAIL
                 assert.equal(res[key].results.size, 375);
                 done();
             });
@@ -506,9 +504,9 @@ describe('Backbeat Server', () => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Completions count = OPS_FAIL
+                // Failures count = OPS_FAIL
                 assert.equal(res[key].results.count, 205);
-                // Completions bytes = BYTES_FAIL
+                // Failures bytes = BYTES_FAIL
                 assert.equal(res[key].results.size, 950);
                 done();
             });
@@ -567,16 +565,10 @@ describe('Backbeat Server', () => {
             getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
-                assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
+                assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
-
-                assert(res.backlog.description);
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res.backlog.results.count, 1275);
-                // Backlog size = BYTES - BYTES_DONE
-                assert.equal(res.backlog.results.size, 1171);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
@@ -589,6 +581,12 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.count, 0.5);
                 // Throughput bytes = BYTES_DONE / EXPIRY
                 assert.equal(res.throughput.results.size, 1.14);
+
+                assert(res.failures.description);
+                // Failures count = OPS_FAIL
+                assert.equal(res.failures.results.count, 150);
+                // Failures bytes = BYTES_FAIL
+                assert.equal(res.failures.results.size, 375);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 2);
@@ -603,16 +601,10 @@ describe('Backbeat Server', () => {
             getRequest('/_/metrics/crr/all', (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
-                assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
+                assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
-
-                assert(res.backlog.description);
-                // Backlog count = OPS - OPS_DONE
-                assert.equal(res.backlog.results.count, 1875);
-                // Backlog size = (BYTES - BYTES_DONE) / 1000
-                assert.equal(res.backlog.results.size, 224.0);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
@@ -625,6 +617,12 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.count, 0.83);
                 // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
                 assert.equal(res.throughput.results.size, 0.32);
+
+                assert(res.failures.description);
+                // Failures count = OPS_FAIL
+                assert.equal(res.failures.results.count, 205);
+                // Failures bytes = BYTES_FAIL
+                assert.equal(res.failures.results.size, 950);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 4);
@@ -674,14 +672,10 @@ describe('Backbeat Server', () => {
                     assert.ifError(err);
 
                     const keys = Object.keys(res);
-                    assert(keys.includes('backlog'));
                     assert(keys.includes('completions'));
                     assert(keys.includes('throughput'));
+                    assert(keys.includes('failures'));
                     assert(keys.includes('pending'));
-
-                    assert(res.backlog.description);
-                    assert.equal(res.backlog.results.count, 0);
-                    assert.equal(res.backlog.results.size, 0);
 
                     assert(res.completions.description);
                     assert.equal(res.completions.results.count, 0);
@@ -690,6 +684,10 @@ describe('Backbeat Server', () => {
                     assert(res.throughput.description);
                     assert.equal(res.throughput.results.count, 0);
                     assert.equal(res.throughput.results.size, 0);
+
+                    assert(res.failures.description);
+                    assert.equal(res.failures.results.count, 0);
+                    assert.equal(res.failures.results.size, 0);
 
                     assert(res.pending.description);
                     assert.equal(res.pending.results.count, 0);
