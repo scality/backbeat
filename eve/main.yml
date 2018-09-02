@@ -57,7 +57,13 @@ stages:
           name: run unit tests
           command: npm test
       - ShellCommand:
-          name: run s3 server and run feature tests
+          name: run feature tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash
+          workdir: '%(prop:builddir)s/build'
+          env:
+            CI: "true"
+      - ShellCommand:
+          name: run api tests
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
           workdir: '%(prop:builddir)s/build'
           env:
