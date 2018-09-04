@@ -6,6 +6,7 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
@@ -44,6 +45,7 @@ class ReplicateObject extends BackbeatTask {
         this.s3destCredentials = null;
         this.S3source = null;
         this.backbeatSource = null;
+        this.backbeatSourceProxy = null;
         this.backbeatDest = null;
     }
 
@@ -435,6 +437,9 @@ class ReplicateObject extends BackbeatTask {
             httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
+        this.backbeatSourceProxy =
+            new BackbeatMetadataProxy(this.sourceConfig, this.sourceHTTPAgent);
+        this.backbeatSourceProxy.setSourceClient(log);
     }
 
     _setupDestClients(targetRole, log) {
