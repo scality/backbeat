@@ -28,8 +28,7 @@ function initAndStart() {
         applyBucketWorkflows: applyBucketLifecycleWorkflows,
     }, error => {
         if (error) {
-            logger.error('could not load management db',
-                { error: error.message });
+            logger.error('could not load management db', { error });
             setTimeout(initAndStart, 5000);
             return;
         }
