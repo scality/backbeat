@@ -263,7 +263,20 @@ describe('Backbeat Server', () => {
             statsClient.reportNewRequest(`${site2}:${OPS_FAIL}`, 55);
             statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
             statsClient.reportNewRequest(`${site2}:${BYTES_FAIL}`, 575);
+
+            // TODO: quick fix made for failures/pending. Need to enhance tests
+            const testVersionId =
+                '3938353030303836313334343731393939393939524730303120203';
+            const testTimestamp = '0123456789';
+            const keys = [
+                `test-bucket:test-key:${testVersionId}0:${site1}:` +
+                    `${testTimestamp}`,
+                `test-bucket:test-key:${testVersionId}1:${site2}:` +
+                    `${testTimestamp}`,
+            ];
+
             return async.parallel([
+                next => setKey(redisClient, keys, next),
                 next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
                 next => redisClient.incrby(`${site1}:${BYTES_PENDING}`, 1024,
                     next),
@@ -274,7 +287,7 @@ describe('Backbeat Server', () => {
         });
 
         after(done => {
-            redis.keys('*:test:bb:*').then(keys => {
+            redis.keys('*test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
                     pipeline.del(key);
@@ -450,10 +463,10 @@ describe('Backbeat Server', () => {
             getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Failures count = OPS_FAIL
-                assert.equal(res[key].results.count, 150);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res[key].results.size, 375);
+                // Failures count scans all object fail keys
+                assert.equal(res[key].results.count, 1);
+                // Failures bytes is no longer used
+                assert.equal(res[key].results.size, 0);
                 done();
             });
         });
@@ -463,10 +476,10 @@ describe('Backbeat Server', () => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                // Failures count = OPS_FAIL
-                assert.equal(res[key].results.count, 205);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res[key].results.size, 950);
+                // Failures count scans all object fail keys
+                assert.equal(res[key].results.count, 2);
+                // Failures bytes is no longer used
+                assert.equal(res[key].results.size, 0);
                 done();
             });
         });
@@ -548,10 +561,10 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.size, 1.14);
 
                 assert(res.failures.description);
-                // Failures count = OPS_FAIL
-                assert.equal(res.failures.results.count, 150);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res.failures.results.size, 375);
+                // Failures count scans all object fail keys
+                assert.equal(res.failures.results.count, 1);
+                // Failures bytes is no longer used
+                assert.equal(res.failures.results.size, 0);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 2);
@@ -590,10 +603,10 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.size, 3.22);
 
                 assert(res.failures.description);
-                // Failures count = OPS_FAIL
-                assert.equal(res.failures.results.count, 205);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res.failures.results.size, 950);
+                // Failures count scans all object fail keys
+                assert.equal(res.failures.results.count, 2);
+                // Failures bytes is no longer used
+                assert.equal(res.failures.results.size, 0);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 4);
@@ -663,7 +676,8 @@ describe('Backbeat Server', () => {
                     assert.equal(res.throughput.results.size, 0);
 
                     assert(res.failures.description);
-                    assert.equal(res.failures.results.count, 0);
+                    // Failures are based on object metrics
+                    assert.equal(res.failures.results.count, 2);
                     assert.equal(res.failures.results.size, 0);
 
                     assert(res.pending.description);
