@@ -112,6 +112,21 @@ route for batch deletes.
 Eventually this process could be used to garbage-collect data from
 other processes (e.g. for MPU).
 
+##### CRR data processor
+
+Added a check on source metadata before starting replicating data, to
+skip if the status is COMPLETED for the location the data processor is
+responsible for. This is done on transient source location as well for
+non-transient locations as a sanity check.
+
+Rationale: for transient source it's most important to handle
+duplicate kafka entries from the replication topic, and become
+idempotent in such case, because replication from a transient source
+enforces the read to happen on the local (primary) storage, which does
+not work as soon as the local data has been deleted (the data
+processor would eventually set the status to FAILED on top of the
+COMPLETED one otherwise because of the missing data to replicate).
+
 #### Zenko deployment with Kubernetes
 
 * The garbage collector is a new backbeat service on its own, with its

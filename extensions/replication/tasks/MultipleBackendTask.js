@@ -4,6 +4,7 @@ const uuid = require('uuid/v4');
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -98,6 +99,36 @@ class MultipleBackendTask extends ReplicateObject {
                 return cb(errors.BadRole);
             }
             return cb(null, roles[0]);
+        });
+    }
+
+    _refreshSourceEntry(sourceEntry, log, cb) {
+        const params = {
+            bucket: sourceEntry.getBucket(),
+            objectKey: sourceEntry.getObjectKey(),
+            encodedVersionId: sourceEntry.getEncodedVersionId(),
+        };
+        return this.backbeatSourceProxy.getMetadata(
+        params, log, (err, blob) => {
+            if (err) {
+                log.error('error getting metadata blob from S3', {
+                    method: 'MultipleBackendTask._refreshSourceEntry',
+                    error: err,
+                });
+                return cb(err);
+            }
+            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
+            if (parsedEntry.error) {
+                log.error('error parsing metadata blob', {
+                    error: parsedEntry.error,
+                    method: 'MultipleBackendTask._refreshSourceEntry',
+                });
+                return cb(errors.InternalError.
+                    customizeDescription('error parsing metadata blob'));
+            }
+            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+            return cb(null, refreshedEntry);
         });
     }
 
@@ -749,16 +780,35 @@ class MultipleBackendTask extends ReplicateObject {
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toMultipleBackendReplicaEntry(this.site);
+        const content = sourceEntry.getReplicationContent();
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
         return async.waterfall([
             next => this._setupRoles(sourceEntry, log, next),
-            (sourceRole, next) => {
+            (sourceRole, next) =>
+                this._refreshSourceEntry(sourceEntry, log, next),
+            (refreshedEntry, next) => {
                 if (sourceEntry.getIsDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, destEntry, log,
                         next);
                 }
-                const content = sourceEntry.getReplicationContent();
+                const status = refreshedEntry.getReplicationSiteStatus(
+                    this.site);
+                log.debug('refreshed entry site replication info', {
+                    entry: refreshedEntry.getLogInfo(),
+                    site: this.site, siteStatus: status,
+                    content,
+                });
+                if (status === 'COMPLETED' && content.includes('DATA')) {
+                    const errMessage = 'skipping replication: ' +
+                          'replication status is already COMPLETED ' +
+                          `on the location ${this.site}`;
+                    log.warn(errMessage, {
+                        entry: refreshedEntry.getLogInfo(),
+                    });
+                    return done(errors.PreconditionFailed.customizeDescription(
+                        errMessage));
+                }
                 if (content.includes('MPU')) {
                     return this._getAndPutMultipartUpload(sourceEntry,
                         destEntry, log, next);
