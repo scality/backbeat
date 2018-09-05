@@ -565,10 +565,16 @@ describe('Backbeat Server', () => {
             getRequest(`/_/metrics/crr/${site1}`, (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
+
+                // backlog matches pending
+                assert(res.backlog.description);
+                assert.equal(res.backlog.results.count, 2);
+                assert.equal(res.backlog.results.size, 1024);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
@@ -601,10 +607,16 @@ describe('Backbeat Server', () => {
             getRequest('/_/metrics/crr/all', (err, res) => {
                 assert.ifError(err);
                 const keys = Object.keys(res);
+                assert(keys.includes('backlog'));
                 assert(keys.includes('completions'));
                 assert(keys.includes('throughput'));
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
+
+                // backlog matches pending
+                assert(res.backlog.description);
+                assert.equal(res.backlog.results.count, 4);
+                assert.equal(res.backlog.results.size, 2048);
 
                 assert(res.completions.description);
                 // Completions count = OPS_DONE
@@ -627,6 +639,7 @@ describe('Backbeat Server', () => {
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 4);
                 assert.equal(res.pending.results.size, 2048);
+
                 done();
             });
         });
@@ -672,10 +685,15 @@ describe('Backbeat Server', () => {
                     assert.ifError(err);
 
                     const keys = Object.keys(res);
+                    assert(keys.includes('backlog'));
                     assert(keys.includes('completions'));
                     assert(keys.includes('throughput'));
                     assert(keys.includes('failures'));
                     assert(keys.includes('pending'));
+
+                    assert(res.backlog.description);
+                    assert.equal(res.backlog.results.count, 0);
+                    assert.equal(res.backlog.results.size, 0);
 
                     assert(res.completions.description);
                     assert.equal(res.completions.results.count, 0);
