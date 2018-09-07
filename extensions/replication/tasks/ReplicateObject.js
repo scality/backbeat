@@ -439,6 +439,7 @@ class ReplicateObject extends BackbeatTask {
         });
         this.backbeatSourceProxy =
             new BackbeatMetadataProxy(this.sourceConfig, this.sourceHTTPAgent);
+        this.backbeatSourceProxy.setSourceRole(sourceRole);
         this.backbeatSourceProxy.setSourceClient(log);
     }
 
