@@ -480,7 +480,8 @@ class QueueProcessor extends EventEmitter {
                     consumerReady = true;
                     const paused = options && options.paused;
                     this._consumer.subscribe(paused);
-
+                });
+                this._consumer.on('canary', () => {
                     this.logger.info('queue processor is ready to consume ' +
                                      'replication entries');
                     this.emit('ready');
@@ -546,6 +547,10 @@ class QueueProcessor extends EventEmitter {
             this.logger.error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
+        }
+        if (sourceEntry.skip) {
+            // skip message, noop
+            return process.nextTick(done);
         }
         let task;
         if (sourceEntry instanceof BucketQueueEntry) {
