@@ -42,7 +42,7 @@
     "ioredis": "^3.2.2",
     "joi": "^10.6",
     "node-forge": "^0.7.1",
-    "node-rdkafka": "2.2.0",
+    "node-rdkafka": "2.3.1",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
