@@ -285,11 +285,13 @@ class ReplicateObject extends BackbeatTask {
             const partObj = new ObjectMDLocation(part);
             return partObj.getDataStoreETag() === undefined;
         })) {
-            log.error('cannot replicate object without dataStoreETag ' +
-                      'property',
-                      { method: 'ReplicateObject._getAndPutData',
-                        entry: sourceEntry.getLogInfo() });
-            return cb(errors.InvalidObjectState);
+            const errMessage =
+                  'cannot replicate object without dataStoreETag property';
+            log.error(errMessage, {
+                method: 'ReplicateObject._getAndPutData',
+                entry: sourceEntry.getLogInfo(),
+            });
+            return cb(errors.InternalError.customizeDescription(errMessage));
         }
         const locations = sourceEntry.getReducedLocations();
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
@@ -564,6 +566,11 @@ class ReplicateObject extends BackbeatTask {
                      { entry: sourceEntry.getLogInfo() });
             return this._processQueueEntryRetryFull(sourceEntry, destEntry,
                                                     log, done);
+        }
+        if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
+            log.info('replication skipped: invalid object state',
+                     { entry: sourceEntry.getLogInfo() });
+            return done();
         }
         log.debug('replication failed permanently for object, ' +
                   'publishing replication status as FAILED',

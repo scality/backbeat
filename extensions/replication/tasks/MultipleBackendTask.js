@@ -712,17 +712,20 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _getAndPutData(sourceEntry, destEntry, log, cb) {
+        // FIXME this function seems to duplicate
+        // ReplicateObject._getAndPutData(), consider merging implementations
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
         if (sourceEntry.getLocation().some(part => {
             const partObj = new ObjectMDLocation(part);
             return partObj.getDataStoreETag() === undefined;
         })) {
-            log.error('cannot replicate object without dataStoreETag property',
-                {
-                    method: 'MultipleBackendTask._getAndPutData',
-                    entry: sourceEntry.getLogInfo(),
-                });
-            return cb(errors.InvalidObjectState);
+            const errMessage =
+                  'cannot replicate object without dataStoreETag property';
+            log.error(errMessage, {
+                method: 'MultipleBackendTask._getAndPutData',
+                entry: sourceEntry.getLogInfo(),
+            });
+            return cb(errors.InternalError.customizeDescription(errMessage));
         }
         const locations = sourceEntry.getReducedLocations();
         // Metadata-only operations have no part locations.
@@ -806,7 +809,7 @@ class MultipleBackendTask extends ReplicateObject {
                     log.warn(errMessage, {
                         entry: refreshedEntry.getLogInfo(),
                     });
-                    return done(errors.PreconditionFailed.customizeDescription(
+                    return next(errors.InvalidObjectState.customizeDescription(
                         errMessage));
                 }
                 if (content.includes('MPU')) {
