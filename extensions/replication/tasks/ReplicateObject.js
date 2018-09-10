@@ -461,6 +461,16 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
+    _handleErrorMetric(entry) {
+        const content = entry.getReplicationContent();
+        const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
+        const extMetrics = getExtMetrics(this.site, bytes, entry);
+
+        // TODO: Add to constants
+        return this.mProducer.publishMetrics(extMetrics,
+            'error', metricsExtension, () => {});
+    }
+
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(this.site);
@@ -552,6 +562,8 @@ class ReplicateObject extends BackbeatTask {
                     entry: sourceEntry.getLogInfo(),
                     origin: err.origin,
                     error: err.description });
+            // TODO: decrement pending
+            this._handleErrorMetric(sourceEntry);
             return done();
         }
         if (err.ObjNotFound || err.code === 'ObjNotFound') {
@@ -559,6 +571,8 @@ class ReplicateObject extends BackbeatTask {
                 log.info('replication skipped: ' +
                          'source object version does not exist',
                          { entry: sourceEntry.getLogInfo() });
+                // TODO: decrement pending
+                this._handleErrorMetric(sourceEntry);
                 return done();
             }
             log.info('target object version does not exist, retrying ' +
@@ -570,6 +584,8 @@ class ReplicateObject extends BackbeatTask {
         if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
+            // TODO: decrement pending
+            this._handleErrorMetric(sourceEntry);
             return done();
         }
         log.debug('replication failed permanently for object, ' +
