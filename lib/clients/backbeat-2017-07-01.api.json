@@ -333,6 +333,46 @@
                 }
             }
         },
+        "MultipleBackendAbortMPU": {
+            "http": {
+                "method": "DELETE",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=abortmpu"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "UploadId": {
+                        "location": "header",
+                        "locationName": "X-Scal-Upload-Id"
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
+        },
         "MultipleBackendCompleteMPU": {
             "http": {
                 "method": "POST",
