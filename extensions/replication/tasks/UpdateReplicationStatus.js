@@ -88,7 +88,9 @@ class UpdateReplicationStatus extends BackbeatTask {
     _reportMetrics(entry, site) {
         const status = entry.getReplicationSiteStatus(site);
         const data = {};
-        const bytes = entry.getContentLength();
+        const content = entry.getReplicationContent();
+        const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
+
         data[site] = { ops: 1, bytes };
 
         if (status === 'COMPLETED' || status === 'FAILED') {
