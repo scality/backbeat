@@ -490,11 +490,23 @@ describe('Backbeat Server', () => {
         `/_/metrics/crr/${site1}/failures`, done => {
             getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
                 assert.ifError(err);
+
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // single site
+                    adjustResult -= 10;
+                }
+
                 const key = Object.keys(res)[0];
-                // Failures count = OPS_FAIL
-                assert.equal(res[key].results.count, 150);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res[key].results.size, 375);
+                // Failures count scans all object fail keys
+                assert.equal(res[key].results.count, 240 - adjustResult);
+                // Failures bytes is no longer used
+                assert.equal(res[key].results.size, 0);
                 done();
             });
         });
@@ -503,11 +515,23 @@ describe('Backbeat Server', () => {
         '/_/metrics/crr/all/failures', done => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
+
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // both sites
+                    adjustResult -= 20;
+                }
+
                 const key = Object.keys(res)[0];
-                // Failures count = OPS_FAIL
-                assert.equal(res[key].results.count, 205);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res[key].results.size, 950);
+                // Failures count scans all object fail keys
+                assert.equal(res[key].results.count, 480 - adjustResult);
+                // Failures bytes is no longer used
+                assert.equal(res[key].results.size, 0);
                 done();
             });
         });
@@ -571,6 +595,17 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // single site
+                    adjustResult -= 10;
+                }
+
                 // backlog matches pending
                 assert(res.backlog.description);
                 assert.equal(res.backlog.results.count, 2);
@@ -589,10 +624,10 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.size, 1.14);
 
                 assert(res.failures.description);
-                // Failures count = OPS_FAIL
-                assert.equal(res.failures.results.count, 150);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res.failures.results.size, 375);
+                // Failures count scans all object fail keys
+                assert.equal(res.failures.results.count, 240 - adjustResult);
+                // Failures bytes is no longer used
+                assert.equal(res.failures.results.size, 0);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 2);
@@ -613,6 +648,17 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // both sites
+                    adjustResult -= 20;
+                }
+
                 // backlog matches pending
                 assert(res.backlog.description);
                 assert.equal(res.backlog.results.count, 4);
@@ -631,10 +677,10 @@ describe('Backbeat Server', () => {
                 assert.equal(res.throughput.results.size, 3.22);
 
                 assert(res.failures.description);
-                // Failures count = OPS_FAIL
-                assert.equal(res.failures.results.count, 205);
-                // Failures bytes = BYTES_FAIL
-                assert.equal(res.failures.results.size, 950);
+                // Failures count scans all object fail keys
+                assert.equal(res.failures.results.count, 480 - adjustResult);
+                // Failures bytes is no longer used
+                assert.equal(res.failures.results.size, 0);
 
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 4);
@@ -704,8 +750,9 @@ describe('Backbeat Server', () => {
                     assert.equal(res.throughput.results.size, 0);
 
                     assert(res.failures.description);
-                    assert.equal(res.failures.results.count, 0);
-                    assert.equal(res.failures.results.size, 0);
+                    // Failures are based on object metrics
+                    assert.equal(typeof res.failures.results.count, 'number');
+                    assert.equal(typeof res.failures.results.size, 'number');
 
                     assert(res.pending.description);
                     assert.equal(res.pending.results.count, 0);
