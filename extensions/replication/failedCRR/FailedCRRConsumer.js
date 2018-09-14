@@ -1,6 +1,6 @@
 'use strict'; // eslint-disable-line strict
-const async = require('async');
 
+const { StatsModel } = require('arsenal').metrics;
 const Logger = require('werelogs').Logger;
 const redisClient = require('../../replication/utils/getRedisClient')();
 
@@ -24,6 +24,7 @@ class FailedCRRConsumer {
         this.logger = new Logger('Backbeat:FailedCRRConsumer');
         this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
         this._backbeatTask = new BackbeatTask();
+        this._statsClient = new StatsModel(redisClient);
     }
 
     /**
@@ -70,7 +71,8 @@ class FailedCRRConsumer {
     }
 
     /**
-     * Process an entry from the retry topic, and set the data in a Redis hash.
+     * Process an entry from the retry topic, and add the member in a Redis
+     * sorted set.
      * @param {Object} kafkaEntry - The entry from the retry topic
      * @param {function} cb - The callback function
      * @return {undefined}
@@ -88,70 +90,24 @@ class FailedCRRConsumer {
             log.end();
             return cb();
         }
-        return async.series([
-            next => this._removePreexistingKeys(data, err => {
-                if (err) {
-                    this.logger.error('error deleting preexisting CRR object ' +
-                    'metrics redis keys', {
-                        method: 'FailedCRRConsumer.processKafkaEntry',
-                        error: err,
-                    });
-                }
-                return next();
-            }),
-            next => this._setRedisKey(data, kafkaEntry, log, next),
-        ], cb);
+        return this._addSortedSetMember(data, kafkaEntry, log, cb);
     }
 
     /**
-     * Delete any pre-existing object CRR metrics keys. This way the object
-     * metrics during the retry will not be affected by the prior attempt.
-     * @param {Object} data - The kafka entry value
-     * @param {Function} cb - callback to call
-     * @return {undefined}
-     */
-    _removePreexistingKeys(data, cb) {
-        // eslint-disable-next-line no-unused-vars
-        const [service, extension, status, bucketName, objectKey, versionId,
-            site] = data.key.split(':');
-        // CRR object-level metrics key schema.
-        const queryString = `${site}:${bucketName}:${objectKey}:${versionId}:` +
-            `${service}:${extension}:*`;
-        return redisClient.scan(queryString, undefined, (err, keys) => {
-            if (err) {
-                return cb(err);
-            }
-            if (keys.length === 0) {
-                return cb();
-            }
-            return redisClient.batch([['del', ...keys]], (err, res) => {
-                if (err) {
-                    return cb(err);
-                }
-                const [cmdErr] = res[0];
-                if (cmdErr) {
-                    return cb(cmdErr);
-                }
-                return cb();
-            });
-        });
-    }
-
-    /**
-     * Attempt to set the Redis hash, using an exponential backoff should the
-     * key set fail. If the backoff time is exceeded, push the entry back into
-     * the retry entry topic for a later reattempt.
+     * Attempt to add the Redis sorted set member, using an exponential backoff
+     * should the set fail. If the backoff time is exceeded, push the entry back
+     * into the retry entry topic for a later attempt.
      * @param {Object} data - The field and value for the Redis hash
      * @param {Object} kafkaEntry - The entry from the retry topic
      * @param {Werelogs} log - The werelogs logger
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _setRedisKey(data, kafkaEntry, log, cb) {
+    _addSortedSetMember(data, kafkaEntry, log, cb) {
         this._backbeatTask.retry({
-            actionDesc: 'set redis key',
+            actionDesc: 'add redis sorted set member',
             logFields: {},
-            actionFunc: done => this._setRedisKeyOnce(data, log, done),
+            actionFunc: done => this._addSortedSetMemberOnce(data, done),
             shouldRetryFunc: err => err.retryable,
             log,
         }, err => {
@@ -160,28 +116,31 @@ class FailedCRRConsumer {
                 const entry = Buffer.from(kafkaEntry.value).toString();
                 return this._failedCRRProducer.publishFailedCRREntry(entry, cb);
             }
-            log.info('successfully set redis key');
+            if (err) {
+                log.error('could not add redis sorted set member', {
+                    error: err,
+                    data,
+                });
+                return cb(err);
+            }
+            log.info('successfully added redis sorted set member');
             return cb();
         });
     }
 
     /**
-     * Attempt to set the Redis hash.
+     * Attempt to add the sorted set member.
      * @param {Object} data - The key and value for the Redis key
-     * @param {Werelogs} log - The werelogs logger
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    _setRedisKeyOnce(data, log, cb) {
-        const { key, value } = data;
-        const expiry = this._repConfig.monitorReplicationFailureExpiryTimeS;
-        const cmd = ['set', key, value, 'EX', expiry];
-        return redisClient.batch([cmd], (err, res) => {
+    _addSortedSetMemberOnce(data, cb) {
+        const { key, member, score } = data;
+        return this._statsClient.addToSortedSet(key, score, member, err => {
             if (err) {
                 return cb({ retryable: true });
             }
-            const [cmdErr] = res[0];
-            return cb({ retryable: cmdErr !== null });
+            return cb();
         });
     }
 }
