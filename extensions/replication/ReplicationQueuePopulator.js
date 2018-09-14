@@ -58,12 +58,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                      JSON.stringify(entry));
 
         const repSites = queueEntry.getReplicationInfo().backends;
+        const content = queueEntry.getReplicationContent();
+        const bytes = content.includes('DATA') ?
+            queueEntry.getContentLength() : 0;
 
         // record replication metrics by site
         repSites.filter(entry => entry.status === 'PENDING')
             .forEach(backend => {
-                this._incrementMetrics(backend.site,
-                    queueEntry.getContentLength());
+                this._incrementMetrics(backend.site, bytes);
             });
     }
 }
