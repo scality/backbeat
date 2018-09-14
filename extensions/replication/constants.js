@@ -11,6 +11,7 @@ const constants = {
     metricsTypeQueued: 'queued',
     metricsTypeCompleted: 'completed',
     metricsTypeFailed: 'failed',
+    metricsError: 'error',
     redisKeys: {
         opsPending: testIsOn ? 'test:bb:opspending' : 'bb:crr:opspending',
         bytesPending: testIsOn ? 'test:bb:bytespending' : 'bb:crr:bytespending',

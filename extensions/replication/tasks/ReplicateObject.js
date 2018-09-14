@@ -15,8 +15,12 @@ const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const {
+    metricsExtension,
+    metricsTypeQueued,
+    metricsTypeCompleted,
+    metricsError,
+} = require('../constants');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -461,6 +465,14 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
+    _handleErrorMetric(entry) {
+        const content = entry.getReplicationContent();
+        const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
+        const extMetrics = getExtMetrics(this.site, bytes, entry);
+        return this.mProducer.publishMetrics(extMetrics,
+            metricsError, metricsExtension, () => {});
+    }
+
     processQueueEntry(sourceEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(this.site);
@@ -552,6 +564,7 @@ class ReplicateObject extends BackbeatTask {
                     entry: sourceEntry.getLogInfo(),
                     origin: err.origin,
                     error: err.description });
+            this._handleErrorMetric(sourceEntry);
             return done();
         }
         if (err.ObjNotFound || err.code === 'ObjNotFound') {
@@ -559,6 +572,7 @@ class ReplicateObject extends BackbeatTask {
                 log.info('replication skipped: ' +
                          'source object version does not exist',
                          { entry: sourceEntry.getLogInfo() });
+                this._handleErrorMetric(sourceEntry);
                 return done();
             }
             log.info('target object version does not exist, retrying ' +
@@ -570,6 +584,7 @@ class ReplicateObject extends BackbeatTask {
         if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
+            this._handleErrorMetric(sourceEntry);
             return done();
         }
         log.debug('replication failed permanently for object, ' +
