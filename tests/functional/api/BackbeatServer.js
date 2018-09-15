@@ -227,6 +227,9 @@ describe('Backbeat Server', () => {
         const OBJECT_KEY = 'test/object-key';
         const VERSION_ID = 'test-version-id';
 
+        // Needed in-case failures set expires during tests
+        const testStartTime = Date.now();
+
         const destconfig = config.extensions.replication.destination;
         const site1 = destconfig.bootstrapList[0].site;
         const site2 = destconfig.bootstrapList[1].site;
@@ -264,25 +267,35 @@ describe('Backbeat Server', () => {
             statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
             statsClient.reportNewRequest(`${site2}:${BYTES_FAIL}`, 575);
 
-            // TODO: quick fix made for failures/pending. Need to enhance tests
-            const testVersionId =
-                '3938353030303836313334343731393939393939524730303120203';
-            const testTimestamp = '0123456789';
-            const keys = [
-                `test-bucket:test-key:${testVersionId}0:${site1}:` +
-                    `${testTimestamp}`,
-                `test-bucket:test-key:${testVersionId}1:${site2}:` +
-                    `${testTimestamp}`,
-            ];
-
             return async.parallel([
-                next => setKey(redisClient, keys, next),
                 next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
                 next => redisClient.incrby(`${site1}:${BYTES_PENDING}`, 1024,
                     next),
                 next => redisClient.incrby(`${site2}:${OPS_PENDING}`, 2, next),
                 next => redisClient.incrby(`${site2}:${BYTES_PENDING}`, 1024,
                     next),
+                next => {
+                    // site1
+                    const timestamps = statsClient.getSortedSetHours(
+                        testStartTime);
+                    async.each(timestamps, (ts, tsCB) =>
+                        async.times(10, (n, timeCB) => {
+                            const key = `${TEST_REDIS_KEY_FAILED_CRR}:` +
+                                `${site1}:${ts}`;
+                            redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
+                        }, tsCB), next);
+                },
+                next => {
+                    // site2
+                    const timestamps = statsClient.getSortedSetHours(
+                        testStartTime);
+                    async.each(timestamps, (ts, tsCB) =>
+                        async.times(10, (n, timeCB) => {
+                            const key = `${TEST_REDIS_KEY_FAILED_CRR}:` +
+                                `${site2}:${ts}`;
+                            redisClient.zadd(key, 10 + n, `test-${n}`, timeCB);
+                        }, tsCB), next);
+                },
             ], done);
         });
 
@@ -462,9 +475,21 @@ describe('Backbeat Server', () => {
         `/_/metrics/crr/${site1}/failures`, done => {
             getRequest(`/_/metrics/crr/${site1}/failures`, (err, res) => {
                 assert.ifError(err);
+
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // single site
+                    adjustResult -= 10;
+                }
+
                 const key = Object.keys(res)[0];
                 // Failures count scans all object fail keys
-                assert.equal(res[key].results.count, 1);
+                assert.equal(res[key].results.count, 240 - adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res[key].results.size, 0);
                 done();
@@ -475,9 +500,21 @@ describe('Backbeat Server', () => {
         '/_/metrics/crr/all/failures', done => {
             getRequest('/_/metrics/crr/all/failures', (err, res) => {
                 assert.ifError(err);
+
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // both sites
+                    adjustResult -= 20;
+                }
+
                 const key = Object.keys(res)[0];
                 // Failures count scans all object fail keys
-                assert.equal(res[key].results.count, 2);
+                assert.equal(res[key].results.count, 480 - adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res[key].results.size, 0);
                 done();
@@ -543,6 +580,17 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // single site
+                    adjustResult -= 10;
+                }
+
                 // backlog matches pending
                 assert(res.backlog.description);
                 assert.equal(res.backlog.results.count, 2);
@@ -562,7 +610,7 @@ describe('Backbeat Server', () => {
 
                 assert(res.failures.description);
                 // Failures count scans all object fail keys
-                assert.equal(res.failures.results.count, 1);
+                assert.equal(res.failures.results.count, 240 - adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res.failures.results.size, 0);
 
@@ -585,6 +633,17 @@ describe('Backbeat Server', () => {
                 assert(keys.includes('failures'));
                 assert(keys.includes('pending'));
 
+                const testTime = statsClient.getSortedSetCurrentHour(
+                    testStartTime);
+                const current = statsClient.getSortedSetCurrentHour(Date.now());
+
+                // Need to adjust results if oldest set already expired
+                let adjustResult = 0;
+                if (current !== testTime) {
+                    // both sites
+                    adjustResult -= 20;
+                }
+
                 // backlog matches pending
                 assert(res.backlog.description);
                 assert.equal(res.backlog.results.count, 4);
@@ -604,7 +663,7 @@ describe('Backbeat Server', () => {
 
                 assert(res.failures.description);
                 // Failures count scans all object fail keys
-                assert.equal(res.failures.results.count, 2);
+                assert.equal(res.failures.results.count, 480 - adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res.failures.results.size, 0);
 
@@ -677,8 +736,8 @@ describe('Backbeat Server', () => {
 
                     assert(res.failures.description);
                     // Failures are based on object metrics
-                    assert.equal(res.failures.results.count, 2);
-                    assert.equal(res.failures.results.size, 0);
+                    assert.equal(typeof res.failures.results.count, 'number');
+                    assert.equal(typeof res.failures.results.size, 'number');
 
                     assert(res.pending.description);
                     assert.equal(res.pending.results.count, 0);
