@@ -8,6 +8,7 @@ const config = require('../../../conf/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { HealthProbeServer } = require('arsenal').network.probe;
+const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
 const { zookeeperReplicationNamespace } = require('../constants');
 const ZK_CRR_STATE_PATH = '/state';
@@ -109,7 +110,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     log.fatal('error setting state for queue processor', {
                         method: 'QueueProcessor:task',
                         site,
-                        error: e,
+                        error: reshapeExceptionError(e),
                     });
                     return done(e);
                 }
