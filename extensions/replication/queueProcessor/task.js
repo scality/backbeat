@@ -74,7 +74,7 @@ function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
         });
     }
     qp.scheduleResume(scheduleDate);
-    return cb();
+    return cb(null, { paused: true });
 }
 
 /**
