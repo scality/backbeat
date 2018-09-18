@@ -98,13 +98,9 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                           error: err.message });
                     return done(err);
                 }
+                let d;
                 try {
-                    const d = JSON.parse(data.toString());
-                    if (d.scheduledResume) {
-                        return checkAndApplyScheduleResume(qp, d, zkClient,
-                            site, done);
-                    }
-                    return done(null, d);
+                    d = JSON.parse(data.toString());
                 } catch (e) {
                     log.fatal('error setting state for queue processor', {
                         method: 'QueueProcessor:task',
@@ -113,6 +109,11 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     });
                     return done(e);
                 }
+                if (d.scheduleResume) {
+                    return checkAndApplyScheduleResume(qp, d, zkClient,
+                        site, done);
+                }
+                return done(null, d);
             });
         }
         if (err) {
