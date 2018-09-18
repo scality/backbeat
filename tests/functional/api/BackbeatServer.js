@@ -726,7 +726,7 @@ describe('Backbeat Server', () => {
                     const memberCount = (150 * 5) * 24;
                     const set = new Set();
                     let marker = 0;
-                    async.timesSeries(40, (i, next) =>
+                    async.timesSeries(memberCount, (i, next) =>
                         getRequest('/_/crr/failed?' +
                             `marker=${marker}&sitename=test-site`,
                             (err, res) => {
@@ -776,7 +776,7 @@ describe('Backbeat Server', () => {
                     const memberCount = 2000 * 5;
                     const set = new Set();
                     let marker = 0;
-                    async.timesSeries(10, (i, next) =>
+                    async.timesSeries(memberCount, (i, next) =>
                         getRequest('/_/crr/failed?' +
                             `marker=${marker}&sitename=test-site`,
                             (err, res) => {
