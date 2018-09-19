@@ -96,6 +96,32 @@ function getRequest(path, done) {
     req.end();
 }
 
+function checkListingResult(memberCount, cb) {
+    const set = new Set();
+    let marker = 0;
+    async.timesSeries(memberCount, (i, next) =>
+        getRequest(`/_/crr/failed?marker=${marker}&sitename=test-site`,
+            (err, res) => {
+                assert.ifError(err);
+                res.Versions.forEach(version => {
+                    // Ensure we have no duplicate results.
+                    assert(!set.has(version.Key));
+                    set.add(version.Key);
+                });
+                if (res.IsTruncated === false) {
+                    assert.strictEqual(res.NextMarker,
+                        undefined);
+                    assert.strictEqual(set.size, memberCount);
+                    return cb();
+                }
+                assert.strictEqual(res.IsTruncated, true);
+                assert.strictEqual(
+                    typeof(res.NextMarker), 'number');
+                marker = res.NextMarker;
+                return next();
+            }), cb);
+}
+
 describe('Backbeat Server', () => {
     let s3Mock;
     let vaultMock;
@@ -1057,30 +1083,7 @@ describe('Backbeat Server', () => {
                 }, err => {
                     assert.ifError(err);
                     const memberCount = (150 * 5) * 24;
-                    const set = new Set();
-                    let marker = 0;
-                    async.timesSeries(memberCount, (i, next) =>
-                        getRequest('/_/crr/failed?' +
-                            `marker=${marker}&sitename=test-site`,
-                            (err, res) => {
-                                assert.ifError(err);
-                                res.Versions.forEach(version => {
-                                    // Ensure we have no duplicate results.
-                                    assert(!set.has(version.Key));
-                                    set.add(version.Key);
-                                });
-                                if (res.IsTruncated === false) {
-                                    assert.strictEqual(res.NextMarker,
-                                        undefined);
-                                    assert.strictEqual(set.size, memberCount);
-                                    return done();
-                                }
-                                assert.strictEqual(res.IsTruncated, true);
-                                assert.strictEqual(
-                                    typeof(res.NextMarker), 'number');
-                                marker = res.NextMarker;
-                                return next();
-                            }), done);
+                    return checkListingResult(memberCount, done);
                 });
             });
 
@@ -1107,30 +1110,97 @@ describe('Backbeat Server', () => {
                 }, err => {
                     assert.ifError(err);
                     const memberCount = 2000 * 5;
-                    const set = new Set();
-                    let marker = 0;
-                    async.timesSeries(memberCount, (i, next) =>
-                        getRequest('/_/crr/failed?' +
-                            `marker=${marker}&sitename=test-site`,
-                            (err, res) => {
-                                assert.ifError(err);
-                                res.Versions.forEach(version => {
-                                    // Ensure we have no duplicate results.
-                                    assert(!set.has(version.Key));
-                                    set.add(version.Key);
-                                });
-                                if (res.IsTruncated === false) {
-                                    assert.strictEqual(res.NextMarker,
-                                        undefined);
-                                    assert.strictEqual(set.size, memberCount);
-                                    return done();
-                                }
-                                assert.strictEqual(res.IsTruncated, true);
-                                assert.strictEqual(
-                                    typeof(res.NextMarker), 'number');
-                                marker = res.NextMarker;
-                                return next();
-                            }), done);
+                    return checkListingResult(memberCount, done);
+                });
+            });
+
+            it('should get correct data at scale for GET route: ' +
+            '/_/crr/failed when failures occur across hours and there are ' +
+            'duplicate scores ending sorted set',
+            function f(done) {
+                this.timeout(30000);
+                async.eachLimit([1, 2], 10, (hour, callback) => {
+                    const delta = (60 * 60 * 1000) * hour;
+                    let timestamp = Date.now() - delta;
+                    const start = timestamp;
+                    let normalizedScore;
+                    return async.timesLimit(20, 10, (i, next) => {
+                        const members = [
+                            `bucket-${i}:key-a-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-b-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-c-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-d-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-e-${i}-${hour}:versionId-${i}`,
+                        ];
+                        const statsClient = new StatsModel(redisClient);
+                        normalizedScore = statsClient
+                            .normalizeTimestampByHour(new Date(timestamp));
+                        timestamp += 5;
+                        return addManyMembers(redisClient, 'test-site', members,
+                            normalizedScore, timestamp, next);
+                    }, err => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        const member1 = `bucket-0:key-f-0-${hour}:versionId-0`;
+                        const member2 = `bucket-0:key-g-0-${hour}:versionId-0`;
+                        return async.series([
+                            cb => addManyMembers(redisClient, 'test-site',
+                                [member1], normalizedScore, start + 5, cb),
+                            cb => addManyMembers(redisClient, 'test-site',
+                                [member2], normalizedScore, start + 5, cb),
+                        ], callback);
+                    });
+                }, err => {
+                    assert.ifError(err);
+                    const memberCount = ((20 * 5) * 2) + 4;
+                    return checkListingResult(memberCount, done);
+                });
+            });
+
+            it('should get correct data at scale for GET route: ' +
+            '/_/crr/failed when failures occur across hours and there are ' +
+            'duplicate scores in the middle of the sorted set',
+            function f(done) {
+                this.timeout(30000);
+                async.eachLimit([1, 2], 10, (hour, callback) => {
+                    const delta = (60 * 60 * 1000) * hour;
+                    let timestamp = Date.now() - delta;
+                    const start = timestamp;
+                    let normalizedScore;
+                    return async.timesLimit(40, 10, (i, next) => {
+                        const members = [
+                            `bucket-${i}:key-a-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-b-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-c-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-d-${i}-${hour}:versionId-${i}`,
+                            `bucket-${i}:key-e-${i}-${hour}:versionId-${i}`,
+                        ];
+                        const statsClient = new StatsModel(redisClient);
+                        normalizedScore = statsClient
+                            .normalizeTimestampByHour(new Date(timestamp));
+                        timestamp += 5;
+                        return addManyMembers(redisClient, 'test-site', members,
+                            normalizedScore, timestamp, next);
+                    }, err => {
+                        if (err) {
+                            return callback(err);
+                        }
+                        const member1 = `bucket-0:key-f-0-${hour}:versionId-0`;
+                        const member2 = `bucket-0:key-g-0-${hour}:versionId-0`;
+                        return async.series([
+                            cb => addManyMembers(redisClient, 'test-site',
+                                [member1], normalizedScore,
+                                start + 5 + (5 * 20), cb),
+                            cb => addManyMembers(redisClient, 'test-site',
+                                [member2], normalizedScore,
+                                start + 5 + (5 * 20), cb),
+                        ], callback);
+                    });
+                }, err => {
+                    assert.ifError(err);
+                    const memberCount = ((40 * 5) * 2) + 4;
+                    return checkListingResult(memberCount, done);
                 });
             });
 
