@@ -5,6 +5,8 @@ const testIsOn = process.env.CI === 'true';
 const constants = {
     zookeeperReplicationNamespace:
         testIsOn ? '/backbeattest' : '/backbeat/replication',
+    zkCRRStatePath: '/state',
+    zkCRRStateProperties: ['paused', 'scheduledResume'],
     proxyVaultPath: '/_/backbeat/vault',
     proxyIAMPath: '/_/backbeat/iam',
     metricsExtension: 'crr',

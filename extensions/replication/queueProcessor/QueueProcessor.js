@@ -26,10 +26,10 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
-const { zookeeperReplicationNamespace } = require('../constants');
-const ZK_CRR_STATE_PATH = '/state';
-
 const {
+    zookeeperReplicationNamespace,
+    zkCRRStatePath,
+    zkCRRStateProperties,
     proxyVaultPath,
     proxyIAMPath,
     replicationBackends,
@@ -328,7 +328,7 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getZkSiteNode() {
-        return `${zookeeperReplicationNamespace}${ZK_CRR_STATE_PATH}/` +
+        return `${zookeeperReplicationNamespace}${zkCRRStatePath}/` +
             `${this.site}`;
     }
 
@@ -340,12 +340,19 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _updateZkStateNode(key, value, cb) {
+        if (!zkCRRStateProperties.includes(key)) {
+            const errorMsg = 'incorrect zookeeper state property given';
+            this.logger.error(errorMsg, {
+                method: 'QueueProcessor._updateZkStateNode',
+            });
+            return cb(new Error('incorrect zookeeper state property given'));
+        }
         const path = this._getZkSiteNode();
-        async.waterfall([
+        return async.waterfall([
             next => this.zkClient.getData(path, (err, data) => {
                 if (err) {
                     this.logger.error('could not get state from zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err.message,
                     });
@@ -360,7 +367,7 @@ class QueueProcessor extends EventEmitter {
                 } catch (err) {
                     this.logger.error('could not parse state data from ' +
                     'zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err,
                     });
@@ -371,7 +378,7 @@ class QueueProcessor extends EventEmitter {
                 if (err) {
                     this.logger.error('could not save state data in ' +
                     'zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err,
                     });

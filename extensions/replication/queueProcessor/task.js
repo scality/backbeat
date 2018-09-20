@@ -10,8 +10,8 @@ const { applyBucketReplicationWorkflows } = require('../management');
 const { HealthProbeServer } = require('arsenal').network.probe;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
-const { zookeeperReplicationNamespace } = require('../constants');
-const ZK_CRR_STATE_PATH = '/state';
+const { zookeeperReplicationNamespace, zkCRRStatePath } =
+    require('../constants');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -20,6 +20,8 @@ const sourceConfig = repConfig.source;
 const redisConfig = config.redis;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
+
+const RESUME_NODE = 'scheduledResume';
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -35,7 +37,7 @@ const healthServer = new HealthProbeServer({
 const activeQProcessors = {};
 
 function getCRRStateZkPath() {
-    return `${zookeeperReplicationNamespace}${ZK_CRR_STATE_PATH}`;
+    return `${zookeeperReplicationNamespace}${zkCRRStatePath}`;
 }
 
 /**
@@ -54,7 +56,7 @@ function getCRRStateZkPath() {
  * @return {undefined}
  */
 function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
-    const scheduleDate = new Date(data.scheduledResume);
+    const scheduleDate = new Date(data[RESUME_NODE]);
     const hasExpired = new Date() >= scheduleDate;
     if (hasExpired) {
         // if date expired, resume automatically for the site.
@@ -110,7 +112,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     });
                     return done(e);
                 }
-                if (d.scheduledResume) {
+                if (d[RESUME_NODE]) {
                     return checkAndApplyScheduleResume(qp, d, zkClient,
                         site, done);
                 }
