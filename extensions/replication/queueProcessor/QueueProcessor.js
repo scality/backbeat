@@ -383,26 +383,37 @@ class QueueProcessor extends EventEmitter {
     }
 
     scheduleResume(date) {
+        function triggerResume() {
+            this._updateZkStateNode('scheduledResume', null, err => {
+                if (err) {
+                    this.logger.error('error occurred saving state ' +
+                    'to zookeeper for resuming a scheduled resume. Retry ' +
+                    'again in 1 minute', {
+                        method: 'QueueProcessor.scheduleResume',
+                        error: err,
+                    });
+                    // if an error occurs, need to retry
+                    // for now, schedule minute from now
+                    const date = new Date();
+                    date.setMinutes(date.getMinutes() + 1);
+                    this.scheduleResume = schedule.scheduleJob(date,
+                        triggerResume.bind(this));
+                } else {
+                    this.scheduledResume.cancel();
+                    this.scheduledResume = null;
+                    this._resumeService();
+                }
+            });
+        }
+
         this._updateZkStateNode('scheduledResume', date, err => {
             if (err) {
                 this.logger.trace('error occurred saving state to zookeeper', {
                     method: 'QueueProcessor.scheduleResume',
                 });
             } else {
-                this.scheduledResume = schedule.scheduleJob(date, () => {
-                    this.scheduledResume = null;
-                    this._updateZkStateNode('scheduledResume', null,
-                    err => {
-                        if (err) {
-                            this.logger.error('error occurred saving state ' +
-                            'to zookeeper', {
-                                method: 'QueueProcessor.scheduleResume',
-                            });
-                        } else {
-                            this._resumeService();
-                        }
-                    });
-                });
+                this.scheduledResume = schedule.scheduleJob(date,
+                    triggerResume.bind(this));
                 this.logger.info('scheduled CRR resume', {
                     scheduleTime: date.toString(),
                 });

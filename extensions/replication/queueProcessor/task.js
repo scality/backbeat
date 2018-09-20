@@ -110,7 +110,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     });
                     return done(e);
                 }
-                if (d.scheduleResume) {
+                if (d.scheduledResume) {
                     return checkAndApplyScheduleResume(qp, d, zkClient,
                         site, done);
                 }
