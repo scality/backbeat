@@ -19,7 +19,7 @@ const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const {
     getSortedSetMember,
     getSortedSetKey,
-} = require('../../../lib/util/sortedSetHelper');
+} = require('../../../lib/util/getRedisKeys');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 // StatsClient constant default for site metrics
