@@ -8,6 +8,7 @@ const { RoundRobin } = require('arsenal').network;
 const config = require('../conf/Config');
 const SetupReplication =
           require('../extensions/replication/utils/SetupReplication');
+const version = require('../package.json').version;
 
 werelogs.configure({
     level: config.log.logLevel,
@@ -26,7 +27,8 @@ function _createSetupReplication(command, options, log) {
     // Required options
     if (!sourceBucket || !targetBucket ||
         !sourceProfile || (!targetProfile && !targetIsExternal)) {
-        program.commands.find(n => n._name === command).help();
+        program.commands.find(n => n._name === command).outputHelp();
+        process.stdout.write('\n');
         process.exit(1);
     }
 
@@ -54,69 +56,62 @@ function _createSetupReplication(command, options, log) {
             isExternal: targetIsExternal,
             siteName,
         },
+        https: config.https,
         checkSanity: true,
         log,
     });
 }
 
-program
-    .version('1.0.0')
-    .command('setup')
-    .option('--source-bucket <name>', '[required] source bucket name')
-    .option('--source-profile <name>',
-            '[required] source aws/credentials profile')
-    .option('--target-bucket <name>', '[required] target bucket name')
-    .option('--target-profile <name>', '[optional] target aws/credentials ' +
-            'profile (optional if using external location)')
-    .option('--site-name <name>', '[optional] the site name (required if ' +
-            'using external location)')
-    .action(options => {
-        const log = new Logger('BackbeatSetup').newRequestLogger();
-        const s = _createSetupReplication('setup', options, log);
-        s.setupReplication(err => {
-            if (err) {
-                log.error('replication setup failed', {
-                    errCode: err.code,
-                    error: err.message,
-                });
-                process.exit(1);
-            }
-            log.info('replication setup successful');
-            process.exit();
-        });
-    });
+program.version(version);
 
-program
-    .command('validate')
-    .option('--source-bucket <name>', '[required] source bucket name')
-    .option('--source-profile <name>',
-            '[required] source aws/credentials profile')
-    .option('--target-bucket <name>', '[required] target bucket name')
-    .option('--target-profile <name>', '[optional] target aws/credentials ' +
-            'profile (optional if using external location)')
-    .option('--site-name <name>', '[optional] the site name (required if ' +
-            'using external location)')
-    .action(options => {
-        const log = new Logger('BackbeatSetup').newRequestLogger();
-        const s = _createSetupReplication('validate', options, log);
-        s.checkSanity(err => {
-            if (err) {
-                log.error('replication validation check failed', {
-                    errCode: err.code,
-                    error: err.message,
-                });
-                process.exit(1);
-            }
-            log.info('replication is correctly setup');
-            process.exit();
+[
+    {
+        name: 'setup',
+        method: 'setupReplication',
+        errorLog: 'replication setup failed',
+        successLog: 'replication setup successful',
+    },
+    {
+        name: 'validate',
+        method: 'checkSanity',
+        errorLog: 'replication validation check failed',
+        successLog: 'replication is correctly setup',
+    },
+].forEach(cmd => {
+    program
+        .command(cmd.name)
+        .option('--source-bucket <name>', '[required] source bucket name')
+        .option('--source-profile <name>',
+                '[required] source aws/credentials profile')
+        .option('--target-bucket <name>', '[required] target bucket name')
+        .option('--target-profile <name>', '[optional] target ' +
+                'aws/credentials profile (optional if using external location)')
+        .option('--site-name <name>', '[optional] the site name (required if ' +
+                'using external location)')
+        .action(options => {
+            const log = new Logger('BackbeatSetup').newRequestLogger();
+            const s = _createSetupReplication(cmd.name, options, log);
+            s[cmd.method](err => {
+                if (err) {
+                    log.error(cmd.errorLog, {
+                        errCode: err.code,
+                        error: err.message,
+                    });
+                    process.exit(1);
+                }
+                log.info(cmd.successLog);
+                process.exit();
+            });
         });
-    });
+});
 
-program.parse(process.argv);
 const validCommands = program.commands.map(n => n._name);
 
 // Is the command given invalid or are there too few arguments passed
 if (!validCommands.includes(process.argv[2])) {
-    program.help();
+    program.outputHelp();
+    process.stdout.write('\n');
     process.exit(1);
+} else {
+    program.parse(process.argv);
 }

@@ -59,6 +59,28 @@ class Config {
                 { host: '127.0.0.1', port: 6379 });
         }
 
+        // additional certs checks
+        if (parsedConfig.certFilePaths) {
+            const { key, cert, ca } = parsedConfig.certFilePaths;
+
+            const makePath = value =>
+                  (value.startsWith('/') ?
+                   value : `${this._basePath}/${value}`);
+            parsedConfig.https = {};
+            if (key && cert) {
+                const keypath = makePath(key);
+                const certpath = makePath(cert);
+                fs.accessSync(keypath, fs.F_OK | fs.R_OK);
+                fs.accessSync(certpath, fs.F_OK | fs.R_OK);
+                parsedConfig.https.cert = fs.readFileSync(certpath, 'ascii');
+                parsedConfig.https.key = fs.readFileSync(keypath, 'ascii');
+            }
+            if (ca) {
+                const capath = makePath(ca);
+                fs.accessSync(capath, fs.F_OK | fs.R_OK);
+                parsedConfig.https.ca = fs.readFileSync(capath, 'ascii');
+            }
+        }
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
     }

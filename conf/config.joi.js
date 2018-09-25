@@ -44,6 +44,11 @@ const joiSchema = {
             })
         ),
     },
+    certFilePaths: joi.object({
+        key: joi.string().empty(''),
+        cert: joi.string().empty(''),
+        ca: joi.string().empty(''),
+    }),
 };
 
 module.exports = joiSchema;

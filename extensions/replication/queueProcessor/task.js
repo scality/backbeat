@@ -9,6 +9,7 @@ const config = require('../../../conf/Config');
 const zkConfig = config.zookeeper;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
+const httpsConfig = config.https;
 const mConfig = config.metrics;
 
 const site = process.argv[2];
@@ -36,6 +37,6 @@ metricsProducer.setupProducer(err => {
         return undefined;
     }
     const queueProcessor = new QueueProcessor(zkConfig, sourceConfig,
-        destConfig, repConfig, site, metricsProducer);
+        destConfig, repConfig, httpsConfig, site, metricsProducer);
     return queueProcessor.start();
 });
