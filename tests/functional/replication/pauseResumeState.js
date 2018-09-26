@@ -10,7 +10,10 @@ const TimeMachine = require('../utils/timeMachine');
 
 // Configs
 const config = require('../../config.json');
-const redisConfig = { host: '127.0.0.1', port: 6379 };
+const redisConfig = {
+    host: config.redis.host,
+    port: config.redis.port,
+};
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = {
@@ -18,10 +21,7 @@ const sourceConfig = {
 };
 const destConfig = {
     auth: { type: 'skip', vault: 'skip' },
-    bootstrapList: [
-        { site: 'test-site-1', servers: ['127.0.0.1:9443'] },
-        { site: 'test-site-2', type: 'aws_s3' },
-    ],
+    bootstrapList: repConfig.destination.bootstrapList,
 };
 const mConfig = config.metrics;
 
@@ -339,7 +339,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer2) !== true,
+        }, 1000), () => !isConsumerActive(consumer2),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
@@ -499,30 +499,21 @@ describe('CRR Pause/Resume status updates', function d() {
         });
     });
 
-    // TODO: ZENKO-1086
-    it.skip('should not schedule a resume when the location is already active',
+    it('should not schedule a resume when the location is already active',
     done => {
-        let zkScheduleState;
-        let zkPauseState;
         // send fake api request
         mockAPI.resumeCRRService(firstSite, futureDate);
 
-        return async.doWhilst(cb => setTimeout(() => {
+        setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
-                if (err) {
-                    return cb(err);
-                }
-                zkScheduleState = data.scheduledResume;
-                zkPauseState = data.paused;
-                return cb();
+                assert.ifError(err);
+
+                assert.strictEqual(data.scheduledResume, null);
+                assert.strictEqual(data.paused, false);
+                assert.strictEqual(isConsumerActive(consumer1), true);
+                done();
             });
-        }, 1000), () => isConsumerActive(consumer1),
-        err => {
-            assert.ifError(err);
-            assert.strictEqual(zkScheduleState, undefined);
-            assert.strictEqual(zkPauseState, false);
-            done();
-        });
+        }, 1000);
     });
 
     it('should resume a location when a scheduled resume triggers',
