@@ -478,7 +478,9 @@ class QueueProcessor extends EventEmitter {
                     this.scheduleResume = schedule.scheduleJob(date,
                         triggerResume.bind(this));
                 } else {
-                    this.scheduledResume.cancel();
+                    if (this.scheduledResume) {
+                        this.scheduledResume.cancel();
+                    }
                     this.scheduledResume = null;
                     this._resumeService();
                 }
