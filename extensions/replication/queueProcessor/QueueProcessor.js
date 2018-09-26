@@ -359,11 +359,16 @@ class QueueProcessor extends EventEmitter {
     _resumeService(date) {
         const enabled = this._consumer.getServiceStatus();
         const now = new Date();
+
+        if (enabled) {
+            this.logger.info(`cannot resume, site ${this.site} is not paused`);
+            return;
+        }
+
         if (date && now < new Date(date)) {
             // if date is in the future, attempt to schedule job
             this.scheduleResume(date);
-        } else if (!enabled) {
-            // if currently paused, attempt to resume
+        } else {
             this._updateZkStateNode('paused', false, err => {
                 if (err) {
                     this.logger.trace('error occurred saving state to ' +
