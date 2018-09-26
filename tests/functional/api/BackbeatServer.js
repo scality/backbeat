@@ -1285,6 +1285,35 @@ describe('Backbeat Server', () => {
                 });
             });
 
+            it('should get correct data for POST route: ' +
+            '/_/crr/failed when no key has been matched and ForceRetry ' +
+            'field is specified', done => {
+                const body = JSON.stringify([{
+                    Bucket: 'bucket',
+                    Key: 'key',
+                    VersionId: 'versionId',
+                    StorageClass: 'site',
+                    ForceRetry: true,
+                }]);
+                makeRetryPOSTRequest(body, (err, res) => {
+                    assert.ifError(err);
+                    getResponseBody(res, (err, resBody) => {
+                        assert.ifError(err);
+                        const body = JSON.parse(resBody);
+                        assert.deepStrictEqual(body, [{
+                            Bucket: 'bucket',
+                            Key: 'key',
+                            VersionId: testVersionId,
+                            StorageClass: 'site',
+                            ReplicationStatus: 'PENDING',
+                            LastModified: '2018-03-30T22:22:34.384Z',
+                            Size: 1,
+                        }]);
+                        done();
+                    });
+                });
+            });
+
             it('should get correct data for POST route: /_/crr/failed ' +
             'when there are multiple matching keys', done => {
                 const member = `test-bucket:test-key:${testVersionId}`;
