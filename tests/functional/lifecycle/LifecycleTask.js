@@ -1000,20 +1000,6 @@ describe('lifecycle task functional tests', function dF() {
                 },
             },
             {
-                message: 'should implicitly apply ExpiredObjectDeleteMarker ' +
-                    'rule when a valid and applicable EXPIRATION rule is ' +
-                    'set, EODM is not false, and owner is Lifecycle service ' +
-                    'account',
-                bucketLCRules: [
-                    new Rule().addID('task-1')
-                        .addExpiration('Days', 1).build(),
-                ],
-                owner: `${OWNER}/lifecycle`,
-                expected: {
-                    objectCount: 1,
-                },
-            },
-            {
                 message: 'should not apply ExpiredObjectDeleteMarker rule ' +
                     'when EODM is set to false',
                 bucketLCRules: [
@@ -1021,14 +1007,14 @@ describe('lifecycle task functional tests', function dF() {
                         .addExpiration('ExpiredObjectDeleteMarker', false)
                         .build(),
                 ],
-                owner: `${OWNER}/lifecycle`,
+                owner: OWNER,
                 expected: {
                     objectCount: 0,
                 },
             },
             {
-                message: 'should apply valid Expiration rule even if ' +
-                    'ExpiredObjectDeleteMarker rule is set to false',
+                message: 'should not remove an expired object delete marker ' +
+                    'when the ExpiredObjectDeleteMarker rule is set to false',
                 bucketLCRules: [
                     new Rule().addID('task-1')
                         .addExpiration('ExpiredObjectDeleteMarker', false)
@@ -1036,7 +1022,7 @@ describe('lifecycle task functional tests', function dF() {
                     new Rule().addID('task-2')
                         .addExpiration('Days', 1).build(),
                 ],
-                owner: `${OWNER}/lifecycle`,
+                owner: OWNER,
                 expected: {
                     objectCount: 1,
                 },
