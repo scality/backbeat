@@ -61,6 +61,9 @@ describe('queuePopulator', () => {
                 queuePopulator = new QueuePopulator(
                     testConfig.zookeeper,
                     testConfig.queuePopulator,
+                    undefined,
+                    undefined,
+                    undefined,
                     testConfig.extensions);
                 queuePopulator.open(next);
             },

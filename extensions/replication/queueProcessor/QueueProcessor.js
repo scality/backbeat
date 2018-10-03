@@ -57,10 +57,19 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.topic - replication topic name
      * @param {String} repConfig.queueProcessor - config object
      *   specific to queue processor
-     * @param {Object} [httpsConfig] - HTTPS configuration object
+     * @param {Object} [httpsConfig] - destination SSL termination
+     *   HTTPS configuration object
      * @param {String} [httpsConfig.key] - client private key in PEM format
      * @param {String} [httpsConfig.cert] - client certificate in PEM format
      * @param {String} [httpsConfig.ca] - alternate CA bundle in PEM format
+     * @param {Object} [internalHttpsConfig] - internal source HTTPS
+     *   configuration object
+     * @param {String} [internalHttpsConfig.key] - client private key
+     *   in PEM format
+     * @param {String} [internalHttpsConfig.cert] - client certificate
+     *   in PEM format
+     * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
+     *   in PEM format
      * @param {String} repConfig.queueProcessor.groupId - kafka
      *   consumer group ID
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
@@ -69,14 +78,15 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, httpsConfig,
-                site, mProducer) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig,
+                httpsConfig, internalHttpsConfig, site, mProducer) {
         super();
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
         this.httpsConfig = httpsConfig;
+        this.internalHttpsConfig = internalHttpsConfig;
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
@@ -90,7 +100,16 @@ class QueueProcessor extends EventEmitter {
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
         // global variables
-        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        if (sourceConfig.transport === 'https') {
+            this.sourceHTTPAgent = new https.Agent({
+                key: internalHttpsConfig.key,
+                cert: internalHttpsConfig.cert,
+                ca: internalHttpsConfig.ca,
+                keepAlive: true,
+            });
+        } else {
+            this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        }
         if (destConfig.transport === 'https') {
             this.destHTTPAgent = new https.Agent({
                 key: httpsConfig.key,
@@ -130,6 +149,13 @@ class QueueProcessor extends EventEmitter {
             this.vaultclientCache
                 .setHost('source:s3', host)
                 .setPort('source:s3', port);
+            if (this.sourceConfig.transport === 'https') {
+                // provision HTTPS credentials for local Vault S3 route
+                this.vaultclientCache.setHttps(
+                    'source:s3', this.internalHttpsConfig.key,
+                    this.internalHttpsConfig.cert,
+                    this.internalHttpsConfig.ca);
+            }
             if (adminCredentials) {
                 this.vaultclientCache
                     .setHost('source:admin', host)
@@ -137,6 +163,13 @@ class QueueProcessor extends EventEmitter {
                     .loadAdminCredentials('source:admin',
                                           adminCredentials.accessKey,
                                           adminCredentials.secretKey);
+                if (this.sourceConfig.transport === 'https') {
+                    // provision HTTPS credentials for local Vault admin route
+                    this.vaultclientCache.setHttps(
+                        'source:admin', this.internalHttpsConfig.key,
+                        this.internalHttpsConfig.cert,
+                        this.internalHttpsConfig.ca);
+                }
                 this.sourceAdminVaultConfigured = true;
             }
         }
@@ -240,6 +273,7 @@ class QueueProcessor extends EventEmitter {
             destConfig: this.destConfig,
             repConfig: this.repConfig,
             httpsConfig: this.httpsConfig,
+            internalHttpsConfig: this.internalHttpsConfig,
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,

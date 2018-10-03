@@ -49,11 +49,20 @@ class ReplicationStatusProcessor {
      * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry status
      *   update
+     * @param {Object} [internalHttpsConfig] - internal HTTPS
+     *   configuration object
+     * @param {String} [internalHttpsConfig.key] - client private key
+     *   in PEM format
+     * @param {String} [internalHttpsConfig.cert] - client certificate
+     *   in PEM format
+     * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
+     *   in PEM format
      */
-    constructor(zkConfig, sourceConfig, repConfig) {
+    constructor(zkConfig, sourceConfig, repConfig, internalHttpsConfig) {
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
+        this.internalHttpsConfig = internalHttpsConfig;
         this._consumer = null;
 
         this.logger =
@@ -61,7 +70,12 @@ class ReplicationStatusProcessor {
 
         // global variables
         if (sourceConfig.transport === 'https') {
-            this.sourceHTTPAgent = new https.Agent({ keepAlive: true });
+            this.sourceHTTPAgent = new https.Agent({
+                key: internalHttpsConfig.key,
+                cert: internalHttpsConfig.cert,
+                ca: internalHttpsConfig.ca,
+                keepAlive: true,
+            });
         } else {
             this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
         }
@@ -80,6 +94,13 @@ class ReplicationStatusProcessor {
             this.vaultclientCache
                 .setHost('source:s3', host)
                 .setPort('source:s3', port);
+            if (this.sourceConfig.transport === 'https') {
+                // provision HTTPS credentials for local Vault S3 route
+                this.vaultclientCache.setHttps(
+                    'source:s3', this.internalHttpsConfig.key,
+                    this.internalHttpsConfig.cert,
+                    this.internalHttpsConfig.ca);
+            }
         }
     }
 
@@ -87,6 +108,7 @@ class ReplicationStatusProcessor {
         return {
             sourceConfig: this.sourceConfig,
             repConfig: this.repConfig,
+            internalHttpsConfig: this.internalHttpsConfig,
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             logger: this.logger,

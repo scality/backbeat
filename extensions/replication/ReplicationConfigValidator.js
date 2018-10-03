@@ -1,10 +1,7 @@
 const fs = require('fs');
 const joi = require('joi');
-const { hostPortJoi, bootstrapListJoi, adminCredsJoi } =
+const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi } =
     require('../../lib/config/configItems.joi.js');
-
-const transportJoi = joi.alternatives().try('http', 'https')
-    .default('http');
 
 const joiSchema = {
     source: {
