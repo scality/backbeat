@@ -77,10 +77,19 @@ class SetupReplication extends BackbeatTask {
      *   is on an external location
      * @param {String} [params.target.siteName] - the site name where the target
      *   bucket exists, if the target is on an external location
-     * @param {Object} [params.https] - HTTPS configuration object
+     * @param {Object} [params.https] - destination SSL termination
+     *   HTTPS configuration object
      * @param {String} [params.https.key] - client private key in PEM format
      * @param {String} [params.https.cert] - client certificate in PEM format
      * @param {String} [params.https.ca] - alternate CA bundle in PEM format
+     * @param {Object} [params.internalHttps] - internal HTTPS
+     *   configuration object
+     * @param {String} [params.internalHttps.key] - client private key
+     *   in PEM format
+     * @param {String} [params.internalHttps.cert] - client
+     *   certificate in PEM format
+     * @param {String} [params.internalHttps.ca] - alternate CA bundle
+     *   in PEM format
      * @param {Boolean} [params.checkSanity=false] - whether to check
      *   sanity of the config after setup, in case something would
      *   have gone wrong but unnoticed
@@ -92,7 +101,7 @@ class SetupReplication extends BackbeatTask {
      * @param {Object} params.log - werelogs request logger object
      */
     constructor(params) {
-        const { source, target, https, checkSanity,
+        const { source, target, https, internalHttps, checkSanity,
                 retryTimeoutS, skipSourceBucketCreation, log } = params;
         super({ retryTimeoutS });
         this._log = log;
@@ -106,16 +115,18 @@ class SetupReplication extends BackbeatTask {
         const destHost = target.isExternal ?
             undefined : this.destHosts.pickHost();
         this._s3Clients = {
-            source: _setupS3Client(source.transport,
-                `${source.s3.host}:${source.s3.port}`, source.credentials),
+            source: _setupS3Client(
+                source.transport, `${source.s3.host}:${source.s3.port}`,
+                source.credentials, internalHttps),
             target: target.isExternal ? undefined : _setupS3Client(
                 target.transport, `${destHost.host}:${destHost.port}`,
                 target.credentials, https),
         };
         this._iamClients = {
-            source: _setupIAMClient(source.transport,
+            source: _setupIAMClient(
+                source.transport,
                 `${source.vault.host}:${source.vault.adminPort}`,
-                source.credentials),
+                source.credentials, internalHttps),
             target: target.isExternal ? undefined : _setupIAMClient(
                 target.transport, `${destHost.host}:${destHost.port}`,
                 target.credentials, https),

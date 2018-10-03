@@ -655,6 +655,7 @@ describe('queue processor functional tests with mocking', () => {
                   groupId: 'backbeat-func-test-group-id',
               },
             }, {
+            }, {
             }, 'sf', new MetricsMock());
         queueProcessor.start({ disableConsumer: true });
         // create the replication status processor only when the queue
@@ -676,7 +677,8 @@ describe('queue processor functional tests with mocking', () => {
                       retryTimeoutS: 5,
                       groupId: 'backbeat-func-test-group-id',
                   },
-              }, 'sf');
+                }, {
+                });
             replicationStatusProcessor.start({ bootstrap: true }, done);
         });
 

@@ -62,6 +62,9 @@ describe('queuePopulator', () => {
                     testConfig.zookeeper,
                     testConfig.kafka,
                     testConfig.queuePopulator,
+                    undefined,
+                    undefined,
+                    undefined,
                     testConfig.extensions);
                 queuePopulator.open(next);
             },

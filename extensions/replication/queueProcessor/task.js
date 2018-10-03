@@ -10,6 +10,7 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
+const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 
 const site = process.argv[2];
@@ -36,7 +37,8 @@ metricsProducer.setupProducer(err => {
         });
         return undefined;
     }
-    const queueProcessor = new QueueProcessor(kafkaConfig, sourceConfig,
-        destConfig, repConfig, httpsConfig, site, metricsProducer);
+    const queueProcessor = new QueueProcessor(
+        kafkaConfig, sourceConfig, destConfig, repConfig,
+        httpsConfig, internalHttpsConfig, site, metricsProducer);
     return queueProcessor.start();
 });

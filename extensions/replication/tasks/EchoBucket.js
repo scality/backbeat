@@ -228,6 +228,7 @@ class EchoBucket extends BackbeatTask {
                     },
                     retryTimeoutS: this.repConfig.queueProcessor.retryTimeoutS,
                     https: this.httpsConfig,
+                    internalHttps: this.internalHttpsConfig,
                     skipSourceBucketCreation: true,
                     log,
                 });

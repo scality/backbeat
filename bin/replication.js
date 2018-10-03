@@ -57,6 +57,7 @@ function _createSetupReplication(command, options, log) {
             siteName,
         },
         https: config.https,
+        internalHttps: config.internalHttps,
         checkSanity: true,
         log,
     });
