@@ -1,7 +1,8 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
+const { hostPortJoi, transportJoi, logJoi } =
+      require('../lib/config/configItems.joi.js');
 
 const joiSchema = {
     zookeeper: {
@@ -17,6 +18,7 @@ const joiSchema = {
         zookeeperPath: joi.string().required(),
         logSource: joi.alternatives().try('bucketd', 'dmd').required(),
         bucketd: hostPortJoi
+            .keys({ transport: transportJoi })
             .when('logSource', { is: 'bucketd', then: joi.required() }),
         dmd: hostPortJoi.keys({
             logName: joi.string().default('s3-recordlog'),
