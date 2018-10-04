@@ -33,9 +33,20 @@ class MongoQueueProcessor {
      * @param {String} mongoProcessorConfig.topic - topic name
      * @param {String} mongoProcessorConfig.groupId - kafka
      *   consumer group ID
-     * @param {Integer} mongoProcessorConfig.retryTimeoutS -
-     *   number of seconds before giving up retries of an entry status
-     *   update
+     * @param {number} [mongoProcessorConfig.retry.timeoutS] -
+     *  retry timeout in secs.
+     * @param {number} [mongoProcessorConfig.retry.maxRetries] -
+     *  max retries before giving up
+     * @param {Object} [mongoProcessorConfig.retry.backoff] -
+     *  backoff params
+     * @param {number} [mongoProcessorConfig.retry.backoff.min] -
+     *  min. backoff in ms.
+     * @param {number} [mongoProcessorConfig.retry.backoff.max] -
+     *  max. backoff in ms.
+     * @param {number} [mongoProcessorConfig.retry.backoff.jitter] -
+     *  randomness
+     * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
+     *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
      */
     constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig) {

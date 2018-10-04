@@ -667,7 +667,10 @@ describe('queue processor functional tests with mocking', () => {
             { topic: 'backbeat-func-test-dummy-topic',
               replicationStatusTopic: 'backbeat-func-test-repstatus',
               queueProcessor: {
-                  retryTimeoutS: 5,
+                  retry: {
+                      scality: { timeoutS: 5 },
+                      azure: { timeoutS: 5 },
+                  },
                   groupId: 'backbeat-func-test-group-id',
               },
             },
@@ -705,7 +708,9 @@ describe('queue processor functional tests with mocking', () => {
                 },
                 { replicationStatusTopic: 'backbeat-func-test-repstatus',
                   replicationStatusProcessor: {
-                      retryTimeoutS: 5,
+                      retry: {
+                          timeoutS: 5,
+                      },
                       groupId: 'backbeat-func-test-group-id',
                   },
                 },

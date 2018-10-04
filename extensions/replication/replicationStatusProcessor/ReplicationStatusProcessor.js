@@ -49,9 +49,20 @@ class ReplicationStatusProcessor {
      *   specific to replication status processor
      * @param {String} repConfig.replicationStatusProcessor.groupId - kafka
      *   consumer group ID
-     * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
-     *   number of seconds before giving up retries of an entry status
-     *   update
+     * @param {number} [repConfig.retry.timeoutS] -
+     *  retry timeout in secs.
+     * @param {number} [repConfig.retry.maxRetries] -
+     *  max retries before giving up
+     * @param {Object} [repConfig.retry.backoff] -
+     *  backoff params
+     * @param {number} [repConfig.retry.backoff.min] -
+     *  min. backoff in ms.
+     * @param {number} [repConfig.retry.backoff.max] -
+     *  max. backoff in ms.
+     * @param {number} [repConfig.retry.backoff.jitter] -
+     *  randomness
+     * @param {number} [repConfig.retry.backoff.factor] -
+     *  backoff factor
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
      */

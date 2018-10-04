@@ -1,4 +1,5 @@
 const joi = require('joi');
+const { retryParamsJoi } = require('../../lib/config/configItems.joi.js');
 
 const joiSchema = {
     zookeeperPath: joi.string().required(),
@@ -34,7 +35,7 @@ const joiSchema = {
     },
     bucketProcessor: {
         groupId: joi.string().required(),
-        retryTimeoutS: joi.number().default(300),
+        retry: retryParamsJoi,
         // a single producer task is already involving concurrency in
         // the processing, no need to add more here to avoid
         // overloading the system
@@ -42,7 +43,7 @@ const joiSchema = {
     },
     objectProcessor: {
         groupId: joi.string().required(),
-        retryTimeoutS: joi.number().default(300),
+        retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
     },
     rules: {

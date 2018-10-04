@@ -36,9 +36,20 @@ class GarbageCollector extends EventEmitter {
      * object
      * @param {String} params.gcConfig.consumer.groupId - kafka
      * consumer group id
-     * @param {Number} [params.gcConfig.consumer.retryTimeoutS] -
-     *  number of seconds before giving up retries of an entry
-     *  lifecycle action
+     * @param {number} [params.gcConfig.consumer.retry.timeoutS] -
+     *  retry timeout in secs.
+     * @param {number} [params.gcConfig.consumer.retry.maxRetries] -
+     *  max retries before giving up
+     * @param {Object} [params.gcConfig.consumer.retry.backoff] -
+     *  backoff params
+     * @param {number} [params.gcConfig.consumer.retry.backoff.min] -
+     *  min. backoff in ms.
+     * @param {number} [params.gcConfig.consumer.retry.backoff.max] -
+     *  max. backoff in ms.
+     * @param {number} [params.gcConfig.consumer.retry.backoff.jitter] -
+     *  randomness
+     * @param {number} [params.gcConfig.consumer.retry.backoff.factor] -
+     *  backoff factor
      * @param {Number} [params.gcConfig.consumer.concurrency] - number
      *  of max allowed concurrent operations
      * @param {String} [params.transport='http'] - transport
