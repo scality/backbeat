@@ -5,6 +5,16 @@ const { hostPortJoi, bootstrapListJoi, adminCredsJoi } =
 
 const transportJoi = joi.alternatives().try('http', 'https')
     .default('http');
+const retryParamsJoi = joi.object({
+    maxRetries: joi.number().required(),
+    timeoutS: joi.number().required(),
+    backoff: joi.object({
+        min: joi.number().required(),
+        max: joi.number().required(),
+        jitter: joi.number().required(),
+        factor: joi.number().required(),
+    }),
+});
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 
@@ -59,7 +69,12 @@ const joiSchema = {
         joi.number().default(CRR_FAILURE_EXPIRY),
     queueProcessor: {
         groupId: joi.string().required(),
-        retryTimeoutS: joi.number().default(300),
+        retry: joi.object({
+            aws: retryParamsJoi,
+            azure: retryParamsJoi,
+            gcp: retryParamsJoi,
+            default: retryParamsJoi,
+        }),
         concurrency: joi.number().greater(0).default(10),
     },
     replicationStatusProcessor: {
