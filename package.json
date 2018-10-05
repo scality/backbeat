@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.0.0",
+  "version": "8.1.0",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -32,11 +32,11 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal#549ca1f",
+    "arsenal": "scality/Arsenal#4e522a4",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#520d164",
+    "bucketclient": "scality/bucketclient#8991e19",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^3.2.2",
@@ -47,14 +47,14 @@
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
-    "vaultclient": "github:scality/vaultclient#754b6e1",
-    "werelogs": "scality/werelogs#74b121b"
+    "vaultclient": "github:scality/vaultclient#f00326d",
+    "werelogs": "scality/werelogs#ba0c415"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/S3#b17904e",
+    "@zenko/cloudserver": "scality/S3#62df2c0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#0a771c2",
+    "eslint-config-scality": "scality/Guidelines#cebb730",
     "eslint-plugin-react": "^4.2.3",
     "mocha": "^3.3.0"
   }
