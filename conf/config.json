@@ -97,7 +97,48 @@
             "monitorReplicationFailureExpiryTimeS": 86400,
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "aws": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 30000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "azure": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 30000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "gcp": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 30000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "default": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 30000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    }
+                },
                 "concurrency": 10
             },
             "replicationStatusProcessor": {
