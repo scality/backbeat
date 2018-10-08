@@ -34,6 +34,15 @@
     },
     "extensions": {
         "ingestion": {
+            "auth": {
+                "type": "service",
+                "account": "service-ingestion",
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8500,
+                    "adminPort": 8600
+                }
+            },
             "topic": "backbeat-ingestion",
             "zookeeperPath": "/ingestion",
             "cronRule": "*/5 * * * * *",
