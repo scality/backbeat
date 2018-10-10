@@ -265,8 +265,10 @@ class ReplicateObject extends BackbeatTask {
                         { method: 'ReplicateObject._setTargetAccountMdOnce',
                             entry: destEntry.getLogInfo(),
                             origin: 'target',
-                            peer: (this.destConfig.auth.type === 'role' ?
-                                   this.destConfig.auth.vault : undefined),
+                            peer: this.destConfig.auth.type === 'role' ?
+                              { host: this.destConfig.auth.vault.host,
+                                port: this.destConfig.auth.vault.port }
+                              : undefined,
                             error: err.message });
                     return cb(err);
                 }
