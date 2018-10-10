@@ -253,13 +253,21 @@ class ReplicateObject extends BackbeatTask {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'target';
+                    let peer;
+                    if (this.destConfig.auth.type === 'role') {
+                        if (this.destConfig.auth.vault) {
+                            const { host, port } = this.destConfig.auth.vault;
+                            peer = { host, port };
+                        } else {
+                            peer = this.destBackbeatHost;
+                        }
+                    }
                     log.error('an error occurred when looking up target ' +
                               'account attributes',
                         { method: 'ReplicateObject._setTargetAccountMdOnce',
                             entry: destEntry.getLogInfo(),
                             origin: 'target',
-                            peer: (this.destConfig.auth.type === 'role' ?
-                                   this.destConfig.auth.vault : undefined),
+                            peer,
                             error: err.message });
                     return cb(err);
                 }
