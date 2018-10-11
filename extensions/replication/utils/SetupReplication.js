@@ -16,22 +16,33 @@ const trustPolicy = {
     ],
 };
 
-function _setupS3Client(transport, endpoint, credentials) {
+function _setupS3Client(transport, endpoint, credentials, https) {
+    const httpOptions = {
+        timeout: 0,
+        key: https && https.key,
+        cert: https && https.cert,
+        ca: https && https.ca,
+    };
     return new S3({
         endpoint: `${endpoint}`,
         sslEnabled: transport === 'https',
         credentials,
         s3ForcePathStyle: true,
         signatureVersion: 'v4',
-        httpOptions: { timeout: 0 },
+        httpOptions,
         maxRetries: 0,
     });
 }
 
-function _setupIAMClient(transport, endpoint, credentials) {
-    const httpOptions = { timeout: 1000 };
+function _setupIAMClient(transport, endpoint, credentials, https) {
+    const httpOptions = {
+        timeout: 30000,
+        key: https && https.key,
+        cert: https && https.cert,
+        ca: https && https.ca,
+    };
     return new IAM({
-        endpoint: `${transport}://${endpoint}`,
+        endpoint: `${endpoint}`,
         sslEnabled: transport === 'https',
         credentials,
         maxRetries: 0,
@@ -66,6 +77,10 @@ class SetupReplication extends BackbeatTask {
      *   is on an external location
      * @param {String} [params.target.siteName] - the site name where the target
      *   bucket exists, if the target is on an external location
+     * @param {Object} [params.https] - HTTPS configuration object
+     * @param {String} [params.https.key] - client private key in PEM format
+     * @param {String} [params.https.cert] - client certificate in PEM format
+     * @param {String} [params.https.ca] - alternate CA bundle in PEM format
      * @param {Boolean} [params.checkSanity=false] - whether to check
      *   sanity of the config after setup, in case something would
      *   have gone wrong but unnoticed
@@ -77,7 +92,7 @@ class SetupReplication extends BackbeatTask {
      * @param {Object} params.log - werelogs request logger object
      */
     constructor(params) {
-        const { source, target, checkSanity,
+        const { source, target, https, checkSanity,
                 retryTimeoutS, skipSourceBucketCreation, log } = params;
         super({ retryTimeoutS });
         this._log = log;
@@ -90,24 +105,20 @@ class SetupReplication extends BackbeatTask {
         this.destHosts = target.hosts;
         const destHost = target.isExternal ?
             undefined : this.destHosts.pickHost();
-        // XXX use target port through nginx gateway
-        // Hard-code port 8600 for now on IAM client while other vault
-        // clients go through the gateway (signature mismatch issue).
-        const destPort = (target.vault && target.vault.adminPort) || 8600;
         this._s3Clients = {
             source: _setupS3Client(source.transport,
                 `${source.s3.host}:${source.s3.port}`, source.credentials),
-            target: target.isExternal ? undefined :
-                _setupS3Client(target.transport,
-                `${destHost.host}:${destHost.port}`, target.credentials),
+            target: target.isExternal ? undefined : _setupS3Client(
+                target.transport, `${destHost.host}:${destHost.port}`,
+                target.credentials, https),
         };
         this._iamClients = {
             source: _setupIAMClient(source.transport,
                 `${source.vault.host}:${source.vault.adminPort}`,
                 source.credentials),
             target: target.isExternal ? undefined : _setupIAMClient(
-                target.transport, `${destHost.host}:${destPort}`,
-                target.credentials),
+                target.transport, `${destHost.host}:${destHost.port}`,
+                target.credentials, https),
         };
     }
 
@@ -284,6 +295,7 @@ class SetupReplication extends BackbeatTask {
         this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
             if (err && err.code !== 'BucketAlreadyOwnedByYou') {
                 this._log.error('error creating a bucket', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -294,6 +306,7 @@ class SetupReplication extends BackbeatTask {
             }
             if (err && err.code === 'BucketAlreadyOwnedByYou') {
                 this._log.debug('Bucket already exists. Continuing setup.', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -302,6 +315,7 @@ class SetupReplication extends BackbeatTask {
                 });
             } else {
                 this._log.debug('Created bucket', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     method: 'SetupReplication._createBucket',
@@ -331,6 +345,7 @@ class SetupReplication extends BackbeatTask {
         this._iamClients[where].createRole(params, (err, res) => {
             if (err) {
                 this._log.error('error creating a role', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -340,6 +355,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(err);
             }
             this._log.debug('Created role', {
+                where,
                 bucket: where === 'source' ? this._sourceBucket :
                     this._targetBucket,
                 method: 'SetupReplication._createRole',
@@ -366,6 +382,7 @@ class SetupReplication extends BackbeatTask {
         this._iamClients[where].createPolicy(params, (err, res) => {
             if (err) {
                 this._log.error('error creating policy', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -375,6 +392,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(err);
             }
             this._log.debug('Created policy', {
+                where,
                 bucket: where === 'source' ? this._sourceBucket :
                     this._targetBucket,
                 method: 'SetupReplication._createPolicy',
@@ -451,6 +469,7 @@ class SetupReplication extends BackbeatTask {
         this._s3Clients[where].putBucketVersioning(params, (err, res) => {
             if (err) {
                 this._log.error('error enabling versioning', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -460,6 +479,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(err);
             }
             this._log.debug('Versioning enabled', {
+                where,
                 bucket: where === 'source' ? this._sourceBucket :
                     this._targetBucket,
                 method: 'SetupReplication._enableVersioning',
@@ -488,6 +508,7 @@ class SetupReplication extends BackbeatTask {
         this._iamClients[where].attachRolePolicy(params, (err, res) => {
             if (err) {
                 this._log.error('error attaching resource policy', {
+                    where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     errCode: err.code,
@@ -497,6 +518,7 @@ class SetupReplication extends BackbeatTask {
                 return cb(err);
             }
             this._log.debug('Attached resource policy', {
+                where,
                 bucket: where === 'source' ? this._sourceBucket :
                     this._targetBucket,
                 method: 'SetupReplication._attachResourcePolicy',

@@ -45,11 +45,6 @@
                       "echo": false },
                     { "site": "us-east-1", "type": "aws_s3" }
                 ],
-                "certFilePaths": {
-                    "key": "ssl/key.pem",
-                    "cert": "ssl/cert.crt",
-                    "ca": "ssl/ca.crt"
-                },
                 "auth": {
                     "type": "account",
                     "account": "lisa"
@@ -82,5 +77,10 @@
         },
         "host": "127.0.0.1",
         "port": 8900
+    },
+    "certFilePaths": {
+        "key": "",
+        "cert": "",
+        "ca": ""
     }
 }

@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const http = require('http');
+const https = require('https');
 const { EventEmitter } = require('events');
 
 const Logger = require('werelogs').Logger;
@@ -56,6 +57,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.topic - replication topic name
      * @param {String} repConfig.queueProcessor - config object
      *   specific to queue processor
+     * @param {Object} [httpsConfig] - HTTPS configuration object
+     * @param {String} [httpsConfig.key] - client private key in PEM format
+     * @param {String} [httpsConfig.cert] - client certificate in PEM format
+     * @param {String} [httpsConfig.ca] - alternate CA bundle in PEM format
      * @param {String} repConfig.queueProcessor.groupId - kafka
      *   consumer group ID
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
@@ -64,13 +69,14 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(zkConfig, sourceConfig, destConfig, repConfig, site,
-    mProducer) {
+    constructor(zkConfig, sourceConfig, destConfig, repConfig, httpsConfig,
+                site, mProducer) {
         super();
         this.zkConfig = zkConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
+        this.httpsConfig = httpsConfig;
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
@@ -84,9 +90,17 @@ class QueueProcessor extends EventEmitter {
         this.logger = new Logger('Backbeat:Replication:QueueProcessor');
 
         // global variables
-        // TODO: for SSL support, create HTTPS agents instead
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        if (destConfig.transport === 'https') {
+            this.destHTTPAgent = new https.Agent({
+                key: httpsConfig.key,
+                cert: httpsConfig.cert,
+                ca: httpsConfig.ca,
+                keepAlive: true,
+            });
+        } else {
+            this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        }
 
         this._setupVaultclientCache();
 
@@ -152,6 +166,13 @@ class QueueProcessor extends EventEmitter {
                         'dest:admin',
                         adminCredentials.accessKey,
                         adminCredentials.secretKey);
+                    if (this.destConfig.transport === 'https') {
+                        // provision HTTPS credentials for admin route
+                        this.vaultclientCache.setHttps(
+                            'dest:admin', this.httpsConfig.key,
+                            this.httpsConfig.cert,
+                            this.httpsConfig.ca);
+                    }
                     this.destAdminVaultConfigured = true;
                 }
             }
@@ -161,6 +182,13 @@ class QueueProcessor extends EventEmitter {
                 // proxy
                 this.vaultclientCache.setProxyPath('dest:s3',
                                                    proxyVaultPath);
+            }
+            if (this.destConfig.transport === 'https') {
+                // provision HTTPS credentials for IAM route
+                this.vaultclientCache.setHttps(
+                    'dest:s3', this.httpsConfig.key,
+                    this.httpsConfig.cert,
+                    this.httpsConfig.ca);
             }
         }
     }
@@ -211,6 +239,7 @@ class QueueProcessor extends EventEmitter {
             sourceConfig: this.sourceConfig,
             destConfig: this.destConfig,
             repConfig: this.repConfig,
+            httpsConfig: this.httpsConfig,
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,
