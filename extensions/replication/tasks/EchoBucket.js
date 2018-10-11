@@ -37,6 +37,13 @@ class EchoBucket extends BackbeatTask {
                 sourceAdminVault.listAccounts(
                     { maxItems: 1000 }, (err, data) => {
                         if (err) {
+                            log.error('error listing accounts', {
+                                where: 'source',
+                                bucket: sourceEntry.getBucket(),
+                                errCode: err.code,
+                                error: err.message,
+                                method: 'EchoBucket._getSourceAccountCreds',
+                            });
                             return done(err);
                         }
                         data.accounts.forEach(account => {
@@ -59,7 +66,19 @@ class EchoBucket extends BackbeatTask {
                     return done(null, null);
                 }
                 return sourceAdminVault.generateAccountAccessKey(
-                    displayName, done);
+                    displayName, (err, res) => {
+                        if (err) {
+                            log.error('error generating account access key', {
+                                where: 'source',
+                                bucket: sourceEntry.getBucket(),
+                                errCode: err.code,
+                                error: err.message,
+                                method: 'EchoBucket._getSourceAccountCreds',
+                            });
+                            return done(err);
+                        }
+                        return done(null, res);
+                    });
             }, (res, done) => {
                 if (res) {
                     accountCreds = {
@@ -91,11 +110,35 @@ class EchoBucket extends BackbeatTask {
 
         async.waterfall([
             done => destS3Vault.getCanonicalIds(
-                [email], { reqUid: log.getSerializedUids() }, done),
+                [email], { reqUid: log.getSerializedUids() }, (err, res) => {
+                    if (err) {
+                        log.error('error getting account canonical ID', {
+                            where: 'target',
+                            bucket: sourceEntry.getBucket(),
+                            errCode: err.code,
+                            error: err.message,
+                            method: 'EchoBucket._getTargetAccountCreds',
+                        });
+                        return done(err);
+                    }
+                    return done(null, res);
+                }),
             (res, done) => {
                 if (res.message.body[email] === 'NotFound') {
-                    return destAdminVault.createAccount(displayName, { email },
-                                                        done);
+                    return destAdminVault.createAccount(
+                        displayName, { email }, (err, res) => {
+                            if (err) {
+                                log.error('error creating account', {
+                                    where: 'target',
+                                    bucket: sourceEntry.getBucket(),
+                                    errCode: err.code,
+                                    error: err.message,
+                                    method: 'EchoBucket._getTargetAccountCreds',
+                                });
+                                return done(err);
+                            }
+                            return done(null, res);
+                        });
                 }
                 return done(null,
                             { account: {
@@ -107,8 +150,20 @@ class EchoBucket extends BackbeatTask {
                 if (accountCreds) {
                     return done(null, null);
                 }
-                return destAdminVault.generateAccountAccessKey(displayName,
-                                                               done);
+                return destAdminVault.generateAccountAccessKey(
+                    displayName, (err, res) => {
+                        if (err) {
+                            log.error('error generating account access key', {
+                                where: 'target',
+                                bucket: sourceEntry.getBucket(),
+                                errCode: err.code,
+                                error: err.message,
+                                method: 'EchoBucket._getTargetAccountCreds',
+                            });
+                            return done(err);
+                        }
+                        return done(null, res);
+                    });
             }, (res, done) => {
                 if (res) {
                     accountCreds = {
@@ -172,6 +227,7 @@ class EchoBucket extends BackbeatTask {
                         transport: this.destConfig.transport,
                     },
                     retryTimeoutS: this.repConfig.queueProcessor.retryTimeoutS,
+                    https: this.httpsConfig,
                     skipSourceBucketCreation: true,
                     log,
                 });

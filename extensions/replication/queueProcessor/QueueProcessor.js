@@ -2,6 +2,7 @@
 
 const async = require('async');
 const http = require('http');
+const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
@@ -64,16 +65,21 @@ class QueueProcessor extends EventEmitter {
      * @param {Object} redisConfig - redis configuration
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
+     * @param {Object} [httpsConfig] - HTTPS configuration object
+     * @param {String} [httpsConfig.key] - client private key in PEM format
+     * @param {String} [httpsConfig.cert] - client certificate in PEM format
+     * @param {String} [httpsConfig.ca] - alternate CA bundle in PEM format
      * @param {String} site - site name
      */
     constructor(zkClient, kafkaConfig, sourceConfig, destConfig, repConfig,
-        redisConfig, mConfig, site) {
+        redisConfig, mConfig, httpsConfig, site) {
         super();
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
+        this.httpsConfig = httpsConfig;
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
@@ -90,9 +96,17 @@ class QueueProcessor extends EventEmitter {
             `Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // global variables
-        // TODO: for SSL support, create HTTPS agents instead
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        if (destConfig.transport === 'https') {
+            this.destHTTPAgent = new https.Agent({
+                key: httpsConfig.key,
+                cert: httpsConfig.cert,
+                ca: httpsConfig.ca,
+                keepAlive: true,
+            });
+        } else {
+            this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        }
 
         this._setupVaultclientCache();
         this._setupRedis(redisConfig);
@@ -159,6 +173,13 @@ class QueueProcessor extends EventEmitter {
                         'dest:admin',
                         adminCredentials.accessKey,
                         adminCredentials.secretKey);
+                    if (this.destConfig.transport === 'https') {
+                        // provision HTTPS credentials for admin route
+                        this.vaultclientCache.setHttps(
+                            'dest:admin', this.httpsConfig.key,
+                            this.httpsConfig.cert,
+                            this.httpsConfig.ca);
+                    }
                     this.destAdminVaultConfigured = true;
                 }
             }
@@ -168,6 +189,13 @@ class QueueProcessor extends EventEmitter {
                 // proxy
                 this.vaultclientCache.setProxyPath('dest:s3',
                                                    proxyVaultPath);
+            }
+            if (this.destConfig.transport === 'https') {
+                // provision HTTPS credentials for IAM route
+                this.vaultclientCache.setHttps(
+                    'dest:s3', this.httpsConfig.key,
+                    this.httpsConfig.cert,
+                    this.httpsConfig.ca);
             }
         }
     }
@@ -433,6 +461,7 @@ class QueueProcessor extends EventEmitter {
             sourceConfig: this.sourceConfig,
             destConfig: this.destConfig,
             repConfig: this.repConfig,
+            httpsConfig: this.httpsConfig,
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,

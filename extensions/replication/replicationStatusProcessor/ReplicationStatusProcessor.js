@@ -2,6 +2,7 @@
 
 const http = require('http');
 const async = require('async');
+const https = require('https');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -67,8 +68,11 @@ class ReplicationStatusProcessor {
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
 
         // global variables
-        // TODO: for SSL support, create HTTPS agents instead
-        this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        if (sourceConfig.transport === 'https') {
+            this.sourceHTTPAgent = new https.Agent({ keepAlive: true });
+        } else {
+            this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+        }
 
         this._setupVaultclientCache();
 
