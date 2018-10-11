@@ -73,6 +73,11 @@ const joiSchema = {
         bindAddress: joi.string().default('127.0.0.1'),
         port: joi.number().default(4042),
     }).required(),
+    certFilePaths: joi.object({
+        key: joi.string().empty(''),
+        cert: joi.string().empty(''),
+        ca: joi.string().empty(''),
+    }),
 };
 
 module.exports = joiSchema;

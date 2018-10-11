@@ -674,6 +674,7 @@ describe('queue processor functional tests with mocking', () => {
             { host: '127.0.0.1',
               port: 6379 },
             { topic: 'metrics-test-topic' },
+            {},
         ];
         async.parallel([
             done => {

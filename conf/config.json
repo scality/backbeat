@@ -80,11 +80,6 @@
                       "echo": false },
                     { "site": "us-east-1", "type": "aws_s3" }
                 ],
-                "certFilePaths": {
-                    "key": "ssl/key.pem",
-                    "cert": "ssl/cert.crt",
-                    "ca": "ssl/ca.crt"
-                },
                 "auth": {
                     "type": "service",
                     "account": "service-replication"
@@ -183,5 +178,10 @@
     "localCache": {
         "host": "127.0.0.1",
         "port": 6379
+    },
+    "certFilePaths": {
+        "key": "",
+        "cert": "",
+        "ca": ""
     }
 }

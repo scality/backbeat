@@ -18,6 +18,7 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const redisConfig = config.redis;
+const httpsConfig = config.https;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 
@@ -161,7 +162,7 @@ function initAndStart(zkClient) {
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(
                             zkClient, kafkaConfig, sourceConfig, destConfig,
-                            repConfig, redisConfig, mConfig, site);
+                            repConfig, redisConfig, mConfig, httpsConfig, site);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -194,7 +195,7 @@ function initAndStart(zkClient) {
         async.each(siteNames, (site, next) => {
             const qp = new QueueProcessor(zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, site);
+                redisConfig, mConfig, httpsConfig, site);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {
