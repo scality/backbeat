@@ -35,6 +35,8 @@ const joiSchema = {
         port: joi.number().default(8900),
     },
     redis: {
+        host: joi.string().default('localhost'),
+        port: joi.number().default(6379),
         name: joi.string().default('backbeat'),
         password: joi.string().default('').allow(''),
         sentinels: joi.array().items(
