@@ -1,10 +1,7 @@
 const fs = require('fs');
 const joi = require('joi');
-const { hostPortJoi, bootstrapListJoi, adminCredsJoi } =
+const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi } =
     require('../../lib/config/configItems.joi.js');
-
-const transportJoi = joi.alternatives().try('http', 'https')
-    .default('http');
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 
