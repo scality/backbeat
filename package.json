@@ -36,6 +36,7 @@
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#71a059ad",
     "eslint-plugin-react": "^4.2.3",
+    "ioredis": "^3.2.2",
     "joi": "^10.6",
     "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
