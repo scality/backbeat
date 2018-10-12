@@ -27,12 +27,16 @@ if [[ "$KAFKA_HOSTS" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .kafka.hosts=\"$KAFKA_HOSTS\""
 fi
 
-if [[ "$REDIS_HOST" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.host=\"$REDIS_HOST\""
+if [ -z "$REDIS_HA_NAME" ]; then
+    REDIS_HA_NAME='mymaster'
 fi
 
-if [[ "$REDIS_PORT" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=\"$REDIS_PORT\""
+if [[ "$REDIS_SENTINELS" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.name=\"$REDIS_HA_NAME\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.sentinels=\"$REDIS_SENTINELS\""
+elif [[ "$REDIS_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.host=\"$REDIS_HOST\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=6379"
 fi
 
 if [[ "$REDIS_LOCALCACHE_HOST" ]]; then
@@ -42,6 +46,10 @@ fi
 
 if [[ "$REDIS_LOCALCACHE_PORT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .localCache.port=$REDIS_LOCALCACHE_PORT"
+fi
+
+if [[ "$REDIS_PORT" ]] && [[ -z "$REDIS_SENTINELS" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=$REDIS_PORT"
 fi
 
 if [[ "$QUEUE_POPULATOR_DMD_HOST" ]]; then
@@ -103,6 +111,14 @@ if [[ "$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST" ]]; then
     else
         JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.destination.bootstrapList=[{\"site\": \"zenko\", \"servers\": [\"$EXTENSIONS_REPLICATION_DEST_BOOTSTRAPLIST\"]}]"
     fi
+fi
+
+if [[ "$EXTENSIONS_REPLICATION_REPLICATION_STATUS_PROCESSOR_RETRY_TIMEOUT_S" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.replicationStatusProcessor.retryTimeoutS=\"$EXTENSIONS_REPLICATION_REPLICATION_STATUS_PROCESSOR_RETRY_TIMEOUT_S\""
+fi
+
+if [[ "$EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_RETRY_TIMEOUT_S" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.queueProcessor.retryTimeoutS=\"$EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_RETRY_TIMEOUT_S\""
 fi
 
 if [[ "$HEALTHCHECKS_ALLOWFROM" ]]; then

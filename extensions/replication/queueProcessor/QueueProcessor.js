@@ -2,6 +2,7 @@
 
 const async = require('async');
 const http = require('http');
+const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
@@ -26,10 +27,10 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
-const { zookeeperReplicationNamespace } = require('../constants');
-const ZK_CRR_STATE_PATH = '/state';
-
 const {
+    zookeeperReplicationNamespace,
+    zkCRRStatePath,
+    zkCRRStateProperties,
     proxyVaultPath,
     proxyIAMPath,
     replicationBackends,
@@ -64,16 +65,21 @@ class QueueProcessor extends EventEmitter {
      * @param {Object} redisConfig - redis configuration
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
+     * @param {Object} [httpsConfig] - HTTPS configuration object
+     * @param {String} [httpsConfig.key] - client private key in PEM format
+     * @param {String} [httpsConfig.cert] - client certificate in PEM format
+     * @param {String} [httpsConfig.ca] - alternate CA bundle in PEM format
      * @param {String} site - site name
      */
     constructor(zkClient, kafkaConfig, sourceConfig, destConfig, repConfig,
-        redisConfig, mConfig, site) {
+        redisConfig, mConfig, httpsConfig, site) {
         super();
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
         this.repConfig = repConfig;
+        this.httpsConfig = httpsConfig;
         this.destHosts = null;
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
@@ -90,9 +96,17 @@ class QueueProcessor extends EventEmitter {
             `Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // global variables
-        // TODO: for SSL support, create HTTPS agents instead
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
-        this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        if (destConfig.transport === 'https') {
+            this.destHTTPAgent = new https.Agent({
+                key: httpsConfig.key,
+                cert: httpsConfig.cert,
+                ca: httpsConfig.ca,
+                keepAlive: true,
+            });
+        } else {
+            this.destHTTPAgent = new http.Agent({ keepAlive: true });
+        }
 
         this._setupVaultclientCache();
         this._setupRedis(redisConfig);
@@ -159,6 +173,13 @@ class QueueProcessor extends EventEmitter {
                         'dest:admin',
                         adminCredentials.accessKey,
                         adminCredentials.secretKey);
+                    if (this.destConfig.transport === 'https') {
+                        // provision HTTPS credentials for admin route
+                        this.vaultclientCache.setHttps(
+                            'dest:admin', this.httpsConfig.key,
+                            this.httpsConfig.cert,
+                            this.httpsConfig.ca);
+                    }
                     this.destAdminVaultConfigured = true;
                 }
             }
@@ -168,6 +189,13 @@ class QueueProcessor extends EventEmitter {
                 // proxy
                 this.vaultclientCache.setProxyPath('dest:s3',
                                                    proxyVaultPath);
+            }
+            if (this.destConfig.transport === 'https') {
+                // provision HTTPS credentials for IAM route
+                this.vaultclientCache.setHttps(
+                    'dest:s3', this.httpsConfig.key,
+                    this.httpsConfig.cert,
+                    this.httpsConfig.ca);
             }
         }
     }
@@ -236,6 +264,8 @@ class QueueProcessor extends EventEmitter {
                 const validActions = {
                     pauseService: this._pauseService.bind(this),
                     resumeService: this._resumeService.bind(this),
+                    deleteScheduledResumeService:
+                        this._deleteScheduledResumeService.bind(this),
                 };
                 try {
                     const { action, date } = JSON.parse(message);
@@ -271,6 +301,7 @@ class QueueProcessor extends EventEmitter {
                     this._consumer.pause(this.site);
                     this.logger.info('paused replication for location: ' +
                         `${this.site}`);
+                    this._deleteScheduledResumeService();
                 }
             });
         }
@@ -299,13 +330,33 @@ class QueueProcessor extends EventEmitter {
                     this._consumer.resume(this.site);
                     this.logger.info('resumed replication for location: ' +
                         `${this.site}`);
+                    this._deleteScheduledResumeService();
                 }
             });
         }
     }
 
+    /**
+     * Delete scheduled resume (if any)
+     * @return {undefined}
+     */
+    _deleteScheduledResumeService() {
+        this._updateZkStateNode('scheduledResume', null, err => {
+            if (err) {
+                this.logger.trace('error occurred saving state to zookeeper', {
+                    method: 'QueueProcessor._deleteScheduledResumeService',
+                });
+            } else if (this.scheduledResume) {
+                this.scheduledResume.cancel();
+                this.scheduledResume = null;
+                this.logger.info('deleted scheduled CRR resume for location:' +
+                    ` ${this.site}`);
+            }
+        });
+    }
+
     _getZkSiteNode() {
-        return `${zookeeperReplicationNamespace}${ZK_CRR_STATE_PATH}/` +
+        return `${zookeeperReplicationNamespace}${zkCRRStatePath}/` +
             `${this.site}`;
     }
 
@@ -317,12 +368,19 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _updateZkStateNode(key, value, cb) {
+        if (!zkCRRStateProperties.includes(key)) {
+            const errorMsg = 'incorrect zookeeper state property given';
+            this.logger.error(errorMsg, {
+                method: 'QueueProcessor._updateZkStateNode',
+            });
+            return cb(new Error('incorrect zookeeper state property given'));
+        }
         const path = this._getZkSiteNode();
-        async.waterfall([
+        return async.waterfall([
             next => this.zkClient.getData(path, (err, data) => {
                 if (err) {
                     this.logger.error('could not get state from zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err.message,
                     });
@@ -337,7 +395,7 @@ class QueueProcessor extends EventEmitter {
                 } catch (err) {
                     this.logger.error('could not parse state data from ' +
                     'zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err,
                     });
@@ -348,7 +406,7 @@ class QueueProcessor extends EventEmitter {
                 if (err) {
                     this.logger.error('could not save state data in ' +
                     'zookeeper', {
-                        method: 'QueueProcessor._updateZkServiceStatus',
+                        method: 'QueueProcessor._updateZkStateNode',
                         zookeeperPath: path,
                         error: err,
                     });
@@ -360,26 +418,37 @@ class QueueProcessor extends EventEmitter {
     }
 
     scheduleResume(date) {
+        function triggerResume() {
+            this._updateZkStateNode('scheduledResume', null, err => {
+                if (err) {
+                    this.logger.error('error occurred saving state ' +
+                    'to zookeeper for resuming a scheduled resume. Retry ' +
+                    'again in 1 minute', {
+                        method: 'QueueProcessor.scheduleResume',
+                        error: err,
+                    });
+                    // if an error occurs, need to retry
+                    // for now, schedule minute from now
+                    const date = new Date();
+                    date.setMinutes(date.getMinutes() + 1);
+                    this.scheduleResume = schedule.scheduleJob(date,
+                        triggerResume.bind(this));
+                } else {
+                    this.scheduledResume.cancel();
+                    this.scheduledResume = null;
+                    this._resumeService();
+                }
+            });
+        }
+
         this._updateZkStateNode('scheduledResume', date, err => {
             if (err) {
                 this.logger.trace('error occurred saving state to zookeeper', {
                     method: 'QueueProcessor.scheduleResume',
                 });
             } else {
-                this.scheduledResume = schedule.scheduleJob(date, () => {
-                    this.scheduledResume = null;
-                    this._updateZkStateNode('scheduledResume', null,
-                    err => {
-                        if (err) {
-                            this.logger.error('error occurred saving state ' +
-                            'to zookeeper', {
-                                method: 'QueueProcessor.scheduleResume',
-                            });
-                        } else {
-                            this._resumeService();
-                        }
-                    });
-                });
+                this.scheduledResume = schedule.scheduleJob(date,
+                    triggerResume.bind(this));
                 this.logger.info('scheduled CRR resume', {
                     scheduleTime: date.toString(),
                 });
@@ -392,6 +461,7 @@ class QueueProcessor extends EventEmitter {
             sourceConfig: this.sourceConfig,
             destConfig: this.destConfig,
             repConfig: this.repConfig,
+            httpsConfig: this.httpsConfig,
             destHosts: this.destHosts,
             sourceHTTPAgent: this.sourceHTTPAgent,
             destHTTPAgent: this.destHTTPAgent,
@@ -457,7 +527,8 @@ class QueueProcessor extends EventEmitter {
                     consumerReady = true;
                     const paused = options && options.paused;
                     this._consumer.subscribe(paused);
-
+                });
+                this._consumer.on('canary', () => {
                     this.logger.info('queue processor is ready to consume ' +
                                      'replication entries');
                     this.emit('ready');
@@ -523,6 +594,10 @@ class QueueProcessor extends EventEmitter {
             this.logger.error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
+        }
+        if (sourceEntry.skip) {
+            // skip message, noop
+            return process.nextTick(done);
         }
         let task;
         if (sourceEntry instanceof BucketQueueEntry) {

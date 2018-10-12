@@ -57,6 +57,7 @@ function _createSetupReplication(command, options, log) {
             isExternal: targetIsExternal,
             siteName,
         },
+        https: config.https,
         checkSanity: true,
         log,
     });

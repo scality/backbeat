@@ -6,6 +6,7 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
@@ -44,6 +45,7 @@ class ReplicateObject extends BackbeatTask {
         this.s3destCredentials = null;
         this.S3source = null;
         this.backbeatSource = null;
+        this.backbeatSourceProxy = null;
         this.backbeatDest = null;
     }
 
@@ -258,13 +260,23 @@ class ReplicateObject extends BackbeatTask {
                 if (err) {
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'target';
+                    let peer;
+                    if (this.destConfig.auth.type === 'role') {
+                        peer = this.destBackbeatHost;
+                        if (this.destConfig.auth.vault) {
+                            const { host, port } = this.destConfig.auth.vault;
+                            if (host) {
+                                // no proxy is used, log the vault host/port
+                                peer = { host, port };
+                            }
+                        }
+                    }
                     log.error('an error occurred when looking up target ' +
                               'account attributes',
                         { method: 'ReplicateObject._setTargetAccountMdOnce',
                             entry: destEntry.getLogInfo(),
                             origin: 'target',
-                            peer: (this.destConfig.auth.type === 'role' ?
-                                   this.destConfig.auth.vault : undefined),
+                            peer,
                             error: err.message });
                     return cb(err);
                 }
@@ -283,11 +295,13 @@ class ReplicateObject extends BackbeatTask {
             const partObj = new ObjectMDLocation(part);
             return partObj.getDataStoreETag() === undefined;
         })) {
-            log.error('cannot replicate object without dataStoreETag ' +
-                      'property',
-                      { method: 'ReplicateObject._getAndPutData',
-                        entry: sourceEntry.getLogInfo() });
-            return cb(errors.InvalidObjectState);
+            const errMessage =
+                  'cannot replicate object without dataStoreETag property';
+            log.error(errMessage, {
+                method: 'ReplicateObject._getAndPutData',
+                entry: sourceEntry.getLogInfo(),
+            });
+            return cb(errors.InternalError.customizeDescription(errMessage));
         }
         const locations = sourceEntry.getReducedLocations();
         return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
@@ -435,6 +449,10 @@ class ReplicateObject extends BackbeatTask {
             httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
+        this.backbeatSourceProxy =
+            new BackbeatMetadataProxy(this.sourceConfig, this.sourceHTTPAgent);
+        this.backbeatSourceProxy.setSourceRole(sourceRole);
+        this.backbeatSourceProxy.setSourceClient(log);
     }
 
     _setupDestClients(targetRole, log) {
@@ -558,6 +576,11 @@ class ReplicateObject extends BackbeatTask {
                      { entry: sourceEntry.getLogInfo() });
             return this._processQueueEntryRetryFull(sourceEntry, destEntry,
                                                     log, done);
+        }
+        if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
+            log.info('replication skipped: invalid object state',
+                     { entry: sourceEntry.getLogInfo() });
+            return done();
         }
         log.debug('replication failed permanently for object, ' +
                   'publishing replication status as FAILED',

@@ -25,9 +25,7 @@ function initAndStart() {
         serviceAccount: sourceConfig.auth.account,
     }, error => {
         if (error) {
-            log.error('could not load management db', {
-                error: error.message,
-            });
+            log.error('could not load management db', { error });
             setTimeout(initAndStart, 5000);
             return;
         }

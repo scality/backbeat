@@ -7,7 +7,6 @@ const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 
 const RETRYTIMEOUTS = 300;
-
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 // concurrency mainly used in async calls
@@ -416,13 +415,11 @@ class LifecycleTask extends BackbeatTask {
      * For all filtered rules, get rules that apply the earliest
      * @param {array} rules - list of filtered rules that apply to a specific
      *   object, version, or upload
-     * @param {boolean} isLCUser - is current account a lifecycle service
-     *   account
      * @return {object} all applicable rules with earliest dates of action
      *  i.e. { Expiration: { Date: <DateObject>, Days: 10 },
      *         NoncurrentVersionExpiration: { NoncurrentDays: 5 } }
      */
-    _getApplicableRules(rules, isLCUser) {
+    _getApplicableRules(rules) {
         // NOTE: Ask Team
         // Assumes if for example a rule defines expiration and transition
         // and if backbeat disables expiration and enables transition,
@@ -433,7 +430,7 @@ class LifecycleTask extends BackbeatTask {
             this.enabledRules[rule].enabled);
 
         /* eslint-disable no-param-reassign */
-        const filteredRules = rules.reduce((store, rule) => {
+        return rules.reduce((store, rule) => {
             // filter and find earliest dates
             // NOTE: only care about expiration for this feature.
             //  Add other lifecycle rules here for future features.
@@ -488,13 +485,6 @@ class LifecycleTask extends BackbeatTask {
             }
             return store;
         }, {});
-        // if EODM was not explicitly set and current account is LC account
-        // enable EODM rule by default
-        if (isLCUser && filteredRules.Expiration &&
-        filteredRules.Expiration.ExpiredObjectDeleteMarker !== false) {
-            filteredRules.Expiration.ExpiredObjectDeleteMarker = true;
-        }
-        return filteredRules;
         /* eslint-enable no-param-reassign */
     }
 
@@ -518,12 +508,11 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getRules(bucketData, bucketLCRules, object, log, done) {
-        const isLCUser = isLifecycleUser(bucketData.target.owner);
         if (this._isDeleteMarker(object)) {
             // DeleteMarkers don't have any tags, so avoid calling
             // `getObjectTagging` which will throw an error
             const filterRules = this._filterRules(bucketLCRules, object, []);
-            return done(null, this._getApplicableRules(filterRules, isLCUser));
+            return done(null, this._getApplicableRules(filterRules));
         }
 
         const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
@@ -548,7 +537,7 @@ class LifecycleTask extends BackbeatTask {
             const filterRules = this._filterRules(bucketLCRules, object, tags);
 
             // reduce filteredRules to only get earliest dates
-            return done(null, this._getApplicableRules(filterRules, isLCUser));
+            return done(null, this._getApplicableRules(filterRules));
         });
     }
 
@@ -725,12 +714,30 @@ class LifecycleTask extends BackbeatTask {
             (versions, next) => {
                 const matchingNoncurrentKeys = versions.filter(v => (
                     v.Key === deleteMarker.Key && !v.IsLatest));
+                const daysSinceInitiated = this._findDaysSince(
+                    new Date(deleteMarker.LastModified));
+
+                const eodm = rules.Expiration &&
+                    rules.Expiration.ExpiredObjectDeleteMarker;
+
+                const applicableExpRule = rules.Expiration && (
+                    (rules.Expiration.Days !== undefined &&
+                     daysSinceInitiated >= rules.Expiration.Days) ||
+                    (rules.Expiration.Date !== undefined &&
+                     rules.Expiration.Date < Date.now()) ||
+                    eodm !== false
+                );
+                const validLifecycleUserCase = (
+                    isLifecycleUser(deleteMarker.Owner.ID) &&
+                    eodm !== false
+                );
 
                 // if there are no other versions with the same Key as this DM,
-                // the ExpiredObjectDeleteMarker rule applies. Otherwise, no
-                // rule applies to this `IsLatest` DM
-                if (matchingNoncurrentKeys.length === 0 && rules.Expiration &&
-                rules.Expiration.ExpiredObjectDeleteMarker) {
+                // if a valid Expiration rule exists or if the DM was created
+                // by a lifecycle service account and eodm rule is not
+                // explicitly set to false, apply and permanently delete this DM
+                if (matchingNoncurrentKeys.length === 0 && (applicableExpRule ||
+                validLifecycleUserCase)) {
                     const entry = {
                         action: 'deleteObject',
                         target: {
@@ -742,8 +749,7 @@ class LifecycleTask extends BackbeatTask {
                     };
                     this.sendObjectEntry(entry, err => {
                         if (!err) {
-                            log.debug('sent object entry for ' +
-                            'consumption', {
+                            log.debug('sent object entry for consumption', {
                                 method: 'LifecycleTask._checkAndApplyEODMRule',
                                 entry,
                             });
@@ -930,29 +936,16 @@ class LifecycleTask extends BackbeatTask {
     versioningStatus, log, done) {
         const isDeleteMarker = this._isDeleteMarker(version);
 
-        // 1. In a versioning-suspended bucket, create a DM with null as version
-        //    ID. Doesn't matter if IsLatest is a Version or DM
-        // 2. In a versioning-enabled bucket, if Version, apply expiration rule,
-        //    and add delete marker
-        if (versioningStatus === 'Suspended' ||
-        (versioningStatus === 'Enabled' && !isDeleteMarker)) {
-            // if Expiration rule exists, apply it here
-            if (rules.Expiration) {
-                this._checkAndApplyExpirationRule(bucketData, version, rules,
-                    log);
-            }
-            return done();
-        }
-
-        // All other cases below means versioningStatus === 'Enabled'
-
-        // 3. If DM, and has no other versions with the Key, and versioning is
-        //    enabled, the ExpiredObjectDeleteMarker rule applies.
-        // 4. If DM is current version and there are 1+ versions for that key,
-        //    no action is taken
         if (isDeleteMarker) {
+            // check EODM
             return this._checkAndApplyEODMRule(bucketData, version,
                 listOfVersions, rules, log, done);
+        }
+        // if Expiration rule exists, apply it here to a Version
+        if (rules.Expiration) {
+            this._checkAndApplyExpirationRule(bucketData, version, rules,
+                log);
+            return done();
         }
 
         log.debug('no action taken on IsLatest version', {

@@ -2,9 +2,6 @@
 
 ![backbeat logo](res/backbeat-logo.png)
 
-[![CircleCI][badgepub]](https://circleci.com/gh/scality/backbeat)
-[![Scality CI][badgepriv]](http://ci.ironmann.io/gh/scality/backbeat)
-
 ## OVERVIEW
 
 Backbeat is an engine with a messaging system at its heart.

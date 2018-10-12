@@ -57,11 +57,11 @@ const joiSchema = {
         port: joi.number().default(6379),
         name: joi.string().default('backbeat'),
         password: joi.string().default('').allow(''),
-        sentinels: joi.array().items(
+        sentinels: joi.alternatives([joi.string(), joi.array().items(
             joi.object({
                 host: joi.string().required(),
                 port: joi.number().required(),
-            })
+            }))]
         ),
     },
     localCache: {
@@ -73,6 +73,11 @@ const joiSchema = {
         bindAddress: joi.string().default('127.0.0.1'),
         port: joi.number().default(4042),
     }).required(),
+    certFilePaths: joi.object({
+        key: joi.string().empty(''),
+        cert: joi.string().empty(''),
+        ca: joi.string().empty(''),
+    }),
 };
 
 module.exports = joiSchema;

@@ -8,17 +8,21 @@ const config = require('../../../conf/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { HealthProbeServer } = require('arsenal').network.probe;
+const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
-const { zookeeperReplicationNamespace } = require('../constants');
-const ZK_CRR_STATE_PATH = '/state';
+const { zookeeperReplicationNamespace, zkCRRStatePath } =
+    require('../constants');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const redisConfig = config.redis;
+const httpsConfig = config.https;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
+
+const RESUME_NODE = 'scheduledResume';
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -34,7 +38,7 @@ const healthServer = new HealthProbeServer({
 const activeQProcessors = {};
 
 function getCRRStateZkPath() {
-    return `${zookeeperReplicationNamespace}${ZK_CRR_STATE_PATH}`;
+    return `${zookeeperReplicationNamespace}${zkCRRStatePath}`;
 }
 
 /**
@@ -53,7 +57,7 @@ function getCRRStateZkPath() {
  * @return {undefined}
  */
 function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
-    const scheduleDate = new Date(data.scheduledResume);
+    const scheduleDate = new Date(data[RESUME_NODE]);
     const hasExpired = new Date() >= scheduleDate;
     if (hasExpired) {
         // if date expired, resume automatically for the site.
@@ -73,7 +77,7 @@ function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
         });
     }
     qp.scheduleResume(scheduleDate);
-    return cb();
+    return cb(null, { paused: true });
 }
 
 /**
@@ -98,21 +102,22 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                           error: err.message });
                     return done(err);
                 }
+                let d;
                 try {
-                    const d = JSON.parse(data.toString());
-                    if (d.scheduledResume) {
-                        return checkAndApplyScheduleResume(qp, d, zkClient,
-                            site, done);
-                    }
-                    return done(null, d);
+                    d = JSON.parse(data.toString());
                 } catch (e) {
                     log.fatal('error setting state for queue processor', {
                         method: 'QueueProcessor:task',
                         site,
-                        error: e,
+                        error: reshapeExceptionError(e),
                     });
                     return done(e);
                 }
+                if (d[RESUME_NODE]) {
+                    return checkAndApplyScheduleResume(qp, d, zkClient,
+                        site, done);
+                }
+                return done(null, d);
             });
         }
         if (err) {
@@ -134,8 +139,7 @@ function initAndStart(zkClient) {
         applyBucketWorkflows: applyBucketReplicationWorkflows,
     }, error => {
         if (error) {
-            log.error('could not load management db',
-                { error: error.message });
+            log.error('could not load management db', { error });
             setTimeout(initAndStart, 5000);
             return;
         }
@@ -158,7 +162,7 @@ function initAndStart(zkClient) {
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(
                             zkClient, kafkaConfig, sourceConfig, destConfig,
-                            repConfig, redisConfig, mConfig, site);
+                            repConfig, redisConfig, mConfig, httpsConfig, site);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -191,7 +195,7 @@ function initAndStart(zkClient) {
         async.each(siteNames, (site, next) => {
             const qp = new QueueProcessor(zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, site);
+                redisConfig, mConfig, httpsConfig, site);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {

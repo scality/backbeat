@@ -52,7 +52,8 @@
                     "port": 7777
                 },
                 "auth": {
-                    "type": "role",
+                    "type": "account",
+                    "account": "bart",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 7778

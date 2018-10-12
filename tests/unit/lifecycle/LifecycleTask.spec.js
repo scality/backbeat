@@ -482,7 +482,22 @@ describe('lifecycle task helper methods', () => {
                 bucket: 'test-bucket',
             },
         };
-        const deleteMarker = {
+        // lifecycle service account created delete marker
+        const deleteMarkerLC = {
+            Owner: {
+                DisplayName: 'Lifecycle Service Account',
+                ID: '86346e5bda4c2158985574c9942089c36ca650dc509/lifecycle',
+            },
+            Key: 'test-key',
+            VersionId:
+            '834373731313631393339313839393939393952473030312020353820',
+        };
+        // user created delete marker
+        const deleteMarkerNotLC = {
+            Owner: {
+                DisplayName: 'Not Lifecycle Service Account',
+                ID: '86346e5bda4c2158985574c9942089c36ca650dc509',
+            },
             Key: 'test-key',
             VersionId:
             '834373731313631393339313839393939393952473030312020353820',
@@ -507,15 +522,87 @@ describe('lifecycle task helper methods', () => {
                 getLatestEntry() {
                     return this.latestEntry;
                 }
+
+                reset() {
+                    this.latestEntry = undefined;
+                }
             }
             lct2 = new LifecycleTaskMock(lp);
         });
 
-        it('should NOT send any entry to Kafka when Expiration rule is not ' +
-        'enabled', () => {
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        it('should send an entry to Kafka when ExpiredObjectDeleteMarker is ' +
+        'enabled and delete marker was created by the lifecycle service ' +
+        'account', () => {
+            const rules = {
+                Expiration: { ExpiredObjectDeleteMarker: true },
+            };
+
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerLC,
+            listOfVersions, rules, fakeLogger, err => {
+                assert.ifError(err);
+
+                const latestEntry = lct2.getLatestEntry();
+
+                const expectedTarget = Object.assign({}, bucketData.target, {
+                    key: deleteMarkerLC.Key,
+                    version: deleteMarkerLC.VersionId,
+                });
+                const expected = {
+                    action: 'deleteObject',
+                    target: expectedTarget,
+                };
+                assert.deepStrictEqual(latestEntry, expected);
+            });
+        });
+
+        it('should send an entry to Kafka when the delete marker was created ' +
+        'by the lifecycle service account and ExpiredObjectDeleteMarker rule ' +
+        'was NOT explicitly set to false', () => {
             const rules = {};
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerLC,
+            listOfVersions, rules, fakeLogger, err => {
+                assert.ifError(err);
+
+                const latestEntry = lct2.getLatestEntry();
+                const expectedTarget = Object.assign({}, bucketData.target, {
+                    key: deleteMarkerLC.Key,
+                    version: deleteMarkerLC.VersionId,
+                });
+                const expected = {
+                    action: 'deleteObject',
+                    target: expectedTarget,
+                };
+                assert.deepStrictEqual(latestEntry, expected);
+            });
+        });
+
+        it('should NOT send any entry to Kafka when Expiration rule is not ' +
+        'enabled and the delete marker was not created by the lifecycle ' +
+        'service account', () => {
+            const rules = {};
+
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerNotLC,
+            listOfVersions, rules, fakeLogger, err => {
+                assert.ifError(err);
+
+                const latestEntry = lct2.getLatestEntry();
+                assert.equal(latestEntry, undefined);
+            });
+        });
+
+        it('should NOT send an entry to Kafka when the delete marker was ' +
+        'created by the lifecycle service account but ' +
+        'ExpiredObjectDeleteMarker rule is explicitly set to false', () => {
+            const rules = {
+                Expiration: { ExpiredObjectDeleteMarker: false },
+            };
+
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerLC,
             listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
@@ -525,20 +612,21 @@ describe('lifecycle task helper methods', () => {
         });
 
         it('should send an entry to Kafka when ExpiredObjectDeleteMarker is ' +
-        ' enabled and conditions are all met', () => {
+        'enabled and delete marker was not created by the lifecycle service ' +
+        'account', () => {
             const rules = {
                 Expiration: { ExpiredObjectDeleteMarker: true },
             };
 
-            lct2._checkAndApplyEODMRule(bucketData, deleteMarker,
+            lct2._checkAndApplyEODMRule(bucketData, deleteMarkerNotLC,
             listOfVersions, rules, fakeLogger, err => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
 
                 const expectedTarget = Object.assign({}, bucketData.target, {
-                    key: deleteMarker.Key,
-                    version: deleteMarker.VersionId,
+                    key: deleteMarkerNotLC.Key,
+                    version: deleteMarkerNotLC.VersionId,
                 });
                 const expected = {
                     action: 'deleteObject',

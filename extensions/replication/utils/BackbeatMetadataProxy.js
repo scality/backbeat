@@ -154,6 +154,10 @@ class BackbeatMetadataProxy extends BackbeatTask {
         return this;
     }
 
+    setSourceRole(sourceRole) {
+        this.sourceRole = sourceRole;
+    }
+
     setSourceClient(log) {
         const { transport, s3 } = this.sourceConfig;
         const { host, port } = s3;
