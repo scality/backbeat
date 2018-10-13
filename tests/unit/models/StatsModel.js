@@ -156,4 +156,21 @@ describe('StatsModel class', () => {
             },
         ], done);
     });
+
+    it('should not crash on empty results', done => {
+        async.series([
+            next => {
+                statsModel.getAllStats(fakeLogger, id, (err, res) => {
+                    assert.ifError(err);
+                    const expected = {
+                        'requests': [0, 0, 0],
+                        '500s': [0, 0, 0],
+                        'sampleDuration': STATS_EXPIRY,
+                    };
+                    assert.deepStrictEqual(res, expected);
+                    next();
+                });
+            },
+        ], done);
+    });
 });
