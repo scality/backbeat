@@ -28,6 +28,8 @@ const statsModel = new StatsModel(redisClient, STATS_INTERVAL, STATS_EXPIRY);
 // made to the original methods
 describe('StatsModel class', () => {
     const id = 'arsenal-test';
+    const id2 = 'test-2';
+    const id3 = 'test-3';
 
     afterEach(() => redisClient.clear(() => {}));
 
@@ -49,7 +51,15 @@ describe('StatsModel class', () => {
         assert.deepStrictEqual(res, expected);
     });
 
-    it('_getCount should return a an array of all valid integer values',
+    it('_zip should return an empty array if given an invalid array', () => {
+        const arrays = [];
+
+        const res = statsModel._zip(arrays);
+
+        assert.deepStrictEqual(res, []);
+    });
+
+    it('_getCount should return an array of all valid integer values',
     () => {
         const res = statsModel._getCount([
             [null, '1'],
@@ -160,7 +170,7 @@ describe('StatsModel class', () => {
     it('should not crash on empty results', done => {
         async.series([
             next => {
-                statsModel.getAllStats(fakeLogger, id, (err, res) => {
+                statsModel.getStats(fakeLogger, id, (err, res) => {
                     assert.ifError(err);
                     const expected = {
                         'requests': [0, 0, 0],
@@ -168,6 +178,62 @@ describe('StatsModel class', () => {
                         'sampleDuration': STATS_EXPIRY,
                     };
                     assert.deepStrictEqual(res, expected);
+                    next();
+                });
+            },
+            next => {
+                statsModel.getAllStats(fakeLogger, id, (err, res) => {
+                    assert.ifError(err);
+
+                    const expected = {
+                        'requests': [0, 0, 0],
+                        '500s': [0, 0, 0],
+                        'sampleDuration': STATS_EXPIRY,
+                    };
+                    assert.deepStrictEqual(res, expected);
+                    next();
+                });
+            },
+        ], done);
+    });
+
+    it('should return a zero-filled array if no ids are passed to getAllStats',
+    done => {
+        statsModel.getAllStats(fakeLogger, [], (err, res) => {
+            assert.ifError(err);
+
+            const expected = Array(STATS_EXPIRY / STATS_INTERVAL).fill(0);
+
+            assert.deepStrictEqual(res.requests, expected);
+            assert.deepStrictEqual(res['500s'], expected);
+            done();
+        });
+    });
+
+    it('should get accurately reported data for given id from getAllStats',
+    done => {
+        statsModel.reportNewRequest(id, 9);
+        statsModel.reportNewRequest(id2, 2);
+        statsModel.reportNewRequest(id3, 3);
+        statsModel.report500(id);
+
+        async.series([
+            next => {
+                statsModel.getAllStats(fakeLogger, [id], (err, res) => {
+                    assert.ifError(err);
+
+                    assert.equal(res.requests[0], 9);
+                    assert.equal(res['500s'][0], 1);
+                    next();
+                });
+            },
+            next => {
+                statsModel.getAllStats(fakeLogger, [id, id2, id3],
+                (err, res) => {
+                    assert.ifError(err);
+
+                    assert.equal(res.requests[0], 14);
+                    assert.deepStrictEqual(res.requests, [14, 0, 0]);
                     next();
                 });
             },
