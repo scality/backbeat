@@ -26,6 +26,7 @@ const {
     proxyIAMPath,
     metricsExtension,
     metricsTypeProcessed,
+    replicationBackends,
 } = require('../constants');
 
 class QueueProcessor extends EventEmitter {
@@ -57,11 +58,11 @@ class QueueProcessor extends EventEmitter {
      * @param {String} repConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      *   replication
-     * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
+     * @param {String} site - site name
      */
     constructor(kafkaConfig, sourceConfig, destConfig, repConfig, httpsConfig,
-                site, mProducer) {
+                mProducer, site) {
         super();
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -73,12 +74,13 @@ class QueueProcessor extends EventEmitter {
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
         this._consumer = null;
-        this.site = site;
         this._mProducer = mProducer;
+        this.site = site;
 
         this.echoMode = false;
 
-        this.logger = new Logger('Backbeat:Replication:QueueProcessor');
+        this.logger = new Logger(
+            `Backbeat:Replication:QueueProcessor:${this.site}`);
 
         // global variables
         this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
@@ -284,7 +286,9 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                this._mProducer.publishMetrics(data,
+                const filteredData = {};
+                filteredData[this.site] = data[this.site];
+                this._mProducer.publishMetrics(filteredData,
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
                             'metrics', {
@@ -340,14 +344,20 @@ class QueueProcessor extends EventEmitter {
                 task = new EchoBucket(this);
             }
             // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry &&
-            sourceEntry.getReplicationStorageClass().includes(this.site)) {
-            const replicationEndpoint = this.destConfig.bootstrapList
-                .find(endpoint => endpoint.site === this.site);
-            if (['aws_s3', 'azure'].includes(replicationEndpoint.type)) {
-                task = new MultipleBackendTask(this);
-            } else {
-                task = new ReplicateObject(this);
+        } else if (sourceEntry instanceof ObjectQueueEntry) {
+            const replicationStorageClass =
+                sourceEntry.getReplicationStorageClass();
+            const sites = replicationStorageClass.split(',');
+
+            if (sites.includes(this.site)) {
+                const replicationEndpoint = this.destConfig.bootstrapList
+                    .find(endpoint => endpoint.site === this.site);
+                if (replicationEndpoint &&
+                replicationBackends.includes(replicationEndpoint.type)) {
+                    task = new MultipleBackendTask(this);
+                } else {
+                    task = new ReplicateObject(this);
+                }
             }
         }
         if (task) {

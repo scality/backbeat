@@ -16,6 +16,7 @@ const constants = {
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:crr:bytesdone',
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
+    replicationBackends: ['aws_s3', 'azure'],
 };
 
 module.exports = constants;

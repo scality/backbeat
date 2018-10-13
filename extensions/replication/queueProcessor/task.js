@@ -37,6 +37,6 @@ metricsProducer.setupProducer(err => {
         return undefined;
     }
     const queueProcessor = new QueueProcessor(kafkaConfig, sourceConfig,
-        destConfig, repConfig, httpsConfig, site, metricsProducer);
+        destConfig, repConfig, httpsConfig, metricsProducer, site);
     return queueProcessor.start();
 });
