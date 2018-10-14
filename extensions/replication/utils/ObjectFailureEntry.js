@@ -12,7 +12,7 @@ class ObjectFailureEntry {
     constructor(redisKey, role) {
         this.redisKey = redisKey;
         const schema = this.redisKey.split(':');
-        if (process.env.TEST_SWITCH) {
+        if (process.env.CI) {
             schema.shift(); // Test keys are prefixed with 'test:'.
         }
         const [service, extension, status, bucket, objectKey, encodedVersionId,
