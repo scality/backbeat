@@ -235,14 +235,14 @@ describe('Backbeat Server', () => {
                 .listen(config.extensions.replication.source.auth.vault.port);
 
             statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
-            statsClient.reportNewRequest(`${site1}:${BYTES}`, 219800);
+            statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
             statsClient.reportNewRequest(`${site1}:${OPS_DONE}`, 450);
-            statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 102700);
+            statsClient.reportNewRequest(`${site1}:${BYTES_DONE}`, 1027);
 
             statsClient.reportNewRequest(`${site2}:${OPS}`, 900);
-            statsClient.reportNewRequest(`${site2}:${BYTES}`, 294300);
+            statsClient.reportNewRequest(`${site2}:${BYTES}`, 2943);
             statsClient.reportNewRequest(`${site2}:${OPS_DONE}`, 300);
-            statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 187400);
+            statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
 
             done();
         });

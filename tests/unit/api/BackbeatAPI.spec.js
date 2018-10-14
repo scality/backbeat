@@ -26,7 +26,6 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/all/backlog', method: 'GET' },
             { url: '/_/metrics/crr/all/completions', method: 'GET' },
             { url: '/_/metrics/crr/all/throughput', method: 'GET' },
-            { url: '/_/monitoring/metrics', method: 'GET' },
             { url: '/_/crr/failed/mybucket/mykey/vId', method: 'GET' },
             { url: '/_/crr/failed?mymarker', method: 'GET' },
             // invalid params but will default to getting all buckets
@@ -49,7 +48,6 @@ describe('BackbeatAPI', () => {
             { url: '/_/invalid/crr/all', method: 'GET' },
             // // invalid http verb
             { url: '/_/healthcheck', method: 'POST' },
-            { url: '/_/monitoring/metrics', method: 'POST' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);

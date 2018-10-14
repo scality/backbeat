@@ -69,18 +69,6 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details3.key, 'mykey');
             assert.strictEqual(details3.versionId, 'myvId');
         });
-
-        it('should parse monitoring routes and store internally as route ' +
-        'details', () => {
-            const req = new BackbeatRequest({
-                url: '/_/monitoring/metrics',
-                method: 'GET',
-            });
-            const details = req.getRouteDetails();
-
-            assert.strictEqual(details.category, 'monitoring');
-            assert.strictEqual(details.type, 'metrics');
-        });
     });
 
     it('should set route without prefix if valid route has valid prefix',
