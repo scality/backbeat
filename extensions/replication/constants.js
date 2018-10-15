@@ -1,6 +1,6 @@
 'use strict'; // eslint-disable-line
 
-const testIsOn = process.env.CI === 'true';
+const testIsOn = true;
 
 const constants = {
     zookeeperReplicationNamespace:
@@ -28,6 +28,7 @@ const constants = {
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
     replicationBackends: ['aws_s3', 'azure', 'gcp'],
+    versioningNotImplBackends: { azure: true, gcp: true },
 };
 
 module.exports = constants;

@@ -11,8 +11,8 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const { metricsExtension, metricsTypeQueued, metricsTypeCompleted,
+    versioningNotImplBackends } = require('../constants');
 
 const MPU_CONC_LIMIT = 10;
 const MPU_GCP_MAX_PARTS = 1024;
@@ -990,12 +990,21 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _sendMultipleBackendDeleteObject(destEntry, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendDeleteObject({
+        const storageType = destEntry.getReplicationStorageType();
+        const params = {
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             StorageType: destEntry.getReplicationStorageType(),
             StorageClass: this.site,
-        });
+        };
+        let destReq = this.backbeatSource.multipleBackendDeleteObject(params);
+        if (versioningNotImplBackends[destEntry.getReplicationStorageType()]) {
+            const userMetaData = { 'scal-delete-marker': Date.now() };
+            const updateObjectParams = Object.assign({}, params, {
+                UserMetaData: JSON.stringify(userMetaData),
+            });
+            destReq = this.backbeatSource.updateObject(updateObjectParams);
+        }
         attachReqUids(destReq, log);
         return destReq.send(err => {
             if (err) {

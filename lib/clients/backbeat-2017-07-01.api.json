@@ -156,6 +156,47 @@
                 }
             }
         },
+        "UpdateObject": {
+            "http": {
+                "method": "PUT",
+                "requestUri": "/_/backbeat/multiplebackenddata/{Bucket}/{Key+}?operation=updateobject"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "StorageClass",
+                    "UserMetaData"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "UserMetaData": {
+                        "location": "header",
+                        "locationName": "X-Scal-User-Metadata"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "StorageType": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Type"
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
+        },
         "MultipleBackendDeleteObject": {
             "http": {
                 "method": "DELETE",
