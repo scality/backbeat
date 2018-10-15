@@ -6,7 +6,7 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
-const { getAccountCredentials } =
+const AccountCredentials =
     require('../../../lib/credentials/AccountCredentials');
 
 class BackbeatMetadataProxy extends BackbeatTask {
@@ -31,9 +31,8 @@ class BackbeatMetadataProxy extends BackbeatTask {
 
     _createCredentials(log) {
         const authConfig = this.sourceConfig.auth;
-        const accountCredentials = getAccountCredentials(authConfig, log);
-        if (accountCredentials) {
-            return accountCredentials;
+        if (authConfig.type === 'account') {
+            return new AccountCredentials(authConfig, log);
         }
         const vaultclient = this.vaultclientCache.getClient('source:s3');
         const extension = 'replication';
