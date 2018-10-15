@@ -1,4 +1,5 @@
 const errors = require('arsenal').errors;
+const assert = require('assert');
 
 const config = require('../../../conf/Config');
 
@@ -81,12 +82,12 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     /**
      * Report CRR metrics
+     * @param {String} status - The replication status
      * @param {ObjectQueueEntry} entry - updated object entry
      * @param {String} site - site recently updated
      * @return {undefined}
      */
-    _reportMetrics(entry, site) {
-        const status = entry.getReplicationSiteStatus(site);
+    _reportMetrics(status, entry, site) {
         const data = {};
         const content = entry.getReplicationContent();
         const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
@@ -111,6 +112,31 @@ class UpdateReplicationStatus extends BackbeatTask {
         }
     }
 
+    /**
+     * Get the appropriate source metadata for a non-versioned bucket. If the
+     * object metadata has changed since we performed CRR, then we want to
+     * keep the PENDING status while updating other relevant metadata values.
+     * Otherwise we put a COMPLETED status, as usual.
+     * @param {ObjectQueueEntry} sourceEntry - The source entry
+     * @param {ObjectQueueEntry} refreshedEntry - The entry from source metadata
+     * @return {ObjectQueueEntry} The entry to put on the source
+     */
+    _getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry) {
+        const hasMD5Mismatch =
+            sourceEntry.getContentMd5() !== refreshedEntry.getContentMd5();
+        if (hasMD5Mismatch) {
+            return refreshedEntry.toPendingEntry(sourceEntry.getSite());
+        }
+        try {
+            const soureEntryTags = sourceEntry.getTags();
+            const refreshedEntryTags = refreshedEntry.getTags();
+            assert.deepStrictEqual(soureEntryTags, refreshedEntryTags);
+        } catch (e) {
+            return refreshedEntry.toPendingEntry(sourceEntry.getSite());
+        }
+        return refreshedEntry.toCompletedEntry(sourceEntry.getSite());
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -122,6 +148,10 @@ class UpdateReplicationStatus extends BackbeatTask {
             let updatedSourceEntry;
             if (status === 'COMPLETED') {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
+                if (sourceEntry.getReplicationIsNFS()) {
+                    updatedSourceEntry = this._getNFSUpdatedSourceEntry(
+                        sourceEntry, refreshedEntry);
+                }
             } else if (status === 'FAILED') {
                 updatedSourceEntry = refreshedEntry.toFailedEntry(site);
             } else if (status === 'PENDING') {
@@ -153,7 +183,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 });
 
                 // Report to MetricsProducer with completed/failed metrics
-                this._reportMetrics(updatedSourceEntry, site);
+                this._reportMetrics(status, updatedSourceEntry, site);
 
                 if (config.getIsTransientLocation(
                     updatedSourceEntry.getDataStoreName()) &&
