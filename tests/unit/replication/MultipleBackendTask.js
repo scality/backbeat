@@ -6,13 +6,14 @@ const MPU_GCP_MAX_PARTS = 1024;
 const MIN_AWS_PART_SIZE = (1024 * 1024) * 5; // 5MB
 const MAX_AWS_PART_SIZE = (1024 * 1024 * 1024) * 5; // 5GB
 const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
+const retryConfig = { scality: { timeoutS: 0 } };
 
 describe('MultipleBackendTask', () => {
     const task = new MultipleBackendTask({
         getStateVars: () => ({
             repConfig: {
                 queueProcessor: {
-                    retryTimeoutS: 0,
+                    retry: retryConfig,
                 },
             },
         }),

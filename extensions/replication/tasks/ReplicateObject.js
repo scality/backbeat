@@ -33,11 +33,19 @@ class ReplicateObject extends BackbeatTask {
      */
     constructor(qp) {
         const qpState = qp.getStateVars();
-        super({
-            retryTimeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
-        });
+        super();
         Object.assign(this, qpState);
-
+        this.retryParams = this.repConfig.queueProcessor.retry.scality;
+        if (this.destConfig && this.destConfig.bootstrapList) {
+            const destination = this.destConfig.bootstrapList
+                .find(endpoint => endpoint.site === this.site) || {};
+            this.destType = destination.type;
+            const retryParams =
+                this.repConfig.queueProcessor.retry[destination.type];
+            if (retryParams) {
+                this.retryParams = retryParams;
+            }
+        }
         this.sourceRole = null;
         this.targetRole = null;
         this.destBackbeatHost = null;

@@ -76,12 +76,10 @@
             },
             "producer": {
                 "groupId": "backbeat-lifecycle-producer-test-group",
-                "retryTimeoutS": 300,
                 "concurrency": 10
             },
             "consumer": {
                 "groupId": "backbeat-lifecycle-consumer-test-group",
-                "retryTimeoutS": 300,
                 "concurrency": 10
             },
             "rules": {

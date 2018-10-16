@@ -54,7 +54,16 @@
         "mongoProcessor": {
             "topic": "backbeat-ingestion",
             "groupId": "backbeat-mongo-processor-group",
-            "retryTimeoutS": 300
+            "retry": {
+                "maxRetries": 5,
+                "timeoutS": 300,
+                "backoff": {
+                    "min": 1000,
+                    "max": 300000,
+                    "jitter": 0.1,
+                    "factor": 1.5
+                }
+            }
         },
         "replication": {
             "source": {
@@ -92,12 +101,62 @@
             "monitorReplicationFailureExpiryTimeS": 86400,
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "aws_s3": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "azure": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "gcp": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "scality": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 300000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    }
+                },
                 "concurrency": 10
             },
             "replicationStatusProcessor": {
                 "groupId": "backbeat-replication-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
                 "concurrency": 10
             }
         },
@@ -124,12 +183,30 @@
             },
             "bucketProcessor": {
                 "groupId": "backbeat-lifecycle-bucket-processor-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
                 "concurrency": 10
             },
             "objectProcessor": {
                 "groupId": "backbeat-lifecycle-object-processor-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
                 "concurrency": 10
             },
             "rules": {
@@ -152,7 +229,16 @@
             },
             "consumer": {
                 "groupId": "backbeat-gc-consumer-group",
-                "retryTimeoutS": 300,
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
                 "concurrency": 10
             }
         }

@@ -59,9 +59,20 @@ class QueueProcessor extends EventEmitter {
      *   specific to queue processor
      * @param {String} repConfig.queueProcessor.groupId - kafka
      *   consumer group ID
-     * @param {String} repConfig.queueProcessor.retryTimeoutS -
-     *   number of seconds before giving up retries of an entry
-     *   replication
+     * @param {number} [repConfig.queueProcessor.retry.timeoutS] -
+     *  retry timeout in secs.
+     * @param {number} [repConfig.queueProcessor.retry.maxRetries] -
+     *  max retries before giving up
+     * @param {Object} [repConfig.queueProcessor.retry.backoff] -
+     *  backoff params
+     * @param {number} [repConfig.queueProcessor.retry.backoff.min] -
+     *  min. backoff in ms.
+     * @param {number} [repConfig.queueProcessor.retry.backoff.max] -
+     *  max. backoff in ms.
+     * @param {number} [repConfig.queueProcessor.retry.backoff.jitter] -
+     *  randomness
+     * @param {number} [repConfig.queueProcessor.retry.backoff.factor] -
+     *  backoff factor
      * @param {Object} redisConfig - redis configuration
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic

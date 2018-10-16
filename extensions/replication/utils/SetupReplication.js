@@ -84,17 +84,15 @@ class SetupReplication extends BackbeatTask {
      * @param {Boolean} [params.checkSanity=false] - whether to check
      *   sanity of the config after setup, in case something would
      *   have gone wrong but unnoticed
-     * @param {Number} [params.retryTimeoutS=300] - timeout for
-     *   request retries
      * @param {Boolean} [params.skipSourceBucketCreation=false] - can
      *   be set to true if the source bucket is guaranteed to exist to
      *   spare a request
      * @param {Object} params.log - werelogs request logger object
      */
     constructor(params) {
-        const { source, target, https, checkSanity,
-                retryTimeoutS, skipSourceBucketCreation, log } = params;
-        super({ retryTimeoutS });
+        const { source, target, https, checkSanity, skipSourceBucketCreation,
+            log } = params;
+        super();
         this._log = log;
         this._sourceBucket = source.bucket;
         this._targetBucket = target.bucket;
