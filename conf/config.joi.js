@@ -1,10 +1,8 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('joi');
-const { hostPortJoi, logJoi } = require('../lib/config/configItems.joi.js');
-
-const transportJoi = joi.alternatives().try('http', 'https')
-    .default('http');
+const { hostPortJoi, transportJoi, logJoi, certFilePathsJoi } =
+      require('../lib/config/configItems.joi.js');
 
 const logSourcesJoi = joi.string().valid('bucketd', 'mongo', 'ingestion',
     'dmd');
@@ -27,6 +25,7 @@ const joiSchema = {
         logSource: joi.alternatives().try(logSourcesJoi).required(),
         subscribeToLogSourceDispatcher: joi.boolean().default(false),
         bucketd: hostPortJoi
+            .keys({ transport: transportJoi })
             .when('logSource', { is: 'bucketd', then: joi.required() }),
         dmd: hostPortJoi.keys({
             logName: joi.string().default('s3-recordlog'),
@@ -73,11 +72,8 @@ const joiSchema = {
         bindAddress: joi.string().default('127.0.0.1'),
         port: joi.number().default(4042),
     }).required(),
-    certFilePaths: joi.object({
-        key: joi.string().empty(''),
-        cert: joi.string().empty(''),
-        ca: joi.string().empty(''),
-    }),
+    certFilePaths: certFilePathsJoi,
+    internalCertFilePaths: certFilePathsJoi,
 };
 
 module.exports = joiSchema;

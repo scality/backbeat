@@ -1,10 +1,8 @@
 const fs = require('fs');
 const joi = require('joi');
-const { hostPortJoi, bootstrapListJoi, adminCredsJoi, retryParamsJoi } =
+const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
+        retryParamsJoi } =
     require('../../lib/config/configItems.joi.js');
-
-const transportJoi = joi.alternatives().try('http', 'https')
-    .default('http');
 
 const qpRetryJoi = joi.object({
     aws_s3: retryParamsJoi, // eslint-disable-line camelcase

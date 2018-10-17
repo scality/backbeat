@@ -8,6 +8,7 @@ const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const extConfigs = config.extensions;
 const qpConfig = config.queuePopulator;
+const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
