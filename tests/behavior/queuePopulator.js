@@ -121,7 +121,7 @@ describe('queuePopulator', () => {
                 queuePopulator.open(next);
             },
             next => {
-                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+                queuePopulator.processLogEntries({ maxRead: 10 }, next);
             },
             (data, next) => {
                 const { connectionString } = testConfig.zookeeper;
@@ -172,15 +172,15 @@ describe('queuePopulator', () => {
             });
         }));
 
-    it('processAllLogEntries with nothing to do', done => {
-        queuePopulator.processAllLogEntries(
+    it('processLogEntries with nothing to do', done => {
+        queuePopulator.processLogEntries(
             { maxRead: 10 }, (err, counters) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(counters[0].queuedEntries, {});
                 done();
             });
     });
-    it('processAllLogEntries with an object to replicate', done => {
+    it('processLogEntries with an object to replicate', done => {
         async.waterfall([
             next => {
                 s3.putObject({ Bucket: testBucket,
@@ -189,7 +189,7 @@ describe('queuePopulator', () => {
                     Tagging: 'mytag=mytagvalue' }, next);
             },
             (data, next) => {
-                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+                queuePopulator.processLogEntries({ maxRead: 10 }, next);
             },
             (counters, next) => {
                 // 2 reads expected: master key and and versioned key
@@ -204,7 +204,7 @@ describe('queuePopulator', () => {
             done();
         });
     });
-    it('processAllLogEntries with an object put and delete to replicate',
+    it('processLogEntries with an object put and delete to replicate',
     done => {
         async.waterfall([
             next => {
@@ -214,14 +214,14 @@ describe('queuePopulator', () => {
                     Tagging: 'mytag=mytagvalue' }, next);
             },
             (data, next) => {
-                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+                queuePopulator.processLogEntries({ maxRead: 10 }, next);
             },
             (counters, next) => {
                 s3.deleteObject({ Bucket: testBucket,
                     Key: 'keyToReplicate' }, next);
             },
             (data, next) => {
-                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+                queuePopulator.processLogEntries({ maxRead: 10 }, next);
             },
             (counters, next) => {
                 // 2 reads expected: master key update + new delete marker
@@ -236,7 +236,7 @@ describe('queuePopulator', () => {
             done();
         });
     });
-    it('processAllLogEntries with 100 objects to replicate in 20 batches',
+    it('processLogEntries with 100 objects to replicate in 20 batches',
     function test100objects(done) {
         this.timeout(10000);
         async.waterfall([
@@ -259,7 +259,7 @@ describe('queuePopulator', () => {
                 }
             },
             next => {
-                queuePopulator.processAllLogEntries({ maxRead: 10 }, next);
+                queuePopulator.processLogEntries({ maxRead: 10 }, next);
             },
             (counters, next) => {
                 // 2 reads expected: master key and and versioned key
@@ -300,7 +300,7 @@ describe('queuePopulator', () => {
                 }, done));
 
             it('should have created the lifecycle bucket data path', done =>
-                queuePopulator.processAllLogEntries({ maxRead: 10 },
+                queuePopulator.processLogEntries({ maxRead: 10 },
                     (err, counters) => {
                         if (err) {
                             return done(err);
@@ -313,13 +313,13 @@ describe('queuePopulator', () => {
             it('should delete lifecycle bucket data path if bucket is deleted',
             done => async.series([
                 next =>
-                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
                 next =>
                     doesBucketNodeExist(true, zkClient, testBucket, next),
                 next =>
                     s3.deleteBucket({ Bucket: testBucket }, next),
                 next =>
-                    queuePopulator.processAllLogEntries({ maxRead: 10 },
+                    queuePopulator.processLogEntries({ maxRead: 10 },
                         next),
                 next =>
                     doesBucketNodeExist(false, zkClient, testBucket, next),
@@ -328,13 +328,13 @@ describe('queuePopulator', () => {
             it('should delete lifecycle bucket data path if lifecycle config ' +
             'is deleted', done => async.series([
                 next =>
-                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
                 next =>
                     doesBucketNodeExist(true, zkClient, testBucket, next),
                 next =>
                     s3.deleteBucketLifecycle({ Bucket: testBucket }, next),
                 next =>
-                    queuePopulator.processAllLogEntries({ maxRead: 10 }, next),
+                    queuePopulator.processLogEntries({ maxRead: 10 }, next),
                 next =>
                     doesBucketNodeExist(false, zkClient, testBucket, next),
             ], done));
