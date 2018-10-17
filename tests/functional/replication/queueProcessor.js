@@ -678,6 +678,7 @@ describe('queue processor functional tests with mocking', () => {
               port: 6379 },
             { topic: 'metrics-test-topic' },
             {},
+            {},
         ];
         async.parallel([
             done => {
@@ -714,6 +715,7 @@ describe('queue processor functional tests with mocking', () => {
                       groupId: 'backbeat-func-test-group-id',
                   },
                 },
+                {},
                 { topic: 'metrics-test-topic' });
             replicationStatusProcessor.start({ bootstrap: true }, done);
         });
