@@ -4,43 +4,18 @@
 class ObjectFailureEntry {
     /**
      * @constructor
-     * @param {String} redisKey - The Redis key for the failed object. The key
-     * has the following schema: bb:crr:failed:<bucket>:<key>:<versionId>:<site>
-     * @param {String} role - The source IAM role used for authentication when
-     * getting the source object's metadata from cloud server
+     * @param {String} member - The Redis sorted set member for the failed
+     * object. The key has the following schema: <bucket>:<key>:<versionId>
+     * @param {String} sitename - The site in which the version is stored
      */
-    constructor(redisKey, role) {
-        this.redisKey = redisKey;
-        const schema = this.redisKey.split(':');
-        if (process.env.TEST_SWITCH) {
-            schema.shift(); // Test keys are prefixed with 'test:'.
-        }
-        const [service, extension, status, bucket, objectKey, encodedVersionId,
-            site] = schema;
-        this.service = service;
-        this.extension = extension;
-        this.status = status;
+    constructor(member, sitename) {
+        this.member = member;
+        const schema = this.member.split(':');
+        const [bucket, objectKey, encodedVersionId] = schema;
         this.bucket = bucket;
         this.objectKey = objectKey;
         this.encodedVersionId = encodedVersionId;
-        this.site = site;
-        this.sourceRole = role;
-    }
-
-    getRedisKey() {
-        return this.redisKey;
-    }
-
-    getService() {
-        return this.service;
-    }
-
-    getExtension() {
-        return this.extension;
-    }
-
-    getStatus() {
-        return this.status;
+        this.sitename = sitename;
     }
 
     getBucket() {
@@ -56,11 +31,11 @@ class ObjectFailureEntry {
     }
 
     getSite() {
-        return this.site;
+        return this.sitename;
     }
 
-    getReplicationRoles() {
-        return this.sourceRole;
+    getMember() {
+        return `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
     }
 
     getLogInfo() {

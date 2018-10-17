@@ -14,8 +14,12 @@ const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
-const getFailedCRRKey = require('../../../lib/util/getFailedCRRKey');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const {
+    getSortedSetMember,
+    getSortedSetKey,
+} = require('../../../lib/util/sortedSetHelper');
 
 /**
  * @class ReplicationStatusProcessor
@@ -167,14 +171,15 @@ class ReplicationStatusProcessor {
             b.status === 'FAILED' && b.site === queueEntry.getSite());
         if (backend) {
             const bucket = queueEntry.getBucket();
-            const key = queueEntry.getObjectKey();
+            const objectKey = queueEntry.getObjectKey();
             const versionId = queueEntry.getEncodedVersionId();
+            const score = Date.now();
             const { site } = backend;
-            const roles = queueEntry.getReplicationRoles();
-            const value = roles.split(',')[0]; // The source IAM role.
+            const latestHour = this._statsClient.getSortedSetCurrentHour(score);
             const message = {
-                key: getFailedCRRKey(bucket, key, versionId, site),
-                value,
+                key: getSortedSetKey(site, latestHour),
+                member: getSortedSetMember(bucket, objectKey, versionId),
+                score,
             };
             return this._FailedCRRProducer
                 .publishFailedCRREntry(JSON.stringify(message), cb);
