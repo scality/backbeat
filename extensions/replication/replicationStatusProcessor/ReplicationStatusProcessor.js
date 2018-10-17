@@ -6,15 +6,14 @@ const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
+const { StatsModel } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const FailedCRRProducer =
-    require('../../../extensions/replication/failedCRR/FailedCRRProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const {
     getSortedSetMember,
@@ -81,6 +80,7 @@ class ReplicationStatusProcessor {
 
         this._setupVaultclientCache();
 
+        this._statsClient = new StatsModel(undefined);
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }

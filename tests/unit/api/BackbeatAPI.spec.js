@@ -41,7 +41,6 @@ describe('BackbeatAPI', () => {
             '/_/metrics/crr/all/completionss',
         ].forEach(path => {
             const req = new BackbeatRequest({ url: path });
-
             assert.equal(bbapi.isValidRoute(req), false);
         });
     });
