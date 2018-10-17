@@ -4,7 +4,7 @@ const ObjectFailureEntry =
     require('../../../extensions/replication/utils/ObjectFailureEntry');
 
 describe('ObjectFailureEntry helper class', () => {
-    const member = 'test-bucket:test-key:test-versionId';
+    const member = 'test-bucket:test-key:test-versionId:test-role';
     const sitename = 'test-site';
     const entry = new ObjectFailureEntry(member, sitename);
 
