@@ -225,6 +225,7 @@ class EchoBucket extends BackbeatTask {
                         transport: this.destConfig.transport,
                     },
                     https: this.httpsConfig,
+                    internalHttps: this.internalHttpsConfig,
                     skipSourceBucketCreation: true,
                     log,
                 });
