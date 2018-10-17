@@ -173,12 +173,13 @@ class ReplicationStatusProcessor {
             const bucket = queueEntry.getBucket();
             const objectKey = queueEntry.getObjectKey();
             const versionId = queueEntry.getEncodedVersionId();
+            const role = queueEntry.getReplicationRoles().split(',')[0];
             const score = Date.now();
             const { site } = backend;
             const latestHour = this._statsClient.getSortedSetCurrentHour(score);
             const message = {
                 key: getSortedSetKey(site, latestHour),
-                member: getSortedSetMember(bucket, objectKey, versionId),
+                member: getSortedSetMember(bucket, objectKey, versionId, role),
                 score,
             };
             return this._FailedCRRProducer

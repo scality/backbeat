@@ -16,6 +16,8 @@ class ObjectFailureEntry {
         this.objectKey = objectKey;
         this.encodedVersionId = encodedVersionId;
         this.sitename = sitename;
+        const firstPart = `${bucket}:${objectKey}:${encodedVersionId}:`;
+        this.role = this.member.split(firstPart)[1];
     }
 
     getBucket() {
@@ -34,8 +36,13 @@ class ObjectFailureEntry {
         return this.sitename;
     }
 
+    getReplicationRoles() {
+        return this.role;
+    }
+
     getMember() {
-        return `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
+        return `${this.bucket}:${this.objectKey}:${this.encodedVersionId}` +
+            `${this.role}`;
     }
 
     getLogInfo() {
