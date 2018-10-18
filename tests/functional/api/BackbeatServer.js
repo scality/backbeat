@@ -615,6 +615,76 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: /_/crr/failed when ' +
+            'unknown marker is given',
+            done => {
+                const site = 'test-site';
+                const member = `test-bucket-1:test-key:${testVersionId}`;
+                addMembers(redisClient, site, [member], err => {
+                    assert.ifError(err);
+                    const endpoint =
+                        `/_/crr/failed?marker=999999999999999&sitename=${site}`;
+                    return getRequest(endpoint, (err, res) => {
+                        assert.ifError(err);
+                        assert.deepStrictEqual(res, {
+                            IsTruncated: false,
+                            Versions: [],
+                        });
+                        done();
+                    });
+                });
+            });
+
+            it('should get correct data for GET route: /_/crr/failed and ' +
+            'normalize members when there are duplicate failures across hours',
+            done => {
+                const hour = 60 * 60 * 1000;
+                const oneHoursAgo = new Date(Date.now() - hour);
+                const twoHoursAgo = new Date(Date.now() - (hour * 2));
+                const statsClient = new StatsModel(redisClient);
+                const norm1 = statsClient.normalizeTimestampByHour(oneHoursAgo);
+                const norm2 = statsClient.normalizeTimestampByHour(twoHoursAgo);
+                const site = 'test-site';
+                const bucket = 'test-bucket';
+                const objectKey = 'test-key';
+                const member = `${bucket}:${objectKey}:${testVersionId}`;
+                return async.series([
+                    next => addManyMembers(redisClient, site, [member],
+                        norm1, norm1 + 1, next),
+                    next => addManyMembers(redisClient, site, [member],
+                        norm2, norm2 + 2, next),
+                    next =>
+                        getRequest(`/_/crr/failed?marker=0&sitename=${site}`,
+                            (err, res) => {
+                                assert.ifError(err);
+                                assert.deepStrictEqual(res, {
+                                    IsTruncated: false,
+                                    Versions: [{
+                                        Bucket: bucket,
+                                        Key: objectKey,
+                                        VersionId: testVersionId,
+                                        StorageClass: site,
+                                        Size: 1,
+                                        LastModified:
+                                            '2018-03-30T22:22:34.384Z',
+                                    }],
+                                });
+                                return next();
+                            }),
+                    next => async.map([
+                        `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm1}`,
+                        `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm2}`,
+                    ],
+                    (key, cb) => redisClient.zcard(key, cb),
+                    (err, results) => {
+                        assert.ifError(err);
+                        const sum = results[0] + results[1];
+                        assert.strictEqual(sum, 1);
+                        return next();
+                    }),
+                ], done);
+            });
+
+            it('should get correct data for GET route: /_/crr/failed when ' +
             'the key has been created and there are multiple members',
             done => {
                 const members = [
