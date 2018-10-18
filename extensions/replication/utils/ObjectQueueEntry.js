@@ -18,8 +18,11 @@ function _getGlobalReplicationStatus(data) {
         if (statuses.includes('FAILED')) {
             return 'FAILED';
         }
-        if (statuses.includes('PENDING')) {
+        if (statuses.includes('PENDING') && statuses.includes('COMPLETED')) {
             return 'PROCESSING';
+        }
+        if (statuses.every(status => status === 'PENDING')) {
+            return 'PENDING';
         }
     }
     return 'COMPLETED';

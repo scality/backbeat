@@ -70,6 +70,16 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(completed1.getReplicationSiteStatus('sf'),
                 'COMPLETED');
             assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
+
+            // If all are PENDING, the global status should be PENDING
+            const pending1 = entry.toPendingEntry('sf');
+            const pending2 = entry.toPendingEntry('replicationaws');
+            assert.strictEqual(pending1.getReplicationSiteStatus('sf'),
+                'PENDING');
+            assert.strictEqual(
+                pending2.getReplicationSiteStatus('replicationaws'),
+                'PENDING');
+            assert.strictEqual(completed.getReplicationStatus(), 'PENDING');
         });
     });
 
