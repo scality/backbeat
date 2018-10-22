@@ -318,7 +318,9 @@ class QueueProcessor extends EventEmitter {
             });
             this._consumer.on('metrics', data => {
                 // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                this._mProducer.publishMetrics(data,
+                const filteredData = {};
+                filteredData[this.site] = data[this.site];
+                this._mProducer.publishMetrics(filteredData,
                     metricsTypeProcessed, metricsExtension, err => {
                         this.logger.trace('error occurred in publishing ' +
                             'metrics', {
