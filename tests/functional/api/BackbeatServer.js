@@ -1004,9 +1004,11 @@ describe('Backbeat Server', () => {
             });
 
             it('should get correct data for GET route: ' +
-            '/_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
+            '/_/crr/failed/<bucket>/<key>?versionId=<versionId> when there ' +
+            'is no key',
             done => {
-                getRequest('/_/crr/failed/test-bucket/test-key/test-versionId',
+                getRequest('/_/crr/failed/test-bucket/test-key?' +
+                    'versionId=test-versionId',
                 (err, res) => {
                     assert.ifError(err);
                     assert.deepStrictEqual(res, {
