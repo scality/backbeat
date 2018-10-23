@@ -32,13 +32,29 @@ stages:
           name: run unit tests
           command: npm test
       - ShellCommand:
-          name: run s3 server tests
-          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
+          name: run backbeat routes test
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
           workdir: '%(prop:builddir)s/build'
           env:
             CI: "true"
       - ShellCommand:
+          name: run backbeat retry tests with account authentication
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
+          workdir: '%(prop:builddir)s/build'
+          env:
+            CI: "true"
+            CI_AUTH_TYPE: "account"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
+          name: run backbeat retry tests with role authentication
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
+          workdir: '%(prop:builddir)s/build'
+          env:
+            CI: "true"
+            CI_AUTH_TYPE: "role"
+            BACKBEAT_CONFIG_FILE: "tests/config.roleAuth.json"
+      - ShellCommand:
           name: run feature tests
-          command: npm run ft_test
+          command: npm run ft_test:replication
           env:
             CI: "true"
