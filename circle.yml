@@ -22,5 +22,7 @@ test:
         - npm run --silent lint_md
         - npm run --silent lint
         - npm test
-        - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
-        - npm run ft_test
+        - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_test:api:routes
+        - CI=true BACKBEAT_CONFIG_FILE=tests/config.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && CI_AUTH_TYPE=account npm run ft_test:api:retry
+        - CI=true BACKBEAT_CONFIG_FILE=tests/config.roleAuth.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && CI_AUTH_TYPE=role npm run ft_test:api:retry
+        - npm run ft_test:replication

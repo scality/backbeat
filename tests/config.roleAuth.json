@@ -33,8 +33,7 @@
                     "port": 7777
                 },
                 "auth": {
-                    "type": "account",
-                    "account": "bart",
+                    "type": "role",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 7778
@@ -47,8 +46,7 @@
                     { "site": "test-site-2", "type": "aws_s3" }
                 ],
                 "auth": {
-                    "type": "account",
-                    "account": "bart"
+                    "type": "role"
                 }
             },
             "topic": "backbeat-replication",
