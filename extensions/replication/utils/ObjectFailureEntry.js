@@ -18,7 +18,8 @@ class ObjectFailureEntry {
         this.objectKey = objectKey;
         this.encodedVersionId = encodedVersionId;
         this.sitename = sitename;
-        this.role = encodedRole ? querystring.unescape(encodedRole) : '';
+        this.encodedRole = encodedRole;
+        this.role = encodedRole ? querystring.unescape(encodedRole) : undefined;
     }
 
     getBucket() {
@@ -44,8 +45,8 @@ class ObjectFailureEntry {
     getMember() {
         const member =
             `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
-        if (this.role) {
-            return `${member}:${this.role}`;
+        if (this.encodedRole) {
+            return `${member}:${this.encodedRole}`;
         }
         return member;
     }
