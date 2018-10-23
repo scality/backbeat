@@ -21,6 +21,9 @@ const {
 } = require('../../../lib/util/sortedSetHelper');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
+// StatsClient constant default for site metrics
+const INTERVAL = 300; // 5 minutes;
+
 /**
  * @class ReplicationStatusProcessor
  *
@@ -86,7 +89,9 @@ class ReplicationStatusProcessor {
 
         this._setupVaultclientCache();
 
-        this._statsClient = new StatsModel(undefined);
+        const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
+        this._statsClient = new StatsModel(undefined, INTERVAL,
+            (monitorReplicationFailureExpiryTimeS + INTERVAL));
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }
