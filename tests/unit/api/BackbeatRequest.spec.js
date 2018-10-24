@@ -58,7 +58,7 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(req2.getHTTPMethod(), 'POST');
 
             const req3 = new BackbeatRequest({
-                url: '/_/crr/failed/mybucket/mykey/myvId',
+                url: '/_/crr/failed/mybucket/mykey?versionId=myvId',
                 method: 'GET',
             });
             const details3 = req3.getRouteDetails();

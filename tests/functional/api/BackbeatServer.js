@@ -622,13 +622,13 @@ describe('Backbeat Server', () => {
                 // Completions count = OPS_DONE
                 assert.equal(res.completions.results.count, 750);
                 // Completions bytes = BYTES_DONE / 1000
-                assert.equal(res.completions.results.size, 290.1);
+                assert.equal(res.completions.results.size, 2901);
 
                 assert(res.throughput.description);
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res.throughput.results.count, 0.83);
                 // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res.throughput.results.size, 0.32);
+                assert.equal(res.throughput.results.size, 3.22);
 
                 assert(res.failures.description);
                 // Failures count = OPS_FAIL
