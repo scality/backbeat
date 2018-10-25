@@ -10,7 +10,7 @@ const { applyBucketReplicationWorkflows } = require('../management');
 const { HealthProbeServer } = require('arsenal').network.probe;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
-const { zookeeperReplicationNamespace, zkCRRStatePath } =
+const { zookeeperReplicationNamespace, zkStatePath } =
     require('../constants');
 
 const zkConfig = config.zookeeper;
@@ -39,7 +39,7 @@ const healthServer = new HealthProbeServer({
 const activeQProcessors = {};
 
 function getCRRStateZkPath() {
-    return `${zookeeperReplicationNamespace}${zkCRRStatePath}`;
+    return `${zookeeperReplicationNamespace}${zkStatePath}`;
 }
 
 /**

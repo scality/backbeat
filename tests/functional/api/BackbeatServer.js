@@ -1751,7 +1751,7 @@ describe('Backbeat Server', () => {
                             message.action);
                         done();
                     });
-                });
+                }, 1000);
             });
         });
 

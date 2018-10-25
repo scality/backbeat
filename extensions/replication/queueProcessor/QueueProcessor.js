@@ -29,7 +29,7 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const {
     zookeeperReplicationNamespace,
-    zkCRRStatePath,
+    zkStatePath,
     zkCRRStateProperties,
     proxyVaultPath,
     proxyIAMPath,
@@ -405,7 +405,7 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getZkSiteNode() {
-        return `${zookeeperReplicationNamespace}${zkCRRStatePath}/` +
+        return `${zookeeperReplicationNamespace}${zkStatePath}/` +
             `${this.site}`;
     }
 
