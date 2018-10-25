@@ -12,7 +12,10 @@ const { makeRequest, getResponseBody } =
     require('../utils/makeRequest');
 const S3Mock = require('../utils/S3Mock');
 const VaultMock = require('../utils/VaultMock');
-const redisConfig = { host: '127.0.0.1', port: 6379 };
+const redisConfig = {
+    host: config.redis.host,
+    port: config.redis.port,
+};
 const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
 const ZK_TEST_CRR_STATE_PATH = '/backbeattest/state';
