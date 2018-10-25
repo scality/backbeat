@@ -56,6 +56,7 @@
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#e49d1a2",
     "eslint-plugin-react": "^4.2.3",
+    "lolex": "^2.7.5",
     "mocha": "^3.3.0"
   }
 }
