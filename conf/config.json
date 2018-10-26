@@ -13,7 +13,7 @@
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
-        "batchTimeoutMs": 10000,
+        "batchTimeoutMs": 9000,
         "zookeeperPath": "/queue-populator",
         "logSource": "mongo",
         "bucketd": {

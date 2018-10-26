@@ -20,7 +20,7 @@ const joiSchema = {
     queuePopulator: {
         cronRule: joi.string().required(),
         batchMaxRead: joi.number().default(10000),
-        batchTimeoutMs: joi.number().default(10000),
+        batchTimeoutMs: joi.number().default(9000),
         zookeeperPath: joi.string().required(),
 
         logSource: joi.alternatives().try(logSourcesJoi).required(),
