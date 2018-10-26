@@ -29,20 +29,14 @@ function queueBatch(queuePopulator, taskState, qConfig, log) {
     log.debug('start queueing replication batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
-    queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
+    queuePopulator.processLogEntries({ maxRead }, err => {
         taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during replication', {
                 method: 'QueuePopulator::task.queueBatch',
                 error: err,
             });
-            return undefined;
         }
-        const logFunc = (counters.some(counter =>
-            Object.keys(counter.queuedEntries).length > 0) ?
-            log.info : log.debug).bind(log);
-        logFunc('replication batch finished', { counters });
-        return undefined;
     });
     return undefined;
 }
