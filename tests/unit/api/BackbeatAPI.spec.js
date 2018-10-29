@@ -39,11 +39,10 @@ describe('BackbeatAPI', () => {
             { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` +
                 '?versionId=test-myvId', method: 'GET' },
         ].forEach(request => {
+            process.stdout.write(`checking valid route ${request.url}\n`);
+
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
-
-            process.stdout.write(JSON.stringify(request))
-            process.stdout.write('\n\n')
 
             assert.equal(routeError, null);
         });
@@ -65,6 +64,8 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
                 '?versionId=test-myvId', method: 'GET' },
         ].forEach(request => {
+            process.stdout.write(`checking invalid route ${request.url}\n`);
+
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
 
