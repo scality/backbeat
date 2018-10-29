@@ -42,6 +42,9 @@ describe('BackbeatAPI', () => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
 
+            process.stdout.write(JSON.stringify(request))
+            process.stdout.write('\n\n')
+
             assert.equal(routeError, null);
         });
 
