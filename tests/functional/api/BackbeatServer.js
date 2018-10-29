@@ -7,6 +7,7 @@ const zookeeper = require('node-zookeeper-client');
 
 const { RedisClient, StatsModel } = require('arsenal').metrics;
 
+const constants = require('../../../extensions/replication/constants');
 const config = require('../../config.json');
 const { makeRequest, getResponseBody } =
     require('../utils/makeRequest');
@@ -16,9 +17,12 @@ const redisConfig = {
     host: config.redis.host,
     port: config.redis.port,
 };
-const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
-const ZK_TEST_CRR_STATE_PATH = '/backbeattest/state';
+const TEST_REDIS_KEY_FAILED_CRR = constants.redisKeys.failedCRR;
+const ZK_TEST_CRR_STATE_PATH =
+    `${constants.zookeeperReplicationNamespace}${constants.zkStatePath}`;
+const ZK_TEST_INGESTION_STATE_PATH =
+    `${constants.zookeeperIngestionNamespace}${constants.zkStatePath}`;
 const EPHEMERAL_NODE = 1;
 
 const fakeLogger = {
@@ -1449,322 +1453,367 @@ describe('Backbeat Server', () => {
         });
     });
 
-    describe('CRR Pause/Resume service routes', () => {
-        let redis1;
-        let redis2;
-        let cache1 = [];
-        let cache2 = [];
-        let channel1;
-        let channel2;
+    describe('Pause/Resume service routes', () => {
+        const skipNotImplemented = svc => (svc === 'ingestion' ? it.skip : it);
 
-        let zkClient;
-
-        const emptyBody = '';
         const crrConfigs = config.extensions.replication;
-        const crrTopic = crrConfigs.topic;
-        const destconfig = crrConfigs.destination;
+        const ingestionConfig = config.extensions.ingestion;
 
-        const firstSite = destconfig.bootstrapList[0].site;
-        const secondSite = destconfig.bootstrapList[1].site;
+        const crrSites = crrConfigs.destination.bootstrapList.map(s => s.site);
+        const ingestionSites = ingestionConfig.sources.map(s => s.name);
 
-        const futureDate = new Date();
-        futureDate.setHours(futureDate.getHours() + 5);
+        [
+            {
+                // CRR Service
+                name: 'crr',
+                topic: crrConfigs.topic,
+                sites: crrSites,
+                baseZkPath: ZK_TEST_CRR_STATE_PATH,
+            },
+            {
+                // Ingestion Service
+                name: 'ingestion',
+                topic: ingestionConfig.topic,
+                sites: ingestionSites,
+                baseZkPath: ZK_TEST_INGESTION_STATE_PATH,
+            },
+        ].forEach(svc => {
+            let redis1;
+            let redis2;
 
-        function setupZkClient(cb) {
-            const { connectionString } = config.zookeeper;
-            zkClient = zookeeper.createClient(connectionString);
-            zkClient.connect();
-            zkClient.once('connected', () => {
-                async.series([
-                    next => zkClient.mkdirp(ZK_TEST_CRR_STATE_PATH, err => {
-                        if (err && err.name !== 'NODE_EXISTS') {
-                            return next(err);
+            let cache1 = [];
+            let cache2 = [];
+
+            let channel1;
+            let channel2;
+            let zkClient;
+
+            const emptyBody = '';
+            const topic = svc.topic;
+            const firstSite = svc.sites[0];
+            const secondSite = svc.sites[1];
+
+            const futureDate = new Date();
+            futureDate.setHours(futureDate.getHours() + 5);
+
+            function setupZkTestState(cb) {
+                const { connectionString } = config.zookeeper;
+                zkClient = zookeeper.createClient(connectionString);
+                zkClient.connect();
+                zkClient.once('connected', () => {
+                    async.series([
+                        next => zkClient.mkdirp(svc.baseZkPath, err => {
+                            if (err && err.name !== 'NODE_EXISTS') {
+                                return next(err);
+                            }
+                            return next();
+                        }),
+                        next => {
+                            // emulate first site to be active (not paused)
+                            const path = `${svc.baseZkPath}/${firstSite}`;
+                            const data = Buffer.from(
+                                JSON.stringify({ paused: false }));
+                            zkClient.create(path, data, EPHEMERAL_NODE, next);
+                        },
+                        next => {
+                            // emulate second site to be paused
+                            const path = `${svc.baseZkPath}/${secondSite}`;
+                            const data = Buffer.from(JSON.stringify({
+                                paused: true,
+                                scheduledResume: futureDate.toString(),
+                            }));
+                            zkClient.create(path, data, EPHEMERAL_NODE, next);
+                        },
+                    ], err => {
+                        if (err) {
+                            process.stdout.write('error occurred in zookeeper' +
+                            ' setup for pause/resume');
+                            return cb(err);
                         }
-                        return next();
-                    }),
-                    next => {
-                        // emulate first site to be active (not paused)
-                        const path = `${ZK_TEST_CRR_STATE_PATH}/${firstSite}`;
-                        const data =
-                            Buffer.from(JSON.stringify({ paused: false }));
-                        zkClient.create(path, data, EPHEMERAL_NODE, next);
-                    },
-                    next => {
-                        // emulate second site to be paused
-                        const path = `${ZK_TEST_CRR_STATE_PATH}/${secondSite}`;
-                        const data = Buffer.from(JSON.stringify({
-                            paused: true,
-                            scheduledResume: futureDate.toString(),
-                        }));
-                        zkClient.create(path, data, EPHEMERAL_NODE, next);
-                    },
-                ], err => {
-                    if (err) {
-                        process.stdout.write('error occurred in zookeeper ' +
-                        'setup for CRR pause/resume');
-                        return cb(err);
-                    }
-                    return cb();
+                        return cb();
+                    });
                 });
-            });
-        }
-
-        before(done => {
-            redis1 = new Redis();
-            redis2 = new Redis();
-
-            channel1 = `${crrTopic}-${firstSite}`;
-            redis1.subscribe(channel1, err => assert.ifError(err));
-            redis1.on('message', (channel, message) => {
-                cache1.push({ channel, message });
-            });
-
-            channel2 = `${crrTopic}-${secondSite}`;
-            redis2.subscribe(channel2, err => assert.ifError(err));
-            redis2.on('message', (channel, message) => {
-                cache2.push({ channel, message });
-            });
-
-            setupZkClient(done);
-        });
-
-        afterEach(() => {
-            cache1 = [];
-            cache2 = [];
-        });
-
-        after(() => {
-            if (zkClient) {
-                zkClient.close();
-                zkClient = null;
             }
-        });
 
-        const validRequests = [
-            { path: '/_/crr/pause', method: 'POST' },
-            { path: '/_/crr/resume', method: 'POST' },
-            { path: '/_/crr/resume/all', method: 'POST' },
-            { path: `/_/crr/resume/${firstSite}`, method: 'POST' },
-            { path: '/_/crr/status', method: 'GET' },
-            { path: `/_/crr/status/${firstSite}`, method: 'GET' },
-            { path: '/_/crr/resume/all', method: 'GET' },
-        ];
-        validRequests.forEach(entry => {
-            it(`should get a 200 response for route: ${entry.path}`, done => {
+            before(done => {
+                redis1 = new Redis();
+                redis2 = new Redis();
+
+                channel1 = `${topic}-${firstSite}`;
+                redis1.subscribe(channel1, err => assert.ifError(err));
+                redis1.on('message', (channel, message) => {
+                    cache1.push({ channel, message });
+                });
+
+                channel2 = `${topic}-${secondSite}`;
+                redis2.subscribe(channel2, err => assert.ifError(err));
+                redis2.on('message', (channel, message) => {
+                    cache2.push({ channel, message });
+                });
+
+                setupZkTestState(done);
+            });
+
+            afterEach(() => {
+                cache1 = [];
+                cache2 = [];
+            });
+
+            after(() => {
+                if (zkClient) {
+                    zkClient.close();
+                    zkClient = null;
+                }
+            });
+
+            const validRequests = [
+                { path: `/_/${svc.name}/pause`, method: 'POST' },
+                { path: `/_/${svc.name}/resume`, method: 'POST' },
+                { path: `/_/${svc.name}/resume/all`, method: 'POST' },
+                { path: `/_/${svc.name}/resume/${firstSite}`, method: 'POST' },
+                { path: `/_/${svc.name}/status`, method: 'GET' },
+                { path: `/_/${svc.name}/status/${firstSite}`, method: 'GET' },
+                { path: `/_/${svc.name}/resume/all`, method: 'GET',
+                  skip: 'ingestion' },
+            ];
+            validRequests.forEach(entry => {
+                skipNotImplemented(entry.skip)('should get a 200 response for' +
+                ` route: ${entry.path}`, done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: entry.method,
+                        path: entry.path,
+                    });
+                    const req = http.request(options, res => {
+                        assert.equal(res.statusCode, 200);
+                        done();
+                    });
+                    req.end();
+                });
+            });
+
+            const invalidSites = svc.name === 'crr' ? ingestionSites : crrSites;
+            const invalidRequests = [
+                { path: `/_/${svc.name}/pause/invalid-site`, method: 'POST' },
+                { path: `/_/${svc.name}/pause/${invalidSites[0]}`,
+                  method: 'POST' },
+                { path: `/_/${svc.name}/pause/${invalidSites[1]}`,
+                  method: 'POST' },
+                { path: `/_/${svc.name}/resume/invalid-site`, method: 'POST' },
+                { path: `/_/${svc.name}/resume/${invalidSites[0]}`,
+                  method: 'POST' },
+                { path: `/_/${svc.name}/resume/${invalidSites[1]}`,
+                  method: 'POST' },
+                { path: `/_/${svc.name}/status`, method: 'POST' },
+                { path: `/_/${svc.name}/status/invalid-site`, method: 'GET' },
+                { path: `/_/${svc.name}/status/${invalidSites[0]}`,
+                  method: 'GET' },
+                { path: `/_/${svc.name}/status/${invalidSites[1]}`,
+                  method: 'GET' },
+            ];
+            invalidRequests.forEach(entry => {
+                it(`should get a 404 response for route: ${entry.path}`,
+                done => {
+                    const options = Object.assign({}, defaultOptions, {
+                        method: entry.method,
+                        path: entry.path,
+                    });
+                    const req = http.request(options, res => {
+                        assert.equal(res.statusCode, 404);
+                        assert.equal(res.statusMessage, 'Not Found');
+                        assert.equal(cache1.length, 0);
+                        assert.equal(cache2.length, 0);
+                        done();
+                    });
+                    req.end();
+                });
+            });
+
+            it('should receive a pause request on all site channels from ' +
+            `route /_/${svc.name}/pause`, done => {
                 const options = Object.assign({}, defaultOptions, {
-                    method: entry.method,
-                    path: entry.path,
+                    method: 'POST',
+                    path: `/_/${svc.name}/pause`,
                 });
-                const req = http.request(options, res => {
-                    assert.equal(res.statusCode, 200);
-                    done();
-                });
-                req.end();
-            });
-        });
+                makeRequest(options, emptyBody, err => {
+                    assert.ifError(err);
 
-        const invalidRequests = [
-            { path: '/_/crr/pause/invalid-site', method: 'POST' },
-            { path: '/_/crr/resume/invalid-site', method: 'POST' },
-            { path: '/_/crr/status', method: 'POST' },
-            { path: '/_/crr/status/invalid-site', method: 'GET' },
-        ];
-        invalidRequests.forEach(entry => {
-            it(`should get a 404 response for route: ${entry.path}`, done => {
+                    setTimeout(() => {
+                        assert.strictEqual(cache1.length, 1);
+                        assert.strictEqual(cache2.length, 1);
+
+                        assert.deepStrictEqual(cache1[0].channel, channel1);
+                        assert.deepStrictEqual(cache2[0].channel, channel2);
+
+                        const message1 = JSON.parse(cache1[0].message);
+                        const message2 = JSON.parse(cache2[0].message);
+                        const expected = { action: 'pauseService' };
+                        assert.deepStrictEqual(message1, expected);
+                        assert.deepStrictEqual(message2, expected);
+                        done();
+                    }, 1000);
+                });
+            });
+
+            it('should receive a pause request on specified site from route ' +
+            `/_/${svc.name}/pause/${firstSite}`, done => {
                 const options = Object.assign({}, defaultOptions, {
-                    method: entry.method,
-                    path: entry.path,
+                    method: 'POST',
+                    path: `/_/${svc.name}/pause/${firstSite}`,
                 });
-                const req = http.request(options, res => {
-                    assert.equal(res.statusCode, 404);
-                    assert.equal(res.statusMessage, 'Not Found');
-                    assert.equal(cache1.length, 0);
-                    assert.equal(cache2.length, 0);
+                makeRequest(options, emptyBody, err => {
+                    assert.ifError(err);
+
+                    setTimeout(() => {
+                        assert.strictEqual(cache1.length, 1);
+                        assert.strictEqual(cache2.length, 0);
+
+                        assert.deepStrictEqual(cache1[0].channel, channel1);
+
+                        const message = JSON.parse(cache1[0].message);
+                        const expected = { action: 'pauseService' };
+                        assert.deepStrictEqual(message, expected);
+                        done();
+                    }, 1000);
+                });
+            });
+
+            it('should receive a resume request on all site channels from ' +
+            `route /_/${svc.name}/resume`, done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: `/_/${svc.name}/resume`,
+                });
+                makeRequest(options, emptyBody, err => {
+                    assert.ifError(err);
+
+                    setTimeout(() => {
+                        assert.strictEqual(cache1.length, 1);
+                        assert.strictEqual(cache2.length, 1);
+                        assert.deepStrictEqual(cache1[0].channel, channel1);
+                        assert.deepStrictEqual(cache2[0].channel, channel2);
+
+                        const message1 = JSON.parse(cache1[0].message);
+                        const message2 = JSON.parse(cache2[0].message);
+                        const expected = { action: 'resumeService' };
+                        assert.deepStrictEqual(message1, expected);
+                        assert.deepStrictEqual(message2, expected);
+                        done();
+                    }, 1000);
+                });
+            });
+
+            skipNotImplemented(svc.name)('should get scheduled resume jobs ' +
+            ' for all sites using route ' +
+            `/_/${svc.name}/resume/all/schedule`, done => {
+                getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
+                    assert.ifError(err);
+                    const expected = {
+                        [firstSite]: 'none',
+                        [secondSite]: futureDate.toString(),
+                    };
+                    assert.deepStrictEqual(expected, res);
                     done();
                 });
-                req.end();
             });
-        });
 
-        it('should receive a pause request on all site channels from route ' +
-        '/_/crr/pause', done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'POST',
-                path: '/_/crr/pause',
+            skipNotImplemented(svc.name)('should receive a scheduled resume ' +
+            'request with specified hours from route ' +
+            `/_/${svc.name}/resume/${firstSite}/schedule`,
+            done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: `/_/${svc.name}/resume/${firstSite}/schedule`,
+                });
+                const body = JSON.stringify({ hours: 1 });
+                makeRequest(options, body, (err, res) => {
+                    assert.ifError(err);
+                    setTimeout(() => {
+                        getResponseBody(res, err => {
+                            assert.ifError(err);
+
+                            assert.strictEqual(cache1.length, 1);
+                            assert.deepStrictEqual(cache1[0].channel, channel1);
+                            const message = JSON.parse(cache1[0].message);
+                            assert.equal('resumeService', message.action);
+                            const date = new Date();
+                            const scheduleDate = new Date(message.date);
+                            assert(scheduleDate > date);
+                            // check scheduled time does not exceed expected
+                            const millisecondPerHour = 60 * 60 * 1000;
+                            assert(scheduleDate - date <= millisecondPerHour);
+                            done();
+                        });
+                    }, 1000);
+                });
             });
-            makeRequest(options, emptyBody, err => {
-                assert.ifError(err);
 
-                setTimeout(() => {
-                    assert.strictEqual(cache1.length, 1);
-                    assert.strictEqual(cache2.length, 1);
+            skipNotImplemented(svc.name)('should receive a scheduled resume ' +
+            'request without specified hours from route ' +
+            `/_/${svc.name}/resume/${firstSite}/schedule`,
+            done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: `/_/${svc.name}/resume/${firstSite}/schedule`,
+                });
+                makeRequest(options, emptyBody, err => {
+                    assert.ifError(err);
 
-                    assert.deepStrictEqual(cache1[0].channel, channel1);
-                    assert.deepStrictEqual(cache2[0].channel, channel2);
-
-                    const message1 = JSON.parse(cache1[0].message);
-                    const message2 = JSON.parse(cache2[0].message);
-                    const expected = { action: 'pauseService' };
-                    assert.deepStrictEqual(message1, expected);
-                    assert.deepStrictEqual(message2, expected);
-                    done();
-                }, 1000);
-            });
-        });
-
-        it('should receive a pause request on specified site from route ' +
-        `/_/crr/pause/${firstSite}`, done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'POST',
-                path: `/_/crr/pause/${firstSite}`,
-            });
-            makeRequest(options, emptyBody, err => {
-                assert.ifError(err);
-
-                setTimeout(() => {
-                    assert.strictEqual(cache1.length, 1);
-                    assert.strictEqual(cache2.length, 0);
-
-                    assert.deepStrictEqual(cache1[0].channel, channel1);
-
-                    const message = JSON.parse(cache1[0].message);
-                    const expected = { action: 'pauseService' };
-                    assert.deepStrictEqual(message, expected);
-                    done();
-                }, 1000);
-            });
-        });
-
-        it('should receive a resume request on all site channels from route ' +
-        '/_/crr/resume', done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'POST',
-                path: '/_/crr/resume',
-            });
-            makeRequest(options, emptyBody, err => {
-                assert.ifError(err);
-
-                setTimeout(() => {
-                    assert.strictEqual(cache1.length, 1);
-                    assert.strictEqual(cache2.length, 1);
-                    assert.deepStrictEqual(cache1[0].channel, channel1);
-                    assert.deepStrictEqual(cache2[0].channel, channel2);
-
-                    const message1 = JSON.parse(cache1[0].message);
-                    const message2 = JSON.parse(cache2[0].message);
-                    const expected = { action: 'resumeService' };
-                    assert.deepStrictEqual(message1, expected);
-                    assert.deepStrictEqual(message2, expected);
-                    done();
-                }, 1000);
-            });
-        });
-
-        it('should get scheduled resume jobs for all sites using route ' +
-        '/_/crr/resume/all/schedule', done => {
-            getRequest('/_/crr/resume/all/schedule', (err, res) => {
-                assert.ifError(err);
-                const expected = {
-                    'test-site-1': 'none',
-                    'test-site-2': futureDate.toString(),
-                };
-                assert.deepStrictEqual(expected, res);
-                done();
-            });
-        });
-
-        it('should receive a scheduled resume request with specified hours ' +
-        `from route /_/crr/resume/${firstSite}/schedule`, done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'POST',
-                path: `/_/crr/resume/${firstSite}/schedule`,
-            });
-            const body = JSON.stringify({ hours: 1 });
-            makeRequest(options, body, (err, res) => {
-                assert.ifError(err);
-                setTimeout(() => {
-                    getResponseBody(res, err => {
-                        assert.ifError(err);
-
+                    setTimeout(() => {
                         assert.strictEqual(cache1.length, 1);
                         assert.deepStrictEqual(cache1[0].channel, channel1);
+
                         const message = JSON.parse(cache1[0].message);
                         assert.equal('resumeService', message.action);
+
                         const date = new Date();
                         const scheduleDate = new Date(message.date);
                         assert(scheduleDate > date);
-                        // make sure the scheduled time does not exceed expected
+
+                        // check scheduled time between 5 and 6 hours from now
                         const millisecondPerHour = 60 * 60 * 1000;
-                        assert(scheduleDate - date <= millisecondPerHour);
+                        assert((scheduleDate - date <= millisecondPerHour * 6)
+                            && (scheduleDate - date) >= millisecondPerHour * 5);
                         done();
-                    });
-                }, 1000);
+                    }, 1000);
+                });
             });
-        });
 
-        it('should receive a scheduled resume request without specified ' +
-        `hours from route /_/crr/resume/${firstSite}/schedule`, done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'POST',
-                path: `/_/crr/resume/${firstSite}/schedule`,
+            skipNotImplemented(svc.name)('should remove a scheduled resume ' +
+            'request when receiving a DELETE request to route' +
+            `/_/${svc.name}/resume/${secondSite}/schedule`, done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'DELETE',
+                    path: `/_/${svc.name}/resume/${secondSite}/schedule`,
+                });
+                makeRequest(options, emptyBody, (err, res) => {
+                    assert.ifError(err);
+
+                    setTimeout(() => {
+                        getResponseBody(res, err => {
+                            assert.ifError(err);
+
+                            assert.strictEqual(cache2.length, 1);
+
+                            const message = JSON.parse(cache2[0].message);
+                            assert.equal('deleteScheduledResumeService',
+                                message.action);
+                            done();
+                        });
+                    }, 1000);
+                });
             });
-            makeRequest(options, emptyBody, err => {
-                assert.ifError(err);
 
-                setTimeout(() => {
-                    assert.strictEqual(cache1.length, 1);
-                    assert.deepStrictEqual(cache1[0].channel, channel1);
-
-                    const message = JSON.parse(cache1[0].message);
-                    assert.equal('resumeService', message.action);
-
-                    const date = new Date();
-                    const scheduleDate = new Date(message.date);
-                    assert(scheduleDate > date);
-
-                    // make sure scheduled time between 5 and 6 hours from now
-                    const millisecondPerHour = 60 * 60 * 1000;
-                    assert((scheduleDate - date <= millisecondPerHour * 6) &&
-                           (scheduleDate - date) >= millisecondPerHour * 5);
+            it('should receive a status request on all site channels from ' +
+            `route /_/${svc.name}/status`, done => {
+                getRequest(`/_/${svc.name}/status`, (err, res) => {
+                    assert.ifError(err);
+                    const expected = {
+                        [firstSite]: 'enabled',
+                        [secondSite]: 'disabled',
+                    };
+                    assert.deepStrictEqual(expected, res);
                     done();
-                }, 1000);
-            });
-        });
-
-        it('should remove a scheduled resume request when receiving a DELETE ' +
-        `request to route /_/crr/resume/${secondSite}/schedule`, done => {
-            const options = Object.assign({}, defaultOptions, {
-                method: 'DELETE',
-                path: `/_/crr/resume/${secondSite}/schedule`,
-            });
-            makeRequest(options, emptyBody, (err, res) => {
-                assert.ifError(err);
-
-                setTimeout(() => {
-                    getResponseBody(res, err => {
-                        assert.ifError(err);
-
-                        assert.strictEqual(cache2.length, 1);
-
-                        const message = JSON.parse(cache2[0].message);
-                        assert.equal('deleteScheduledResumeService',
-                            message.action);
-                        done();
-                    });
-                }, 1000);
-            });
-        });
-
-        it('should receive a status request on all site channels from route ' +
-        '/_/crr/status', done => {
-            getRequest('/_/crr/status', (err, res) => {
-                assert.ifError(err);
-                const expected = {
-                    'test-site-1': 'enabled',
-                    'test-site-2': 'disabled',
-                };
-                assert.deepStrictEqual(expected, res);
-                done();
+                });
             });
         });
     });

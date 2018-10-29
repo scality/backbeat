@@ -39,6 +39,23 @@
         }
     },
     "extensions": {
+        "ingestion": {
+            "topic": "backbeat-test-ingestion",
+            "sources": [
+                {
+                    "name": "ingest-site-1",
+                    "host": "localhost",
+                    "port": 8000,
+                    "https": false
+                },
+                {
+                    "name": "ingest-site-2",
+                    "host": "localhost",
+                    "port": 8000,
+                    "https": false
+                }
+            ]
+        },
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",

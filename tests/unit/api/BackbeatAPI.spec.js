@@ -20,7 +20,9 @@ describe('BackbeatAPI', () => {
 
     it('should validate routes', () => {
         const destconfig = config.extensions.replication.destination;
+        const ingestionConfig = config.extensions.ingestion;
         const { site } = destconfig.bootstrapList[0];
+        const ingestSite = ingestionConfig.sources[0].name;
         // valid routes
         [
             { url: '/_/metrics/crr/all', method: 'GET' },
@@ -41,10 +43,20 @@ describe('BackbeatAPI', () => {
             { url: '/_/crr/resume/all/schedule', method: 'POST' },
             { url: '/_/crr/resume', method: 'GET' },
             { url: '/_/crr/status', method: 'GET' },
+            { url: '/_/ingestion/pause', method: 'POST' },
+            { url: '/_/ingestion/resume', method: 'POST' },
+            { url: '/_/ingestion/status', method: 'GET' },
             { url: `/_/metrics/crr/${site}/throughput/mybucket/mykey` +
                 '?versionId=test-myvId', method: 'GET' },
             { url: `/_/metrics/crr/${site}/progress/mybucket/mykey` +
                 '?versionId=test-myvId', method: 'GET' },
+            // valid site for given service
+            { url: `/_/crr/pause/${site}`, method: 'POST' },
+            { url: `/_/crr/resume/${site}`, method: 'POST' },
+            { url: `/_/crr/status/${site}`, method: 'GET' },
+            { url: `/_/ingestion/pause/${ingestSite}`, method: 'POST' },
+            { url: `/_/ingestion/resume/${ingestSite}`, method: 'POST' },
+            { url: `/_/ingestion/status/${ingestSite}`, method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);
@@ -63,15 +75,27 @@ describe('BackbeatAPI', () => {
             { url: '/_/metrics/crr/all/fail', method: 'GET' },
             { url: '/_/invalid/crr/all', method: 'GET' },
             { url: '/_/metrics/pause/all', method: 'GET' },
-            // // invalid http verb
+            // invalid http verb
             { url: '/_/healthcheck', method: 'POST' },
             { url: '/_/monitoring/metrics', method: 'POST' },
             { url: '/_/crr/pause', method: 'GET' },
             { url: '/_/crr/status', method: 'POST' },
+            { url: '/_/ingestion/pause', method: 'GET' },
+            { url: '/_/ingestion/status', method: 'POST' },
             { url: '/_/metrics/crr/unknown-site/throughput/mybucket/mykey' +
                 '?versionId=test-myvId', method: 'GET' },
             { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
                 '?versionId=test-myvId', method: 'GET' },
+            // invalid site for given service
+            { url: `/_/crr/pause/${ingestSite}`, method: 'POST' },
+            { url: `/_/crr/resume/${ingestSite}`, method: 'POST' },
+            { url: `/_/crr/status/${ingestSite}`, method: 'GET' },
+            { url: `/_/ingestion/pause/${site}`, method: 'POST' },
+            { url: `/_/ingestion/resume/${site}`, method: 'POST' },
+            { url: `/_/ingestion/status/${site}`, method: 'GET' },
+            // not implemented
+            { url: '/_/ingestion/resume/all/schedule', method: 'POST' },
+            { url: '/_/ingestion/resume', method: 'GET' },
         ].forEach(request => {
             const req = new BackbeatRequest(request);
             const routeError = bbapi.findValidRoute(req);

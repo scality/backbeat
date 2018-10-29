@@ -124,6 +124,37 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details3.status, 'status');
             assert.strictEqual(details3.site, 'all');
         });
+
+        it('should parse ingestion pause/resume routes and store internally ' +
+        'as route details', () => {
+            const req = new BackbeatRequest({
+                url: '/_/ingestion/resume/mysite',
+                method: 'POST',
+            });
+            const details = req.getRouteDetails();
+
+            assert.strictEqual(details.extension, 'ingestion');
+            assert.strictEqual(details.status, 'resume');
+            assert.strictEqual(details.site, 'mysite');
+
+            const req2 = new BackbeatRequest({
+                url: '/_/ingestion/resume',
+                method: 'POST',
+            });
+            const details2 = req2.getRouteDetails();
+            // should default to 'all' if none specified
+            assert.strictEqual(details2.site, 'all');
+
+            const req3 = new BackbeatRequest({
+                url: '/_/ingestion/status',
+                method: 'GET',
+            });
+            const details3 = req3.getRouteDetails();
+
+            assert.strictEqual(details3.extension, 'ingestion');
+            assert.strictEqual(details3.status, 'status');
+            assert.strictEqual(details3.site, 'all');
+        });
     });
 
     it('should set route without prefix if valid route has valid prefix',
