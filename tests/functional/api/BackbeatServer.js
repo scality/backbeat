@@ -4,15 +4,17 @@ const http = require('http');
 const Redis = require('ioredis');
 const { Producer } = require('node-rdkafka');
 
-const { RedisClient } = require('arsenal').metrics;
+const { RedisClient, StatsModel } = require('arsenal').metrics;
 
-const { StatsModel } = require('arsenal').metrics;
 const config = require('../../config.json');
 const { makePOSTRequest, getResponseBody } =
     require('../utils/makePOSTRequest');
 const S3Mock = require('../utils/S3Mock');
 const VaultMock = require('../utils/VaultMock');
-const redisConfig = { host: '127.0.0.1', port: 6379 };
+const redisConfig = {
+    host: config.redis.host,
+    port: config.redis.port,
+};
 const TEST_REDIS_KEY_FAILED_CRR = 'test:bb:crr:failed';
 
 const fakeLogger = {
@@ -225,7 +227,7 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe('API routes', function dF() {
+    describe.only('API routes', function dF() {
         this.timeout(10000);
         const interval = 300;
         const expiry = 900;
@@ -257,7 +259,6 @@ describe('Backbeat Server', () => {
             redis = new Redis();
             statsClient = new StatsModel(redisClient, interval, expiry);
 
-            statsClient.reportNewRequest(`${site1}:${OPS}`, 1725);
             statsClient.reportNewRequest(`${site1}:${BYTES}`, 2198);
             statsClient.reportNewRequest(`${site1}:${BUCKET_NAME}:` +
                 `${OBJECT_KEY}:${VERSION_ID}:${OBJECT_BYTES}`, 100);
@@ -316,7 +317,7 @@ describe('Backbeat Server', () => {
         });
 
         after(() => {
-            redis.keys('*:test:bb:*').then(keys => {
+            redis.keys('*test:bb:*').then(keys => {
                 const pipeline = redis.pipeline();
                 keys.forEach(key => {
                     pipeline.del(key);
@@ -557,7 +558,7 @@ describe('Backbeat Server', () => {
                 // Throughput count = OPS_DONE / EXPIRY
                 assert.equal(res[key].results.count, 0.83);
                 // Throughput bytes = (BYTES_DONE / 1000) / EXPIRY
-                assert.equal(res[key].results.size, 0.32);
+                assert.equal(res[key].results.size, 3.22);
                 done();
             });
         });
