@@ -78,12 +78,12 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     /**
      * Report CRR metrics
+     * @param {String} status - The replication status
      * @param {ObjectQueueEntry} entry - updated object entry
      * @param {String} site - site recently updated
      * @return {undefined}
      */
-    _reportMetrics(entry, site) {
-        const status = entry.getReplicationSiteStatus(site);
+    _reportMetrics(status, entry, site) {
         const data = {};
         const content = entry.getReplicationContent();
         const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
@@ -147,7 +147,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 });
 
                 // Report to MetricsProducer with completed/failed metrics
-                this._reportMetrics(updatedSourceEntry, site);
+                this._reportMetrics(status, updatedSourceEntry, site);
 
                 return done();
             });

@@ -139,12 +139,12 @@ class ReplicationStatusProcessor {
         async.parallel([
             done => {
                 this._failedCRRProducer =
-                    new FailedCRRProducer(this.kafkaConfig);
+                    new FailedCRRProducer();
                 this._failedCRRProducer.setupProducer(done);
             },
             done => {
-                this._mProducer =
-                    new MetricsProducer(this.kafkaConfig, this.mConfig);
+                this._mProducer = new MetricsProducer(this.kafkaConfig,
+                    this.mConfig);
                 this._mProducer.setupProducer(done);
             },
             done => {
