@@ -227,7 +227,7 @@ describe('Backbeat Server', () => {
         }).timeout(20000);
     });
 
-    describe.only('API routes', function dF() {
+    describe('API routes', function dF() {
         this.timeout(10000);
         const interval = 300;
         const expiry = 900;
