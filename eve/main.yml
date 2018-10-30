@@ -31,6 +31,8 @@ stages:
       - ShellCommand:
           name: run unit tests
           command: npm test
+          env:
+            CI: "true"
       - ShellCommand:
           name: run s3 server tests
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
