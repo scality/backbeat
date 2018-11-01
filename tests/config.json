@@ -8,20 +8,7 @@
     },
     "s3": {
         "host": "127.0.0.1",
-        "port": 8000,
-        "transport": "http",
-        "accessKey": "accessKey1",
-        "secretKey": "verySecretKey1"
-    },
-    "auth": {
-        "type": "account",
-        "account": "bart",
-        "vault": {
-            "host": "127.0.0.1",
-            "port": 8500,
-            "adminPort": 8600,
-            "adminCredentialsFile": "../conf/authdata.json"
-        }
+        "port": 8000
     },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
@@ -38,13 +25,15 @@
             "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
         }
     },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
     "extensions": {
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
             "monitorReplicationFailures": true,
             "monitorReplicationFailureExpiryTimeS": 86400,
-            "groupId": "backbeat-test-replication-group",
             "source": {
                 "transport": "http",
                 "s3": {
@@ -64,11 +53,17 @@
                 "bootstrapList": [
                     { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
                     { "site": "test-site-2", "type": "aws_s3" }
-                ]
+                ],
+                "auth": {
+                    "type": "account",
+                    "account": "bart"
+                }
             },
+            "topic": "backbeat-replication",
+            "replicationStatusTopic": "backbeat-replication-status",
+            "replicationFailedTopic": "backbeat-replication-failed",
             "queueProcessor": {
                 "groupId": "backbeat-test-replication-group",
-                "retryTimeoutS": 300,
                 "concurrency": 10
             }
         },
@@ -78,14 +73,6 @@
             "objectTasksTopic": "backbeat-test-dummy-object-task",
             "conductor": {
                 "cronRule": "0 */5 * * * *"
-            },
-            "producer": {
-                "groupId": "backbeat-lifecycle-producer-test-group",
-                "concurrency": 10
-            },
-            "consumer": {
-                "groupId": "backbeat-lifecycle-consumer-test-group",
-                "concurrency": 10
             },
             "rules": {
                 "expiration": {
@@ -97,6 +84,10 @@
                 "abortIncompleteMultipartUpload": {
                     "enabled": true
                 }
+            },
+            "auth": {
+                "type": "account",
+                "account": "bart"
             }
         }
     },
@@ -113,6 +104,10 @@
         },
         "host": "127.0.0.1",
         "port": 8900
+    },
+    "healthcheckServer": {
+        "bindAddress": "0.0.0.0",
+        "port": 4042
     },
     "redis": {
         "name": "backbeat-test",
