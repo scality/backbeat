@@ -74,7 +74,10 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "location1": "disabled",
+        "location2": "disabled"
+    }
     ```
 
 * POST `/_/backbeat/api/crr/pause/<location-name>`
@@ -87,7 +90,9 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "<location-name>": "disabled"
+    }
     ```
 
 * GET `/_/backbeat/api/crr/resume/<location-name>`
@@ -117,7 +122,10 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "location1": "enabled",
+        "location2": "enabled"
+    }
     ```
 
 * POST `/_/backbeat/api/crr/resume/<location-name>`
@@ -130,7 +138,9 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "<location-name>": "enabled"
+    }
     ```
 
 * POST `/_/backbeat/api/crr/resume/<location-name>/schedule`
@@ -155,7 +165,9 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "<location-name>": "2018-06-28T05:40:20.600Z"
+    }
     ```
 
 * DELETE `/_/backbeat/api/crr/resume/<location-name>/schedule`
@@ -168,5 +180,7 @@ is resumed, it again resumes consuming entries from its last offset.
 
     Response:
     ```json
-    {}
+    {
+        "<location-name>": "none"
+    }
     ```
