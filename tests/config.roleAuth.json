@@ -6,10 +6,6 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
-    "s3": {
-        "host": "127.0.0.1",
-        "port": 8000
-    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -19,10 +15,6 @@
             "host": "127.0.0.1",
             "port": 9990,
             "logName": "s3-recordlog"
-        },
-        "mongo": {
-            "logName": "s3-recordlog",
-            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
         }
     },
     "kafka": {
@@ -41,8 +33,7 @@
                     "port": 7777
                 },
                 "auth": {
-                    "type": "account",
-                    "account": "bart",
+                    "type": "role",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 7778
@@ -55,40 +46,12 @@
                     { "site": "test-site-2", "type": "aws_s3" }
                 ],
                 "auth": {
-                    "type": "account",
-                    "account": "bart"
+                    "type": "role"
                 }
             },
             "topic": "backbeat-replication",
             "replicationStatusTopic": "backbeat-replication-status",
-            "replicationFailedTopic": "backbeat-replication-failed",
-            "queueProcessor": {
-                "groupId": "backbeat-test-replication-group",
-                "concurrency": 10
-            }
-        },
-        "lifecycle": {
-            "zookeeperPath": "/lifecycletest",
-            "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
-            "objectTasksTopic": "backbeat-test-dummy-object-task",
-            "conductor": {
-                "cronRule": "0 */5 * * * *"
-            },
-            "rules": {
-                "expiration": {
-                    "enabled": true
-                },
-                "noncurrentVersionExpiration": {
-                    "enabled": true
-                },
-                "abortIncompleteMultipartUpload": {
-                    "enabled": true
-                }
-            },
-            "auth": {
-                "type": "account",
-                "account": "bart"
-            }
+            "replicationFailedTopic": "backbeat-replication-failed"
         }
     },
     "log": {
@@ -105,14 +68,8 @@
         "host": "127.0.0.1",
         "port": 8900
     },
-    "healthcheckServer": {
-        "bindAddress": "0.0.0.0",
-        "port": 4042
-    },
     "redis": {
         "name": "backbeat-test",
-        "password": "",
-        "host": "127.0.0.1",
-        "port": 6379
+        "password": ""
     }
 }

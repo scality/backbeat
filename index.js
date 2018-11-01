@@ -5,10 +5,7 @@ const werelogs = require('werelogs');
 const runServer = require('./lib/api/BackbeatServer');
 const { initManagement } = require('./lib/management/index');
 
-const testIsOn = process.env.CI === 'true';
-const config = testIsOn ?
-    require('./tests/config.json') : require('./conf/Config');
-
+const config = require('./conf/Config');
 const Logger = werelogs.Logger;
 const log = new Logger('BackbeatServer:index');
 
@@ -42,7 +39,7 @@ function initAndStart() {
     });
 }
 
-if (testIsOn) {
+if (process.env.CI === 'true') {
     // skip initManagement
     runServer(config, Logger);
 } else {
