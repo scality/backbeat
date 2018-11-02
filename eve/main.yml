@@ -57,17 +57,25 @@ stages:
           name: run unit tests
           command: npm test
       - ShellCommand:
-          name: run feature tests
-          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash
+          name: run backbeat routes test
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
           workdir: '%(prop:builddir)s/build'
           env:
             CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
       - ShellCommand:
-          name: run api tests
-          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash
+          name: run backbeat retry tests with account authentication
+          command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
           workdir: '%(prop:builddir)s/build'
           env:
             CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
+          name: run feature tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:replication
+          env:
+            CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
 
   docker-build:
     worker:

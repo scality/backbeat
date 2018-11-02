@@ -14,6 +14,6 @@ killandsleep () {
   sleep 10
 }
 
-cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash 8000 40 && npm run ft_test
+cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash 8000 40 && npm run $1
 
 killandsleep 8000
