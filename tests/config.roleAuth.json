@@ -1,0 +1,75 @@
+{
+    "zookeeper": {
+        "connectionString": "127.0.0.1:2181",
+        "autoCreateNamespace": true
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "zookeeperPath": "/backbeat/test/queue-populator",
+        "logSource": "dmd",
+        "dmd": {
+            "host": "127.0.0.1",
+            "port": 9990,
+            "logName": "s3-recordlog"
+        }
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092"
+    },
+    "extensions": {
+        "replication": {
+            "topic": "backbeat-test-replication",
+            "replicationStatusTopic": "backbeat-test-replication-status",
+            "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
+            "source": {
+                "transport": "http",
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 7777
+                },
+                "auth": {
+                    "type": "role",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 7778
+                    }
+                }
+            },
+            "destination": {
+                "bootstrapList": [
+                    { "site": "test-site-1", "servers": ["127.0.0.1:9443"] },
+                    { "site": "test-site-2", "type": "aws_s3" }
+                ],
+                "auth": {
+                    "type": "role"
+                }
+            },
+            "topic": "backbeat-replication",
+            "replicationStatusTopic": "backbeat-replication-status",
+            "replicationFailedTopic": "backbeat-replication-failed"
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-test-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
+    },
+    "redis": {
+        "name": "backbeat-test",
+        "password": ""
+    }
+}

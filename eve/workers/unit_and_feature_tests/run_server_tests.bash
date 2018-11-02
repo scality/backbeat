@@ -8,6 +8,7 @@ killandsleep () {
   sleep 10
 }
 
-npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_server_test
+# run backbeat server
+npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run $1
 
 killandsleep 8900
