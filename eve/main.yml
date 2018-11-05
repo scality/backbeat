@@ -72,10 +72,23 @@ stages:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
       - ShellCommand:
-          name: run feature tests
-          command: npm run ft_test:replication
+          name: run feature replication tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:replication
           env:
             CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
+          name: run feature lifecycle tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:lifecycle
+          env:
+            CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
+          name: run misc functional tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:models
+          env:
+            CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
 
   docker-build:
     worker:

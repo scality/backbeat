@@ -14,6 +14,8 @@
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
+    "ft_test:models": "mocha --recursieve $(find tests/functional/models -name '*.js')",
+    "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js')",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js')",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js",
     "ft_test:api:retry": "mocha tests/functional/api/retry.js",

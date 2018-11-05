@@ -19,4 +19,4 @@ killandsleep () {
 }
 
 cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
-npm run ft_test
+npm run $1
