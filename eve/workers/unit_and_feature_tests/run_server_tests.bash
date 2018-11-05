@@ -1,16 +1,17 @@
 #!/bin/bash
 
 set -x
-set -e
+set -eu -o pipefail
+
+# port for backbeat server
+PORT=8900
+
+trap killandsleep EXIT
 
 killandsleep () {
-  kill -9 $(lsof -t -i:$1) || true
+  kill -9 $(lsof -t -i:$PORT) || true
   sleep 10
 }
 
-# run backbeat server
-npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run $1
-
-killandsleep 8900
-
-exit $?
+npm start & bash tests/utils/wait_for_local_port.bash $PORT 40
+npm run $1
