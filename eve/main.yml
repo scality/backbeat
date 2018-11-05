@@ -46,7 +46,8 @@ stages:
           haltOnFailure: True
       - ShellCommand:
           name: Npm install
-          command: npm install --unsafe-perm
+          command: rm -rf node_modules && npm install --unsafe-perm
+          haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
           command: npm run --silent lint_md
