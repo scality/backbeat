@@ -7,7 +7,6 @@ branches:
   development/*:
     stage: "post-merge"
 
-
 models:
   - SetProperty: &docker_image_name
       name: Set docker image name property
@@ -46,7 +45,8 @@ stages:
           haltOnFailure: True
       - ShellCommand:
           name: Npm install
-          command: npm install --unsafe-perm
+          command: rm -rf node_modules && npm install --unsafe-perm
+          haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
           command: npm run --silent lint_md
