@@ -107,6 +107,13 @@
                 "type": "account",
                 "account": "bart"
             }
+        },
+        "gc": {
+            "topic": "backbeat-test-gc",
+            "auth": {
+                "type": "account",
+                "account": "bart"
+            }
         }
     },
     "log": {
