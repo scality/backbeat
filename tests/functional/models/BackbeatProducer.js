@@ -1,6 +1,6 @@
 const assert = require('assert');
 const { errors } = require('arsenal');
-const BackbeatProducer = require('../../lib/BackbeatProducer');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-producer-spec';
 const multipleMessages = [
