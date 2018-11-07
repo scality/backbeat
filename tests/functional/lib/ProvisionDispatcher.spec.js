@@ -6,7 +6,7 @@ const zookeeper = require('node-zookeeper-client');
 
 const jsutil = require('arsenal').jsutil;
 const ProvisionDispatcher =
-          require('../../lib/provisioning/ProvisionDispatcher');
+          require('../../../lib/provisioning/ProvisionDispatcher');
 
 const ZK_TEST_PATH = '/tests/prov-test';
 

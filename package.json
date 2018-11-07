@@ -14,6 +14,9 @@
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
+    "ft_test": "mocha --recursive $(find tests/functional -name '*.js')",
+    "ft_test:lib": "mocha --recursieve $(find tests/functional/lib -name '*.js')",
+    "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js')",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js')",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js",
     "ft_test:api:retry": "mocha tests/functional/api/retry.js",
@@ -52,7 +55,7 @@
     "werelogs": "scality/werelogs#74b121b"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/S3#62df2c0",
+    "@zenko/cloudserver": "scality/cloudserver#62df2c0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#e49d1a2",
