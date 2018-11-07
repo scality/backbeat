@@ -1,8 +1,8 @@
 const assert = require('assert');
 const async = require('async');
-const zookeeperHelper = require('../../lib/clients/zookeeper');
-const BackbeatProducer = require('../../lib/BackbeatProducer');
-const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const zookeeperHelper = require('../../../lib/clients/zookeeper');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
+const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const zookeeperConf = { connectionString: 'localhost:2181' };
 const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-consumer-spec';

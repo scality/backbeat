@@ -10,6 +10,7 @@ const TimeMachine = require('../utils/timeMachine');
 
 // Configs
 const config = require('../../config.json');
+const constants = require('../../../extensions/replication/constants');
 const redisConfig = {
     host: config.redis.host,
     port: config.redis.port,
@@ -26,7 +27,8 @@ const destConfig = {
 const mConfig = config.metrics;
 
 // Constants
-const ZK_TEST_CRR_STATE_PATH = '/backbeattest/state';
+const ZK_TEST_CRR_STATE_PATH =
+    `${constants.zookeeperReplicationNamespace}/state`;
 const EPHEMERAL_NODE = 1;
 
 // Future Date to be used in tests

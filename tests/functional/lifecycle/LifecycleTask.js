@@ -11,11 +11,9 @@ const testConfig = require('../../config.json');
 
 const S3 = AWS.S3;
 const s3config = {
-    endpoint: `${testConfig.s3.transport}://` +
-        `${testConfig.s3.host}:${testConfig.s3.port}`,
+    endpoint: `http://${testConfig.s3.host}:${testConfig.s3.port}`,
     s3ForcePathStyle: true,
-    credentials: new AWS.Credentials(testConfig.s3.accessKey,
-                                     testConfig.s3.secretKey),
+    credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
 };
 
 /*
