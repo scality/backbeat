@@ -8,7 +8,7 @@ const USERSBUCKET = arsenal.constants.usersBucket;
 const PENSIEVE = 'PENSIEVE';
 const METASTORE = '__metastore';
 
-class MongoMDWrapper extends MongoClientInterface {
+class MongoIngestionInterface extends MongoClientInterface {
     constructor(params) {
         super(Object.assign({}, params, {
             logger: new Logger('Backbeat:MongoIngestionInterface'),
@@ -40,4 +40,4 @@ class MongoMDWrapper extends MongoClientInterface {
     }
 }
 
-module.exports = MongoMDWrapper;
+module.exports = MongoIngestionInterface;
