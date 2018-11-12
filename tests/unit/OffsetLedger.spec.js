@@ -7,6 +7,10 @@ describe('OffsetLedger', () => {
         const ledger = new OffsetLedger();
 
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), null);
+
+        assert.strictEqual(ledger.getProcessingCount(), 0);
+        assert.strictEqual(ledger.getProcessingCount('topic'), 0);
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 0);
     });
 
     it('should get correct offset with one consumed message', () => {
@@ -14,6 +18,12 @@ describe('OffsetLedger', () => {
 
         ledger.onOffsetConsumed('topic', 0, 42);
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 42);
+        assert.strictEqual(ledger.getProcessingCount(), 1);
+        assert.strictEqual(ledger.getProcessingCount('topic'), 1);
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 1);
+        assert.strictEqual(ledger.getProcessingCount('topic', 1), 0);
+        assert.strictEqual(ledger.getProcessingCount('topic2'), 0);
+        assert.strictEqual(ledger.getProcessingCount('topic2', 0), 0);
 
         const committableOffset = ledger.onOffsetProcessed('topic', 0, 42);
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 43);
@@ -27,7 +37,13 @@ describe('OffsetLedger', () => {
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 42);
         ledger.onOffsetConsumed('topic', 0, 43);
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 42);
+        assert.strictEqual(ledger.getProcessingCount(), 2);
+        assert.strictEqual(ledger.getProcessingCount('topic'), 2);
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 2);
         ledger.onOffsetProcessed('topic', 0, 42);
+        assert.strictEqual(ledger.getProcessingCount(), 1);
+        assert.strictEqual(ledger.getProcessingCount('topic'), 1);
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 1);
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 43);
         const committableOffset = ledger.onOffsetProcessed('topic', 0, 43);
         assert.strictEqual(ledger.getCommittableOffset('topic', 0), 44);
@@ -60,11 +76,13 @@ describe('OffsetLedger', () => {
             ledger.onOffsetConsumed('topic', 0, 42 + i);
             assert.strictEqual(ledger.getCommittableOffset('topic', 0), 42);
         }
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 10);
         for (let i = 0; i < 10; ++i) {
             ledger.onOffsetProcessed('topic', 0, finishOrder[i]);
             assert.strictEqual(ledger.getCommittableOffset('topic', 0),
                                expectedCommittableOffsets[i]);
         }
+        assert.strictEqual(ledger.getProcessingCount('topic', 0), 0);
     });
 
     it('should get correct offset with ten messages processed intermingled ' +
@@ -129,6 +147,12 @@ describe('OffsetLedger', () => {
                 assert.strictEqual(
                     ledger.getCommittableOffset(topic, partition),
                     42 + partition);
+                assert.strictEqual(
+                    ledger.getProcessingCount(topic, partition), 2);
+                assert.strictEqual(
+                    ledger.getProcessingCount(topic, partition + 1), 0);
+                assert.strictEqual(
+                    ledger.getProcessingCount('foo', partition), 0);
             });
         });
         ['topic2', 'topic1'].forEach(topic => {
