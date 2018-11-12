@@ -572,7 +572,7 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
-    processQueueEntry(sourceEntry, done) {
+    processQueueEntry(sourceEntry, kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(this.site);
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
@@ -599,8 +599,8 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
             },
-        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
-            log, done));
+        ], err => this._handleReplicationOutcome(
+            err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 }
 

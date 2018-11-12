@@ -132,33 +132,39 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
-    _publishReplicationStatus(sourceEntry, replicationStatus, params, cb) {
-        const { log, reason } = params;
+    _publishReplicationStatus(sourceEntry, replicationStatus, params) {
+        const { log, reason, kafkaEntry } = params;
         const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
             sourceEntry.toCompletedEntry(this.site) :
             sourceEntry.toFailedEntry(this.site);
         updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
             sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
         const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
-        return this.replicationStatusProducer.send(kafkaEntries, err => {
+        this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
                 log.error(
-                    'error publishing entry to replication status topic',
+                    'error in entry delivery to replication status topic',
                     { method: 'ReplicateObject._publishReplicationStatus',
                       topic: this.repConfig.replicationStatusTopic,
                       entry: updatedSourceEntry.getLogInfo(),
                       replicationStatus:
                       updatedSourceEntry.getReplicationStatus(),
                       error: err });
-                return cb(err);
             }
-            log.end().info('replication status published', {
-                topic: this.repConfig.replicationStatusTopic,
-                entry: updatedSourceEntry.getLogInfo(),
-                replicationStatus,
-                reason,
-            });
-            return cb();
+            // Commit whether there was an error or not to allow
+            // progress of the consumer, as best effort measure when
+            // there are errors. We can count on the sweeper to retry
+            // entries that failed to be published to kafka (because
+            // they will keep their PENDING status).
+            if (this.consumer) {
+                this.consumer.onEntryCommittable(kafkaEntry);
+            }
+        });
+        log.end().info('replication status published', {
+            topic: this.repConfig.replicationStatusTopic,
+            entry: updatedSourceEntry.getLogInfo(),
+            replicationStatus,
+            reason,
         });
     }
 
@@ -454,7 +460,7 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    processQueueEntry(sourceEntry, done) {
+    processQueueEntry(sourceEntry, kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(this.site);
 
@@ -476,8 +482,8 @@ class ReplicateObject extends BackbeatTask {
                     // TODO check that bucket role matches role in metadata
                     this._putMetadata(destEntry, false, log, next);
                 },
-            ], err => this._handleReplicationOutcome(err, sourceEntry,
-                                                     destEntry, log, done));
+            ], err => this._handleReplicationOutcome(
+                err, sourceEntry, destEntry, kafkaEntry, log, done));
         }
 
         const mdOnly = !sourceEntry.getReplicationContent().includes('DATA');
@@ -503,11 +509,11 @@ class ReplicateObject extends BackbeatTask {
                 destEntry.setLocation(location);
                 this._putMetadata(destEntry, mdOnly, log, next);
             },
-        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
-                                                 log, done));
+        ], err => this._handleReplicationOutcome(
+            err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 
-    _processQueueEntryRetryFull(sourceEntry, destEntry, log, done) {
+    _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log, done) {
         log.debug('reprocessing entry as full replication',
                   { entry: sourceEntry.getLogInfo() });
 
@@ -519,19 +525,19 @@ class ReplicateObject extends BackbeatTask {
                 destEntry.setLocation(location);
                 this._putMetadata(destEntry, false, log, next);
             },
-        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
-                                                 log, done));
+        ], err => this._handleReplicationOutcome(
+            err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 
-    _handleReplicationOutcome(err, sourceEntry, destEntry, log, done) {
-        let status;
+    _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry,
+                              log, done) {
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                       'replication status as COMPLETED',
                       { entry: sourceEntry.getLogInfo() });
-            status = 'COMPLETED';
-            return this._publishReplicationStatus(sourceEntry, status, { log },
-                done);
+            this._publishReplicationStatus(
+                sourceEntry, 'COMPLETED', { kafkaEntry, log });
+            return done(null, { committable: false });
         }
         if (err.BadRole ||
             (err.origin === 'source' &&
@@ -555,17 +561,21 @@ class ReplicateObject extends BackbeatTask {
             log.info('target object version does not exist, retrying ' +
                      'a full replication',
                      { entry: sourceEntry.getLogInfo() });
-            return this._processQueueEntryRetryFull(sourceEntry, destEntry,
-                                                    log, done);
+            return this._processQueueEntryRetryFull(
+                sourceEntry, destEntry, kafkaEntry, log, done);
         }
         log.debug('replication failed permanently for object, ' +
                   'publishing replication status as FAILED',
             { failMethod: err.method,
                 entry: sourceEntry.getLogInfo(),
                 error: err.description });
-        status = 'FAILED';
-        return this._publishReplicationStatus(sourceEntry, status,
-            { log, reason: err.description }, done);
+        this._publishReplicationStatus(
+            sourceEntry, 'FAILED', {
+                log,
+                reason: err.description,
+                kafkaEntry,
+            });
+        return done(null, { committable: false });
     }
 }
 
