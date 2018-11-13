@@ -3,12 +3,10 @@
 const testIsOn = process.env.CI === 'true';
 
 const constants = {
-    zookeeperReplicationNamespace:
+    zookeeperNamespace:
         testIsOn ? '/backbeattest/replication' : '/backbeat/replication',
-    zookeeperIngestionNamespace:
-        testIsOn ? '/backbeattest/ingestion' : '/backbeat/ingestion',
     zkStatePath: '/state',
-    zkCRRStateProperties: ['paused', 'scheduledResume'],
+    zkStateProperties: ['paused', 'scheduledResume'],
     proxyVaultPath: '/_/backbeat/vault',
     proxyIAMPath: '/_/backbeat/iam',
     metricsExtension: 'crr',

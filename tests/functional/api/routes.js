@@ -7,7 +7,15 @@ const zookeeper = require('node-zookeeper-client');
 const { RedisClient } = require('arsenal').metrics;
 const { StatsModel } = require('arsenal').metrics;
 
-const constants = require('../../../extensions/replication/constants');
+const {
+    zookeeperNamespace: zookeeperReplicationNamespace,
+    zkStatePath: zkReplicationStatePath,
+} = require('../../../extensions/replication/constants');
+const {
+    zookeeperNamespace: zookeeperIngestionNamespace,
+    zkStatePath: zkIngestionStatePath,
+} = require('../../../extensions/ingestion/constants');
+
 const config = require('../../config.json');
 const { makeRequest, getRequest, getResponseBody } =
     require('../utils/httpHelpers');
@@ -20,9 +28,9 @@ const redisConfig = {
     port: config.redis.port,
 };
 const ZK_TEST_CRR_STATE_PATH =
-    `${constants.zookeeperReplicationNamespace}${constants.zkStatePath}`;
+    `${zookeeperReplicationNamespace}${zkReplicationStatePath}`;
 const ZK_TEST_INGESTION_STATE_PATH =
-    `${constants.zookeeperIngestionNamespace}${constants.zkStatePath}`;
+    `${zookeeperIngestionNamespace}${zkIngestionStatePath}`;
 const EPHEMERAL_NODE = 1;
 
 const defaultOptions = {

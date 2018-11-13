@@ -28,9 +28,9 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const {
-    zookeeperReplicationNamespace,
+    zookeeperNamespace,
     zkStatePath,
-    zkCRRStateProperties,
+    zkStateProperties,
     proxyVaultPath,
     proxyIAMPath,
     replicationBackends,
@@ -406,7 +406,7 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getZkSiteNode() {
-        return `${zookeeperReplicationNamespace}${zkStatePath}/` +
+        return `${zookeeperNamespace}${zkStatePath}/` +
             `${this.site}`;
     }
 
@@ -418,7 +418,7 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _updateZkStateNode(key, value, cb) {
-        if (!zkCRRStateProperties.includes(key)) {
+        if (!zkStateProperties.includes(key)) {
             const errorMsg = 'incorrect zookeeper state property given';
             this.logger.error(errorMsg, {
                 method: 'QueueProcessor._updateZkStateNode',

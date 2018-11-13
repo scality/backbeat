@@ -28,7 +28,7 @@ const mConfig = config.metrics;
 
 // Constants
 const ZK_TEST_CRR_STATE_PATH =
-    `${constants.zookeeperReplicationNamespace}/state`;
+    `${constants.zookeeperNamespace}/state`;
 const EPHEMERAL_NODE = 1;
 
 // Future Date to be used in tests
