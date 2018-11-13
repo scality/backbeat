@@ -48,14 +48,17 @@ class MongoQueueProcessor {
      * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
+     * @param {String} site - site name
      */
-    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, site) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
+        this.mongoClientConfig = mongoClientConfig;
+        this.site = site;
+
         this._consumer = null;
         this.logger =
-            new Logger('Backbeat:MongoProcessor');
-        this.mongoClientConfig = mongoClientConfig;
+            new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
     }
@@ -75,7 +78,7 @@ class MongoQueueProcessor {
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
-                groupId: `${this.mongoProcessorConfig.groupId}`,
+                groupId: `${this.mongoProcessorConfig.groupId}-${this.site}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
