@@ -707,8 +707,6 @@ describe('API routes', () => {
     });
 
     describe('Pause/Resume service routes', () => {
-        const skipNotImplemented = svc => (svc === 'ingestion' ? it.skip : it);
-
         const crrConfigs = config.extensions.replication;
         const ingestionConfig = config.extensions.ingestion;
 
@@ -826,12 +824,11 @@ describe('API routes', () => {
                 { path: `/_/${svc.name}/resume/${firstSite}`, method: 'POST' },
                 { path: `/_/${svc.name}/status`, method: 'GET' },
                 { path: `/_/${svc.name}/status/${firstSite}`, method: 'GET' },
-                { path: `/_/${svc.name}/resume/all`, method: 'GET',
-                  skip: 'ingestion' },
+                { path: `/_/${svc.name}/resume/all`, method: 'GET' },
             ];
             validRequests.forEach(entry => {
-                skipNotImplemented(entry.skip)('should get a 200 response for' +
-                ` route: ${entry.path}`, done => {
+                it(`should get a 200 response for route: ${entry.path}`,
+                done => {
                     const options = Object.assign({}, defaultOptions, {
                         method: entry.method,
                         path: entry.path,
@@ -955,8 +952,7 @@ describe('API routes', () => {
                 });
             });
 
-            skipNotImplemented(svc.name)('should get scheduled resume jobs ' +
-            ' for all sites using route ' +
+            it('should get scheduled resume jobs for all sites using route ' +
             `/_/${svc.name}/resume/all/schedule`, done => {
                 getRequest(`/_/${svc.name}/resume/all/schedule`, (err, res) => {
                     assert.ifError(err);
@@ -969,9 +965,8 @@ describe('API routes', () => {
                 });
             });
 
-            skipNotImplemented(svc.name)('should receive a scheduled resume ' +
-            'request with specified hours from route ' +
-            `/_/${svc.name}/resume/${firstSite}/schedule`,
+            it('should receive a scheduled resume request with specified ' +
+            `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
             done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'POST',
@@ -1000,9 +995,8 @@ describe('API routes', () => {
                 });
             });
 
-            skipNotImplemented(svc.name)('should receive a scheduled resume ' +
-            'request without specified hours from route ' +
-            `/_/${svc.name}/resume/${firstSite}/schedule`,
+            it('should receive a scheduled resume request without specified ' +
+            `hours from route /_/${svc.name}/resume/${firstSite}/schedule`,
             done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'POST',
@@ -1031,8 +1025,8 @@ describe('API routes', () => {
                 });
             });
 
-            skipNotImplemented(svc.name)('should remove a scheduled resume ' +
-            'request when receiving a DELETE request to route' +
+            it('should remove a scheduled resume request when receiving a ' +
+            'DELETE request to route' +
             `/_/${svc.name}/resume/${secondSite}/schedule`, done => {
                 const options = Object.assign({}, defaultOptions, {
                     method: 'DELETE',

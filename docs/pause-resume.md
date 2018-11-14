@@ -124,6 +124,7 @@ consumer is resumed, it again resumes consuming entries from its last offset.
 
     Route available for following services:
     - Cross-Region Replication: `crr`
+    - Metadata Ingestion: `ingestion`
 
     Response:
     ```json
@@ -181,6 +182,7 @@ consumer is resumed, it again resumes consuming entries from its last offset.
 
     Route available for following services:
     - Cross-Region Replication: `crr`
+    - Metadata Ingestion: `ingestion`
 
     Request Body Example:
     ```json
@@ -203,6 +205,7 @@ consumer is resumed, it again resumes consuming entries from its last offset.
 
     Route available for following services:
     - Cross-Region Replication: `crr`
+    - Metadata Ingestion: `ingestion`
 
     Response:
     ```json
