@@ -186,7 +186,7 @@ class MockAPI {
      * @param {Date} [date] - optional date object
      * @return {undefined}
      */
-    resumeCRRService(site, date) {
+    resumeService(site, date) {
         const message = {
             action: 'resumeService',
         };
@@ -201,7 +201,7 @@ class MockAPI {
      * @param {string} site - site name
      * @return {undefined}
      */
-    pauseCRRService(site) {
+    pauseService(site) {
         const message = JSON.stringify({
             action: 'pauseService',
         });
@@ -244,7 +244,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 destConfig, repConfig, redisConfig, mConfig, {}, {},
                 secondSite);
             qpSite2.start({ paused: true });
-            qpSite2.scheduleResume(futureDate);
+            qpSite2._scheduleResume(futureDate);
 
             // wait for clients/jobs to set
             return async.whilst(() => (
@@ -264,7 +264,7 @@ describe('CRR Pause/Resume status updates', function d() {
             !qpSite2.scheduledResume,
         cb => setTimeout(() => {
             qpSite1._deleteScheduledResumeService();
-            qpSite2.scheduleResume(futureDate);
+            qpSite2._scheduleResume(futureDate);
             cb();
         }, 1000), err => {
             assert.ifError(err);
@@ -279,7 +279,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should pause an active location', done => {
         let zkPauseState;
         // send fake api request
-        mockAPI.pauseCRRService(firstSite);
+        mockAPI.pauseService(firstSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
@@ -307,7 +307,7 @@ describe('CRR Pause/Resume status updates', function d() {
         // double-check initial state
         assert.strictEqual(isConsumerActive(consumer2), false);
         // send fake api request
-        mockAPI.pauseCRRService(secondSite);
+        mockAPI.pauseService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -332,7 +332,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should resume a paused location', done => {
         let zkPauseState;
         // send fake api request
-        mockAPI.resumeCRRService(secondSite);
+        mockAPI.resumeService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -357,7 +357,7 @@ describe('CRR Pause/Resume status updates', function d() {
         // double-check initial state
         assert.strictEqual(isConsumerActive(consumer1), true);
         // send fake api request
-        mockAPI.resumeCRRService(firstSite);
+        mockAPI.resumeService(firstSite);
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
                 if (err) {
@@ -405,7 +405,7 @@ describe('CRR Pause/Resume status updates', function d() {
             assert.ifError(err);
             consumer1.pause();
             // send fake api request
-            mockAPI.resumeCRRService(firstSite, futureDate);
+            mockAPI.resumeService(firstSite, futureDate);
 
             return async.doWhilst(cb => setTimeout(() => {
                 zkHelper.get(firstSite, (err, data) => {
@@ -452,7 +452,7 @@ describe('CRR Pause/Resume status updates', function d() {
             newScheduledDate.setHours(newScheduledDate.getHours() +
                 item.timeChange);
             // send fake api request
-            mockAPI.resumeCRRService(secondSite, newScheduledDate);
+            mockAPI.resumeService(secondSite, newScheduledDate);
 
             return async.doWhilst(cb => setTimeout(() => {
                 zkHelper.get(secondSite, (err, data) => {
@@ -482,7 +482,7 @@ describe('CRR Pause/Resume status updates', function d() {
         let zkScheduleState;
         let zkPauseState;
         // send fake api request
-        mockAPI.resumeCRRService(secondSite);
+        mockAPI.resumeService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -505,7 +505,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should not schedule a resume when the location is already active',
     done => {
         // send fake api request
-        mockAPI.resumeCRRService(firstSite, futureDate);
+        mockAPI.resumeService(firstSite, futureDate);
 
         setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {

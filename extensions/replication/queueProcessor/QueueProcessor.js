@@ -22,7 +22,6 @@ const getLocationsFromStorageClass =
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const EchoBucket = require('../tasks/EchoBucket');
-
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
@@ -289,7 +288,7 @@ class QueueProcessor extends EventEmitter {
     /**
      * Setup the Redis Subscriber which listens for actions from other processes
      * (i.e. BackbeatAPI for pause/resume)
-     * @param {object} redisConfig - redis ha config
+     * @param {object} redisConfig - redis config
      * @return {undefined}
      */
     _setupRedis(redisConfig) {
@@ -368,7 +367,7 @@ class QueueProcessor extends EventEmitter {
 
         if (date && now < new Date(date)) {
             // if date is in the future, attempt to schedule job
-            this.scheduleResume(date);
+            this._scheduleResume(date);
         } else {
             this._updateZkStateNode('paused', false, err => {
                 if (err) {
@@ -406,8 +405,7 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getZkSiteNode() {
-        return `${zookeeperNamespace}${zkStatePath}/` +
-            `${this.site}`;
+        return `${zookeeperNamespace}${zkStatePath}/${this.site}`;
     }
 
     /**
@@ -467,21 +465,21 @@ class QueueProcessor extends EventEmitter {
         ], cb);
     }
 
-    scheduleResume(date) {
+    _scheduleResume(date) {
         function triggerResume() {
             this._updateZkStateNode('scheduledResume', null, err => {
                 if (err) {
                     this.logger.error('error occurred saving state ' +
                     'to zookeeper for resuming a scheduled resume. Retry ' +
                     'again in 1 minute', {
-                        method: 'QueueProcessor.scheduleResume',
+                        method: 'QueueProcessor._scheduleResume',
                         error: err,
                     });
                     // if an error occurs, need to retry
                     // for now, schedule minute from now
                     const date = new Date();
                     date.setMinutes(date.getMinutes() + 1);
-                    this.scheduleResume = schedule.scheduleJob(date,
+                    this.scheduledResume = schedule.scheduleJob(date,
                         triggerResume.bind(this));
                 } else {
                     if (this.scheduledResume) {
@@ -496,7 +494,7 @@ class QueueProcessor extends EventEmitter {
         this._updateZkStateNode('scheduledResume', date, err => {
             if (err) {
                 this.logger.trace('error occurred saving state to zookeeper', {
-                    method: 'QueueProcessor.scheduleResume',
+                    method: 'QueueProcessor._scheduleResume',
                 });
             } else {
                 this.scheduledResume = schedule.scheduleJob(date,
