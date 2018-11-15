@@ -86,10 +86,10 @@ describe('ingestion producer tests with mock', () => {
     });
 
     it('can generate a valid snapshot', done => {
-        this.iProducer.snapshot('1', (err, res) => {
-            // we expect 6 logs from the MockMetadataServer: 2 buckets with 2
-            // logs per bucket, and 1 object in each bucket with 1 log entry
-            assert.strictEqual(res.length, 6);
+        this.iProducer.snapshot('bucket1', (err, res) => {
+            // we expect 3 logs from the MockMetadataServer: 1 bucket with 2 log
+            // entries per bucket, and 1 object in each bucket with 1 log entry
+            assert.strictEqual(res.length, 3);
             res.forEach(entry => {
                 assert(entry.type);
                 assert(entry.bucket);
@@ -102,6 +102,9 @@ describe('ingestion producer tests with mock', () => {
 
     it('should be able to get raft logs', done => {
         this.iProducer.getRaftLog('1', null, null, null, (err, res) => {
+            assert.ifError(err);
+            assert(res.log);
+            assert(res.info);
             res.log.on('data', data => {
                 assert(data.db);
                 assert.strictEqual(typeof data.method, 'number');
@@ -109,6 +112,16 @@ describe('ingestion producer tests with mock', () => {
                 assert.strictEqual(data.entries.length, 1);
             });
             res.log.on('end', done);
+        });
+    });
+
+    it('should find the correct raftId for the requested bucket', done => {
+        this.iProducer.getRaftId('bucketfindraftid', (err, res) => {
+            // based on MetadataMock, raft 1 will have 'bucketfindraftid'
+            assert.ifError(err);
+            assert.strictEqual(typeof res, 'string');
+            assert.strictEqual(res, '5');
+            return done();
         });
     });
 });

@@ -212,7 +212,7 @@ class MetadataMock {
             const value = ['bucket1', 'bucket2'];
             return res.end(JSON.stringify(value));
         } else if
-        (/\/_\/metadata\/default\/attributes\/[a-z0-9]/.test(req.url)) {
+        (/\/_\/metadata\/default\/attributes\/[a-z0-9]{3,63}/.test(req.url)) {
             const bucketName = req.url.split('/');
             const bucketMd = dummyBucketMD[bucketName[bucketName.length - 1]];
             const dummyBucketMdObj = new BucketInfo(bucketMd._name,
@@ -224,12 +224,18 @@ class MetadataMock {
                 bucketMd._websiteConfiguration, bucketMd._cors,
                 bucketMd._lifeCycle);
             return res.end(dummyBucketMdObj.serialize());
-        } else if (/\/_\/metadata\/default\/bucket\/[a-z0-9]/.test(req.url)) {
+        } else if
+        (/\/_\/metadata\/default\/bucket\/[a-z0-9]{3,63}/.test(req.url)) {
             return res.end(JSON.stringify(objectList));
-        } else if (/\/_\/metadata\/default\/[a-z0-9]\/[a-z0-9]/.test(req.url)) {
+        } else if
+        (/\/_\/metadata\/default\/[a-z0-9]{3,63}\/[a-z0-9]{3,63}/
+            .test(req.url)) {
             return res.end(JSON.stringify({
                 metadata: 'dogsAreGood',
             }));
+        } else if
+        (/\/_\/metadata\/admin\/buckets\/[a-z0-9]{3,63}\/id/.test(req.url)) {
+            return res.end(JSON.stringify(5));
         } else if (mockLogURLRegex.test(req.url)) {
             return res.end(JSON.stringify(mockLogs));
         }
