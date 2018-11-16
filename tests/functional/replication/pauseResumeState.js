@@ -244,7 +244,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 destConfig, repConfig, redisConfig, mConfig, {}, {},
                 secondSite);
             qpSite2.start({ paused: true });
-            qpSite2.scheduleResume(futureDate);
+            qpSite2._scheduleResume(futureDate);
 
             // wait for clients/jobs to set
             return async.whilst(() => (
@@ -264,7 +264,7 @@ describe('CRR Pause/Resume status updates', function d() {
             !qpSite2.scheduledResume,
         cb => setTimeout(() => {
             qpSite1._deleteScheduledResumeService();
-            qpSite2.scheduleResume(futureDate);
+            qpSite2._scheduleResume(futureDate);
             cb();
         }, 1000), err => {
             assert.ifError(err);

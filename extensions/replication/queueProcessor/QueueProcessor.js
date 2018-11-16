@@ -304,23 +304,8 @@ class QueueProcessor extends EventEmitter {
                 process.exit(1);
             }
             redis.on('message', (channel, message) => {
-                const validActions = {
-                    pauseService: this._pauseService.bind(this),
-                    resumeService: this._resumeService.bind(this),
-                    deleteScheduledResumeService:
-                        this._deleteScheduledResumeService.bind(this),
-                };
-                try {
-                    const { action, date } = JSON.parse(message);
-                    const cmd = validActions[action];
-                    if (channel === channelName && typeof cmd === 'function') {
-                        cmd(date);
-                    }
-                } catch (e) {
-                    this.logger.error('error parsing redis sub message', {
-                        method: 'QueueProcessor._setupRedis',
-                        error: e,
-                    });
+                if (channel === channelName) {
+                    this._handlePauseResumeRequest(redis, message);
                 }
             });
         });
