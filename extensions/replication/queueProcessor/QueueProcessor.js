@@ -24,7 +24,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const { PauseResumeProcessorMixin } =
-    require('../../../lib/util/pauseResumeHelpers');
+    require('../../../lib/util/pauseResumeHelpers/ProcessorMixin');
 
 const {
     zookeeperReplicationNamespace,
