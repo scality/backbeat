@@ -29,7 +29,6 @@ const { PauseResumeProcessorMixin } =
 const {
     zookeeperReplicationNamespace,
     zkStatePath,
-    // zkCRRStateProperties,
     proxyVaultPath,
     proxyIAMPath,
     replicationBackends,

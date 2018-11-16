@@ -8,7 +8,6 @@ const constants = {
     zookeeperIngestionNamespace:
         testIsOn ? '/backbeattest/ingestion' : '/backbeat/ingestion',
     zkStatePath: '/state',
-    zkCRRStateProperties: ['paused', 'scheduledResume'],
     proxyVaultPath: '/_/backbeat/vault',
     proxyIAMPath: '/_/backbeat/iam',
     metricsExtension: 'crr',
