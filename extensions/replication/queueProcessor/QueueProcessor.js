@@ -24,7 +24,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const { PauseResumeProcessorMixin } =
-    require('../../../lib/util/pauseResumeHelper');
+    require('../../../lib/util/pauseResumeHelpers');
 
 const {
     zookeeperReplicationNamespace,
@@ -394,26 +394,6 @@ class QueueProcessor extends EventEmitter {
                 });
                 return undefined;
             });
-        });
-    }
-
-    /**
-     * Cleanup zookeeper node if the site has been removed as a location
-     * @param {function} cb - callback(error)
-     * @return {undefined}
-     */
-    removeZkState(cb) {
-        const path = this._getZkSiteNode();
-        this.zkClient.remove(path, err => {
-            if (err && err.name !== 'NO_NODE') {
-                this.logger.error('failed removing zookeeper state node', {
-                    method: 'QueueProcessor.removeZkState',
-                    zookeeperPath: path,
-                    error: err,
-                });
-                return cb(err);
-            }
-            return cb();
         });
     }
 
