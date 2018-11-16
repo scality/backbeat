@@ -410,7 +410,7 @@ describe('API routes', () => {
 
                 const key = Object.keys(res)[0];
                 // Failures count scans all object fail keys
-                assert.equal(res[key].results.count, 242 - adjustResult);
+                assert.equal(res[key].results.count, 242 + adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res[key].results.size, 0);
                 done();
@@ -435,7 +435,7 @@ describe('API routes', () => {
 
                 const key = Object.keys(res)[0];
                 // Failures count scans all object fail keys
-                assert.equal(res[key].results.count, 482 - adjustResult);
+                assert.equal(res[key].results.count, 482 + adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res[key].results.size, 0);
                 done();
@@ -531,7 +531,7 @@ describe('API routes', () => {
 
                 assert(res.failures.description);
                 // Failures count scans all object fail keys
-                assert.equal(res.failures.results.count, 242 - adjustResult);
+                assert.equal(res.failures.results.count, 242 + adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res.failures.results.size, 0);
 
@@ -584,7 +584,7 @@ describe('API routes', () => {
 
                 assert(res.failures.description);
                 // Failures count scans all object fail keys
-                assert.equal(res.failures.results.count, 482 - adjustResult);
+                assert.equal(res.failures.results.count, 482 + adjustResult);
                 // Failures bytes is no longer used
                 assert.equal(res.failures.results.size, 0);
 
