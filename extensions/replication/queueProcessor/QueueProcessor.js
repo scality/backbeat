@@ -23,7 +23,7 @@ const EchoBucket = require('../tasks/EchoBucket');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
-const { PauseResumeProcessorMixin } =
+const PauseResumeProcessorMixin =
     require('../../../lib/util/pauseResumeHelpers/ProcessorMixin');
 
 const {
