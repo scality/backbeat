@@ -31,8 +31,8 @@
     "extensions": {
         "ingestion": {
             "auth": {
-                "type": "service",
-                "account": "md-ingestion"
+                "type": "account",
+                "account": "bart"
             },
             "topic": "backbeat-test-ingestion",
             "zookeeperPath": "/ingestion",
@@ -50,6 +50,10 @@
                     "https": false
                 }
             ]
+        },
+        "mongoProcessor": {
+            "topic": "backbeat-test-ingestion",
+            "groupId": "backbeat-mongo-processor-test-group"
         },
         "replication": {
             "topic": "backbeat-test-replication",

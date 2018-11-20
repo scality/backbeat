@@ -2,7 +2,7 @@ const joi = require('joi');
 
 const joiSchema = {
     auth: joi.object({
-        type: joi.string().valid('service').required(),
+        type: joi.alternatives().try('account', 'service').required(),
         account: joi.string().required(),
     }).required(),
     topic: joi.string().required(),
