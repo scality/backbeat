@@ -26,6 +26,10 @@ class Rule {
         if (this.abortMPU) {
             rule.AbortIncompleteMultipartUpload = this.abortMPU;
         }
+        if (this.transitions) {
+            rule.Transitions = this.transitions;
+        }
+
 
         const filter = {};
         if ((this.prefix && this.tags.length) || (this.tags.length > 1)) {
@@ -106,6 +110,16 @@ class Rule {
     */
     addAbortMPU(days) {
         this.abortMPU = { DaysAfterInitiation: days };
+        return this;
+    }
+
+    /**
+     * Transitions
+     * @param {array} transitions - transitions
+     * @return {undefined}
+     */
+    addTransitions(transitions) {
+        this.transitions = transitions;
         return this;
     }
 }

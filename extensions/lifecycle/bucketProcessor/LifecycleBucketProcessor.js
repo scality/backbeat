@@ -37,12 +37,18 @@ class LifecycleBucketProcessor {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {Object} lcConfig - lifecycle config
-     * @param {Object} lcConfig.auth - authentication info
-     * @param {String} lcConfig.bucketTasksTopic - lifecycle bucket topic name
-     * @param {Object} lcConfig.bucketProcessor - kafka consumer object
-     * @param {String} lcConfig.bucketProcessor.groupId - kafka
+     * @param {Object} extensions - backbeat config extensions object
+     * @param {Object} extensions.lifecycle - lifecycle config
+     * @param {Object} extensions.lifecycle.auth - authentication info
+     * @param {String} extensions.lifecycle.bucketTasksTopic - lifecycle bucket
+     * topic name
+     * @param {Object} extensions.lifecycle.bucketProcessor - kafka consumer
+     * object
+     * @param {String} extensions.lifecycle.bucketProcessor.groupId - kafka
      * consumer group id
+     * @param {Object} extensions.replication - replication config
+     * @param {String} extensions.replication.topic - kafka replication topic
+     * @param {Object} extensions.replication.source - replication source
      * @param {Number} [lcConfig.bucketProcessor.concurrency] - number
      *  of max allowed concurrent operations
      * @param {Object} [lcConfig.backlogMetrics] - param object to
@@ -53,15 +59,17 @@ class LifecycleBucketProcessor {
      * @param {String} s3Config.port - port
      * @param {String} transport - http or https
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport) {
+    constructor(zkConfig, kafkaConfig, extensions, s3Config, transport) {
         this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
-        this._lcConfig = lcConfig;
+        this._lcConfig = extensions.lifecycle;
+        this._repConfig = extensions.replication;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
         this._transport = transport;
         this._bucketProducer = null;
         this._objectProducer = null;
+        this._transitionProducer = null;
         this.accountCredsCache = {};
 
         // The task scheduler for processing lifecycle tasks concurrently.
@@ -103,6 +111,16 @@ class LifecycleBucketProcessor {
     }
 
     /**
+     * Send Kafka entry to the replication topic.
+     * @param {Object} entry - The Kafka entry to send to the topic
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    sendTransitionEntry(entry, cb) {
+        this._transitionProducer.send([entry], cb);
+    }
+
+    /**
      * Get the state variables of the current instance.
      * @return {Object} Object containing the state variables
      */
@@ -110,6 +128,9 @@ class LifecycleBucketProcessor {
         return {
             sendBucketEntry: this.sendBucketEntry.bind(this),
             sendObjectEntry: this.sendObjectEntry.bind(this),
+            sendTransitionEntry: this.sendTransitionEntry.bind(this),
+            replicationSource: this._repConfig.source,
+            bootstrapList: this._repConfig.destination.bootstrapList,
             enabledRules: this._lcConfig.rules,
             log: this._log,
         };
@@ -437,6 +458,21 @@ class LifecycleBucketProcessor {
                     this._objectProducer = producer;
                     return next();
                 }),
+            // Set up producer to populate the replication topic, used for
+            // transitioning objects.
+            next => this._setupProducer(this._repConfig.topic,
+                (err, producer) => {
+                    if (err) {
+                        this._log.error('error setting up kafka producer for ' +
+                        'transition task', {
+                            error: err.message,
+                            method: 'LifecycleBucketProcessor.start',
+                        });
+                        return next(err);
+                    }
+                    this._transitionProducer = producer;
+                    return next();
+                }),
         ], err => {
             if (err) {
                 this._log.error('error setting up kafka clients', {
@@ -469,6 +505,10 @@ class LifecycleBucketProcessor {
             done => {
                 this._log.debug('closing object tasks producer');
                 this._objectProducer.close(done);
+            },
+            done => {
+                this._log.debug('closing transition tasks producer');
+                this._transitionProducer.close(done);
             },
         ], () => cb());
     }

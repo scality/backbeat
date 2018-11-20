@@ -218,6 +218,9 @@
                 "noncurrentVersionExpiration": {
                     "enabled": true
                 },
+                "transitions": {
+                    "enabled": true
+                },
                 "abortIncompleteMultipartUpload": {
                     "enabled": true
                 }

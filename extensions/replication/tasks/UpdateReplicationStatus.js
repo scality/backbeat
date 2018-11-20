@@ -79,17 +79,22 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     /**
      * Report CRR metrics
-     * @param {String} status - The replication status
-     * @param {ObjectQueueEntry} entry - updated object entry
-     * @param {String} site - site recently updated
+     * @param {ObjectQueueEntry} sourceEntry - The original entry
+     * @param {ObjectQueueEntry} updatedSourceEntry - updated object entry
      * @return {undefined}
      */
-    _reportMetrics(status, entry, site) {
+    _reportMetrics(sourceEntry, updatedSourceEntry) {
+        if (!sourceEntry.isReplicationOperation()) {
+            return undefined;
+        }
+        const content = updatedSourceEntry.getReplicationContent();
+        const contentLength = updatedSourceEntry.getContentLength();
+        const bytes = content.includes('DATA') ? contentLength : 0;
         const data = {};
-        const content = entry.getReplicationContent();
-        const bytes = content.includes('DATA') ? entry.getContentLength() : 0;
+        const site = sourceEntry.getSite();
         data[site] = { ops: 1, bytes };
-
+        const status = sourceEntry.getReplicationSiteStatus(site);
+        // Report to MetricsProducer with completed/failed metrics.
         if (status === 'COMPLETED' || status === 'FAILED') {
             const entryType = status === 'COMPLETED' ?
                 metricsTypeCompleted : metricsTypeFailed;
@@ -107,6 +112,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             monitoringClient.crrOpDone.inc();
             monitoringClient.crrBytesDone.inc(bytes);
         }
+        return undefined;
     }
 
     /**
@@ -134,64 +140,128 @@ class UpdateReplicationStatus extends BackbeatTask {
         return refreshedEntry.toCompletedEntry(sourceEntry.getSite());
     }
 
+    _checkStatus(sourceEntry) {
+        // This check only applies to replication operations.
+        if (!sourceEntry.isReplicationOperation()) {
+            return undefined;
+        }
+        const site = sourceEntry.getSite();
+        const status = sourceEntry.getReplicationSiteStatus(site);
+        const statuses = ['COMPLETED', 'FAILED', 'PENDING'];
+        if (!statuses.includes(status)) {
+            const msg = `unknown status in replication info: ${status}`;
+            return errors.InternalError.customizeDescription(msg);
+        }
+        return undefined;
+    }
+
+    _getUpdatedReplicationEntry(params) {
+        const { sourceEntry, refreshedEntry } = params;
+        const site = sourceEntry.getSite();
+        const status = sourceEntry.getReplicationSiteStatus(site);
+        let entry;
+        if (status === 'COMPLETED' && sourceEntry.getReplicationIsNFS()) {
+            entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
+        } else if (status === 'COMPLETED') {
+            entry = refreshedEntry.toCompletedEntry(site);
+        } else if (status === 'FAILED') {
+            entry = refreshedEntry.toFailedEntry(site);
+        } else if (status === 'PENDING') {
+            entry = refreshedEntry.toPendingEntry(site);
+        }
+        const versionId =
+            sourceEntry.getReplicationSiteDataStoreVersionId(site);
+        entry.setReplicationSiteDataStoreVersionId(site, versionId);
+        entry.setSite(site);
+        return entry;
+    }
+
+    _getUpdatedLifecycleEntry(params) {
+        const { sourceEntry, refreshedEntry } = params;
+        const site = sourceEntry.getSite();
+        // Just set the AMZ storage class, and no replication info.
+        return refreshedEntry.setAmzStorageClass(site);
+    }
+
+    _getUpdatedSourceEntry(params) {
+        const { sourceEntry } = params;
+        if (sourceEntry.isReplicationOperation()) {
+            return this._getUpdatedReplicationEntry(params);
+        }
+        if (sourceEntry.isLifecycleOperation()) {
+            return this._getUpdatedLifecycleEntry(params);
+        }
+        return undefined;
+    }
+
+    _garbageCollectReplication(entry, cb) {
+        const dataStoreName = entry.getDataStoreName();
+        const isTransient = config.getIsTransientLocation(dataStoreName);
+        const status = entry.getReplicationStatus();
+        // Should we garbage collect the source data?
+        if (isTransient && status === 'COMPLETED') {
+            const locations = entry.getReducedLocations();
+            // Schedule garbage collection of transient data locations array.
+            return this.gcProducer.publishDeleteDataEntry(locations, cb);
+        }
+        return cb();
+    }
+
+    _garbageCollectLifecycle(entry, cb) {
+        // TODO: Implement garbage collection of transitioned data.
+        return cb();
+    }
+
+    _handleGarbageCollection(entry, cb) {
+        if (entry.isReplicationOperation()) {
+            return this._garbageCollectReplication(entry, cb);
+        }
+        if (entry.isLifecycleOperation()) {
+            return this._garbageCollectLifecycle(entry, cb);
+        }
+        return cb();
+    }
+
+    _putMetadata(updatedSourceEntry, log, cb) {
+        const client = this.backbeatSourceClient;
+        return client.putMetadata(updatedSourceEntry, log, err => {
+            if (err) {
+                log.error('an error occurred when updating metadata', {
+                    entry: updatedSourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    replicationStatus:
+                        updatedSourceEntry.getReplicationStatus(),
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            log.end().info('metadata updated', {
+                entry: updatedSourceEntry.getLogInfo(),
+                replicationStatus: updatedSourceEntry.getReplicationStatus(),
+            });
+            return cb();
+        });
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
+        const error = this._checkStatus(sourceEntry);
+        if (error) {
+            return done(error);
+        }
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
             if (err) {
                 return done(err);
             }
-            const site = sourceEntry.getSite();
-            const status = sourceEntry.getReplicationSiteStatus(site);
-            let updatedSourceEntry;
-            if (status === 'COMPLETED') {
-                updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
-                if (sourceEntry.getReplicationIsNFS()) {
-                    updatedSourceEntry = this._getNFSUpdatedSourceEntry(
-                        sourceEntry, refreshedEntry);
-                }
-            } else if (status === 'FAILED') {
-                updatedSourceEntry = refreshedEntry.toFailedEntry(site);
-            } else if (status === 'PENDING') {
-                updatedSourceEntry = refreshedEntry.toPendingEntry(site);
-            } else {
-                const msg = `unknown status in replication info: ${status}`;
-                return done(errors.InternalError.customizeDescription(msg));
-            }
-            updatedSourceEntry.setSite(site);
-            updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
-                sourceEntry.getReplicationSiteDataStoreVersionId(site));
-            return this.backbeatSourceClient
-            .putMetadata(updatedSourceEntry, log, err => {
+            const params = { sourceEntry, refreshedEntry };
+            const updatedSourceEntry = this._getUpdatedSourceEntry(params);
+            return this._putMetadata(updatedSourceEntry, log, err => {
                 if (err) {
-                    log.error('an error occurred when writing replication ' +
-                              'status',
-                        { entry: updatedSourceEntry.getLogInfo(),
-                          origin: 'source',
-                          peer: this.sourceConfig.s3,
-                          replicationStatus:
-                            updatedSourceEntry.getReplicationStatus(),
-                          error: err.message });
                     return done(err);
                 }
-                log.end().info('replication status updated', {
-                    entry: updatedSourceEntry.getLogInfo(),
-                    replicationStatus:
-                        updatedSourceEntry.getReplicationStatus(),
-                });
-
-                // Report to MetricsProducer with completed/failed metrics
-                this._reportMetrics(status, updatedSourceEntry, site);
-
-                if (config.getIsTransientLocation(
-                    updatedSourceEntry.getDataStoreName()) &&
-                    updatedSourceEntry.getReplicationStatus()
-                    === 'COMPLETED') {
-                    // schedule garbage-collection of transient data
-                    // locations array
-                    return this.gcProducer.publishDeleteDataEntry(
-                        updatedSourceEntry.getReducedLocations(), done);
-                }
-                return done();
+                this._reportMetrics(sourceEntry, updatedSourceEntry);
+                return this._handleGarbageCollection(updatedSourceEntry, done);
             });
         });
     }

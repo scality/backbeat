@@ -53,6 +53,9 @@ const joiSchema = {
         noncurrentVersionExpiration: {
             enabled: joi.boolean().default(true),
         },
+        transitions: {
+            enabled: joi.boolean().default(true),
+        },
         abortIncompleteMultipartUpload: {
             enabled: joi.boolean().default(true),
         },

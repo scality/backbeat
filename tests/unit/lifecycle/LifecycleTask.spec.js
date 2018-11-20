@@ -26,13 +26,29 @@ const lp = {
             enabledRules: {
                 expiration: { enabled: true },
                 transitions: { enabled: true },
-                noncurrentVersionTransitions: { enabled: true },
                 noncurrentVersionExpiration: { enabled: true },
                 abortIncompleteMultipartUpload: { enabled: true },
             },
         }
     ),
 };
+
+// Get the date from the number of days given.
+function getDate(params) {
+    const numberOfDaysFromNow = params.numberOfDaysFromNow || 0;
+    const oneDay = 24 * 60 * 60 * 1000; // Milliseconds in a day.
+    const milliseconds = numberOfDaysFromNow * oneDay;
+    const timestamp = Date.now() + milliseconds;
+    return new Date(timestamp);
+}
+
+// Get the metadata object.
+function getMetadataObject(lastModified, storageClass) {
+    return {
+        LastModified: lastModified,
+        StorageClass: storageClass || 'STANDARD',
+    };
+}
 
 // get all rule ID's
 function getRuleIDs(rules) {
@@ -272,6 +288,571 @@ describe('lifecycle task helper methods', () => {
                 res.AbortIncompleteMultipartUpload.DaysAfterInitiation, 4);
             assert.strictEqual(
                 res.NoncurrentVersionExpiration.NoncurrentDays, 3);
+        });
+
+        it('should return Transition with Days', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko',
+                        },
+                    ])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -2 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 1,
+                    StorageClass: 'zenko',
+                },
+            });
+        });
+
+        it('should return Transition when multiple rule transitions', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko-1',
+                        },
+                        {
+                            Days: 3,
+                            StorageClass: 'zenko-3',
+                        },
+                    ])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -4 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 3,
+                    StorageClass: 'zenko-3',
+                },
+            });
+        });
+
+        it('should return Transition with Date', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Date: 0,
+                        StorageClass: 'zenko',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -1 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Date: 0,
+                    StorageClass: 'zenko',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: first rule', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 1,
+                        StorageClass: 'zenko-1',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Days: 3,
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -2 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 1,
+                    StorageClass: 'zenko-1',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: second rule', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 1,
+                        StorageClass: 'zenko-1',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Days: 3,
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -4 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 3,
+                    StorageClass: 'zenko-3',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: first rule with ' +
+        'multiple transitions', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 1,
+                        StorageClass: 'zenko-1',
+                    }, {
+                        Days: 3,
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Days: 4,
+                        StorageClass: 'zenko-4',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -2 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 1,
+                    StorageClass: 'zenko-1',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: second rule with ' +
+        'multiple transitions', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 1,
+                        StorageClass: 'zenko-1',
+                    }, {
+                        Days: 3,
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Days: 4,
+                        StorageClass: 'zenko-4',
+                    }, {
+                        Days: 6,
+                        StorageClass: 'zenko-6',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -5 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 4,
+                    StorageClass: 'zenko-4',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: combination of Date ' +
+        'and Days gets Date result', () => {
+            const applicableDate = getDate({ numberOfDaysFromNow: -1 });
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 1,
+                        StorageClass: 'zenko-1',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Date: applicableDate,
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -4 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Date: applicableDate,
+                    StorageClass: 'zenko-3',
+                },
+            });
+        });
+
+        it('should return Transition across many rules: combination of Date ' +
+        'and Days gets Days result', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Days: 3,
+                        StorageClass: 'zenko-1',
+                    }])
+                    .build(),
+                new Rule()
+                    .addTransitions([{
+                        Date: getDate({ numberOfDaysFromNow: -4 }),
+                        StorageClass: 'zenko-3',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -4 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.deepStrictEqual(rules, {
+                Transition: {
+                    Days: 3,
+                    StorageClass: 'zenko-1',
+                },
+            });
+        });
+
+        it('should not return transition when Transitions has no applicable ' +
+        'rule: Days', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([
+                        {
+                            Days: 3,
+                            StorageClass: 'zenko',
+                        },
+                    ])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: -2 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.strictEqual(rules.Transition, undefined);
+        });
+
+        it('should not return transition when Transitions has no applicable ' +
+        'rule: Date', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([{
+                        Date: new Date(getDate({ numberOfDaysFromNow: 1 })),
+                        StorageClass: 'zenko',
+                    }])
+                    .build(),
+            ];
+            const lastModified = getDate({ numberOfDaysFromNow: 0 });
+            const object = getMetadataObject(lastModified);
+            const rules = lct._getApplicableRules(applicableRules, object);
+            assert.strictEqual(rules.Transition, undefined);
+        });
+
+        it('should not return transition when Transitions is an empty ' +
+        'array', () => {
+            const applicableRules = [
+                new Rule()
+                    .addTransitions([])
+                    .build(),
+            ];
+            const rules = lct._getApplicableRules(applicableRules, {});
+            assert.strictEqual(rules.Transition, undefined);
+        });
+
+        it('should not return transition when Transitions is undefined', () => {
+            const applicableRules = [
+                new Rule()
+                    .addExpiration('Days', 1)
+                    .build(),
+            ];
+            const rules = lct._getApplicableRules(applicableRules, {});
+            assert.strictEqual(rules.Transition, undefined);
+        });
+
+        describe('transitioning to the same storage class', () => {
+            it('should not return transition when applicable transition is ' +
+            'already stored at the destination', () => {
+                const applicableRules = [
+                    new Rule()
+                        .addTransitions([
+                            {
+                                Days: 1,
+                                StorageClass: 'zenko',
+                            },
+                        ])
+                        .build(),
+                ];
+                const lastModified = getDate({ numberOfDaysFromNow: -2 });
+                const object = getMetadataObject(lastModified, 'zenko');
+                const rules = lct._getApplicableRules(applicableRules, object);
+                assert.strictEqual(rules.Transition, undefined);
+            });
+
+            it('should not return transition when applicable transition is ' +
+            'already stored at the destination: multiple rules', () => {
+                const applicableRules = [
+                    new Rule()
+                        .addTransitions([
+                            {
+                                Days: 2,
+                                StorageClass: 'zenko',
+                            },
+                        ])
+                        .build(),
+                    new Rule()
+                        .addTransitions([
+                            {
+                                Days: 1,
+                                StorageClass: 'STANDARD',
+                            },
+                        ])
+                        .build(),
+                ];
+                const lastModified = getDate({ numberOfDaysFromNow: -3 });
+                const object = getMetadataObject(lastModified, 'zenko');
+                const rules = lct._getApplicableRules(applicableRules, object);
+                assert.strictEqual(rules.Transition, undefined);
+            });
+        });
+    });
+
+    describe('_getApplicableTransition', () => {
+        describe('using Days time type', () => {
+            it('should return undefined if no rules given', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [],
+                    currentDate: '1970-01-03T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                assert.deepStrictEqual(result, undefined);
+            });
+
+            it('should return undefined when no rule applies', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-01T23:59:59.999Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                assert.deepStrictEqual(result, undefined);
+            });
+
+            it('should return a single rule if it applies', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-02T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                const expected = {
+                    Days: 1,
+                    StorageClass: 'zenko',
+                };
+                assert.deepStrictEqual(result, expected);
+            });
+
+            it('should return the most applicable rule: last rule', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko',
+                        },
+                        {
+                            Days: 10,
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-11T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                const expected = {
+                    Days: 10,
+                    StorageClass: 'zenko',
+                };
+                assert.deepStrictEqual(result, expected);
+            });
+
+            it('should return the most applicable rule: middle rule', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Days: 1,
+                            StorageClass: 'zenko',
+                        },
+                        {
+                            Days: 4,
+                            StorageClass: 'zenko',
+                        },
+                        {
+                            Days: 10,
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-05T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                const expected = {
+                    Days: 4,
+                    StorageClass: 'zenko',
+                };
+                assert.deepStrictEqual(result, expected);
+            });
+        });
+
+        describe('using Date time type', () => {
+            it('should return undefined if no rules given', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [],
+                    currentDate: '1970-01-03T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                assert.deepStrictEqual(result, undefined);
+            });
+
+            it('should return undefined when no rule applies', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Date: '1970-01-02T00:00:00.000Z',
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-01T23:59:59.999Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                assert.deepStrictEqual(result, undefined);
+            });
+
+            it('should return a single rule if it applies', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Date: '1970-01-02T00:00:00.000Z',
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-02T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                const expected = {
+                    Date: '1970-01-02T00:00:00.000Z',
+                    StorageClass: 'zenko',
+                };
+                assert.deepStrictEqual(result, expected);
+            });
+
+            it('should return the most applicable rule', () => {
+                const result = lct._getApplicableTransition({
+                    transitions: [
+                        {
+                            Date: '1970-01-02T00:00:00.000Z',
+                            StorageClass: 'zenko',
+                        },
+                        {
+                            Date: '1970-01-10T00:00:00.000Z',
+                            StorageClass: 'zenko',
+                        },
+                    ],
+                    currentDate: '1970-01-11T00:00:00.000Z',
+                    lastModified: '1970-01-01T00:00:00.000Z',
+                    store: {},
+                });
+                const expected = {
+                    Date: '1970-01-10T00:00:00.000Z',
+                    StorageClass: 'zenko',
+                };
+                assert.deepStrictEqual(result, expected);
+            });
+        });
+    });
+
+    describe('_compareTransitions', () => {
+        it('should return undefined if no rules given', () => {
+            const result = lct._compareTransitions({ });
+            assert.strictEqual(result, undefined);
+        });
+
+        it('should return first rule if second rule is not given', () => {
+            const transition1 = {
+                Days: 1,
+                StorageClass: 'zenko',
+            };
+            const result = lct._compareTransitions({ transition1 });
+            assert.deepStrictEqual(result, transition1);
+        });
+
+        it('should return second rule if first rule is not given', () => {
+            const transition2 = {
+                Days: 1,
+                StorageClass: 'zenko',
+            };
+            const result = lct._compareTransitions({ transition2 });
+            assert.deepStrictEqual(result, transition2);
+        });
+
+        it('should return the first rule if older than the second rule', () => {
+            const transition1 = {
+                Days: 2,
+                StorageClass: 'zenko',
+            };
+            const transition2 = {
+                Days: 1,
+                StorageClass: 'zenko',
+            };
+            const result = lct._compareTransitions({
+                transition1,
+                transition2,
+                lastModified: '1970-01-01T00:00:00.000Z',
+            });
+            assert.deepStrictEqual(result, transition1);
+        });
+
+        it('should return the second rule if older than the first rule', () => {
+            const transition1 = {
+                Days: 1,
+                StorageClass: 'zenko',
+            };
+            const transition2 = {
+                Days: 2,
+                StorageClass: 'zenko',
+            };
+            const result = lct._compareTransitions({
+                transition1,
+                transition2,
+                lastModified: '1970-01-01T00:00:00.000Z',
+            });
+            assert.deepStrictEqual(result, transition2);
         });
     });
 

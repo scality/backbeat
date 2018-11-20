@@ -85,6 +85,45 @@ describe('QueueEntry helper class', () => {
                 'COMPLETED');
             assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
         });
+
+        it('should set a kafka entry operation type', () => {
+            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            assert.strictEqual(entry.error, undefined);
+            entry.setOperationType('a');
+            assert.strictEqual(entry.getOperationType(), 'a');
+        });
+
+        it('should get a kafka entry operation type as replication when ' +
+        'not declared', () => {
+            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            assert.strictEqual(entry.error, undefined);
+            assert.strictEqual(entry.getOperationType(), undefined);
+            assert.strictEqual(entry.isReplicationOperation(), true);
+        });
+
+        it('should get a kafka entry operation type as lifecycle', () => {
+            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            assert.strictEqual(entry.error, undefined);
+            const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
+            assert.strictEqual(lifecycleEntry.isLifecycleOperation(), true);
+        });
+
+        it('should set a lifecycle kafka entry replication storage class',
+        () => {
+            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            assert.strictEqual(entry.error, undefined);
+            const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
+            assert.strictEqual(lifecycleEntry.getReplicationStorageClass(),
+                'a');
+        });
+
+        it('should set a lifecycle kafka entry replication storage type',
+        () => {
+            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            assert.strictEqual(entry.error, undefined);
+            const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
+            assert.strictEqual(lifecycleEntry.getReplicationStorageType(), 'b');
+        });
     });
 
     describe('QueueEntry.getReducedLocations helper method', () => {

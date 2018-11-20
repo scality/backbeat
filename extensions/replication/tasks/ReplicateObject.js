@@ -147,13 +147,29 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
+    _getUpdatedSourceEntry(params) {
+        const { sourceEntry, replicationStatus } = params;
+        if (sourceEntry.isReplicationOperation()) {
+            const entry = replicationStatus === 'COMPLETED' ?
+                sourceEntry.toCompletedEntry(this.site) :
+                sourceEntry.toFailedEntry(this.site);
+            const versionId =
+                sourceEntry.getReplicationSiteDataStoreVersionId(this.site);
+            return entry.setReplicationSiteDataStoreVersionId(this.site,
+                versionId);
+        }
+        if (sourceEntry.isLifecycleOperation()) {
+            const { bootstrapList } = this.destConfig;
+            const { type } = bootstrapList.find(i => this.site === i.site);
+            return sourceEntry.toLifecycleEntry(this.site, type);
+        }
+        return undefined;
+    }
+
     _publishReplicationStatus(sourceEntry, replicationStatus, params) {
         const { log, reason, kafkaEntry } = params;
-        const updatedSourceEntry = replicationStatus === 'COMPLETED' ?
-            sourceEntry.toCompletedEntry(this.site) :
-            sourceEntry.toFailedEntry(this.site);
-        updatedSourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-            sourceEntry.getReplicationSiteDataStoreVersionId(this.site));
+        const entryParams = { sourceEntry, replicationStatus };
+        const updatedSourceEntry = this._getUpdatedSourceEntry(entryParams);
         const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
         this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
