@@ -378,9 +378,9 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             }
             const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            return this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () =>
-                doneOnce(null, data));
+            this.mProducer.publishMetrics(extMetrics,
+                metricsTypeCompleted, metricsExtension, () => {});
+            return doneOnce(null, data);
         });
     }
 
@@ -630,9 +630,10 @@ class MultipleBackendTask extends ReplicateObject {
             }
             const extMetrics = getExtMetrics(this.site,
                 sourceEntry.getContentLength(), sourceEntry);
-            return this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-                metricsExtension, () => this._completeRangedMPU(sourceEntry,
-                    destEntry, uploadId, log, doneOnce));
+            this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
+                metricsExtension, () => {});
+            return this._completeRangedMPU(sourceEntry,
+                destEntry, uploadId, log, doneOnce);
         });
     }
 
@@ -824,9 +825,9 @@ class MultipleBackendTask extends ReplicateObject {
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
             const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            return this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () =>
-                doneOnce(null, data));
+            this.mProducer.publishMetrics(extMetrics,
+                metricsTypeCompleted, metricsExtension, () => {});
+            return doneOnce(null, data);
         });
     }
 
@@ -945,10 +946,10 @@ class MultipleBackendTask extends ReplicateObject {
         }
         const extMetrics = getExtMetrics(this.site,
             sourceEntry.getContentLength(), sourceEntry);
-        return this.mProducer.publishMetrics(extMetrics,
-            metricsTypeQueued, metricsExtension, () =>
-            async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb));
+        this.mProducer.publishMetrics(extMetrics,
+            metricsTypeQueued, metricsExtension, () => {});
+        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
     }
 
     _putDeleteMarker(sourceEntry, destEntry, log, cb) {
@@ -1014,7 +1015,7 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
-    processQueueEntry(sourceEntry, done) {
+    processQueueEntry(sourceEntry, kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toMultipleBackendReplicaEntry(this.site);
         const content = sourceEntry.getReplicationContent();
@@ -1072,8 +1073,8 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return this._getAndPutData(sourceEntry, destEntry, log, next);
             },
-        ], err => this._handleReplicationOutcome(err, sourceEntry, destEntry,
-            log, done));
+        ], err => this._handleReplicationOutcome(
+            err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 }
 

@@ -180,7 +180,7 @@ class EchoBucket extends BackbeatTask {
         });
     }
 
-    processQueueEntry(sourceEntry, done) {
+    processQueueEntry(sourceEntry, kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         let displayName;
         let email;
