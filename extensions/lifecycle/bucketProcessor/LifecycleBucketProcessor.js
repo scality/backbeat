@@ -280,7 +280,6 @@ class LifecycleBucketProcessor {
             groupId: this._lcConfig.bucketProcessor.groupId,
             concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
-            autoCommit: true,
             backlogMetrics: this._lcConfig.backlogMetrics,
         });
         this._consumer.on('error', err => {

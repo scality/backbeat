@@ -155,7 +155,8 @@ class QueueProcessor extends EventEmitter {
         }
 
         this.taskScheduler = new ReplicationTaskScheduler(
-            (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
+            (ctx, done) => ctx.task.processQueueEntry(
+                ctx.entry, ctx.kafkaEntry, done));
     }
 
     _setupVaultclientCache() {
@@ -523,6 +524,7 @@ class QueueProcessor extends EventEmitter {
             mProducer: this._mProducer,
             logger: this.logger,
             site: this.site,
+            consumer: this._consumer,
         };
     }
 
@@ -675,7 +677,8 @@ class QueueProcessor extends EventEmitter {
         if (task) {
             this.logger.debug('source entry is being pushed',
               { entry: sourceEntry.getLogInfo() });
-            return this.taskScheduler.push({ task, entry: sourceEntry },
+            return this.taskScheduler.push({ task, entry: sourceEntry,
+                                             kafkaEntry },
                                            sourceEntry.getCanonicalKey(),
                                            done);
         }
