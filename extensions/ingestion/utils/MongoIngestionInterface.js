@@ -24,10 +24,10 @@ class MongoIngestionInterface extends MongoClientInterface {
             'value.ingestion': {
                 $type: 'object',
             },
-        }, {
-            'value.name': true,
-            'value.ingestion': true,
-            'value.locationConstraint': true,
+        }).project({
+            'value.name': 1,
+            'value.ingestion': 1,
+            'value.locationConstraint': 1,
         }).toArray((err, doc) => {
             if (err) {
                 this.logger.error(
@@ -35,7 +35,7 @@ class MongoIngestionInterface extends MongoClientInterface {
                     { error: err.message });
                 return callback(errors.InternalError);
             }
-            return callback(null, doc);
+            return callback(null, doc.map(i => i.value));
         });
     }
 }
