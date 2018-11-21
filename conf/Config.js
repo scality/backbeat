@@ -73,6 +73,9 @@ class Config extends EventEmitter {
             this.bootstrapList = [];
         }
 
+        // NOTE: used to store source location endpoint and credentials
+        this.locations = {};
+
         // whitelist IP, CIDR for health checks
         const defaultHealthChecks = ['127.0.0.1/8', '::1'];
         const healthChecks = parsedConfig.server.healthChecks;
@@ -161,6 +164,27 @@ class Config extends EventEmitter {
     getBootstrapList() {
         monitoringClient.crrSiteCount.set(this.bootstrapList.length);
         return this.bootstrapList;
+    }
+
+    setLocations(locationConstraints) {
+        // NOTE: currently only s3 connector (s3c 7.4.2 and above) are supported
+        const ingestionTypeMatch = Object.assign({}, locationTypeMatch, {
+            'location-scality-ring-s3-v1': 'scality_s3',
+        });
+
+        // refresh/reset
+        this.locations = {};
+        Object.keys(locationConstraints).forEach(key => {
+            const locItem = locationConstraints[key];
+            this.locations[key] = Object.assign({}, locItem.details, {
+                locationType: ingestionTypeMatch[locItem.locationType],
+            });
+        });
+        this.emit('locations-update');
+    }
+
+    getLocations() {
+        return this.locations;
     }
 
     setIsTransientLocation(locationName, isTransient) {
