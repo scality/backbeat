@@ -4,7 +4,6 @@ const async = require('async');
 const AWS = require('aws-sdk');
 const http = require('http');
 const Redis = require('ioredis');
-const schedule = require('node-schedule');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -19,11 +18,12 @@ const BucketMdQueueEntry = require('../../lib/models/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const { getAccountCredentials } =
     require('../../lib/credentials/AccountCredentials');
+const PauseResumeProcessorMixin =
+    require('../../lib/util/pauseResumeHelpers/ProcessorMixin');
 
 const {
     zookeeperNamespace,
     zkStatePath,
-    zkStateProperties,
 } = require('../ingestion/constants');
 
 // TODO - ADD PREFIX BASED ON SOURCE
@@ -81,8 +81,7 @@ class MongoQueueProcessor {
 
         this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
         this._s3Client = null;
-        this._consumer = null;
-        this.scheduledResume = null;
+        this.consumer = null;
 
         this.logger =
             new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
@@ -108,28 +107,13 @@ class MongoQueueProcessor {
                 this.logger.fatal('mongo queue processor failed to subscribe ' +
                                   'to ingestion redis channel for location ' +
                                   `${this.site}`,
-                                  { method: 'MongoQueueProcessor.constructor',
+                                  { method: 'MongoQueueProcessor._setupRedis',
                                     error: err });
                 process.exit(1);
             }
             redis.on('message', (channel, message) => {
-                const validActions = {
-                    pauseService: this._pauseService.bind(this),
-                    resumeService: this._resumeService.bind(this),
-                    deleteScheduledResumeService:
-                        this._deleteScheduledResumeService.bind(this),
-                };
-                try {
-                    const { action, date } = JSON.parse(message);
-                    const cmd = validActions[action];
-                    if (channel === channelName && typeof cmd === 'function') {
-                        cmd(date);
-                    }
-                } catch (e) {
-                    this.logger.error('error parsing redis sub message', {
-                        method: 'MongoQueueProcessor._setupRedis',
-                        error: e,
-                    });
+                if (channel === channelName) {
+                    this._handlePauseResumeRequest(redis, message);
                 }
             });
         });
@@ -178,224 +162,38 @@ class MongoQueueProcessor {
                 process.exit(1);
             }
             let consumerReady = false;
-            this._consumer = new BackbeatConsumer({
+            this.consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
                 groupId: `${this.mongoProcessorConfig.groupId}-${this.site}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
-            this._consumer.on('error', () => {
+            this.consumer.on('error', () => {
                 if (!consumerReady) {
                     this.logger.fatal('error starting mongo queue processor');
                     process.exit(1);
                 }
             });
-            this._consumer.on('ready', () => {
+            this.consumer.on('ready', () => {
                 consumerReady = true;
                 const paused = options && options.paused;
-                this._consumer.subscribe(paused);
+                this.consumer.subscribe(paused);
                 this.logger.info('mongo queue processor is ready');
             });
         });
     }
 
-    /**
-     * Pause consumers
-     * @return {undefined}
-     */
-    _pauseService() {
-        const enabled = this._consumer.getServiceStatus();
-        if (enabled) {
-            // if currently resumed/active, attempt to pause
-            this._updateZkStateNode('paused', true, err => {
-                if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
-                        method: 'MongoQueueProcessor._pauseService',
-                    });
-                } else {
-                    this._consumer.pause(this.site);
-                    this.logger.info('paused ingestion for location: ' +
-                        `${this.site}`);
-                    this._deleteScheduledResumeService();
-                }
-            });
-        }
-    }
-
-    /**
-     * Resume consumers
-     * @param {Date} [date] - optional date object for scheduling resume
-     * @return {undefined}
-     */
-    _resumeService(date) {
-        const enabled = this._consumer.getServiceStatus();
-        const now = new Date();
-
-        if (enabled) {
-            this.logger.info(`cannot resume, site ${this.site} is not paused`);
-            return;
-        }
-
-        if (date && now < new Date(date)) {
-            // if date is in the future, attempt to schedule job
-            this._scheduleResume(date);
-        } else {
-            this._updateZkStateNode('paused', false, err => {
-                if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
-                        method: 'MongoQueueProcessor._resumeService',
-                    });
-                } else {
-                    this._consumer.resume(this.site);
-                    this.logger.info('resumed ingestion for location: ' +
-                        `${this.site}`);
-                    this._deleteScheduledResumeService();
-                }
-            });
-        }
-    }
-
-    /**
-     * Delete scheduled resume (if any)
-     * @return {undefined}
-     */
-    _deleteScheduledResumeService() {
-        this._updateZkStateNode('scheduledResume', null, err => {
-            if (err) {
-                this.logger.trace('error occurred saving state to zookeeper', {
-                    method: 'MongoQueueProcessor._deleteScheduledResumeService',
-                });
-            } else if (this.scheduledResume) {
-                this.scheduledResume.cancel();
-                this.scheduledResume = null;
-                this.logger.info('deleted scheduled resume for location:' +
-                    ` ${this.site}`);
-            }
-        });
+    getPauseResumeVars() {
+        return {
+            logger: this.logger,
+            site: this.site,
+            zkClient: this.zkClient,
+            consumer: this.consumer,
+        };
     }
 
     _getZkSiteNode() {
         return `${zookeeperNamespace}${zkStatePath}/${this.site}`;
-    }
-
-    /**
-     * Update zookeeper state node for this site-defined MongoQueueProcessor
-     * @param {String} key - key name to store in zk state node
-     * @param {String|Boolean} value - value
-     * @param {Function} cb - callback(error)
-     * @return {undefined}
-     */
-    _updateZkStateNode(key, value, cb) {
-        if (!zkStateProperties.includes(key)) {
-            const errorMsg = 'incorrect zookeeper state property given';
-            this.logger.error(errorMsg, {
-                method: 'MongoQueueProcessor._updateZkStateNode',
-            });
-            return cb(new Error('incorrect zookeeper state property given'));
-        }
-        const path = this._getZkSiteNode();
-        return async.waterfall([
-            next => this.zkClient.getData(path, (err, data) => {
-                if (err) {
-                    this.logger.error('could not get state from zookeeper', {
-                        method: 'MongoQueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err.message,
-                    });
-                    return next(err);
-                }
-                try {
-                    const state = JSON.parse(data.toString());
-                    // set revised status
-                    state[key] = value;
-                    const bufferedData = Buffer.from(JSON.stringify(state));
-                    return next(null, bufferedData);
-                } catch (err) {
-                    this.logger.error('could not parse state data from ' +
-                    'zookeeper', {
-                        method: 'MongoQueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-            }),
-            (data, next) => this.zkClient.setData(path, data, err => {
-                if (err) {
-                    this.logger.error('could not save state data in ' +
-                    'zookeeper', {
-                        method: 'MongoQueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-                return next();
-            }),
-        ], cb);
-    }
-
-    _scheduleResume(date) {
-        function triggerResume() {
-            this._updateZkStateNode('scheduledResume', null, err => {
-                if (err) {
-                    this.logger.error('error occurred saving state ' +
-                    'to zookeeper for resuming a scheduled resume. Retry ' +
-                    'again in 1 minute', {
-                        method: 'MongoQueueProcessor._scheduleResume',
-                        error: err,
-                    });
-                    // if an error occurs, need to retry
-                    // for now, schedule minute from now
-                    const date = new Date();
-                    date.setMinutes(date.getMinutes() + 1);
-                    this.scheduledResume = schedule.scheduleJob(date,
-                        triggerResume.bind(this));
-                } else {
-                    if (this.scheduledResume) {
-                        this.scheduledResume.cancel();
-                    }
-                    this.scheduledResume = null;
-                    this._resumeService();
-                }
-            });
-        }
-
-        this._updateZkStateNode('scheduledResume', date, err => {
-            if (err) {
-                this.logger.trace('error occurred saving state to zookeeper', {
-                    method: 'MongoQueueProcessor._scheduleResume',
-                });
-            } else {
-                this.scheduledResume = schedule.scheduleJob(date,
-                    triggerResume.bind(this));
-                this.logger.info('scheduled ingestion resume', {
-                    scheduleTime: date.toString(),
-                });
-            }
-        });
-    }
-
-    /**
-     * Cleanup zookeeper node if the site has been removed as a location
-     * @param {function} cb - callback(error)
-     * @return {undefined}
-     */
-    removeZkState(cb) {
-        const path = this._getZkSiteNode();
-        this.zkClient.remove(path, err => {
-            if (err && err.name !== 'NO_NODE') {
-                this.logger.error('failed removing zookeeper state node', {
-                    method: 'MongoQueueProcessor.removeZkState',
-                    zookeeperPath: path,
-                    error: err,
-                });
-                return cb(err);
-            }
-            return cb();
-        });
     }
 
     /**
@@ -405,10 +203,10 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     stop(done) {
-        if (!this._consumer) {
+        if (!this.consumer) {
             return setImmediate(done);
         }
-        return this._consumer.close(done);
+        return this.consumer.close(done);
     }
 
     /**
@@ -607,8 +405,11 @@ class MongoQueueProcessor {
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady();
+        return this.consumer && this.consumer.isReady();
     }
 }
+
+// Added mixins
+Object.assign(MongoQueueProcessor.prototype, PauseResumeProcessorMixin);
 
 module.exports = MongoQueueProcessor;

@@ -259,8 +259,8 @@ describe('Ingestion Pause/Resume status updates', function d() {
             return async.whilst(() => (
                 !consumer1 && !consumer2 && !qpSite2.scheduledResume
             ), cb => setTimeout(() => {
-                consumer1 = qpSite1._consumer;
-                consumer2 = qpSite2._consumer;
+                consumer1 = qpSite1.getPauseResumeVars().consumer;
+                consumer2 = qpSite2.getPauseResumeVars().consumer;
                 return cb();
             }, 1000), done);
         });

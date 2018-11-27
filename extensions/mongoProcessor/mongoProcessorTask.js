@@ -65,7 +65,7 @@ function checkAndApplyScheduleResume(qp, data, zkClient, site, cb) {
         return zkClient.setData(path, Buffer.from(d), err => {
             if (err) {
                 log.fatal('could not set zookeeper status node', {
-                    method: 'MongoProcessor:task',
+                    method: 'mongoProcessorTask:checkAndApplyScheduleResume',
                     zookeeperPath: path,
                     error: err.message,
                 });
@@ -95,7 +95,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
             return zkClient.getData(path, (err, data) => {
                 if (err) {
                     log.fatal('could not check site status in zookeeper',
-                        { method: 'MongoProcessor:task',
+                        { method: 'mongoProcessorTask:setupZkSiteNode',
                           zookeeperPath: path,
                           error: err.message });
                     return done(err);
@@ -105,7 +105,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
                     d = JSON.parse(data.toString());
                 } catch (e) {
                     log.fatal('error setting state for queue processor', {
-                        method: 'MongoProcessor:task',
+                        method: 'mongoProcessorTask:setupZkSiteNode',
                         site,
                         error: reshapeExceptionError(e),
                     });
@@ -120,7 +120,7 @@ function setupZkSiteNode(qp, zkClient, site, done) {
         }
         if (err) {
             log.fatal('could not setup zookeeper node', {
-                method: 'MongoProcessor:task',
+                method: 'mongoProcessorTask:setupZkSiteNode',
                 zookeeperPath: path,
                 error: err.message,
             });
@@ -247,7 +247,7 @@ zkClient.once('ready', () => {
     zkClient.mkdirp(path, err => {
         if (err) {
             log.fatal('could not create path in zookeeper', {
-                method: 'MongoProcessor:task',
+                method: 'mongoProcessorTask:task',
                 zookeeperPath: path,
                 error: err.message,
             });
