@@ -207,10 +207,12 @@ class MetadataMock {
                 error: 'mock server only supports GET requests',
             }));
         }
-        if (/\/_\/metadata\/listbuckets\/[1-8]/.test(req.url)) {
+        if
+        (/\/_\/metadata\/admin\/raft_sessions\/[1-8]\/bucket/.test(req.url)) {
             const value = ['bucket1', 'bucket2'];
             return res.end(JSON.stringify(value));
-        } else if (/\/_\/metadata\/getbucket\/[a-z0-9]/.test(req.url)) {
+        } else if
+        (/\/_\/metadata\/default\/attributes\/[a-z0-9]/.test(req.url)) {
             const bucketName = req.url.split('/');
             const bucketMd = dummyBucketMD[bucketName[bucketName.length - 1]];
             const dummyBucketMdObj = new BucketInfo(bucketMd._name,
@@ -222,9 +224,9 @@ class MetadataMock {
                 bucketMd._websiteConfiguration, bucketMd._cors,
                 bucketMd._lifeCycle);
             return res.end(dummyBucketMdObj.serialize());
-        } else if (/\/_\/metadata\/listobjects\/[a-z0-9]/.test(req.url)) {
+        } else if (/\/_\/metadata\/default\/bucket\/[a-z0-9]/.test(req.url)) {
             return res.end(JSON.stringify(objectList));
-        } else if (/\/_\/metadata\/getobject\/[a-z0-9]/.test(req.url)) {
+        } else if (/\/_\/metadata\/default\/[a-z0-9]\/[a-z0-9]/.test(req.url)) {
             return res.end(JSON.stringify({
                 metadata: 'dogsAreGood',
             }));
