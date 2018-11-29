@@ -55,7 +55,7 @@
     "werelogs": "scality/werelogs#74b121b"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/cloudserver#b17904e",
+    "@zenko/cloudserver": "scality/cloudserver#5839daf",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#0a771c2",
