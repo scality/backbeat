@@ -50,6 +50,8 @@ class GarbageCollectorProducer {
      * @param {string} dataLocations[].dataStoreName - data location
      *   constraint name
      * @param {number} dataLocations[].size - object size in bytes
+     * @param {string} [dataLocations[].dataStoreVersionId] - version
+     *   ID of location, needed for cloud backends
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
@@ -61,6 +63,7 @@ class GarbageCollectorProducer {
                     key: location.key,
                     dataStoreName: location.dataStoreName,
                     size: location.size,
+                    dataStoreVersionId: location.dataStoreVersionId,
                 })),
             },
         }) }], err => {

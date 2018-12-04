@@ -913,6 +913,9 @@
                                 },
                                 "size": {
                                     "type": "integer"
+                                },
+                                "dataStoreVersionId": {
+                                    "type": "string"
                                 }
                             }
                         }
