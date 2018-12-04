@@ -1,5 +1,7 @@
 # Zenko Backbeat
 
+[![Greenkeeper badge](https://badges.greenkeeper.io/scality/backbeat.svg)](https://greenkeeper.io/)
+
 ![backbeat logo](res/backbeat-logo.png)
 
 ## OVERVIEW
