@@ -195,8 +195,8 @@ const mockLogs = {
         ] },
     ] };
 
-const mockLogString = '\\/_\\/raft_sessions\\/[\\d]*\\/log\\?begin=' +
-    '[\\d]*&limit=[\\d]*&targetLeader=false';
+const mockLogString = '\\/_\\/metadata\\/admin\\/raft_sessions\\/[\\d]*\\/' +
+    'log';
 const mockLogURLRegex = new RegExp(mockLogString);
 
 class MetadataMock {
