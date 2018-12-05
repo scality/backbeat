@@ -928,7 +928,7 @@
         "GetRaftBuckets": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/metadata/listbuckets/{LogId}"
+                "requestUri": "/_/metadata/admin/raft_sessions/{LogId}/bucket"
             },
             "input": {
                 "type": "structure",
@@ -949,10 +949,67 @@
                 }
             }
         },
+        "GetRaftID": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/admin/buckets/{Bucket}/id"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }
+                }
+            },
+            "output": {
+                "type": "string"
+            }
+        },
+        "GetRaftLog": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/admin/raft_sessions/{LogId}/log"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "LogId"
+                ],
+                "members": {
+                    "LogId": {
+                        "location": "uri",
+                        "locationName": "LogId"
+                    },
+                    "Begin": {
+                        "type": "integer",
+                        "location": "querystring",
+                        "locationName": "begin"
+                    },
+                    "End": {
+                        "type": "integer",
+                        "location": "querystring",
+                        "locationName": "end"
+                    },
+                    "TargetLeader": {
+                        "type": "boolean",
+                        "location": "querystring",
+                        "locationName": "targetLeader"
+                    }
+                }
+            },
+            "output": {
+                "shape": "RaftLogOutput"
+            }
+        },
         "GetBucketMetadata": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/metadata/getbucket/{Bucket}"
+                "requestUri": "/_/metadata/default/attributes/{Bucket}"
             },
             "input": {
                 "type": "structure",
@@ -973,7 +1030,7 @@
         "GetObjectList": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/metadata/listobjects/{Bucket}"
+                "requestUri": "/_/metadata/default/bucket/{Bucket}"
             },
             "input": {
                 "type": "structure",
@@ -994,7 +1051,7 @@
         "GetObjectMetadata": {
             "http": {
                 "method": "GET",
-                "requestUri": "/_/metadata/getobject/{Bucket}/{Key+}"
+                "requestUri": "/_/metadata/default/bucket/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",
@@ -1235,6 +1292,53 @@
                     "type": "list",
                     "member": {
                         "type": "string"
+                    }
+                }
+            }
+        },
+        "RaftLogOutput": {
+            "type": "structure",
+            "members": {
+                "info": {
+                    "type": "structure",
+                    "members": {
+                        "start": {
+                            "type": "integer"
+                        },
+                        "cseq": {
+                            "type": "integer"
+                        },
+                        "prune": {
+                            "type": "integer"
+                        }
+                    }
+                },
+                "log": {
+                    "type": "list",
+                    "member": {
+                        "type": "structure",
+                        "members": {
+                            "db": {
+                                "type": "string"
+                            },
+                            "entries": {
+                                "type": "list",
+                                "member": {
+                                    "type": "structure",
+                                    "members": {
+                                        "key": {
+                                            "type": "string"
+                                        },
+                                        "value": {
+                                            "type": "string"
+                                        }
+                                    }
+                                }
+                            },
+                            "method": {
+                                "type": "integer"
+                            }
+                        }
                     }
                 }
             }

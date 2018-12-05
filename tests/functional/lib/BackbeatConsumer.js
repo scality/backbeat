@@ -209,8 +209,7 @@ describe('BackbeatConsumer concurrency tests', () => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
     });
-    after(function after(done) {
-        this.timeout(10000);
+    after(done => {
         async.parallel([
             innerDone => producer.close(innerDone),
             innerDone => consumer.close(innerDone),
@@ -254,7 +253,7 @@ describe('BackbeatConsumer concurrency tests', () => {
                 next();
             },
         ], done);
-    }).timeout(30000);
+    });
 
     it('should not prevent progress with concurrency if one task is stuck',
     done => {
@@ -299,7 +298,7 @@ describe('BackbeatConsumer concurrency tests', () => {
                 next();
             },
         ], done);
-    }).timeout(30000);
+    });
 });
 
 describe('BackbeatConsumer "deferred committable" tests', () => {
@@ -344,8 +343,7 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
     });
-    after(function after(done) {
-        this.timeout(10000);
+    after(done => {
         async.parallel([
             innerDone => producer.close(innerDone),
             innerDone => consumer.close(innerDone),
@@ -384,5 +382,5 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
                 }, 2000);
             }
         });
-    }).timeout(30000);
+    });
 });
