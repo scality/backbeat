@@ -40,8 +40,9 @@
             "cronRule": "*/5 * * * * *",
             "sources": [
                 {
-                    "name": "source1",
-                    "prefix": "source1",
+                    "name": "zenko-bucket",
+                    "bucket": "src-bucket",
+                    "prefix": "location-name",
                     "cronRule": "*/5 * * * * *",
                     "zookeeperSuffix": "/source1",
                     "host": "localhost",
