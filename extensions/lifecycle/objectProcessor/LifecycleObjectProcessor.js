@@ -80,7 +80,6 @@ class LifecycleObjectProcessor extends EventEmitter {
             groupId: this.lcConfig.objectProcessor.groupId,
             concurrency: this.lcConfig.objectProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
-            autoCommit: true,
             backlogMetrics: this.lcConfig.backlogMetrics,
         });
         this._consumer.on('error', () => {
