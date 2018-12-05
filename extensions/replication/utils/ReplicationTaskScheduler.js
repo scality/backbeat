@@ -10,7 +10,7 @@ class ReplicationTaskScheduler {
         this._runningTasksByMasterKey = {};
     }
 
-    push(entry, masterKey, done) {
+    push(ctx, masterKey, done) {
         let queue = this._runningTasksByMasterKey[masterKey];
         if (queue === undefined) {
             queue = async.queue(this._processingFunc);
@@ -18,7 +18,7 @@ class ReplicationTaskScheduler {
                 () => delete this._runningTasksByMasterKey[masterKey];
             this._runningTasksByMasterKey[masterKey] = queue;
         }
-        queue.push(entry, done);
+        queue.push(ctx, done);
     }
 }
 
