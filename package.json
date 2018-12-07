@@ -15,7 +15,7 @@
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
-    "ft_test:lib": "mocha --recursieve $(find tests/functional/lib -name '*.js') --timeout 30000",
+    "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js --timeout 30000",
@@ -36,6 +36,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
+    "JSONStream": "^1.3.5",
     "arsenal": "scality/Arsenal#13b156b",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",

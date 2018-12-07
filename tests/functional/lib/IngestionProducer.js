@@ -7,7 +7,7 @@ const IngestionProducer =
 const testConfig = require('../../config.json');
 const MetadataMock = require('../../utils/MockMetadataServer');
 
-describe('ingestion producer unit tests with mock', () => {
+describe('ingestion producer tests with mock', () => {
     let httpServer;
     let metadataMock;
 
@@ -97,6 +97,18 @@ describe('ingestion producer unit tests with mock', () => {
                 assert(entry.value || entry.value === null);
             });
             return done();
+        });
+    });
+
+    it('should be able to get raft logs', done => {
+        this.iProducer.getRaftLog('1', null, null, null, (err, res) => {
+            res.log.on('data', data => {
+                assert(data.db);
+                assert.strictEqual(typeof data.method, 'number');
+                assert.strictEqual(typeof data.entries, 'object');
+                assert.strictEqual(data.entries.length, 1);
+            });
+            res.log.on('end', done);
         });
     });
 });
