@@ -48,14 +48,17 @@ class MongoQueueProcessor {
      * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
+     * @param {String} site - site name
      */
-    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, site) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
+        this.mongoClientConfig = mongoClientConfig;
+        this.site = site;
+
         this._consumer = null;
         this.logger =
-            new Logger('Backbeat:MongoProcessor');
-        this.mongoClientConfig = mongoClientConfig;
+            new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
     }
@@ -75,7 +78,7 @@ class MongoQueueProcessor {
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
-                groupId: `${this.mongoProcessorConfig.groupId}`,
+                groupId: `${this.mongoProcessorConfig.groupId}-${this.site}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
@@ -121,6 +124,13 @@ class MongoQueueProcessor {
             this.logger.error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
+        }
+        // TODO-FIX:
+        // Depends on the filter data. Need a way of determining the
+        // zenko bucket.
+        // if entry is for another site, simply skip/ignore
+        if (this.site !== kafkaEntry.bucket) {
+            return process.nextTick(done);
         }
         if (sourceEntry instanceof DeleteOpQueueEntry) {
             const bucket = sourceEntry.getBucket();
