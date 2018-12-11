@@ -8,6 +8,7 @@ const LifecycleTask = require('../../../extensions/lifecycle' +
     '/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
 const testConfig = require('../../config.json');
+const QueueEntry = require('../../../lib/models/QueueEntry');
 
 const S3 = AWS.S3;
 const s3config = {
@@ -299,8 +300,8 @@ class LifecycleBucketProcessorMock {
                 expiration: { enabled: true },
                 noncurrentVersionExpiration: { enabled: true },
                 abortIncompleteMultipartUpload: { enabled: true },
+                transitions: { enabled: true },
                 // below are features not implemented yet
-                transition: { enabled: false },
                 noncurrentVersionTransition: { enabled: false },
             },
         };
@@ -308,10 +309,12 @@ class LifecycleBucketProcessorMock {
         this.sendCount = {
             bucket: 0,
             object: 0,
+            transitions: 0,
         };
         this.entries = {
             bucket: [],
             object: [],
+            transitions: [],
         };
     }
 
@@ -329,6 +332,12 @@ class LifecycleBucketProcessorMock {
         cb();
     }
 
+    sendTransitionEntry(entry, cb) {
+        this.sendCount.transitions++;
+        this.entries.transitions.push(entry);
+        cb();
+    }
+
     getCount() {
         return this.sendCount;
     }
@@ -338,11 +347,16 @@ class LifecycleBucketProcessorMock {
     }
 
     getStateVars() {
+        const { replication } = testConfig.extensions;
         return {
             sendBucketEntry: this.sendBucketEntry.bind(this),
+            sendTransitionEntry: this.sendTransitionEntry.bind(this),
             sendObjectEntry: this.sendObjectEntry.bind(this),
             removeBucketFromQueued: () => {},
             enabledRules: this._lcConfig.rules,
+            // Corresponds to the default endpoint in the cloudserver config.
+            bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
+            replicationSource: replication.source,
             log: this._log,
         };
     }
@@ -351,10 +365,12 @@ class LifecycleBucketProcessorMock {
         this.sendCount = {
             bucket: 0,
             object: 0,
+            transitions: 0,
         };
         this.entries = {
             bucket: [],
             object: [],
+            transitions: [],
         };
         this.sendBucketEntry = null;
         this.sendObjectEntry = null;
@@ -382,7 +398,13 @@ s3mock, params, cb) {
             /* eslint-enable no-param-reassign */
         }
         // end of recursion
-        return cb(null, { count: params.lcp.getCount(), entries });
+        // Processing of bucket data is performed in the background, hence we
+        // cannot know when the messages will finish being pushed. Allow some
+        // timeout for it to complete.
+        const timeout = params.timeout || 0;
+        return setTimeout(() => {
+            cb(null, { count: params.lcp.getCount(), entries });
+        }, timeout);
     });
 }
 
@@ -400,6 +422,74 @@ describe('lifecycle task functional tests', function dF() {
         lcTask = new LifecycleTask(lcp);
         s3Helper = new S3Helper(s3);
     });
+
+    // Assert that the results from the bucket processor have the expected data.
+    function assertTransitionResult(params) {
+        const { data, expectedKeys } = params;
+        const { count, entries } = data;
+        assert.strictEqual(count.transitions, expectedKeys.length);
+        assert.strictEqual(entries.transitions.length, expectedKeys.length);
+        const results = {};
+        data.entries.transitions.forEach(transition => {
+            const entry = QueueEntry.createFromKafkaEntry({
+                value: transition.message,
+            });
+            const key = entry.getObjectKey();
+            results[key] = entry;
+        });
+        expectedKeys.forEach(key => {
+            const entry = results[key];
+            assert(entry !== undefined);
+            assert(entry.isLifecycleOperation());
+            assert.strictEqual(entry.getObjectKey(), key);
+            assert.strictEqual(entry.getSite(), 'us-east-2');
+            assert.strictEqual(entry.getReplicationStorageType(), 'aws_s3');
+            assert.strictEqual(entry.getReplicationStorageClass(), 'us-east-2');
+        });
+    }
+
+    // Perform the bucket setup as defined in the parameters, and call the
+    // lifecycle task bucket processor method.
+    function testTransition(params, cb) {
+        const bucketName = 'test-bucket';
+        const { rules, scenarioNumber, hasVersioning, expectedKeys } = params;
+        async.waterfall([
+            next => s3Helper.setAndCreateBucket(bucketName, next),
+            next => {
+                if (!hasVersioning) {
+                    return next();
+                }
+                return s3Helper.setBucketVersioning('Enabled', err =>
+                    next(err));
+            },
+            next => s3Helper.setBucketLifecycleConfigurations(rules, next),
+            (data, next) => s3Helper.createObjects(scenarioNumber, next),
+            next => s3.getBucketLifecycleConfiguration({
+                Bucket: bucketName,
+            }, next),
+            (data, next) => {
+                const entry = {
+                    action: 'test-action',
+                    target: {
+                        bucket: bucketName,
+                        owner: OWNER,
+                    },
+                    details: {},
+                };
+                const params = {
+                    lcTask,
+                    lcp,
+                    counter: 0,
+                    timeout: 1000,
+                };
+                wrapProcessBucketEntry(data.Rules, entry, s3, params, next);
+            },
+        ], (err, data) => {
+            assert.ifError(err);
+            assertTransitionResult({ data, expectedKeys });
+            return cb();
+        });
+    }
 
     // Example lifecycle configs
     // {
@@ -433,6 +523,69 @@ describe('lifecycle task functional tests', function dF() {
                 assert.ifError(err);
                 done();
             });
+        });
+
+        it('transition rules: no matching prefix', done => {
+            const params = {
+                scenarioNumber: 0,
+                hasVersioning: false,
+                rules: [
+                    new Rule()
+                        .addPrefix('test/')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: [],
+            };
+            testTransition(params, done);
+        });
+
+        it('transition rules: matching prefix', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new Rule()
+                        .addPrefix('test/')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: [
+                    'test/obj-1',
+                    'test/obj-3',
+                    'test/obj-6',
+                ],
+            };
+            testTransition(params, done);
+        });
+
+        it('transition rules: matching tag', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new Rule()
+                        .addTag('key1', 'value1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: [
+                    'test/obj-1',
+                    'obj-2',
+                    'test/obj-3',
+                    'test/obj-6',
+                ],
+            };
+            testTransition(params, done);
         });
 
         it('should verify changes in lifecycle rules will apply to the ' +
@@ -653,6 +806,60 @@ describe('lifecycle task functional tests', function dF() {
                 assert.ifError(err);
                 done();
             });
+        });
+
+        it('transition rules: no matching prefix', done => {
+            const params = {
+                scenarioNumber: 2,
+                hasVersioning: true,
+                rules: [
+                    new Rule()
+                        .addPrefix('test/')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: [],
+            };
+            testTransition(params, done);
+        });
+
+        it('transition rules: matching prefix', done => {
+            const params = {
+                scenarioNumber: 2,
+                hasVersioning: true,
+                rules: [
+                    new Rule()
+                        .addPrefix('version-1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: ['version-1'],
+            };
+            testTransition(params, done);
+        });
+
+        it('transition rules: matching tag', done => {
+            const params = {
+                scenarioNumber: 2,
+                hasVersioning: false,
+                rules: [
+                    new Rule()
+                        .addTag('key1', 'value1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+                expectedKeys: ['version-1'],
+            };
+            testTransition(params, done);
         });
 
         it('should verify changes in lifecycle rules will apply to ' +
