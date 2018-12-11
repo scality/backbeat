@@ -949,7 +949,7 @@
                 }
             }
         },
-        "GetRaftID": {
+        "GetRaftId": {
             "http": {
                 "method": "GET",
                 "requestUri": "/_/metadata/admin/buckets/{Bucket}/id"
