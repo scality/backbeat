@@ -65,11 +65,27 @@ describe('garbage collector', () => {
             },
         }, done);
     });
-    it('should send batch delete request with locations array', done => {
+    it('should send batch delete request with locations array with ' +
+    'no dataStoreVersionId', done => {
         expectBatchDeleteLocations = [{
             key: 'foo',
             dataStoreName: 'ds',
             size: 10,
+        }];
+        gcTask.processQueueEntry({
+            action: 'deleteData',
+            target: {
+                locations: expectBatchDeleteLocations,
+            },
+        }, done);
+    });
+    it('should send batch delete request with locations array with ' +
+    'some dataStoreVersionId', done => {
+        expectBatchDeleteLocations = [{
+            key: 'foo',
+            dataStoreName: 'ds',
+            size: 10,
+            dataStoreVersionId: 'someversion',
         }];
         gcTask.processQueueEntry({
             action: 'deleteData',
