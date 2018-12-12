@@ -1,8 +1,8 @@
 const async = require('async');
+
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 
-const zookeeper = require('../../lib/clients/zookeeper');
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
@@ -31,23 +31,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 return next();
             });
         }, cb);
-    }
-
-    _setupZookeeper(done) {
-        const populatorZkPath = this.extConfig.zookeeperPath;
-        const zookeeperUrl =
-            `${this.zkConfig.connectionString}${populatorZkPath}`;
-        this.log.info('opening zookeeper connection for persisting ' +
-            'populator state', { zookeeperUrl });
-        this.zkClient = zookeeper.createClient(zookeeperUrl, {
-            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
-        });
-        this.zkClient.connect();
-        this.zkClient.once('error', done);
-        this.zkClient.once('ready', () => {
-            this.zkClient.removeAllListeners('error');
-            done();
-        });
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
