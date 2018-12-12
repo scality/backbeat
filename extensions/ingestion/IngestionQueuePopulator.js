@@ -14,9 +14,10 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             return cb();
         }
         const { zookeeperPath } = this.extConfig;
-        const bucketPrefix = source.prefix ? source.prefix : source.name;
+        const targetZenkoBucket = source.name;
         return async.times(source.raftCount, (index, next) => {
-            const path = `${zookeeperPath}/${bucketPrefix}/provisions/${index}`;
+            const path = `${zookeeperPath}/${targetZenkoBucket}` +
+                `/raft-id-dispatcher/provisions/${index}`;
             return this.zkClient.mkdirp(path, err => {
                 if (err) {
                     if (err.name !== 'NO_NODE') {
@@ -31,7 +32,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             });
         }, cb);
     }
-
 
     _setupZookeeper(done) {
         const populatorZkPath = this.extConfig.zookeeperPath;
