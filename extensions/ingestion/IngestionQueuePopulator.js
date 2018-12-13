@@ -3,34 +3,68 @@ const async = require('async');
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 
+const LEADERS = '/leaders';
+const OWNERS = '/owners';
+const PROVISIONS = '/provisions';
+
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.config = params.config;
     }
 
+    // necessary for ProvisionDispatcher
     createZkPath(cb, source) {
         if (!source || !source.raftCount) {
             return cb();
         }
         const { zookeeperPath } = this.extConfig;
         const targetZenkoBucket = source.name;
-        return async.times(source.raftCount, (index, next) => {
-            const path = `${zookeeperPath}/${targetZenkoBucket}` +
-                `/raft-id-dispatcher/provisions/${index}`;
-            return this.zkClient.mkdirp(path, err => {
-                if (err) {
-                    if (err.name !== 'NO_NODE') {
+        const basePath =
+            `${zookeeperPath}/${targetZenkoBucket}/raft-id-dispatcher`;
+        return async.parallel([
+            next => {
+                const path = `${basePath}${LEADERS}`;
+                return this.zkClient.mkdirp(path, err => {
+                    if (err) {
                         this.log.error('error creating zookeeper path', {
                             method: 'IngestionQueuePopulator.createZkPath',
-                            zookeeperPath, error: err,
+                            zookeeperPath: path,
+                            error: err,
                         });
-                        return next(err);
                     }
-                }
-                return next();
-            });
-        }, cb);
+                    return next(err);
+                });
+            },
+            next => {
+                const path = `${basePath}${OWNERS}`;
+                return this.zkClient.mkdirp(path, err => {
+                    if (err) {
+                        this.log.error('error creating zookeeper path', {
+                            method: 'IngestionQueuePopulator.createZkPath',
+                            zookeeperPath: path,
+                            error: err,
+                        });
+                    }
+                    return next(err);
+                });
+            },
+            next => async.times(source.raftCount, (index, done) => {
+                const path = `${basePath}${PROVISIONS}/${index}`;
+                return this.zkClient.mkdirp(path, err => {
+                    if (err) {
+                        if (err.name !== 'NO_NODE') {
+                            this.log.error('error creating zookeeper path', {
+                                method: 'IngestionQueuePopulator.createZkPath',
+                                zookeeperPath, error: err,
+                            });
+                            return done(err);
+                        }
+                    }
+                    return done();
+                });
+            }, next),
+        ], cb);
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
