@@ -195,9 +195,28 @@ const mockLogs = {
         ] },
     ] };
 
-const mockLogString = '\\/_\\/metadata\\/admin\\/raft_sessions\\/[\\d]*\\/' +
+// url to retrieve bucket list
+const bucketListURL = '\\/_\\/metadata\\/admin\\/raft_sessions\\/[1-8]' +
+    '\\/bucket';
+const bucketListRegex = new RegExp(bucketListURL);
+// url to retrieve bucket metadata
+const bucketMetadataURL = '\\/_\\/metadata\\/default\\/attributes\\/' +
+    '[a-z0-9]{3,63}';
+const bucketMetadataRegex = new RegExp(bucketMetadataURL);
+// url to retrieve list of objects
+const objectListURL = '\\/_\\/metadata\\/default\\/bucket\\/[a-z0-9]{3,63}';
+const objectListRegex = new RegExp(objectListURL);
+// url to retrieve object metadata
+const objectMetadataURL = '\\/_\\/metadata\\/default\\/bucket\\/' +
+    '[a-z0-9]{3,63}\\/[a-z0-9]{3,63}';
+const objectMetadataRegex = new RegExp(objectMetadataURL);
+// url to retrieve raft log id for bucket
+const raftIdURL = '\\/_\\/metadata\\/admin\\/buckets\\/[a-z0-9]{3,63}\\/id';
+const raftIdRegex = new RegExp(raftIdURL);
+// url to retrieve raft logs
+const logURL = '\\/_\\/metadata\\/admin\\/raft_sessions\\/[\\d]*\\/' +
     'log';
-const mockLogURLRegex = new RegExp(mockLogString);
+const logRegex = new RegExp(logURL);
 
 class MetadataMock {
     onRequest(req, res) {
@@ -207,12 +226,10 @@ class MetadataMock {
                 error: 'mock server only supports GET requests',
             }));
         }
-        if
-        (/\/_\/metadata\/admin\/raft_sessions\/[1-8]\/bucket/.test(req.url)) {
+        if (bucketListRegex.test(req.url)) {
             const value = ['bucket1', 'bucket2'];
             return res.end(JSON.stringify(value));
-        } else if
-        (/\/_\/metadata\/default\/attributes\/[a-z0-9]{3,63}/.test(req.url)) {
+        } else if (bucketMetadataRegex.test(req.url)) {
             const bucketName = req.url.split('/');
             const bucketMd = dummyBucketMD[bucketName[bucketName.length - 1]];
             const dummyBucketMdObj = new BucketInfo(bucketMd._name,
@@ -224,19 +241,17 @@ class MetadataMock {
                 bucketMd._websiteConfiguration, bucketMd._cors,
                 bucketMd._lifeCycle);
             return res.end(dummyBucketMdObj.serialize());
-        } else if
-        (/\/_\/metadata\/default\/bucket\/[a-z0-9]{3,63}/.test(req.url)) {
-            return res.end(JSON.stringify(objectList));
-        } else if
-        (/\/_\/metadata\/default\/[a-z0-9]{3,63}\/[a-z0-9]{3,63}/
-            .test(req.url)) {
+        } else if (objectMetadataRegex.test(req.url)) {
             return res.end(JSON.stringify({
                 metadata: 'dogsAreGood',
             }));
         } else if
-        (/\/_\/metadata\/admin\/buckets\/[a-z0-9]{3,63}\/id/.test(req.url)) {
+        (objectListRegex.test(req.url)) {
+            return res.end(JSON.stringify(objectList));
+        } else if
+        (raftIdRegex.test(req.url)) {
             return res.end(JSON.stringify(5));
-        } else if (mockLogURLRegex.test(req.url)) {
+        } else if (logRegex.test(req.url)) {
             return res.end(JSON.stringify(mockLogs));
         }
         return res.end(JSON.stringify({
@@ -245,4 +260,9 @@ class MetadataMock {
     }
 }
 
-module.exports = MetadataMock;
+module.exports = {
+    MetadataMock,
+    mockLogs,
+    objectList,
+    dummyBucketMD,
+};

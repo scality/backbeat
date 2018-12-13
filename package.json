@@ -18,6 +18,7 @@
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
+    "ft_test:ingestion": "mocha --recursive $(find tests/functional/ingestion -name '*.js') --timeout  30000",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js --timeout 30000",
     "ft_test:api:retry": "mocha tests/functional/api/retry.js --timeout 30000",
     "bh_test": "mocha --recursive tests/behavior",

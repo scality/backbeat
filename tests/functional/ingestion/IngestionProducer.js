@@ -5,7 +5,7 @@ const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
 const testConfig = require('../../config.json');
-const MetadataMock = require('../../utils/MockMetadataServer');
+const { MetadataMock } = require('../../utils/MockMetadataServer');
 
 describe('ingestion producer tests with mock', () => {
     let httpServer;
