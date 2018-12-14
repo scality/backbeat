@@ -21,6 +21,7 @@ describe('ingestion producer tests with mock', () => {
             host: 'localhost',
             port: 7999,
             prefix: 'testbackend',
+            https: false,
             auth: {
                 accessKey: 'accessKey1',
                 secretKey: 'verySecretKey1',
