@@ -24,8 +24,6 @@ const BucketQueueEntry = require('../utils/BucketQueueEntry');
 const {
     proxyVaultPath,
     proxyIAMPath,
-    metricsExtension,
-    metricsTypeProcessed,
 } = require('../constants');
 
 class QueueProcessor extends EventEmitter {
@@ -272,6 +270,7 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
+            mProducer: this._mProducer,
             site: this.site,
             consumer: this._consumer,
             logger: this.logger,
@@ -317,23 +316,6 @@ class QueueProcessor extends EventEmitter {
                 this.logger.info('queue processor is ready to consume ' +
                                  'replication entries');
                 this.emit('ready');
-            });
-            this._consumer.on('metrics', data => {
-                // i.e. data = { my-site: { ops: 1, bytes: 124 } }
-                const filteredData = Object.keys(data).filter(key =>
-                    key === this.site).reduce((store, k) => {
-                        // eslint-disable-next-line no-param-reassign
-                        store[k] = data[this.site];
-                        return store;
-                    }, {});
-                this._mProducer.publishMetrics(filteredData,
-                    metricsTypeProcessed, metricsExtension, err => {
-                        this.logger.trace('error occurred in publishing ' +
-                            'metrics', {
-                                error: err,
-                                method: 'QueueProcessor.start',
-                            });
-                    });
             });
             return undefined;
         });
