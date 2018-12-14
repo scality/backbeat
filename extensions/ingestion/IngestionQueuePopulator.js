@@ -7,6 +7,15 @@ const LEADERS = '/leaders';
 const OWNERS = '/owners';
 const PROVISIONS = '/provisions';
 
+// Temp testing
+const RESET = '\x1b[0m';
+// green
+const COLORME = '\x1b[32m';
+
+function logMe(str) {
+    console.log(COLORME, str, RESET);
+}
+
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
@@ -70,15 +79,23 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
     filter(entry) {
         if (entry.type !== 'put' && entry.type !== 'del') {
+            logMe(`ENTRY TYPE IS NOT PUT OR DEL: ${entry.type}`)
             this.log.trace('skipping entry because not type put or del');
             return;
         }
         // Note that del entries at least have a bucket and key
         // and that bucket metadata entries at least have a bucket
         if (!entry.bucket) {
+            logMe(`ENTRY BUCKET MISSING: ${JSON.stringify(entry)}`)
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
+
+        logMe(`PUBLISH TO KAFKA!! ${this.config.topic} | ${entry.bucket}/${entry.key}`)
+        logMe(JSON.stringify(entry));
+
+        logMe('------------------')
+
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
         this.publish(this.config.topic,
