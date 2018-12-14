@@ -21,13 +21,8 @@ describe('ingestion producer tests with mock', () => {
             port: 7999,
             prefix: 'testbackend',
             auth: {
-                type: 'account',
-                account: 'bart',
-                vault: {
-                    host: '127.0.0.1',
-                    port: 8500,
-                    adminPort: 8600,
-                },
+                accessKey: 'accessKey1',
+                secretKey: 'verySecretKey1',
             },
         }, testConfig.queuePopulator, testConfig.s3);
         this.queuePopulator = new QueuePopulator(
