@@ -1,6 +1,11 @@
 const assert = require('assert');
 const MultipleBackendTask =
     require('../../../extensions/replication/tasks/MultipleBackendTask');
+const config = require('../../config.json');
+const QueueEntry = require('../../../lib/models/QueueEntry');
+const fakeLogger = require('../../utils/fakeLogger');
+const { replicationEntry, lifecycleEntry } =
+    require('../../utils/kafkaEntries');
 
 const MPU_GCP_MAX_PARTS = 1024;
 const MIN_AWS_PART_SIZE = (1024 * 1024) * 5; // 5MB
@@ -9,20 +14,49 @@ const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
 const retryConfig = { scality: { timeoutS: 0 } };
 
 describe('MultipleBackendTask', () => {
-    const task = new MultipleBackendTask({
-        getStateVars: () => ({
-            repConfig: {
-                queueProcessor: {
-                    retry: retryConfig,
-                },
-            },
-        }),
-    });
+    let task;
 
     function checkPartLength(contentLength, expectedPartSize) {
         const partSize = task._getRangeSize(contentLength);
         assert.strictEqual(partSize, expectedPartSize);
     }
+
+    beforeEach(() => {
+        task = new MultipleBackendTask({
+            getStateVars: () => ({
+                repConfig: {
+                    queueProcessor: {
+                        retry: retryConfig,
+                    },
+                },
+                sourceConfig: config.extensions.replication.source,
+            }),
+        });
+    });
+
+    describe('::_setupClients', () => {
+        it('should set client for replication', done => {
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            task._setupClients(entry, fakeLogger, () => {
+                assert(task.sourceRole !== null);
+                assert(task.S3source !== null);
+                assert(task.backbeatSource !== null);
+                assert(task.backbeatSourceProxy !== null);
+                done();
+            });
+        });
+
+        it('should set clients for lifecycle', done => {
+            const entry = QueueEntry.createFromKafkaEntry(lifecycleEntry);
+            task._setupClients(entry, fakeLogger, () => {
+                assert(task.sourceRole === null);
+                assert(task.S3source !== null);
+                assert(task.backbeatSource !== null);
+                assert(task.backbeatSourceProxy !== null);
+                done();
+            });
+        });
+    });
 
     describe('::_getRangeSize', () => {
         it('should get correct part sizes', () => {

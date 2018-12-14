@@ -100,7 +100,7 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return cb(errors.BadRole);
             }
-            return cb(null, roles[0]);
+            return cb();
         });
     }
 
@@ -1015,6 +1015,26 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
+    /**
+     * Sets up the clients used for data and metadata requests to the source
+     * CloudServer.
+     * @param {ObjectQueueEntry} entry - The source object entry
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _setupClients(entry, log, cb) {
+        if (entry.isReplicationOperation()) {
+            // Sets up source clients using the role from the replication
+            // configuration if the authentication type is as such.
+            return this._setupRoles(entry, log, cb);
+        }
+        if (entry.isLifecycleOperation()) {
+            this._setupSourceClients(undefined, log);
+        }
+        return cb();
+    }
+
     processQueueEntry(sourceEntry, kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toMultipleBackendReplicaEntry(this.site);
@@ -1022,21 +1042,20 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('processing entry', { entry: sourceEntry.getLogInfo() });
 
         return async.waterfall([
-            next => this._setupRoles(sourceEntry, log, next),
-            (sourceRole, next) =>
-                this._refreshSourceEntry(sourceEntry, log, (err, res) => {
-                    if (err && err.code === 'ObjNotFound' &&
-                        sourceEntry.getReplicationIsNFS() &&
-                        !sourceEntry.getIsDeleteMarker()) {
-                        // The object was deleted before entry is processed, we
-                        // can safely skip this entry.
-                        return next(errors.InvalidObjectState);
-                    }
-                    if (err) {
-                        return next(err);
-                    }
-                    return next(null, res);
-                }),
+            next => this._setupClients(sourceEntry, log, next),
+            next => this._refreshSourceEntry(sourceEntry, log, (err, res) => {
+                if (err && err.code === 'ObjNotFound' &&
+                    sourceEntry.getReplicationIsNFS() &&
+                    !sourceEntry.getIsDeleteMarker()) {
+                    // The object was deleted before entry is processed, we
+                    // can safely skip this entry.
+                    return next(errors.InvalidObjectState);
+                }
+                if (err) {
+                    return next(err);
+                }
+                return next(null, res);
+            }),
             (refreshedEntry, next) => {
                 if (sourceEntry.getIsDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, destEntry, log,

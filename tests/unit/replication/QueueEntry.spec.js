@@ -4,12 +4,12 @@ const assert = require('assert');
 
 const QueueEntry =
           require('../../../lib/models/QueueEntry');
-const kafkaEntry = require('../../utils/kafkaEntry');
+const { replicationEntry } = require('../../utils/kafkaEntries');
 
 describe('QueueEntry helper class', () => {
     describe('built from Kafka queue entry', () => {
         it('should parse a well-formed kafka entry', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             assert.strictEqual(entry.getBucket(),
                                'queue-populator-test-bucket');
@@ -30,7 +30,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should convert a kafka entry\'s replication status', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
 
             // If one site is a REPLICA, the global status should be REPLICA
@@ -87,7 +87,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should set a kafka entry operation type', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             entry.setOperationType('a');
             assert.strictEqual(entry.getOperationType(), 'a');
@@ -95,14 +95,14 @@ describe('QueueEntry helper class', () => {
 
         it('should get a kafka entry operation type as replication when ' +
         'not declared', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             assert.strictEqual(entry.getOperationType(), undefined);
             assert.strictEqual(entry.isReplicationOperation(), true);
         });
 
         it('should get a kafka entry operation type as lifecycle', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
             assert.strictEqual(lifecycleEntry.isLifecycleOperation(), true);
@@ -110,7 +110,7 @@ describe('QueueEntry helper class', () => {
 
         it('should set a lifecycle kafka entry replication storage class',
         () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
             assert.strictEqual(lifecycleEntry.getReplicationStorageClass(),
@@ -119,7 +119,7 @@ describe('QueueEntry helper class', () => {
 
         it('should set a lifecycle kafka entry replication storage type',
         () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
             const lifecycleEntry = entry.toLifecycleEntry('a', 'b');
             assert.strictEqual(lifecycleEntry.getReplicationStorageType(), 'b');
@@ -129,7 +129,7 @@ describe('QueueEntry helper class', () => {
     describe('QueueEntry.getReducedLocations helper method', () => {
         it('should not alter an array when each part has only one element',
         () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const locations = [
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
@@ -151,7 +151,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should reduce an array when first part is > 1 element', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
@@ -194,7 +194,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should reduce an array when second part is > 1 element', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
@@ -237,7 +237,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should reduce an array when multiple parts are > 1 element', () => {
-            const entry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             entry.setLocation([
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',

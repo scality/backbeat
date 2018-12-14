@@ -3,12 +3,7 @@ const assert = require('assert');
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
 
-const fakeLogger = {
-    debug: () => {},
-    error: () => {},
-    info: () => {},
-    trace: () => {},
-};
+const fakeLogger = require('../../utils/fakeLogger');
 
 const TOPIC = 'test-topic';
 const SITE = 'test-site';

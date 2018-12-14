@@ -3,13 +3,7 @@ const assert = require('assert');
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
 const config = require('../../config.json');
-
-const fakeLogger = {
-    trace: () => {},
-    error: () => {},
-    info: () => {},
-    debug: () => {},
-};
+const fakeLogger = require('../../utils/fakeLogger');
 
 describe('BackbeatAPI', () => {
     let bbapi;

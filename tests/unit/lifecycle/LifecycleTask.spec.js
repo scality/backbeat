@@ -5,19 +5,13 @@ const assert = require('assert');
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
+const fakeLogger = require('../../utils/fakeLogger');
 
 // 5 days prior to CURRENT
 const PAST = new Date(2018, 1, 5);
 const CURRENT = new Date(2018, 1, 10);
 // 5 days after CURRENT
 const FUTURE = new Date(2018, 1, 15);
-
-const fakeLogger = {
-    trace: () => {},
-    error: () => {},
-    info: () => {},
-    debug: () => {},
-};
 
 // LifecycleBucketProcessor mini Mock
 const lp = {

@@ -3,17 +3,17 @@ const assert = require('assert');
 const UpdateReplicationStatus =
     require('../../../extensions/replication/tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const kafkaEntry = require('../../utils/kafkaEntry');
+const { replicationEntry } = require('../../utils/kafkaEntries');
 
 function getCompletedEntry() {
-    return QueueEntry.createFromKafkaEntry(kafkaEntry)
+    return QueueEntry.createFromKafkaEntry(replicationEntry)
         .toCompletedEntry('sf')
         .toCompletedEntry('replicationaws')
         .setSite('sf');
 }
 
 function getRefreshedEntry() {
-    return QueueEntry.createFromKafkaEntry(kafkaEntry).setSite('sf');
+    return QueueEntry.createFromKafkaEntry(replicationEntry).setSite('sf');
 }
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {

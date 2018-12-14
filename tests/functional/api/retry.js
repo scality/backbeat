@@ -10,7 +10,7 @@ const getUrl = require('../utils/getUrl');
 const { addMembers, addManyMembers } = require('../utils/sortedSetHelpers');
 const { makeRetryPOSTRequest, getRequest, getResponseBody } =
     require('../utils/httpHelpers');
-const fakeLogger = require('../utils/fakeLogger');
+const fakeLogger = require('../../utils/fakeLogger');
 
 const redisConfig = { host: '127.0.0.1', port: 6379 };
 const redisClient = new RedisClient(redisConfig, fakeLogger);

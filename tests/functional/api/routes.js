@@ -12,7 +12,7 @@ const config = require('../../config.json');
 const { makeRequest, getRequest, getResponseBody } =
     require('../utils/httpHelpers');
 const getUrl = require('../utils/getUrl');
-const fakeLogger = require('../utils/fakeLogger');
+const fakeLogger = require('../../utils/fakeLogger');
 const { addMembers } = require('../utils/sortedSetHelpers');
 
 const redisConfig = {
