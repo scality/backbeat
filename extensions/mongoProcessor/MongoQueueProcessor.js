@@ -1,5 +1,7 @@
 'use strict'; // eslint-disable-line
 
+const util = require('util');
+
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const MongoClient = require('arsenal').storage
@@ -11,6 +13,15 @@ const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const BucketQueueEntry = require('../../lib/models/BucketQueueEntry');
 const BucketMdQueueEntry = require('../../lib/models/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
+
+// Temp testing
+const RESET = '\x1b[0m';
+// blue
+const COLORME = '\x1b[35m';
+
+function logMe(str) {
+    console.log(COLORME, str, RESET);
+}
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -125,6 +136,12 @@ class MongoQueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
+
+        logMe(JSON.stringify(sourceEntry))
+
+        logMe(`==== CHECK: ${this.site}`)
+        logMe(JSON.stringify(util.inspect(kafkaEntry, { depth: 4 })))
+
         // TODO-FIX:
         // Depends on the filter data. Need a way of determining the
         // zenko bucket.
@@ -132,7 +149,11 @@ class MongoQueueProcessor {
         if (this.site !== kafkaEntry.bucket) {
             return process.nextTick(done);
         }
+
+
+
         if (sourceEntry instanceof DeleteOpQueueEntry) {
+            logMe('--> DELETE OP QUEUE ENTRY <--')
             const bucket = sourceEntry.getBucket();
             const key = sourceEntry.getObjectVersionedKey();
             // Always call deleteObject with version params undefined so
@@ -153,6 +174,7 @@ class MongoQueueProcessor {
                 });
         }
         if (sourceEntry instanceof ObjectQueueEntry) {
+            logMe('--> OBJECT QUEUE ENTRY <--')
             const bucket = sourceEntry.getBucket();
             // always use versioned key so putting full version state to mongo
             const key = sourceEntry.getObjectVersionedKey();
@@ -176,6 +198,7 @@ class MongoQueueProcessor {
                 });
         }
         if (sourceEntry instanceof BucketMdQueueEntry) {
+            logMe('--> BUCKET MD QUEUE ENTRY <--')
             const masterBucket = sourceEntry.getMasterBucket();
             const instanceBucket = sourceEntry.getInstanceBucket();
             const val = sourceEntry.getValue();
@@ -194,6 +217,7 @@ class MongoQueueProcessor {
                 });
         }
         if (sourceEntry instanceof BucketQueueEntry) {
+            logMe('--> BUCKET QUEUE ENTRY <--')
             const bucketOwnerKey = sourceEntry.getBucketOwnerKey();
             const val = sourceEntry.getValue();
             return this._mongoClient.putObject(usersBucket,
