@@ -111,7 +111,7 @@ describe('ingestion producer tests with mock', () => {
             // based on MetadataMock, raft 1 will have 'bucketfindraftid'
             assert.ifError(err);
             assert.strictEqual(typeof res, 'string');
-            assert.strictEqual(res, '5');
+            assert.strictEqual(res, '1');
             return done();
         });
     });

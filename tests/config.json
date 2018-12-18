@@ -34,20 +34,21 @@
                 "type": "service",
                 "account": "md-ingestion"
             },
-            "topic": "backbeat-test-ingestion",
+            "topic": "backbeat-ingestion",
             "zookeeperPath": "/ingestion",
+            "cronRule": "*/5 * * * * *",
             "sources": [
                 {
-                    "name": "ingest-site-1",
+                    "name": "zenkobucket",
+                    "bucket": "bucket1",
                     "host": "localhost",
-                    "port": 8000,
-                    "https": false
-                },
-                {
-                    "name": "ingest-site-2",
-                    "host": "localhost",
-                    "port": 8000,
-                    "https": false
+                    "port": 7998,
+                    "https": false,
+                    "type": "scality_s3",
+                    "auth": {
+                        "accessKey": "myAccessKey",
+                        "secretKey": "myEncryptedSecretKey"
+                    }
                 }
             ]
         },
