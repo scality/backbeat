@@ -273,7 +273,7 @@ describe('CRR Retry feature', () => {
                         });
                         return next();
                     }),
-            // add setTimeout to give time for normalize method to update Redis
+            //  add setTimeout to give time for normalize method to update Redis
             next => setTimeout(() => {
                 async.map([
                     `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm1}`,
