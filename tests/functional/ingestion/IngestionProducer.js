@@ -17,6 +17,7 @@ describe('ingestion producer tests with mock', () => {
             (req, res) => metadataMock.onRequest(req, res)).listen(7999);
         testConfig.s3.port = 7999;
         this.iProducer = new IngestionProducer({
+            name: 'testbucket',
             host: 'localhost',
             port: 7999,
             prefix: 'testbackend',
