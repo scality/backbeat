@@ -1,5 +1,7 @@
 const async = require('async');
 
+const util = require('util');
+
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 
@@ -90,9 +92,15 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-
         logMe(`PUBLISH TO KAFKA!! ${this.config.topic} | ${entry.bucket}/${entry.key}`)
-        logMe(JSON.stringify(entry));
+        // logMe(entry)
+        // logMe(util.inspect(entry, { depth: 3 }));
+        // let a = JSON.parse(entry.value);
+        // logMe(Object.keys(a))
+        // logMe(a.replicationInfo)
+        // logMe(JSON.stringify(a.replicationInfo))
+        // logMe(JSON.stringify(entry.value.tags))
+        // logMe(JSON.stringify(entry));
 
         logMe('------------------')
 

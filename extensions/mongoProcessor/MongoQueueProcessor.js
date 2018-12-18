@@ -7,6 +7,7 @@ const errors = require('arsenal').errors;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const { usersBucket } = require('arsenal').constants;
+const { BucketInfo } = require('arsenal').models;
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
@@ -81,6 +82,8 @@ class MongoQueueProcessor {
      */
     start() {
         this.logger.info('starting mongo queue processor');
+        logMe(`PROCESSOR TOPIC: ${this.mongoProcessorConfig.topic}`)
+        logMe(this.kafkaConfig.hosts)
         this._mongoClient.setup(err => {
             if (err) {
                 this.logger.error('could not connect to MongoDB', { err });
@@ -89,9 +92,10 @@ class MongoQueueProcessor {
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
-                groupId: `${this.mongoProcessorConfig.groupId}-${this.site}`,
+                groupId: `${this.mongoProcessorConfig.groupId}s-${this.site}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
+                concurrency: 10,
             });
             this._consumer.on('error', () => {
                 if (!consumerReady) {
@@ -130,13 +134,16 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        logMe('ENTER processKafkaEntry')
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
+            logMe('GOT ERROR ON PROCESSOR SIDE')
             this.logger.error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
 
+        logMe('IN PROCESSOR SIDE')
         logMe(JSON.stringify(sourceEntry))
 
         logMe(`==== CHECK: ${this.site}`)
@@ -146,11 +153,9 @@ class MongoQueueProcessor {
         // Depends on the filter data. Need a way of determining the
         // zenko bucket.
         // if entry is for another site, simply skip/ignore
-        if (this.site !== kafkaEntry.bucket) {
-            return process.nextTick(done);
-        }
-
-
+        // if (this.site !== kafkaEntry.bucket) {
+        //     return process.nextTick(done);
+        // }
 
         if (sourceEntry instanceof DeleteOpQueueEntry) {
             logMe('--> DELETE OP QUEUE ENTRY <--')
