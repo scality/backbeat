@@ -261,17 +261,19 @@ describe('CRR Retry feature', () => {
                         });
                         return next();
                     }),
-            next => async.map([
-                `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm1}`,
-                `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm2}`,
-            ],
-            (key, cb) => redisClient.zcard(key, cb),
-            (err, results) => {
-                assert.ifError(err);
-                const sum = results[0] + results[1];
-                assert.strictEqual(sum, 1);
-                return next();
-            }),
+            next => setTimeout(() => {
+                async.map([
+                    `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm1}`,
+                    `${TEST_REDIS_KEY_FAILED_CRR}:${site}:${norm2}`,
+                ],
+                (key, cb) => redisClient.zcard(key, cb),
+                (err, results) => {
+                    assert.ifError(err);
+                    const sum = results[0] + results[1];
+                    assert.strictEqual(sum, 1);
+                    return next();
+                });
+            }, 2000),
         ], done);
     });
 
