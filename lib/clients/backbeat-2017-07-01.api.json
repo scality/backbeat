@@ -1097,6 +1097,18 @@
             "members": {
                 "Contents": {
                     "shape": "ObjectMDList"
+                },
+                "CommonPrefixes": {
+                    "type": "list",
+                    "members": {
+                        "type": "string"
+                    }
+                },
+                "IsTruncated": {
+                    "type": "boolean"
+                },
+                "Delimiter": {
+                    "type": "string"
                 }
             }
         },

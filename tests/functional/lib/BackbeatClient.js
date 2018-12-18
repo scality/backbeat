@@ -4,12 +4,16 @@ const BucketInfo = require('arsenal').models.BucketInfo;
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { getAccountCredentials } =
     require('../../../lib/credentials/AccountCredentials');
-const { MetadataMock, mockLogs, objectList, dummyBucketMD } =
+const { MetadataMock, mockLogs, objectList, dummyBucketMD, objectMD } =
     require('arsenal').testing.MetadataMock;
 const backbeatClientTestPort = 9004;
 const bucketName = 'bucket1';
 const bucketName2 = 'bucket2';
 const objectName = 'object1';
+
+const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
+const expectedObjectList = JSON.parse(JSON.stringify(objectList));
+const expectedObjectMD = objectMD[objectName];
 
 const accountCreds = getAccountCredentials({
     type: 'account',
@@ -27,6 +31,18 @@ const serverMock = new MetadataMock();
 describe('BackbeatClient unit tests with mock server', () => {
     let httpServer;
     before(done => {
+        expectedLogs.log.forEach((log, i) => {
+            log.entries.forEach((entry, j) => {
+                expectedLogs.log[i].entries[j].value.attributes =
+                    JSON.stringify(entry.value.attributes);
+                expectedLogs.log[i].entries[j].value =
+                    JSON.stringify(entry.value);
+            });
+        });
+        expectedObjectList.Contents.forEach((obj, i) => {
+            expectedObjectList.Contents[i].value =
+                JSON.stringify(obj.value);
+        });
         httpServer = http.createServer(
             (req, res) => serverMock.onRequest(req, res))
                 .listen(backbeatClientTestPort, done);
@@ -55,7 +71,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.strictEqual(data[0], '5');
+            assert.strictEqual(data[0], '1');
             return done();
         });
     });
@@ -66,7 +82,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.deepStrictEqual(data, mockLogs);
+            assert.deepStrictEqual(data, expectedLogs);
             return done();
         });
     });
@@ -105,7 +121,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.deepStrictEqual(data, objectList);
+            assert.deepStrictEqual(data, expectedObjectList);
             return done();
         });
     });
@@ -117,9 +133,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.strictEqual(typeof data, 'object');
-            assert(data.key);
-            assert.strictEqual(data.key, 'dogsAreGood');
+            assert.deepStrictEqual(data, expectedObjectMD);
             return done();
         });
     });

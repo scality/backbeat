@@ -22,7 +22,7 @@
         },
         "mongo": {
             "logName": "s3-recordlog",
-            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
+            "replicaSetHosts": "localhost:27018"
         }
     },
     "kafka": {
@@ -36,18 +36,19 @@
             },
             "topic": "backbeat-test-ingestion",
             "zookeeperPath": "/ingestion",
+            "cronRule": "*/5 * * * * *",
             "sources": [
                 {
-                    "name": "ingest-site-1",
+                    "name": "zenkobucket",
+                    "bucket": "bucket1",
                     "host": "localhost",
-                    "port": 8000,
-                    "https": false
-                },
-                {
-                    "name": "ingest-site-2",
-                    "host": "localhost",
-                    "port": 8000,
-                    "https": false
+                    "port": 7998,
+                    "https": false,
+                    "type": "scality_s3",
+                    "auth": {
+                        "accessKey": "myAccessKey",
+                        "secretKey": "J9K8FUQpjRRVVZbHVm73VQpMNAxK1ZqVbgIuAgaoxlkQ24285VbfK1K/Q2Vcp9RoAGZItiOCTBkRVyp7VLE3bexxRpOWlDbq7k5O2HN1DgxsJrCYMpjUbOSKnVTdu8gsAFKg2q4RgDl6OgPaOMLlClS1n7c6EocOHMbmUeTxC+/hmvvOktMJeSbzXdf9GNwMIbu1IbRmvqw/6TlwtpnrPLJTI4EQdUTYba6YcZnM6jNP8p+hkzc0V6G0lD/a7cI7EeXD/UZlkdWj5P8Z+FZj99Fez5IJuiYY5FyfJeRcznOLCaVgUvg+GjFB01Z2/vcBNCLV950Tmwi0v5X3GZFBcQ=="
+                    }
                 }
             ]
         },
@@ -85,6 +86,10 @@
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed",
             "queueProcessor": {
+                "groupId": "backbeat-test-replication-group",
+                "concurrency": 10
+            },
+            "replicationStatusProcessor": {
                 "groupId": "backbeat-test-replication-group",
                 "concurrency": 10
             }
