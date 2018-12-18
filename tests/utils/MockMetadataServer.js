@@ -243,7 +243,7 @@ class MetadataMock {
             return res.end(dummyBucketMdObj.serialize());
         } else if (objectMetadataRegex.test(req.url)) {
             return res.end(JSON.stringify({
-                metadata: 'dogsAreGood',
+                key: 'dogsAreGood',
             }));
         } else if
         (objectListRegex.test(req.url)) {

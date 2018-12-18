@@ -24,7 +24,7 @@ const backbeatClient = new BackbeatClient({
 
 const serverMock = new MetadataMock();
 
-describe.only('BackbeatClient unit tests with mock server', () => {
+describe('BackbeatClient unit tests with mock server', () => {
     let httpServer;
     before(done => {
         httpServer = http.createServer(
@@ -116,8 +116,8 @@ describe.only('BackbeatClient unit tests with mock server', () => {
         return destReq.send((err, data) => {
             assert.ifError(err);
             assert.strictEqual(typeof data, 'object');
-            assert(data.metadata);
-            assert.strictEqual(data.metadata, 'dogsAreGood');
+            assert(data.key);
+            assert.strictEqual(data.key, 'dogsAreGood');
             return done();
         });
     });
