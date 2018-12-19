@@ -256,6 +256,14 @@ if [[ "$EXTENSIONS_GC_TOPIC" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.gc.topic=\"$EXTENSIONS_GC_TOPIC\""
 fi
 
+if [[ "$EXTENSIONS_INGESTION_AUTH_TYPE" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.ingestion.auth.type=\"$EXTENSIONS_INGESTION_AUTH_TYPE\""
+fi
+
+if [[ "$EXTENSIONS_INGESTION_AUTH_ACCOUNT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.ingestion.auth.account=\"$EXTENSIONS_INGESTION_AUTH_ACCOUNT\""
+fi
+
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
     jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
     mv conf/config.json.tmp conf/config.json

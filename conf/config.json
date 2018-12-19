@@ -35,6 +35,10 @@
     },
     "extensions": {
         "ingestion": {
+            "auth": {
+                "type": "service",
+                "account": "service-md-ingestion"
+            },
             "topic": "backbeat-ingestion",
             "zookeeperPath": "/ingestion",
             "cronRule": "*/5 * * * * *",
