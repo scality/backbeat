@@ -60,15 +60,6 @@ describe('ingestion producer tests with mock', () => {
         });
     });
 
-    it('should be able to grab metadata for specified bucket', done => {
-        this.iProducer._getBucketMd(['bucket1'], (err, res) => {
-            assert.ifError(err);
-            assert(res);
-            assert.deepStrictEqual(res, ['bucket1']);
-            return done();
-        });
-    });
-
     it('should be able to grab metadata for list of objects', done => {
         this.iProducer._getBucketObjectsMetadata([{
             bucket: 'bucket1',
@@ -86,7 +77,7 @@ describe('ingestion producer tests with mock', () => {
         this.iProducer.snapshot('bucket1', (err, res) => {
             // we expect 3 logs from the MockMetadataServer: 1 bucket with 2 log
             // entries per bucket, and 1 object in each bucket with 1 log entry
-            assert.strictEqual(res.length, 3);
+            assert.strictEqual(res.length, 1);
             res.forEach(entry => {
                 assert(entry.type);
                 assert(entry.bucket);

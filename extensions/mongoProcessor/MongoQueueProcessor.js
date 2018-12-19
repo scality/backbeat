@@ -4,7 +4,7 @@ const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
-const { usersBucket } = require('arsenal').constants;
+
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
@@ -176,41 +176,19 @@ class MongoQueueProcessor {
                 });
         }
         if (sourceEntry instanceof BucketMdQueueEntry) {
-            const masterBucket = sourceEntry.getMasterBucket();
-            const instanceBucket = sourceEntry.getInstanceBucket();
-            const val = sourceEntry.getValue();
-            return this._mongoClient.putObject(masterBucket,
-                instanceBucket, val, undefined,
-                this.logger, err => {
-                    if (err) {
-                        this.logger.error('error putting bucket ' +
-                        'metadata to mongo',
-                        { error: err.message, masterBucket, instanceBucket });
-                        return done(err);
-                    }
-                    this.logger.info('bucket metadata put into mongo',
-                    { masterBucket, instanceBucket });
-                    return done();
-                });
-        }
-        if (sourceEntry instanceof BucketQueueEntry) {
-            const bucketOwnerKey = sourceEntry.getBucketOwnerKey();
-            const val = sourceEntry.getValue();
-            return this._mongoClient.putObject(usersBucket,
-                bucketOwnerKey, val, undefined,
-                this.logger, err => {
-                    if (err) {
-                        this.logger.error('error putting bucket entry to mongo',
-                        { error: err.message, bucketOwnerKey });
-                        return done(err);
-                    }
-                    this.logger.info('successfully put bucket entry to mongo',
-                    { bucketOwnerKey });
-                    return done();
-                });
-        }
-        this.logger.warn('skipping unknown source entry',
+            this.logger.warn('skipping bucket md queue entry', {
+                method: 'MongoQueueProcessor.processKafkaEntry',
+                entry: sourceEntry.getLogInfo(),
+            });
+        } else if (sourceEntry instanceof BucketQueueEntry) {
+            this.logger.warn('skipping bucket queue entry', {
+                method: 'MongoQueueProcessor.processKafkaEntry',
+                entry: sourceEntry.getLogInfo(),
+            });
+        } else {
+            this.logger.warn('skipping unknown source entry',
                             { entry: sourceEntry.getLogInfo() });
+        }
         return process.nextTick(done);
     }
 
