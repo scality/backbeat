@@ -146,8 +146,8 @@ class MongoQueueProcessor {
         logMe('IN PROCESSOR SIDE')
         logMe(JSON.stringify(sourceEntry))
 
-        logMe(`==== CHECK: ${this.site}`)
-        logMe(JSON.stringify(util.inspect(kafkaEntry, { depth: 4 })))
+        // logMe(`==== CHECK: ${this.site}`)
+        // logMe(JSON.stringify(util.inspect(kafkaEntry, { depth: 4 })))
 
         // TODO-FIX:
         // Depends on the filter data. Need a way of determining the
@@ -180,6 +180,9 @@ class MongoQueueProcessor {
         }
         if (sourceEntry instanceof ObjectQueueEntry) {
             logMe('--> OBJECT QUEUE ENTRY <--')
+
+            // TODO:
+            //
             const bucket = sourceEntry.getBucket();
             // always use versioned key so putting full version state to mongo
             const key = sourceEntry.getObjectVersionedKey();
@@ -203,40 +206,42 @@ class MongoQueueProcessor {
                 });
         }
         if (sourceEntry instanceof BucketMdQueueEntry) {
+            logMe('WARN')
             logMe('--> BUCKET MD QUEUE ENTRY <--')
-            const masterBucket = sourceEntry.getMasterBucket();
-            const instanceBucket = sourceEntry.getInstanceBucket();
-            const val = sourceEntry.getValue();
-            return this._mongoClient.putObject(masterBucket,
-                instanceBucket, val, undefined,
-                this.logger, err => {
-                    if (err) {
-                        this.logger.error('error putting bucket ' +
-                        'metadata to mongo',
-                        { error: err.message, masterBucket, instanceBucket });
-                        return done(err);
-                    }
-                    this.logger.info('bucket metadata put into mongo',
-                    { masterBucket, instanceBucket });
-                    return done();
-                });
+        //     const masterBucket = sourceEntry.getMasterBucket();
+        //     const instanceBucket = sourceEntry.getInstanceBucket();
+        //     const val = sourceEntry.getValue();
+        //     return this._mongoClient.putObject(masterBucket,
+        //         instanceBucket, val, undefined,
+        //         this.logger, err => {
+        //             if (err) {
+        //                 this.logger.error('error putting bucket ' +
+        //                 'metadata to mongo',
+        //                 { error: err.message, masterBucket, instanceBucket });
+        //                 return done(err);
+        //             }
+        //             this.logger.info('bucket metadata put into mongo',
+        //             { masterBucket, instanceBucket });
+        //             return done();
+        //         });
         }
         if (sourceEntry instanceof BucketQueueEntry) {
+            logMe('WARN')
             logMe('--> BUCKET QUEUE ENTRY <--')
-            const bucketOwnerKey = sourceEntry.getBucketOwnerKey();
-            const val = sourceEntry.getValue();
-            return this._mongoClient.putObject(usersBucket,
-                bucketOwnerKey, val, undefined,
-                this.logger, err => {
-                    if (err) {
-                        this.logger.error('error putting bucket entry to mongo',
-                        { error: err.message, bucketOwnerKey });
-                        return done(err);
-                    }
-                    this.logger.info('successfully put bucket entry to mongo',
-                    { bucketOwnerKey });
-                    return done();
-                });
+        //     const bucketOwnerKey = sourceEntry.getBucketOwnerKey();
+        //     const val = sourceEntry.getValue();
+        //     return this._mongoClient.putObject(usersBucket,
+        //         bucketOwnerKey, val, undefined,
+        //         this.logger, err => {
+        //             if (err) {
+        //                 this.logger.error('error putting bucket entry to mongo',
+        //                 { error: err.message, bucketOwnerKey });
+        //                 return done(err);
+        //             }
+        //             this.logger.info('successfully put bucket entry to mongo',
+        //             { bucketOwnerKey });
+        //             return done();
+        //         });
         }
         this.logger.warn('skipping unknown source entry',
                             { entry: sourceEntry.getLogInfo() });
