@@ -124,6 +124,33 @@ class MongoQueueProcessor {
         return this._consumer.close(done);
     }
 
+    _manipulateLocation(entry) {
+        const locations = entry.getLocation();
+        const editLocations = locations.map(location => {
+            const newValues = {
+                key: entry.getObjectKey(),
+                dataStoreName: 'philz-ring', // require this from populator
+                dataStoreType: 'aws_s3',
+            }
+            if (entry.getVersionId()) {
+                console.log(`has versionid.. ${entry.getEncodedVersionId()}`)
+                newValues.dataStoreVersionId = entry.getEncodedVersionId();
+            }
+            return Object.assign({}, location, newValues);
+        });
+        entry.setLocation(editLocations);
+    }
+
+    _manipulateOwner(entry) {
+        entry.setOwnerDisplayName('felipe')
+        entry.setOwnerId(
+            '117d39428f838cb5ac64ffd998f27e44167047a46e6504057b50ed484ae6c5de')
+    }
+
+    _manipulateKey(entry) {
+        //
+    }
+
     /**
      * Put kafka queue entry into mongo
      *
@@ -186,6 +213,10 @@ class MongoQueueProcessor {
             const bucket = sourceEntry.getBucket();
             // always use versioned key so putting full version state to mongo
             const key = sourceEntry.getObjectVersionedKey();
+
+            this._manipulateLocation(sourceEntry);
+            this._manipulateOwner(sourceEntry);
+
             const objVal = sourceEntry.getValue();
 
             // Always call putObject with version params undefined so
