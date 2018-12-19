@@ -1,6 +1,10 @@
 const joi = require('joi');
 
 const joiSchema = {
+    auth: joi.object({
+        type: joi.string().valid('service').required(),
+        account: joi.string().required(),
+    }).required(),
     topic: joi.string().required(),
     zookeeperPath: joi.string().required(),
     cronRule: joi.string().default('*/5 * * * * *'),

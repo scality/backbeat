@@ -71,11 +71,9 @@ const healthServer = new HealthProbeServer({
 const myOwnCronRule = '*/15 * * * * *';
 
 function initAndStart() {
-    // TODO: change to using ingestion service account
-    const sourceConfig = config.extensions.replication.source;
     initManagement({
-        serviceName: 'replication',
-        serviceAccount: sourceConfig.auth.account,
+        serviceName: 'md-ingestion',
+        serviceAccount: ingestionExtConfigs.auth.account,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });
