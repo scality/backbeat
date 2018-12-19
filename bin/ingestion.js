@@ -68,6 +68,8 @@ const healthServer = new HealthProbeServer({
     port: config.healthcheckServer.port,
 });
 
+const myOwnCronRule = '*/15 * * * * *';
+
 function initAndStart() {
     // TODO: change to using ingestion service account
     const sourceConfig = config.extensions.replication.source;
@@ -88,7 +90,7 @@ function initAndStart() {
                 const taskState = {
                     batchInProgress: false,
                 };
-                scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
+                scheduler = schedule.scheduleJob(myOwnCronRule,
                     () => {
                         queueBatch(ingestionPopulator, taskState, log);
                     });
