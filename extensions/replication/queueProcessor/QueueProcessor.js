@@ -16,7 +16,7 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
+const TaskScheduler = require('../../utils/TaskScheduler');
 const getLocationsFromStorageClass =
     require('../utils/getLocationsFromStorageClass');
 const ReplicateObject = require('../tasks/ReplicateObject');
@@ -154,7 +154,7 @@ class QueueProcessor extends EventEmitter {
             });
         }
 
-        this.taskScheduler = new ReplicationTaskScheduler(
+        this.taskScheduler = new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(
                 ctx.entry, ctx.kafkaEntry, done));
     }
@@ -678,10 +678,11 @@ class QueueProcessor extends EventEmitter {
         if (task) {
             this.logger.debug('source entry is being pushed',
               { entry: sourceEntry.getLogInfo() });
-            return this.taskScheduler.push({ task, entry: sourceEntry,
-                                             kafkaEntry },
-                                           sourceEntry.getCanonicalKey(),
-                                           done);
+            return this.taskScheduler.push({
+                task,
+                entry: sourceEntry,
+                kafkaEntry,
+            }, done);
         }
         this.logger.debug('skip source entry',
                           { entry: sourceEntry.getLogInfo() });

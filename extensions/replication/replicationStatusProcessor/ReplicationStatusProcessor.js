@@ -11,7 +11,7 @@ const { StatsModel } = require('arsenal').metrics;
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
-const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
+const TaskScheduler = require('../../utils/TaskScheduler');
 const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
@@ -105,7 +105,7 @@ class ReplicationStatusProcessor {
         const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
         this._statsClient = new StatsModel(undefined, INTERVAL,
             (monitorReplicationFailureExpiryTimeS + INTERVAL));
-        this.taskScheduler = new ReplicationTaskScheduler(
+        this.taskScheduler = new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
     }
 
@@ -262,12 +262,11 @@ class ReplicationStatusProcessor {
             return async.parallel([
                 next => this._pushFailedEntry(sourceEntry, next),
                 next => this.taskScheduler.push({ task, entry: sourceEntry },
-                    sourceEntry.getCanonicalKey(), next),
+                    next),
             ], done);
         }
         if (task) {
-            return this.taskScheduler.push({ task, entry: sourceEntry },
-                sourceEntry.getCanonicalKey(), done);
+            return this.taskScheduler.push({ task, entry: sourceEntry }, done);
         }
         this.logger.warn('skipping unknown source entry',
                          { entry: sourceEntry.getLogInfo() });
