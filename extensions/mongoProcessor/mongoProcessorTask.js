@@ -12,6 +12,7 @@ const mongoProcessorConfig = config.extensions.mongoProcessor;
 // TODO: consider whether we would want a separate mongo config
 // for the consumer side
 const mongoClientConfig = config.queuePopulator.mongo;
+const ingestionServiceAuth = config.extensions.ingestion.auth;
 
 const healthServer = new HealthProbeServer({
     bindAddress: config.healthcheckServer.bindAddress,
@@ -79,11 +80,9 @@ function loadHealthcheck() {
 }
 
 function loadManagementDatabase() {
-    // NOTE: using replication service account
-    const sourceConfig = config.extensions.replication.source;
     initManagement({
-        serviceName: 'replication',
-        serviceAccount: sourceConfig.auth.account,
+        serviceName: 'md-ingestion',
+        serviceAccount: ingestionServiceAuth.account,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });

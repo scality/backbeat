@@ -30,6 +30,10 @@
     },
     "extensions": {
         "ingestion": {
+            "auth": {
+                "type": "service",
+                "account": "md-ingestion"
+            },
             "topic": "backbeat-test-ingestion",
             "zookeeperPath": "/ingestion",
             "sources": [
