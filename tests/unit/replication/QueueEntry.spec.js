@@ -30,7 +30,7 @@ describe('QueueEntry helper class', () => {
         });
 
         it('should convert a kafka entry\'s replication status', () => {
-            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            let entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             assert.strictEqual(entry.error, undefined);
 
             // If one site is a REPLICA, the global status should be REPLICA
@@ -42,17 +42,18 @@ describe('QueueEntry helper class', () => {
                 'PENDING');
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
+            entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const multipleBackendReplica =
                 entry.toMultipleBackendReplicaEntry('sf');
             assert.strictEqual(
                 multipleBackendReplica.getReplicationSiteStatus('sf'),
-                'REPLICA');
+                'PENDING');
             assert.strictEqual(
                 multipleBackendReplica
                     .getReplicationSiteStatus('replicationaws'),
                 'PENDING');
             assert.strictEqual(
-                multipleBackendReplica.getReplicationStatus(), 'REPLICA');
+                multipleBackendReplica.getReplicationStatus(), 'PENDING');
             assert.strictEqual(entry.getBucket(),
                 multipleBackendReplica.getBucket());
 
