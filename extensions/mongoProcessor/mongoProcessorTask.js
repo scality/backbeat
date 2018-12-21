@@ -8,6 +8,7 @@ const config = require('../../conf/Config');
 const { initManagement } = require('../../lib/management/index');
 
 const kafkaConfig = config.kafka;
+const s3Config = config.s3;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
 // TODO: consider whether we would want a separate mongo config
 // for the consumer side
@@ -37,8 +38,9 @@ function updateProcessors(bootstrapList) {
             delete activeProcessors[site];
         } else if (!active.includes(site)) {
             // add new processor, site is new and requires setup
-            const mqp = new MongoQueueProcessor(kafkaConfig,
-                mongoProcessorConfig, mongoClientConfig, site);
+            const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
+                mongoProcessorConfig, mongoClientConfig,
+                ingestionServiceAuth, site);
             mqp.start();
             activeProcessors[site] = mqp;
         }
@@ -57,8 +59,9 @@ function loadProcessors() {
     // Start Processors for each site
     const siteNames = bootstrapList.map(i => i.site);
     siteNames.forEach(site => {
-        const mqp = new MongoQueueProcessor(kafkaConfig,
-            mongoProcessorConfig, mongoClientConfig, site);
+        const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
+            mongoProcessorConfig, mongoClientConfig,
+            ingestionServiceAuth, site);
         mqp.start();
         activeProcessors[site] = mqp;
     });
