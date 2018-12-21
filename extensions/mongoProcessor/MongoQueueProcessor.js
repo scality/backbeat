@@ -110,6 +110,18 @@ class MongoQueueProcessor {
     }
 
     /**
+     * Update ingested entry metadata fields: owner-id, owner-display-name
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {object} ownerInfo - owner details
+     * @return {undefined}
+     */
+    _updateOwnerMD(entry, ownerInfo) {
+        // zenko bucket owner information is being set on ingested md
+        entry.setOwnerDisplayName(ownerInfo.ownerDisplayName);
+        entry.setOwnerId(ownerInfo.ownerId);
+    }
+
+    /**
      * Process a delete object entry
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
      * @param {function} done - callback(error)
@@ -140,13 +152,18 @@ class MongoQueueProcessor {
     /**
      * Process an object entry
      * @param {ObjectQueueEntry} sourceEntry - object metadata entry
+     * @param {object} ownerInfo - owner details
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(sourceEntry, done) {
+    _processObjectQueueEntry(sourceEntry, ownerInfo, done) {
         const bucket = sourceEntry.getBucket();
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
+
+        // update necessary metadata fields before saving to Zenko MongoDB
+        this._updateOwnerMD(sourceEntry);
+
         const objVal = sourceEntry.getValue();
         // Always call putObject with version params undefined so
         // that mongoClient will use putObjectNoVer which just puts
@@ -189,27 +206,45 @@ class MongoQueueProcessor {
         if (this.site !== kafkaEntry.bucket) {
             return process.nextTick(done);
         }
-        if (sourceEntry instanceof DeleteOpQueueEntry) {
-            return this._processDeleteOpQueueEntry(sourceEntry, done);
-        }
-        if (sourceEntry instanceof ObjectQueueEntry) {
-            return this._processObjectQueueEntry(sourceEntry, done);
-        }
         if (sourceEntry instanceof BucketMdQueueEntry) {
             this.logger.warn('skipping bucket md queue entry', {
                 method: 'MongoQueueProcessor.processKafkaEntry',
                 entry: sourceEntry.getLogInfo(),
             });
+            return process.nextTick(done);
         } else if (sourceEntry instanceof BucketQueueEntry) {
             this.logger.warn('skipping bucket queue entry', {
                 method: 'MongoQueueProcessor.processKafkaEntry',
                 entry: sourceEntry.getLogInfo(),
             });
-        } else {
+            return process.nextTick(done);
+        }
+
+        const bucketName = sourceEntry.getBucket();
+        return this._mongoClient.getBucketAttributes(bucketName, this.logger,
+        (err, data) => {
+            if (err) {
+                this.logger.error('error getting bucket owner details', {
+                    method: 'MongoQueueProcessor.processKafkaEntry',
+                    entry: sourceEntry.getLogInfo(),
+                });
+                return done(err);
+            }
+            const ownerInfo = {
+                ownerId: data._owner,
+                ownerDisplayName: data._ownerDisplayName,
+            };
+            if (sourceEntry instanceof DeleteOpQueueEntry) {
+                return this._processDeleteOpQueueEntry(sourceEntry, done);
+            }
+            if (sourceEntry instanceof ObjectQueueEntry) {
+                return this._processObjectQueueEntry(sourceEntry, ownerInfo,
+                    done);
+            }
             this.logger.warn('skipping unknown source entry',
                             { entry: sourceEntry.getLogInfo() });
-        }
-        return process.nextTick(done);
+            return process.nextTick(done);
+        });
     }
 
     isReady() {
