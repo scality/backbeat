@@ -162,7 +162,7 @@ class MongoQueueProcessor {
         const key = sourceEntry.getObjectVersionedKey();
 
         // update necessary metadata fields before saving to Zenko MongoDB
-        this._updateOwnerMD(sourceEntry);
+        this._updateOwnerMD(sourceEntry, ownerInfo);
 
         const objVal = sourceEntry.getValue();
         // Always call putObject with version params undefined so
