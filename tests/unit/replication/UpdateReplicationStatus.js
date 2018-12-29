@@ -34,6 +34,11 @@ describe('update replication status', () => {
             },
             sourceConfig: {
                 auth: {},
+                s3: {
+                    host: 'localhost',
+                    port: 8000,
+                },
+                transport: 'http',
             },
         }),
     };

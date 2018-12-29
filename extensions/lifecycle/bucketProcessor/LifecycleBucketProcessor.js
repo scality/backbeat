@@ -129,9 +129,10 @@ class LifecycleBucketProcessor {
             sendBucketEntry: this.sendBucketEntry.bind(this),
             sendObjectEntry: this.sendObjectEntry.bind(this),
             sendTransitionEntry: this.sendTransitionEntry.bind(this),
-            replicationSource: this._repConfig.source,
             bootstrapList: this._repConfig.destination.bootstrapList,
             enabledRules: this._lcConfig.rules,
+            s3Endpoint: this._s3Endpoint,
+            s3Auth: this._lcConfig.auth,
             log: this._log,
         };
     }

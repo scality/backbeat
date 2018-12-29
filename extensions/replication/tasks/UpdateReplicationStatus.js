@@ -5,7 +5,7 @@ const config = require('../../../conf/Config');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
+const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const monitoringClient = require('../../../lib/clients/monitoringHandler');
 
 const {
@@ -29,8 +29,9 @@ class UpdateReplicationStatus extends BackbeatTask {
         this.retryParams = this.repConfig.replicationStatusProcessor.retry;
         this.sourceRole = null;
         this.s3sourceCredentials = null;
-        this.backbeatSourceClient =
-            new BackbeatMetadataProxy(this.sourceConfig, this.sourceHTTPAgent);
+        const { transport, s3, auth } = this.sourceConfig;
+        this.backbeatSourceClient = new BackbeatMetadataProxy(
+            `${transport}://${s3.host}:${s3.port}`, auth, this.sourceHTTPAgent);
     }
 
     processQueueEntry(sourceEntry, done) {
