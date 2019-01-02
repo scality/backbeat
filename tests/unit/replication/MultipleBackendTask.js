@@ -3,7 +3,7 @@ const config = require('../../config.json');
 const MultipleBackendTask =
     require('../../../extensions/replication/tasks/MultipleBackendTask');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const { sourceEntry, destEntry } = require('../../utils/mockEntries');
+const { sourceEntry } = require('../../utils/mockEntries');
 const fakeLogger = require('../../utils/fakeLogger');
 const { replicationEntry } = require('../../utils/kafkaEntries');
 
@@ -33,8 +33,7 @@ describe('MultipleBackendTask', function test() {
             }),
         };
 
-        task._getAndPutMultipartUpload(sourceEntry, destEntry, fakeLogger,
-            err => {
+        task._getAndPutMultipartUpload(sourceEntry, fakeLogger, err => {
                 if (retryable) {
                     assert.ifError(err);
                 }

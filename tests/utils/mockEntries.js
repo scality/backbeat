@@ -1,4 +1,8 @@
 const sourceEntry = {
+    getBucket: () => {},
+    getObjectKey: () => {},
+    getReplicationStorageType: () => {},
+    getEncodedVersionId: () => {},
     getLogInfo: () => {},
     getLocation: () => ([]),
     getUserMetadata: () => {},
@@ -9,12 +13,4 @@ const sourceEntry = {
     getReplicationIsNFS: () => {},
 };
 
-const destEntry = {
-    getLogInfo: () => {},
-    getBucket: () => {},
-    getObjectKey: () => {},
-    getReplicationStorageType: () => {},
-    getEncodedVersionId: () => {},
-};
-
-module.exports = { sourceEntry, destEntry };
+module.exports = { sourceEntry };

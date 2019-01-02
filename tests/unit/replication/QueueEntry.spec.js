@@ -42,20 +42,6 @@ describe('QueueEntry helper class', () => {
                 'PENDING');
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
-            const multipleBackendReplica =
-                entry.toMultipleBackendReplicaEntry('sf');
-            assert.strictEqual(
-                multipleBackendReplica.getReplicationSiteStatus('sf'),
-                'REPLICA');
-            assert.strictEqual(
-                multipleBackendReplica
-                    .getReplicationSiteStatus('replicationaws'),
-                'PENDING');
-            assert.strictEqual(
-                multipleBackendReplica.getReplicationStatus(), 'REPLICA');
-            assert.strictEqual(entry.getBucket(),
-                multipleBackendReplica.getBucket());
-
             // If one site is FAILED, the global status should be FAILED
             const failed = entry.toFailedEntry('sf');
             assert.strictEqual(failed.getReplicationSiteStatus('sf'),
