@@ -11,9 +11,10 @@ RUN apk --no-cache add \
     cyrus-sasl-dev \
     openssl-dev \
     make \
-    python
+    python \
+    jq
 
-RUN apk add --no-cache --virtual .build-deps gcc zlib-dev libc-dev bsd-compat-headers py-setuptools bash git
+RUN apk add --no-cache --virtual .build-deps gcc zlib-dev libc-dev bsd-compat-headers py-setuptools git
 
 ENV DOCKERIZE_VERSION v0.6.1
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
@@ -21,7 +22,7 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
     && rm dockerize-alpine-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 
-COPY package.json /usr/src/app
+COPY package.json package-lock.json /usr/src/app/
 RUN npm install --production \
     && rm -rf /var/lib/apt/lists/* \
     && npm cache clear --force \
