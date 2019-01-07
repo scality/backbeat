@@ -58,10 +58,10 @@
   },
   "devDependencies": {
     "@zenko/cloudserver": "scality/cloudserver#d47b71d",
-    "eslint": "^2.4.0",
-    "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#e49d1a2",
-    "eslint-plugin-react": "^4.2.3",
+    "eslint": "^5.3.0",
+    "eslint-config-airbnb-base": "^13.1.0",
+    "eslint-config-scality": "scality/Guidelines#1d6f287b",
+    "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
     "mocha": "^3.3.0"
   }
