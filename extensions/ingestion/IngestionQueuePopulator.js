@@ -92,7 +92,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        logMe(`PUBLISH TO KAFKA!! ${this.config.topic} | ${entry.bucket}/${entry.key}`)
+        // logMe(`PUBLISH TO KAFKA!! ${this.config.topic} | ${entry.bucket}/${entry.key}`)
         // logMe(entry)
         // logMe(util.inspect(entry, { depth: 3 }));
         // let a = JSON.parse(entry.value);

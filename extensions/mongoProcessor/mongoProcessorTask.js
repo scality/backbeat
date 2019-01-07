@@ -12,7 +12,8 @@ const mongoProcessorConfig = config.extensions.mongoProcessor;
 // TODO: consider whether we would want a separate mongo config
 // for the consumer side
 const mongoClientConfig = config.queuePopulator.mongo;
-const ingestionExtConfigs = config.extensions.ingestion;
+const ingestionServiceAuth = config.extensions.ingestion.auth;
+const s3Config = config.s3;
 
 const healthServer = new HealthProbeServer({
     bindAddress: config.healthcheckServer.bindAddress,
@@ -37,8 +38,9 @@ function updateProcessors(bootstrapList) {
             delete activeProcessors[site];
         } else if (!active.includes(site)) {
             // add new processor, site is new and requires setup
-            const mqp = new MongoQueueProcessor(kafkaConfig,
-                mongoProcessorConfig, mongoClientConfig, site);
+            const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
+                mongoProcessorConfig, mongoClientConfig,
+                ingestionServiceAuth, site);
             mqp.start();
             activeProcessors[site] = mqp;
         }
@@ -57,8 +59,9 @@ function loadProcessors() {
     // Start Processors for each site
     const siteNames = bootstrapList.map(i => i.site);
     siteNames.forEach(site => {
-        const mqp = new MongoQueueProcessor(kafkaConfig,
-            mongoProcessorConfig, mongoClientConfig, site);
+        const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
+            mongoProcessorConfig, mongoClientConfig,
+            ingestionServiceAuth, site);
         mqp.start();
         activeProcessors[site] = mqp;
     });
@@ -82,7 +85,7 @@ function loadHealthcheck() {
 function loadManagementDatabase() {
     initManagement({
         serviceName: 'md-ingestion',
-        serviceAccount: ingestionExtConfigs.auth.account,
+        serviceAccount: ingestionServiceAuth.account,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });
