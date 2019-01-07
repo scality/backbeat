@@ -1,1 +1,35 @@
-{ "extends": "scality" }
+{
+    "extends": "scality",
+    "rules": {
+        "object-curly-newline": "off",
+        "import/newline-after-import": "off",
+        "import/order": "off",
+        "prefer-destructuring": "off",
+        "operator-linebreak": "off",
+        "no-underscore-dangle": "off",
+        "indent": "off",
+        "function-paren-newline": "off",
+        "implicit-arrow-linebreak": "off",
+        "no-bitwise": "off",
+        "comma-dangle": "off",
+        "padded-blocks": "off",
+        "lines-around-directive": "off",
+        "global-require": "off",
+        "import/no-dynamic-require": "off",
+        "object-property-newline": "off",
+        "no-plusplus": "off",
+        "class-methods-use-this": "off",
+        "no-lonely-if": "off",
+        "no-else-return": "off",
+        "dot-location": "off",
+        "no-restricted-properties": "off",
+        "no-buffer-constructor": "off",
+        "no-restricted-globals": "off",
+        "no-useless-return": "off",
+        "no-multi-spaces": "off",
+        "space-unary-ops": "off",
+        "no-undef-init": "off",
+        "newline-per-chained-call": "off",
+        "no-useless-escape": "off"
+    }
+}
