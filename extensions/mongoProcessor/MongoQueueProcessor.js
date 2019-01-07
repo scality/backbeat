@@ -277,10 +277,6 @@ class MongoQueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
-        // if entry is for another site, simply skip/ignore
-        if (this.site !== kafkaEntry.bucket) {
-            return process.nextTick(done);
-        }
         if (sourceEntry instanceof BucketMdQueueEntry) {
             this.logger.warn('skipping bucket md queue entry', {
                 method: 'MongoQueueProcessor.processKafkaEntry',
