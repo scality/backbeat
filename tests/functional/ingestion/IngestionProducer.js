@@ -18,10 +18,11 @@ describe('ingestion producer tests with mock', () => {
         testConfig.s3.port = 7999;
         this.iProducer = new IngestionProducer({
             name: 'testbucket',
+            bucket: 'src-bucket',
             host: 'localhost',
             port: 7999,
-            prefix: 'testbackend',
             https: false,
+            type: 'scality_s3',
             auth: {
                 accessKey: 'accessKey1',
                 secretKey: 'verySecretKey1',
