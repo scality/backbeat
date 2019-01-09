@@ -118,8 +118,7 @@ initAndStart();
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    ingestionPopulator.close(() => {
-        scheduler.cancel();
-        process.exit(0);
-    });
+    ingestionPopulator.close();
+    scheduler.cancel();
+    process.exit(0);
 });

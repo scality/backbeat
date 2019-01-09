@@ -130,7 +130,6 @@ describe('Ingestion Populator', () => {
         it('should attach configuration properties for each new ingestion ' +
         'source', () => {
             ip.getAdded().forEach(newSource => {
-                assert.strictEqual(newSource.raftCount, 8);
                 assert(newSource.name);
                 assert(newSource.bucket);
                 assert(newSource.host);

@@ -50,7 +50,6 @@
                     "port": 8000,
                     "https": false,
                     "type": "scality_s3",
-                    "raftCount": 8,
                     "auth": {
                         "accessKey": "myAccessKey",
                         "secretKey": "myEncryptedSecretKey"
