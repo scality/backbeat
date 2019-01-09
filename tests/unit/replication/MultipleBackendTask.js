@@ -1,8 +1,9 @@
 const assert = require('assert');
+const config = require('../../config.json');
 const MultipleBackendTask =
     require('../../../extensions/replication/tasks/MultipleBackendTask');
-const config = require('../../config.json');
 const QueueEntry = require('../../../lib/models/QueueEntry');
+const { sourceEntry, destEntry } = require('../../utils/mockEntries');
 const fakeLogger = require('../../utils/fakeLogger');
 const { replicationEntry, lifecycleEntry } =
     require('../../utils/kafkaEntries');
@@ -11,14 +12,35 @@ const MPU_GCP_MAX_PARTS = 1024;
 const MIN_AWS_PART_SIZE = (1024 * 1024) * 5; // 5MB
 const MAX_AWS_PART_SIZE = (1024 * 1024 * 1024) * 5; // 5GB
 const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
-const retryConfig = { scality: { timeoutS: 0 } };
+const retryConfig = { scality: { timeoutS: 300 } };
 
-describe('MultipleBackendTask', () => {
+describe('MultipleBackendTask', function test() {
+    this.timeout(5000);
     let task;
 
     function checkPartLength(contentLength, expectedPartSize) {
         const partSize = task._getRangeSize(contentLength);
         assert.strictEqual(partSize, expectedPartSize);
+    }
+
+    function requestInitiateMPU(params, done) {
+        const { retryable } = params;
+
+        task.backbeatSource = {
+            multipleBackendInitiateMPU: () => ({
+                httpRequest: { headers: {} },
+                send: cb => cb({ retryable }),
+                on: (action, cb) => cb(),
+            }),
+        };
+
+        task._getAndPutMultipartUpload(sourceEntry, destEntry, fakeLogger,
+            err => {
+                if (retryable) {
+                    assert.ifError(err);
+                }
+                return done();
+            });
     }
 
     beforeEach(() => {
@@ -30,6 +52,8 @@ describe('MultipleBackendTask', () => {
                     },
                 },
                 sourceConfig: config.extensions.replication.source,
+                destConfig: config.extensions.replication.destination,
+                site: 'test-site-2',
             }),
         });
     });
@@ -56,6 +80,16 @@ describe('MultipleBackendTask', () => {
                 done();
             });
         });
+    });
+
+    describe('::initiateMultipartUpload', () => {
+        it('should use exponential backoff if retryable error ', done => {
+            setTimeout(() => done(), 4000); // Retries will exceed test timeout.
+            requestInitiateMPU({ retryable: true }, done);
+        });
+
+        it('should not use exponential backoff if non-retryable error ', done =>
+            requestInitiateMPU({ retryable: false }, done));
     });
 
     describe('::_getRangeSize', () => {
