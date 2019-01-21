@@ -37,7 +37,7 @@ const locations = [
         sourceBucket: 'your-ring-bucket',
         accessKey: 'yourAccessKey',
         secretKey: 'yourVerySecretKey',
-        endpoint: 'http://127.0.0.1:8000',
+        endpoint: 'http://127.0.0.1',
         locationType: 'scality_s3',
     },
 ];
@@ -93,21 +93,19 @@ class IngestionPopulatorMock extends IngestionPopulator {
         };
         this._locationDetails = this._mockLocationDetails();
 
-        // mock existing provisioned sources
-        this._provisionedIngestionSources = {
+        // mock existing active sources
+        this._activeIngestionSources = {
             [OLD_BUCKET]: {},
             [EXISTING_BUCKET]: {},
         };
     }
 
-    addNewLogSource(newSource, cb) {
+    addNewLogSource(newSource) {
         this._added.push(newSource);
-        return cb();
     }
 
-    closeLogState(source, cb) {
+    closeLogState(source) {
         this._removed.push(source);
-        return cb();
     }
 }
 
@@ -129,18 +127,11 @@ describe('Ingestion Populator', () => {
             ip.reset();
         });
 
-        it('should attach configuration properties for each new source', () => {
+        it('should attach configuration properties for each new ingestion ' +
+        'source', () => {
             ip.getAdded().forEach(newSource => {
-                // default configs
-                assert.strictEqual(newSource.cronRule, '*/5 * * * * *');
-                assert.strictEqual(newSource.zookeeperSuffix,
-                    `/${newSource.name}`);
-                assert.strictEqual(newSource.raftCount, 8);
-
-                // unique configs
                 assert(newSource.name);
                 assert(newSource.bucket);
-                assert(newSource.prefix);
                 assert(newSource.host);
                 assert.strictEqual(typeof newSource.port, 'number');
                 assert.strictEqual(typeof newSource.https, 'boolean');
@@ -148,34 +139,42 @@ describe('Ingestion Populator', () => {
             });
         });
 
-        it('should keep an existing provisioned source', () => {
-            const inAdd = ip.getAdded().findIndex(r =>
-                r.name === EXISTING_BUCKET);
-            const inRemove = ip.getRemoved().findIndex(r =>
-                r === EXISTING_BUCKET);
-
-            assert(inAdd === -1);
-            assert(inRemove === -1);
+        it('should apply default port 80 for a new ingestion source with ' +
+        'no port provided', () => {
+            const source = ip.getAdded().find(newSource =>
+                newSource.name === NEW_BUCKET);
+            assert.equal(source.port, 80);
         });
 
-        it('should add/provision a new ingestion bucket', () => {
-            const inAdd = ip.getAdded().findIndex(r =>
-                r.name === NEW_BUCKET);
-            const inRemove = ip.getRemoved().findIndex(r =>
-                r === NEW_BUCKET);
-            assert(inAdd >= 0);
-            assert(inRemove === -1);
+        it('should keep an existing active ingestion source', () => {
+            const wasAdded = ip.getAdded().findIndex(r =>
+                r.name === EXISTING_BUCKET) >= 0;
+            const wasRemoved = ip.getRemoved().findIndex(r =>
+                r === EXISTING_BUCKET) >= 0;
+
+            assert(!wasAdded);
+            assert(!wasRemoved);
         });
 
-        it('should remove a provisioned source that is no longer an ' +
-        'ingestion bucket', () => {
-            const inAdd = ip.getAdded().findIndex(r =>
-                r.name === OLD_BUCKET);
-            const inRemove = ip.getRemoved().findIndex(r =>
-                r === OLD_BUCKET);
+        it('should add a new ingestion source', () => {
+            const wasAdded = ip.getAdded().findIndex(r =>
+                r.name === NEW_BUCKET) >= 0;
+            const wasRemoved = ip.getRemoved().findIndex(r =>
+                r === NEW_BUCKET) >= 0;
 
-            assert(inAdd === -1);
-            assert(inRemove >= 0);
+            assert(wasAdded);
+            assert(!wasRemoved);
+        });
+
+        it('should remove an ingestion source that is has become inactive',
+        () => {
+            const wasAdded = ip.getAdded().findIndex(r =>
+                r.name === OLD_BUCKET) >= 0;
+            const wasRemoved = ip.getRemoved().findIndex(r =>
+                r === OLD_BUCKET) >= 0;
+
+            assert(!wasAdded);
+            assert(wasRemoved);
         });
     });
 });
