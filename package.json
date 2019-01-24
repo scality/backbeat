@@ -4,6 +4,7 @@
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
+    "helloworld_processor": "node extensions/helloWorld/queueProcessor/task.js",
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "ingestion_populator": "node bin/ingestion.js",
