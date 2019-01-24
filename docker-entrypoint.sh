@@ -264,6 +264,18 @@ if [[ "$EXTENSIONS_INGESTION_AUTH_ACCOUNT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.ingestion.auth.account=\"$EXTENSIONS_INGESTION_AUTH_ACCOUNT\""
 fi
 
+if [[ "$EXTENSIONS_HELLOWORLD_TOPIC" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.helloWorld.topic=\"$EXTENSIONS_HELLOWORLD_TOPIC\""
+fi
+
+if [[ "$EXTENSIONS_HELLOWORLD_S3_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.helloWorld.s3.host=\"$EXTENSIONS_HELLOWORLD_S3_HOST\""
+fi
+
+if [[ "$EXTENSIONS_HELLOWORLD_S3_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.helloWorld.s3.port=\"$EXTENSIONS_HELLOWORLD_S3_PORT\""
+fi
+
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
     jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
     mv conf/config.json.tmp conf/config.json
