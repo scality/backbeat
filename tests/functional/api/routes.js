@@ -3,8 +3,8 @@ const async = require('async');
 const http = require('http');
 const Redis = require('ioredis');
 const { Producer } = require('node-rdkafka');
-const { RedisClient } = require('arsenal').metrics;
-const { StatsModel } = require('arsenal').metrics;
+
+const { RedisClient, StatsModel } = require('arsenal').metrics;
 
 const config = require('../../config.json');
 const { getRequest } = require('../utils/httpHelpers');
@@ -14,10 +14,36 @@ const fakeLogger = require('../utils/fakeLogger');
 const redisConfig = { host: '127.0.0.1', port: 6379 };
 
 describe('API routes', () => {
+    const redis = new Redis();
     const redisClient = new RedisClient(redisConfig, fakeLogger);
     const interval = 300;
     const expiry = 900;
     const statsClient = new StatsModel(redisClient, interval, expiry);
+
+    it('should get a 404 route not found error response', () => {
+        const url = getUrl('/_/invalidpath');
+
+        http.get(url, res => {
+            assert.equal(res.statusCode, 404);
+        });
+    });
+
+    it('should get a 405 method not allowed from invalid http verb', done => {
+        const options = {
+            host: config.server.host,
+            port: config.server.port,
+            method: 'DELETE',
+            path: '/_/healthcheck',
+        };
+        const req = http.request(options, res => {
+            assert.equal(res.statusCode, 405);
+        });
+        req.on('error', err => {
+            assert.ifError(err);
+        });
+        req.end();
+        done();
+    });
 
     describe('healthcheck route', () => {
         let data;
@@ -119,24 +145,22 @@ describe('API routes', () => {
         const BYTES = 'test:bb:bytes';
         const OPS_DONE = 'test:bb:opsdone';
         const BYTES_DONE = 'test:bb:bytesdone';
+
         statsClient.reportNewRequest(OPS, 1725);
         statsClient.reportNewRequest(BYTES, 2198);
         statsClient.reportNewRequest(OPS_DONE, 450);
         statsClient.reportNewRequest(BYTES_DONE, 1027);
 
         after(done => {
-            const redis = new Redis();
             redis.flushall(done);
         });
 
-        // TODO: refactor this
         const metricsPaths = [
             '/_/metrics/crr/all',
             '/_/metrics/crr/all/backlog',
             '/_/metrics/crr/all/completions',
             '/_/metrics/crr/all/throughput',
         ];
-
         metricsPaths.forEach(path => {
             it(`should get a 200 response for route: ${path}`, done => {
                 const url = getUrl(path);
@@ -162,7 +186,6 @@ describe('API routes', () => {
             });
         });
 
-        // TODO: refactor this
         const allWrongPaths = [
             // general wrong paths
             '/',
@@ -187,7 +210,6 @@ describe('API routes', () => {
             '/_/metrics/crr/all/throughpu',
             '/_/metrics/crr/all/throughputs',
         ];
-
         allWrongPaths.forEach(path => {
             it(`should get a 404 response for route: ${path}`, done => {
                 const url = getUrl(path);
@@ -277,30 +299,45 @@ describe('API routes', () => {
                 done();
             });
         });
-    });
 
-    it('should get a 404 route not found error response', () => {
-        const url = getUrl('/_/invalidpath');
+        describe('No metrics data in Redis', () => {
+            before(done => {
+                redis.keys('*:test:bb:*').then(keys => {
+                    const pipeline = redis.pipeline();
+                    keys.forEach(key => {
+                        pipeline.del(key);
+                    });
+                    pipeline.exec(done);
+                });
+            });
 
-        http.get(url, res => {
-            assert.equal(res.statusCode, 404);
-        });
-    });
+            it('should return a response even if redis data does not exist: ' +
+            'all CRR metrics', done => {
+                getRequest('/_/metrics/crr/all', (err, res) => {
+                    assert.ifError(err);
 
-    it('should get a 405 method not allowed from invalid http verb', done => {
-        const options = {
-            host: config.server.host,
-            port: config.server.port,
-            method: 'DELETE',
-            path: '/_/healthcheck',
-        };
-        const req = http.request(options, res => {
-            assert.equal(res.statusCode, 405);
+                    const keys = Object.keys(res);
+                    assert(keys.includes('backlog'));
+                    assert(keys.includes('completions'));
+                    assert(keys.includes('throughput'));
+                    assert(keys.includes('failures'));
+                    assert(keys.includes('pending'));
+
+                    assert(res.backlog.description);
+                    assert.equal(res.backlog.results.count, 0);
+                    assert.equal(res.backlog.results.size, 0);
+
+                    assert(res.completions.description);
+                    assert.equal(res.completions.results.count, 0);
+                    assert.equal(res.completions.results.size, 0);
+
+                    assert(res.throughput.description);
+                    assert.equal(res.throughput.results.count, 0);
+                    assert.equal(res.throughput.results.size, 0);
+
+                    done();
+                });
+            });
         });
-        req.on('error', err => {
-            assert.ifError(err);
-        });
-        req.end();
-        done();
     });
 });
