@@ -302,7 +302,7 @@ describe('API routes', () => {
 
         describe('No metrics data in Redis', () => {
             before(done => {
-                redis.keys('*:test:bb:*').then(keys => {
+                redis.keys('*test:bb:*').then(keys => {
                     const pipeline = redis.pipeline();
                     keys.forEach(key => {
                         pipeline.del(key);
@@ -320,8 +320,6 @@ describe('API routes', () => {
                     assert(keys.includes('backlog'));
                     assert(keys.includes('completions'));
                     assert(keys.includes('throughput'));
-                    assert(keys.includes('failures'));
-                    assert(keys.includes('pending'));
 
                     assert(res.backlog.description);
                     assert.equal(res.backlog.results.count, 0);
