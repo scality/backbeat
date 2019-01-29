@@ -3,13 +3,7 @@ const assert = require('assert');
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
 const config = require('../../config.json');
-
-const fakeLogger = {
-    trace: () => {},
-    error: () => {},
-    info: () => {},
-    debug: () => {},
-};
+const fakeLogger = require('../../utils/fakeLogger');
 
 describe('BackbeatAPI', () => {
     let bbapi;
@@ -18,30 +12,43 @@ describe('BackbeatAPI', () => {
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
     });
 
-    it('should validate routes', () => {
-        // valid routes
-        [
-            '/_/metrics/crr/all',
-            '/_/healthcheck',
-            '/_/metrics/crr/all/backlog',
-            '/_/metrics/crr/all/completions',
-            '/_/metrics/crr/all/throughput',
-        ].forEach(path => {
-            const req = new BackbeatRequest({ url: path });
+    // valid routes
+    [
+        { url: '/_/metrics/crr/all', method: 'GET' },
+        { url: '/_/healthcheck', method: 'GET' },
+        { url: '/_/metrics/crr/all/backlog', method: 'GET' },
+        { url: '/_/metrics/crr/all/completions', method: 'GET' },
+        { url: '/_/metrics/crr/all/throughput', method: 'GET' },
+        { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
+            method: 'GET' },
+        { url: '/_/crr/failed?mymarker', method: 'GET' },
+        // invalid params but will default to getting all buckets
+        { url: '/_/crr/failed/mybucket', method: 'GET' },
+        { url: '/_/crr/failed', method: 'POST' },
+    ].forEach(request => {
+        it(`should validate route: ${request.method} ${request.url}`, () => {
+            const req = new BackbeatRequest(request);
+            const routeError = bbapi.findValidRoute(req);
 
-            assert.ok(bbapi.isValidRoute(req));
+            assert.equal(routeError, null);
         });
+    });
 
-        // invalid routes
-        [
-            '/_/invalid/crr/all',
-            '/_/metrics/ext/all',
-            '/_/metrics/crr/test',
-            '/_/metrics/crr/all/backlo',
-            '/_/metrics/crr/all/completionss',
-        ].forEach(path => {
-            const req = new BackbeatRequest({ url: path });
-            assert.equal(bbapi.isValidRoute(req), false);
+    // invalid routes
+    [
+        { url: '/_/invalid/crr/all', method: 'GET' },
+        { url: '/_/metrics/ext/all', method: 'GET' },
+        { url: '/_/metrics/crr/test', method: 'GET' },
+        { url: '/_/metrics/crr/all/backlo', method: 'GET' },
+        { url: '/_/metrics/crr/all/completionss', method: 'GET' },
+        // invalid http verb
+        { url: '/_/healthcheck', method: 'POST' },
+    ].forEach(request => {
+        it(`should invalidate route: ${request.method} ${request.url}`, () => {
+            const req = new BackbeatRequest(request);
+            const routeError = bbapi.findValidRoute(req);
+
+            assert(routeError);
         });
     });
 
