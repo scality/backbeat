@@ -4,7 +4,7 @@ const ReplicationTaskScheduler = require(
     '../../../extensions/replication/utils/ReplicationTaskScheduler');
 
 describe('replication task scheduler', () => {
-    it('should ensure serialization of updates to the same versioned object',
+    it.only('should ensure serialization of updates to the same versioned object',
     done => {
         const taskScheduler = new ReplicationTaskScheduler(
             (entry, done) => {
@@ -20,7 +20,6 @@ describe('replication task scheduler', () => {
             ++doneCount;
             if (doneCount === objects.length * 10) {
                 objects.forEach(obj => {
-                    process.stdout.write(`${obj.value.toString()}\n`)
                     assert.strictEqual(obj.value, 9);
                 });
                 done();
