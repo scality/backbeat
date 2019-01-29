@@ -20,6 +20,7 @@ describe('replication task scheduler', () => {
             ++doneCount;
             if (doneCount === objects.length * 10) {
                 objects.forEach(obj => {
+                    process.stdout.write(obj.value)
                     assert.strictEqual(obj.value, 9);
                 });
                 done();
