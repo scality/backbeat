@@ -137,4 +137,16 @@ describe('BackbeatClient unit tests with mock server', () => {
             return done();
         });
     });
+
+    it('should get bucket specified cseq', done => {
+        const destReq = backbeatClient.getBucketCseq({
+            Bucket: bucketName,
+        });
+        return destReq.send((err, data) => {
+            assert.ifError(err);
+            assert(data[0] && data[0].cseq);
+            assert.strictEqual(data[0].cseq, 7);
+            return done();
+        });
+    });
 });

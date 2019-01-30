@@ -1076,6 +1076,35 @@
             "output": {
                 "shape": "ObjectMetadataObject"
             }
+        },
+        "GetBucketCseq": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/metadata/default/informations/{Bucket}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }
+                }
+            },
+            "output": {
+                "type": "list",
+                "member": {
+                    "type": "structure",
+                    "members": {
+                        "cseq": {
+                            "type": "integer"
+                        }
+                    }
+                }
+            }
         }
     },
     "shapes": {
