@@ -993,10 +993,10 @@
                         "location": "querystring",
                         "locationName": "begin"
                     },
-                    "End": {
+                    "Limit": {
                         "type": "integer",
                         "location": "querystring",
-                        "locationName": "end"
+                        "locationName": "limit"
                     },
                     "TargetLeader": {
                         "type": "boolean",
