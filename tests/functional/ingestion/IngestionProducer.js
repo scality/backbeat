@@ -1,94 +1,49 @@
 const assert = require('assert');
-const async = require('async');
-const AWS = require('aws-sdk');
 const http = require('http');
+const { MetadataMock } = require('arsenal').testing.MetadataMock;
+const VID_SEP = require('arsenal').versioning.VersioningConstants
+          .VersionId.Separator;
+
 const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
+const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
 const testConfig = require('../../config.json');
-const { MetadataMock, objectList } = require('arsenal').testing.MetadataMock;
 
-function emptyAndDeleteVersionedBucket(s3Client, Bucket, cb) {
-    // won't need to worry about 1k+ objects pagination
-    async.series([
-        next => s3Client.listObjectVersions({ Bucket }, (err, data) => {
-                    assert.ifError(err);
+const sourceConfig = testConfig.extensions.ingestion.sources[0];
 
-                    const list = [
-                        ...data.Versions.map(v => ({
-                            Key: v.Key,
-                            VersionId: v.VersionId,
-                        })),
-                        ...data.DeleteMarkers.map(dm => ({
-                            Key: dm.Key,
-                            VersionId: dm.VersionId,
-                        })),
-                    ];
-
-                    if (list.length === 0) {
-                        return next();
-                    }
-
-                    return s3Client.deleteObjects({
-                        Bucket,
-                        Delete: { Objects: list },
-                    }, next);
-                }),
-        next => s3Client.deleteBucket({ Bucket }, next),
-    ], cb);
+function _extractVersionedBaseKey(key) {
+    return key.split(VID_SEP)[0];
 }
 
 describe('ingestion producer tests with mock', () => {
     let httpServer;
     let metadataMock;
-    const accessKey = 'accessKey1';
-    const secretKey = 'verySecretKey1';
-    const bucket = 'bucket1';
+    const bucket = sourceConfig.bucket;
 
     before(done => {
         metadataMock = new MetadataMock();
         httpServer = http.createServer(
-            (req, res) => metadataMock.onRequest(req, res)).listen(7999);
-        this.iProducer = new IngestionProducer({
-            name: 'testbucket',
-            bucket: 'src-bucket',
-            host: 'localhost',
-            port: 7999,
-            https: false,
-            type: 'scality_s3',
-            auth: { accessKey, secretKey },
-        }, testConfig.queuePopulator, testConfig.s3);
+            (req, res) => metadataMock.onRequest(req, res)).listen(7998);
+
+        const adjustedConfig = Object.assign({}, sourceConfig, {
+            auth: { accessKey: 'accessKey1', secretKey: 'verySecretKey1' },
+        });
+        this.iProducer = new IngestionProducer(adjustedConfig,
+            testConfig.queuePopulator, testConfig.s3);
 
         this.queuePopulator = new QueuePopulator(
             testConfig.zookeeper,
             testConfig.kafka,
             testConfig.queuePopulator,
             testConfig.extensions);
-
-        this.s3Client = new AWS.S3({
-            endpoint: `http://${testConfig.s3.host}:${testConfig.s3.port}`,
-            s3ForcePathStyle: true,
-            credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
-        });
-        return async.series([
-            next => this.s3Client.createBucket({ Bucket: bucket }, next),
-            next => this.s3Client.putBucketVersioning({
-                Bucket: bucket,
-                VersioningConfiguration: { Status: 'Enabled' },
-            }, next),
-            next => async.eachLimit(objectList.Contents, 10, (obj, cb) => {
-                this.s3Client.putObject({
-                    Bucket: bucket,
-                    Key: obj.key,
-                }, cb);
-            }, next),
-        ], done);
+        setupS3Mock(sourceConfig, done);
     });
 
     after(done => {
         httpServer.close();
 
-        emptyAndDeleteVersionedBucket(this.s3Client, bucket, done);
+        emptyAndDeleteVersionedBucket(sourceConfig, done);
     });
 
     // skipping because functionality currently not needed
@@ -104,44 +59,65 @@ describe('ingestion producer tests with mock', () => {
 
     it('should be able to grab list of object versions for given bucket',
     done => {
-        this.iProducer._getObjectVersionsList(bucket, (err, res) => {
+        this.iProducer._getObjectVersionsList(bucket, {}, (err, res) => {
             assert.ifError(err);
             assert(res);
-            // We have a duplicate IsLatest entry in the returned list.
-            // Additional entry is for creating a metadata entry where key name
-            // does not include the version id
-            assert.strictEqual(res.length, 2);
+            assert(Array.isArray(res.versionList));
+            assert.strictEqual(typeof res.IsTruncated, 'boolean');
 
-            const isLatestEntry = res.filter(o => o.isLatest);
+            assert.strictEqual(res.IsTruncated, false);
+            assert.strictEqual(res.versionList.length, 1);
+
+            const isLatestEntry = res.versionList.filter(o => o.isLatest);
             assert(isLatestEntry);
             return done();
         });
     });
 
     it('should be able to grab metadata for list of objects', done => {
-        this.iProducer._getObjectVersionsList(bucket, (err, list) => {
+        this.iProducer._getObjectVersionsList(bucket, {}, (err, res) => {
             assert.ifError(err);
 
-            this.iProducer._getBucketObjectsMetadata(bucket, list,
-            err => {
+            const { versionList } = res;
+            this.iProducer._getBucketObjectsMetadata(bucket, versionList,
+            (err, list) => {
                 assert.ifError(err);
+
+                assert(Array.isArray(list));
+                // one versioned entry, one master entry
+                assert.strictEqual(list.length, 2);
+                const [entry1, entry2] = list;
+                assert.strictEqual(entry1.type, entry2.type);
+                assert.strictEqual(entry1.bucket, entry2.bucket);
+                assert.deepStrictEqual(entry1.value, entry2.value);
+                assert(entry1.key !== entry2.key);
+                assert.strictEqual(
+                    _extractVersionedBaseKey(entry1.key),
+                    _extractVersionedBaseKey(entry2.key));
+
                 return done();
             });
         });
     });
 
     it('can generate a valid snapshot', done => {
-        this.iProducer.snapshot(bucket, (err, res) => {
+        this.iProducer.snapshot(bucket, {}, (err, res) => {
             assert.ifError(err);
 
-            assert.strictEqual(res.length, 2);
-            res.forEach(entry => {
+            assert(res);
+            assert(res.logRes);
+            assert(res.initState);
+
+            assert.strictEqual(res.logRes.length, 2);
+            res.logRes.forEach(entry => {
                 assert.strictEqual(entry.type, 'put');
                 assert(entry.bucket);
                 assert(entry.key);
                 assert(entry.value);
             });
-            assert(res[0].key !== res[1].key);
+            assert.strictEqual(res.initState.isStatusComplete, true);
+            assert.strictEqual(res.initState.versionMarker, undefined);
+            assert.strictEqual(res.initState.keyMarker, undefined);
 
             return done();
         });

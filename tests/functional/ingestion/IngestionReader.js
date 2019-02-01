@@ -12,6 +12,8 @@ const dummyLogger = require('../../utils/DummyLogger');
 const testConfig = require('../../config.json');
 const jsutil = require('arsenal').jsutil;
 const { MetadataMock } = require('arsenal').testing.MetadataMock;
+const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
+
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
 
@@ -45,9 +47,15 @@ class TestIngestionQP {
     }
 
     filter(entry) {
-        assert.strictEqual(`${entry.bucket}/${entry.key}`,
-            `${this.expectedEntry.bucket}/${this.expectedEntry.key}`);
-        assert.deepStrictEqual(entry, this.expectedEntry);
+        assert.strictEqual(entry.bucket, this.expectedEntry.bucket);
+        if (entry.key !== this.expectedEntry.key) {
+            assert(entry.key.startsWith(this.expectedEntry.key));
+            assert.deepStrictEqual(entry.value, this.expectedEntry.value);
+            assert.strictEqual(entry.type, this.expectedEntry.type);
+        } else {
+            assert.strictEqual(entry.key, this.expectedEntry.key);
+            assert.deepStrictEqual(entry, this.expectedEntry);
+        }
         this.publish(this.config.topic, `${entry.bucket}/${entry.key}`,
             JSON.stringify(entry));
     }
@@ -81,9 +89,21 @@ const zkClient = zookeeper.createClient('localhost:2181', {
     autoCreateNamespace: true,
 });
 
-describe('ingestion reader tests with mock', () => {
+function setZookeeperInitState(ingestionReader, cb) {
+    const path = `${ingestionReader.bucketInitPath}/isStatusComplete`;
+    async.series([
+        next => zkClient.mkdirp(path, next),
+        next => zkClient.setData(path, Buffer.from('true'),
+            -1, next),
+    ], cb);
+}
+
+describe('ingestion reader tests with mock', function fD() {
+    this.timeout(5000);
+
     let httpServer;
     let batchState;
+    const sourceConfig = testConfig.extensions.ingestion.sources[0];
 
     before(done => {
         const mongoUrl =
@@ -157,25 +177,34 @@ describe('ingestion reader tests with mock', () => {
         this.ingestionReader = new IngestionReader({
             zkClient,
             kafkaConfig: testConfig.kafka,
-            bucketdConfig: testConfig.extensions.ingestion.sources[0],
+            bucketdConfig: sourceConfig,
             qpConfig: testConfig.queuePopulator,
             logger: dummyLogger,
             extensions: [extIngestionQP],
             s3Config: testConfig.s3,
-            bucket: testConfig.extensions.ingestion.sources[0].bucket,
+            bucket: sourceConfig.bucket,
         });
         this.ingestionReader.setup(() => {
-            zkClient.setData(this.ingestionReader.pathToLogOffset,
-                Buffer.from('2'), -1, err => {
-                    assert.ifError(err);
-                    return done();
-                });
+            // indicate snapshot phase is done
+            async.series([
+                next => setZookeeperInitState(this.ingestionReader, next),
+                next => zkClient.setData(this.ingestionReader.pathToLogOffset,
+                    Buffer.from('2'), -1, err => {
+                        assert.ifError(err);
+                        return next(err);
+                    }
+                ),
+                next => setupS3Mock(sourceConfig, next),
+            ], err => {
+                assert.ifError(err);
+                return done();
+            });
         });
     });
 
     afterEach(done => {
         httpServer.close();
-        done();
+        emptyAndDeleteVersionedBucket(sourceConfig, done);
     });
 
     after(done => {
@@ -234,11 +263,11 @@ describe('ingestion reader tests with mock', () => {
     });
 
     it('should succesfully ingest new bucket with existing objects', done => {
+        // update zookeeper status to indicate snapshot phase
+        const path = `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
         async.waterfall([
-            // the process assumes that it is a new ingestion when the logOffset
-            // is found to be one
-            next => zkClient.setData(this.ingestionReader.pathToLogOffset,
-                Buffer.from('1'), -1, err => {
+            next => zkClient.setData(path, Buffer.from('false'), -1,
+                err => {
                     assert.ifError(err);
                     return next();
                 }),
