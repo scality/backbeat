@@ -102,22 +102,23 @@ describe('ingestion producer tests with mock', () => {
 
     it('should be able to grab list of object versions for given bucket',
     done => {
-        this.iProducer._getObjectVersionsList(bucket, (err, res) => {
+        this.iProducer._getObjectVersionsList(bucket, {}, (err, res) => {
             assert.ifError(err);
             assert(res);
+            assert(res.versionList);
             // We have a duplicate IsLatest entry in the returned list.
             // Additional entry is for creating a metadata entry where key name
             // does not include the version id
-            assert.strictEqual(res.length, 2);
+            assert.strictEqual(res.versionList.length, 2);
 
-            const isLatestEntry = res.filter(o => o.isLatest);
+            const isLatestEntry = res.versionList.filter(o => o.isLatest);
             assert(isLatestEntry);
             return done();
         });
     });
 
     it('should be able to grab metadata for list of objects', done => {
-        this.iProducer._getObjectVersionsList(bucket, (err, list) => {
+        this.iProducer._getObjectVersionsList(bucket, {}, (err, list) => {
             assert.ifError(err);
 
             this.iProducer._getBucketObjectsMetadata(bucket, list,
@@ -129,17 +130,25 @@ describe('ingestion producer tests with mock', () => {
     });
 
     it('can generate a valid snapshot', done => {
-        this.iProducer.snapshot(bucket, (err, res) => {
+        this.iProducer.snapshot(bucket, {}, (err, res) => {
             assert.ifError(err);
 
-            assert.strictEqual(res.length, 2);
-            res.forEach(entry => {
+            assert(res);
+            assert(res.logRes);
+            assert(res.initState);
+
+            assert.strictEqual(res.logRes.length, 2);
+            res.logRes.forEach(entry => {
                 assert.strictEqual(entry.type, 'put');
                 assert(entry.bucket);
                 assert(entry.key);
                 assert(entry.value);
             });
-            assert(res[0].key !== res[1].key);
+            assert(res.logRes[0].key !== res.logRes[1].key);
+
+            assert.strictEqual(res.initState.status, 'complete');
+            assert.strictEqual(res.initState.versionMarker, undefined);
+            assert.strictEqual(res.initState.keyMarker, undefined);
 
             return done();
         });
