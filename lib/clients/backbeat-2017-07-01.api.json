@@ -1070,6 +1070,10 @@
                     "Key": {
                         "location": "uri",
                         "locationName": "Key"
+                    },
+                    "VersionId": {
+                        "location": "querystring",
+                        "locationName": "VersionId"
                     }
                 }
             },
