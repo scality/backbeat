@@ -347,7 +347,7 @@ class LifecycleBucketProcessorMock {
     }
 
     getStateVars() {
-        const { replication } = testConfig.extensions;
+        const { lifecycle } = testConfig.extensions;
         return {
             sendBucketEntry: this.sendBucketEntry.bind(this),
             sendTransitionEntry: this.sendTransitionEntry.bind(this),
@@ -356,7 +356,8 @@ class LifecycleBucketProcessorMock {
             enabledRules: this._lcConfig.rules,
             // Corresponds to the default endpoint in the cloudserver config.
             bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
-            replicationSource: replication.source,
+            s3Endpoint: s3config.endpoint,
+            s3Auth: lifecycle.auth,
             log: this._log,
         };
     }

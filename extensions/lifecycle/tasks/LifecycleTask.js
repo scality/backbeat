@@ -6,7 +6,7 @@ const { errors } = require('arsenal');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy =
-    require('../../replication/utils/BackbeatMetadataProxy');
+    require('../../../lib/BackbeatMetadataProxy');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
@@ -782,7 +782,9 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getObjectMetadata(params, log, cb) {
-        return new BackbeatMetadataProxy(this.replicationSource)
+        // FIXME create the proxy instance in LifecycleBucketProcessor
+        // and provide an HTTP agent
+        return new BackbeatMetadataProxy(this.s3Endpoint, this.s3Auth)
             .setSourceClient(log)
             .getMetadata(params, log, (err, res) => {
                 if (err) {
