@@ -121,7 +121,10 @@ describe('ingestion producer tests with mock', () => {
         this.iProducer._getObjectVersionsList(bucket, {}, (err, list) => {
             assert.ifError(err);
 
-            this.iProducer._getBucketObjectsMetadata(bucket, list,
+            // this is done in snapshot
+            const { versionList } = list;
+
+            this.iProducer._getBucketObjectsMetadata(bucket, versionList,
             err => {
                 assert.ifError(err);
                 return done();
