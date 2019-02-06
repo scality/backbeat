@@ -5,7 +5,7 @@ const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 const IngestionProducer =
     require('../../../lib/queuePopulator/IngestionProducer');
 const testConfig = require('../../config.json');
-const { MetadataMock } = require('../../utils/MockMetadataServer');
+const { MetadataMock } = require('arsenal').testing.MetadataMock;
 
 describe('ingestion producer tests with mock', () => {
     let httpServer;
@@ -41,7 +41,9 @@ describe('ingestion producer tests with mock', () => {
         done();
     });
 
-    it('should be able to grab list of buckets for each raft session', done => {
+    // skipping because functionality currently not needed
+    it.skip('should be able to grab list of buckets for each raft session',
+        done => {
         this.iProducer._getBuckets('1', (err, res) => {
             assert.ifError(err);
             assert(res);
@@ -105,7 +107,7 @@ describe('ingestion producer tests with mock', () => {
     });
 
     it('should find the correct raftId for the requested bucket', done => {
-        this.iProducer.getRaftId('bucketfindraftid', (err, res) => {
+        this.iProducer.getRaftId('bucket1', (err, res) => {
             // based on MetadataMock, raft 1 will have 'bucketfindraftid'
             assert.ifError(err);
             assert.strictEqual(typeof res, 'string');

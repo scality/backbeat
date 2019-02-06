@@ -5,11 +5,11 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { getAccountCredentials } =
     require('../../../lib/credentials/AccountCredentials');
 const { MetadataMock, mockLogs, objectList, dummyBucketMD } =
-    require('../../utils/MockMetadataServer');
+    require('arsenal').testing.MetadataMock;
 const backbeatClientTestPort = 9004;
 const bucketName = 'bucket1';
 const bucketName2 = 'bucket2';
-const objectName = 'testobject1';
+const objectName = 'object1';
 
 const accountCreds = getAccountCredentials({
     type: 'account',
@@ -34,7 +34,8 @@ describe('BackbeatClient unit tests with mock server', () => {
 
     after(() => httpServer.close());
 
-    it('should get list of buckets managed by raft session', done => {
+    // skipping this test because ingestion does not need list bucket per raft
+    it.skip('should get list of buckets managed by raft session', done => {
         const destReq = backbeatClient.getRaftBuckets({
             LogId: '1',
         });
@@ -77,19 +78,20 @@ describe('BackbeatClient unit tests with mock server', () => {
         return destReq.send((err, data) => {
             assert.ifError(err);
             const bucketMd = dummyBucketMD[bucketName];
-            const expectedBucketMD = new BucketInfo(bucketMd._name,
-                bucketMd._owner, bucketMd._ownerDisplayName,
-                bucketMd._creationDate, bucketMd._mdBucketModelVersion,
-                bucketMd._acl, bucketMd._transient, bucketMd._deleted,
-                bucketMd._serverSideEncryption,
-                bucketMd.versioningConfiguration, bucketMd._locationContraint,
-                bucketMd._websiteConfiguration, bucketMd._cors,
-                bucketMd._lifeCycle);
+            const expectedBucketMD = new BucketInfo(bucketMd.name,
+                bucketMd.owner, bucketMd.ownerDisplayName,
+                bucketMd.creationDate, bucketMd.mdBucketModelVersion,
+                bucketMd.acl, bucketMd.transient, bucketMd.deleted,
+                bucketMd.serverSideEncryption,
+                bucketMd.versioningConfiguration, bucketMd.locationConstraint,
+                bucketMd.websiteConfiguration, bucketMd.cors,
+                bucketMd.lifeCycle);
             const recBucketMD = new BucketInfo(data.name, data.owner,
                 data.ownerDisplayName, data.creationDate,
                 data.mdBucketModelVersion, data.acl, data.transient,
-                data.deleted, null, data.versioningConfiguration,
-                data.locationConstraint);
+                data.deleted, data.serverSideEncryption,
+                data.versioningConfiguration, data.locationConstraint,
+                data.websiteConfiguration, data.cors, data.lifeCycle);
             delete expectedBucketMD._uid;
             delete recBucketMD._uid;
             assert.deepStrictEqual(recBucketMD, expectedBucketMD);
