@@ -8,7 +8,6 @@ const LifecycleTask = require('../../../extensions/lifecycle' +
     '/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
 const testConfig = require('../../config.json');
-const QueueEntry = require('../../../lib/models/QueueEntry');
 
 const S3 = AWS.S3;
 const s3config = {
@@ -430,22 +429,17 @@ describe('lifecycle task functional tests', function dF() {
         const { count, entries } = data;
         assert.strictEqual(count.transitions, expectedKeys.length);
         assert.strictEqual(entries.transitions.length, expectedKeys.length);
-        const results = {};
+        // TODO modify this test when ActionQueueEntry messages are
+        // generated for transition purposes
+        data.entries.transitions.sort(
+            (t1, t2) => (t1.objectKey < t2.objectKey ? -1 : 1));
+        expectedKeys.sort();
+        assert.deepStrictEqual(
+            data.entries.transitions.map(t => t.objectKey),
+            expectedKeys);
         data.entries.transitions.forEach(transition => {
-            const entry = QueueEntry.createFromKafkaEntry({
-                value: transition.message,
-            });
-            const key = entry.getObjectKey();
-            results[key] = entry;
-        });
-        expectedKeys.forEach(key => {
-            const entry = results[key];
-            assert(entry !== undefined);
-            assert(entry.isLifecycleOperation());
-            assert.strictEqual(entry.getObjectKey(), key);
-            assert.strictEqual(entry.getSite(), 'us-east-2');
-            assert.strictEqual(entry.getReplicationStorageType(), 'aws_s3');
-            assert.strictEqual(entry.getReplicationStorageClass(), 'us-east-2');
+            assert.strictEqual(transition.bucket, 'test-bucket');
+            assert.strictEqual(transition.site, 'us-east-2');
         });
     }
 

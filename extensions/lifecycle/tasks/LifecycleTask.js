@@ -5,9 +5,6 @@ const { errors } = require('arsenal');
 
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const BackbeatMetadataProxy =
-    require('../../../lib/BackbeatMetadataProxy');
-const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -772,69 +769,6 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Get object metadata from CloudServer.
-     * @param {object} params - The function parameters
-     * @param {string} params.bucket - The source bucket name
-     * @param {string} params.objectKey - The object key name
-     * @param {string} params.encodedVersionId - The object encoded version ID
-     * @param {Werelogs.Logger} log - Logger object
-     * @param {Function} cb - Callback with error or the parsed metadata
-     * @return {undefined}
-     */
-    _getObjectMetadata(params, log, cb) {
-        // FIXME create the proxy instance in LifecycleBucketProcessor
-        // and provide an HTTP agent
-        return new BackbeatMetadataProxy(this.s3Endpoint, this.s3Auth)
-            .setSourceClient(log)
-            .getMetadata(params, log, (err, res) => {
-                if (err) {
-                    log.error('could not retrieve object metadata', {
-                        method: 'LifecycleTask._getObjectMetadata',
-                        error: err,
-                    });
-                    return cb(err);
-                }
-                const metadata = JSON.parse(res.Body);
-                log.debug('retrieved object metadata', {
-                    method: 'LifecycleTask._getObjectMetadata',
-                    metadata,
-                });
-                return cb(null, metadata);
-            });
-    }
-
-    /**
-     * Get the source object metadata and build a Kafka entry for transitions.
-     * @param {object} params - The function parameters
-     * @param {string} params.bucket - The source bucket name
-     * @param {string} params.objectKey - The object key name
-     * @param {string} params.encodedVersionId - The object encoded version ID
-     * @param {string} params.site - The site name to transition the object to
-     * @param {Werelogs.Logger} log - Logger object
-     * @param {Function} cb - Callback to call with error or the Kafka entry
-     * @return {undefined}
-     */
-    _getTransitionEntry(params, log, cb) {
-        const { bucket, objectKey, encodedVersionId } = params;
-        const metadataParams = {
-            bucket,
-            objectKey,
-            encodedVersionId,
-        };
-        return this._getObjectMetadata(metadataParams, log, (err, metadata) => {
-            if (err) {
-                return cb(err);
-            }
-            const { site } = params;
-            const { type } = this.bootstrapList.find(i => site === i.site);
-            const entry = new ObjectQueueEntry(bucket, objectKey, metadata)
-                .toLifecycleEntry(site, type)
-                .toKafkaEntry(site);
-            return cb(null, entry);
-        });
-    }
-
-    /**
      * Gets the transition entry and sends it to the replication topic.
      * @param {object} params - The function parameters
      * @param {string} params.bucket - The source bucket name
@@ -844,11 +778,17 @@ class LifecycleTask extends BackbeatTask {
      * @param {Werelogs.Logger} log - Logger object
      * @return {undefined}
      */
+    // eslint-disable-next-line no-unused-vars
     _applyTransitionRule(params, log) {
-        return async.waterfall([
-            next => this._getTransitionEntry(params, log, next),
-            (entry, next) => this.sendTransitionEntry(entry, next),
-        ], err => {
+        // TODO use ActionQueueEntry to send command to the data
+        // mover, for now use a placeholder message to be able to
+        // unit-test transition rules
+        this.sendTransitionEntry({
+            bucket: params.bucket,
+            objectKey: params.objectKey,
+            encodedVersionId: params.encodedVersionId,
+            site: params.site,
+        }, err => {
             if (err) {
                 log.error('could not send transition entry for consumption', {
                     method: 'LifecycleTask._applyTransitionRule',
