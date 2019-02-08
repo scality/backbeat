@@ -5,25 +5,30 @@
 This feature offers a way for users to manually pause and resume a service
 extension by storage location.
 
+In addition, a user may choose to resume service operations for a given storage
+location by a specified number of hours from the current time. This is useful
+for CRR in particular because if the user knows a destination location will be
+down for a certain amount of time, the user can schedule for the service to
+resume at time of destination location availability.
+
 This feature is currently available for the following service extensions:
 
 - Cross-Region Replication (CRR)
-- Metadata Ingestion
-
-In addition, for the CRR service only, a user may choose to resume CRR
-operations for a given storage location by a specified number of hours from the
-current time. This is useful when the user knows a destination location will be
-down for a certain amount of time and wants to schedule for the service to
-resume at time of destination location availability.
+- RING Out-of-Band Updates (RING-OOB)
 
 ## Design
 
 The RESTful API exposes methods for users to pause or resume service operations
 by storage location.
 
-Redis’s pub/sub function propagate requests to all active and relevant Kafka
-Consumers on all nodes. The published Redis message specifies the service and
-storage location to pause or resume.
+The API has a Redis instance publishing messages to a specific channel.
+Each service will be subscribed and listening to their relevant channels.
+
+### Design - CRR
+
+Redis’s pub/sub function propagate requests to active CRR Kafka Consumers
+on all nodes. The published Redis message specifies the CRR service and storage
+location to pause or resume.
 
 Backbeat's design allows pausing or resuming a service at the lowest level
 (pause or resume all Kafka Consumers subscribed to a given service topic) to
@@ -43,6 +48,21 @@ When a consumer pauses, the consumer process is kept alive and maintains any
 internal state, including offset. The consumer is no longer subscribed to the
 service topic, so no longer tries to consume any entries. When the paused
 consumer is resumed, it again resumes consuming entries from its last offset.
+
+### Design - RING-OOB
+
+Redis's pub/sub function propagate requests to the Ingestion Populator class,
+which handles management of fetching metadata logs from RING sources and
+produces these log entries to Kafka. The published Redis message specifies the
+RING-OOB service and storage location to pause or resume.
+
+On receiving a request to pause or resume, the Ingestion Populator will manage
+the state of each RING source. Management of state is saved in ZooKeeper for
+persistence.
+
+On pause, the RING-OOB service will stop fetching metadata logs from relevant
+sources. The consumer process is kept alive and it is possible to see metadata
+entries continue populating in Zenko's metadata storage.
 
 ## Definition of API
 
