@@ -108,7 +108,7 @@ class MultipleBackendTask extends ReplicateObject {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            encodedVersionId: sourceEntry.getEncodedVersionId(),
+            versionId: sourceEntry.getEncodedVersionId(),
         };
         return this.backbeatSourceProxy.getMetadata(
         params, log, (err, blob) => {
@@ -774,7 +774,7 @@ class MultipleBackendTask extends ReplicateObject {
         metadataProxy.getMetadata({
             bucket: destEntry.getBucket(),
             objectKey: destEntry.getObjectKey(),
-            encodedVersionId: destEntry.getEncodedVersionId(),
+            versionId: destEntry.getEncodedVersionId(),
         }, log, cb);
     }
 
