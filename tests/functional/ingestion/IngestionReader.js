@@ -19,6 +19,7 @@ const testConfig = require('../../config.json');
 const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
 const zookeeper = require('../../../lib/clients/zookeeper');
 
+const ingestionConfig = testConfig.extensions.ingestion;
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
 const CONSUMER_TIMEOUT = 25000;
