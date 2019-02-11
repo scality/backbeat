@@ -5,8 +5,7 @@ const MultipleBackendTask =
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const { sourceEntry, destEntry } = require('../../utils/mockEntries');
 const fakeLogger = require('../../utils/fakeLogger');
-const { replicationEntry, lifecycleEntry } =
-    require('../../utils/kafkaEntries');
+const { replicationEntry } = require('../../utils/kafkaEntries');
 
 const MPU_GCP_MAX_PARTS = 1024;
 const MIN_AWS_PART_SIZE = (1024 * 1024) * 5; // 5MB
@@ -63,17 +62,6 @@ describe('MultipleBackendTask', function test() {
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             task._setupClients(entry, fakeLogger, () => {
                 assert(task.sourceRole !== null);
-                assert(task.S3source !== null);
-                assert(task.backbeatSource !== null);
-                assert(task.backbeatSourceProxy !== null);
-                done();
-            });
-        });
-
-        it('should set clients for lifecycle', done => {
-            const entry = QueueEntry.createFromKafkaEntry(lifecycleEntry);
-            task._setupClients(entry, fakeLogger, () => {
-                assert(task.sourceRole === null);
                 assert(task.S3source !== null);
                 assert(task.backbeatSource !== null);
                 assert(task.backbeatSourceProxy !== null);

@@ -1026,15 +1026,9 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _setupClients(entry, log, cb) {
-        if (entry.isReplicationOperation()) {
-            // Sets up source clients using the role from the replication
-            // configuration if the authentication type is as such.
-            return this._setupRoles(entry, log, cb);
-        }
-        if (entry.isLifecycleOperation()) {
-            this._setupSourceClients(undefined, log);
-        }
-        return cb();
+        // Sets up source clients using the role from the replication
+        // configuration if the authentication type is as such.
+        return this._setupRoles(entry, log, cb);
     }
 
     processQueueEntry(sourceEntry, kafkaEntry, done) {

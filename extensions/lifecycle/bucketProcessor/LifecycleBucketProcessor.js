@@ -117,7 +117,9 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     sendTransitionEntry(entry, cb) {
-        this._transitionProducer.send([entry], cb);
+        // TODO produce ActionQueueEntry messages to data-mover topic
+        this._log.debug('sendTransitionEntry called', { entry });
+        process.nextTick(cb);
     }
 
     /**

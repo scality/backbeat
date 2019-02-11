@@ -85,9 +85,6 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @return {undefined}
      */
     _reportMetrics(sourceEntry, updatedSourceEntry) {
-        if (!sourceEntry.isReplicationOperation()) {
-            return undefined;
-        }
         const content = updatedSourceEntry.getReplicationContent();
         const contentLength = updatedSourceEntry.getContentLength();
         const bytes = content.includes('DATA') ? contentLength : 0;
@@ -142,10 +139,6 @@ class UpdateReplicationStatus extends BackbeatTask {
     }
 
     _checkStatus(sourceEntry) {
-        // This check only applies to replication operations.
-        if (!sourceEntry.isReplicationOperation()) {
-            return undefined;
-        }
         const site = sourceEntry.getSite();
         const status = sourceEntry.getReplicationSiteStatus(site);
         const statuses = ['COMPLETED', 'FAILED', 'PENDING'];
@@ -156,7 +149,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         return undefined;
     }
 
-    _getUpdatedReplicationEntry(params) {
+    _getUpdatedSourceEntry(params) {
         const { sourceEntry, refreshedEntry } = params;
         const site = sourceEntry.getSite();
         const status = sourceEntry.getReplicationSiteStatus(site);
@@ -177,25 +170,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         return entry;
     }
 
-    _getUpdatedLifecycleEntry(params) {
-        const { sourceEntry, refreshedEntry } = params;
-        const site = sourceEntry.getSite();
-        // Just set the AMZ storage class, and no replication info.
-        return refreshedEntry.setAmzStorageClass(site);
-    }
-
-    _getUpdatedSourceEntry(params) {
-        const { sourceEntry } = params;
-        if (sourceEntry.isReplicationOperation()) {
-            return this._getUpdatedReplicationEntry(params);
-        }
-        if (sourceEntry.isLifecycleOperation()) {
-            return this._getUpdatedLifecycleEntry(params);
-        }
-        return undefined;
-    }
-
-    _garbageCollectReplication(entry, cb) {
+    _handleGarbageCollection(entry, log, cb) {
         const dataStoreName = entry.getDataStoreName();
         const isTransient = config.getIsTransientLocation(dataStoreName);
         const status = entry.getReplicationStatus();
@@ -204,21 +179,6 @@ class UpdateReplicationStatus extends BackbeatTask {
             const locations = entry.getReducedLocations();
             // Schedule garbage collection of transient data locations array.
             return this.gcProducer.publishDeleteDataEntry(locations, cb);
-        }
-        return cb();
-    }
-
-    _garbageCollectLifecycle(entry, cb) {
-        // TODO: Implement garbage collection of transitioned data.
-        return cb();
-    }
-
-    _handleGarbageCollection(entry, cb) {
-        if (entry.isReplicationOperation()) {
-            return this._garbageCollectReplication(entry, cb);
-        }
-        if (entry.isLifecycleOperation()) {
-            return this._garbageCollectLifecycle(entry, cb);
         }
         return cb();
     }
@@ -262,7 +222,8 @@ class UpdateReplicationStatus extends BackbeatTask {
                     return done(err);
                 }
                 this._reportMetrics(sourceEntry, updatedSourceEntry);
-                return this._handleGarbageCollection(updatedSourceEntry, done);
+                return this._handleGarbageCollection(
+                    updatedSourceEntry, log, done);
             });
         });
     }
