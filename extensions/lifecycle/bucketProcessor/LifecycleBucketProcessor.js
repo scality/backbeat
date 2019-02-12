@@ -67,9 +67,7 @@ class LifecycleBucketProcessor {
         this._repConfig = extensions.replication;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
         this._transport = transport;
-        this._bucketProducer = null;
-        this._objectProducer = null;
-        this._transitionProducer = null;
+        this._producer = null;
         this.accountCredsCache = {};
 
         // The task scheduler for processing lifecycle tasks concurrently.
@@ -89,52 +87,21 @@ class LifecycleBucketProcessor {
     }
 
     /**
-     * Send entry to the object task topic
-     * @param {Object} entry - The Kafka entry to send to the topic
-     * @param {Function} cb - The callback to call
-     * @return {undefined}
-     */
-    sendObjectEntry(entry, cb) {
-        const entries = [{ message: JSON.stringify(entry) }];
-        this._objectProducer.send(entries, cb);
-    }
-
-    /**
-     * Send entry back to bucket task topic
-     * @param {Object} entry - The Kafka entry to send to the topic
-     * @param {Function} cb - The callback to call
-     * @return {undefined}
-     */
-    sendBucketEntry(entry, cb) {
-        const entries = [{ message: JSON.stringify(entry) }];
-        this._bucketProducer.send(entries, cb);
-    }
-
-    /**
-     * Send Kafka entry to the replication topic.
-     * @param {Object} entry - The Kafka entry to send to the topic
-     * @param {Function} cb - The callback to call
-     * @return {undefined}
-     */
-    sendTransitionEntry(entry, cb) {
-        // TODO produce ActionQueueEntry messages to data-mover topic
-        this._log.debug('sendTransitionEntry called', { entry });
-        process.nextTick(cb);
-    }
-
-    /**
      * Get the state variables of the current instance.
      * @return {Object} Object containing the state variables
      */
     getStateVars() {
         return {
-            sendBucketEntry: this.sendBucketEntry.bind(this),
-            sendObjectEntry: this.sendObjectEntry.bind(this),
-            sendTransitionEntry: this.sendTransitionEntry.bind(this),
+            producer: this._producer,
             bootstrapList: this._repConfig.destination.bootstrapList,
             enabledRules: this._lcConfig.rules,
             s3Endpoint: this._s3Endpoint,
             s3Auth: this._lcConfig.auth,
+            bucketTasksTopic: this._lcConfig.bucketTasksTopic,
+            objectTasksTopic: this._lcConfig.objectTasksTopic,
+            // FIXME change this to configured data mover topic once
+            // implemented
+            dataMoverTopic: 'REPLACEME',
             log: this._log,
         };
     }
@@ -267,21 +234,18 @@ class LifecycleBucketProcessor {
 
     /**
      * Set up the backbeat producer with the given topic.
-     * @param {String} topic - - Kafka topic to write to
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _setupProducer(topic, cb) {
+    _setupProducer(cb) {
         const producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
-            topic,
         });
         producer.once('error', cb);
         producer.once('ready', () => {
             producer.removeAllListeners('error');
             producer.on('error', err => {
                 this._log.error('error from backbeat producer', {
-                    topic,
                     error: err,
                 });
             });
@@ -432,61 +396,17 @@ class LifecycleBucketProcessor {
      */
     start() {
         this._setupCredentials();
-        return async.parallel([
-            // Set up producer to populate the lifecycle bucket task topic.
-            next => this._setupProducer(this._lcConfig.bucketTasksTopic,
-                (err, producer) => {
-                    if (err) {
-                        this._log.error('error setting up kafka producer for ' +
-                        'bucket task', {
-                            error: err.message,
-                            method: 'LifecycleBucketProcessor.start',
-                        });
-                        return next(err);
-                    }
-                    this._bucketProducer = producer;
-                    return next();
-                }),
-            // Set up producer to populate the lifecycle object task topic.
-            next => this._setupProducer(this._lcConfig.objectTasksTopic,
-                (err, producer) => {
-                    if (err) {
-                        this._log.error('error setting up kafka producer for ' +
-                        'object task', {
-                            error: err.message,
-                            method: 'LifecycleBucketProcessor.start',
-                        });
-                        return next(err);
-                    }
-                    this._objectProducer = producer;
-                    return next();
-                }),
-            // Set up producer to populate the replication topic, used for
-            // transitioning objects.
-            next => this._setupProducer(this._repConfig.topic,
-                (err, producer) => {
-                    if (err) {
-                        this._log.error('error setting up kafka producer for ' +
-                        'transition task', {
-                            error: err.message,
-                            method: 'LifecycleBucketProcessor.start',
-                        });
-                        return next(err);
-                    }
-                    this._transitionProducer = producer;
-                    return next();
-                }),
-        ], err => {
+        this._setupProducer((err, producer) => {
             if (err) {
-                this._log.error('error setting up kafka clients', {
+                this._log.error('error setting up kafka producer', {
                     error: err,
                     method: 'LifecycleBucketProcessor.start',
                 });
                 process.exit(1);
             }
             this._setupConsumer();
+            this._producer = producer;
             this._log.info('lifecycle bucket processor successfully started');
-            return undefined;
         });
     }
 
@@ -502,23 +422,14 @@ class LifecycleBucketProcessor {
                 this._consumer.close(done);
             },
             done => {
-                this._log.debug('closing bucket tasks producer');
-                this._bucketProducer.close(done);
-            },
-            done => {
-                this._log.debug('closing object tasks producer');
-                this._objectProducer.close(done);
-            },
-            done => {
-                this._log.debug('closing transition tasks producer');
-                this._transitionProducer.close(done);
+                this._log.debug('closing producer');
+                this._producer.close(done);
             },
         ], () => cb());
     }
 
     isReady() {
-        return this._bucketProducer && this._bucketProducer.isReady() &&
-               this._objectProducer && this._objectProducer.isReady() &&
+        return this._producer && this._producer.isReady() &&
                this._consumer && this._consumer.isReady();
     }
 }

@@ -32,6 +32,36 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Send entry back to bucket task topic
+     * @param {Object} entry - The Kafka entry to send to the topic
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _sendBucketEntry(entry, cb) {
+        const entries = [{ message: JSON.stringify(entry) }];
+        this.producer.sendToTopic(this.bucketTasksTopic, entries, cb);
+    }
+
+    /**
+     * Send entry to the object task topic
+     * @param {ActionQueueEntry} entry - The action entry to send to the topic
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _sendObjectEntry(entry, cb) {
+        const entries = [{ message: JSON.stringify(entry) }];
+        this.producer.sendToTopic(this.objectTasksTopic, entries, cb);
+    }
+
+    _sendDataMoverEntry(entry, cb) {
+        // FIXME for now, this is a stub only required for functional
+        // tests to catch and check the produced messages, as there is
+        // no data mover topic yet
+        const entries = [{ message: JSON.stringify(entry) }];
+        this.producer.sendToTopic(this.dataMoverTopic, entries, cb);
+    }
+
+    /**
      * Handles non-versioned objects
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
@@ -74,7 +104,7 @@ class LifecycleTask extends BackbeatTask {
                     const entry = Object.assign({}, bucketData, {
                         details: { marker },
                     });
-                    this.sendBucketEntry(entry, err => {
+                    this._sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
                                 'sent kafka entry for bucket consumption', {
@@ -131,7 +161,7 @@ class LifecycleTask extends BackbeatTask {
                         prevDate: last.LastModified,
                     },
                 });
-                this.sendBucketEntry(entry, err => {
+                this._sendBucketEntry(entry, err => {
                     if (!err) {
                         log.debug('sent kafka entry for bucket ' +
                         'consumption', {
@@ -190,7 +220,7 @@ class LifecycleTask extends BackbeatTask {
                             uploadIdMarker: data.NextUploadIdMarker,
                         },
                     });
-                    return this.sendBucketEntry(entry, err => {
+                    return this._sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
                                 'sent kafka entry for bucket consumption', {
@@ -732,7 +762,7 @@ class LifecycleTask extends BackbeatTask {
                     lastModified: obj.LastModified,
                 },
             };
-            this.sendObjectEntry(entry, err => {
+            this._sendObjectEntry(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption', {
                         method: 'LifecycleTask._compareObject',
@@ -755,7 +785,7 @@ class LifecycleTask extends BackbeatTask {
                     lastModified: obj.LastModified,
                 },
             };
-            this.sendObjectEntry(entry, err => {
+            this._sendObjectEntry(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption', {
                         method: 'LifecycleTask._compareObject',
@@ -783,7 +813,7 @@ class LifecycleTask extends BackbeatTask {
         // TODO use ActionQueueEntry to send command to the data
         // mover, for now use a placeholder message to be able to
         // unit-test transition rules
-        this.sendTransitionEntry({
+        this._sendDataMoverEntry({
             bucket: params.bucket,
             objectKey: params.objectKey,
             encodedVersionId: params.encodedVersionId,
@@ -876,7 +906,7 @@ class LifecycleTask extends BackbeatTask {
                             version: deleteMarker.VersionId,
                         },
                     };
-                    this.sendObjectEntry(entry, err => {
+                    this._sendObjectEntry(entry, err => {
                         if (!err) {
                             log.debug('sent object entry for consumption', {
                                 method: 'LifecycleTask._checkAndApplyEODMRule',
@@ -918,7 +948,7 @@ class LifecycleTask extends BackbeatTask {
                     version: version.VersionId,
                 },
             };
-            this.sendObjectEntry(entry, err => {
+            this._sendObjectEntry(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for ' +
                     'consumption', {
@@ -1151,7 +1181,7 @@ class LifecycleTask extends BackbeatTask {
                         UploadId: upload.UploadId,
                     },
                 };
-                this.sendObjectEntry(entry, err => {
+                this._sendObjectEntry(entry, err => {
                     if (!err) {
                         log.debug('sent object entry for consumption', {
                             method: 'LifecycleTask._compareMPUUploads',
