@@ -52,7 +52,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            encodedVersionId: sourceEntry.getEncodedVersionId(),
+            versionId: sourceEntry.getEncodedVersionId(),
         };
         return this.backbeatSourceClient
         .getMetadata(params, log, (err, blob) => {
@@ -185,7 +185,12 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     _putMetadata(updatedSourceEntry, log, cb) {
         const client = this.backbeatSourceClient;
-        return client.putMetadata(updatedSourceEntry, log, err => {
+        return client.putMetadata({
+            bucket: updatedSourceEntry.getBucket(),
+            objectKey: updatedSourceEntry.getObjectKey(),
+            versionId: updatedSourceEntry.getEncodedVersionId(),
+            mdBlob: updatedSourceEntry.getSerialized(),
+        }, log, err => {
             if (err) {
                 log.error('an error occurred when updating metadata', {
                     entry: updatedSourceEntry.getLogInfo(),
