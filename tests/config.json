@@ -83,6 +83,7 @@
                 }
             },
             "topic": "backbeat-replication",
+            "dataMoverTopic": "backbeat-data-mover",
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed",
             "queueProcessor": {

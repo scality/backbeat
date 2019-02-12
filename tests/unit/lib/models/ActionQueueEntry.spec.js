@@ -43,6 +43,25 @@ describe('ActionQueueEntry', () => {
             entry.getAttribute('details'), { roundTrip: true });
     });
 
+    it('should set an error when retrieving an unset attribute and ' +
+    '"required" option is set', () => {
+        const entry = ActionQueueEntry.create('sendPigeon')
+              .setAttribute('toCountry', 'Finland');
+        assert.strictEqual(
+            entry.getAttribute('cost', { required: true }), undefined);
+        assert(entry.getError());
+        assert.strictEqual(entry.getError().code, 400);
+        assert.strictEqual(entry.getError().message, 'MissingParameter');
+
+        // nested attributes should work too
+        entry.setAttribute('details.roundTrip', true);
+        assert.strictEqual(entry.getAttribute('details.roundTrip'), true);
+        assert.strictEqual(
+            entry.getAttribute('details.roundTrip.foo', undefined));
+        assert.deepStrictEqual(
+            entry.getAttribute('details'), { roundTrip: true });
+    });
+
     it('should return specified logged attributes from getLogInfo()', () => {
         const entry = ActionQueueEntry.create('sendPigeon')
               .setAttribute('toCountry', 'Finland')
