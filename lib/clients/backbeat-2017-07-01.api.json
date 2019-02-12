@@ -152,6 +152,12 @@
                 "members": {
                     "versionId": {
                         "type": "string"
+                    },
+                    "location": {
+                        "type": "list",
+                        "member": {
+                            "shape": "LocationMDObj"
+                        }
                     }
                 }
             }
@@ -441,6 +447,12 @@
                 "members": {
                     "versionId": {
                         "type": "string"
+                    },
+                    "location": {
+                        "type": "list",
+                        "member": {
+                            "shape": "LocationMDObj"
+                        }
                     }
                 }
             }

@@ -52,6 +52,7 @@ const joiSchema = {
         bootstrapList: bootstrapListJoi,
     },
     topic: joi.string().required(),
+    dataMoverTopic: joi.string().required(),
     replicationStatusTopic: joi.string().required(),
     monitorReplicationFailures: joi.boolean().default(true),
     replicationFailedTopic: joi.string().required(),

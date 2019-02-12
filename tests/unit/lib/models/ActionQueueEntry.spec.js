@@ -43,6 +43,17 @@ describe('ActionQueueEntry', () => {
             entry.getAttribute('details'), { roundTrip: true });
     });
 
+    it('should set an error when retrieving an unset attribute and ' +
+    '"required" option is set', () => {
+        const entry = ActionQueueEntry.create('sendPigeon')
+              .setAttribute('toCountry', 'Finland');
+        assert.strictEqual(
+            entry.getAttribute('cost', { required: true }), undefined);
+        assert(entry.getError());
+        assert.strictEqual(entry.getError().code, 400);
+        assert.strictEqual(entry.getError().message, 'MissingParameter');
+    });
+
     it('should return specified logged attributes from getLogInfo()', () => {
         const entry = ActionQueueEntry.create('sendPigeon')
               .setAttribute('toCountry', 'Finland')
