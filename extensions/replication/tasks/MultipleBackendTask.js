@@ -135,6 +135,35 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     /**
+     * Used when an operation performed in the process of replicating a
+     * multipart upload fails.
+     * @param {ObjectQueueEntry} sourceEntry - The source object entry
+     * @param {String} uploadId - The upload ID of the initiated MPU
+     * @param {Werelogs} log - The logger instance
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _handleMPUFailure(sourceEntry, uploadId, log, cb) {
+        this._multipleBackendAbortMPU(sourceEntry, uploadId, log, err => {
+            if (err) {
+                log.error('an error occurred when aborting a MPU', {
+                    method: 'MultipleBackendTask._handleMPUFailure',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            log.info('successfully aborted a MPU', {
+                method: 'MultipleBackendTask._handleMPUFailure',
+                entry: sourceEntry.getLogInfo(),
+            });
+            return cb();
+        });
+    }
+
+    /**
      * This is a retry wrapper for calling _getRangeAndPutMPUPartOnce.
      * @param {ObjectQueueEntry} sourceEntry - The source object entry
      * @param {ObjectQueueEntry} destEntry - The destination object entry
@@ -293,7 +322,11 @@ class MultipleBackendTask extends ReplicateObject {
                     peer: this.destBackbeatHost,
                     error: err.message,
                 });
-                return doneOnce(err);
+                // Attempt to abort the MPU, but pass the error from
+                // multipleBackendCompleteMPU because that operation's result
+                // should determine the replication's success or failure.
+                return this._handleMPUFailure(sourceEntry, uploadId, log, () =>
+                    doneOnce(err));
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
@@ -567,7 +600,11 @@ class MultipleBackendTask extends ReplicateObject {
                         peer: this.destBackbeatHost,
                         error: err.message,
                     });
-                    return doneOnce(err);
+                    // Attempt to abort the MPU, but pass an error from
+                    // multipleBackendPutMPUPart because that operation's result
+                    // should determine the replication's success or failure.
+                    return this._handleMPUFailure(sourceEntry, uploadId, log,
+                        () => doneOnce(err));
                 }
                 return this._completeMPU(sourceEntry, destEntry, uploadId, data,
                     log, doneOnce);
