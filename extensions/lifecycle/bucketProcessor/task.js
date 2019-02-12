@@ -35,7 +35,7 @@ function startHealthProbe() {
         if (bucketProcessor.isReady()) {
             return true;
         }
-        log.error('LifecycleBucketProcessor is not ready!');
+        log.error('lifecycle bucket processor is not ready!');
         return false;
     });
     logger.info('Starting HealthProbe server');

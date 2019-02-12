@@ -288,6 +288,48 @@ class S3Helper {
     }
 }
 
+class ProducerMock {
+    constructor() {
+        this.reset();
+    }
+
+    reset() {
+        this.sendCount = {
+            bucket: 0,
+            object: 0,
+            transitions: 0,
+        };
+        this.entries = {
+            bucket: [],
+            object: [],
+            transitions: [],
+        };
+    }
+
+    sendToTopic(topicName, entries, cb) {
+        const entry = JSON.parse(entries[0].message);
+        if (topicName === 'bucket-tasks') {
+            this.sendCount.bucket++;
+            this.entries.bucket.push(entry);
+        } else if (topicName === 'object-tasks') {
+            this.sendCount.object++;
+            this.entries.object.push(entry.target.key);
+        } else if (topicName === 'data-mover') {
+            this.sendCount.transitions++;
+            this.entries.transitions.push(entry);
+        }
+        return process.nextTick(cb);
+    }
+
+    getCount() {
+        return this.sendCount;
+    }
+
+    getEntries() {
+        return this.entries;
+    }
+}
+
 class LifecycleBucketProcessorMock {
     constructor() {
         this._log = new Logger(
@@ -305,75 +347,36 @@ class LifecycleBucketProcessorMock {
             },
         };
 
-        this.sendCount = {
-            bucket: 0,
-            object: 0,
-            transitions: 0,
-        };
-        this.entries = {
-            bucket: [],
-            object: [],
-            transitions: [],
-        };
-    }
-
-    sendBucketEntry(entry, cb) {
-        this.sendCount.bucket++;
-        this.entries.bucket.push(entry);
-
-        cb();
-    }
-
-    sendObjectEntry(entry, cb) {
-        this.sendCount.object++;
-        this.entries.object.push(entry.target.key);
-
-        cb();
-    }
-
-    sendTransitionEntry(entry, cb) {
-        this.sendCount.transitions++;
-        this.entries.transitions.push(entry);
-        cb();
+        this._producer = new ProducerMock();
     }
 
     getCount() {
-        return this.sendCount;
+        return this._producer.getCount();
     }
 
     getEntries() {
-        return this.entries;
+        return this._producer.getEntries();
     }
 
     getStateVars() {
         const { lifecycle } = testConfig.extensions;
         return {
-            sendBucketEntry: this.sendBucketEntry.bind(this),
-            sendTransitionEntry: this.sendTransitionEntry.bind(this),
-            sendObjectEntry: this.sendObjectEntry.bind(this),
+            producer: this._producer,
             removeBucketFromQueued: () => {},
             enabledRules: this._lcConfig.rules,
             // Corresponds to the default endpoint in the cloudserver config.
             bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
             s3Endpoint: s3config.endpoint,
             s3Auth: lifecycle.auth,
+            bucketTasksTopic: 'bucket-tasks',
+            objectTasksTopic: 'object-tasks',
+            dataMoverTopic: 'data-mover',
             log: this._log,
         };
     }
 
     reset() {
-        this.sendCount = {
-            bucket: 0,
-            object: 0,
-            transitions: 0,
-        };
-        this.entries = {
-            bucket: [],
-            object: [],
-            transitions: [],
-        };
-        this.sendBucketEntry = null;
-        this.sendObjectEntry = null;
+        this._producer.reset();
     }
 }
 

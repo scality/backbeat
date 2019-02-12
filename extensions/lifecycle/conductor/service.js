@@ -30,7 +30,7 @@ lcConductor.start(err => {
         if (lcConductor.isReady()) {
             return true;
         }
-        log.error('LifecycleConductor is not ready!');
+        log.error('lifecycle conductor is not ready!');
         return false;
     });
     logger.info('Starting HealthProbe server');

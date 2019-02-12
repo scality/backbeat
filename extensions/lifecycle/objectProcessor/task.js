@@ -40,7 +40,7 @@ function initAndStart() {
             if (objectProcessor.isReady()) {
                 return true;
             }
-            log.error('LifecycleConductor is not ready!');
+            log.error('lifecycle object processor is not ready!');
             return false;
         });
         log.info('Starting HealthProbe server');

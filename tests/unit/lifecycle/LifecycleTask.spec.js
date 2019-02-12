@@ -1087,9 +1087,9 @@ describe('lifecycle task helper methods', () => {
         ];
 
         before(() => {
-            // overwrite sendObjectEntry to read entry sent
+            // overwrite _sendObjectEntry to read entry sent
             class LifecycleTaskMock extends LifecycleTask {
-                sendObjectEntry(entry, cb) {
+                _sendObjectEntry(entry, cb) {
                     this.latestEntry = entry;
                     return cb();
                 }
