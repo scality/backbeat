@@ -1,12 +1,12 @@
 const assert = require('assert');
 const async = require('async');
-const Redis = require('ioredis');
 const schedule = require('node-schedule');
-const zookeeper = require('node-zookeeper-client');
 
 const QueueProcessor = require('../../../extensions/replication' +
                                '/queueProcessor/QueueProcessor');
 const TimeMachine = require('../utils/timeMachine');
+const ZKStateHelper = require('../utils/pauseResumeUtils/zkStateHelper');
+const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
 
 // Configs
 const config = require('../../config.json');
@@ -31,185 +31,10 @@ const mConfig = config.metrics;
 
 // Constants
 const ZK_TEST_CRR_STATE_PATH = `${zookeeperNamespace}${zkStatePath}`;
-const EPHEMERAL_NODE = 1;
 
 // Future Date to be used in tests
 const futureDate = new Date();
 futureDate.setHours(futureDate.getHours() + 5);
-
-class ZKStateHelper {
-    constructor(zkConfig, firstSite, secondSite) {
-        this.zkConfig = zkConfig;
-        this.zkClient = null;
-
-        this.firstPath = `${ZK_TEST_CRR_STATE_PATH}/${firstSite}`;
-        this.secondPath = `${ZK_TEST_CRR_STATE_PATH}/${secondSite}`;
-    }
-
-    getClient() {
-        return this.zkClient;
-    }
-
-    get(site, cb) {
-        const path = `${ZK_TEST_CRR_STATE_PATH}/${site}`;
-        this.zkClient.getData(path, (err, data) => {
-            if (err) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.get at zkClient.getData');
-                return cb(err);
-            }
-            let state;
-            try {
-                state = JSON.parse(data.toString());
-            } catch (parseErr) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.get at JSON.parse');
-                return cb(parseErr);
-            }
-            return cb(null, state);
-        });
-    }
-
-    set(site, state, cb) {
-        const data = Buffer.from(state);
-        const path = `${ZK_TEST_CRR_STATE_PATH}/${site}`;
-        this.zkClient.setData(path, data, cb);
-    }
-
-    /**
-     * Setup initial zookeeper state for pause/resume tests. After each test,
-     * state should be reset to this initial state.
-     * State is setup as such:
-     *   - firstSite: { paused: false }
-     *   - secondSite: { paused: true, scheduledResume: futureDate }
-     * Where futureDate is defined at the top of this test file.
-     * @param {function} cb - callback(err)
-     * @return {undefined}
-     */
-    init(cb) {
-        const { connectionString } = config.zookeeper;
-        this.zkClient = zookeeper.createClient(connectionString);
-        this.zkClient.connect();
-        this.zkClient.once('connected', () => {
-            async.series([
-                next => this.zkClient.mkdirp(ZK_TEST_CRR_STATE_PATH, err => {
-                    if (err && err.name !== 'NODE_EXISTS') {
-                        return next(err);
-                    }
-                    return next();
-                }),
-                next => {
-                    // emulate first site to be active (not paused)
-                    const data =
-                        Buffer.from(JSON.stringify({ paused: false }));
-                    this.zkClient.create(this.firstPath, data, EPHEMERAL_NODE,
-                        next);
-                },
-                next => {
-                    // emulate second site to be paused
-                    const data = Buffer.from(JSON.stringify({
-                        paused: true,
-                        scheduledResume: futureDate.toString(),
-                    }));
-                    this.zkClient.create(this.secondPath, data, EPHEMERAL_NODE,
-                        next);
-                },
-            ], err => {
-                if (err) {
-                    process.stdout.write('Zookeeper test helper error in ' +
-                    'ZKStateHelper.init');
-                    return cb(err);
-                }
-                return cb();
-            });
-        });
-    }
-
-    reset(cb) {
-        // reset state, just overwrite regardless of current state
-        async.parallel([
-            next => {
-                const data = Buffer.from(JSON.stringify({
-                    paused: false,
-                    scheduledResume: null,
-                }));
-                this.zkClient.setData(this.firstPath, data, next);
-            },
-            next => {
-                const data = Buffer.from(JSON.stringify({
-                    paused: true,
-                    scheduledResume: futureDate.toString(),
-                }));
-                this.zkClient.setData(this.secondPath, data, next);
-            },
-        ], err => {
-            if (err) {
-                process.stdout.write('Zookeeper test helper error in ' +
-                'ZKStateHelper.reset');
-                return cb(err);
-            }
-            return cb();
-        });
-    }
-
-    close() {
-        if (this.zkClient) {
-            this.zkClient.close();
-            this.zkClient = null;
-        }
-    }
-}
-
-class MockAPI {
-    constructor() {
-        this.publisher = new Redis();
-    }
-
-    _sendRequest(site, msg) {
-        const channel = `${repConfig.topic}-${site}`;
-        this.publisher.publish(channel, msg);
-    }
-
-    /**
-     * mock a delete schedule resume call
-     * @param {string} site - site name
-     * @return {undefined}
-     */
-    deleteScheduledResumeService(site) {
-        const message = JSON.stringify({
-            action: 'deleteScheduledResumeService',
-        });
-        this._sendRequest(site, message);
-    }
-
-    /**
-     * mock a resume api call
-     * @param {string} site - site name
-     * @param {Date} [date] - optional date object
-     * @return {undefined}
-     */
-    resumeCRRService(site, date) {
-        const message = {
-            action: 'resumeService',
-        };
-        if (date) {
-            message.date = date;
-        }
-        this._sendRequest(site, JSON.stringify(message));
-    }
-
-    /**
-     * mock a pause api call
-     * @param {string} site - site name
-     * @return {undefined}
-     */
-    pauseCRRService(site) {
-        const message = JSON.stringify({
-            action: 'pauseService',
-        });
-        this._sendRequest(site, message);
-    }
-}
 
 function isConsumerActive(consumer) {
     return consumer.getServiceStatus();
@@ -227,9 +52,9 @@ describe('CRR Pause/Resume status updates', function d() {
     let consumer2;
 
     before(done => {
-        mockAPI = new MockAPI();
-        zkHelper = new ZKStateHelper(config.zookeeper, firstSite,
-            secondSite);
+        mockAPI = new MockAPI(repConfig);
+        zkHelper = new ZKStateHelper(config.zookeeper, ZK_TEST_CRR_STATE_PATH,
+            firstSite, secondSite, futureDate);
         zkHelper.init(err => {
             if (err) {
                 return done(err);
@@ -281,7 +106,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should pause an active location', done => {
         let zkPauseState;
         // send fake api request
-        mockAPI.pauseCRRService(firstSite);
+        mockAPI.pauseService(firstSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
@@ -309,7 +134,7 @@ describe('CRR Pause/Resume status updates', function d() {
         // double-check initial state
         assert.strictEqual(isConsumerActive(consumer2), false);
         // send fake api request
-        mockAPI.pauseCRRService(secondSite);
+        mockAPI.pauseService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -334,7 +159,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should resume a paused location', done => {
         let zkPauseState;
         // send fake api request
-        mockAPI.resumeCRRService(secondSite);
+        mockAPI.resumeService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -359,7 +184,7 @@ describe('CRR Pause/Resume status updates', function d() {
         // double-check initial state
         assert.strictEqual(isConsumerActive(consumer1), true);
         // send fake api request
-        mockAPI.resumeCRRService(firstSite);
+        mockAPI.resumeService(firstSite);
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
                 if (err) {
@@ -407,7 +232,7 @@ describe('CRR Pause/Resume status updates', function d() {
             assert.ifError(err);
             consumer1.pause();
             // send fake api request
-            mockAPI.resumeCRRService(firstSite, futureDate);
+            mockAPI.resumeService(firstSite, futureDate);
 
             return async.doWhilst(cb => setTimeout(() => {
                 zkHelper.get(firstSite, (err, data) => {
@@ -454,7 +279,7 @@ describe('CRR Pause/Resume status updates', function d() {
             newScheduledDate.setHours(newScheduledDate.getHours() +
                 item.timeChange);
             // send fake api request
-            mockAPI.resumeCRRService(secondSite, newScheduledDate);
+            mockAPI.resumeService(secondSite, newScheduledDate);
 
             return async.doWhilst(cb => setTimeout(() => {
                 zkHelper.get(secondSite, (err, data) => {
@@ -484,7 +309,7 @@ describe('CRR Pause/Resume status updates', function d() {
         let zkScheduleState;
         let zkPauseState;
         // send fake api request
-        mockAPI.resumeCRRService(secondSite);
+        mockAPI.resumeService(secondSite);
 
         return async.doWhilst(cb => setTimeout(() => {
             zkHelper.get(secondSite, (err, data) => {
@@ -507,7 +332,7 @@ describe('CRR Pause/Resume status updates', function d() {
     it('should not schedule a resume when the location is already active',
     done => {
         // send fake api request
-        mockAPI.resumeCRRService(firstSite, futureDate);
+        mockAPI.resumeService(firstSite, futureDate);
 
         setTimeout(() => {
             zkHelper.get(firstSite, (err, data) => {
