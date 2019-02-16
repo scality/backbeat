@@ -30,19 +30,19 @@ mapped Zenko bucket.
 ```
                     +-------------+
                     |             |
-                    | Cloudserver |
-                    |             |
-                    +------+------+   Use S3 API calls to
-                           |          list bucket       +----------------------+
-                           |                            |                      |
-                           |                            |     S3 Connector     |
-                           |                            |                      |
-                           |        +-----------------> | +------------------+ |
-                           |        |                   | |                  | |
-                           v        | ----------------> | |  Metadata Server | |
-                  +-----------------+  Obtain list of   | |                  | |
-                  | +-------------+ |  object keys      | +--------^---------+ |
-                  | |             | |                   +----------|-----------+
+    ---------------+| Cloudserver |
+    |               |             |
+    |               +------+------+   Use S3 API calls to
+    |                                list bucket       +----------------------+
+    |                                                  |                      |
+    |                                                  |     S3 Connector     |
+    |                                                  |                      |
+    |                              +-----------------> | +------------------+ |
+    |                              |                   | |                  | |
+    |                              | ----------------> | |  Metadata Server | |
+    |             +-----------------+  Obtain list of  | |                  | |
+    |             | +-------------+ |   object keys    | +--------^---------+ |
+    v             | |             | |                  +-----------|-----------+
 +----------+      | |  Kafka      | |                              |
 |          | <------+             | |                              |
 | Mongo DB |      | +-------------+ |                              |
@@ -58,7 +58,6 @@ mapped Zenko bucket.
                |     On startup, check Zookeeper to
                +---> see if a 'sequence id' or `Next Continuation Token` already
                      exists.
-
 ```
 
 * Create a new S3C location in Orbit by adding a versioning-enabled S3C bucket
