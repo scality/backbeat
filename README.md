@@ -25,9 +25,15 @@ updates in a FIFO order.
 
 ## DESIGN
 
-Please refer to the ****[Design document](/DESIGN.md)****
-
-- [CRR from CloudServer to AWS S3 workflow](/docs/crr-to-aws-s3.md)
+- [Backbeat core design](/DESIGN.md)
+- [CRR to AWS S3 workflow](/docs/crr-to-aws-s3.md)
+- [Object Lifecycle management](/docs/lifecycle.md)
+- [Metrics](/docs/metrics.md)
+- [CRR Pause and Resume](/docs/pause-resume.md)
+- [Healthcheck](/docs/healthcheck.md)
+- [Site Level CRR](/docs/site-level-crr.md)
+- [Transient Source](/docs/transient-crr-source.md)
+- [Out of Band updates from RING](/docs/oob-s3-ring.md)
 
 ## QUICKSTART
 
