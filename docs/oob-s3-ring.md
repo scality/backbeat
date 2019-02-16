@@ -32,7 +32,7 @@ mapped Zenko bucket.
                     |             |
     ---------------+| Cloudserver |
     |               |             |
-    |               +------+------+   Use S3 API calls to
+    |               +-------------+   Use S3 API calls to
     |                                list bucket       +----------------------+
     |                                                  |                      |
     |                                                  |     S3 Connector     |
