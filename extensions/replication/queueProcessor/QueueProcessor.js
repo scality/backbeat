@@ -569,6 +569,7 @@ class QueueProcessor extends EventEmitter {
                     groupId,
                     concurrency: this.repConfig.queueProcessor.concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
+                    canary: true,
                 });
                 this._consumer.on('error', () => {
                     if (!consumerReady) {
