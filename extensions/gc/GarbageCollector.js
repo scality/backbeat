@@ -7,6 +7,7 @@ const errors = require('arsenal').errors;
 const Logger = require('werelogs').Logger;
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const GarbageCollectorTask = require('./tasks/GarbageCollectorTask');
 
 /**
@@ -112,17 +113,15 @@ class GarbageCollector extends EventEmitter {
     processKafkaEntry(kafkaEntry, done) {
         this._logger.debug('processing kafka entry');
 
-        let entryData;
-        try {
-            entryData = JSON.parse(kafkaEntry.value);
-        } catch (err) {
+        const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+        if (actionEntry.error) {
             this._logger.error(
                 'malformed kafka entry from garbage collector topic',
-                { error: err.message });
+                { error: actionEntry.error.message });
             return process.nextTick(() => done(errors.InternalError));
         }
         const task = new GarbageCollectorTask(this);
-        return task.processQueueEntry(entryData, done);
+        return task.processActionEntry(actionEntry, done);
     }
 
     getStateVars() {

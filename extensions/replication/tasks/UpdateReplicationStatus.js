@@ -4,6 +4,7 @@ const assert = require('assert');
 const config = require('../../../conf/Config');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const monitoringClient = require('../../../lib/clients/monitoringHandler');
@@ -178,7 +179,14 @@ class UpdateReplicationStatus extends BackbeatTask {
         if (isTransient && status === 'COMPLETED') {
             const locations = entry.getReducedLocations();
             // Schedule garbage collection of transient data locations array.
-            return this.gcProducer.publishDeleteDataEntry(locations, cb);
+            const gcEntry = ActionQueueEntry.create('deleteData')
+                  .addContext({
+                      origin: 'transientSource',
+                      reqId: log.getSerializedUids(),
+                  })
+                  .addContext(entry.getLogInfo())
+                  .setAttribute('target.locations', locations);
+            return this.gcProducer.publishActionEntry(gcEntry, cb);
         }
         return cb();
     }
