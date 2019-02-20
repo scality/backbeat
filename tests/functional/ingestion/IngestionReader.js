@@ -8,7 +8,7 @@ const fakeLogger = require('../../utils/fakeLogger');
 const testConfig = require('../../config.json');
 const { MetadataMock } = require('arsenal').testing.MetadataMock;
 const testPort = testConfig.extensions.ingestion.sources[0].port;
-const mockLogOffset = 1;
+const mockLogOffset = 2;
 
 /**
  * The QueuePopulatorExtension class sends entries to kafka, but for testing
@@ -18,6 +18,7 @@ const mockLogOffset = 1;
  */
 class TestIngestionQP {
     constructor(params) {
+        this.config = params.config;
         this.expectedEntry = params.expectedEntry;
     }
 
@@ -25,10 +26,25 @@ class TestIngestionQP {
         this._batch = batch;
     }
 
+    publish(topic, key, message) {
+        const kafkaEntry = { key: encodeURIComponent(key), message };
+        if (this._batch[topic] === undefined) {
+            this._batch[topic] = [kafkaEntry];
+        } else {
+            this._batch[topic].push(kafkaEntry);
+        }
+    }
+
+    setExpectedEntry(entry) {
+        this.expectedEntry = entry;
+    }
+
     filter(entry) {
         assert.strictEqual(`${entry.bucket}/${entry.key}`,
             `${this.expectedEntry.bucket}/${this.expectedEntry.key}`);
         assert.deepStrictEqual(entry, this.expectedEntry);
+        this.publish(this.config.topic, `${entry.bucket}/${entry.key}`,
+            JSON.stringify(entry));
     }
 }
 
@@ -45,21 +61,28 @@ const expectedEntry = {
     '"x-amz-server-side-encryption-customer-algorithm":"",' +
     '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
     '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
-    '"location":null,"isDeleteMarker":false,"tags":{},"replicationInfo":' +
+    '"location":[],"isDeleteMarker":false,"tags":{},"replicationInfo":' +
     '{"status":"","backends":[],"content":[],"destination":"","storageClass":' +
     '"","role":"","storageType":"","dataStoreVersionId":""},"dataStoreName":' +
-    '"us-east-1","last-modified":"2018-02-16T21:56:52.690Z",' +
+    '"us-east-1","last-modified":"2018-02-16T22:43:37.174Z",' +
     '"md-model-version":3}',
 };
 
-const extIngestionQP = new TestIngestionQP({ expectedEntry });
+const extIngestionQP = new TestIngestionQP({
+    config: testConfig.extensions.ingestion,
+    expectedEntry });
 
 class MockZkClient {
-    constructor(params) {
-        this.logOffset = params.logOffset;
+    // constructor(params) {
+    //     this.logOffset = params.logOffset;
+    // }
+
+    setOffset(offSet) {
+        this.logOffset = offSet;
     }
 
     getData(data, done) {
+        console.log('GETTING DATA', this.logOffset);
         return done(null, this.logOffset);
     }
 
@@ -69,6 +92,7 @@ class MockZkClient {
         return done(null);
     }
 }
+const zkClient = new MockZkClient();
 
 describe('ingestion reader tests with mock', () => {
     let httpServer;
@@ -92,14 +116,13 @@ describe('ingestion reader tests with mock', () => {
             timeoutMs: 1000,
             logger: fakeLogger,
         };
+        extIngestionQP.setBatch(batchState.entriesToPublish);
         const metadataMock = new MetadataMock();
         httpServer = http.createServer(
             (req, res) => metadataMock.onRequest(req, res)).listen(testPort);
         testConfig.s3.port = testPort;
         this.ingestionReader = new IngestionReader({
-            zkClient: new MockZkClient({
-                logOffset: mockLogOffset,
-            }),
+            zkClient,
             kafkaConfig: testConfig.kafka,
             bucketdConfig: testConfig.extensions.ingestion.sources[0],
             qpConfig: testConfig.queuePopulator,
@@ -116,8 +139,10 @@ describe('ingestion reader tests with mock', () => {
         done();
     });
 
-    it.skip('_processReadRecords should retrieve logRes stream', done => {
+    it('_processReadRecords should retrieve logRes stream', done => {
         assert.strictEqual(batchState.logRes, null);
+        zkClient.setOffset(mockLogOffset);
+        console.log('zkClient', zkClient);
         return this.ingestionReader._processReadRecords({}, batchState, err => {
             assert.ifError(err);
             assert.deepStrictEqual(batchState.logRes.info,
@@ -134,7 +159,7 @@ describe('ingestion reader tests with mock', () => {
     });
 
     // Assertion on parsedlogs here is done in the extIngestionQP mock
-    it.skip('_processPrepareEntries should send entries in the correct format and ' +
+    it('_processPrepareEntries should send entries in the correct format and ' +
     'update `nbLogEntriesRead` + `nbLogRecordsRead`', done => {
         async.waterfall([
             next =>
@@ -163,11 +188,17 @@ describe('ingestion reader tests with mock', () => {
         done();
     });
 
-    it.only('should succesfully ingest existing objects', done => {
+    it.skip('should succesfully ingest new bucket with existing objects', done => {
+        zkClient.setOffset(1);
         this.ingestionReader.processLogEntries({}, (err, res) => {
             console.log('err is', err);
             console.log('res is', res);
+            console.log(zkClient.logOffset);
             return done();
         });
     });
+
+    // it('should successfully ', done => {
+    //     return done();
+    // })
 });
