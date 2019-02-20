@@ -3,12 +3,12 @@ const async = require('async');
 const http = require('http');
 
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
-
+const { initManagement } = require('../../../lib/management/index');
 const fakeLogger = require('../../utils/fakeLogger');
 const testConfig = require('../../config.json');
 const { MetadataMock } = require('arsenal').testing.MetadataMock;
 const testPort = testConfig.extensions.ingestion.sources[0].port;
-const mockLogOffset = 2;
+const mockLogOffset = 1;
 
 /**
  * The QueuePopulatorExtension class sends entries to kafka, but for testing
@@ -35,7 +35,7 @@ class TestIngestionQP {
 const expectedEntry = {
     type: 'put',
     bucket: 'zenkobucket',
-    key: 'afternoon',
+    key: 'object1',
     value: '{"owner-display-name":"test_1518720219","owner-id":' +
     '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
     '"content-length":0,"content-md5":"d41d8cd98f00b204e9800998ecf8427e",' +
@@ -62,11 +62,21 @@ class MockZkClient {
     getData(data, done) {
         return done(null, this.logOffset);
     }
+
+    setData(path, data, val, done) {
+        console.log('SETTING DATA', path);
+        console.log(data);
+        return done(null);
+    }
 }
 
 describe('ingestion reader tests with mock', () => {
     let httpServer;
     let batchState;
+
+    before(done => {
+        initManagement(testConfig, done);
+    });
 
     beforeEach(done => {
         batchState = {
@@ -139,9 +149,9 @@ describe('ingestion reader tests with mock', () => {
         });
     });
 
-    it.only('should successfully run setup()', done => {
+    it('should successfully run setup()', done => {
         this.ingestionReader.setup(err => {
-            console.log('err', err);
+            assert.ifError(err);
             return done();
         });
     });
@@ -151,5 +161,13 @@ describe('ingestion reader tests with mock', () => {
         // value initialized when creating MockZkClient
         assert.equal(logOffset, mockLogOffset);
         done();
+    });
+
+    it.only('should succesfully ingest existing objects', done => {
+        this.ingestionReader.processLogEntries({}, (err, res) => {
+            console.log('err is', err);
+            console.log('res is', res);
+            return done();
+        });
     });
 });
