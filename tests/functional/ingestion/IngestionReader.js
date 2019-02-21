@@ -179,6 +179,14 @@ describe.only('ingestion reader tests with mock', () => {
         done();
     });
 
+    after(done => {
+        this.db.collection('PENSIEVE').drop(err => {
+            assert.ifError(err);
+            this.client.close();
+            done();
+        });
+    });
+
     it('_processReadRecords should retrieve logRes stream', done => {
         assert.strictEqual(batchState.logRes, null);
         return this.ingestionReader._processReadRecords({}, batchState, err => {
