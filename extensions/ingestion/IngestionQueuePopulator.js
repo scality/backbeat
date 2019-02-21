@@ -9,7 +9,6 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
     filter(entry) {
-        console.log('FILTER CALLED', entry);
         if (entry.type !== 'put' && entry.type !== 'del') {
             this.log.trace('skipping entry because not type put or del');
             return;
