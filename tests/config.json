@@ -22,7 +22,7 @@
         },
         "mongo": {
             "logName": "s3-recordlog",
-            "replicaSetHosts": "localhost:27017,localhost:27018,localhost:27019"
+            "replicaSetHosts": "localhost:27018"
         }
     },
     "kafka": {
