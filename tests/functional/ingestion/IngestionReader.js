@@ -124,7 +124,13 @@ describe('ingestion reader tests with mock', () => {
             s3Config: testConfig.s3,
             bucket: testConfig.extensions.ingestion.sources[0].bucket,
         });
-        this.ingestionReader.setup(done);
+        this.ingestionReader.setup(() => {
+            zkClient.setData(this.ingestionReader.pathToLogOffset,
+                Buffer.from('2'), -1, err => {
+                    assert.ifError(err);
+                    return done();
+                });
+        });
     });
 
     afterEach(done => {

@@ -34,7 +34,7 @@
                 "type": "service",
                 "account": "md-ingestion"
             },
-            "topic": "backbeat-ingestion",
+            "topic": "backbeat-test-ingestion",
             "zookeeperPath": "/ingestion",
             "cronRule": "*/5 * * * * *",
             "sources": [
