@@ -61,6 +61,7 @@ const joiSchema = {
         groupId: joi.string().required(),
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
+        minMPUSizeMB: joi.number().greater(0).default(20),
     },
     replicationStatusProcessor: {
         groupId: joi.string().required(),
