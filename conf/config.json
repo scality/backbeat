@@ -52,7 +52,7 @@
                     "type": "scality_s3",
                     "auth": {
                         "accessKey": "myAccessKey",
-                        "secretKey": "l82xrHB3gcZKiuXk22UqNFTkHepyq8ZNYG5U0eTJ"
+                        "secretKey": "myEncryptedSecretKey"
                     }
                 }
             ]

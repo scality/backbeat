@@ -2,6 +2,7 @@ const assert = require('assert');
 const async = require('async');
 const http = require('http');
 
+const zookeeper = require('../../../lib/clients/zookeeper');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
 const { initManagement } = require('../../../lib/management/index');
 const fakeLogger = require('../../utils/fakeLogger');
@@ -92,14 +93,26 @@ class MockZkClient {
         return done(null);
     }
 }
-const zkClient = new MockZkClient();
+const zkClient = zookeeper.createClient('localhost:2181', {
+    autoCreateNamespace: true,
+});
 
 describe('ingestion reader tests with mock', () => {
     let httpServer;
     let batchState;
 
     before(done => {
-        initManagement(testConfig, done);
+        async.waterfall([
+            next => {
+                zkClient.connect();
+                zkClient.once('error', next);
+                zkClient.once('ready', () => {
+                    zkClient.removeAllListeners('error');
+                    next();
+                });
+            },
+            next => initManagement(testConfig, next),
+        ], done);
     });
 
     beforeEach(done => {
@@ -141,8 +154,6 @@ describe('ingestion reader tests with mock', () => {
 
     it('_processReadRecords should retrieve logRes stream', done => {
         assert.strictEqual(batchState.logRes, null);
-        zkClient.setOffset(mockLogOffset);
-        console.log('zkClient', zkClient);
         return this.ingestionReader._processReadRecords({}, batchState, err => {
             assert.ifError(err);
             assert.deepStrictEqual(batchState.logRes.info,
@@ -188,12 +199,9 @@ describe('ingestion reader tests with mock', () => {
         done();
     });
 
-    it.skip('should succesfully ingest new bucket with existing objects', done => {
-        zkClient.setOffset(1);
-        this.ingestionReader.processLogEntries({}, (err, res) => {
-            console.log('err is', err);
-            console.log('res is', res);
-            console.log(zkClient.logOffset);
+    it('should succesfully ingest new bucket with existing objects', done => {
+        this.ingestionReader.processLogEntries({}, err => {
+            assert.ifError(err);
             return done();
         });
     });
