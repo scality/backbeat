@@ -26,3 +26,13 @@ spec:
     hostPath:
       path: /var/run/docker.sock
       type: Socket
+  - name: mongo
+  image: scality/ci-mongo:3.6.8
+  imagePullPolicy: IfNotPresent
+  resources:
+    requests:
+      cpu: 100m
+      memory: 1Gi
+    limits:
+      cpu: 500m
+      memory: 1Gi
