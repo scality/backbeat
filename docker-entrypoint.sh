@@ -73,12 +73,12 @@ if [[ "$MONGODB_DATABASE" ]]; then
    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.database=\"$MONGODB_DATABASE\""
 fi
 
-if [[ "$S3_HOST" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.host=\"$S3_HOST\""
+if [[ "$CLOUDSERVER_HOST" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.host=\"$CLOUDSERVER_HOST\""
 fi
 
-if [[ "$S3_PORT" ]]; then
-    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.port=\"$S3_PORT\""
+if [[ "$CLOUDSERVER_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.port=\"$CLOUDSERVER_PORT\""
 fi
 
 if [[ "$EXTENSIONS_REPLICATION_SOURCE_S3_HOST" ]]; then
