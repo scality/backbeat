@@ -88,6 +88,10 @@
             "queueProcessor": {
                 "groupId": "backbeat-test-replication-group",
                 "concurrency": 10
+            },
+            "replicationStatusProcessor": {
+                "groupId": "backbeat-test-replication-group",
+                "concurrency": 10
             }
         },
         "lifecycle": {
