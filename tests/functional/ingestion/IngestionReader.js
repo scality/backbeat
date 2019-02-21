@@ -1,7 +1,10 @@
 const assert = require('assert');
 const async = require('async');
 const http = require('http');
+const MongoClient = require('mongodb').MongoClient;
 
+const dummyPensieveCredentials = require('./DummyPensieveCredentials.json');
+const dummySSHKey = require('./DummySSHKey.json');
 const zookeeper = require('../../../lib/clients/zookeeper');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
 const { initManagement } = require('../../../lib/management/index');
@@ -77,12 +80,50 @@ const zkClient = zookeeper.createClient('localhost:2181', {
     autoCreateNamespace: true,
 });
 
-describe('ingestion reader tests with mock', () => {
+describe.only('ingestion reader tests with mock', () => {
     let httpServer;
     let batchState;
 
     before(done => {
+        const mongoUrl =
+            `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}/db?replicaSet=rs0`;
         async.waterfall([
+            next => {
+                MongoClient.connect(mongoUrl, {}, (err, client) => {
+                    if (err) {
+                        console.log('err connecting to mongo');
+                        next(err);
+                    }
+                    console.log('CLIENT IS', client);
+                    this.client = client;
+                    this.db = this.client.db('metadata', {
+                        ignoreUndefined: true,
+                    });
+                    next();
+                })
+            },
+            next => this.db.createCollection('PENSIEVE', (err,  res) => {
+                console.log('err?', err, res);
+                return next();
+            }),
+            next => {
+                this.m = this.db.collection('PENSIEVE');
+                this.m.insert(dummyPensieveCredentials, {}, err => {
+                    console.log('err', err);
+                });
+                return next();
+            },
+            next => {
+                this.m.insert({
+                    _id: 'configuration/overlay-version',
+                    value: 6,
+                }, {});
+                return next();
+            },
+            next => {
+                this.m.insert(dummySSHKey, {});
+                return next();
+            },
             next => {
                 zkClient.connect();
                 zkClient.once('error', next);
