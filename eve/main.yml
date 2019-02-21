@@ -32,11 +32,9 @@ stages:
         - run-tests
         - docker-build
   run-tests:
-    worker: &workspace
-      type: docker
-      path: eve/workers/unit_and_feature_tests
-      volumes:
-        - '/home/eve/workspace'
+    worker:
+      type: kube_pod
+      path: eve/workers/mongopod.yml
     steps:
       - Git: &git
           name: fetch source
