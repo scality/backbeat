@@ -73,26 +73,6 @@ const extIngestionQP = new TestIngestionQP({
     config: testConfig.extensions.ingestion,
     expectedEntry });
 
-class MockZkClient {
-    // constructor(params) {
-    //     this.logOffset = params.logOffset;
-    // }
-
-    setOffset(offSet) {
-        this.logOffset = offSet;
-    }
-
-    getData(data, done) {
-        console.log('GETTING DATA', this.logOffset);
-        return done(null, this.logOffset);
-    }
-
-    setData(path, data, val, done) {
-        console.log('SETTING DATA', path);
-        console.log(data);
-        return done(null);
-    }
-}
 const zkClient = zookeeper.createClient('localhost:2181', {
     autoCreateNamespace: true,
 });
@@ -200,10 +180,17 @@ describe('ingestion reader tests with mock', () => {
     });
 
     it('should succesfully ingest new bucket with existing objects', done => {
-        this.ingestionReader.processLogEntries({}, err => {
-            assert.ifError(err);
-            return done();
-        });
+        async.waterfall([
+            next => zkClient.setData(this.ingestionReader.pathToLogOffset,
+                Buffer.from('1'), -1, err => {
+                    assert.ifError(err);
+                    return next();
+                }),
+            next => this.ingestionReader.processLogEntries({}, err => {
+                assert.ifError(err);
+                return next();
+            }),
+        ], done);
     });
 
     // it('should successfully ', done => {
