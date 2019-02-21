@@ -22,15 +22,15 @@ spec:
     - mountPath: /var/run/docker.sock
       name: docker-socket
   - name: mongo
-  image: scality/ci-mongo:3.6.8
-  imagePullPolicy: IfNotPresent
-  resources:
-    requests:
-      cpu: 100m
-      memory: 1Gi
-    limits:
-      cpu: 500m
-      memory: 1Gi
+    image: scality/ci-mongo:3.6.8
+    imagePullPolicy: IfNotPresent
+    resources:
+      requests:
+        cpu: 100m
+        memory: 1Gi
+      limits:
+        cpu: 500m
+        memory: 1Gi
   volumes:
   - name: docker-socket
     hostPath:
