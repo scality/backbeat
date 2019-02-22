@@ -35,6 +35,8 @@ stages:
     worker:
       type: kube_pod
       path: eve/workers/mongopod.yml
+      images:
+        aggressor: eve/workers/unit_and_feature_tests
     steps:
       - Git: &git
           name: fetch source
