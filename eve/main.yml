@@ -22,9 +22,8 @@ models:
 
 stages:
   pre-merge:
-    worker: &pod
-      type: kube_pod
-      path: eve/workers/pod.yml
+    worker:
+      type: local
     steps:
     - TriggerStages:
         name: trigger all the tests

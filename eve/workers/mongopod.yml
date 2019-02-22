@@ -18,9 +18,6 @@ spec:
         cpu: "1"
         memory: 2Gi
     command: ["/bin/sh", "-c", "buildbot-worker create-worker . ${BUILDMASTER}:${BUILDMASTER_PORT} ${WORKERNAME} ${WORKERPASS} && buildbot-worker start --nodaemon"]
-    volumeMounts:
-    - mountPath: /var/run/docker.sock
-      name: docker-socket
   - name: mongo
     image: scality/ci-mongo:3.6.8
     imagePullPolicy: IfNotPresent
