@@ -196,6 +196,38 @@ class MongoQueueProcessor {
         entry.setLocation(editLocations);
     }
 
+    _updateReplicationInfo(entry) {
+        // TODO: Rely on ObjectMD to set this
+        // defaults
+        const replicationInfo = {
+            status: '',
+            backends: [],
+            content: [],
+            destination: '',
+            storageClass: '',
+            role: '',
+            storageType: '',
+            dataStoreVersionId: '',
+            isNFS: null,
+        };
+
+        entry.setReplicationInfo(replicationInfo);
+    }
+
+    _updateAcl(entry) {
+        // TODO: Rely on ObjectMD to set this
+        // defaults
+        const aclInfo = {
+            Canned: 'private',
+            FULL_CONTROL: [],
+            WRITE_ACP: [],
+            READ: [],
+            READ_ACP: [],
+        };
+
+        entry.setAcl(aclInfo);
+    }
+
     /**
      * Process a delete object entry
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
@@ -241,6 +273,8 @@ class MongoQueueProcessor {
         this._updateOwnerMD(sourceEntry, bucketInfo);
         this._updateObjectDataStoreName(sourceEntry, location);
         this._updateLocations(sourceEntry, location);
+        this._updateReplicationInfo(sourceEntry);
+        this._updateAcl(sourceEntry);
 
         const objVal = sourceEntry.getValue();
         // Always call putObject with version params undefined so
