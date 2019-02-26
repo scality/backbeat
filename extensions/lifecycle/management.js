@@ -37,9 +37,17 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
                     Status: wf.enabled ? 'Enabled' : 'Disabled',
                 };
                 if (wf.currentVersionTriggerDelayDays) {
-                    workflow.Expiration = {
-                        Days: wf.currentVersionTriggerDelayDays,
-                    };
+                    if (wf.type.includes('expiration')) {
+                        workflow.Expiration = {
+                            Days: wf.currentVersionTriggerDelayDays,
+                        };
+                    }
+                    if (wf.type.includes('transition')) {
+                        workflow.Transitions = [{
+                            Days: wf.currentVersionTriggerDelayDays,
+                            StorageClass: wf.currentVersionLocations[0].name,
+                        }];
+                    }
                 }
                 if (wf.filter && wf.filter.objectKeyPrefix) {
                     workflow.Filter = {
@@ -49,9 +57,11 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
                     workflow.Filter = {};
                 }
                 if (wf.previousVersionTriggerDelayDays) {
-                    workflow.NoncurrentVersionExpiration = {
-                        NoncurrentDays: wf.previousVersionTriggerDelayDays,
-                    };
+                    if (wf.type.includes('expiration')) {
+                        workflow.NoncurrentVersionExpiration = {
+                            NoncurrentDays: wf.previousVersionTriggerDelayDays,
+                        };
+                    }
                 }
                 return workflow;
             }),
