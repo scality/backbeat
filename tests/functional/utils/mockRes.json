@@ -1,33 +1,17 @@
 {
     "GET": {
         "responses": {
-            "/_/healthcheck": {
-                "resType": "healthcheck",
-                "name": "ok"
-            },
-            "/default/bucket/users..bucket": {
-                "resType": "objectList",
-                "name": "bucketList"
-            },
-            "/default/bucket/bucket1": {
-                "resType": "objectList",
-                "name": "objectList1"
-            },
-            "/default/attributes/bucket1": {
-                "resType": "bucketMD",
-                "name": "bucket1"
-            },
-            "/default/attributes/bucket2": {
-                "resType": "error",
-                "name": "NoSuchBucket"
-            },
             "/_/metadata/default/bucket/bucket1/object1": {
                 "resType": "objectMD",
                 "name": "object1"
             },
-            "/_/metadata/default/bucket/bucket2/object2": {
+            "/_/metadata/default/bucket/bucket2/zerobyteobject": {
                 "resType": "objectMD",
-                "name": "object2"
+                "name": "zerobyteobject"
+            },
+            "/_/metadata/default/bucket/bucket3/%E4%86%A9%E9%88%81%E6%AB%A8%E3%9F%94%E7%BD%B3": {
+                "resType": "objectMD",
+                "name": "䆩鈁櫨㟔罳"
             },
             "/_/metadata/default/attributes/bucket1": {
                 "resType": "bucketMD",
@@ -41,6 +25,14 @@
                 "resType": "raftId",
                 "name": "bucket1"
             },
+            "/_/metadata/admin/buckets/bucket2/id": {
+                "resType": "raftId",
+                "name": "bucket2"
+            },
+            "/_/meadata/admin/buckets/bucket3/id": {
+                "resType": "raftId",
+                "name": "bucket3"
+            },
             "/_/metadata/admin/raft_sessions/1/log": {
                 "resType": "raftLogs",
                 "name": "1"
@@ -48,6 +40,14 @@
             "/_/metadata/default/bucket/bucket1": {
                 "resType": "objectList",
                 "name": "objectList1"
+            },
+            "/_/metadata/default/bucket/bucket2": {
+                "resType": "objectList",
+                "name": "objectList2"
+            },
+            "/_/metadata/default/bucket/bucket3": {
+                "resType": "objectList",
+                "name": "objectList3"
             },
             "/_/metadata/default/informations/bucket1": {
                 "resType": "raftInformation",
@@ -73,6 +73,100 @@
             "Contents": [
                 {
                     "key": "object1",
+                    "value": {
+                        "owner-display-name": "test_1518720219",
+                        "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
+                        "content-length": 17303,
+                        "content-md5": "42070968aa8ae79704befe77afc6935b",
+                        "x-amz-version-id": "null",
+                        "x-amz-server-version-id": "",
+                        "x-amz-storage-class": "STANDARD",
+                        "x-amz-server-side-encryption": "",
+                        "x-amz-server-side-encryption-aws-kms-key-id": "",
+                        "x-amz-server-side-encryption-customer-algorithm": "",
+                        "x-amz-website-redirect-location": "",
+                        "acl": {
+                            "Canned": "private",
+                            "FULL_CONTROL": [],
+                            "WRITE_ACP": [],
+                            "READ": [],
+                            "READ_ACP": []
+                        },
+                        "key": "",
+                        "location": [],
+                        "isDeleteMarker": false,
+                        "tags": {},
+                        "replicationInfo": {
+                            "status": "",
+                            "backends": [],
+                            "content": [],
+                            "destination": "",
+                            "storageClass": "",
+                            "role": "",
+                            "storageType": "",
+                            "dataStoreVersionId": ""
+                        },
+                        "dataStoreName": "us-east-1",
+                        "last-modified": "2018-02-16T22:43:37.174Z",
+                        "md-model-version": 3
+                    }
+                }
+            ],
+            "IsTruncated": false,
+            "Delimiter": "/"
+        },
+        "objectList2": {
+            "CommonPrefixes": [],
+            "Contents": [
+                {
+                    "key": "zerobyteobject",
+                    "value": {
+                        "owner-display-name": "test_1518720219",
+                        "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
+                        "content-length": 0,
+                        "content-md5": "d41d8cd98f00b204e9800998ecf8427e",
+                        "x-amz-version-id": "",
+                        "x-amz-server-version-id": "null",
+                        "x-amz-storage-class": "STANDARD",
+                        "x-amz-server-side-encryption": "",
+                        "x-amz-server-side-encryption-aws-kms-key-id": "",
+                        "x-amz-server-side-encryption-customer-algorithm": "",
+                        "x-amz-website-redirect-location": "",
+                        "acl": {
+                            "Canned": "private",
+                            "FULL_CONTROL": [],
+                            "WRITE_ACP": [],
+                            "READ": [],
+                            "READ_ACP": []
+                        },
+                        "key": "",
+                        "location": [],
+                        "isDeleteMarker": false,
+                        "tags": {},
+                        "replicationInfo": {
+                            "status": "",
+                            "backends": [],
+                            "content": [],
+                            "destination": "",
+                            "storageClass": "",
+                            "role": "",
+                            "storageType": "",
+                            "dataStoreVersionId": ""
+                        },
+                        "dataStoreName": "us-east-1",
+                        "last-modified": "2018-02-16T22:43:37.174Z",
+                        "md-model-version": 3
+                    }
+                }
+            ],
+            "IsTruncated": false,
+            "Delimiter": "/"
+        },
+        "objectList3": {
+            "CommonPrefixes": [],
+            "Contents": [
+                {
+                    "key": "䆩鈁櫨㟔罳",
                     "value": {
                         "owner-display-name": "test_1518720219",
                         "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
@@ -118,6 +212,80 @@
     },
     "objectMD": {
         "object1": {
+            "owner-display-name": "test_1518720219",
+            "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
+            "content-length": 17303,
+            "content-md5": "42070968aa8ae79704befe77afc6935b",
+            "x-amz-version-id": "null",
+            "x-amz-server-version-id": "",
+            "x-amz-storage-class": "STANDARD",
+            "x-amz-server-side-encryption": "",
+            "x-amz-server-side-encryption-aws-kms-key-id": "",
+            "x-amz-server-side-encryption-customer-algorithm": "",
+            "x-amz-website-redirect-location": "",
+            "acl": {
+                "Canned": "private",
+                "FULL_CONTROL": [],
+                "WRITE_ACP": [],
+                "READ": [],
+                "READ_ACP": []
+            },
+            "key": "",
+            "location": [],
+            "isDeleteMarker": false,
+            "tags": {},
+            "replicationInfo": {
+                "status": "",
+                "backends": [],
+                "content": [],
+                "destination": "",
+                "storageClass": "",
+                "role": "",
+                "storageType": "",
+                "dataStoreVersionId": ""
+            },
+            "dataStoreName": "us-east-1",
+            "last-modified": "2018-02-16T22:43:37.174Z",
+            "md-model-version": 3
+        },
+        "zerobyteobject": {
+            "owner-display-name": "test_1518720219",
+            "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
+            "content-length": 0,
+            "content-md5": "d41d8cd98f00b204e9800998ecf8427e",
+            "x-amz-version-id": "null",
+            "x-amz-server-version-id": "",
+            "x-amz-storage-class": "STANDARD",
+            "x-amz-server-side-encryption": "",
+            "x-amz-server-side-encryption-aws-kms-key-id": "",
+            "x-amz-server-side-encryption-customer-algorithm": "",
+            "x-amz-website-redirect-location": "",
+            "acl": {
+                "Canned": "private",
+                "FULL_CONTROL": [],
+                "WRITE_ACP": [],
+                "READ": [],
+                "READ_ACP": []
+            },
+            "key": "",
+            "location": [],
+            "isDeleteMarker": false,
+            "tags": {},
+            "replicationInfo": {
+                "status": "",
+                "backends": [],
+                "content": [],
+                "destination": "",
+                "storageClass": "",
+                "role": "",
+                "storageType": "",
+                "dataStoreVersionId": ""
+            },
+            "dataStoreName": "us-east-1",
+            "last-modified": "2018-02-16T22:43:37.174Z",
+            "md-model-version": 3
+        },
+        "䆩鈁櫨㟔罳": {
             "owner-display-name": "test_1518720219",
             "owner-id": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
             "content-length": 0,
@@ -207,7 +375,7 @@
             "uid": null
         }
     },
-    "bucketList": [ "bucket1", "bucket2" ],
+    "bucketList": [ "bucket1", "bucket2", "bucket3" ],
     "raftLogs": {
         "1": {
             "info": {
@@ -217,13 +385,13 @@
             },
             "log": [
                 {
-                    "db": "friday",
+                    "db": "bucket1",
                     "method": 0,
                     "entries": [
                         {
                             "value": {
                                 "attributes": {
-                                    "name": "friday",
+                                    "name": "bucket1",
                                     "owner": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
                                     "ownerDisplayName": "test_1518720219",
                                     "creationDate": "2018-02-16T19:59:31.664Z",
@@ -241,13 +409,13 @@
                     ]
                 },
                 {
-                    "db": "friday",
+                    "db": "bucket1",
                     "method": 7,
                     "entries": [
                         {
                             "value": {
                                 "attributes": {
-                                    "name": "friday",
+                                    "name": "bucket1",
                                     "owner": "94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",
                                     "ownerDisplayName": "test_1518720219",
                                     "creationDate": "2018-02-16T19:59:31.664Z",
@@ -414,7 +582,8 @@
     },
     "raftId": {
         "bucket1": 1,
-        "bucket2": 5
+        "bucket2": 5,
+        "bucket3": 1
     },
     "raftInformation": {
         "1": {

@@ -49,6 +49,30 @@
                         "accessKey": "accessKey1",
                         "secretKey": "o7Q9X25qRv9KNYUewzlXAmfUmnOycFT9yTdgfk5IMntV8kEg4+mqEYl3QhAXyrCw22vbxvSzgdtjh+YhcZBIC6BL/AWurIh5MZyktbaSQabM3ZobTGuEet+qjog0I6Dr9tjHhxM1tfcOdN5Hy2lQk9LTW5uj2/7rtF6jLn5E1HLEn25sAAy60qPqMjBt+pQ0l6Y4JQ6dymZFCv/lZluEQ2mCdH0WlfDh4ZLcNC0KslwjQVJA4kPS5ydE88bB5m5BMscvzMeeRWkObHwdxnu6xN/YJqXvsx05NIC/G4ioeKdoQrBfuRvhlU1MhoCB/+yESdbVRLoM1MppEKkxQbQLTw=="
                     }
+                },
+                {
+                    "name": "zenkobucket",
+                    "bucket": "bucket2",
+                    "host": "localhost",
+                    "port": 7998,
+                    "https": false,
+                    "type": "scality_s3",
+                    "auth": {
+                        "accessKey": "accessKey1",
+                        "secretKey": "o7Q9X25qRv9KNYUewzlXAmfUmnOycFT9yTdgfk5IMntV8kEg4+mqEYl3QhAXyrCw22vbxvSzgdtjh+YhcZBIC6BL/AWurIh5MZyktbaSQabM3ZobTGuEet+qjog0I6Dr9tjHhxM1tfcOdN5Hy2lQk9LTW5uj2/7rtF6jLn5E1HLEn25sAAy60qPqMjBt+pQ0l6Y4JQ6dymZFCv/lZluEQ2mCdH0WlfDh4ZLcNC0KslwjQVJA4kPS5ydE88bB5m5BMscvzMeeRWkObHwdxnu6xN/YJqXvsx05NIC/G4ioeKdoQrBfuRvhlU1MhoCB/+yESdbVRLoM1MppEKkxQbQLTw=="
+                    }
+                },
+                {
+                    "name": "zenkobucket",
+                    "bucket": "bucket3",
+                    "host": "localhost",
+                    "port": 7998,
+                    "https": false,
+                    "type": "scality_s3",
+                    "auth": {
+                        "accessKey": "accessKey1",
+                        "secretKey": "o7Q9X25qRv9KNYUewzlXAmfUmnOycFT9yTdgfk5IMntV8kEg4+mqEYl3QhAXyrCw22vbxvSzgdtjh+YhcZBIC6BL/AWurIh5MZyktbaSQabM3ZobTGuEet+qjog0I6Dr9tjHhxM1tfcOdN5Hy2lQk9LTW5uj2/7rtF6jLn5E1HLEn25sAAy60qPqMjBt+pQ0l6Y4JQ6dymZFCv/lZluEQ2mCdH0WlfDh4ZLcNC0KslwjQVJA4kPS5ydE88bB5m5BMscvzMeeRWkObHwdxnu6xN/YJqXvsx05NIC/G4ioeKdoQrBfuRvhlU1MhoCB/+yESdbVRLoM1MppEKkxQbQLTw=="
+                    }
                 }
             ]
         },

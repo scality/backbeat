@@ -53,7 +53,6 @@ function setupS3Mock(sourceInfo, cb) {
                 if (err) {
                     return next(err);
                 }
-
                 return async.each(res.Contents, (entry, done) => {
                     awsClient.putObject({
                         Bucket: bucket,
