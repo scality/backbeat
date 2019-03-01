@@ -4,7 +4,6 @@ const uuid = require('uuid/v4');
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMD = require('arsenal').models.ObjectMD;
-const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
@@ -664,37 +663,28 @@ class MultipleBackendTask extends ReplicateObject {
         });
     }
 
-    _getAndPutPart(sourceEntry, part, log, cb) {
+    _getAndPutObject(sourceEntry, log, cb) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
         this.retry({
-            actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo(), part },
-            actionFunc: done => this._getAndPutPartOnce(
-                sourceEntry, part, partLogger, done),
+            actionDesc: 'stream object data',
+            logFields: { entry: sourceEntry.getLogInfo() },
+            actionFunc: done => this._getAndPutObjectOnce(
+                sourceEntry, partLogger, done),
             shouldRetryFunc: err => err.retryable,
-            onRetryFunc: err => {
-                if (err.origin === 'target') {
-                    this.destHosts.pickNextHost();
-                    this._setupDestClients(this.targetRole, partLogger);
-                }
-            },
             log: partLogger,
         }, cb);
     }
 
-    _getAndPutPartOnce(sourceEntry, part, log, done) {
-        log.debug('getting object part', { entry: sourceEntry.getLogInfo() });
+    _getAndPutObjectOnce(sourceEntry, log, done) {
+        log.debug('getting object data', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
-        const partObj = part ? new ObjectMDLocation(part) : undefined;
-        const size = part ? partObj.getPartSize() :
-            sourceEntry.getContentLength();
+        const size = sourceEntry.getContentLength();
         let incomingMsg = null;
         if (size !== 0) {
             const sourceReq = this.backbeatSource.getObject({
                 Bucket: sourceEntry.getBucket(),
                 Key: sourceEntry.getObjectKey(),
                 VersionId: sourceEntry.getEncodedVersionId(),
-                PartNumber: part ? partObj.getPartNumber() : undefined,
                 LocationConstraint: sourceEntry.getDataStoreName(),
             });
             attachReqUids(sourceReq, log);
@@ -703,7 +693,7 @@ class MultipleBackendTask extends ReplicateObject {
                 err.origin = 'source';
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', {
-                        method: 'MultipleBackendTask._getAndPutPartOnce',
+                        method: 'MultipleBackendTask._getAndPutObjectOnce',
                         entry: sourceEntry.getLogInfo(),
                         origin: 'source',
                         peer: this.sourceConfig.s3,
@@ -712,8 +702,8 @@ class MultipleBackendTask extends ReplicateObject {
                     });
                     return doneOnce(err);
                 }
-                log.error('an error occurred on getObject from S3', {
-                    method: 'MultipleBackendTask._getAndPutPartOnce',
+                log.error('an error occurred getting object from S3', {
+                    method: 'MultipleBackendTask._getAndPutObjectOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
@@ -726,7 +716,7 @@ class MultipleBackendTask extends ReplicateObject {
             incomingMsg.on('error', err => {
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', {
-                        method: 'MultipleBackendTask._getAndPutPartOnce',
+                        method: 'MultipleBackendTask._getAndPutObjectOnce',
                         entry: sourceEntry.getLogInfo(),
                         origin: 'source',
                         peer: this.sourceConfig.s3,
@@ -739,14 +729,14 @@ class MultipleBackendTask extends ReplicateObject {
                 err.origin = 'source';
                 log.error('an error occurred when streaming data from S3', {
                     entry: sourceEntry.getLogInfo(),
-                    method: 'MultipleBackendTask._getAndPutPartOnce',
+                    method: 'MultipleBackendTask._getAndPutObjectOnce',
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message,
                 });
                 return doneOnce(err);
             });
-            log.debug('putting data', { entry: sourceEntry.getLogInfo() });
+            log.debug('putting object', { entry: sourceEntry.getLogInfo() });
         }
         if (sourceEntry.getReplicationIsNFS()) {
             return this._checkObjectState(sourceEntry, log, err => {
@@ -754,11 +744,11 @@ class MultipleBackendTask extends ReplicateObject {
                     return doneOnce(err);
                 }
                 return this._sendMultipleBackendPutObject(sourceEntry,
-                    part, partObj, size, incomingMsg, log, doneOnce);
+                    size, incomingMsg, log, doneOnce);
             });
         }
-        return this._sendMultipleBackendPutObject(sourceEntry, part,
-            partObj, size, incomingMsg, log, doneOnce);
+        return this._sendMultipleBackendPutObject(sourceEntry,
+            size, incomingMsg, log, doneOnce);
     }
 
     /**
@@ -824,23 +814,20 @@ class MultipleBackendTask extends ReplicateObject {
     /**
      * Send the put object request to Cloudserver.
      * @param {ObjectQueueEntry} sourceEntry - The source object entry
-     * @param {Object} part - single data location info
-     * @param {ObjectMDLocation} partObj - The instance to get a part location
      * @param {Number} size - The size of object to stream
      * @param {Readable} incomingMsg - The stream of data to put
      * @param {Werelogs} log - The logger instance
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
-    _sendMultipleBackendPutObject(sourceEntry, part, partObj, size,
+    _sendMultipleBackendPutObject(sourceEntry, size,
         incomingMsg, log, doneOnce) {
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             CanonicalID: sourceEntry.getOwnerId(),
             ContentLength: size,
-            ContentMD5: part ? partObj.getPartETag() :
-                sourceEntry.getContentMd5(),
+            ContentMD5: sourceEntry.getContentMd5(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
             VersionId: sourceEntry.getEncodedVersionId(),
@@ -857,8 +844,8 @@ class MultipleBackendTask extends ReplicateObject {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
-                log.error('an error occurred on putData to S3', {
-                    method: 'MultipleBackendTask._getAndPutPartOnce',
+                log.error('an error occurred putting object to S3', {
+                    method: 'MultipleBackendTask._getAndPutObjectOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
@@ -965,35 +952,6 @@ class MultipleBackendTask extends ReplicateObject {
                 data.versionId);
             return doneOnce();
         });
-    }
-
-    _getAndPutData(sourceEntry, log, cb) {
-        // FIXME this function seems to duplicate
-        // ReplicateObject._getAndPutData(), consider merging implementations
-        log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
-        if (sourceEntry.getLocation().some(part => {
-            const partObj = new ObjectMDLocation(part);
-            return partObj.getDataStoreETag() === undefined;
-        })) {
-            const errMessage =
-                  'cannot replicate object without dataStoreETag property';
-            log.error(errMessage, {
-                method: 'MultipleBackendTask._getAndPutData',
-                entry: sourceEntry.getLogInfo(),
-            });
-            return cb(errors.InternalError.customizeDescription(errMessage));
-        }
-        const locations = sourceEntry.getReducedLocations();
-        // Metadata-only operations have no part locations.
-        if (locations.length === 0) {
-            return this._getAndPutPart(sourceEntry, null, log, cb);
-        }
-        const extMetrics = getExtMetrics(this.site,
-            sourceEntry.getContentLength(), sourceEntry);
-        this.mProducer.publishMetrics(extMetrics,
-            metricsTypeQueued, metricsExtension, () => {});
-        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
-            this._getAndPutPart(sourceEntry, part, log, done), cb);
     }
 
     _putDeleteMarker(sourceEntry, log, cb) {
@@ -1115,17 +1073,32 @@ class MultipleBackendTask extends ReplicateObject {
                     return next(errors.InvalidObjectState.customizeDescription(
                         errMessage));
                 }
-                if (content.includes('MPU')) {
-                    return this._getAndPutMultipartUpload(sourceEntry,
-                        log, next);
-                }
                 if (content.includes('PUT_TAGGING')) {
                     return this._putObjectTagging(sourceEntry, log, next);
                 }
                 if (content.includes('DELETE_TAGGING')) {
                     return this._deleteObjectTagging(sourceEntry, log, next);
                 }
-                return this._getAndPutData(sourceEntry, log, next);
+                // Do a multipart upload when either the size is above
+                // a threshold or the source object is itself a MPU.
+                //
+                // FIXME: object ETag for MPUs is an aggregate from
+                // each part's ETag, which does not allow the current
+                // implementation to check the data integrity when
+                // doing ranged PUTs. Also in the current
+                // implementation we are forced to send an ETag for a
+                // multiple backend putObject(), which only matches if
+                // the object is not a MPU, so we cannot use this
+                // route for MPUs as-is without recomputing a new
+                // checksum, which is not the case today (hence the
+                // MPU check below).
+                if (sourceEntry.getContentLength() / 1000000 >=
+                    this.repConfig.queueProcessor.minMPUSizeMB ||
+                    sourceEntry.isMultipartUpload()) {
+                    return this._getAndPutMultipartUpload(sourceEntry,
+                        log, next);
+                }
+                return this._getAndPutObject(sourceEntry, log, next);
             },
         ], err => this._handleReplicationOutcome(
             err, sourceEntry, kafkaEntry, log, done));
