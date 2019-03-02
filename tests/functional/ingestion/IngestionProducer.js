@@ -100,6 +100,14 @@ describe('ingestion producer tests with mock', () => {
         });
     });
 
+    it('should be able to grab bucket cseq', done => {
+        this.iProducer._getBucketCseq('bucket1', (err, cseq) => {
+            assert.ifError(err);
+            assert.strictEqual(cseq, 7);
+            return done();
+        });
+    });
+
     it('can generate a valid snapshot', done => {
         this.iProducer.snapshot(bucket, {}, (err, res) => {
             assert.ifError(err);
