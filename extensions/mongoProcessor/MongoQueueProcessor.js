@@ -154,13 +154,13 @@ class MongoQueueProcessor {
     /**
      * Update ingested entry metadata fields: owner-id, owner-display-name
      * @param {ObjectQueueEntry} entry - object queue entry object
-     * @param {object} ownerInfo - owner details
+     * @param {BucketInfo} bucketInfo - bucket info object
      * @return {undefined}
      */
-    _updateOwnerMD(entry, ownerInfo) {
+    _updateOwnerMD(entry, bucketInfo) {
         // zenko bucket owner information is being set on ingested md
-        entry.setOwnerDisplayName(ownerInfo.ownerDisplayName);
-        entry.setOwnerId(ownerInfo.ownerId);
+        entry.setOwnerDisplayName(bucketInfo.getOwnerDisplayName());
+        entry.setOwnerId(bucketInfo.getOwner());
     }
 
     /**
@@ -196,6 +196,38 @@ class MongoQueueProcessor {
         entry.setLocation(editLocations);
     }
 
+    _updateReplicationInfo(entry) {
+        // TODO: Rely on ObjectMD to set this
+        // defaults
+        const replicationInfo = {
+            status: '',
+            backends: [],
+            content: [],
+            destination: '',
+            storageClass: '',
+            role: '',
+            storageType: '',
+            dataStoreVersionId: '',
+            isNFS: null,
+        };
+
+        entry.setReplicationInfo(replicationInfo);
+    }
+
+    _updateAcl(entry) {
+        // TODO: Rely on ObjectMD to set this
+        // defaults
+        const aclInfo = {
+            Canned: 'private',
+            FULL_CONTROL: [],
+            WRITE_ACP: [],
+            READ: [],
+            READ_ACP: [],
+        };
+
+        entry.setAcl(aclInfo);
+    }
+
     /**
      * Process a delete object entry
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
@@ -228,19 +260,21 @@ class MongoQueueProcessor {
      * Process an object entry
      * @param {ObjectQueueEntry} sourceEntry - object metadata entry
      * @param {string} location - zenko storage location name
-     * @param {object} ownerInfo - owner details
+     * @param {BucketInfo} bucketInfo - bucket info object
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(sourceEntry, location, ownerInfo, done) {
+    _processObjectQueueEntry(sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
         // update necessary metadata fields before saving to Zenko MongoDB
-        this._updateOwnerMD(sourceEntry, ownerInfo);
+        this._updateOwnerMD(sourceEntry, bucketInfo);
         this._updateObjectDataStoreName(sourceEntry, location);
         this._updateLocations(sourceEntry, location);
+        this._updateReplicationInfo(sourceEntry);
+        this._updateAcl(sourceEntry);
 
         const objVal = sourceEntry.getValue();
         // Always call putObject with version params undefined so
@@ -294,7 +328,7 @@ class MongoQueueProcessor {
         const bucketName = sourceEntry.getBucket();
         return async.series([
             next => this._mongoClient.getBucketAttributes(bucketName,
-                this.logger, (err, data) => {
+                this.logger, (err, bucketInfo) => {
                     if (err) {
                         this.logger.error('error getting bucket owner ' +
                         'details', {
@@ -303,11 +337,7 @@ class MongoQueueProcessor {
                         });
                         return done(err);
                     }
-                    const ownerInfo = {
-                        ownerId: data._owner,
-                        ownerDisplayName: data._ownerDisplayName,
-                    };
-                    return next(null, ownerInfo);
+                    return next(null, bucketInfo);
                 }),
             next => this._s3Client.getBucketLocation({ Bucket: bucketName },
                 (err, data) => {
@@ -326,7 +356,7 @@ class MongoQueueProcessor {
             if (err) {
                 return done(err);
             }
-            const ownerInfo = results[0];
+            const bucketInfo = results[0];
             const location = results[1];
             // if entry is for another site, simply skip/ignore
             if (this.site !== location) {
@@ -338,7 +368,7 @@ class MongoQueueProcessor {
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
                 return this._processObjectQueueEntry(sourceEntry, location,
-                    ownerInfo, done);
+                    bucketInfo, done);
             }
             this.logger.warn('skipping unknown source entry',
                             { entry: sourceEntry.getLogInfo() });
