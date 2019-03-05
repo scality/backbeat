@@ -21,6 +21,7 @@ const BucketMdQueueEntry = require('../../lib/models/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const { getAccountCredentials } =
     require('../../lib/credentials/AccountCredentials');
+const getContentType = require('./utils/contentTypeHelper');
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -160,15 +161,6 @@ class MongoQueueProcessor {
             return setImmediate(done);
         }
         return this._consumer.close(done);
-    }
-
-    _getDataContent(entry) {
-        const contentLength = entry.getContentLength();
-        if (contentLength > 0) {
-            return ['DATA', 'METADATA'];
-        } else {
-            return ['METADATA'];
-        }
     }
 
     _getZenkoObjectMetadata(entry, done) {
@@ -350,6 +342,9 @@ class MongoQueueProcessor {
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
+        // Do not ingest object if the object version exists in Mongo, object
+        // tagging has not changed, and is not master version.
+
         this._getZenkoObjectMetadata(sourceEntry, (err, zenkoObjMd) => {
             if (err) {
                 this.logger.error('error processing object queue entry', {
@@ -358,18 +353,18 @@ class MongoQueueProcessor {
                 });
                 return done(err);
             }
-            // identify duplicate entry if the object key w/ version id already
-            // exists in mongo and the current entry is not a master key
-            if (zenkoObjMd && !isMasterKey(key)) {
+
+            const content = getContentType(sourceEntry, zenkoObjMd);
+
+            console.log(`--> CONTENT: ${content}`);
+            if (content.length === 0) {
                 this.logger.debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                 });
-                return process.nextTick(done);
+                // identified as duplicate entry, do not store in mongo
+                return done();
             }
-            // TODO: for md-only updates, content will need to be checked
-            //   based off previous entries
-            const content = this._getDataContent(sourceEntry);
 
             // update necessary metadata fields before saving to Zenko MongoDB
             this._updateOwnerMD(sourceEntry, bucketInfo);
