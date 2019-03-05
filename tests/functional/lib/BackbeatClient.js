@@ -5,7 +5,7 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { getAccountCredentials } =
     require('../../../lib/credentials/AccountCredentials');
 const { MetadataMock, mockLogs, objectList, dummyBucketMD, objectMD } =
-    require('arsenal').testing.MetadataMock;
+    require('../utils/MetadataMock');
 const backbeatClientTestPort = 9004;
 const bucketName = 'bucket1';
 const bucketName2 = 'bucket2';
