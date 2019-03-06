@@ -13,7 +13,7 @@ class TaskScheduler {
     }
 
     /**
-     * Set the unqiue key in the relevant task or push to that queue.
+     * Set the unique key in the relevant task or push to that queue.
      * @param {object} tasks - The running tasks to push to
      * @param {object} ctx - The context for the task
      * @param {string} key - The unique key to track running tasks

@@ -120,7 +120,7 @@ describe('task scheduler', () => {
             }
         }
 
-        it('should each task when keys are unique', done => {
+        it('should process each task when keys are unique', done => {
             pushLifecycleEntries({
                 uniqueKeyCount: 10,
                 duplicateKeyCount: 1,
