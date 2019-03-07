@@ -6,9 +6,13 @@ const http = require('http');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
+const { replicationBackends } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
+const ObjectMD = require('arsenal').models.ObjectMD;
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
 
+const Config = require('../../conf/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
@@ -71,6 +75,7 @@ class MongoQueueProcessor {
         this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
         this._s3Client = null;
         this._consumer = null;
+        this._bootstrapList = null;
         this.logger =
             new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
         this.mongoClientConfig.logger = this.logger;
@@ -117,6 +122,12 @@ class MongoQueueProcessor {
                 this.logger.error('could not connect to MongoDB', { err });
                 process.exit(1);
             }
+
+            this._bootstrapList = Config.getBootstrapList();
+            Config.on('bootstrap-list-update', () => {
+                this._bootstrapList = Config.getBootstrapList();
+            });
+
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
@@ -149,6 +160,37 @@ class MongoQueueProcessor {
             return setImmediate(done);
         }
         return this._consumer.close(done);
+    }
+
+    _getDataContent(entry) {
+        const contentLength = entry.getContentLength();
+        if (contentLength > 0) {
+            return ['DATA', 'METADATA'];
+        } else {
+            return ['METADATA'];
+        }
+    }
+
+    _getZenkoObjectMetadata(entry, done) {
+        const bucket = entry.getBucket();
+        const key = entry.getObjectKey();
+        const params = { versionId: entry.getVersionId() };
+
+        this._mongoClient.getObject(bucket, key, params, this.logger,
+        (err, data) => {
+            if (err && err.NoSuchKey) {
+                return done();
+            }
+            if (err) {
+                this.logger.error('error getting zenko object metadata', {
+                    method: 'MongoQueueProcessor._getZenkoObjectMetadata',
+                    error: err,
+                    entry: entry.getLogInfo(),
+                });
+                return done(err);
+            }
+            return done(null, data);
+        });
     }
 
     /**
@@ -196,36 +238,74 @@ class MongoQueueProcessor {
         entry.setLocation(editLocations);
     }
 
-    _updateReplicationInfo(entry) {
-        // TODO: Rely on ObjectMD to set this
-        // defaults
-        const replicationInfo = {
-            status: '',
-            backends: [],
-            content: [],
-            destination: '',
-            storageClass: '',
-            role: '',
-            storageType: '',
-            dataStoreVersionId: '',
-            isNFS: null,
-        };
-
-        entry.setReplicationInfo(replicationInfo);
+    /**
+     * Update acl info on ingested object MD
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @return {undefined}
+     */
+    _updateAcl(entry) {
+        // reset acl info
+        const objectMDModel = new ObjectMD();
+        entry.setAcl(objectMDModel.getAcl());
     }
 
-    _updateAcl(entry) {
-        // TODO: Rely on ObjectMD to set this
-        // defaults
-        const aclInfo = {
-            Canned: 'private',
-            FULL_CONTROL: [],
-            WRITE_ACP: [],
-            READ: [],
-            READ_ACP: [],
-        };
+    /**
+     * Update replication info on ingested object MD to match Zenko defined
+     * replication info.
+     * @param {ObjectQueueEntry} entry - object queue entry object
+     * @param {BucketInfo} bucketInfo - bucket info object
+     * @param {Array} content - replication info content field
+     * @return {undefined}
+     */
+    _updateReplicationInfo(entry, bucketInfo, content) {
+        const bucketRepInfo = bucketInfo.getReplicationConfiguration();
 
-        entry.setAcl(aclInfo);
+        // reset first before attempting any other updates
+        const objectMDModel = new ObjectMD();
+        entry.setReplicationInfo(objectMDModel.getReplicationInfo());
+
+        // TODO: refactor based off cloudserver getReplicationInfo
+        if (bucketRepInfo) {
+            const { role, destination, rules } = bucketRepInfo;
+            const rule = rules.find(r =>
+                (entry.getObjectKey().startsWith(r.prefix) && r.enabled));
+
+            if (rule) {
+                const replicationInfo = {};
+                const storageTypes = [];
+                const backends = [];
+                const storageClasses = rule.storageClass.split(',');
+
+                storageClasses.forEach(storageClass => {
+                    const storageClassName =
+                        storageClass.endsWith(':preferred_read') ?
+                        storageClass.split(':')[0] : storageClass;
+                    const location = this._bootstrapList.find(l =>
+                        (l.site === storageClassName));
+                    if (location && replicationBackends[location.type]) {
+                        storageTypes.push(location.type);
+                    }
+                    backends.push({
+                        site: storageClassName,
+                        status: 'PENDING',
+                        dataStoreVersionId: '',
+                    });
+                });
+
+                // save updated replication info
+                replicationInfo.status = 'PENDING';
+                replicationInfo.backends = backends;
+                replicationInfo.content = content;
+                replicationInfo.destination = destination;
+                replicationInfo.storageClass = storageClasses.join(',');
+                replicationInfo.role = role;
+                replicationInfo.storageType = storageTypes.join(',');
+                replicationInfo.isNFS = bucketInfo.isNFS();
+
+                // apply changes
+                entry.setReplicationInfo(replicationInfo);
+            }
+        }
     }
 
     /**
@@ -250,8 +330,9 @@ class MongoQueueProcessor {
                     'from mongo', { bucket, key, error: err.message });
                     return done(err);
                 }
-                this.logger.info('object metadata deleted from mongo',
-                { bucket, key });
+                this.logger.info('object metadata deleted from mongo', {
+                    entry: sourceEntry.getLogInfo(),
+                });
                 return done();
             });
     }
@@ -269,30 +350,53 @@ class MongoQueueProcessor {
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
-        // update necessary metadata fields before saving to Zenko MongoDB
-        this._updateOwnerMD(sourceEntry, bucketInfo);
-        this._updateObjectDataStoreName(sourceEntry, location);
-        this._updateLocations(sourceEntry, location);
-        this._updateReplicationInfo(sourceEntry);
-        this._updateAcl(sourceEntry);
+        this._getZenkoObjectMetadata(sourceEntry, (err, zenkoObjMd) => {
+            if (err) {
+                this.logger.error('error processing object queue entry', {
+                    method: 'MongoQueueProcessor._processObjectQueueEntry',
+                    entry: sourceEntry.getLogInfo(),
+                });
+                return done(err);
+            }
+            // identify duplicate entry if the object key w/ version id already
+            // exists in mongo and the current entry is not a master key
+            if (zenkoObjMd && !isMasterKey(key)) {
+                this.logger.debug('skipping duplicate entry', {
+                    method: 'MongoQueueProcessor._processObjectQueueEntry',
+                    entry: sourceEntry.getLogInfo(),
+                });
+                return process.nextTick(done);
+            }
+            // TODO: for md-only updates, content will need to be checked
+            //   based off previous entries
+            const content = this._getDataContent(sourceEntry);
 
-        const objVal = sourceEntry.getValue();
-        // Always call putObject with version params undefined so
-        // that mongoClient will use putObjectNoVer which just puts
-        // the object without further manipulation/actions.
-        // S3 takes care of the versioning logic so consuming the queue
-        // is sufficient to replay the version logic in the consumer.
-        return this._mongoClient.putObject(bucket, key, objVal, undefined,
-            this.logger, err => {
-                if (err) {
-                    this.logger.error('error putting object metadata ' +
-                    'to mongo', { error: err });
-                    return done(err);
-                }
-                this.logger.info('object metadata put to mongo',
-                { key });
-                return done();
-            });
+            // update necessary metadata fields before saving to Zenko MongoDB
+            this._updateOwnerMD(sourceEntry, bucketInfo);
+            this._updateObjectDataStoreName(sourceEntry, location);
+            this._updateLocations(sourceEntry, location);
+            this._updateAcl(sourceEntry);
+            this._updateReplicationInfo(sourceEntry, bucketInfo, content);
+
+            const objVal = sourceEntry.getValue();
+            // Always call putObject with version params undefined so
+            // that mongoClient will use putObjectNoVer which just puts
+            // the object without further manipulation/actions.
+            // S3 takes care of the versioning logic so consuming the queue
+            // is sufficient to replay the version logic in the consumer.
+            return this._mongoClient.putObject(bucket, key, objVal, undefined,
+                this.logger, err => {
+                    if (err) {
+                        this.logger.error('error putting object metadata ' +
+                        'to mongo', { error: err });
+                        return done(err);
+                    }
+                    this.logger.info('object metadata put to mongo', {
+                        entry: sourceEntry.getLogInfo(),
+                    });
+                    return done();
+                });
+        });
     }
 
     /**
