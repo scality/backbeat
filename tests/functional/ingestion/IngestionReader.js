@@ -9,6 +9,8 @@ const MongoClient = require('mongodb').MongoClient;
 const dummyLogger = require('../../utils/DummyLogger');
 const dummyPensieveCredentials = require('./DummyPensieveCredentials.json');
 const dummySSHKey = require('./DummySSHKey.json');
+const { expectedNewIngestionEntry, expectedZeroByteObj, expectedUTF8Obj,
+    expectedVersionIdObj, expectedTagsObj } = require('./expectedEntries');
 const IngestionQueuePopulator =
     require('../../../extensions/ingestion/IngestionQueuePopulator');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
@@ -20,66 +22,6 @@ const zookeeper = require('../../../lib/clients/zookeeper');
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
 const CONSUMER_TIMEOUT = 25000;
-
-const expectedNewIngestionEntry = {
-    type: 'put',
-    bucket: 'zenkobucket',
-    key: 'object1',
-    value: '{"owner-display-name":"test_1518720219","owner-id":' +
-    '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
-    '"content-length":17303,"content-md5":"42070968aa8ae79704befe77afc6935b",' +
-    '"x-amz-version-id":"null","x-amz-server-version-id":"",' +
-    '"x-amz-storage-class":"STANDARD","x-amz-server-side-encryption":"",' +
-    '"x-amz-server-side-encryption-aws-kms-key-id":"",' +
-    '"x-amz-server-side-encryption-customer-algorithm":"",' +
-    '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
-    '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
-    '"location":[],"isDeleteMarker":false,"tags":{},"replicationInfo":' +
-    '{"status":"","backends":[],"content":[],"destination":"","storageClass":' +
-    '"","role":"","storageType":"","dataStoreVersionId":""},"dataStoreName":' +
-    '"us-east-1","last-modified":"2018-02-16T22:43:37.174Z",' +
-    '"md-model-version":3}',
-};
-
-const expectedZeroByteObj = {
-    type: 'put',
-    bucket: 'zenkobucket',
-    key: 'zerobyteobject',
-    value: '{"owner-display-name":"test_1518720219","owner-id":' +
-    '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
-    '"content-length":0,"content-md5":"d41d8cd98f00b204e9800998ecf8427e",' +
-    '"x-amz-version-id":"null","x-amz-server-version-id":"",' +
-    '"x-amz-storage-class":"STANDARD","x-amz-server-side-encryption":"",' +
-    '"x-amz-server-side-encryption-aws-kms-key-id":"",' +
-    '"x-amz-server-side-encryption-customer-algorithm":"",' +
-    '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
-    '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
-    '"location":[],"isDeleteMarker":false,"tags":{},"replicationInfo":' +
-    '{"status":"","backends":[],"content":[],"destination":"","storageClass":' +
-    '"","role":"","storageType":"","dataStoreVersionId":""},"dataStoreName":' +
-    '"us-east-1","last-modified":"2018-02-16T22:43:37.174Z",' +
-    '"md-model-version":3}',
-};
-
-const expectedUTF8Obj = {
-    type: 'put',
-    bucket: 'zenkobucket',
-    key: '䆩鈁櫨㟔罳',
-    value: '{"owner-display-name":"test_1518720219","owner-id":' +
-    '"94224c921648ada653f584f3caf42654ccf3f1cbd2e569a24e88eb460f2f84d8",' +
-    '"content-length":0,"content-md5":"d41d8cd98f00b204e9800998ecf8427e",' +
-    '"x-amz-version-id":"null","x-amz-server-version-id":"",' +
-    '"x-amz-storage-class":"STANDARD","x-amz-server-side-encryption":"",' +
-    '"x-amz-server-side-encryption-aws-kms-key-id":"",' +
-    '"x-amz-server-side-encryption-customer-algorithm":"",' +
-    '"x-amz-website-redirect-location":"","acl":{"Canned":"private",' +
-    '"FULL_CONTROL":[],"WRITE_ACP":[],"READ":[],"READ_ACP":[]},"key":"",' +
-    '"location":[],"isDeleteMarker":false,"tags":{},"replicationInfo":' +
-    '{"status":"","backends":[],"content":[],"destination":"","storageClass":' +
-    '"","role":"","storageType":"","dataStoreVersionId":""},"dataStoreName":' +
-    '"us-east-1","last-modified":"2018-02-16T22:43:37.174Z",' +
-    '"md-model-version":3}',
-};
 
 const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
 const expectedOOBEntries = expectedLogs.log.filter(entry =>
@@ -118,14 +60,18 @@ function setZookeeperInitState(ingestionReader, cb) {
     ], cb);
 }
 
-function checkEntryInQueue(kafkaEntries, expectedEntry) {
-    assert.strictEqual(kafkaEntries.length, 2);
+function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
+    // 2 entries per object - 1 with version key and 1 with master key
+    assert.strictEqual(kafkaEntries.length, expectedEntries.length * 2);
 
     const retrievedEntries = kafkaEntries.map(entry =>
         entry.value.toString());
-    const expectedEntryString =
-        JSON.stringify(expectedEntry);
-    assert(retrievedEntries.indexOf(expectedEntryString) > -1);
+    expectedEntries.forEach(entry => {
+        const expectedEntryString =
+            JSON.stringify(entry);
+        assert(retrievedEntries.indexOf(expectedEntryString) > -1);
+    });
+    return done();
 }
 
 describe('ingestion reader tests with mock', function fD() {
@@ -334,8 +280,8 @@ describe('ingestion reader tests with mock', function fD() {
                 next => {
                     consumer.consume(10, (err, entries) => {
                         assert.ifError(err);
-                        checkEntryInQueue(entries, expectedNewIngestionEntry);
-                        return next();
+                        checkEntryInQueue(entries, [expectedNewIngestionEntry],
+                            next);
                     });
                 },
             ], done);
@@ -394,7 +340,9 @@ describe('ingestion reader tests with mock', function fD() {
             emptyAndDeleteVersionedBucket(sourceConfig, done);
         });
 
-        it('should successfully ingest new bucket with existing 0-byte object',
+        it('should successfully ingest from new bucket: existing 0-byte ' +
+            'object, existing object with versionId, existing object ' +
+            'with utf-8 key, existing object with tags',
         done => {
             // update zookeeper status to indicate snapshot phase
             const path =
@@ -411,62 +359,12 @@ describe('ingestion reader tests with mock', function fD() {
                 }),
                 next => {
                     consumer.consume(10, (err, entries) => {
-                        checkEntryInQueue(entries, expectedZeroByteObj);
-                        return next();
-                    });
-                },
-            ], done);
-        });
-    });
-
-    describe('testing with `bucket3` configuration', () => {
-        const sourceConfig = testConfig.extensions.ingestion.sources[2];
-
-        beforeEach(done => {
-            this.ingestionReader = new IngestionReader({
-                zkClient,
-                kafkaConfig: testConfig.kafka,
-                bucketdConfig: sourceConfig,
-                qpConfig: testConfig.queuePopulator,
-                logger: dummyLogger,
-                extensions: [ingestionQP],
-                s3Config: testConfig.s3,
-                bucket: sourceConfig.bucket,
-            });
-            this.ingestionReader.setup(() => {
-                async.series([
-                    next => setZookeeperInitState(this.ingestionReader, next),
-                    next => setupS3Mock(sourceConfig, next),
-                ], err => {
-                    assert.ifError(err);
-                    return done();
-                });
-            });
-        });
-
-        afterEach(done => {
-            emptyAndDeleteVersionedBucket(sourceConfig, done);
-        });
-
-        it('should successfully ingest new bucket with utf-8 key object',
-        done => {
-            // update zookeeper status to indicate snapshot phase
-            const path =
-                `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
-            async.waterfall([
-                next => zkClient.setData(path, Buffer.from('false'), -1,
-                    err => {
-                        assert.ifError(err);
-                        return next();
-                    }),
-                next => this.ingestionReader.processLogEntries({}, err => {
-                    assert.ifError(err);
-                    setTimeout(next, CONSUMER_TIMEOUT);
-                }),
-                next => {
-                    consumer.consume(10, (err, entries) => {
-                        checkEntryInQueue(entries, expectedUTF8Obj);
-                        return next();
+                        checkEntryInQueue(entries, [
+                            expectedZeroByteObj,
+                            expectedUTF8Obj,
+                            expectedTagsObj,
+                            expectedVersionIdObj
+                        ], next);
                     });
                 },
             ], done);
