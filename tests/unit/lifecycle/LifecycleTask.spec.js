@@ -1087,9 +1087,9 @@ describe('lifecycle task helper methods', () => {
         ];
 
         before(() => {
-            // overwrite _sendObjectEntry to read entry sent
+            // overwrite _sendObjectAction to read entry sent
             class LifecycleTaskMock extends LifecycleTask {
-                _sendObjectEntry(entry, cb) {
+                _sendObjectAction(entry, cb) {
                     this.latestEntry = entry;
                     return cb();
                 }
@@ -1121,16 +1121,13 @@ describe('lifecycle task helper methods', () => {
                 assert.ifError(err);
 
                 const latestEntry = lct2.getLatestEntry();
-
                 const expectedTarget = Object.assign({}, bucketData.target, {
                     key: deleteMarkerLC.Key,
                     version: deleteMarkerLC.VersionId,
                 });
-                const expected = {
-                    action: 'deleteObject',
-                    target: expectedTarget,
-                };
-                assert.deepStrictEqual(latestEntry, expected);
+                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                assert.deepStrictEqual(
+                    latestEntry.getAttribute('target'), expectedTarget);
             });
         });
 
@@ -1148,11 +1145,9 @@ describe('lifecycle task helper methods', () => {
                     key: deleteMarkerLC.Key,
                     version: deleteMarkerLC.VersionId,
                 });
-                const expected = {
-                    action: 'deleteObject',
-                    target: expectedTarget,
-                };
-                assert.deepStrictEqual(latestEntry, expected);
+                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                assert.deepStrictEqual(
+                    latestEntry.getAttribute('target'), expectedTarget);
             });
         });
 
@@ -1203,11 +1198,9 @@ describe('lifecycle task helper methods', () => {
                     key: deleteMarkerNotLC.Key,
                     version: deleteMarkerNotLC.VersionId,
                 });
-                const expected = {
-                    action: 'deleteObject',
-                    target: expectedTarget,
-                };
-                assert.deepStrictEqual(latestEntry, expected);
+                assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                assert.deepStrictEqual(
+                    latestEntry.getAttribute('target'), expectedTarget);
             });
         });
     });

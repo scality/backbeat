@@ -434,15 +434,15 @@ describe('lifecycle task functional tests', function dF() {
         assert.strictEqual(entries.transitions.length, expectedKeys.length);
         // TODO modify this test when ActionQueueEntry messages are
         // generated for transition purposes
-        data.entries.transitions.sort(
-            (t1, t2) => (t1.objectKey < t2.objectKey ? -1 : 1));
+        entries.transitions.sort(
+            (t1, t2) => (t1.target.key < t2.target.key ? -1 : 1));
         expectedKeys.sort();
         assert.deepStrictEqual(
-            data.entries.transitions.map(t => t.objectKey),
+            entries.transitions.map(t => t.target.key),
             expectedKeys);
-        data.entries.transitions.forEach(transition => {
-            assert.strictEqual(transition.bucket, 'test-bucket');
-            assert.strictEqual(transition.site, 'us-east-2');
+        entries.transitions.forEach(transition => {
+            assert.strictEqual(transition.target.bucket, 'test-bucket');
+            assert.strictEqual(transition.toLocation, 'us-east-2');
         });
     }
 

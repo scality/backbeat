@@ -99,9 +99,7 @@ class LifecycleBucketProcessor {
             s3Auth: this._lcConfig.auth,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
-            // FIXME change this to configured data mover topic once
-            // implemented
-            dataMoverTopic: 'REPLACEME',
+            dataMoverTopic: this._repConfig.dataMoverTopic,
             log: this._log,
         };
     }
