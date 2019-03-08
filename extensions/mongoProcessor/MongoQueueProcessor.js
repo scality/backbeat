@@ -10,7 +10,7 @@ const { replicationBackends } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const ObjectMD = require('arsenal').models.ObjectMD;
-const { isMasterKey } = require('arsenal/lib/versioning/Version');
+
 
 const Config = require('../../conf/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');

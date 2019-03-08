@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
-// function _isMasterKey(entry) {
-//     return entry.getObjectVersionedKey() === entry.getObjectKey();
-// }
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
 
 function _getDataContent(entry) {
     const contentLength = entry.getContentLength();
@@ -70,12 +68,40 @@ function getContentType(entry, zenkoObjMd) {
     if (zenkoObjMd) {
         return _getObjectTagContent(entry, zenkoObjMd);
     }
-    // if (!_isMasterKey(entry)) {
-    //     // if the entry is not a master key entry and we identified no
-    //     // md-only updates, we identify this as a duplicate entry to be
-    //     // ignored. Send empty array.
-    //     return content;
-    // }
+    /*
+        TODO:
+        I think this logic is important to get right, and I'm not 100% sure yet.
+        Reasoning for current implementation:
+        - Above, we check if the object md (for given version) exists in Mongo.
+          If it does exist, we can say this is now a situation where the current
+          kafka entry is a duplicate entry or an entry where md-only change was
+          made. Only metadata change I check is tagging.
+          Note that the check is specifically for the Mongo entry where the key
+          name is the `${key}${versionId}`. We do not check the master version.
+
+        - If no md-only is identified, below, we check if this current entry
+          is a master key.
+          - If not a master key, then this is a duplicate entry.
+          - If master key, we want to update regardless. This is a situation
+            where the kafka entry for a master key could seem like a duplicate.
+            But, it might just be the master key trying to update itself.
+            TODO: One check to make is the `zenkoObjMd` replicationInfo fields.
+                  If this field is set and shows 'COMPLETED' or 'FAILED', we
+                  know this entry has already attempted replication.
+                  So (I think) we don't need to update master to 'PENDING' in
+                  this case.
+
+        - At bottom, it either means we are dealing with master key or a
+          version key that has not yet been stored in Mongo. This case means we
+          should just check the usual 'DATA', 'METADATA', and 'MPU' as this
+          version has yet to be added as a "new version" in Zenko
+    */
+    if (!isMasterKey(entry)) {
+        // if the entry is not a master key entry and we identified no
+        // md-only updates, we identify this as a duplicate entry to be
+        // ignored. Send empty array.
+        return content;
+    }
     // object does not exist in mongo or is a master key entry
     content.push(..._getDataContent(entry));
     content.push(..._getMPUTagContent(entry));
