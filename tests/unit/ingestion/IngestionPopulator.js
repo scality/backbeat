@@ -19,12 +19,12 @@ const EXISTING_BUCKET = 'my-zenko-bucket';
 const NEW_BUCKET = 'your-zenko-bucket';
 const OLD_BUCKET = 'old-ingestion-bucket';
 
-const locations = [
+const buckets = [
     {
         locationConstraint: 'my-ring',
         zenkoBucket: EXISTING_BUCKET,
         ingestion: { Status: 'enabled' },
-        sourceBucket: 'my-ring-bucket',
+        bucketName: 'my-ring-bucket',
         accessKey: 'myAccessKey',
         secretKey: 'myVerySecretKey',
         endpoint: 'http://127.0.0.1:8000',
@@ -34,24 +34,13 @@ const locations = [
         locationConstraint: 'your-ring',
         zenkoBucket: NEW_BUCKET,
         ingestion: { Status: 'enabled' },
-        sourceBucket: 'your-ring-bucket',
+        bucketName: 'your-ring-bucket',
         accessKey: 'yourAccessKey',
         secretKey: 'yourVerySecretKey',
         endpoint: 'http://127.0.0.1',
         locationType: 'scality_s3',
     },
 ];
-
-class MongoMock {
-    getIngestionBuckets(cb) {
-        const bucketList = locations.map(l => ({
-            name: l.zenkoBucket,
-            ingestion: l.ingestion,
-            locationConstraint: l.locationConstraint,
-        }));
-        return cb(null, bucketList);
-    }
-}
 
 class IngestionPopulatorMock extends IngestionPopulator {
     reset() {
@@ -67,31 +56,15 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return this._removed;
     }
 
-    _mockLocationDetails() {
-        const locationDetails = {};
-        locations.forEach(l => {
-            locationDetails[l.locationConstraint] = {
-                accessKey: l.accessKey,
-                secretKey: l.secretKey,
-                endpoint: l.endpoint,
-                locationType: l.locationType,
-                bucketName: l.sourceBucket,
-            };
-        });
-        return locationDetails;
-    }
-
     setupMock() {
         // for testing purposes
         this._added = [];
         this._removed = [];
 
         // mocks
-        this._mongoClient = new MongoMock();
         this._extension = {
             createZkPath: cb => cb(),
         };
-        this._locationDetails = this._mockLocationDetails();
 
         // mock existing active sources
         this._activeIngestionSources = {
@@ -119,8 +92,8 @@ describe('Ingestion Populator', () => {
             ip.setupMock();
         });
 
-        beforeEach(done => {
-            ip.applyUpdates(done);
+        beforeEach(() => {
+            ip.applyUpdates(buckets);
         });
 
         afterEach(() => {

@@ -73,8 +73,8 @@ class Config extends EventEmitter {
             this.bootstrapList = [];
         }
 
-        // NOTE: used to store source location endpoint and credentials
-        this.locations = {};
+        // NOTE: used to store ingestion bucket information
+        this.ingestionBuckets = [];
 
         // whitelist IP, CIDR for health checks
         const defaultHealthChecks = ['127.0.0.1/8', '::1'];
@@ -166,25 +166,34 @@ class Config extends EventEmitter {
         return this.bootstrapList;
     }
 
-    setLocations(locationConstraints) {
+    setIngestionBuckets(locationConstraints, buckets) {
         // NOTE: currently only s3 connector (s3c 7.4.2 and above) are supported
         const ingestionTypeMatch = Object.assign({}, locationTypeMatch, {
             'location-scality-ring-s3-v1': 'scality_s3',
         });
 
         // refresh/reset
-        this.locations = {};
-        Object.keys(locationConstraints).forEach(key => {
-            const locItem = locationConstraints[key];
-            this.locations[key] = Object.assign({}, locItem.details, {
-                locationType: ingestionTypeMatch[locItem.locationType],
-            });
+        this.ingestionBuckets = [];
+        buckets.forEach(bucket => {
+            const { name, ingestion, locationConstraint } = bucket;
+            const locationInfo = locationConstraints[locationConstraint];
+            const ingestionBucketDetails = Object.assign(
+                {},
+                locationInfo.details,
+                {
+                    locationType: ingestionTypeMatch[locationInfo.locationType],
+                    zenkoBucket: name,
+                    ingestion,
+                    locationConstraint,
+                }
+            );
+            this.ingestionBuckets.push(ingestionBucketDetails);
         });
-        this.emit('locations-update');
+        this.emit('ingestion-update');
     }
 
-    getLocations() {
-        return this.locations;
+    getIngestionBuckets() {
+        return this.ingestionBuckets;
     }
 
     setIsTransientLocation(locationName, isTransient) {
