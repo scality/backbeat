@@ -56,6 +56,8 @@ stages:
       - ShellCommand:
           name: run unit tests
           command: npm test
+          env:
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
       - ShellCommand:
           name: run backbeat routes test
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
