@@ -1,6 +1,6 @@
 const assert = require('assert');
 const http = require('http');
-const { MetadataMock } = require('arsenal').testing.MetadataMock;
+const { MetadataMock } = require('../utils/MetadataMock');
 const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
 
