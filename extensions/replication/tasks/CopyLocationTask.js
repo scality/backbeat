@@ -7,6 +7,7 @@ const { ObjectMD } = models;
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const ActionMetric = require('../../../lib/ActionMetric');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
@@ -17,17 +18,6 @@ const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
 
 const MPU_CONC_LIMIT = 10;
 const MPU_GCP_MAX_PARTS = 1024;
-
-function _getExtMetrics(site, bytes, actionEntry) {
-    const extMetrics = {};
-    extMetrics[site] = {
-        bytes,
-        bucketName: actionEntry.getAttribute('target.bucket'),
-        objectKey: actionEntry.getAttribute('target.key'),
-        versionId: actionEntry.getAttribute('target.version'),
-    };
-    return extMetrics;
-}
 
 class CopyLocationTask extends BackbeatTask {
 
@@ -50,6 +40,10 @@ class CopyLocationTask extends BackbeatTask {
                 this.retryParams = retryParams;
             }
         }
+        this._actionMetric = new ActionMetric()
+            .withProducer(this.mProducer)
+            .withSite(this.site)
+            .withExtension(metricsExtension);
     }
 
     _validateActionCredentials(actionEntry) {
@@ -183,10 +177,11 @@ class CopyLocationTask extends BackbeatTask {
 
     _getAndPutObject(actionEntry, objMD, log, cb) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
-        const extMetrics = _getExtMetrics(this.site,
-            objMD.getContentLength(), actionEntry);
-        this.mProducer.publishMetrics(extMetrics,
-            metricsTypeQueued, metricsExtension, () => {});
+        this._actionMetric
+            .withEntry(actionEntry)
+            .withMetricType(metricsTypeQueued)
+            .withObjectSize(objMD.getContentLength())
+            .publish();
         this.retry({
             actionDesc: 'stream part data',
             logFields: { entry: actionEntry.getLogInfo() },
@@ -299,9 +294,11 @@ class CopyLocationTask extends BackbeatTask {
             actionEntry.setSuccess({
                 location: data.location,
             });
-            const extMetrics = _getExtMetrics(this.site, size, actionEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+            this._actionMetric
+                .withEntry(actionEntry)
+                .withMetricType(metricsTypeCompleted)
+                .withObjectSize(size)
+                .publish();
             return cb(null, data);
         });
     }
@@ -537,9 +534,11 @@ class CopyLocationTask extends BackbeatTask {
                 }, actionEntry.getLogInfo()));
                 return doneOnce(err);
             }
-            const extMetrics = _getExtMetrics(this.site, size, actionEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+            this._actionMetric
+                .withEntry(actionEntry)
+                .withMetricType(metricsTypeCompleted)
+                .withObjectSize(size)
+                .publish();
             return doneOnce(null, data);
         });
     }
@@ -728,10 +727,11 @@ class CopyLocationTask extends BackbeatTask {
             if (err) {
                 return cb(err);
             }
-            const extMetrics = _getExtMetrics(this.site,
-                objMD.getContentLength(), actionEntry);
-            this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-                metricsExtension, () => {});
+            this._actionMetric
+                .withEntry(actionEntry)
+                .withMetricType(metricsTypeQueued)
+                .withObjectSize(objMD.getContentLength())
+                .publish();
             return this._completeRangedMPU(actionEntry, objMD,
                 uploadId, log, cb);
         });
