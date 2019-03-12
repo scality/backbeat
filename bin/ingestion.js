@@ -33,30 +33,23 @@ function queueBatch(ingestionPopulator, taskState, log) {
     log.debug('start queueing ingestion batch');
     taskState.batchInProgress = true;
 
-    return ingestionPopulator.applyUpdates(err => {
+    const maxRead = qpConfig.batchMaxRead;
+    // apply updates to Ingestion Readers
+    // currently this is a synchronous operation, but later this will
+    // need to go back to being an async operation to support pause/resume
+    ingestionPopulator.applyUpdates();
+    ingestionPopulator.processLogEntries({ maxRead }, err => {
+        taskState.batchInProgress = false;
         if (err) {
-            log.fatal('failed to update ingestion readers', {
-                method: 'IngestionPopulator.applyUpdates',
+            log.fatal('an error occurred during ingestion', {
+                method: 'IngestionPopulator::task.queueBatch',
                 error: err,
             });
             scheduler.cancel();
             process.exit(1);
         }
-        log.debug('updated active ingestion readers');
-        const maxRead = qpConfig.batchMaxRead;
-        ingestionPopulator.processLogEntries({ maxRead }, err => {
-            taskState.batchInProgress = false;
-            if (err) {
-                log.error('an error occurred during ingestion', {
-                    method: 'IngestionPopulator::task.queueBatch',
-                    error: err,
-                });
-                // exit process and let Kubernetes respawn the pod
-                process.exit(1);
-            }
-        });
-        return undefined;
     });
+    return undefined;
 }
 /* eslint-enable no-param-reassign */
 
@@ -72,6 +65,7 @@ function initAndStart() {
     initManagement({
         serviceName: 'md-ingestion',
         serviceAccount: ingestionExtConfigs.auth.account,
+        enableIngestionUpdates: true,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });
@@ -87,9 +81,7 @@ function initAndStart() {
                     batchInProgress: false,
                 };
                 scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
-                    () => {
-                        queueBatch(ingestionPopulator, taskState, log);
-                    });
+                    () => queueBatch(ingestionPopulator, taskState, log));
                 done();
             },
         ], err => {

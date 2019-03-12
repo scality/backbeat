@@ -20,6 +20,7 @@ function initAndStart() {
     initManagement({
         serviceName: 'replication',
         serviceAccount: sourceConfig.auth.account,
+        enableIngestionUpdates: true,
     }, error => {
         if (error) {
             log.error('could not load management db', { error });

@@ -19,39 +19,39 @@ const EXISTING_BUCKET = 'my-zenko-bucket';
 const NEW_BUCKET = 'your-zenko-bucket';
 const OLD_BUCKET = 'old-ingestion-bucket';
 
-const locations = [
+const locationConstraints = {
+    'my-ring': {
+        details: {
+            accessKey: 'myAccessKey',
+            secretKey: 'myVerySecretKey',
+            endpoint: 'http://127.0.0.1:8000',
+            bucketName: 'my-ring-bucket',
+        },
+        locationType: 'location-scality-ring-s3-v1',
+    },
+    'your-ring': {
+        details: {
+            accessKey: 'yourAccessKey',
+            secretKey: 'yourVerySecretKey',
+            endpoint: 'http://127.0.0.1',
+            bucketName: 'your-ring-bucket',
+        },
+        locationType: 'location-scality-ring-s3-v1',
+    },
+};
+
+const buckets = [
     {
         locationConstraint: 'my-ring',
-        zenkoBucket: EXISTING_BUCKET,
-        ingestion: { Status: 'enabled' },
-        sourceBucket: 'my-ring-bucket',
-        accessKey: 'myAccessKey',
-        secretKey: 'myVerySecretKey',
-        endpoint: 'http://127.0.0.1:8000',
-        locationType: 'scality_s3',
+        name: EXISTING_BUCKET,
+        ingestion: { status: 'enabled' },
     },
     {
         locationConstraint: 'your-ring',
-        zenkoBucket: NEW_BUCKET,
-        ingestion: { Status: 'enabled' },
-        sourceBucket: 'your-ring-bucket',
-        accessKey: 'yourAccessKey',
-        secretKey: 'yourVerySecretKey',
-        endpoint: 'http://127.0.0.1',
-        locationType: 'scality_s3',
+        name: NEW_BUCKET,
+        ingestion: { status: 'enabled' },
     },
 ];
-
-class MongoMock {
-    getIngestionBuckets(cb) {
-        const bucketList = locations.map(l => ({
-            name: l.zenkoBucket,
-            ingestion: l.ingestion,
-            locationConstraint: l.locationConstraint,
-        }));
-        return cb(null, bucketList);
-    }
-}
 
 class IngestionPopulatorMock extends IngestionPopulator {
     reset() {
@@ -67,31 +67,16 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return this._removed;
     }
 
-    _mockLocationDetails() {
-        const locationDetails = {};
-        locations.forEach(l => {
-            locationDetails[l.locationConstraint] = {
-                accessKey: l.accessKey,
-                secretKey: l.secretKey,
-                endpoint: l.endpoint,
-                locationType: l.locationType,
-                bucketName: l.sourceBucket,
-            };
-        });
-        return locationDetails;
-    }
-
     setupMock() {
         // for testing purposes
         this._added = [];
         this._removed = [];
 
         // mocks
-        this._mongoClient = new MongoMock();
         this._extension = {
             createZkPath: cb => cb(),
         };
-        this._locationDetails = this._mockLocationDetails();
+        config.setIngestionBuckets(locationConstraints, buckets);
 
         // mock existing active sources
         this._activeIngestionSources = {
@@ -110,23 +95,39 @@ class IngestionPopulatorMock extends IngestionPopulator {
 }
 
 describe('Ingestion Populator', () => {
+    let ip;
+
+    before(() => {
+        ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
+            mConfig, rConfig, ingestionConfig, s3Config);
+        ip.setupMock();
+    });
+
+    beforeEach(() => {
+        ip.applyUpdates();
+    });
+
+    afterEach(() => {
+        ip.reset();
+    });
+
+    it('should fetch correctly formed ingestion bucket object information',
+    () => {
+        const buckets = config.getIngestionBuckets();
+        buckets.forEach(bucket => {
+            assert(bucket.accessKey);
+            assert(bucket.secretKey);
+            assert(bucket.endpoint);
+            assert(bucket.locationType);
+            assert.strictEqual(bucket.locationType, 'scality_s3');
+            assert(bucket.bucketName);
+            assert(bucket.zenkoBucket);
+            assert(bucket.ingestion);
+            assert(bucket.locationConstraint);
+        });
+    });
+
     describe('applyUpdates helper method', () => {
-        let ip;
-
-        before(() => {
-            ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
-                mConfig, rConfig, ingestionConfig, s3Config);
-            ip.setupMock();
-        });
-
-        beforeEach(done => {
-            ip.applyUpdates(done);
-        });
-
-        afterEach(() => {
-            ip.reset();
-        });
-
         it('should attach configuration properties for each new ingestion ' +
         'source', () => {
             ip.getAdded().forEach(newSource => {
@@ -136,6 +137,9 @@ describe('Ingestion Populator', () => {
                 assert.strictEqual(typeof newSource.port, 'number');
                 assert.strictEqual(typeof newSource.https, 'boolean');
                 assert(newSource.type);
+                assert(newSource.auth);
+                assert(newSource.auth.accessKey);
+                assert(newSource.auth.secretKey);
             });
         });
 
