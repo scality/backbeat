@@ -7,6 +7,7 @@ const constants = {
         testIsOn ? '/backbeattest/ingestion' : '/backbeat/ingestion',
     zkStatePath: '/state',
     zkStateProperties: ['paused', 'scheduledResume'],
+    redisKeys: {},
 };
 
 module.exports = constants;
