@@ -1,12 +1,21 @@
 'use strict'; // eslint-disable-line
 
+const async = require('async');
 const http = require('http');
+const AWS = require('aws-sdk');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
-const { errors } = require('arsenal');
 
-const LifecycleObjectTask = require('../tasks/LifecycleObjectTask');
+const LifecycleDeleteObjectTask =
+      require('../tasks/LifecycleDeleteObjectTask');
+const LifecycleUpdateTransitionTask =
+      require('../tasks/LifecycleUpdateTransitionTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
+const { getAccountCredentials } =
+      require('../../../lib/credentials/AccountCredentials');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 
 /**
  * @class LifecycleObjectProcessor
@@ -54,6 +63,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.s3Config = s3Config;
         this._transport = transport;
         this._consumer = null;
+        this._gcProducer = null;
 
         this.logger = new Logger('Backbeat:Lifecycle:ObjectProcessor');
 
@@ -70,30 +80,73 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @return {undefined}
      */
     start() {
-        let consumerReady = false;
-        this._consumer = new BackbeatConsumer({
-            zookeeper: {
-                connectionString: this.zkConfig.connectionString,
+        this._setupClients();
+        async.parallel([
+            done => {
+                let consumerReady = false;
+                this._consumer = new BackbeatConsumer({
+                    zookeeper: {
+                        connectionString: this.zkConfig.connectionString,
+                    },
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.lcConfig.objectTasksTopic,
+                    groupId: this.lcConfig.objectProcessor.groupId,
+                    concurrency: this.lcConfig.objectProcessor.concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    backlogMetrics: this.lcConfig.backlogMetrics,
+                });
+                this._consumer.on('error', () => {
+                    if (!consumerReady) {
+                        this.logger.fatal(
+                            'error starting lifecycle object processor');
+                        process.exit(1);
+                    }
+                });
+                this._consumer.on('ready', () => {
+                    consumerReady = true;
+                    this._consumer.subscribe();
+                    this.logger.info(
+                        'lifecycle object processor successfully started');
+                    this.emit('ready');
+                    done();
+                });
             },
-            kafka: { hosts: this.kafkaConfig.hosts },
-            topic: this.lcConfig.objectTasksTopic,
-            groupId: this.lcConfig.objectProcessor.groupId,
-            concurrency: this.lcConfig.objectProcessor.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-            backlogMetrics: this.lcConfig.backlogMetrics,
+            done => {
+                this._gcProducer = new GarbageCollectorProducer();
+                this._gcProducer.setupProducer(done);
+            },
+        ], () => {});
+    }
+
+    _getCredentials() {
+        const credentials = getAccountCredentials(
+            this.lcConfig.auth, this.logger);
+        if (credentials) {
+            return credentials;
+        }
+        this.logger.fatal('error during lifecycle object processor startup: ' +
+                          `invalid auth type ${this.lcConfig.auth.type}`);
+        return process.exit(1);
+    }
+
+    _setupClients() {
+        const accountCreds = this._getCredentials();
+        const s3 = this.s3Config;
+        const transport = this._transport;
+        this.logger.debug('creating s3 client', { transport, s3 });
+        this.s3Client = new AWS.S3({
+            endpoint: `${transport}://${s3.host}:${s3.port}`,
+            credentials: accountCreds,
+            sslEnabled: transport === 'https',
+            s3ForcePathStyle: true,
+            signatureVersion: 'v4',
+            httpOptions: { agent: this.httpAgent, timeout: 0 },
+            maxRetries: 0,
         });
-        this._consumer.on('error', () => {
-            if (!consumerReady) {
-                this.logger.fatal('error starting lifecycle object processor');
-                process.exit(1);
-            }
-        });
-        this._consumer.on('ready', () => {
-            consumerReady = true;
-            this._consumer.subscribe();
-            this.logger.info('lifecycle object processor successfully started');
-            return this.emit('ready');
-        });
+        this.backbeatClient = new BackbeatMetadataProxy(
+            `${transport}://${s3.host}:${s3.port}`,
+            this.lcConfig.auth, this.httpAgent);
+        this.backbeatClient.setSourceClient(this.logger);
     }
 
     /**
@@ -117,16 +170,28 @@ class LifecycleObjectProcessor extends EventEmitter {
     processKafkaEntry(kafkaEntry, done) {
         this.logger.debug('processing kafka entry');
 
-        let entryData;
-        try {
-            entryData = JSON.parse(kafkaEntry.value);
-        } catch (err) {
-            this.logger.error('error processing lifecycle object entry',
-                { error: err });
-            return process.nextTick(() => done(errors.InternalError));
+        const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+        if (actionEntry.error) {
+            this.logger.error('malformed action entry', kafkaEntry.value);
+            return process.nextTick(done);
         }
-        const task = new LifecycleObjectTask(this);
-        return task.processQueueEntry(entryData, done);
+        this.logger.debug('processing lifecycle object entry',
+                          actionEntry.getLogInfo());
+        const actionType = actionEntry.getActionType();
+        let task;
+        if (actionType === 'deleteObject' ||
+            actionType === 'deleteMPU') {
+            task = new LifecycleDeleteObjectTask(this);
+        } else if (actionType === 'copyLocation' &&
+                   actionEntry.getContextAttribute('ruleType')
+                   === 'transition') {
+            task = new LifecycleUpdateTransitionTask(this);
+        } else {
+            this.logger.warn(`skipped unsupported action ${actionType}`,
+                             actionEntry.getLogInfo());
+            return process.nextTick(done);
+        }
+        return task.processActionEntry(actionEntry, done);
     }
 
     getStateVars() {
@@ -134,8 +199,9 @@ class LifecycleObjectProcessor extends EventEmitter {
             s3Config: this.s3Config,
             lcConfig: this.lcConfig,
             authConfig: this.authConfig,
-            transport: this._transport,
-            httpAgent: this.httpAgent,
+            s3Client: this.s3Client,
+            backbeatClient: this.backbeatClient,
+            gcProducer: this._gcProducer,
             logger: this.logger,
         };
     }

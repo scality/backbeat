@@ -6,6 +6,7 @@ const http = require('http');
 const GarbageCollector = require('../../../extensions/gc/GarbageCollector');
 const GarbageCollectorTask =
       require('../../../extensions/gc/tasks/GarbageCollectorTask');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
 describe('garbage collector', () => {
     let gc;
@@ -58,12 +59,8 @@ describe('garbage collector', () => {
     });
     it('should skip unsupported action type', done => {
         expectBatchDeleteLocations = null;
-        gcTask.processQueueEntry({
-            action: 'foo',
-            target: {
-                locations: [],
-            },
-        }, done);
+        const action = ActionQueueEntry.create('foo');
+        gcTask.processActionEntry(action, done);
     });
     it('should send batch delete request with locations array with ' +
     'no dataStoreVersionId', done => {
@@ -72,12 +69,9 @@ describe('garbage collector', () => {
             dataStoreName: 'ds',
             size: 10,
         }];
-        gcTask.processQueueEntry({
-            action: 'deleteData',
-            target: {
-                locations: expectBatchDeleteLocations,
-            },
-        }, done);
+        const action = ActionQueueEntry.create('deleteData')
+              .setAttribute('target.locations', expectBatchDeleteLocations);
+        gcTask.processActionEntry(action, done);
     });
     it('should send batch delete request with locations array with ' +
     'some dataStoreVersionId', done => {
@@ -87,11 +81,8 @@ describe('garbage collector', () => {
             size: 10,
             dataStoreVersionId: 'someversion',
         }];
-        gcTask.processQueueEntry({
-            action: 'deleteData',
-            target: {
-                locations: expectBatchDeleteLocations,
-            },
-        }, done);
+        const action = ActionQueueEntry.create('deleteData')
+              .setAttribute('target.locations', expectBatchDeleteLocations);
+        gcTask.processActionEntry(action, done);
     });
 });

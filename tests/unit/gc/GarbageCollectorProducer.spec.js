@@ -2,6 +2,8 @@
 
 const assert = require('assert');
 
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+
 const GarbageCollectorProducer =
       require('../../../extensions/gc/GarbageCollectorProducer');
 
@@ -55,13 +57,16 @@ describe('garbage collector producer', () => {
     }].forEach(testSpec => {
         it(`should send a valid GC message to kafka ${testSpec.testDesc}`,
         done => {
+            const action = ActionQueueEntry.create('deleteData')
+                  .setAttribute('target.locations', testSpec.dataLocations);
             kafkaProducerMock.setExpectedMessage({
                 action: 'deleteData',
+                actionId: action.getActionId(),
                 target: {
                     locations: testSpec.dataLocations,
                 },
             });
-            gcProducer.publishDeleteDataEntry(testSpec.dataLocations, err => {
+            gcProducer.publishActionEntry(action, err => {
                 assert.ifError(err);
                 assert(kafkaProducerMock.hasProcessedExpectedMessage());
                 done();

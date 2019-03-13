@@ -35,18 +35,28 @@ class GarbageCollectorTask extends BackbeatTask {
     }
 
     _executeDeleteData(entry, log, done) {
-        const { locations } = entry.target;
+        log.debug('action execution starts', entry.getLogInfo());
+        const locations = entry.getAttribute('target.locations');
         const req = this._backbeatClient.batchDelete({
-            Locations: locations,
+            Locations: locations.map(location => ({
+                key: location.key,
+                dataStoreName: location.dataStoreName,
+                size: location.size,
+                dataStoreVersionId: location.dataStoreVersionId,
+            })),
         });
         attachReqUids(req, log);
         return req.send(err => {
+            entry.setEnd(err);
+            log.info('action execution ended', entry.getLogInfo());
             if (err) {
                 log.error('an error occurred on deleteData method to ' +
                           'backbeat route',
-                          { method: 'LifecycleObjectTask._executeDeleteData',
-                            error: err.message,
-                            httpStatus: err.statusCode });
+                          Object.assign({
+                              method: 'LifecycleObjectTask._executeDeleteData',
+                              error: err.message,
+                              httpStatus: err.statusCode,
+                          }, entry.getLogInfo()));
                 return done(err);
             }
             return done();
@@ -56,26 +66,20 @@ class GarbageCollectorTask extends BackbeatTask {
     /**
      * Execute the action specified in kafka queue entry
      *
-     * @param {Object} entry - kafka queue entry object
+     * @param {ActionQueueEntry} entry - kafka queue entry object
      * @param {String} entry.action - entry action name (e.g. 'deleteData')
      * @param {Object} entry.target - entry action target object
      * @param {Function} done - callback funtion
      * @return {undefined}
      */
 
-    processQueueEntry(entry, done) {
+    processActionEntry(entry, done) {
         const log = this.logger.newRequestLogger();
 
-        const { action, target } = entry;
-        log.debug('processing garbage collector entry', { action, target });
-        if (!target) {
-            log.error('missing "target" in object queue entry', { entry });
-            return process.nextTick(done);
-        }
-        if (action === 'deleteData') {
+        if (entry.getActionType() === 'deleteData') {
             return this._executeDeleteData(entry, log, done);
         }
-        log.info('skipped unsupported action', { action, target });
+        log.warn('skipped unsupported action', entry.getLogInfo());
         return process.nextTick(done);
     }
 }

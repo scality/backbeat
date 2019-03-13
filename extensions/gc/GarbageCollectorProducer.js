@@ -43,34 +43,28 @@ class GarbageCollectorProducer {
     }
 
     /**
-     * Publish a 'deleteData' message to the backbeat-gc Kafka topic.
+     * Publish an action entry to the backbeat-gc Kafka topic.
      *
-     * @param {object[]} dataLocations - array of data locations to gc
-     * @param {string} dataLocations[].key - data location key
-     * @param {string} dataLocations[].dataStoreName - data location
-     *   constraint name
-     * @param {number} dataLocations[].size - object size in bytes
-     * @param {string} [dataLocations[].dataStoreVersionId] - version
-     *   ID of location, needed for cloud backends
+     * Supported action type: 'deleteData'
+     * The action is expected to contain a "target.locations"
+     * attribute containing an array of locations to get rid of, where
+     * each item is an object containing with the following attributes:
+     * - key: data location key
+     * - dataStoreName: data location constraint name
+     * - size: data location size in bytes
+     * - [dataStoreVersionId]: version ID of data location, needed for
+     *   cloud backends
+     * @param {ActionQueueEntry} entry - the action entry to send to
+     * the GC service
      * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    publishDeleteDataEntry(dataLocations, cb) {
-        this._producer.send([{ message: JSON.stringify({
-            action: 'deleteData',
-            target: {
-                locations: dataLocations.map(location => ({
-                    key: location.key,
-                    dataStoreName: location.dataStoreName,
-                    size: location.size,
-                    dataStoreVersionId: location.dataStoreVersionId,
-                })),
-            },
-        }) }], err => {
+    publishActionEntry(entry, cb) {
+        this._producer.send([{ message: entry.toKafkaMessage() }], err => {
             if (err) {
                 this._log.error('error publishing GC.deleteData entry', {
                     error: err,
-                    method: 'GarbageCollectorProducer.publishDeleteDataEntry',
+                    method: 'GarbageCollectorProducer.publishActionEntry',
                 });
             }
             return cb(err);
