@@ -7,6 +7,7 @@ const constants = {
         testIsOn ? '/backbeattest/ingestion' : '/backbeat/ingestion',
     zkStatePath: '/state',
     zkStateProperties: ['paused', 'scheduledResume'],
+    metricsExtension: 'ingestion',
     redisKeys: {
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:ingestion:opsdone',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:ingestion:bytesdone',
