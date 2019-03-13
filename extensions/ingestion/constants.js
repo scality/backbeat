@@ -8,6 +8,8 @@ const constants = {
     zkStatePath: '/state',
     zkStateProperties: ['paused', 'scheduledResume'],
     metricsExtension: 'ingestion',
+    metricsTypeQueued: 'queued',
+    metricsTypeCompleted: 'completed',
     redisKeys: {
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:ingestion:opsdone',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:ingestion:bytesdone',

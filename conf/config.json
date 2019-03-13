@@ -50,6 +50,7 @@
                     "port": 8000,
                     "https": false,
                     "type": "scality_s3",
+                    "locationConstraint": "a-zenko-location",
                     "auth": {
                         "accessKey": "myAccessKey",
                         "secretKey": "myEncryptedSecretKey"

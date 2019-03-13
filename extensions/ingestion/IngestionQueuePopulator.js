@@ -24,6 +24,37 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         this.publish(this.config.topic,
                      `${entry.bucket}/${entry.key}`,
                      JSON.stringify(entry));
+
+        this._incrementMetrics(entry.bucket);
+    }
+
+    /**
+     * Get currently stored metrics for given bucket and reset its counter
+     * @param {String} bucket - zenko bucket name
+     * @return {Integer} metrics accumulated since last called
+     */
+    getAndResetMetrics(bucket) {
+        const tempStore = this._metricsStore[bucket];
+        if (tempStore === undefined) {
+            return undefined;
+        }
+        this._metricsStore[bucket] = {};
+        return tempStore;
+    }
+
+    /**
+     * Set or accumulate metrics based on bucket
+     * @param {String} bucket - Zenko bucket name
+     * @return {undefined}
+     */
+    _incrementMetrics(bucket) {
+        if (!this._metricsStore[bucket]) {
+            this._metricsStore[bucket] = {
+                ops: 1,
+            };
+        } else {
+            this._metricsStore[bucket].ops++;
+        }
     }
 }
 
