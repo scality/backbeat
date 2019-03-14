@@ -55,48 +55,9 @@ queueEntryClasses.forEach(mockClass => {
         return undefined;
     }
 
-    // function scheduleDuplicateVersions(params, cb) {
-    //     const { uniqueKeyCount, duplicateKeyCount } = params;
-    //     for (let i = 0; i < uniqueKeyCount; ++i) {
-    //         objects.push({ objectKey: `key_${i}`, value: -1 });
-    //         // the following inner operations shall be executed in
-    //         // order because they have the same objectKey (passed
-    //         // to replicationTaskScheduler.push())
-    //         const versionId = uuid();
-    //         for (let j = 0; j < duplicateKeyCount + 1; ++j) {
-    //             const ctx = {
-    //                 object: objects[i],
-    //                 setValueTo: j,
-    //                 entry: getMockEntry({
-    //                     objectKey: objects[i].objectKey,
-    //                     versionId,
-    //                     contentMD5: uuid(),
-    //                 }),
-    //             };
-    //             replicationTaskScheduler.push(ctx, objects[i].objectKey, cb);
-    //         }
-    //     }
-    // }
-    // 
-    // // function testDuplicateVersions(params, cb) {
-    // //     const { uniqueKeyCount, duplicateKeyCount } = params;
-    // //     function doneFunc() {
-    // //         ++doneCount;
-    // //         if (doneCount === objects.length * uniqueKeyCount) {
-    // //             objects.forEach(obj => {
-    // //                 assert.strictEqual(obj.value, duplicateKeyCount);
-    // //             });
-    // //             return cb();
-    // //         }
-    // //         return undefined;
-    // //     }
-    // //     scheduleDuplicateVersions(params, doneFunc);
-    // // }
-
-    function scheduleUniqueVersions(params, cb) {
+    function scheduleEntries(params, cb) {
         const { uniqueKeyCount, hasUniqueVersions, hasUniqueContent } = params;
-        const duplicateKeyCount =
-            params.duplicateKeyCount ? params.duplicateKeyCount + 1 : 1;
+        const duplicateKeyCount = params.duplicateKeyCount + 1;
         for (let i = 0; i < uniqueKeyCount; ++i) {
             const objectKey = `key_${i}`;
             let versionId = uuid();
@@ -129,9 +90,9 @@ queueEntryClasses.forEach(mockClass => {
             objects.forEach((obj, i) => assert.strictEqual(obj.value, i));
             return cb();
         }
-        scheduleUniqueVersions(params, doneFunc);
+        scheduleEntries(params, doneFunc);
     }
-    
+
     function testDuplicateVersions(params, cb) {
         const { uniqueKeyCount } = params;
         function doneFunc() {
@@ -148,10 +109,10 @@ queueEntryClasses.forEach(mockClass => {
             });
             return cb();
         }
-        scheduleUniqueVersions(params, doneFunc);
+        scheduleEntries(params, doneFunc);
     }
 
-    describe.only(`task scheduler with ${mockClass}`, () => {
+    describe(`task scheduler with ${mockClass}`, () => {
         before(() => {
             queueEntryClass = mockClass;
         });
@@ -189,14 +150,65 @@ queueEntryClasses.forEach(mockClass => {
                 }, done);
             });
 
-        it('should ensure serialization if duplicate keys',
+        it('should ensure serialization if duplicate keys and versions',
             done => {
                 testDuplicateVersions({
                     uniqueKeyCount: 10,
-                    duplicateKeyCount: 10,
+                    duplicateKeyCount: 9,
                     hasUniqueVersions: false,
                     hasUniqueContent: false,
                 }, done);
             });
+
+        it('should ensure serialization if duplicate keys and a combination ' +
+        'of unique and duplicate versions', done => {
+            function doneFunc() {
+                ++doneCount;
+                if (doneCount !== objects.length) {
+                    return undefined;
+                }
+                assert.deepStrictEqual(objects, [
+                    { objectKey: 'key_0', value: 0 },
+                    { objectKey: 'key_0', value: 1 },
+                    { objectKey: 'key_0', value: -1 },
+                ]);
+                return done();
+            }
+            let ctx = {
+                object: { objectKey: 'key_0', value: -1 },
+                setValueTo: 0,
+                entry: getMockEntry({
+                    objectKey: 'key_0',
+                    versionId: 'a',
+                    contentMD5: 'b',
+                }),
+            };
+            objects.push(ctx.object);
+            replicationTaskScheduler.push(ctx, ctx.objectKey, doneFunc);
+
+            ctx = {
+                object: { objectKey: 'key_0', value: -1 },
+                setValueTo: 1,
+                entry: getMockEntry({
+                    objectKey: 'key_0',
+                    versionId: 'b',
+                    contentMD5: 'b',
+                }),
+            };
+            objects.push(ctx.object);
+            replicationTaskScheduler.push(ctx, ctx.objectKey, doneFunc);
+
+            ctx = {
+                object: { objectKey: 'key_0', value: -1 },
+                setValueTo: 2,
+                entry: getMockEntry({
+                    objectKey: 'key_0',
+                    versionId: 'b',
+                    contentMD5: 'b',
+                }),
+            };
+            objects.push(ctx.object);
+            replicationTaskScheduler.push(ctx, ctx.objectKey, doneFunc);
+        });
     });
 });
