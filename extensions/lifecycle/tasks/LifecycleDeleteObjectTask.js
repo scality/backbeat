@@ -9,12 +9,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
      * Process a lifecycle object entry
      *
      * @constructor
-     * @param {QueueProcessor} qp - queue processor instance
+     * @param {LifecycleObjectProcessor} proc - object processor instance
      */
-    constructor(qp) {
-        const qpState = qp.getStateVars();
+    constructor(proc) {
+        const procState = proc.getStateVars();
         super();
-        Object.assign(this, qpState);
+        Object.assign(this, procState);
     }
 
     _checkDate(entry, log, done) {

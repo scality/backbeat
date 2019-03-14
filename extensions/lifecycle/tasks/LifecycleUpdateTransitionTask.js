@@ -11,19 +11,20 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
      * Process a lifecycle object entry
      *
      * @constructor
-     * @param {QueueProcessor} qp - queue processor instance
+     * @param {LifecycleObjectProcessor} proc - object processor instance
      */
-    constructor(qp) {
-        const qpState = qp.getStateVars();
+    constructor(proc) {
+        const procState = proc.getStateVars();
         super();
-        Object.assign(this, qpState);
+        Object.assign(this, procState);
     }
 
     _getMetadata(entry, log, done) {
+        const { bucket, key, version } = entry.getAttribute('target');
         this.backbeatClient.getMetadata({
-            bucket: entry.getAttribute('target.bucket'),
-            objectKey: entry.getAttribute('target.key'),
-            versionId: entry.getAttribute('target.version'),
+            bucket,
+            objectKey: key,
+            versionId: version,
         }, log, (err, blob) => {
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
@@ -58,10 +59,11 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _putMetadata(entry, objMD, log, done) {
         // TODO add a condition on metadata cookie and retry if needed
+        const { bucket, key, version } = entry.getAttribute('target');
         this.backbeatClient.putMetadata({
-            bucket: entry.getAttribute('target.bucket'),
-            objectKey: entry.getAttribute('target.key'),
-            versionId: entry.getAttribute('target.version'),
+            bucket,
+            objectKey: key,
+            versionId: version,
             mdBlob: objMD.getSerialized(),
         }, log, err => {
             if (err) {
@@ -80,14 +82,16 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
+        const { bucket, key, version, eTag } = entry.getAttribute('target');
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
                   ruleType: 'transition',
                   reqId: log.getSerializedUids(),
-                  bucketName: entry.getAttribute('target.bucket'),
-                  objectKey: entry.getAttribute('target.key'),
-                  versionId: entry.getAttribute('target.version'),
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+                  eTag,
               })
               .setAttribute('target.locations', locations);
         this.gcProducer.publishActionEntry(gcEntry, done);
@@ -109,18 +113,32 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             bucketName: 'target.bucket',
             objectKey: 'target.key',
             versionId: 'target.version',
+            eTag: 'target.eTag',
         });
         if (entry.getStatus() === 'success') {
-            let oldLocation;
+            let locationToGC;
             return async.waterfall([
                 next => this._getMetadata(entry, log, next),
                 (objMD, next) => {
-                    oldLocation = objMD.getLocation();
-                    this._updateMdWithTransition(entry, objMD, log);
-                    this._putMetadata(entry, objMD, log, next);
+                    // commit if MD5 did not change after transition
+                    // started, rollback otherwise
+                    const eTag = entry.getAttribute('target.eTag');
+                    if (eTag === `"${objMD.getContentMd5()}"`) {
+                        locationToGC = objMD.getLocation();
+                        this._updateMdWithTransition(entry, objMD);
+                        return this._putMetadata(entry, objMD, log, next);
+                    }
+                    log.info('object ETag has changed during lifecycle ' +
+                             'transition processing',
+                    Object.assign({
+                        method:
+                        'LifecycleUpdateTransitionTask.processActionEntry',
+                    }, entry.getLogInfo()));
+                    locationToGC = entry.getAttribute('results.location');
+                    return next();
                 },
                 next => this._garbageCollectLocation(
-                    entry, oldLocation, log, next),
+                    entry, locationToGC, log, next),
             ], done);
         }
         // don't update metadata if the copy failed
