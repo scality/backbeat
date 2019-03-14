@@ -43,13 +43,12 @@ class ReplicationTaskScheduler {
         const queue = async.queue(this._processingFunc);
         queue.drain = () => delete this._runningTasksByMasterKey[masterKey];
         this._runningTasksByMasterKey[masterKey] = queue;
-        this._runningTasks[this._getUniqueKey(ctx)] = true;
         return queue;
     }
 
     _getQueue(ctx, masterKey) {
-        const runningQueue = this._runningTasksByMasterKey[masterKey];
-        return runningQueue || this._getNewQueue(ctx, masterKey);
+        return this._runningTasksByMasterKey[masterKey] ||
+            this._getNewQueue(ctx, masterKey);
     }
 
     push(ctx, masterKey, done) {
@@ -57,6 +56,7 @@ class ReplicationTaskScheduler {
             return done();
         }
         const queue = this._getQueue(ctx, masterKey);
+        this._runningTasks[this._getUniqueKey(ctx)] = true;
         return queue.push(ctx, () => this._queueCallback(ctx, done));
     }
 }
