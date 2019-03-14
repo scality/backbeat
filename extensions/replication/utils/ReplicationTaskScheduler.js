@@ -14,50 +14,44 @@ class ReplicationTaskScheduler {
         this._runningTasks = {};
     }
 
-    _getUniqueKey(ctx) {
+    _getTaskKey(ctx) {
         const { entry } = ctx;
-        let key;
-        let version;
-        let contentMd5;
         if (entry instanceof ObjectQueueEntry) {
-            key = entry.getCanonicalKey();
-            version = entry.getVersionId();
-            contentMd5 = entry.getContentMd5();
+            const key = entry.getCanonicalKey();
+            const version = entry.getVersionId();
+            const contentMd5 = entry.getContentMd5();
+            return `${key}:${version || ''}:${contentMd5}`;
         }
         if (entry instanceof ActionQueueEntry) {
-            ({ key, version, contentMd5 } = entry.getAttribute('target'));
+            const { key, version, contentMd5 } = entry.getAttribute('target');
+            return `${key}:${version || ''}:${contentMd5}`;
         }
-        return `${key}:${version || ''}:${contentMd5}`;
+        return undefined;
     }
 
-    _queueCallback(ctx, done) {
-        delete this._runningTasks[this._getUniqueKey(ctx)];
-        done();
-    }
-
-    _isRunningTask(ctx) {
-        return this._runningTasks[this._getUniqueKey(ctx)];
-    }
-
-    _getNewQueue(ctx, masterKey) {
+    _getNewMasterKeyQueue(ctx, masterKey) {
         const queue = async.queue(this._processingFunc);
         queue.drain = () => delete this._runningTasksByMasterKey[masterKey];
         this._runningTasksByMasterKey[masterKey] = queue;
         return queue;
     }
 
-    _getQueue(ctx, masterKey) {
-        return this._runningTasksByMasterKey[masterKey] ||
-            this._getNewQueue(ctx, masterKey);
+    _getMasterKeyQueue(ctx, masterKey) {
+        const queue = this._runningTasksByMasterKey[masterKey];
+        return queue || this._getNewMasterKeyQueue(ctx, masterKey);
     }
 
     push(ctx, masterKey, done) {
-        if (this._isRunningTask(ctx)) {
+        const taskKey = this._getTaskKey(ctx);
+        if (this._runningTasks[taskKey]) {
             return done();
         }
-        const queue = this._getQueue(ctx, masterKey);
-        this._runningTasks[this._getUniqueKey(ctx)] = true;
-        return queue.push(ctx, () => this._queueCallback(ctx, done));
+        this._runningTasks[taskKey] = true;
+        const queue = this._getMasterKeyQueue(ctx, masterKey);
+        return queue.push(ctx, () => {
+            delete this._runningTasks[taskKey];
+            done();
+        });
     }
 }
 
