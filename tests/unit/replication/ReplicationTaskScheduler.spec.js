@@ -64,7 +64,7 @@ queueEntryClasses.forEach(mockClass => {
             // order because they have the same objectKey (passed
             // to replicationTaskScheduler.push())
             const versionId = uuid();
-            for (let j = 0; j < duplicateKeyCount; ++j) {
+            for (let j = 0; j < duplicateKeyCount + 1; ++j) {
                 const ctx = {
                     object: objects[i],
                     setValueTo: j,
@@ -80,12 +80,9 @@ queueEntryClasses.forEach(mockClass => {
     }
 
     function scheduleUniqueVersions(params, cb) {
-        const {
-            uniqueKeyCount,
-            duplicateKeyCount,
-            hasUniqueVersions,
-            hasUniqueContent,
-        } = params;
+        const { uniqueKeyCount, hasUniqueVersions, hasUniqueContent } = params;
+        const duplicateKeyCount =
+            params.duplicateKeyCount ? params.duplicateKeyCount + 1 : 1;
         for (let i = 0; i < uniqueKeyCount; ++i) {
             for (let j = 0; j < duplicateKeyCount; ++j) {
                 const ctx = {
@@ -93,7 +90,7 @@ queueEntryClasses.forEach(mockClass => {
                         objectKey: `key_${i}`,
                         value: -1,
                     },
-                    setValueTo: duplicateKeyCount > 1 ?
+                    setValueTo: params.duplicateKeyCount ?
                         (i * duplicateKeyCount) + j : i,
                     entry: getMockEntry({
                         objectKey: `key_${i}`,
@@ -113,7 +110,7 @@ queueEntryClasses.forEach(mockClass => {
             ++doneCount;
             if (doneCount === objects.length * uniqueKeyCount) {
                 objects.forEach(obj => {
-                    assert.strictEqual(obj.value, duplicateKeyCount - 1);
+                    assert.strictEqual(obj.value, duplicateKeyCount);
                 });
                 return cb();
             }
@@ -134,7 +131,7 @@ queueEntryClasses.forEach(mockClass => {
         scheduleUniqueVersions(params, doneFunc);
     }
 
-    describe(`task scheduler with ${mockClass}`, () => {
+    describe.only(`task scheduler with ${mockClass}`, () => {
         before(() => {
             queueEntryClass = mockClass;
         });
@@ -148,7 +145,7 @@ queueEntryClasses.forEach(mockClass => {
             done => {
                 testDuplicateVersions({
                     uniqueKeyCount: 10,
-                    duplicateKeyCount: 10,
+                    duplicateKeyCount: 9,
                 }, done);
             });
 
@@ -156,7 +153,6 @@ queueEntryClasses.forEach(mockClass => {
             done => {
                 testUniqueVersions({
                     uniqueKeyCount: 10,
-                    duplicateKeyCount: 1,
                 }, done);
             });
 
@@ -164,7 +160,7 @@ queueEntryClasses.forEach(mockClass => {
             done => {
                 testUniqueVersions({
                     uniqueKeyCount: 10,
-                    duplicateKeyCount: 10,
+                    duplicateKeyCount: 9,
                     hasUniqueVersions: true,
                 }, done);
             });
@@ -173,7 +169,7 @@ queueEntryClasses.forEach(mockClass => {
             done => {
                 testUniqueVersions({
                     uniqueKeyCount: 10,
-                    duplicateKeyCount: 10,
+                    duplicateKeyCount: 9,
                     hasUniqueContent: true,
                 }, done);
             });
