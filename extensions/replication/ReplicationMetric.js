@@ -61,6 +61,10 @@ class ReplicationMetric {
     }
 
     publish() {
+        this._log.error('no error publishing metric', Object.assign({
+            error: 'foo',
+            metricsType: this._metricsType,
+        }, this._entry.getLogInfo()));
         // Lifecycle metrics not yet implemented.
         if (this._isLifecycleAction()) {
             return undefined;

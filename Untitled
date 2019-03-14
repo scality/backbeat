@@ -1,0 +1,20 @@
+for i in {
+    zenko-backbeat-api-549fc474b6-74sc2,
+    zenko-backbeat-gc-consumer-5575d68f79-sqtq8,
+    zenko-backbeat-gc-consumer-5575d68f79-sw2g6,
+    zenko-backbeat-gc-consumer-5575d68f79-z8d4t,
+    zenko-backbeat-lifecycle-bucket-processor-84bd6dfddc-9z5dv,
+    zenko-backbeat-lifecycle-bucket-processor-84bd6dfddc-dc42q,
+    zenko-backbeat-lifecycle-bucket-processor-84bd6dfddc-k549h,
+    zenko-backbeat-lifecycle-conductor-f9c694f78-46gd7,
+    zenko-backbeat-lifecycle-object-processor-65dcf5d887-47zzl,
+    zenko-backbeat-lifecycle-object-processor-65dcf5d887-gpdrz,
+    zenko-backbeat-lifecycle-object-processor-65dcf5d887-n4m6r,
+    zenko-backbeat-replication-data-processor-f55cfd978-cngg4,
+    zenko-backbeat-replication-data-processor-f55cfd978-x4bn6,
+    zenko-backbeat-replication-data-processor-f55cfd978-xf629,
+    zenko-backbeat-replication-populator-659fbcfdb7-hfztg,
+    zenko-backbeat-replication-status-processor-7cd6bc547f-6nldw,
+    zenko-backbeat-replication-status-processor-7cd6bc547f-jnz65,
+    zenko-backbeat-replication-status-processor-7cd6bc547f-sn7z8
+}; do ; done
