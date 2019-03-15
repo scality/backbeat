@@ -2,18 +2,19 @@ const assert = require('assert');
 
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
-const config = require('../../config.json');
+const config = require('../../../conf/Config');
 const fakeLogger = require('../../utils/fakeLogger');
+const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 
 describe('BackbeatAPI', () => {
     let bbapi;
 
     const destconfig = config.extensions.replication.destination;
     const { site } = destconfig.bootstrapList[0];
-    // TODO-FIX: currently not filtering sites by service
-    const ingestSite = site;
+    const ingestSite = `${destconfig.bootstrapList[1].site}-ingestion`;
 
     before(() => {
+        setupIngestionSiteMock();
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
     });
 
@@ -84,14 +85,10 @@ describe('BackbeatAPI', () => {
             '?versionId=test-myvId', method: 'GET' },
         { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
             '?versionId=test-myvId', method: 'GET' },
-        // TODO-FIX: Once site filter by service is enabled
         // invalid site for given service
-        // { url: `/_/crr/pause/${ingestSite}`, method: 'POST' },
-        // { url: `/_/crr/resume/${ingestSite}`, method: 'POST' },
-        // { url: `/_/crr/status/${ingestSite}`, method: 'GET' },
-        // { url: `/_/ingestion/pause/${site}`, method: 'POST' },
-        // { url: `/_/ingestion/resume/${site}`, method: 'POST' },
-        // { url: `/_/ingestion/status/${site}`, method: 'GET' },
+        { url: `/_/ingestion/pause/${site}`, method: 'POST' },
+        { url: `/_/ingestion/resume/${site}`, method: 'POST' },
+        { url: `/_/ingestion/status/${site}`, method: 'GET' },
     ].forEach(request => {
         it(`should invalidate route: ${request.method} ${request.url}`, () => {
             const req = new BackbeatRequest(request);

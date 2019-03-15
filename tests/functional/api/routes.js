@@ -7,12 +7,13 @@ const zookeeper = require('node-zookeeper-client');
 const { RedisClient } = require('arsenal').metrics;
 const { StatsModel } = require('arsenal').metrics;
 
-const config = require('../../config.json');
+const config = require('../../../conf/Config');
 const { makeRequest, getRequest, getResponseBody } =
     require('../utils/httpHelpers');
 const getUrl = require('../utils/getUrl');
 const fakeLogger = require('../../utils/fakeLogger');
 const { addMembers } = require('../utils/sortedSetHelpers');
+const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 
 const {
     zookeeperNamespace: zookeeperReplicationNamespace,
@@ -719,8 +720,9 @@ describe('API routes', () => {
         const ingestionConfig = config.extensions.ingestion;
 
         const crrSites = crrConfigs.destination.bootstrapList.map(s => s.site);
-        // TODO-FIX: currently not filtering sites by service
-        const ingestionSites = crrSites;
+        setupIngestionSiteMock();
+        const ingestionSites = config.getIngestionBuckets()
+                                  .map(b => b.locationConstraint);
 
         [
             {
@@ -735,6 +737,7 @@ describe('API routes', () => {
                 name: 'ingestion',
                 topic: ingestionConfig.topic,
                 sites: ingestionSites,
+                invalidSites: crrSites,
                 baseZkPath: ZK_TEST_INGESTION_STATE_PATH,
             },
         ].forEach(svc => {
@@ -810,7 +813,6 @@ describe('API routes', () => {
                 redis2.on('message', (channel, message) => {
                     cache2.push({ channel, message });
                 });
-
                 setupZkTestState(done);
             });
 
@@ -850,25 +852,28 @@ describe('API routes', () => {
                 });
             });
 
-            // TODO-FIX: currently not filtering sites by service
             const invalidRequests = [
                 { path: `/_/${svc.name}/pause/invalid-site`, method: 'POST' },
-                // { path: `/_/${svc.name}/pause/${invalidSites[0]}`,
-                //   method: 'POST' },
-                // { path: `/_/${svc.name}/pause/${invalidSites[1]}`,
-                //   method: 'POST' },
                 { path: `/_/${svc.name}/resume/invalid-site`, method: 'POST' },
-                // { path: `/_/${svc.name}/resume/${invalidSites[0]}`,
-                //   method: 'POST' },
-                // { path: `/_/${svc.name}/resume/${invalidSites[1]}`,
-                //   method: 'POST' },
                 { path: `/_/${svc.name}/status`, method: 'POST' },
                 { path: `/_/${svc.name}/status/invalid-site`, method: 'GET' },
-                // { path: `/_/${svc.name}/status/${invalidSites[0]}`,
-                //   method: 'GET' },
-                // { path: `/_/${svc.name}/status/${invalidSites[1]}`,
-                //   method: 'GET' },
             ];
+            if (svc.invalidSites && svc.invalidSites.length > 1) {
+                invalidRequests.push(...[
+                    { path: `/_/${svc.name}/pause/${svc.invalidSites[0]}`,
+                      method: 'POST' },
+                    { path: `/_/${svc.name}/pause/${svc.invalidSites[1]}`,
+                      method: 'POST' },
+                    { path: `/_/${svc.name}/resume/${svc.invalidSites[0]}`,
+                      method: 'POST' },
+                    { path: `/_/${svc.name}/resume/${svc.invalidSites[1]}`,
+                      method: 'POST' },
+                    { path: `/_/${svc.name}/status/${svc.invalidSites[0]}`,
+                      method: 'GET' },
+                    { path: `/_/${svc.name}/status/${svc.invalidSites[1]}`,
+                      method: 'GET' },
+                ]);
+            }
             invalidRequests.forEach(entry => {
                 it(`should get a 404 response for route: ${entry.path}`,
                 done => {
@@ -925,7 +930,6 @@ describe('API routes', () => {
                     setTimeout(() => {
                         assert.strictEqual(cache1.length, 1);
                         assert.strictEqual(cache2.length, 0);
-
                         assert.deepStrictEqual(cache1[0].channel, channel1);
 
                         const message = JSON.parse(cache1[0].message);

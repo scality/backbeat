@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const runServer = require('./lib/api/BackbeatServer');
 const { initManagement } = require('./lib/management/index');
-
+const setupIngestionSiteMock = require('./tests/utils/mockIngestionSite');
 const config = require('./conf/Config');
 const Logger = werelogs.Logger;
 const log = new Logger('BackbeatServer:index');
@@ -42,6 +42,8 @@ function initAndStart() {
 
 if (process.env.CI === 'true') {
     // skip initManagement
+    // set mock config ingestion site on start-up
+    setupIngestionSiteMock();
     runServer(config, Logger);
 } else {
     initAndStart();
