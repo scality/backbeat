@@ -26,6 +26,13 @@ describe('BackbeatAPI', () => {
         { url: '/_/metrics/crr/all/completions', method: 'GET' },
         { url: '/_/metrics/crr/all/failures', method: 'GET' },
         { url: '/_/metrics/crr/all/throughput', method: 'GET' },
+        { url: '/_/metrics/ingestion/all/completions', method: 'GET' },
+        { url: `/_/metrics/ingestion/${ingestSite}/completions`,
+            method: 'GET' },
+        { url: '/_/metrics/ingestion/all/throughput', method: 'GET' },
+        { url: `/_/metrics/ingestion/${ingestSite}/throughput`, method: 'GET' },
+        { url: '/_/metrics/ingestion/all/pending', method: 'GET' },
+        { url: `/_/metrics/ingestion/${ingestSite}/pending`, method: 'GET' },
         { url: '/_/monitoring/metrics', method: 'GET' },
         { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
             method: 'GET' },
@@ -74,6 +81,10 @@ describe('BackbeatAPI', () => {
         { url: '/_/metrics/crr/all/fail', method: 'GET' },
         { url: '/_/invalid/crr/all', method: 'GET' },
         { url: '/_/metrics/pause/all', method: 'GET' },
+        // unavailable routes for given service
+        { url: '/_/metrics/ingestion/all', method: 'GET' },
+        { url: '/_/metrics/ingestion/all/backlog', method: 'GET' },
+        { url: '/_/metrics/ingestion/all/failures', method: 'GET' },
         // invalid http verb
         { url: '/_/healthcheck', method: 'POST' },
         { url: '/_/monitoring/metrics', method: 'POST' },
@@ -85,7 +96,17 @@ describe('BackbeatAPI', () => {
             '?versionId=test-myvId', method: 'GET' },
         { url: '/_/metrics/crr/unknown-site/progress/mybucket/mykey' +
             '?versionId=test-myvId', method: 'GET' },
+        { url: '/_/metrics/ingestion/all/throughput', method: 'POST' },
+        { url: `/_/metrics/ingestion/${site}/completions`, method: 'POST' },
+        { url: `/_/metrics/ingestion/${site}/pending`, method: 'POST' },
         // invalid site for given service
+        { url: `/_/ingestion/pause/${site}`, method: 'POST' },
+        { url: `/_/ingestion/resume/${site}`, method: 'POST' },
+        { url: `/_/ingestion/status/${site}`, method: 'GET' },
+        // invalid site for given service
+        { url: `/_/crr/pause/${ingestSite}`, method: 'POST' },
+        { url: `/_/crr/resume/${ingestSite}`, method: 'POST' },
+        { url: `/_/crr/status/${ingestSite}`, method: 'GET' },
         { url: `/_/ingestion/pause/${site}`, method: 'POST' },
         { url: `/_/ingestion/resume/${site}`, method: 'POST' },
         { url: `/_/ingestion/status/${site}`, method: 'GET' },
@@ -115,7 +136,7 @@ describe('BackbeatAPI', () => {
             ]);
         };
 
-        bbapi.getThroughput('', (err, data) => {
+        bbapi.getThroughput({ service: 'crr' }, (err, data) => {
             assert.ifError(err);
 
             assert(data.throughput);
