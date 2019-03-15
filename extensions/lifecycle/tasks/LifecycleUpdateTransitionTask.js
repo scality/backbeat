@@ -1,4 +1,5 @@
 const async = require('async');
+const assert = require('assert');
 
 const errors = require('arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -120,25 +121,43 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             return async.waterfall([
                 next => this._getMetadata(entry, log, next),
                 (objMD, next) => {
-                    // commit if MD5 did not change after transition
-                    // started, rollback otherwise
+                    const oldLocation = objMD.getLocation();
+                    const newLocation = entry.getAttribute('results.location');
                     const eTag = entry.getAttribute('target.eTag');
-                    if (eTag === `"${objMD.getContentMd5()}"`) {
-                        locationToGC = objMD.getLocation();
-                        this._updateMdWithTransition(entry, objMD);
-                        return this._putMetadata(entry, objMD, log, next);
+                    // commit if MD5 did not change after transition
+                    // started and location has effectively been
+                    // updated, rollback if MD5 changed
+                    if (eTag !== `"${objMD.getContentMd5()}"`) {
+                        log.info('object ETag has changed during lifecycle ' +
+                                 'transition processing',
+                        Object.assign({
+                            method:
+                            'LifecycleUpdateTransitionTask.processActionEntry',
+                        }, entry.getLogInfo()));
+                        locationToGC = newLocation;
+                        return next();
                     }
-                    log.info('object ETag has changed during lifecycle ' +
-                             'transition processing',
-                    Object.assign({
-                        method:
-                        'LifecycleUpdateTransitionTask.processActionEntry',
-                    }, entry.getLogInfo()));
-                    locationToGC = entry.getAttribute('results.location');
-                    return next();
+                    try {
+                        assert.notDeepStrictEqual(oldLocation, newLocation);
+                    } catch (err) {
+                        log.info('duplicate location update, skipping',
+                        Object.assign({
+                            method:
+                            'LifecycleUpdateTransitionTask.processActionEntry',
+                        }, entry.getLogInfo()));
+                        return next();
+                    }
+                    locationToGC = oldLocation;
+                    this._updateMdWithTransition(entry, objMD);
+                    return this._putMetadata(entry, objMD, log, next);
                 },
-                next => this._garbageCollectLocation(
-                    entry, locationToGC, log, next),
+                next => {
+                    if (!locationToGC) {
+                        return next();
+                    }
+                    return this._garbageCollectLocation(
+                        entry, locationToGC, log, next);
+                },
             ], done);
         }
         // don't update metadata if the copy failed

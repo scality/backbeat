@@ -137,4 +137,17 @@ describe('LifecycleUpdateTransitionTask', () => {
             done();
         });
     });
+
+    it('should not update metadata nor GC anything if location does not change',
+    done => {
+        mdObj.setLocation(newLocation);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatClient.getReceivedMd();
+            assert.strictEqual(receivedMd, null);
+            const receivedGcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(receivedGcEntry, null);
+            done();
+        });
+    });
 });
