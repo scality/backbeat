@@ -665,6 +665,10 @@ class MultipleBackendTask extends ReplicateObject {
 
     _getAndPutObject(sourceEntry, log, cb) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
+        const extMetrics = getExtMetrics(this.site,
+            sourceEntry.getContentLength(), sourceEntry);
+        this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
+            metricsExtension, () => {});
         this.retry({
             actionDesc: 'stream object data',
             logFields: { entry: sourceEntry.getLogInfo() },
