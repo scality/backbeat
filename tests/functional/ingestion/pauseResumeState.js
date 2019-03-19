@@ -222,16 +222,19 @@ describe('Ingestion Pause/Resume', function d() {
     });
 
     beforeEach(done => {
-        this.iPopulator.open(err => {
+        const firstLocation = firstBucket.locationConstraint;
+        const secondLocation = secondBucket.locationConstraint;
+        async.series([
+            next => this.iPopulator.open(next),
+            next => {
+                this.iPopulator._resumeService(firstLocation);
+                this.iPopulator._pauseService(secondLocation);
+                return this.iPopulator.applyUpdates(next);
+            },
+        ], err => {
             if (err) {
                 return done(err);
             }
-            const firstLocation = firstBucket.locationConstraint;
-            const secondLocation = secondBucket.locationConstraint;
-            this.iPopulator._resumeService(firstLocation);
-            this.iPopulator._pauseService(secondLocation);
-            this.iPopulator.applyUpdates();
-
             let pausedList = this.iPopulator.getPausedLocations();
             return async.whilst(() =>
                 Object.keys(pausedList).includes(firstLocation) ||
