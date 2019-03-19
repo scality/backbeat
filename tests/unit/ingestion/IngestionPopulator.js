@@ -1,10 +1,13 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
+const async = require('async');
 
 const config = require('../../../conf/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
+const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
+const fakeLogger = require('../../utils/fakeLogger');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -19,44 +22,91 @@ const EXISTING_BUCKET = 'my-zenko-bucket';
 const NEW_BUCKET = 'your-zenko-bucket';
 const OLD_BUCKET = 'old-ingestion-bucket';
 
-const locationConstraints = {
-    'my-ring': {
+const oldLocation = {
+    'old-ring': {
+        details: {
+            accessKey: 'myAccessKey',
+            secretKey: 'myVerySecretKey',
+            endpoint: 'http://127.0.0.1:80',
+            bucketName: 'old-ring-bucket',
+        },
+        locationType: 'location-scality-ring-s3-v1',
+    },
+};
+const existingLocation = {
+    'existing-ring': {
         details: {
             accessKey: 'myAccessKey',
             secretKey: 'myVerySecretKey',
             endpoint: 'http://127.0.0.1:8000',
-            bucketName: 'my-ring-bucket',
+            bucketName: 'existing-ring-bucket',
         },
         locationType: 'location-scality-ring-s3-v1',
     },
-    'your-ring': {
+};
+const newLocation = {
+    'new-ring': {
         details: {
             accessKey: 'yourAccessKey',
             secretKey: 'yourVerySecretKey',
             endpoint: 'http://127.0.0.1',
-            bucketName: 'your-ring-bucket',
+            bucketName: 'new-ring-bucket',
         },
         locationType: 'location-scality-ring-s3-v1',
     },
 };
 
-const buckets = [
-    {
-        locationConstraint: 'my-ring',
-        name: EXISTING_BUCKET,
-        ingestion: { status: 'enabled' },
-    },
-    {
-        locationConstraint: 'your-ring',
-        name: NEW_BUCKET,
-        ingestion: { status: 'enabled' },
-    },
-];
+const oldBucket = {
+    locationConstraint: 'old-ring',
+    name: OLD_BUCKET,
+    ingestion: { status: 'enabled' },
+};
+const existingBucket = {
+    locationConstraint: 'existing-ring',
+    name: EXISTING_BUCKET,
+    ingestion: { status: 'enabled' },
+};
+const newBucket = {
+    locationConstraint: 'new-ring',
+    name: NEW_BUCKET,
+    ingestion: { status: 'enabled' },
+};
+
+// To be mocked as existing or currently active
+const previousLocations = Object.assign({}, oldLocation, existingLocation);
+const previousBuckets = [oldBucket, existingBucket];
+
+// To be mocked as incoming new active
+const currentLocations = Object.assign({}, existingLocation, newLocation);
+const currentBuckets = [existingBucket, newBucket];
+
+class IngestionReaderMock extends IngestionReader {
+    reset() {
+        this._updated = false;
+    }
+
+    hasUpdated() {
+        return this._updated;
+    }
+
+    /**
+     * Mock to avoid creating S3 client, avoid decrypting secret key.
+     * `IngestionReader.refresh` is called to check and update IngestionReaders.
+     * Every time this method is called indicates a valid update was found.
+     * @param {Function} cb - callback()
+     * @return {undefined}
+     */
+    _setupIngestionProducer(cb) {
+        this._updated = true;
+        return cb();
+    }
+}
 
 class IngestionPopulatorMock extends IngestionPopulator {
     reset() {
         this._added = [];
         this._removed = [];
+        this._ingestionSources = {};
     }
 
     getAdded() {
@@ -67,22 +117,45 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return this._removed;
     }
 
-    setupMock() {
+    getUpdated() {
+        const updated = [];
+        Object.keys(this._ingestionSources).forEach(s => {
+            if (this._ingestionSources[s].hasUpdated()) {
+                updated.push(s);
+            }
+        });
+        return updated;
+    }
+
+    _setupPriorState(cb) {
+        config.setIngestionBuckets(previousLocations, previousBuckets);
+        this.applyUpdates(err => {
+            if (err) {
+                return cb(err);
+            }
+            this._added = [];
+            this._removed = [];
+            return cb();
+        });
+    }
+
+    setupMock(cb) {
         // for testing purposes
-        this._added = [];
-        this._removed = [];
+        this.reset();
 
-        // mocks
-        this._extension = {
-            createZkPath: cb => cb(),
-        };
-        config.setIngestionBuckets(locationConstraints, buckets);
+        this._setupPriorState(err => {
+            if (err) {
+                return cb(err);
+            }
 
-        // mock existing active sources
-        this._ingestionSources = {
-            [OLD_BUCKET]: {},
-            [EXISTING_BUCKET]: {},
-        };
+            // mocks
+            this._extension = {
+                createZkPath: cb => cb(),
+            };
+            config.setIngestionBuckets(currentLocations, currentBuckets);
+
+            return cb();
+        });
     }
 
     _setupZkLocationNode(list, cb) {
@@ -91,6 +164,12 @@ class IngestionPopulatorMock extends IngestionPopulator {
     }
 
     addNewLogSource(newSource) {
+        const zenkoBucket = newSource.name;
+        this._ingestionSources[zenkoBucket] = new IngestionReaderMock({
+            bucketdConfig: newSource,
+            logger: fakeLogger,
+            ingestionConfig: {},
+        });
         this._added.push(newSource);
     }
 
@@ -105,15 +184,13 @@ describe('Ingestion Populator', () => {
     before(() => {
         ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
             mConfig, rConfig, ingestionConfig, s3Config);
-        ip.setupMock();
     });
 
-    beforeEach(() => {
-        ip.applyUpdates();
-    });
-
-    afterEach(() => {
-        ip.reset();
+    beforeEach(done => {
+        async.series([
+            next => ip.setupMock(next),
+            next => ip.applyUpdates(next),
+        ], done);
     });
 
     it('should fetch correctly formed ingestion bucket object information',
@@ -184,6 +261,27 @@ describe('Ingestion Populator', () => {
 
             assert(!wasAdded);
             assert(wasRemoved);
+        });
+
+        it('should update an ingestion reader when the ingestion source ' +
+        'information is updated', done => {
+            assert.deepStrictEqual(ip.getUpdated(), []);
+
+            // hack to update a valid editable field
+            const locationName = Object.keys(existingLocation)[0];
+            const dupeExistingLoc = Object.assign({}, existingLocation);
+            dupeExistingLoc[locationName].details.accessKey = 'anUpdatedKey';
+            config.setIngestionBuckets(dupeExistingLoc, [existingBucket]);
+
+            ip.applyUpdates(err => {
+                assert.ifError(err);
+                const updated = ip.getUpdated();
+
+                assert.strictEqual(updated.length, 1);
+                assert.strictEqual(updated[0], EXISTING_BUCKET);
+
+                done();
+            });
         });
     });
 });

@@ -53,17 +53,26 @@ function queueBatch(ingestionPopulator, taskState, log) {
 
     const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
-    ingestionPopulator.applyUpdates();
-    ingestionPopulator.processLogEntries({ maxRead }, err => {
-        taskState.batchInProgress = false;
+    ingestionPopulator.applyUpdates(err => {
         if (err) {
-            log.fatal('an error occurred during ingestion', {
-                method: 'bin::ingestion.queueBatch',
+            log.fatal('error occurred applying updates to ingestion readers', {
                 error: err,
+                method: 'bin::ingestion.queueBatch',
             });
             scheduler.cancel();
             process.exit(1);
         }
+        ingestionPopulator.processLogEntries({ maxRead }, err => {
+            taskState.batchInProgress = false;
+            if (err) {
+                log.fatal('an error occurred during ingestion', {
+                    method: 'bin::ingestion.queueBatch',
+                    error: err,
+                });
+                scheduler.cancel();
+                process.exit(1);
+            }
+        });
     });
     return undefined;
 }
