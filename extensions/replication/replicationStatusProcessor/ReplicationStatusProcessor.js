@@ -199,10 +199,32 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     stop(done) {
-        if (!this._consumer) {
-            return setImmediate(done);
-        }
-        return this._consumer.close(done);
+        async.series([
+            next => {
+                if (this._consumer) {
+                    this.logger.debug('closing kafka consumer', {
+                        method: 'ReplicationStatusProcessor.stop',
+                    });
+                    return this._consumer.close(next);
+                }
+                this.logger.debug('no kafka consumer to close', {
+                    method: 'ReplicationStatusProcessor.stop',
+                });
+                return next();
+            },
+            next => {
+                if (this._mProducer) {
+                    this.logger.debug('closing metrics producer', {
+                        method: 'ReplicationStatusProcessor.stop',
+                    });
+                    return this._mProducer.close(next);
+                }
+                this.logger.debug('no metrics producer to close', {
+                    method: 'ReplicationStatusProcessor.stop',
+                });
+                return next();
+            }
+        ], done);
     }
 
     /**

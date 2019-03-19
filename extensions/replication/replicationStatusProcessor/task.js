@@ -51,3 +51,16 @@ function initAndStart() {
 }
 
 initAndStart();
+
+process.on('SIGTERM', () => {
+    logger.info('received SIGTERM, exiting');
+    replicationStatusProcessor.stop(error => {
+        if (error) {
+            logger.error('failed to exit properly', {
+                error,
+            });
+            process.exit(1);
+        }
+        process.exit(0);
+    });
+});
