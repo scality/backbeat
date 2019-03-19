@@ -127,13 +127,15 @@ describe('BackbeatClient unit tests with mock server', () => {
     });
 
     it('should get object metadata', done => {
-        const destReq = backbeatClient.getObjectMetadata({
+        const destReq = backbeatClient.getMetadata({
             Bucket: bucketName,
             Key: objectName,
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.deepStrictEqual(data, expectedObjectMD);
+            assert(data.Body);
+            const dataValue = JSON.parse(data.Body);
+            assert.deepStrictEqual(dataValue, expectedObjectMD);
             return done();
         });
     });

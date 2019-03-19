@@ -21,7 +21,7 @@ const zookeeper = require('../../../lib/clients/zookeeper');
 
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
-const CONSUMER_TIMEOUT = 25000;
+const CONSUMER_TIMEOUT = 35000;
 
 const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
 const expectedOOBEntries = expectedLogs.log.filter(entry =>
@@ -64,17 +64,35 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
     // 2 entries per object - 1 with version key and 1 with master key
     assert.strictEqual(kafkaEntries.length, expectedEntries.length * 2);
 
-    const retrievedEntries = kafkaEntries.map(entry =>
-        entry.value.toString());
+    const retrievedEntries = kafkaEntries.map(entry => JSON.parse(entry.value));
+
     expectedEntries.forEach(entry => {
-        const expectedEntryString =
-            JSON.stringify(entry);
-        assert(retrievedEntries.indexOf(expectedEntryString) > -1);
+        const entryValue = JSON.parse(entry.value);
+
+        // for tests, one as master, one w/ version
+        const matchedKafkaEntries = retrievedEntries.filter(e =>
+            e.key.startsWith(entry.key));
+
+        matchedKafkaEntries.forEach(kafkaEntry => {
+            const kafkaValue = JSON.parse(kafkaEntry.value);
+            assert.strictEqual(entry.type, kafkaEntry.type);
+            assert.strictEqual(entry.bucket, kafkaEntry.bucket);
+
+            Object.keys(entryValue).forEach(key => {
+                if (typeof entryValue[key] === 'object') {
+                    assert.strictEqual(JSON.stringify(entryValue[key]),
+                                       JSON.stringify(kafkaValue[key]));
+                } else {
+                    assert.strictEqual(entryValue[key], kafkaValue[key]);
+                }
+            });
+        });
     });
     return done();
 }
 
 describe('ingestion reader tests with mock', function fD() {
+    this.timeout(40000);
     let httpServer;
 
     before(done => {
