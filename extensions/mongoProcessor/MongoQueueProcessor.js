@@ -21,6 +21,9 @@ const BucketMdQueueEntry = require('../../lib/models/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const { getAccountCredentials } =
     require('../../lib/credentials/AccountCredentials');
+const MetricsProducer = require('../../lib/MetricsProducer');
+const { metricsExtension, metricsTypeCompleted } =
+    require('../ingestion/constants');
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -62,14 +65,16 @@ class MongoQueueProcessor {
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} serviceAuth - ingestion service auth
+     * @param {Object} mConfig - metrics config
      * @param {String} site - site name
      */
     constructor(kafkaConfig, s3Config, mongoProcessorConfig, mongoClientConfig,
-                serviceAuth, site) {
+                serviceAuth, mConfig, site) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
         this._serviceAuth = serviceAuth;
+        this._mConfig = mConfig;
         this.site = site;
 
         this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
@@ -80,6 +85,12 @@ class MongoQueueProcessor {
             new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
+    }
+
+    _setupMetricsClients(cb) {
+        // Metrics Producer
+        this._mProducer = new MetricsProducer(this.kafkaConfig, this._mConfig);
+        this._mProducer.setupProducer(cb);
     }
 
     /**
@@ -117,9 +128,28 @@ class MongoQueueProcessor {
         const credentials = getAccountCredentials(this._serviceAuth,
                                                   this.logger);
         this._s3Client = this._getS3Client(credentials);
-        this._mongoClient.setup(err => {
-            if (err) {
-                this.logger.error('could not connect to MongoDB', { err });
+        async.series([
+            next => this._setupMetricsClients(err => {
+                if (err) {
+                    this.logger.error('error setting up metrics client', {
+                        method: 'MongoQueueProcessor.start',
+                        error: err,
+                    });
+                }
+                return next(err);
+            }),
+            next => this._mongoClient.setup(err => {
+                if (err) {
+                    this.logger.error('could not connect to MongoDB', {
+                        method: 'MongoQueueProcessor.start',
+                        error: err,
+                    });
+                }
+                return next(err);
+            }),
+        ], error => {
+            if (error) {
+                this.logger.fatal('error starting mongo queue processor');
                 process.exit(1);
             }
 
@@ -330,6 +360,7 @@ class MongoQueueProcessor {
                     'from mongo', { bucket, key, error: err.message });
                     return done(err);
                 }
+                this._produceMetricCompletionEntry();
                 this.logger.info('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
                 });
@@ -391,12 +422,19 @@ class MongoQueueProcessor {
                         'to mongo', { error: err });
                         return done(err);
                     }
+                    this._produceMetricCompletionEntry();
                     this.logger.info('object metadata put to mongo', {
                         entry: sourceEntry.getLogInfo(),
                     });
                     return done();
                 });
         });
+    }
+
+    _produceMetricCompletionEntry() {
+        const metric = { [this.site]: { ops: 1 } };
+        this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+            metricsExtension, () => {});
     }
 
     /**
