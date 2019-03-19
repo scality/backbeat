@@ -329,7 +329,14 @@ zkClient.once('ready', () => {
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    ingestionPopulator.close();
     scheduler.cancel();
-    process.exit(0);
+    ingestionPopulator.close(error => {
+        if (error) {
+            log.error('failed to exit properly', {
+                error,
+            });
+            process.exit(1);
+        }
+        process.exit(0);
+    });
 });

@@ -1,5 +1,6 @@
 'use strict'; // eslint-disable-line
 
+const async = require('async');
 const werelogs = require('werelogs');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
@@ -101,3 +102,19 @@ function loadManagementDatabase() {
 }
 
 loadManagementDatabase();
+
+process.on('SIGTERM', () => {
+    log.info('received SIGTERM, exiting');
+    const sites = Object.keys(activeProcessors);
+    async.each(sites,
+               (site, done) => activeProcessors[site].stop(done),
+               error => {
+                   if (error) {
+                       log.error('failed to exit properly', {
+                           error,
+                       });
+                       process.exit(1);
+                   }
+                   process.exit(0);
+               });
+});

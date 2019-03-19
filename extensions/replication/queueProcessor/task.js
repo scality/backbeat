@@ -256,3 +256,19 @@ zkClient.once('ready', () => {
         return initAndStart(zkClient);
     });
 });
+
+process.on('SIGTERM', () => {
+    log.info('received SIGTERM, exiting');
+    const sites = Object.keys(activeQProcessors);
+    async.each(sites,
+               (site, done) => activeQProcessors[site].stop(done),
+               error => {
+                   if (error) {
+                       log.error('failed to exit properly', {
+                           error,
+                       });
+                       process.exit(1);
+                   }
+                   process.exit(0);
+               });
+});
