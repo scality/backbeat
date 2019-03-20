@@ -5,6 +5,7 @@ const errors = require('arsenal').errors;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
+const { attachReqUids } = require('../../../lib/clients/utils');
 
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
@@ -18,6 +19,22 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         const procState = proc.getStateVars();
         super();
         Object.assign(this, procState);
+    }
+
+    _checkDate(entry, log, done) {
+        const lastModified = entry.getAttribute('details.lastModified');
+        if (lastModified) {
+            const { bucket, key } = entry.getAttribute('target');
+            const reqParams = {
+                Bucket: bucket,
+                Key: key,
+                IfUnmodifiedSince: lastModified,
+            };
+            const req = this.s3Client.headObject(reqParams);
+            attachReqUids(req, log);
+            return req.send(done);
+        }
+        return done();
     }
 
     _getMetadata(entry, log, done) {
@@ -98,6 +115,20 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         this.gcProducer.publishActionEntry(gcEntry, done);
     }
 
+    _checkAndGarbageCollectLocation(entry, locations, log, done) {
+        return async.series([
+            next => this._checkDate(entry, log, next),
+            next => this._garbageCollectLocation(entry, locations, log, next),
+        ], err => {
+            if (err && err.statusCode === 412) {
+                log.info('Object was modified after transition had begun ' +
+                         'so object was not deleted',
+                         entry.getLogInfo());
+            }
+            return done(err);
+        });
+    }
+
     /**
      * Execute the action specified in action entry to update metadata
      * after an object data has been transitioned to a new storage
@@ -155,7 +186,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     if (!locationToGC) {
                         return next();
                     }
-                    return this._garbageCollectLocation(
+                    return this._checkAndGarbageCollectLocation(
                         entry, locationToGC, log, next);
                 },
             ], done);
