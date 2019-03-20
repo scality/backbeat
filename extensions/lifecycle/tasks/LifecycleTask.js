@@ -812,6 +812,7 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} params.objectKey - The object key name
      * @param {string} params.encodedVersionId - The object encoded version ID
      * @param {string} params.eTag - The object data ETag
+     * @param {string} params.lastModified - The last modified date of object
      * @param {string} params.site - The site name to transition the object to
      * @param {Werelogs.Logger} log - Logger object
      * @return {undefined}
@@ -828,7 +829,9 @@ class LifecycleTask extends BackbeatTask {
               .setAttribute('target.key', params.objectKey)
               .setAttribute('target.version', params.encodedVersionId)
               .setAttribute('target.eTag', params.eTag)
+              .setAttribute('target.lastModified', params.lastModified)
               .setAttribute('toLocation', params.site);
+
         this._sendDataMoverAction(entry, err => {
             if (err) {
                 log.error('could not send transition entry for consumption',
@@ -1024,6 +1027,7 @@ class LifecycleTask extends BackbeatTask {
                     bucket: bucketData.target.bucket,
                     objectKey: obj.Key,
                     eTag: obj.ETag,
+                    lastModified: obj.LastModified,
                     site: rules.Transition.StorageClass,
                 }, log);
                 return done();

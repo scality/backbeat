@@ -98,6 +98,19 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         this.gcProducer.publishActionEntry(gcEntry, done);
     }
 
+    _wasObjectModified(entry, objMD, log) {
+        const { lastModified } = entry.getAttribute('target');
+        const objectWasModified = lastModified !== objMD.getLastModified();
+        if (objectWasModified) {
+            log.info('object LastModified date changed during lifecycle ' +
+                     'transition processing',
+            Object.assign({
+                method: 'LifecycleUpdateTransitionTask._wasObjectModified',
+            }, entry.getLogInfo()));
+        }
+        return objectWasModified;
+    }
+
     /**
      * Execute the action specified in action entry to update metadata
      * after an object data has been transitioned to a new storage
@@ -115,6 +128,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             objectKey: 'target.key',
             versionId: 'target.version',
             eTag: 'target.eTag',
+            lastModified: 'target.lastModified',
         });
         if (entry.getStatus() === 'success') {
             let locationToGC;
@@ -123,6 +137,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 (objMD, next) => {
                     const oldLocation = objMD.getLocation();
                     const newLocation = entry.getAttribute('results.location');
+                    if (this._wasObjectModified(entry, objMD, log)) {
+                        locationToGC = newLocation;
+                        return next();
+                    }
                     const eTag = entry.getAttribute('target.eTag');
                     // commit if MD5 did not change after transition
                     // started and location has effectively been
