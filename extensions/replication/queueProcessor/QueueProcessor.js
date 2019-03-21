@@ -16,7 +16,9 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
-const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');
+const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
+const { getTaskSchedulerQueueKey,
+        getTaskSchedulerDedupeKey } = require('./taskSchedulerHelpers');
 const getLocationsFromStorageClass =
     require('../utils/getLocationsFromStorageClass');
 const ReplicateObject = require('../tasks/ReplicateObject');
@@ -157,9 +159,11 @@ class QueueProcessor extends EventEmitter {
             });
         }
 
-        this.taskScheduler = new ReplicationTaskScheduler(
+        this.taskScheduler = new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(
-                ctx.entry, ctx.kafkaEntry, done));
+                ctx.entry, ctx.kafkaEntry, done),
+            ctx => getTaskSchedulerQueueKey(ctx.entry),
+            ctx => getTaskSchedulerDedupeKey(ctx.entry));
     }
 
     _setupVaultclientCache() {
@@ -717,7 +721,6 @@ class QueueProcessor extends EventEmitter {
               { entry: sourceEntry.getLogInfo() });
             return this.taskScheduler.push({ task, entry: sourceEntry,
                                              kafkaEntry },
-                                           sourceEntry.getCanonicalKey(),
                                            done);
         }
         this.logger.debug('skip replication entry',
@@ -747,12 +750,9 @@ class QueueProcessor extends EventEmitter {
             return process.nextTick(done);
         }
         let task;
-        let canonicalKey;
         if (actionEntry.getActionType() === 'copyLocation') {
             if (actionEntry.getAttribute('toLocation') === this.site) {
                 task = new CopyLocationTask(this);
-                const { bucket, key } = actionEntry.getAttribute('target');
-                canonicalKey = `${bucket}/${key}`;
             }
         } else {
             this.logger.warn('skipping unsupported action type', {
@@ -766,7 +766,7 @@ class QueueProcessor extends EventEmitter {
             });
             return this.taskScheduler.push({ task, entry: actionEntry,
                                              kafkaEntry },
-                                           canonicalKey, done);
+                                           done);
         }
         this.logger.debug('skip data mover entry', {
             entry: actionEntry.getLogInfo(),
