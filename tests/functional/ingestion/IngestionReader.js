@@ -183,6 +183,7 @@ describe('ingestion reader tests with mock', function fD() {
             };
             this.ingestionReader = new IngestionReader({
                 zkClient,
+                ingestionConfig: testConfig.extensions.ingestion,
                 kafkaConfig: testConfig.kafka,
                 bucketdConfig: testConfig.extensions.ingestion.sources[0],
                 qpConfig: testConfig.queuePopulator,
@@ -190,7 +191,6 @@ describe('ingestion reader tests with mock', function fD() {
                 extensions: [ingestionQP],
                 metricsProducer: { publishMetrics: () => {} },
                 s3Config: testConfig.s3,
-                bucket: testConfig.extensions.ingestion.sources[0].bucket,
             });
             this.ingestionReader.setup(() => {
                 async.series([
@@ -318,6 +318,7 @@ describe('ingestion reader tests with mock', function fD() {
         beforeEach(done => {
             this.ingestionReader = new IngestionReader({
                 zkClient,
+                ingestionConfig: testConfig.extensions.ingestion,
                 kafkaConfig: testConfig.kafka,
                 bucketdConfig: sourceConfig,
                 qpConfig: testConfig.queuePopulator,
@@ -325,7 +326,6 @@ describe('ingestion reader tests with mock', function fD() {
                 extensions: [ingestionQP],
                 metricsProducer: { publishMetrics: () => {} },
                 s3Config: testConfig.s3,
-                bucket: sourceConfig.bucket,
             });
             this.ingestionReader.setup(() => {
                 async.series([

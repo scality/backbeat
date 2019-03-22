@@ -4,10 +4,14 @@ const zookeeper = require('node-zookeeper-client');
 
 const werelogs = require('werelogs');
 const { HealthProbeServer } = require('arsenal').network.probe;
+const { reshapeExceptionError } = require('arsenal').errorUtils;
 
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
 const config = require('../conf/Config');
 const { initManagement } = require('../lib/management/index');
+const zookeeperWrapper = require('../lib/clients/zookeeper');
+const { zookeeperNamespace, zkStatePath } =
+    require('../extensions/ingestion/constants');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -16,13 +20,27 @@ const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const s3Config = config.s3;
+const { connectionString, autoCreateNamespace } = zkConfig;
+
+const RESUME_NODE = 'scheduledResume';
 
 const log = new werelogs.Logger('Backbeat:IngestionPopulator');
-
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
+
 let scheduler;
+let ingestionPopulator;
+// memoize
+const configuredLocations = {};
+
+function getIngestionZkPath() {
+    return `${zookeeperNamespace}${zkStatePath}`;
+}
 
 /* eslint-disable no-param-reassign */
 function queueBatch(ingestionPopulator, taskState, log) {
@@ -35,14 +53,12 @@ function queueBatch(ingestionPopulator, taskState, log) {
 
     const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
-    // currently this is a synchronous operation, but later this will
-    // need to go back to being an async operation to support pause/resume
     ingestionPopulator.applyUpdates();
     ingestionPopulator.processLogEntries({ maxRead }, err => {
         taskState.batchInProgress = false;
         if (err) {
             log.fatal('an error occurred during ingestion', {
-                method: 'IngestionPopulator::task.queueBatch',
+                method: 'bin::ingestion.queueBatch',
                 error: err,
             });
             scheduler.cancel();
@@ -53,15 +69,184 @@ function queueBatch(ingestionPopulator, taskState, log) {
 }
 /* eslint-enable no-param-reassign */
 
-const ingestionPopulator = new IngestionPopulator(zkConfig, kafkaConfig,
-    qpConfig, mConfig, rConfig, ingestionExtConfigs, s3Config);
+/**
+ * Remove zookeeper state for a location that has been removed
+ * @param {node-zookeeper-client.Client} zkClient - zookeeper client
+ * @param {String} location - location constraint name
+ * @param {Function} cb - callback(error)
+ * @return {undefined}
+ */
+function removeZkState(zkClient, location, cb) {
+    const path = `${getIngestionZkPath()}/${location}`;
+    zkClient.remove(path, err => {
+        if (err && err.name !== 'NO_NODE') {
+            log.fatal('failed to remove zookeeper state node', {
+                method: 'bin::ingestion.removeZkState',
+                zookeeperPath: path,
+                error: err.message,
+            });
+            return cb(err);
+        }
+        ingestionPopulator.removePausedLocationState(location);
+        return cb();
+    });
+}
 
-const healthServer = new HealthProbeServer({
-    bindAddress: config.healthcheckServer.bindAddress,
-    port: config.healthcheckServer.port,
-});
+/**
+ * A scheduled resume is where consumers for a given location are paused and are
+ * scheduled to be resumed at a later date.
+ * If any scheduled resumes exist for a given location, the date is saved within
+ * zookeeper. On startup, we schedule resume jobs to renew prior state.
+ * If date in zookeeper has not expired, schedule the job. If date expired,
+ * resume automatically for the location, and update the "status" node.
+ * @param {node-zookeeper-client.Client} zkClient - zookeeper client
+ * @param {Object} data - zookeeper state json data
+ * @param {String} location - name of location constraint
+ * @param {Function} cb - callback(error, updatedState) where updatedState is
+ *   an optional, set as true if the schedule resume date has expired
+ * @return {undefined}
+ */
+function checkAndApplyScheduleResume(zkClient, data, location, cb) {
+    const scheduleDate = new Date(data[RESUME_NODE]);
+    const hasExpired = new Date() >= scheduleDate;
+    if (hasExpired) {
+        // if date expired, resume automatically for the location.
+        // remove schedule resume data in zookeeper
+        const path = `${getIngestionZkPath()}/${location}`;
+        const d = JSON.stringify({ paused: false });
+        return zkClient.setData(path, Buffer.from(d), err => {
+            if (err) {
+                log.fatal('could not set zookeeper status node', {
+                    method: 'bin::ingestion.checkAndApplyScheduleResume',
+                    zookeeperPath: path,
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            ingestionPopulator.removePausedLocationState(location);
+            return cb();
+        });
+    }
+    ingestionPopulator.scheduleResume(location, scheduleDate);
+    return cb();
+}
 
-function initAndStart() {
+/**
+ * On startup and when location constraints change, create necessary zookeeper
+ * status node to save persistent state.
+ * @param {node-zookeeper-client.Client} zkClient - zookeeper client
+ * @param {String} location - location constraint
+ * @param {Function} done - callback(error)
+ * @return {undefined}
+ */
+function setupZkLocationNode(zkClient, location, done) {
+    const path = `${getIngestionZkPath()}/${location}`;
+    const data = JSON.stringify({ paused: false });
+    zkClient.create(path, Buffer.from(data), err => {
+        if (err && err.name === 'NODE_EXISTS') {
+            return zkClient.getData(path, (err, data) => {
+                if (err) {
+                    log.fatal('could not check location status in zookeeper',
+                        { method: 'bin::ingestion.setupZkLocationNode',
+                          zookeeperPath: path,
+                          error: err.message });
+                    return done(err);
+                }
+                let d;
+                try {
+                    d = JSON.parse(data.toString());
+                } catch (e) {
+                    log.fatal('error setting state for queue processor', {
+                        method: 'bin::ingestion.setupZkLocationNode',
+                        location,
+                        error: reshapeExceptionError(e),
+                    });
+                    return done(e);
+                }
+                if (d[RESUME_NODE]) {
+                    return checkAndApplyScheduleResume(zkClient, d, location,
+                        done);
+                }
+                if (data.paused === true) {
+                    ingestionPopulator.setPausedLocationState(location);
+                }
+                return done();
+            });
+        }
+        if (err) {
+            log.fatal('could not setup zookeeper node', {
+                method: 'bin::ingestion.setupZkLocationNode',
+                zookeeperPath: path,
+                error: err.message,
+            });
+            return done(err);
+        }
+        ingestionPopulator.setPausedLocationState(location);
+        return done();
+    });
+}
+
+function updateProcessors(zkClient, bootstrapList) {
+    const active = Object.keys(configuredLocations);
+    const update = bootstrapList.map(i => i.site);
+    const allLocations = [...new Set(active.concat(update))];
+
+    async.each(allLocations, (location, next) => {
+        if (!update.includes(location)) {
+            // stop tracking location and remove zookeeper path
+            return removeZkState(zkClient, location, err => {
+                if (err) {
+                    return next(err);
+                }
+                delete configuredLocations[location];
+                return next();
+            });
+        } else if (!active.includes(location)) {
+            // track new location and create zookeeper path if not exists
+            return setupZkLocationNode(zkClient, location, err => {
+                if (err) {
+                    return next(err);
+                }
+                configuredLocations[location] = true;
+                return next();
+            });
+        }
+        // else, existing location and has already been setup
+        return next();
+    }, err => {
+        if (err) {
+            log.fatal('error setting location state in zookeeper', {
+                method: 'bin::ingestion.updateProcessors',
+            });
+            process.exit(1);
+        }
+    });
+}
+
+function loadHealthcheck() {
+    healthServer.onReadyCheck(() => {
+        const state = ingestionPopulator.zkStatus();
+        if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
+            return true;
+        }
+        log.error(`Zookeeper is not connected! ${state}`);
+        return false;
+    });
+    log.info('Starting health probe server');
+    healthServer.start();
+}
+
+function loadProcessors(zkClient) {
+    let bootstrapList = config.getBootstrapList();
+    updateProcessors(zkClient, bootstrapList);
+
+    config.on('bootstrap-list-update', () => {
+        bootstrapList = config.getBootstrapList();
+        updateProcessors(zkClient, bootstrapList);
+    });
+}
+
+function initAndStart(zkClient) {
     initManagement({
         serviceName: 'md-ingestion',
         serviceAccount: ingestionExtConfigs.auth.account,
@@ -73,6 +258,12 @@ function initAndStart() {
             return;
         }
         log.info('management init done');
+
+        ingestionPopulator = new IngestionPopulator(zkClient, zkConfig,
+            kafkaConfig, qpConfig, mConfig, rConfig, ingestionExtConfigs,
+            s3Config);
+
+        loadProcessors(zkClient);
 
         async.series([
             done => ingestionPopulator.open(done),
@@ -87,26 +278,45 @@ function initAndStart() {
         ], err => {
             if (err) {
                 log.fatal('error during ingestion populator initialization', {
-                    method: 'IngestionPopulator::task',
+                    method: 'bin::ingestion.initAndStart',
                     error: err,
                 });
                 process.exit(1);
             }
-            healthServer.onReadyCheck(() => {
-                const state = ingestionPopulator.zkStatus();
-                if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
-                    return true;
-                }
-                log.error(`Zookeeper is not connected! ${state}`);
-                return false;
-            });
-            log.info('Starting HealthProbe server');
-            healthServer.start();
+            loadHealthcheck();
         });
     });
 }
 
-initAndStart();
+const zkClient = zookeeperWrapper.createClient(connectionString, {
+    autoCreateNamespace,
+});
+zkClient.connect();
+zkClient.once('error', err => {
+    log.fatal('error connecting to zookeeper', {
+        error: err.message,
+    });
+    // error occurred at startup trying to start internal clients,
+    // fail immediately
+    process.exit(1);
+});
+zkClient.once('ready', () => {
+    zkClient.removeAllListeners('error');
+    const path = getIngestionZkPath();
+    zkClient.mkdirp(path, err => {
+        if (err) {
+            log.fatal('could not create path in zookeeper', {
+                method: 'bin::ingestion',
+                zookeeperPath: path,
+                error: err.message,
+            });
+            // error occurred at startup trying to start internal clients,
+            // fail immediately
+            process.exit(1);
+        }
+        return initAndStart(zkClient);
+    });
+});
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');

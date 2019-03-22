@@ -79,10 +79,15 @@ class IngestionPopulatorMock extends IngestionPopulator {
         config.setIngestionBuckets(locationConstraints, buckets);
 
         // mock existing active sources
-        this._activeIngestionSources = {
+        this._ingestionSources = {
             [OLD_BUCKET]: {},
             [EXISTING_BUCKET]: {},
         };
+    }
+
+    _setupZkLocationNode(list, cb) {
+        // overwrite and ignore creation of zookeeper nodes
+        return cb();
     }
 
     addNewLogSource(newSource) {
