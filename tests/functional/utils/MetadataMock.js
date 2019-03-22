@@ -1,4 +1,5 @@
 const errors = require('arsenal').errors;
+const { decode } = require('arsenal').versioning.VersionID;
 const mockRes = require('./mockRes');
 
 const mockLogs = mockRes.raftLogs['1'];
@@ -6,22 +7,12 @@ const objectList = mockRes.objectList.objectList1;
 const dummyBucketMD = mockRes.bucketMD;
 const objectMD = mockRes.objectMD;
 
-/**
- * Strip version id from request url to fetch metadata mock entry by specified
- * bucket and object names
- * @param {String} path - request path
- * @return {String} path with no version id
- */
-function _versionIdRemovedURLPath(path) {
-    const urlEncodedNullCharacter = '%00';
-    return path.split(urlEncodedNullCharacter)[0];
-}
 
 class MetadataMock {
     onRequest(req, res) {
         // TODO: for PUT/POST, edit the mockRes object
         if (req.method === 'GET') {
-            const url = _versionIdRemovedURLPath(req.url.split('?')[0]);
+            const [url, queryparams] = req.url.split('?');
             const resObj = mockRes.GET.responses[url];
             if (!resObj && req.url.startsWith('/default/attributes')) {
                 const err = errors.NoSuchBucket;
@@ -57,6 +48,24 @@ class MetadataMock {
                                 JSON.stringify(entry.value);
                         });
                     });
+                }
+                if (resObj.resType === 'objectMD') {
+                    let versionParam;
+                    if (queryparams) {
+                        const params = queryparams.split('&')
+                                                  .map(i => i.split('='));
+                        versionParam = params.find(i => i[0] === 'versionId');
+                    }
+                    let decodedVersionId;
+                    if (versionParam) {
+                        decodedVersionId = decode(versionParam[1]);
+                    }
+                    const objMd = Object.assign({}, resContent, {
+                        versionId: decodedVersionId,
+                    });
+                    res.end(JSON.stringify({
+                        Body: JSON.stringify(objMd)
+                    }));
                 }
                 res.end(JSON.stringify(resContent));
             }
