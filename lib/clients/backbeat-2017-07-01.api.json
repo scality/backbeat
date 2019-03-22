@@ -1063,32 +1063,6 @@
                 "shape": "ObjectMDListResponse"
             }
         },
-        "GetObjectMetadata": {
-            "http": {
-                "method": "GET",
-                "requestUri": "/_/metadata/default/bucket/{Bucket}/{Key+}"
-            },
-            "input": {
-                "type": "structure",
-                "required": [
-                    "Bucket",
-                    "Key"
-                ],
-                "members": {
-                    "Bucket": {
-                        "location": "uri",
-                        "locationName": "Bucket"
-                    },
-                    "Key": {
-                        "location": "uri",
-                        "locationName": "Key"
-                    }
-                }
-            },
-            "output": {
-                "shape": "ObjectMetadataObject"
-            }
-        },
         "GetBucketCseq": {
             "http": {
                 "method": "GET",
@@ -1350,44 +1324,6 @@
                 }
             }
         },
-        "ReplicationInfoObj": {
-            "type": "structure",
-            "members": {
-                "status": {
-                    "type": "string"
-                },
-                "backends": {
-                    "type": "list",
-                    "members": {
-                        "type": "string"
-                    }
-                },
-                "content": {
-                    "type": "list",
-                    "members": {
-                        "type": "string"
-                    }
-                },
-                "destination": {
-                    "type": "string"
-                },
-                "storageClass": {
-                    "type": "string"
-                },
-                "role": {
-                    "type": "string"
-                },
-                "storageType": {
-                    "type": "string"
-                },
-                "dataStoreVersionId": {
-                    "type": "string"
-                },
-                "isNFS": {
-                    "type": "boolean"
-                }
-            }
-        },
         "LocationMDObj": {
             "type": "structure",
             "members": {
@@ -1458,100 +1394,6 @@
                             }
                         }
                     }
-                }
-            }
-        },
-        "ObjectMetadataObject": {
-            "type": "structure",
-            "members": {
-                "owner-display-name": {
-                    "type": "string"
-                },
-                "owner-id": {
-                    "type": "string"
-                },
-                "cache-control": {
-                    "type": "string"
-                },
-                "content-disposition": {
-                    "type": "string"
-                },
-                "content-encoding": {
-                    "type": "string"
-                },
-                "expires": {
-                    "type": "string"
-                },
-                "content-length": {
-                    "type": "integer"
-                },
-                "content-type": {
-                    "type": "string"
-                },
-                "content-md5": {
-                    "type": "string"
-                },
-                "x-amz-version-id": {
-                    "type": "string"
-                },
-                "x-amz-server-version-id": {
-                    "type": "string"
-                },
-                "x-amz-storage-class": {
-                    "type": "string"
-                },
-                "x-amz-server-side-encryption": {
-                    "type": "string"
-                },
-                "x-amz-server-side-encryption-aws-kms-key-id": {
-                    "type": "string"
-                },
-                "x-amz-server-side-encryption-customer-algorithm": {
-                    "type": "string"
-                },
-                "x-amz-website-redirect-location": {
-                    "type": "string"
-                },
-                "acl": {
-                    "shape": "AclObj"
-                },
-                "key": {
-                    "type": "string"
-                },
-                "location": {
-                    "type": "list",
-                    "member": {
-                        "shape": "LocationMDObj"
-                    }
-                },
-                "isNull": {
-                    "type": "boolean"
-                },
-                "nullVersionId": {
-                    "type": "string"
-                },
-                "isDeleteMarker": {
-                    "type": "boolean"
-                },
-                "tags": {
-                    "type": "map",
-                    "key": {},
-                    "value": {}
-                },
-                "replicationInfo": {
-                    "shape": "ReplicationInfoObj"
-                },
-                "dataStoreName": {
-                    "type": "string"
-                },
-                "last-modified": {
-                    "type": "string"
-                },
-                "md-model-version": {
-                    "type": "integer"
-                },
-                "versionId": {
-                    "type": "string"
                 }
             }
         }
