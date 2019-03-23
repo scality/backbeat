@@ -8,6 +8,7 @@ const logSourcesJoi = joi.string().valid('bucketd', 'mongo', 'ingestion',
     'dmd');
 
 const joiSchema = {
+    replicationGroupId: joi.string().length(7).required(),
     zookeeper: {
         connectionString: joi.string().required(),
         autoCreateNamespace: joi.boolean().default(false),
