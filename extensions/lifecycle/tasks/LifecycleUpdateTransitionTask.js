@@ -122,7 +122,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         ], err => {
             if (err && err.statusCode === 412) {
                 log.info('Object was modified after transition had begun ' +
-                         'so object was not deleted',
+                         'so data location was not deleted',
                          entry.getLogInfo());
             }
             return done(err);
