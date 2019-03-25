@@ -21,21 +21,6 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         Object.assign(this, procState);
     }
 
-    _checkDate(entry, log, done) {
-        const { bucket, key, lastModified } = entry.getAttribute('target');
-        if (lastModified) {
-            const reqParams = {
-                Bucket: bucket,
-                Key: key,
-                IfUnmodifiedSince: lastModified,
-            };
-            const req = this.s3Client.headObject(reqParams);
-            attachReqUids(req, log);
-            return req.send(done);
-        }
-        return done();
-    }
-
     _getMetadata(entry, log, done) {
         const { bucket, key, version } = entry.getAttribute('target');
         this.backbeatClient.getMetadata({
@@ -114,18 +99,17 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         this.gcProducer.publishActionEntry(gcEntry, done);
     }
 
-    _checkAndGarbageCollectLocation(entry, locations, log, done) {
-        return async.series([
-            next => this._checkDate(entry, log, next),
-            next => this._garbageCollectLocation(entry, locations, log, next),
-        ], err => {
-            if (err && err.statusCode === 412) {
-                log.info('Object was modified after transition had begun ' +
-                         'so data location was not deleted',
-                         entry.getLogInfo());
-            }
-            return done(err);
-        });
+    _wasObjectModified(entry, objMD, log) {
+        const { lastModified } = entry.getAttribute('target');
+        const objectWasModified = lastModified !== objMD.getLastModified();
+        if (objectWasModified) {
+            log.info(
+                'object LastModified date changed during lifecycle, skipping');
+            Object.assign({
+                method: 'LifecycleUpdateTransitionTask._wasObjectModified',
+            }, entry.getLogInfo());
+        }
+        return objectWasModified;
     }
 
     /**
@@ -145,6 +129,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             objectKey: 'target.key',
             versionId: 'target.version',
             eTag: 'target.eTag',
+            lastModified: 'target.lastModified',
         });
         if (entry.getStatus() === 'success') {
             let locationToGC;
@@ -153,6 +138,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 (objMD, next) => {
                     const oldLocation = objMD.getLocation();
                     const newLocation = entry.getAttribute('results.location');
+                    if (this._wasObjectModified(entry, objMD, log)) {
+                        locationToGC = newLocation;
+                        return next();
+                    }
                     const eTag = entry.getAttribute('target.eTag');
                     // commit if MD5 did not change after transition
                     // started and location has effectively been
@@ -185,7 +174,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     if (!locationToGC) {
                         return next();
                     }
-                    return this._checkAndGarbageCollectLocation(
+                    return this._garbageCollectLocation(
                         entry, locationToGC, log, next);
                 },
             ], done);
