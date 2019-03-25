@@ -829,8 +829,8 @@ class LifecycleTask extends BackbeatTask {
               .setAttribute('target.key', params.objectKey)
               .setAttribute('target.version', params.encodedVersionId)
               .setAttribute('target.eTag', params.eTag)
-              .setAttribute('toLocation', params.site)
-              .setAttribute('details.lastModified', params.lastModified);
+              .setAttribute('target.lastModified', params.lastModified)
+              .setAttribute('toLocation', params.site);
 
         this._sendDataMoverAction(entry, err => {
             if (err) {
