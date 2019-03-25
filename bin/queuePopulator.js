@@ -90,7 +90,13 @@ async.waterfall([
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    queuePopulator.close(() => {
+    queuePopulator.close(error => {
+        if (error) {
+            log.error('failed to exit properly', {
+                error,
+            });
+            process.exit(1);
+        }
         process.exit(0);
     });
 });

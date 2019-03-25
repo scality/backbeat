@@ -186,10 +186,36 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     stop(done) {
-        if (!this._consumer) {
-            return setImmediate(done);
-        }
-        return this._consumer.close(done);
+        async.parallel([
+            next => {
+                if (this._consumer) {
+                    this.logger.debug('closing kafka consumer', {
+                        method: 'MongoQueueProcessor.stop',
+                        site: this.site,
+                    });
+                    return this._consumer.close(next);
+                }
+                this.logger.debug('no kafka consumer to close', {
+                    method: 'MongoQueueProcessor.stop',
+                    site: this.site,
+                });
+                return next();
+            },
+            next => {
+                if (this._mProducer) {
+                    this.logger.debug('closing metrics producer', {
+                        method: 'MongoQueueProcessor.stop',
+                        site: this.site,
+                    });
+                    return this._mProducer.close(next);
+                }
+                this.logger.debug('no metrics producer to close', {
+                    method: 'MongoQueueProcessor.stop',
+                    site: this.site,
+                });
+                return next();
+            },
+        ], done);
     }
 
     _getDataContent(entry) {

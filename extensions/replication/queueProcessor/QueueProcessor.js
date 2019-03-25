@@ -655,20 +655,58 @@ class QueueProcessor extends EventEmitter {
         async.series([
             next => {
                 if (this.replicationStatusProducer) {
+                    this.logger.debug('closing replication status producer', {
+                        method: 'QueueProcessor.stop',
+                        site: this.site,
+                    });
                     return this.replicationStatusProducer.close(next);
                 }
+                this.logger.debug('no replication status producer to close', {
+                    method: 'QueueProcessor.stop',
+                    site: this.site,
+                });
                 return next();
             },
             next => {
                 if (this._consumer) {
+                    this.logger.debug('closing kafka consumer', {
+                        method: 'QueueProcessor.stop',
+                        site: this.site,
+                    });
                     return this._consumer.close(next);
                 }
+                this.logger.debug('no kafka consumer to close', {
+                    method: 'QueueProcessor.stop',
+                    site: this.site,
+                });
                 return next();
             },
             next => {
                 if (this._dataMoverConsumer) {
+                    this.logger.debug('closing data mover consumer', {
+                        method: 'QueueProcessor.stop',
+                        site: this.site,
+                    });
                     return this._dataMoverConsumer.close(next);
                 }
+                this.logger.debug('no data mover consumer to close', {
+                    method: 'QueueProcessor.stop',
+                    site: this.site,
+                });
+                return next();
+            },
+            next => {
+                if (this._mProducer) {
+                    this.logger.debug('closing metrics producer', {
+                        method: 'QueueProcessor.stop',
+                        site: this.site,
+                    });
+                    return this._mProducer.close(next);
+                }
+                this.logger.debug('no metrics producer to close', {
+                    method: 'QueueProcessor.stop',
+                    site: this.site,
+                });
                 return next();
             },
         ], done);
