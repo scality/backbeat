@@ -101,6 +101,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _wasObjectModified(entry, objMD, log) {
         const { lastModified } = entry.getAttribute('target');
+        console.log('foo', { 
+            lastModified,
+            objectMDLastModified: objMD.getLastModified(),
+        });
         const objectWasModified = lastModified !== objMD.getLastModified();
         if (objectWasModified) {
             log.info(
