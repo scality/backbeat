@@ -22,7 +22,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _checkDate(entry, log, done) {
-        const lastModified = entry.getAttribute('details.lastModified');
+        const lastModified = entry.getAttribute('target.lastModified');
         if (lastModified) {
             const { bucket, key } = entry.getAttribute('target');
             const reqParams = {
