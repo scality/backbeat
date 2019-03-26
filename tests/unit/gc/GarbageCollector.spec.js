@@ -39,7 +39,8 @@ describe('garbage collector', () => {
                 if (expectBatchDeleteLocations === null) {
                     assert.fail('did not expect a batch delete request');
                 }
-                assert.strictEqual(req.url, '/_/backbeat/batchdelete');
+                assert.strictEqual(req.url,
+                    '/_/backbeat/batchdelete/{Bucket}/{Key+}');
                 const buffers = [];
                 req.on('data', data => {
                     buffers.push(data);

@@ -8,12 +8,26 @@ const LifecycleTask = require('../../../extensions/lifecycle' +
     '/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
 const testConfig = require('../../config.json');
+const { objectMD } = require('../utils/MetadataMock');
 
 const S3 = AWS.S3;
 const s3config = {
     endpoint: `http://${testConfig.s3.host}:${testConfig.s3.port}`,
     s3ForcePathStyle: true,
     credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
+};
+
+const backbeatMetadataProxyMock = {
+    headObject: (headObjectParams, log, cb) => {
+        cb(null, {
+            lastModified: 'Thu, 28 Mar 2019 21:33:15 GMT',
+        });
+    },
+    getMetadata: (params, log, cb) => {
+        cb(null, {
+            Body: JSON.stringify(objectMD.object1),
+        });
+    },
 };
 
 /*
@@ -389,7 +403,7 @@ class LifecycleBucketProcessorMock {
 function wrapProcessBucketEntry(bucketLCRules, bucketEntry,
 s3mock, params, cb) {
     params.lcTask.processBucketEntry(bucketLCRules, bucketEntry,
-    s3mock, err => {
+    s3mock, backbeatMetadataProxyMock, err => {
         assert.ifError(err);
         const entries = params.lcp.getEntries();
 

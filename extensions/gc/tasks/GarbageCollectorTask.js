@@ -44,11 +44,27 @@ class GarbageCollectorTask extends BackbeatTask {
                 size: location.size,
                 dataStoreVersionId: location.dataStoreVersionId,
             })),
+            IfUnmodifiedSince: entry.getAttribute('source.lastModified'),
+            Bucket: entry.getAttribute('source.bucket'),
+            Key: entry.getAttribute('source.objectKey'),
+            StorageClass: entry.getAttribute('source.storageClass'),
+            Tags: JSON.stringify({
+                'scal-delete-marker': 'true',
+                'scal-delete-service': entry.getAttribute('serviceName'),
+            }),
         });
         attachReqUids(req, log);
         return req.send(err => {
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
+            if (err && err.statusCode === 412) {
+                log.info('precondition for garbage collection was not met',
+                    Object.assign({
+                        method: 'LifecycleObjectTask._executeDeleteData',
+                        lastModified: entry.getAttribute('source.lastModified'),
+                    }, entry.getLogInfo()));
+                return done();
+            }
             if (err) {
                 log.error('an error occurred on deleteData method to ' +
                           'backbeat route',
