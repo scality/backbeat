@@ -244,13 +244,12 @@ class CopyLocationTask extends BackbeatTask {
                 return doneOnce(err);
             });
             sourceReq.on('success', (response) => {
-                console.log('SUCCESSFULLY RETRIEVED OBJECT', response);
+                console.log('SUCCESSFULLY RETRIEVED OBJECT', response.data);
+                actionEntry.setAttribute('foo', 'hello');
             });
             sourceReq.on('extractData', (response) => {
-                console.log('SUCCESSFULLY EXTRACTED RESPONSE DATA', response);
-            });
-            sourceReq.on('httpHeaders', (response) => {
-                console.log('SUCCESSFULLY EXTRACTED HTTP HEADERS', response);
+                console.log('SUCCESSFULLY EXTRACTED RESPONSE DATA', response.data);
+                actionEntry.setAttribute('foo1', 'hello1');
             });
             log.debug('putting data', actionEntry.getLogInfo());
         }
@@ -520,12 +519,6 @@ class CopyLocationTask extends BackbeatTask {
             sourceReq.on('success', (response) => {
                 console.log('1 SUCCESSFULLY RETRIEVED OBJECT', response);
             });
-            sourceReq.on('extractData', (response) => {
-                console.log('1 SUCCESSFULLY EXTRACTED RESPONSE DATA', response);
-            });
-            sourceReq.on('httpHeaders', (response) => {
-                console.log('1 SUCCESSFULLY EXTRACTED HTTP HEADERS', response);
-            });
             log.debug('putting data', actionEntry.getLogInfo());
         }
 
@@ -777,6 +770,8 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     _publishCopyLocationStatus(err, actionEntry, kafkaEntry, log, done) {
+        console.log('FOO ATTRIBUTE:', actionEntry.getAttribute('foo'));
+        console.log('FOO1 ATTRIBUTE:', actionEntry.getAttribute('foo1'));
         if (err && !actionEntry.getError()) {
             actionEntry.setError(err);
         }
