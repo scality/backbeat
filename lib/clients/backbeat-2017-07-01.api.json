@@ -206,6 +206,58 @@
                 }
             }
         },
+        "MultipleBackendHeadObject": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/backbeat/multiplebackendmetadata/{Bucket}/{Key+}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key",
+                    "Locations"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "Locations": {
+                        "location": "header",
+                        "locationName": "X-Scal-Locations",
+                        "type": "string",
+                        "member": {
+                            "type": "structure",
+                            "required": [
+                                "key",
+                                "dataStoreName"
+                            ],
+                            "members": {
+                                "dataStoreName": {
+                                    "type": "string"
+                                },
+                                "key": {
+                                    "type": "string"
+                                }
+                            }
+                        }
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "lastModified": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "MultipleBackendPutMPUPart": {
             "http": {
                 "method": "PUT",
@@ -897,13 +949,34 @@
         "BatchDelete": {
             "http": {
                 "method": "POST",
-                "requestUri": "/_/backbeat/batchdelete"
+                "requestUri": "/_/backbeat/batchdelete/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",
                 "required": [
                 ],
                 "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "IfUnmodifiedSince": {
+                        "location": "header",
+                        "locationName": "If-Unmodified-Since",
+                        "type": "string"
+                    },
+                    "StorageClass": {
+                        "location": "header",
+                        "locationName": "X-Scal-Storage-Class"
+                    },
+                    "Tags": {
+                        "location": "header",
+                        "locationName": "X-Scal-Tags"
+                    },
                     "ContentType": {
                         "location": "header",
                         "locationName": "X-Scal-Content-Type"

@@ -44,6 +44,14 @@ class GarbageCollectorTask extends BackbeatTask {
                 size: location.size,
                 dataStoreVersionId: location.dataStoreVersionId,
             })),
+            IfUnmodifiedSince: entry.getAttribute('source.lastModified'),
+            Bucket: entry.getAttribute('source.bucket'),
+            Key: entry.getAttribute('source.objectKey'),
+            StorageClass: entry.getAttribute('source.storageClass'),
+            Tags: JSON.stringify({
+                'scal-delete-marker': 'true',
+                'scal-delete-service': 'lifecycle',
+            }),
         });
         attachReqUids(req, log);
         return req.send(err => {

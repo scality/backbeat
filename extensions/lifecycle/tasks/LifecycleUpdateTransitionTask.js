@@ -94,6 +94,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                   versionId: version,
                   eTag,
               })
+              .setAttribute('source', entry.getAttribute('source'))
               .setAttribute('target.locations', locations);
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
