@@ -243,6 +243,15 @@ class CopyLocationTask extends BackbeatTask {
                     }, actionEntry.getLogInfo()));
                 return doneOnce(err);
             });
+            incomingMsg.on('success', (response) => {
+                console.log('SUCCESSFULLY RETRIEVED OBJECT', response);
+            });
+            incomingMsg.on('extractData', (response) => {
+                console.log('SUCCESSFULLY EXTRACTED RESPONSE DATA', response);
+            });
+            incomingMsg.on('httpHeaders', (response) => {
+                console.log('SUCCESSFULLY EXTRACTED HTTP HEADERS', response);
+            });
             log.debug('putting data', actionEntry.getLogInfo());
         }
         return this._sendMultipleBackendPutObject(
@@ -507,6 +516,15 @@ class CopyLocationTask extends BackbeatTask {
                     error: err.message,
                 }, actionEntry.getLogInfo()));
                 return doneOnce(err);
+            });
+            incomingMsg.on('success', (response) => {
+                console.log('1 SUCCESSFULLY RETRIEVED OBJECT', response);
+            });
+            incomingMsg.on('extractData', (response) => {
+                console.log('1 SUCCESSFULLY EXTRACTED RESPONSE DATA', response);
+            });
+            incomingMsg.on('httpHeaders', (response) => {
+                console.log('1 SUCCESSFULLY EXTRACTED HTTP HEADERS', response);
             });
             log.debug('putting data', actionEntry.getLogInfo());
         }
