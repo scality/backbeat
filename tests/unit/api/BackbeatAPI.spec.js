@@ -21,6 +21,7 @@ describe('BackbeatAPI', () => {
     // valid routes
     [
         { url: '/_/metrics/crr/all', method: 'GET' },
+        { url: '/_/metrics/ingestion/all', method: 'GET' },
         { url: '/_/healthcheck', method: 'GET' },
         { url: '/_/metrics/crr/all/backlog', method: 'GET' },
         { url: '/_/metrics/crr/all/completions', method: 'GET' },
@@ -82,7 +83,6 @@ describe('BackbeatAPI', () => {
         { url: '/_/invalid/crr/all', method: 'GET' },
         { url: '/_/metrics/pause/all', method: 'GET' },
         // unavailable routes for given service
-        { url: '/_/metrics/ingestion/all', method: 'GET' },
         { url: '/_/metrics/ingestion/all/backlog', method: 'GET' },
         { url: '/_/metrics/ingestion/all/failures', method: 'GET' },
         // invalid http verb

@@ -202,6 +202,11 @@ describe('API routes', () => {
         statsClient.reportNewRequest(`${site2}:${BYTES_DONE}`, 1874);
         statsClient.reportNewRequest(`${site2}:${BYTES_FAIL}`, 575);
 
+        const ingestSite1 = `${site1}-ingestion`;
+        const ingestSite2 = `${site2}-ingestion`;
+        statsClient.reportNewRequest(`${ingestSite1}:${OPS_DONE}`, 100);
+        statsClient.reportNewRequest(`${ingestSite2}:${OPS_DONE}`, 200);
+
         const testVersionId =
             '3938353030303836313334343731393939393939524730303120203';
         const members = [
@@ -218,6 +223,10 @@ describe('API routes', () => {
                 next => redisClient.incrby(`${site2}:${OPS_PENDING}`, 2, next),
                 next => redisClient.incrby(`${site2}:${BYTES_PENDING}`, 1024,
                     next),
+                next => redisClient.incrby(`${ingestSite1}:${OPS_PENDING}`,
+                    12, next),
+                next => redisClient.incrby(`${ingestSite2}:${OPS_PENDING}`,
+                    30, next),
                 next => {
                     // site1
                     const timestamps = statsClient.getSortedSetHours(
@@ -333,7 +342,6 @@ describe('API routes', () => {
             '/_/metrics/crr/all/pendings',
             `/_/metrics/crr/${site1}/progresss`,
             // ingestion service does not support these paths/metrics
-            '/_/metrics/ingestion/all',
             '/_/metrics/ingestion/all/backlog',
             '/_/metrics/ingestion/all/failures',
             // given bucket without object key
@@ -422,7 +430,22 @@ describe('API routes', () => {
 
                 const key = Object.keys(res)[0];
                 // Completions count = OPS_DONE
-                assert.equal(res[key].results.count, 750);
+                assert.equal(res[key].results.count, 300);
+                // Should not include bytes
+                assert(!res[key].results.size);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/ingestion/${ingestSite1}/completions`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/completions`,
+            (err, res) => {
+                assert.ifError(err);
+
+                const key = Object.keys(res)[0];
+                // Completions count = OPS_DONE
+                assert.equal(res[key].results.count, 100);
                 // Should not include bytes
                 assert(!res[key].results.size);
                 done();
@@ -498,7 +521,21 @@ describe('API routes', () => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
                 // Throughput count = OPS_DONE / EXPIRY
-                assert.equal(res[key].results.count, 0.83);
+                assert.equal(res[key].results.count, 0.33);
+                // Should not include bytes
+                assert(!res[key].results.size);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/ingestion/${ingestSite1}/throughput`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/throughput`,
+            (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res[key].results.count, 0.11);
                 // Should not include bytes
                 assert(!res[key].results.size);
                 done();
@@ -532,7 +569,20 @@ describe('API routes', () => {
             getRequest('/_/metrics/ingestion/all/pending', (err, res) => {
                 assert.ifError(err);
                 const key = Object.keys(res)[0];
-                assert.equal(res[key].results.count, 4);
+                assert.equal(res[key].results.count, 42);
+                // Should not include bytes
+                assert(!res[key].results.size);
+                done();
+            });
+        });
+
+        it('should get the right data for route: ' +
+        `/_/metrics/ingestion/${ingestSite1}/pending`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}/pending`,
+            (err, res) => {
+                assert.ifError(err);
+                const key = Object.keys(res)[0];
+                assert.equal(res[key].results.count, 12);
                 // Should not include bytes
                 assert(!res[key].results.size);
                 done();
@@ -640,6 +690,66 @@ describe('API routes', () => {
                 assert(res.pending.description);
                 assert.equal(res.pending.results.count, 4);
                 assert.equal(res.pending.results.size, 2048);
+
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        '/_/metrics/ingestion/all', done => {
+            getRequest('/_/metrics/ingestion/all', (err, res) => {
+                assert.ifError(err);
+
+                const keys = Object.keys(res);
+                assert(!keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+                assert(!keys.includes('failures'));
+                assert(keys.includes('pending'));
+
+                assert(res.completions.description);
+                // Completions count = OPS_DONE
+                assert.equal(res.completions.results.count, 300);
+                assert(!res.completions.results.size);
+
+                assert(res.throughput.description);
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res.throughput.results.count, 0.33);
+                assert(!res.throughput.results.size);
+
+                assert(res.pending.description);
+                assert.equal(res.pending.results.count, 42);
+                assert(!res.pending.results.size);
+
+                done();
+            });
+        });
+
+        it('should return all metrics for route: ' +
+        `/_/metrics/ingestion/${ingestSite1}`, done => {
+            getRequest(`/_/metrics/ingestion/${ingestSite1}`, (err, res) => {
+                assert.ifError(err);
+
+                const keys = Object.keys(res);
+                assert(!keys.includes('backlog'));
+                assert(keys.includes('completions'));
+                assert(keys.includes('throughput'));
+                assert(!keys.includes('failures'));
+                assert(keys.includes('pending'));
+
+                assert(res.completions.description);
+                // Completions count = OPS_DONE
+                assert.equal(res.completions.results.count, 100);
+                assert(!res.completions.results.size);
+
+                assert(res.throughput.description);
+                // Throughput count = OPS_DONE / EXPIRY
+                assert.equal(res.throughput.results.count, 0.11);
+                assert(!res.throughput.results.size);
+
+                assert(res.pending.description);
+                assert.equal(res.pending.results.count, 12);
+                assert(!res.pending.results.size);
 
                 done();
             });
