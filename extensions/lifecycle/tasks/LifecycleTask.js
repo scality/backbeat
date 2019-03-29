@@ -1137,6 +1137,7 @@ class LifecycleTask extends BackbeatTask {
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
                 eTag: version.ETag,
+                lastModified: version.LastModified,
                 site: rules.Transition.StorageClass,
                 encodedVersionId: undefined,
             }, log);

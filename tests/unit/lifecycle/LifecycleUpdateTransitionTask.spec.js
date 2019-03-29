@@ -168,4 +168,24 @@ describe('LifecycleUpdateTransitionTask', () => {
             done();
         });
     });
+
+    it('should transition location in metadata if LastModified is not ' +
+    'provided as a check', done => {
+        actionEntry.setAttribute('target', {
+            bucket: 'somebucket',
+            key: 'somekey',
+            eTag: '"1ccc7006b902a4d30ec26e9ddcf759d8"',
+            lastModified: undefined,
+        });
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatClient.getReceivedMd();
+            assert.deepStrictEqual(receivedMd.location, newLocation);
+            const receivedGcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
+            assert.deepStrictEqual(
+                receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            done();
+        });
+    });
 });
