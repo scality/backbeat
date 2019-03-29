@@ -831,6 +831,8 @@ class LifecycleTask extends BackbeatTask {
               .setAttribute('target.eTag', params.eTag)
               .setAttribute('target.lastModified', params.lastModified)
               .setAttribute('toLocation', params.site);
+             
+        console.log('HELLO2', params);
 
         this._sendDataMoverAction(entry, err => {
             if (err) {
@@ -1023,6 +1025,14 @@ class LifecycleTask extends BackbeatTask {
                 return done();
             }
             if (rules.Transition) {
+                console.log('HELLO1', {
+                    bucket: bucketData.target.bucket,
+                    objectKey: obj.Key,
+                    eTag: obj.ETag,
+                    lastModified: obj.LastModified,
+                    site: rules.Transition.StorageClass,
+                });
+                console.log('obj', obj);
                 this._applyTransitionRule({
                     bucket: bucketData.target.bucket,
                     objectKey: obj.Key,
@@ -1133,10 +1143,20 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
         if (rules.Transition) {
+            console.log('HELLO', {
+                bucket: bucketData.target.bucket,
+                objectKey: version.Key,
+                eTag: version.ETag,
+                lastModified: version.LastModified,
+                site: rules.Transition.StorageClass,
+                encodedVersionId: undefined,
+            });
+            console.log('version', version);
             this._applyTransitionRule({
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
                 eTag: version.ETag,
+                lastModified: version.LastModified,
                 site: rules.Transition.StorageClass,
                 encodedVersionId: undefined,
             }, log);
