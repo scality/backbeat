@@ -190,7 +190,6 @@ function setupZkLocationNode(zkClient, location, done) {
             });
             return done(err);
         }
-        ingestionPopulator.setPausedLocationState(location);
         return done();
     });
 }
