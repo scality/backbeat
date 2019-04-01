@@ -119,7 +119,7 @@ specified ingestion bucket.
 
 ## Dependencies
 
-* RING with S3 Connector on version 7.4.2 or newer
+* RING with S3 Connector on version 7.4.3 or newer
 * Backbeat
 * MongoDB
 * Kafka

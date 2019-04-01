@@ -21,6 +21,10 @@ const locationTypeMatch = {
     'location-scality-ring-s3-v1': 'aws_s3',
     'location-ceph-radosgw-s3-v1': 'aws_s3',
 };
+// NOTE: currently only s3 connector (s3c 7.4.3 and above) are supported
+const ingestionTypeMatch = {
+    'location-scality-ring-s3-v1': 'scality_s3',
+};
 
 class Config extends EventEmitter {
     constructor() {
@@ -167,11 +171,6 @@ class Config extends EventEmitter {
     }
 
     setIngestionBuckets(locationConstraints, buckets, log) {
-        // NOTE: currently only s3 connector (s3c 7.4.2 and above) are supported
-        const ingestionTypeMatch = Object.assign({}, locationTypeMatch, {
-            'location-scality-ring-s3-v1': 'scality_s3',
-        });
-
         const ingestionBuckets = [];
         buckets.forEach(bucket => {
             const { name, ingestion, locationConstraint } = bucket;
@@ -185,11 +184,16 @@ class Config extends EventEmitter {
                 });
                 return;
             }
+            // if location is not an enabled backbeat ingestion location, skip
+            const locationType = ingestionTypeMatch[locationInfo.locationType];
+            if (!locationType) {
+                return;
+            }
             const ingestionBucketDetails = Object.assign(
                 {},
                 locationInfo.details,
                 {
-                    locationType: ingestionTypeMatch[locationInfo.locationType],
+                    locationType,
                     zenkoBucket: name,
                     ingestion,
                     locationConstraint,

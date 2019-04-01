@@ -65,7 +65,7 @@ describe('patchConfiguration', () => {
         { status: 'enabled' });
     // no ingestion set on bucket2
     const bucket2 = createBucketMDObject('bucket-2', 'location-2', null);
-    // bucket with same location as bucket2, and ingestion enabled
+    // ingestion enabled but not a backbeat ingestion location
     const bucket3 = createBucketMDObject('bucket-3', 'location-2',
         { status: 'enabled' });
 
@@ -194,12 +194,10 @@ describe('patchConfiguration', () => {
     });
 
     describe('ingestion bucket list', () => {
-        const ingestionTypeMatch = Object.assign({}, locationTypeMatch, {
+        const ingestionTypeMatch = {
             'location-scality-ring-s3-v1': 'scality_s3',
-        });
-        const bucketList = [bucket1, bucket2, bucket3];
-        const expectedIngestionBuckets =
-            bucketList.filter(b => b.getIngestion());
+        };
+        const expectedIngestionBuckets = [bucket1];
 
         it('should patch ingestion buckets config with an old overlay version',
         done => {
@@ -213,7 +211,7 @@ describe('patchConfiguration', () => {
 
                 ingestionBuckets = Config.getIngestionBuckets();
                 assert(version === undefined);
-                assert.strictEqual(ingestionBuckets.length, 2);
+                assert.strictEqual(ingestionBuckets.length, 1);
                 expectedIngestionBuckets.forEach(bucket => {
                     assert(ingestionBuckets.find(
                         b => b.zenkoBucket === bucket.getName()));
