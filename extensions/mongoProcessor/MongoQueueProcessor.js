@@ -16,8 +16,6 @@ const Config = require('../../conf/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
-const BucketQueueEntry = require('../../lib/models/BucketQueueEntry');
-const BucketMdQueueEntry = require('../../lib/models/BucketMdQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const { getAccountCredentials } =
     require('../../lib/credentials/AccountCredentials');
@@ -487,19 +485,6 @@ class MongoQueueProcessor {
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
-        if (sourceEntry instanceof BucketMdQueueEntry) {
-            this.logger.warn('skipping bucket md queue entry', {
-                method: 'MongoQueueProcessor.processKafkaEntry',
-                entry: sourceEntry.getLogInfo(),
-            });
-            return process.nextTick(done);
-        } else if (sourceEntry instanceof BucketQueueEntry) {
-            this.logger.warn('skipping bucket queue entry', {
-                method: 'MongoQueueProcessor.processKafkaEntry',
-                entry: sourceEntry.getLogInfo(),
-            });
-            return process.nextTick(done);
-        }
 
         const bucketName = sourceEntry.getBucket();
         return async.series([
@@ -544,8 +529,11 @@ class MongoQueueProcessor {
                 return this._processObjectQueueEntry(sourceEntry, location,
                     bucketInfo, done);
             }
-            this.logger.warn('skipping unknown source entry',
-                            { entry: sourceEntry.getLogInfo() });
+            this.logger.warn('skipping unknown source entry', {
+                entry: sourceEntry.getLogInfo(),
+                entryType: sourceEntry.constructor.name,
+                method: 'MongoQueueProcessor.processKafkaEntry',
+            });
             return process.nextTick(done);
         });
     }

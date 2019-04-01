@@ -139,8 +139,9 @@ describe('ingestion producer tests with mock', () => {
             res.log.on('data', data => {
                 assert(data.db);
                 assert.strictEqual(typeof data.method, 'number');
-                assert.strictEqual(typeof data.entries, 'object');
-                assert.strictEqual(data.entries.length, 1);
+                assert(Array.isArray(data.entries));
+                // for our test mock, we may have up to 2 entries
+                assert(data.entries.length > 0 && data.entries.length <= 2);
             });
             res.log.on('end', done);
         });
