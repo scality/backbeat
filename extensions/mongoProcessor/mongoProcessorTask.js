@@ -1,6 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
 const werelogs = require('werelogs');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
@@ -26,58 +25,16 @@ const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-const activeProcessors = {};
-
-function updateProcessors(bootstrapList) {
-    const active = Object.keys(activeProcessors);
-    const update = bootstrapList.map(i => i.site);
-    const allSites = [...new Set(active.concat(update))];
-
-    allSites.forEach(site => {
-        if (!update.includes(site)) {
-            // remove processor, site is no longer active
-            activeProcessors[site].stop(() => {});
-            delete activeProcessors[site];
-        } else if (!active.includes(site)) {
-            // add new processor, site is new and requires setup
-            const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
-                mongoProcessorConfig, mongoClientConfig,
-                ingestionServiceAuth, mConfig, site);
-            mqp.start();
-            activeProcessors[site] = mqp;
-        }
-        // else, existing site and has already been setup
-    });
-}
-
-function loadProcessors() {
-    let bootstrapList = config.getBootstrapList();
-    config.on('bootstrap-list-update', () => {
-        bootstrapList = config.getBootstrapList();
-
-        updateProcessors(bootstrapList);
-    });
-
-    // Start Processors for each site
-    const siteNames = bootstrapList.map(i => i.site);
-    siteNames.forEach(site => {
-        const mqp = new MongoQueueProcessor(kafkaConfig, s3Config,
-            mongoProcessorConfig, mongoClientConfig,
-            ingestionServiceAuth, mConfig, site);
-        mqp.start();
-        activeProcessors[site] = mqp;
-    });
-}
+const mqp = new MongoQueueProcessor(kafkaConfig, s3Config, mongoProcessorConfig,
+    mongoClientConfig, ingestionServiceAuth, mConfig);
 
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
         let passed = true;
-        Object.keys(activeProcessors).forEach(site => {
-            if (!activeProcessors[site].isReady()) {
-                passed = false;
-                log.error(`MongoQueueProcessor for ${site} is not ready`);
-            }
-        });
+        if (!mqp.isReady()) {
+            passed = false;
+            log.error('MongoQueueProcessor is not ready');
+        }
         return passed;
     });
     log.info('Starting HealthProbe server');
@@ -96,7 +53,8 @@ function loadManagementDatabase() {
         }
         log.info('management init done');
 
-        loadProcessors();
+        mqp.start();
+
         loadHealthcheck();
     });
 }
@@ -105,16 +63,13 @@ loadManagementDatabase();
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    const sites = Object.keys(activeProcessors);
-    async.each(sites,
-               (site, done) => activeProcessors[site].stop(done),
-               error => {
-                   if (error) {
-                       log.error('failed to exit properly', {
-                           error,
-                       });
-                       process.exit(1);
-                   }
-                   process.exit(0);
-               });
+    mqp.stop(error => {
+        if (error) {
+            log.error('failed to exit properly', {
+                error,
+            });
+            process.exit(1);
+        }
+        process.exit(0);
+    });
 });
