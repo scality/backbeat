@@ -66,23 +66,20 @@ class MongoQueueProcessor {
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} serviceAuth - ingestion service auth
      * @param {Object} mConfig - metrics config
-     * @param {String} site - site name
      */
     constructor(kafkaConfig, s3Config, mongoProcessorConfig, mongoClientConfig,
-                serviceAuth, mConfig, site) {
+                serviceAuth, mConfig) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
         this._serviceAuth = serviceAuth;
         this._mConfig = mConfig;
-        this.site = site;
 
         this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
         this._s3Client = null;
         this._consumer = null;
         this._bootstrapList = null;
-        this.logger =
-            new Logger(`Backbeat:Ingestion:MongoProcessor:${this.site}`);
+        this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
     }
@@ -142,7 +139,7 @@ class MongoQueueProcessor {
                 if (err) {
                     this.logger.error('could not connect to MongoDB', {
                         method: 'MongoQueueProcessor.start',
-                        error: err,
+                        error: err.message,
                     });
                 }
                 return next(err);
@@ -161,7 +158,7 @@ class MongoQueueProcessor {
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
-                groupId: `${this.mongoProcessorConfig.groupId}-${this.site}`,
+                groupId: `${this.mongoProcessorConfig.groupId}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
@@ -191,13 +188,11 @@ class MongoQueueProcessor {
                 if (this._consumer) {
                     this.logger.debug('closing kafka consumer', {
                         method: 'MongoQueueProcessor.stop',
-                        site: this.site,
                     });
                     return this._consumer.close(next);
                 }
                 this.logger.debug('no kafka consumer to close', {
                     method: 'MongoQueueProcessor.stop',
-                    site: this.site,
                 });
                 return next();
             },
@@ -205,13 +200,11 @@ class MongoQueueProcessor {
                 if (this._mProducer) {
                     this.logger.debug('closing metrics producer', {
                         method: 'MongoQueueProcessor.stop',
-                        site: this.site,
                     });
                     return this._mProducer.close(next);
                 }
                 this.logger.debug('no metrics producer to close', {
                     method: 'MongoQueueProcessor.stop',
-                    site: this.site,
                 });
                 return next();
             },
@@ -240,7 +233,7 @@ class MongoQueueProcessor {
             if (err) {
                 this.logger.error('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
-                    error: err,
+                    error: err.message,
                     entry: entry.getLogInfo(),
                 });
                 return done(err);
@@ -367,10 +360,11 @@ class MongoQueueProcessor {
     /**
      * Process a delete object entry
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
+     * @param {string} location - zenko storage location name
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processDeleteOpQueueEntry(sourceEntry, done) {
+    _processDeleteOpQueueEntry(sourceEntry, location, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectVersionedKey();
 
@@ -383,12 +377,18 @@ class MongoQueueProcessor {
             this.logger, err => {
                 if (err) {
                     this.logger.error('error deleting object metadata ' +
-                    'from mongo', { bucket, key, error: err.message });
+                    'from mongo', {
+                        bucket,
+                        key,
+                        error: err.message,
+                        location,
+                    });
                     return done(err);
                 }
-                this._produceMetricCompletionEntry();
+                this._produceMetricCompletionEntry(location);
                 this.logger.info('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
+                    location,
                 });
                 return done();
             });
@@ -412,6 +412,7 @@ class MongoQueueProcessor {
                 this.logger.error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
+                    location,
                 });
                 return done(err);
             }
@@ -421,6 +422,7 @@ class MongoQueueProcessor {
                 this.logger.debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
+                    location,
                 });
                 return process.nextTick(done);
             }
@@ -445,20 +447,26 @@ class MongoQueueProcessor {
                 this.logger, err => {
                     if (err) {
                         this.logger.error('error putting object metadata ' +
-                        'to mongo', { error: err });
+                        'to mongo', {
+                            bucket,
+                            key,
+                            error: err.message,
+                            location,
+                        });
                         return done(err);
                     }
-                    this._produceMetricCompletionEntry();
+                    this._produceMetricCompletionEntry(location);
                     this.logger.info('object metadata put to mongo', {
                         entry: sourceEntry.getLogInfo(),
+                        location,
                     });
                     return done();
                 });
         });
     }
 
-    _produceMetricCompletionEntry() {
-        const metric = { [this.site]: { ops: 1 } };
+    _produceMetricCompletionEntry(location) {
+        const metric = { [location]: { ops: 1 } };
         this._mProducer.publishMetrics(metric, metricsTypeCompleted,
             metricsExtension, () => {});
     }
@@ -502,6 +510,7 @@ class MongoQueueProcessor {
                         'details', {
                             method: 'MongoQueueProcessor.processKafkaEntry',
                             entry: sourceEntry.getLogInfo(),
+                            error: err.message,
                         });
                         return done(err);
                     }
@@ -526,13 +535,10 @@ class MongoQueueProcessor {
             }
             const bucketInfo = results[0];
             const location = results[1];
-            // if entry is for another site, simply skip/ignore
-            if (this.site !== location) {
-                return process.nextTick(done);
-            }
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._processDeleteOpQueueEntry(sourceEntry, done);
+                return this._processDeleteOpQueueEntry(sourceEntry, location,
+                    done);
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
                 return this._processObjectQueueEntry(sourceEntry, location,
