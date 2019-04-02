@@ -56,10 +56,9 @@ class GarbageCollectorProducer {
      *   cloud backends
      * @param {ActionQueueEntry} entry - the action entry to send to
      * the GC service
-     * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    publishActionEntry(entry, cb) {
+    publishActionEntry(entry) {
         this._producer.send([{ message: entry.toKafkaMessage() }], err => {
             if (err) {
                 this._log.error('error publishing GC.deleteData entry', {
@@ -67,7 +66,6 @@ class GarbageCollectorProducer {
                     method: 'GarbageCollectorProducer.publishActionEntry',
                 });
             }
-            return cb(err);
         });
     }
 }

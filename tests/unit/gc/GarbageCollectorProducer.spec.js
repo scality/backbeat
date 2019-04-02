@@ -66,11 +66,9 @@ describe('garbage collector producer', () => {
                     locations: testSpec.dataLocations,
                 },
             });
-            gcProducer.publishActionEntry(action, err => {
-                assert.ifError(err);
-                assert(kafkaProducerMock.hasProcessedExpectedMessage());
-                done();
-            });
+            gcProducer.publishActionEntry(action);
+            assert(kafkaProducerMock.hasProcessedExpectedMessage());
+            done();
         });
     });
 });

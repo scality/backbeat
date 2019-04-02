@@ -186,7 +186,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                   })
                   .addContext(entry.getLogInfo())
                   .setAttribute('target.locations', locations);
-            return this.gcProducer.publishActionEntry(gcEntry, cb);
+            this.gcProducer.publishActionEntry(gcEntry);
         }
         return cb();
     }

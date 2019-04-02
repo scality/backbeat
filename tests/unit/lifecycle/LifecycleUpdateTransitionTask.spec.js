@@ -11,9 +11,8 @@ class GarbageCollectorProducerMock {
         this.receivedEntry = null;
     }
 
-    publishActionEntry(gcEntry, done) {
+    publishActionEntry(gcEntry) {
         this.receivedEntry = gcEntry;
-        return done();
     }
 
     getReceivedEntry() {
