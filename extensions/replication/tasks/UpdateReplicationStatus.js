@@ -158,8 +158,8 @@ class UpdateReplicationStatus extends BackbeatTask {
                     === 'COMPLETED') {
                     // schedule garbage-collection of transient data
                     // locations array
-                    return this.gcProducer.publishDeleteDataEntry(
-                        updatedSourceEntry.getReducedLocations(), done);
+                    this.gcProducer.publishDeleteDataEntry(
+                        updatedSourceEntry.getReducedLocations());
                 }
                 return done();
             });

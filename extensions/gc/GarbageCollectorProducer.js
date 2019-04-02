@@ -50,10 +50,9 @@ class GarbageCollectorProducer {
      * @param {string} dataLocations[].dataStoreName - data location
      *   constraint name
      * @param {number} dataLocations[].size - object size in bytes
-     * @param {Function} cb - The callback function
      * @return {undefined}
      */
-    publishDeleteDataEntry(dataLocations, cb) {
+    publishDeleteDataEntry(dataLocations) {
         this._producer.send([{ message: JSON.stringify({
             action: 'deleteData',
             target: {
@@ -70,7 +69,6 @@ class GarbageCollectorProducer {
                     method: 'GarbageCollectorProducer.publishDeleteDataEntry',
                 });
             }
-            return cb(err);
         });
     }
 }
