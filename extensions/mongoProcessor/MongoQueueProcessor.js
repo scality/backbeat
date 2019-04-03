@@ -6,7 +6,7 @@ const http = require('http');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
-const { replicationBackends } = require('arsenal').constants;
+const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const ObjectMD = require('arsenal').models.ObjectMD;
@@ -266,23 +266,39 @@ class MongoQueueProcessor {
      * Update ingested entry metadata location field. Each location change
      * includes: key, dataStoreName, dataStoreType, dataStoreVersionId
      * @param {ObjectQueueEntry} entry - object queue entry object
-     * @param {string} location - zenko storage location name
+     * @param {string} zenkoLocation - zenko storage location name
      * @return {undefined}
      */
-    _updateLocations(entry, location) {
+    _updateLocations(entry, zenkoLocation) {
         const locations = entry.getLocation();
-        const editLocations = locations.map(l => {
-            const newValues = {
+        if (!locations || locations.length === 0) {
+            // if version id is defined and this is not a null version
+            const dataStoreVersionId =
+                (entry.getVersionId() && !entry.getIsNull()) ?
+                    entry.getEncodedVersionId() : '';
+            const editLocation = [{
                 key: entry.getObjectKey(),
-                dataStoreName: location,
+                size: 0,
+                start: 0,
+                dataStoreName: zenkoLocation,
                 dataStoreType: 'aws_s3',
-            };
-            if (entry.getVersionId()) {
-                newValues.dataStoreVersionId = entry.getEncodedVersionId();
-            }
-            return Object.assign({}, l, newValues);
-        });
-        entry.setLocation(editLocations);
+                dataStoreETag: `1:${emptyFileMd5}`,
+                dataStoreVersionId,
+            }];
+            entry.setLocation(editLocation);
+        } else {
+            const editLocations = locations.map(location => {
+                const newValues = {
+                    key: entry.getObjectKey(),
+                    dataStoreName: zenkoLocation,
+                    dataStoreType: 'aws_s3',
+                };
+                newValues.dataStoreVersionId = entry.getVersionId() ?
+                    entry.getEncodedVersionId() : '';
+                return Object.assign({}, location, newValues);
+            });
+            entry.setLocation(editLocations);
+        }
     }
 
     /**
