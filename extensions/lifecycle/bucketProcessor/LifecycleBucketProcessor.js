@@ -9,6 +9,7 @@ const { errors } = require('arsenal');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const LifecycleTask = require('../tasks/LifecycleTask');
 const { getAccountCredentials } =
       require('../../../lib/credentials/AccountCredentials');
@@ -72,8 +73,9 @@ class LifecycleBucketProcessor {
 
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
-            const { task, rules, value, s3target } = ctx;
-            return task.processBucketEntry(rules, value, s3target, cb);
+            const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
+            return task.processBucketEntry(
+                rules, value, s3target, backbeatMetadataProxy, cb);
         }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
@@ -221,11 +223,15 @@ class LifecycleBucketProcessor {
                 owner,
                 details: result.details,
             });
+            const backbeatMetadataProxy =
+                new BackbeatMetadataProxy(this._s3Endpoint, this._lcConfig.auth)
+                    .setSourceClient(this._log);
             return this._internalTaskScheduler.push({
                 task: new LifecycleTask(this),
                 rules: config.Rules,
                 value: result,
                 s3target: s3,
+                backbeatMetadataProxy,
             }, cb);
         });
     }
