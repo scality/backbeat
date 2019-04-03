@@ -886,7 +886,11 @@ class LifecycleTask extends BackbeatTask {
                     lastModified,
                 });
                 entry.setAttribute('serviceName', 'lifecycle-transition');
-                return cb(null, entry);
+                console.log('waiting...', lastModified);
+                setTimeout(function () {
+                    console.log('continuing...');
+                    return cb(null, entry);
+                }, 30000);
         });
     }
 
