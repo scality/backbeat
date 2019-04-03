@@ -237,13 +237,8 @@
                                 "key",
                                 "dataStoreName"
                             ],
-                            "members": {
-                                "dataStoreName": {
-                                    "type": "string"
-                                },
-                                "key": {
-                                    "type": "string"
-                                }
+                            "member": {
+                                "shape": "LocationMDObj"
                             }
                         }
                     }

@@ -874,7 +874,7 @@ class LifecycleTask extends BackbeatTask {
             return cb(null, entry);
         }
         const locations = objectMD.getLocation();
-        return this._headObject(params, locations, log,
+        return this._headLocation(params, locations, log,
             (err, lastModified) => {
                 if (err) {
                     return cb(err);
@@ -885,6 +885,7 @@ class LifecycleTask extends BackbeatTask {
                     storageClass: objectMD.getDataStoreName(),
                     lastModified,
                 });
+                entry.setAttribute('serviceName', 'lifecycle-transition');
                 return cb(null, entry);
         });
     }
@@ -1055,14 +1056,14 @@ class LifecycleTask extends BackbeatTask {
         }
     }
 
-    _headObject(params, locations, log, cb) {
-        const headObjectParams = {
+    _headLocation(params, locations, log, cb) {
+        const headLocationParams = {
             bucket: params.bucket,
             objectKey: params.objectKey,
             locations,
         };
-        this.backbeatMetadataProxy.headObject(
-            headObjectParams, log, (err, data) => {
+        this.backbeatMetadataProxy.headLocation(
+            headLocationParams, log, (err, data) => {
                 if (err) {
                     log.error('error getting head response from CloudServer');
                     return cb(err);
