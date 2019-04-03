@@ -24,13 +24,14 @@ const mockLogOffset = 2;
 const CONSUMER_TIMEOUT = 35000;
 
 const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
-const expectedOOBEntries = expectedLogs.log.filter(entry =>
-    entry.db === testConfig.extensions.ingestion.sources[0].bucket);
-expectedOOBEntries.forEach((bucketEntry, i) => {
-    expectedOOBEntries[i].entries[0].value.attributes =
-        JSON.stringify(bucketEntry.entries[0].value.attributes);
-    expectedOOBEntries[i] =
-        JSON.stringify(bucketEntry.entries[0].value);
+const expectedOOBEntries = [];
+const oobEntries = expectedLogs.log.filter(entry =>
+    entry.db === testConfig.extensions.ingestion.sources[0].bucket &&
+    entry.method !== 0 && entry.method !== 7);
+oobEntries.forEach(bucketEntry => {
+    bucketEntry.entries.forEach(entry => {
+        expectedOOBEntries.push(JSON.stringify(entry.value));
+    });
 });
 const zkClient = zookeeper.createClient('localhost:2181', {
     autoCreateNamespace: true,
@@ -238,13 +239,13 @@ describe('ingestion reader tests with mock', function fD() {
                 err => {
                 assert.ifError(err);
                 assert.deepStrictEqual(batchState.logRes.info,
-                    { start: 1, cseq: 7, prune: 1 });
+                    { start: 1, cseq: 8, prune: 1 });
                 const receivedLogs = [];
                 batchState.logRes.log.on('data', data => {
                     receivedLogs.push(data);
                 });
                 batchState.logRes.log.on('end', () => {
-                    assert.strictEqual(receivedLogs.length, 7);
+                    assert.strictEqual(receivedLogs.length, 8);
                     return done();
                 });
             });
@@ -260,8 +261,10 @@ describe('ingestion reader tests with mock', function fD() {
                 next =>
                 this.ingestionReader._processPrepareEntries(batchState, next),
             ], () => {
+                // We have 8 records but one of these records has 2 entries, so
+                // we expect total log entries to be 9
                 assert.deepStrictEqual(batchState.logStats, {
-                    nbLogRecordsRead: 7, nbLogEntriesRead: 7,
+                    nbLogRecordsRead: 8, nbLogEntriesRead: 9,
                 });
                 return done();
             });
@@ -314,9 +317,9 @@ describe('ingestion reader tests with mock', function fD() {
                 }),
                 next => {
                     consumer.consume(10, (err, entries) => {
-                        // the mockLogs have 7 entries, but only 2 entries
-                        // pertain to the test so the expected length is 2
-                        assert.strictEqual(entries.length, 2);
+                        // the mockLogs have 9 entries, but only 3 entries
+                        // pertain to the test so the expected length is 3
+                        assert.strictEqual(entries.length, 3);
                         entries.forEach(entry => {
                             const receivedEntry =
                                 JSON.parse(entry.value.toString());

@@ -19,6 +19,17 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
+        // Filter out bucket metadata entries
+        // If `attributes` key exists in metadata, this is a nested bucket
+        // metadata entry for s3c buckets
+        if (entry.value) {
+            const metadataVal = JSON.parse(entry.value);
+            if (metadataVal.mdBucketModelVersion ||
+                metadataVal.attributes) {
+                return;
+            }
+        }
+
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
         this.publish(this.config.topic,
