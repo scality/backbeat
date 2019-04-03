@@ -10,6 +10,7 @@ const constants = {
     metricsExtension: 'ingestion',
     metricsTypeQueued: 'queued',
     metricsTypeCompleted: 'completed',
+    metricsTypePendingOnly: 'pendingOnly',
     redisKeys: {
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:ingestion:opsdone',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:ingestion:bytesdone',

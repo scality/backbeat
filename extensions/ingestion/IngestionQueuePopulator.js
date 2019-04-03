@@ -49,7 +49,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         if (tempStore === undefined) {
             return undefined;
         }
-        this._metricsStore[bucket] = {};
+        this._metricsStore[bucket] = { ops: 0 };
         return tempStore;
     }
 

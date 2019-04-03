@@ -20,7 +20,7 @@ const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const { getAccountCredentials } =
     require('../../lib/credentials/AccountCredentials');
 const MetricsProducer = require('../../lib/MetricsProducer');
-const { metricsExtension, metricsTypeCompleted } =
+const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
 
 // TODO - ADD PREFIX BASED ON SOURCE
@@ -374,6 +374,7 @@ class MongoQueueProcessor {
         return this._mongoClient.deleteObject(bucket, key, undefined,
             this.logger, err => {
                 if (err) {
+                    this._normalizePendingMetric(location);
                     this.logger.error('error deleting object metadata ' +
                     'from mongo', {
                         bucket,
@@ -407,6 +408,7 @@ class MongoQueueProcessor {
 
         this._getZenkoObjectMetadata(sourceEntry, (err, zenkoObjMd) => {
             if (err) {
+                this._normalizePendingMetric(location);
                 this.logger.error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
@@ -417,6 +419,7 @@ class MongoQueueProcessor {
             // identify duplicate entry if the object key w/ version id already
             // exists in mongo and the current entry is not a master key
             if (zenkoObjMd && !isMasterKey(key)) {
+                this._normalizePendingMetric(location);
                 this.logger.debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
@@ -444,6 +447,7 @@ class MongoQueueProcessor {
             return this._mongoClient.putObject(bucket, key, objVal, undefined,
                 this.logger, err => {
                     if (err) {
+                        this._normalizePendingMetric(location);
                         this.logger.error('error putting object metadata ' +
                         'to mongo', {
                             bucket,
@@ -466,6 +470,19 @@ class MongoQueueProcessor {
     _produceMetricCompletionEntry(location) {
         const metric = { [location]: { ops: 1 } };
         this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+            metricsExtension, () => {});
+    }
+
+    /**
+     * For cases where we experience an error or skip an entry, we need to
+     * normalize pending metric. This means we will see pending metrics stuck
+     * above 0 and will need to bring those metrics down
+     * @param {string} location - location constraint name
+     * @return {undefined}
+     */
+    _normalizePendingMetric(location) {
+        const metric = { [location]: { ops: 1 } };
+        this._mProducer.publishMetrics(metric, metricsTypePendingOnly,
             metricsExtension, () => {});
     }
 
@@ -534,6 +551,7 @@ class MongoQueueProcessor {
                 entryType: sourceEntry.constructor.name,
                 method: 'MongoQueueProcessor.processKafkaEntry',
             });
+            this._normalizePendingMetric(location);
             return process.nextTick(done);
         });
     }
