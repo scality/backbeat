@@ -885,7 +885,6 @@ class LifecycleTask extends BackbeatTask {
                     storageClass: objectMD.getDataStoreName(),
                     lastModified,
                 });
-                entry.setAttribute('serviceName', 'lifecycle-transition');
                 console.log('waiting...', lastModified);
                 setTimeout(function () {
                     console.log('continuing...');
