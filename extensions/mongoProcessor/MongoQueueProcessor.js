@@ -22,6 +22,7 @@ const { getAccountCredentials } =
 const MetricsProducer = require('../../lib/MetricsProducer');
 const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
+const getContentType = require('./utils/contentTypeHelper');
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -209,19 +210,15 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getDataContent(entry) {
-        const contentLength = entry.getContentLength();
-        if (contentLength > 0) {
-            return ['DATA', 'METADATA'];
-        } else {
-            return ['METADATA'];
-        }
-    }
-
     _getZenkoObjectMetadata(entry, done) {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
-        const params = { versionId: entry.getVersionId() };
+        const params = {};
+        // if not master and is not null version
+        if (!isMasterKey(entry.getObjectVersionedKey()) &&
+            entry.getVersionId()) {
+            params.versionId = entry.getVersionId();
+        }
 
         this._mongoClient.getObject(bucket, key, params, this.logger,
         (err, data) => {
@@ -238,6 +235,24 @@ class MongoQueueProcessor {
             }
             return done(null, data);
         });
+    }
+
+    /**
+     * get dataStoreVersionId, if exists
+     * @param {Object} objMd - object md fetched from mongo
+     * @param {String} site - storage location name
+     * @return {String} dataStoreVersionId
+     */
+    _getDataStoreVersionId(objMd, site) {
+        let dataStoreVersionId = '';
+        if (objMd.replicationInfo && objMd.replicationInfo.backends) {
+            const backend = objMd.replicationInfo.backends
+                                                 .find(l => l.site === site);
+            if (backend && backend.dataStoreVersionId) {
+                dataStoreVersionId = backend.dataStoreVersionId;
+            }
+        }
+        return dataStoreVersionId;
     }
 
     /**
@@ -318,9 +333,10 @@ class MongoQueueProcessor {
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {BucketInfo} bucketInfo - bucket info object
      * @param {Array} content - replication info content field
+     * @param {Object|undefined} zenkoObjMd - metadata fetched from mongo
      * @return {undefined}
      */
-    _updateReplicationInfo(entry, bucketInfo, content) {
+    _updateReplicationInfo(entry, bucketInfo, content, zenkoObjMd) {
         const bucketRepInfo = bucketInfo.getReplicationConfiguration();
 
         // reset first before attempting any other updates
@@ -348,10 +364,15 @@ class MongoQueueProcessor {
                     if (location && replicationBackends[location.type]) {
                         storageTypes.push(location.type);
                     }
+                    let dataStoreVersionId = '';
+                    if (zenkoObjMd) {
+                        dataStoreVersionId = this._getDataStoreVersionId(
+                            zenkoObjMd, storageClassName);
+                    }
                     backends.push({
                         site: storageClassName,
                         status: 'PENDING',
-                        dataStoreVersionId: '',
+                        dataStoreVersionId,
                     });
                 });
 
@@ -432,27 +453,26 @@ class MongoQueueProcessor {
                 });
                 return done(err);
             }
-            // identify duplicate entry if the object key w/ version id already
-            // exists in mongo and the current entry is not a master key
-            if (zenkoObjMd && !isMasterKey(key)) {
+
+            const content = getContentType(sourceEntry, zenkoObjMd);
+            if (content.length === 0) {
                 this._normalizePendingMetric(location);
                 this.logger.debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
-                return process.nextTick(done);
+                // identified as duplicate entry, do not store in mongo
+                return done();
             }
-            // TODO: for md-only updates, content will need to be checked
-            //   based off previous entries
-            const content = this._getDataContent(sourceEntry);
 
             // update necessary metadata fields before saving to Zenko MongoDB
             this._updateOwnerMD(sourceEntry, bucketInfo);
             this._updateObjectDataStoreName(sourceEntry, location);
             this._updateLocations(sourceEntry, location);
             this._updateAcl(sourceEntry);
-            this._updateReplicationInfo(sourceEntry, bucketInfo, content);
+            this._updateReplicationInfo(sourceEntry, bucketInfo, content,
+                zenkoObjMd);
 
             const objVal = sourceEntry.getValue();
             // Always call putObject with version params undefined so
