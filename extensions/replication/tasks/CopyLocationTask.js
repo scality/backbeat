@@ -277,6 +277,7 @@ class CopyLocationTask extends BackbeatTask {
             ContentDisposition:
                 objMD.getContentDisposition() || undefined,
             ContentEncoding: objMD.getContentEncoding() || undefined,
+            Tags: JSON.stringify(objMD.getTags()),
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
