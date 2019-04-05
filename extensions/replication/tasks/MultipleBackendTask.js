@@ -841,6 +841,7 @@ class MultipleBackendTask extends ReplicateObject {
             ContentDisposition:
                 sourceEntry.getContentDisposition() || undefined,
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
+            Tags: JSON.stringify(sourceEntry.getTags()),
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
