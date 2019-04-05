@@ -11,6 +11,7 @@ const sourceEntry = {
     getContentDisposition: () => {},
     getContentEncoding: () => {},
     getReplicationIsNFS: () => {},
+    getTags: () => {},
 };
 
 module.exports = { sourceEntry };

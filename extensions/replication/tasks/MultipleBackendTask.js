@@ -303,6 +303,7 @@ class MultipleBackendTask extends ReplicateObject {
             ContentEncoding: sourceEntry.getContentEncoding() ||
                 undefined,
             UploadId: uploadId,
+            Tags: JSON.stringify(sourceEntry.getTags()),
             Body: JSON.stringify(data),
         });
         attachReqUids(destReq, log);
@@ -440,6 +441,7 @@ class MultipleBackendTask extends ReplicateObject {
             ContentDisposition:
                 sourceEntry.getContentDisposition() || undefined,
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
+            Tags: JSON.stringify(sourceEntry.getTags()),
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {

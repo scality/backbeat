@@ -375,6 +375,10 @@
                         "location": "header",
                         "locationName": "X-Scal-Content-Encoding"
                     },
+                    "Tags": {
+                        "location": "header",
+                        "locationName": "X-Scal-Tags"
+                    },
                     "Body": {
                         "type": "blob"
                     }
@@ -486,6 +490,10 @@
                     "UploadId": {
                         "location": "header",
                         "locationName": "X-Scal-Upload-Id"
+                    },
+                    "Tags": {
+                        "location": "header",
+                        "locationName": "X-Scal-Tags"
                     },
                     "Body": {
                         "type": "blob"
