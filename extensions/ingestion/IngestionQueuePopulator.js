@@ -1,5 +1,7 @@
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -19,14 +21,41 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        // Filter out bucket metadata entries
-        // If `attributes` key exists in metadata, this is a nested bucket
-        // metadata entry for s3c buckets
         if (entry.value) {
             const metadataVal = JSON.parse(entry.value);
+            // Filter out bucket metadata entries
+            // If `attributes` key exists in metadata, this is a nested bucket
+            // metadata entry for s3c buckets
             if (metadataVal.mdBucketModelVersion ||
                 metadataVal.attributes) {
                 return;
+            }
+            // Filter out any master key object entries
+            if (entry.type === 'put') {
+                const queueEntry = new ObjectQueueEntry(entry.bucket,
+                                                        entry.key,
+                                                        metadataVal);
+                const sanityCheckRes = queueEntry.checkSanity();
+                if (sanityCheckRes) {
+                    this.log.trace('entry malformed', {
+                        method: 'IngestionQueuePopulator.filter',
+                        bucket: entry.bucket,
+                        key: entry.key,
+                        type: entry.type,
+                    });
+                    return;
+                }
+                // Filter if master key and is not a single null version
+                // with no internal version id set.
+                // This null case will only apply for a previously
+                // non-versioned bucket that has now become versioned, and
+                // the user ingests these null objects.
+                // The `isNull` case is undefined for these entries.
+                if (isMasterKey(queueEntry.getObjectVersionedKey()) &&
+                    queueEntry.getVersionId() !== undefined) {
+                    this.log.trace('skipping master key entry');
+                    return;
+                }
             }
         }
 
