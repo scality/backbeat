@@ -2,6 +2,7 @@ const { zenkoIDHeader } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
@@ -61,6 +62,10 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 this.log.trace('skipping retro-propagated entry');
                 return true;
             }
+            if (this._isMasterKeyEntry(queueEntry)) {
+                this.log.trace('skipping master key entry');
+                return true;
+            }
         }
         return false;
     }
@@ -111,6 +116,27 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 this.log.trace('skipping retro-propagated entry');
                 return true;
             }
+        }
+        return false;
+    }
+
+    /**
+     * Filter if the entry is considered a master key entry.
+     * There is a case where a single null entry looks like a master key and
+     * will not have a duplicate versioned key. They are created when you have a
+     * non-versioned bucket with objects, and then convert bucket to versioned.
+     * If no new versioned objects are added for given object(s), they look like
+     * standalone master keys. The `isNull` case is undefined for these entries.
+     * @param {ObjectQueueEntry} entry - object queue entry instance
+     * @return {Boolean} true if we should filter entry
+     */
+    _isMasterKeyEntry(entry) {
+        const isMaster = isMasterKey(entry.getObjectVersionedKey());
+        // single null entries will have a version id as undefined or null.
+        // do not filter single null entries
+        if (isMaster && entry.getVersionId() !== undefined) {
+            this.log.trace('skipping master key entry');
+            return true;
         }
         return false;
     }
