@@ -10,7 +10,7 @@ const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const ObjectMD = require('arsenal').models.ObjectMD;
-const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const { encode } = require('arsenal').versioning.VersionID;
 
 const Config = require('../../conf/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
@@ -214,12 +214,9 @@ class MongoQueueProcessor {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
-        // if not master and is not null version
-        if (!isMasterKey(entry.getObjectVersionedKey()) &&
-            entry.getVersionId()) {
+        if (entry.getVersionId()) {
             params.versionId = entry.getVersionId();
         }
-
         this._mongoClient.getObject(bucket, key, params, log,
         (err, data) => {
             if (err && err.NoSuchKey) {
@@ -286,11 +283,12 @@ class MongoQueueProcessor {
      */
     _updateLocations(entry, zenkoLocation) {
         const locations = entry.getLocation();
+        // if version id is undefined, we have a single null object.
+        // To hold reference to this null object, we need to encode "null"
+        // as its dataStoreVersionId
+        const dataStoreVersionId = entry.getVersionId() ?
+            entry.getEncodedVersionId() : encode('null');
         if (!locations || locations.length === 0) {
-            // if version id is defined and this is not a null version
-            const dataStoreVersionId =
-                (entry.getVersionId() && !entry.getIsNull()) ?
-                    entry.getEncodedVersionId() : '';
             const editLocation = [{
                 key: entry.getObjectKey(),
                 size: 0,
@@ -307,9 +305,8 @@ class MongoQueueProcessor {
                     key: entry.getObjectKey(),
                     dataStoreName: zenkoLocation,
                     dataStoreType: 'aws_s3',
+                    dataStoreVersionId,
                 };
-                newValues.dataStoreVersionId = entry.getVersionId() ?
-                    entry.getEncodedVersionId() : '';
                 return Object.assign({}, location, newValues);
             });
             entry.setLocation(editLocations);
@@ -442,8 +439,7 @@ class MongoQueueProcessor {
      */
     _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
-        // always use versioned key so putting full version state to mongo
-        const key = sourceEntry.getObjectVersionedKey();
+        const key = sourceEntry.getObjectKey();
 
         this._getZenkoObjectMetadata(log, sourceEntry, (err, zenkoObjMd) => {
             if (err) {
@@ -477,19 +473,29 @@ class MongoQueueProcessor {
                 zenkoObjMd);
 
             const objVal = sourceEntry.getValue();
-            // Always call putObject with version params undefined so
-            // that mongoClient will use putObjectNoVer which just puts
-            // the object without further manipulation/actions.
-            // S3 takes care of the versioning logic so consuming the queue
-            // is sufficient to replay the version logic in the consumer.
-            return this._mongoClient.putObject(bucket, key, objVal, undefined,
-                log, err => {
+
+            const params = {};
+            if (sourceEntry.getVersionId()) {
+                params.versionId = sourceEntry.getVersionId();
+                params.usePHD = true;
+            }
+
+            // For single null versions, their version id is undefined
+            // and isNull is undefined. Always call putObject with version
+            // params undefined so that mongoClient will use putObjectNoVer
+            // which just puts the object without further manipulation/actions.
+            // For all other entries, we specify `usePHD` and `versionId` in
+            // params to putObject to use putObjectVerCase4. We rely on
+            // internal logic in mongoClient for handling master version ops.
+            return this._mongoClient.putObject(bucket, key, objVal, params,
+                this.logger, err => {
                     if (err) {
                         this._normalizePendingMetric(location);
                         log.end().error('error putting object metadata ' +
                         'to mongo', {
                             bucket,
                             key,
+                            versionId: sourceEntry.getEncodedVersionId(),
                             error: err.message,
                             location,
                         });
