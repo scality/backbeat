@@ -140,6 +140,10 @@
                         "location": "header",
                         "locationName": "X-Scal-Version-Id"
                     },
+                    "Tags": {
+                        "location": "header",
+                        "locationName": "X-Scal-Tags"
+                    },
                     "Body": {
                         "streaming": true,
                         "type": "blob"
