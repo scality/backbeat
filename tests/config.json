@@ -80,6 +80,20 @@
                 }
             ]
         },
+        "mongoProcessor": {
+            "topic": "backbeat-test-ingestion",
+            "groupId": "backbeat-test-mongo-processor-group",
+            "retry": {
+                "maxRetries": 5,
+                "timeoutS": 300,
+                "backoff": {
+                    "min": 1000,
+                    "max": 300000,
+                    "jitter": 0.1,
+                    "factor": 1.5
+                }
+            }
+        },
         "replication": {
             "topic": "backbeat-test-replication",
             "replicationStatusTopic": "backbeat-test-replication-status",
