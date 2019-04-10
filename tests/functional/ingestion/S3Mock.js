@@ -3,7 +3,7 @@ const AWS = require('aws-sdk');
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 
-function _getClients(sourceInfo) {
+function getClients(sourceInfo) {
     const { port } = sourceInfo;
 
     const s3sourceCredentials = new AWS.Credentials({
@@ -40,7 +40,7 @@ function _getClients(sourceInfo) {
  */
 function setupS3Mock(sourceInfo, cb) {
     const { bucket } = sourceInfo;
-    const { backbeatClient, awsClient } = _getClients(sourceInfo);
+    const { backbeatClient, awsClient } = getClients(sourceInfo);
 
     async.series([
         next => awsClient.createBucket({ Bucket: bucket }, next),
@@ -72,7 +72,7 @@ function setupS3Mock(sourceInfo, cb) {
  */
 function emptyAndDeleteVersionedBucket(sourceInfo, cb) {
     const { bucket } = sourceInfo;
-    const { awsClient } = _getClients(sourceInfo);
+    const { awsClient } = getClients(sourceInfo);
 
     // won't need to worry about 1k+ objects pagination
     async.series([
@@ -108,6 +108,7 @@ function emptyAndDeleteVersionedBucket(sourceInfo, cb) {
 
 
 module.exports = {
+    getClients,
     setupS3Mock,
     emptyAndDeleteVersionedBucket
 };
