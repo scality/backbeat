@@ -1,6 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
 const http = require('http');
 const https = require('https');
 const { EventEmitter } = require('events');
@@ -333,23 +332,32 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _pauseService() {
-        const enabled = this._consumer.getServiceStatus();
-        if (enabled) {
-            // if currently resumed/active, attempt to pause
-            this._updateZkStateNode('paused', true, err => {
-                if (err) {
+        this._getZkStateData((err, state) => {
+            if (err) {
+                // logged at source
+                return;
+            }
+            if (state.paused === true) {
+                this.logger.info(`location ${this.site} already paused`);
+                return;
+            }
+            this._updateZkStateNode(state, 'paused', true,
+            (error, updatedState) => {
+                if (error) {
                     this.logger.trace('error occurred saving state to ' +
                     'zookeeper', {
                         method: 'QueueProcessor._pauseService',
                     });
-                } else {
-                    this._consumer.pause(this.site);
-                    this.logger.info('paused replication for location: ' +
-                        `${this.site}`);
+                    return;
+                }
+                this._consumer.pause(this.site);
+                this.logger.info('paused replication for location: ' +
+                    `${this.site}`);
+                if (updatedState.scheduledResume) {
                     this._deleteScheduledResumeService();
                 }
             });
-        }
+        });
     }
 
     /**
@@ -358,32 +366,38 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _resumeService(date) {
-        const enabled = this._consumer.getServiceStatus();
-        const now = new Date();
-
-        if (enabled) {
-            this.logger.info(`cannot resume, site ${this.site} is not paused`);
-            return;
-        }
-
-        if (date && now < new Date(date)) {
-            // if date is in the future, attempt to schedule job
-            this.scheduleResume(date);
-        } else {
-            this._updateZkStateNode('paused', false, err => {
-                if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._resumeService',
-                    });
-                } else {
+        this._getZkStateData((err, state) => {
+            if (err) {
+                // logged at source
+                return;
+            }
+            if (state.paused === false) {
+                this.logger.info(`location ${this.site} already active`);
+                return;
+            }
+            const now = new Date();
+            if (date && now < new Date(date)) {
+                // if date is in the future, attempt to schedule job
+                this.scheduleResume(state, date);
+            } else {
+                this._updateZkStateNode(state, 'paused', false,
+                (error, updatedState) => {
+                    if (error) {
+                        this.logger.trace('error occurred saving state to ' +
+                        'zookeeper', {
+                            method: 'QueueProcessor._resumeService',
+                        });
+                        return;
+                    }
                     this._consumer.resume(this.site);
                     this.logger.info('resumed replication for location: ' +
                         `${this.site}`);
-                    this._deleteScheduledResumeService();
-                }
-            });
-        }
+                    if (updatedState.scheduledResume) {
+                        this._deleteScheduledResumeService();
+                    }
+                });
+            }
+        });
     }
 
     /**
@@ -391,17 +405,29 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _deleteScheduledResumeService() {
-        this._updateZkStateNode('scheduledResume', null, err => {
+        this._getZkStateData((err, state) => {
             if (err) {
-                this.logger.trace('error occurred saving state to zookeeper', {
-                    method: 'QueueProcessor._deleteScheduledResumeService',
-                });
-            } else if (this.scheduledResume) {
-                this.scheduledResume.cancel();
-                this.scheduledResume = null;
-                this.logger.info('deleted scheduled CRR resume for location:' +
-                    ` ${this.site}`);
+                // logged at source
+                return;
             }
+            if (!state.scheduledResume) {
+                this.logger.debug(`location ${this.site} has no schedule ` +
+                'resume to cancel');
+                return;
+            }
+            this._updateZkStateNode(state, 'scheduledResume', null, err => {
+                if (err) {
+                    this.logger.trace('error occurred saving state to ' +
+                    'zookeeper', {
+                        method: 'QueueProcessor._deleteScheduledResumeService',
+                    });
+                } else if (this.scheduledResume) {
+                    this.scheduledResume.cancel();
+                    this.scheduledResume = null;
+                    this.logger.info('deleted scheduled CRR resume for' +
+                        `location: ${this.site}`);
+                }
+            });
         });
     }
 
@@ -410,14 +436,40 @@ class QueueProcessor extends EventEmitter {
             `${this.site}`;
     }
 
+    _getZkStateData(cb) {
+        const path = this._getZkSiteNode();
+        this.zkClient.getData(path, (err, data) => {
+            if (err) {
+                this.logger.error('could not get state from zookeeper', {
+                    method: 'QueueProcessor._getZkStateNode',
+                    zookeeperPath: path,
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            let state;
+            try {
+                state = JSON.parse(data.toString());
+            } catch (err) {
+                this.logger.error('could not parse data from zookeeper', {
+                    method: 'QueueProcessor._getZkStateNode',
+                    error: err,
+                });
+                return cb(err);
+            }
+            return cb(null, state);
+        });
+    }
+
     /**
      * Update zookeeper state node for this site-defined QueueProcessor
+     * @param {Object} state - current zookeeper state
      * @param {String} key - key name to store in zk state node
      * @param {String|Boolean} value - value
-     * @param {Function} cb - callback(error)
+     * @param {Function} cb - callback(error, newState)
      * @return {undefined}
      */
-    _updateZkStateNode(key, value, cb) {
+    _updateZkStateNode(state, key, value, cb) {
         if (!zkCRRStateProperties.includes(key)) {
             const errorMsg = 'incorrect zookeeper state property given';
             this.logger.error(errorMsg, {
@@ -426,50 +478,27 @@ class QueueProcessor extends EventEmitter {
             return cb(new Error('incorrect zookeeper state property given'));
         }
         const path = this._getZkSiteNode();
-        return async.waterfall([
-            next => this.zkClient.getData(path, (err, data) => {
-                if (err) {
-                    this.logger.error('could not get state from zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err.message,
-                    });
-                    return next(err);
-                }
-                try {
-                    const state = JSON.parse(data.toString());
-                    // set revised status
-                    state[key] = value;
-                    const bufferedData = Buffer.from(JSON.stringify(state));
-                    return next(null, bufferedData);
-                } catch (err) {
-                    this.logger.error('could not parse state data from ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-            }),
-            (data, next) => this.zkClient.setData(path, data, err => {
-                if (err) {
-                    this.logger.error('could not save state data in ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._updateZkStateNode',
-                        zookeeperPath: path,
-                        error: err,
-                    });
-                    return next(err);
-                }
-                return next();
-            }),
-        ], cb);
+
+        // update field
+        const newState = Object.assign({}, state, { [key]: value });
+        const bufferedData = Buffer.from(JSON.stringify(newState));
+        return this.zkClient.setData(path, bufferedData, err => {
+            if (err) {
+                this.logger.error('could not save state data in ' +
+                'zookeeper', {
+                    method: 'QueueProcessor._updateZkStateNode',
+                    zookeeperPath: path,
+                    error: err,
+                });
+                return cb(err);
+            }
+            return cb(null, newState);
+        });
     }
 
-    scheduleResume(date) {
+    scheduleResume(state, date) {
         function triggerResume() {
-            this._updateZkStateNode('scheduledResume', null, err => {
+            this._updateZkStateNode(state, 'scheduledResume', null, err => {
                 if (err) {
                     this.logger.error('error occurred saving state ' +
                     'to zookeeper for resuming a scheduled resume. Retry ' +
@@ -493,18 +522,19 @@ class QueueProcessor extends EventEmitter {
             });
         }
 
-        this._updateZkStateNode('scheduledResume', date, err => {
+        this._updateZkStateNode(state, 'scheduledResume', date, err => {
             if (err) {
-                this.logger.trace('error occurred saving state to zookeeper', {
+                this.logger.trace('error occurred saving state to ' +
+                'zookeeper', {
                     method: 'QueueProcessor.scheduleResume',
                 });
-            } else {
-                this.scheduledResume = schedule.scheduleJob(date,
-                    triggerResume.bind(this));
-                this.logger.info('scheduled CRR resume', {
-                    scheduleTime: date.toString(),
-                });
+                return;
             }
+            this.scheduledResume = schedule.scheduleJob(date,
+                triggerResume.bind(this));
+            this.logger.info('scheduled CRR resume', {
+                scheduleTime: date.toString(),
+            });
         });
     }
 

@@ -244,7 +244,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 destConfig, repConfig, redisConfig, mConfig, {}, {},
                 secondSite);
             qpSite2.start({ paused: true });
-            qpSite2.scheduleResume(futureDate);
+            qpSite2.scheduleResume({ paused: true }, futureDate);
 
             // wait for clients/jobs to set
             return async.whilst(() => (
@@ -264,7 +264,7 @@ describe('CRR Pause/Resume status updates', function d() {
             !qpSite2.scheduledResume,
         cb => setTimeout(() => {
             qpSite1._deleteScheduledResumeService();
-            qpSite2.scheduleResume(futureDate);
+            qpSite2.scheduleResume({ paused: true }, futureDate);
             cb();
         }, 1000), err => {
             assert.ifError(err);
@@ -511,7 +511,7 @@ describe('CRR Pause/Resume status updates', function d() {
             zkHelper.get(firstSite, (err, data) => {
                 assert.ifError(err);
 
-                assert.strictEqual(data.scheduledResume, null);
+                assert(!data.scheduledResume);
                 assert.strictEqual(data.paused, false);
                 assert.strictEqual(isConsumerActive(consumer1), true);
                 done();
