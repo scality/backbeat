@@ -918,8 +918,14 @@ class LifecycleTask extends BackbeatTask {
                     method: 'LifecycleTask._applyTransitionRule',
                     error: err,
                 });
+            } else {
+                log.debug('transition rule applied', {
+                    method: 'LifecycleTask._applyTransitionRule',
+                    bucket: params.bucket,
+                    key: params.objectKey,
+                    site: params.site,
+                });
             }
-            log.debug('transition rule applied');
         });
     }
 
