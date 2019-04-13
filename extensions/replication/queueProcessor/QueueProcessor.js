@@ -48,10 +48,14 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
+     * @param {Object} zkConfig - zookeeper configuration object
      * @param {node-zookeeper-client.Client} zkClient - zookeeper client
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {String} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
+     * @param {String} [kafkaConfig.backlogMetrics] - kafka topic
+     * metrics config object (see {@link BackbeatConsumer} constructor
+     * for params)
      * @param {Object} sourceConfig - source S3 configuration
      * @param {Object} sourceConfig.s3 - s3 endpoint configuration object
      * @param {Object} sourceConfig.auth - authentication info on source
@@ -95,9 +99,11 @@ class QueueProcessor extends EventEmitter {
      *   in PEM format
      * @param {String} site - site name
      */
-    constructor(zkClient, kafkaConfig, sourceConfig, destConfig, repConfig,
+    constructor(zkConfig, zkClient, kafkaConfig,
+                sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig, site) {
         super();
+        this.zkConfig = zkConfig;
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
@@ -276,7 +282,14 @@ class QueueProcessor extends EventEmitter {
         const groupId =
               `${this.repConfig.queueProcessor.groupId}-${this.site}`;
         const consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
+            zookeeper: {
+                connectionString: this.zkConfig.connectionString,
+            },
+            kafka: {
+                hosts: this.kafkaConfig.hosts,
+                backlogMetrics: options && options.enableBacklogMetrics ?
+                    this.kafkaConfig.backlogMetrics : undefined,
+            },
             topic,
             groupId,
             concurrency: this.repConfig.queueProcessor.concurrency,
@@ -614,7 +627,8 @@ class QueueProcessor extends EventEmitter {
                 }
                 this._dataMoverConsumer = this._createConsumer(
                     this.repConfig.dataMoverTopic,
-                    this.processDataMoverEntry.bind(this), options);
+                    this.processDataMoverEntry.bind(this),
+                    Object.assign({ enableBacklogMetrics: true }, options));
                 return this._dataMoverConsumer.once('canary', done);
             },
         ], () => {

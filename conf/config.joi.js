@@ -15,6 +15,10 @@ const joiSchema = {
     },
     kafka: {
         hosts: joi.string().required(),
+        backlogMetrics: {
+            zkPath: joi.string().default('/backbeat/run/kafka-backlog-metrics'),
+            intervalS: joi.number().default(60),
+        },
     },
     transport: transportJoi,
     s3: hostPortJoi.required(),

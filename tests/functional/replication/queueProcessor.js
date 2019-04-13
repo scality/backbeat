@@ -723,6 +723,7 @@ describe('queue processor functional tests with mocking', () => {
         const qpParams = [
             { connectionString: '127.0.0.1:2181/backbeat',
               autoCreateNamespace: false },
+            null,
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,

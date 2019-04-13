@@ -4,7 +4,16 @@ const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const zookeeperConf = { connectionString: 'localhost:2181' };
-const kafkaConf = { hosts: 'localhost:9092' };
+const producerKafkaConf = {
+    hosts: 'localhost:9092',
+};
+const consumerKafkaConf = {
+    hosts: 'localhost:9092',
+    backlogMetrics: {
+        zkPath: '/test/kafka-backlog-metrics',
+        intervalS: 1,
+    },
+};
 
 describe('BackbeatConsumer main tests', () => {
     const topic = 'backbeat-consumer-spec';
@@ -26,17 +35,14 @@ describe('BackbeatConsumer main tests', () => {
     before(function before(done) {
         this.timeout(60000);
 
-        producer = new BackbeatProducer({ kafka: kafkaConf, topic,
+        producer = new BackbeatProducer({ kafka: producerKafkaConf, topic,
                                           pollIntervalMs: 100 });
-        consumer = new BackbeatConsumer({ zookeeper: zookeeperConf,
-                                          kafka: kafkaConf, groupId, topic,
-                                          queueProcessor,
-                                          backlogMetrics: {
-                                              zkPath: '/test/backlog-metrics',
-                                              intervalS: 1,
-                                          },
-                                          bootstrap: true,
-                                        });
+        consumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf, groupId, topic,
+            queueProcessor,
+            bootstrap: true,
+        });
         async.parallel([
             innerDone => producer.on('ready', innerDone),
             innerDone => consumer.on('ready', innerDone),
@@ -65,12 +71,12 @@ describe('BackbeatConsumer main tests', () => {
     });
 
     it('should be able to read messages sent to the topic and publish ' +
-    'backlog metrics', done => {
+    'topic metrics', done => {
         let consumeCb = null;
         let totalConsumed = 0;
         let topicOffset;
         let consumerOffset;
-        const zkMetricsPath = `/test/backlog-metrics/${topic}/0`;
+        const zkMetricsPath = `/test/kafka-backlog-metrics/${topic}/0`;
         function _checkZkMetrics(done) {
             async.waterfall([
                 next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
@@ -189,13 +195,13 @@ describe('BackbeatConsumer concurrency tests', () => {
         this.timeout(60000);
 
         producer = new BackbeatProducer({
-            kafka: kafkaConf,
+            kafka: producerKafkaConf,
             topic: topicConc,
             pollIntervalMs: 100,
         });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: kafkaConf, groupId: groupIdConc, topic: topicConc,
+            kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
             queueProcessor,
             concurrency: 10,
             bootstrap: true,
@@ -323,13 +329,13 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         this.timeout(60000);
 
         producer = new BackbeatProducer({
-            kafka: kafkaConf,
+            kafka: producerKafkaConf,
             topic: topicConc,
             pollIntervalMs: 100,
         });
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: kafkaConf, groupId: groupIdConc, topic: topicConc,
+            kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
             queueProcessor,
             concurrency: 10,
             bootstrap: true,
