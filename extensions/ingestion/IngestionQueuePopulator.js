@@ -56,6 +56,26 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                     this.log.trace('skipping master key entry');
                     return;
                 }
+                // Filter if user-metadata field "x-amz-meta-zenko-source"
+                // has been set a value
+                let zenkoIDHeader;
+                try {
+                    const metaHeaders = JSON.parse(
+                        queueEntry.getUserMetadata());
+                    zenkoIDHeader = metaHeaders['x-amz-meta-zenko-source'];
+                } catch (err) {
+                    this.log.trace('malformed user metadata', {
+                        method: 'IngestionQueuePopulator.filter',
+                        bucket: entry.bucket,
+                        key: entry.key,
+                        type: entry.type,
+                    });
+                    return;
+                }
+                if (zenkoIDHeader && zenkoIDHeader === 'zenko') {
+                    this.log.trace('skipping retro-propagated entry');
+                    return;
+                }
             }
         }
 
