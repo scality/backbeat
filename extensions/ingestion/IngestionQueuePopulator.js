@@ -1,5 +1,8 @@
+const { zenkoIDHeader } = require('arsenal').constants;
+
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
+const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -19,14 +22,53 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        // Filter out bucket metadata entries
-        // If `attributes` key exists in metadata, this is a nested bucket
-        // metadata entry for s3c buckets
         if (entry.value) {
             const metadataVal = JSON.parse(entry.value);
+            // Filter out bucket metadata entries
+            // If `attributes` key exists in metadata, this is a nested bucket
+            // metadata entry for s3c buckets
             if (metadataVal.mdBucketModelVersion ||
                 metadataVal.attributes) {
                 return;
+            }
+            if (entry.type === 'put') {
+                const queueEntry = new ObjectQueueEntry(entry.bucket,
+                                                        entry.key,
+                                                        metadataVal);
+                const sanityCheckRes = queueEntry.checkSanity();
+                if (sanityCheckRes) {
+                    this.log.trace('entry malformed', {
+                        method: 'IngestionQueuePopulator.filter',
+                        bucket: entry.bucket,
+                        key: entry.key,
+                        type: entry.type,
+                    });
+                    return;
+                }
+                // Retro-propagation is where S3C ingestion will re-ingest an
+                // object whose request originated from Zenko.
+                // Filter these entries indicated by user metadata field
+                // defined by constants.zenkoIDHeader
+                const userMD = queueEntry.getUserMetadata();
+                let existingIDHeader;
+                if (userMD) {
+                    try {
+                        const metaHeaders = JSON.parse(userMD);
+                        existingIDHeader = metaHeaders[zenkoIDHeader];
+                    } catch (err) {
+                        this.log.trace('malformed user metadata', {
+                            method: 'IngestionQueuePopulator.filter',
+                            bucket: entry.bucket,
+                            key: entry.key,
+                            type: entry.type,
+                        });
+                        return;
+                    }
+                    if (existingIDHeader && existingIDHeader === 'zenko') {
+                        this.log.trace('skipping retro-propagated entry');
+                        return;
+                    }
+                }
             }
         }
 
