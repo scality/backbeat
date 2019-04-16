@@ -11,14 +11,18 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
     filter(entry) {
+        console.log('--- entry ---')
+        console.log(JSON.stringify(entry));
         if (entry.type !== 'put' && entry.type !== 'del') {
             this.log.trace('skipping entry because not type put or del');
+            console.log('FILTER-1: not put or del')
             return;
         }
         // Note that del entries at least have a bucket and key
         // and that bucket metadata entries at least have a bucket
         if (!entry.bucket) {
             this.log.trace('skipping entry because missing bucket name');
+            console.log('FILTER-2: no bucket')
             return;
         }
         if (entry.value) {
@@ -28,6 +32,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             // metadata entry for s3c buckets
             if (metadataVal.mdBucketModelVersion ||
                 metadataVal.attributes) {
+                console.log('FILTER-3: bucket entry')
                 return;
             }
             // Filter out any master key object entries
@@ -43,6 +48,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                         key: entry.key,
                         type: entry.type,
                     });
+                    console.log('FILTER-4: failed sanity check')
                     return;
                 }
                 // Filter if master key and is not a single null version
@@ -54,30 +60,37 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                 if (isMasterKey(queueEntry.getObjectVersionedKey()) &&
                     queueEntry.getVersionId() !== undefined) {
                     this.log.trace('skipping master key entry');
+                    console.log('FILTER-5: master key and not single null')
                     return;
                 }
                 // Filter if user-metadata field "x-amz-meta-zenko-source"
                 // has been set a value
                 let zenkoIDHeader;
-                try {
-                    const metaHeaders = JSON.parse(
-                        queueEntry.getUserMetadata());
-                    zenkoIDHeader = metaHeaders['x-amz-meta-zenko-source'];
-                } catch (err) {
-                    this.log.trace('malformed user metadata', {
-                        method: 'IngestionQueuePopulator.filter',
-                        bucket: entry.bucket,
-                        key: entry.key,
-                        type: entry.type,
-                    });
-                    return;
-                }
-                if (zenkoIDHeader && zenkoIDHeader === 'zenko') {
-                    this.log.trace('skipping retro-propagated entry');
-                    return;
+                const userMD = queueEntry.getUserMetadata();
+                if (userMD) {
+                    try {
+                        const metaHeaders = JSON.parse(userMD);
+                        zenkoIDHeader = metaHeaders['x-amz-meta-zenko-source'];
+                    } catch (err) {
+                        this.log.trace('malformed user metadata', {
+                            method: 'IngestionQueuePopulator.filter',
+                            bucket: entry.bucket,
+                            key: entry.key,
+                            type: entry.type,
+                        });
+                        console.log('FILTER-6: malformed user md')
+                        return;
+                    }
+                    if (zenkoIDHeader && zenkoIDHeader === 'zenko') {
+                        console.log('FILTER-7: zenko id header')
+                        this.log.trace('skipping retro-propagated entry');
+                        return;
+                    }
                 }
             }
         }
+
+        console.log('NO_FILTER: this entry will be populated to kafka')
 
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
