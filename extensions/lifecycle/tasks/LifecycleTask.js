@@ -919,6 +919,7 @@ class LifecycleTask extends BackbeatTask {
                     error: err,
                 });
             } else {
+                // TODO: set queued transition metric.
                 log.debug('transition rule applied', {
                     method: 'LifecycleTask._applyTransitionRule',
                     bucket: params.bucket,

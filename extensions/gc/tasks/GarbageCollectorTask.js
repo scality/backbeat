@@ -57,6 +57,8 @@ class GarbageCollectorTask extends BackbeatTask {
         return req.send(err => {
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
+            // TODO: If successfully garbage collected a lifecycle task,
+            // decrement the queued transition.
             if (err && err.statusCode === 412) {
                 log.info('precondition for garbage collection was not met',
                     Object.assign({
