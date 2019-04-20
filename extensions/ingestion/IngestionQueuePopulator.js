@@ -8,6 +8,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.config = params.config;
+        this._instanceId = params.instanceId;
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
@@ -22,54 +23,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             this.log.trace('skipping entry because missing bucket name');
             return;
         }
-        if (entry.value) {
-            const metadataVal = JSON.parse(entry.value);
-            // Filter out bucket metadata entries
-            // If `attributes` key exists in metadata, this is a nested bucket
-            // metadata entry for s3c buckets
-            if (metadataVal.mdBucketModelVersion ||
-                metadataVal.attributes) {
-                return;
-            }
-            if (entry.type === 'put') {
-                const queueEntry = new ObjectQueueEntry(entry.bucket,
-                                                        entry.key,
-                                                        metadataVal);
-                const sanityCheckRes = queueEntry.checkSanity();
-                if (sanityCheckRes) {
-                    this.log.trace('entry malformed', {
-                        method: 'IngestionQueuePopulator.filter',
-                        bucket: entry.bucket,
-                        key: entry.key,
-                        type: entry.type,
-                    });
-                    return;
-                }
-                // Retro-propagation is where S3C ingestion will re-ingest an
-                // object whose request originated from Zenko.
-                // Filter these entries indicated by user metadata field
-                // defined by constants.zenkoIDHeader
-                const userMD = queueEntry.getUserMetadata();
-                let existingIDHeader;
-                if (userMD) {
-                    try {
-                        const metaHeaders = JSON.parse(userMD);
-                        existingIDHeader = metaHeaders[zenkoIDHeader];
-                    } catch (err) {
-                        this.log.trace('malformed user metadata', {
-                            method: 'IngestionQueuePopulator.filter',
-                            bucket: entry.bucket,
-                            key: entry.key,
-                            type: entry.type,
-                        });
-                        return;
-                    }
-                    if (existingIDHeader && existingIDHeader === 'zenko') {
-                        this.log.trace('skipping retro-propagated entry');
-                        return;
-                    }
-                }
-            }
+        if (entry.value && this._filterValueOp(entry)) {
+            return;
         }
 
         this.log.debug('publishing entry',
@@ -79,6 +34,85 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                      JSON.stringify(entry));
 
         this._incrementMetrics(entry.bucket);
+    }
+
+    _filterValueOp(entry) {
+        const metadataVal = JSON.parse(entry.value);
+        if (this._isBucketEntry(metadataVal)) {
+            this.log.trace('skipping bucket entry');
+            return true;
+        }
+        if (entry.type === 'put') {
+            const queueEntry = new ObjectQueueEntry(entry.bucket,
+                                                    entry.key,
+                                                    metadataVal);
+            const sanityCheckRes = queueEntry.checkSanity();
+            if (sanityCheckRes) {
+                this.log.trace('entry malformed', {
+                    method: 'IngestionQueuePopulator.filter',
+                    error: sanityCheckRes.message,
+                    bucket: entry.bucket,
+                    key: entry.key,
+                    type: entry.type,
+                });
+                return true;
+            }
+            if (this._isRetroPropagationEntry(queueEntry)) {
+                this.log.trace('skipping retro-propagated entry');
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /**
+     * Filter out bucket metadata entries from S3C Raft logs
+     * @param {Object} metadataVal - entry metadata value
+     * @return {Boolean} true if we should filter entry
+     */
+    _isBucketEntry(metadataVal) {
+        // If `attributes` key exists in metadata, this is a nested bucket
+        // metadata entry for s3c buckets
+        if (metadataVal.mdBucketModelVersion ||
+            metadataVal.attributes) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
+     * Retro-propagation is where S3C ingestion will re-ingest an object whose
+     * request originated from Zenko. Filter these entries indicated by user
+     * metadata field defined by constants.zenkoIDHeader
+     * @param {ObjectQueueEntry} entry - object queue entry instance
+     * @return {Boolean} true if we should filter entry
+     */
+    _isRetroPropagationEntry(entry) {
+        const userMD = entry.getUserMetadata();
+        let existingIDHeader;
+        if (userMD) {
+            try {
+                const metaHeaders = JSON.parse(userMD);
+                existingIDHeader = metaHeaders[zenkoIDHeader];
+            } catch (err) {
+                this.log.trace('malformed user metadata', {
+                    method: 'IngestionQueuePopulator.filter',
+                    bucket: entry.bucket,
+                    key: entry.key,
+                    type: entry.type,
+                });
+                return true;
+            }
+            // if user metadata field of `constants.zenkoIDHeader`
+            // exists and value is either 'zenko' (for delete markers)
+            // or matches given hashed instance id
+            if (existingIDHeader && (existingIDHeader === 'zenko' ||
+                existingIDHeader === this._instanceId)) {
+                this.log.trace('skipping retro-propagated entry');
+                return true;
+            }
+        }
+        return false;
     }
 
     /**
