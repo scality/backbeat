@@ -51,7 +51,8 @@ function queueBatch(ingestionPopulator, taskState, log) {
     log.debug('start queueing ingestion batch');
     taskState.batchInProgress = true;
 
-    const maxRead = qpConfig.batchMaxRead;
+    // TODO: set maxRead based on Zenko param
+    const maxRead = 1000;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates(err => {
         if (err) {
