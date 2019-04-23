@@ -92,11 +92,19 @@ class GarbageCollector extends EventEmitter {
                 process.exit(1);
             }
         });
-        this._consumer.on('ready', () => {
-            consumerReady = true;
-            this._consumer.subscribe();
-            this._logger.info('garbage collector service successfully started');
-            return this.emit('ready');
+        this._metricsProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
+        this._metricsProducer.setupProducer(err => {
+            if (err) {
+                this.logger.info('error setting up metrics producer',
+                                 { error: err.message });
+                process.exit(1);
+            }
+            this._consumer.on('ready', () => {
+                consumerReady = true;
+                this._consumer.subscribe();
+                this._logger.info('garbage collector service successfully started');
+                return this.emit('ready');
+            });
         });
     }
 
@@ -130,6 +138,7 @@ class GarbageCollector extends EventEmitter {
             gcConfig: this._gcConfig,
             transport: this._transport,
             httpAgent: this._httpAgent,
+            metricsProducer: this._metricsProducer,
             logger: this._logger,
         };
     }

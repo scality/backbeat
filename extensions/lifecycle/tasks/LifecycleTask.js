@@ -8,6 +8,7 @@ const config = require('../../../conf/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const LifecycleMetric = require('../LifecycleMetric');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -32,6 +33,8 @@ class LifecycleTask extends BackbeatTask {
         const lpState = lp.getStateVars();
         super();
         Object.assign(this, lpState);
+        this._lifecycleMetric = new LifecycleMetric()
+            .withProducer(this.mProducer.getProducer());
     }
 
     /**
@@ -65,8 +68,10 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendDataMoverAction(entry, log, cb) {
         const { bucket, key } = entry.getAttribute('target');
-        const entries = [{ key: `${bucket}/${key}`,
-                           message: entry.toKafkaMessage() }];
+        const entries = [{ 
+            key: `${bucket}/${key}`,
+            message: entry.toKafkaMessage(),
+        }];
         this.producer.sendToTopic(this.dataMoverTopic, entries, err => {
             if (err) {
                 log.error('could not send entry for consumption',
@@ -919,13 +924,13 @@ class LifecycleTask extends BackbeatTask {
                     error: err,
                 });
             } else {
-                // TODO: set queued transition metric.
                 log.debug('transition rule applied', {
                     method: 'LifecycleTask._applyTransitionRule',
                     bucket: params.bucket,
                     key: params.objectKey,
                     site: params.site,
                 });
+                this._lifecycleMetric.publishQueuedEntry(entry);
             }
         });
     }

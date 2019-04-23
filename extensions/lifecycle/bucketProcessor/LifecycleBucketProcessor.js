@@ -95,6 +95,7 @@ class LifecycleBucketProcessor {
     getStateVars() {
         return {
             producer: this._producer,
+            metricsProducer: this._metricsProducer,
             bootstrapList: this._repConfig.destination.bootstrapList,
             enabledRules: this._lcConfig.rules,
             s3Endpoint: this._s3Endpoint,
@@ -400,17 +401,37 @@ class LifecycleBucketProcessor {
      */
     start() {
         this._setupCredentials();
-        this._setupProducer((err, producer) => {
-            if (err) {
-                this._log.error('error setting up kafka producer', {
-                    error: err,
-                    method: 'LifecycleBucketProcessor.start',
+        this._metricsProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
+        return async.parallel([
+            done => {
+                this._setupProducer((err, producer) => {
+                    if (err) {
+                        this._log.error('error setting up kafka producer', {
+                            error: err,
+                            method: 'LifecycleBucketProcessor.start',
+                        });
+                        process.exit(1);
+                    }
+                    this._setupConsumer();
+                    this._producer = producer;
+                    this._log.info('lifecycle bucket processor successfully started');
+                    return done();
                 });
-                process.exit(1);
-            }
-            this._setupConsumer();
-            this._producer = producer;
-            this._log.info('lifecycle bucket processor successfully started');
+            },
+            done => {
+                this._metricsProducer.setupProducer(err => {
+                    if (err) {
+                        this.logger.info('error setting up metrics producer',
+                                         { error: err.message });
+                        process.exit(1);
+                    }
+                    return done();
+                });
+            },
+        ], () => {
+            this.logger.info('queue processor is ready to consume ' +
+                             'replication entries');
+            this.emit('ready');
         });
     }
 
@@ -428,6 +449,10 @@ class LifecycleBucketProcessor {
             done => {
                 this._log.debug('closing producer');
                 this._producer.close(done);
+            },
+            done => {
+                this._log.debug('closing metrics producer');
+                this._metricsProducer.close(done);
             },
         ], () => cb());
     }

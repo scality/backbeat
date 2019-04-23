@@ -444,6 +444,7 @@ class CopyLocationTask extends BackbeatTask {
             ContentEncoding: objMD.getContentEncoding() ||
                 undefined,
             UploadId: uploadId,
+            Tags: JSON.stringify(objMD.getTags()),
             Body: JSON.stringify(data),
         });
         attachReqUids(destReq, log);
@@ -572,6 +573,7 @@ class CopyLocationTask extends BackbeatTask {
             ContentDisposition:
                 objMD.getContentDisposition() || undefined,
             ContentEncoding: objMD.getContentEncoding() || undefined,
+            Tags: JSON.stringify(objMD.getTags()),
         });
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {

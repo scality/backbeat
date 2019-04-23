@@ -15,7 +15,10 @@ class GarbageCollectorTask extends BackbeatTask {
         super();
         const gcState = gc.getStateVars();
         Object.assign(this, gcState);
-
+        this._lifecycleMetric = new LifecycleMetric()
+            .withProducer(this.metricsProducer.getProducer())
+            .withSite(this.site)
+            .withExtension(metricsExtension);
         this._setup();
     }
 
@@ -57,8 +60,6 @@ class GarbageCollectorTask extends BackbeatTask {
         return req.send(err => {
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
-            // TODO: If successfully garbage collected a lifecycle task,
-            // decrement the queued transition.
             if (err && err.statusCode === 412) {
                 log.info('precondition for garbage collection was not met',
                     Object.assign({
@@ -95,7 +96,13 @@ class GarbageCollectorTask extends BackbeatTask {
         const log = this.logger.newRequestLogger();
 
         if (entry.getActionType() === 'deleteData') {
-            return this._executeDeleteData(entry, log, done);
+            return this._executeDeleteData(entry, log, err => {
+                if (err) {
+                    return done(err);
+                }
+                this._lifecycleMetric.publishCompletedEntry(entry);
+                return done();
+            });
         }
         log.warn('skipped unsupported action', entry.getLogInfo());
         return process.nextTick(done);
