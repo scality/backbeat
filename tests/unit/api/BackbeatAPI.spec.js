@@ -18,6 +18,7 @@ describe('BackbeatAPI', () => {
         { url: '/_/healthcheck', method: 'GET' },
         { url: '/_/metrics/crr/all/backlog', method: 'GET' },
         { url: '/_/metrics/crr/all/completions', method: 'GET' },
+        { url: '/_/metrics/crr/all/failures', method: 'GET' },
         { url: '/_/metrics/crr/all/throughput', method: 'GET' },
         { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
             method: 'GET' },
@@ -41,6 +42,8 @@ describe('BackbeatAPI', () => {
         { url: '/_/metrics/crr/test', method: 'GET' },
         { url: '/_/metrics/crr/all/backlo', method: 'GET' },
         { url: '/_/metrics/crr/all/completionss', method: 'GET' },
+        { url: '/_/metrics/crr/all/failures', method: 'POST' },
+        { url: '/_/metrics/crr/all/fail', method: 'GET' },
         // invalid http verb
         { url: '/_/healthcheck', method: 'POST' },
     ].forEach(request => {

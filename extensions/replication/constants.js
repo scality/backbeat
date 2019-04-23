@@ -8,12 +8,17 @@ const constants = {
     proxyIAMPath: '/_/backbeat/iam',
     metricsExtension: 'crr',
     metricsTypeQueued: 'queued',
-    metricsTypeProcessed: 'processed',
+    metricsTypeCompleted: 'completed',
+    metricsTypeFailed: 'failed',
     redisKeys: {
+        opsPending: testIsOn ? 'test:bb:opspending' : 'bb:crr:opspending',
+        bytesPending: testIsOn ? 'test:bb:bytespending' : 'bb:crr:bytespending',
         ops: testIsOn ? 'test:bb:ops' : 'bb:crr:ops',
         bytes: testIsOn ? 'test:bb:bytes' : 'bb:crr:bytes',
         opsDone: testIsOn ? 'test:bb:opsdone' : 'bb:crr:opsdone',
+        opsFail: testIsOn ? 'test:bb:opsfail' : 'bb:crr:opsfail',
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:crr:bytesdone',
+        bytesFail: testIsOn ? 'test:bb:bytesfail' : 'bb:crr:bytesfail',
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
 };

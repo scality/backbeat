@@ -12,7 +12,8 @@ const AccountCredentials =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
-const { metricsExtension, metricsTypeProcessed } = require('../constants');
+// const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
+//     require('../constants');
 
 const MPU_CONC_LIMIT = 10;
 
@@ -374,13 +375,13 @@ class ReplicateObject extends BackbeatTask {
                 return doneOnce(err);
             }
             partObj.setDataLocation(data.Location[0]);
-            const extMetrics = {};
-            extMetrics[this.site] = {
-                ops: 1,
-                bytes: partObj.getPartSize(),
-            };
-            this.mProducer.publishMetrics(
-                extMetrics, metricsTypeProcessed, metricsExtension, () => {});
+            // const extMetrics = {};
+            // extMetrics[this.site] = {
+            //     ops: 1,
+            //     bytes: partObj.getPartSize(),
+            // };
+            // this.mProducer.publishMetrics(
+            //     extMetrics, metricsTypeCompleted, metricsExtension, () => {});
             return doneOnce(null, partObj.getValue());
         });
     }

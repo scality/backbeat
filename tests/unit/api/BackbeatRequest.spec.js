@@ -94,4 +94,28 @@ describe('BackbeatRequest helper class', () => {
         assert.strictEqual(route2, '/healthcheck');
         assert.strictEqual(validPrefix2, false);
     });
+
+    it('should set route without prefix if valid route has valid prefix',
+    () => {
+        const req = new BackbeatRequest({
+            url: '/_/healthcheck',
+            method: 'GET',
+        });
+        const route = req.getRoute();
+        const validPrefix = req.getHasValidPrefix();
+
+        assert.strictEqual(route, 'healthcheck');
+        assert.strictEqual(validPrefix, true);
+
+        const req2 = new BackbeatRequest({
+            url: '/healthcheck',
+            method: 'GET',
+        });
+        const route2 = req2.getRoute();
+        const validPrefix2 = req2.getHasValidPrefix();
+
+        // Uses the original route when prefix is incorrect (for error logs)
+        assert.strictEqual(route2, '/healthcheck');
+        assert.strictEqual(validPrefix2, false);
+    });
 });

@@ -4,6 +4,12 @@ const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
 
+const {
+    metricsExtension,
+    metricsTypeCompleted,
+    metricsTypeFailed,
+} = require('../constants');
+
 class UpdateReplicationStatus extends BackbeatTask {
     /**
      * Update a source object replication status from a kafka entry
@@ -70,6 +76,38 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
     }
 
+    /**
+     * Report CRR metrics
+     * @param {ObjectQueueEntry} sourceEntry - The original entry
+     * @param {ObjectQueueEntry} updatedSourceEntry - updated object entry
+     * @return {undefined}
+     */
+    _reportMetrics(sourceEntry, updatedSourceEntry) {
+        const content = updatedSourceEntry.getReplicationContent();
+        const contentLength = updatedSourceEntry.getContentLength();
+        const bytes = content.includes('DATA') ? contentLength : 0;
+        const data = {};
+        const site = sourceEntry.getSite();
+        data[site] = { ops: 1, bytes };
+        const status = sourceEntry.getReplicationSiteStatus(site);
+        // Report to MetricsProducer with completed/failed metrics.
+        if (status === 'COMPLETED' || status === 'FAILED') {
+            const entryType = status === 'COMPLETED' ?
+                metricsTypeCompleted : metricsTypeFailed;
+
+            this.mProducer.publishMetrics(data, entryType, metricsExtension,
+            err => {
+                if (err) {
+                    this.logger.trace('error occurred in publishing metrics', {
+                        error: err,
+                        method: 'UpdateReplicationStatus._reportMetrics',
+                    });
+                }
+            });
+        }
+        return undefined;
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -105,6 +143,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                           error: err.message });
                     return done(err);
                 }
+                this._reportMetrics(sourceEntry, updatedSourceEntry);
                 log.end().info('replication status updated', {
                     entry: updatedSourceEntry.getLogInfo(),
                     replicationStatus:

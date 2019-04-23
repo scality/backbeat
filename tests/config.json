@@ -17,9 +17,6 @@
             "logName": "s3-recordlog"
         }
     },
-    "kafka": {
-        "hosts": "127.0.0.1:9092"
-    },
     "extensions": {
         "replication": {
             "topic": "backbeat-test-replication",
