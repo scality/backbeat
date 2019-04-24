@@ -210,7 +210,7 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(entry, done) {
+    _getZenkoObjectMetadata(log, entry, done) {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
@@ -220,13 +220,13 @@ class MongoQueueProcessor {
             params.versionId = entry.getVersionId();
         }
 
-        this._mongoClient.getObject(bucket, key, params, this.logger,
+        this._mongoClient.getObject(bucket, key, params, log,
         (err, data) => {
             if (err && err.NoSuchKey) {
                 return done();
             }
             if (err) {
-                this.logger.error('error getting zenko object metadata', {
+                log.error('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
                     error: err.message,
                     entry: entry.getLogInfo(),
@@ -394,12 +394,13 @@ class MongoQueueProcessor {
 
     /**
      * Process a delete object entry
+     * @param {Logger.newRequestLogger} log - logger object
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
      * @param {string} location - zenko storage location name
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processDeleteOpQueueEntry(sourceEntry, location, done) {
+    _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectVersionedKey();
 
@@ -409,10 +410,10 @@ class MongoQueueProcessor {
         // S3 takes care of the versioning logic so consuming the queue
         // is sufficient to replay the version logic in the consumer.
         return this._mongoClient.deleteObject(bucket, key, undefined,
-            this.logger, err => {
+            log, err => {
                 if (err) {
                     this._normalizePendingMetric(location);
-                    this.logger.error('error deleting object metadata ' +
+                    log.end().error('error deleting object metadata ' +
                     'from mongo', {
                         bucket,
                         key,
@@ -422,7 +423,7 @@ class MongoQueueProcessor {
                     return done(err);
                 }
                 this._produceMetricCompletionEntry(location);
-                this.logger.info('object metadata deleted from mongo', {
+                log.end().info('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
@@ -432,21 +433,22 @@ class MongoQueueProcessor {
 
     /**
      * Process an object entry
+     * @param {Logger.newRequestLogger} log - logger object
      * @param {ObjectQueueEntry} sourceEntry - object metadata entry
      * @param {string} location - zenko storage location name
      * @param {BucketInfo} bucketInfo - bucket info object
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(sourceEntry, location, bucketInfo, done) {
+    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
-        this._getZenkoObjectMetadata(sourceEntry, (err, zenkoObjMd) => {
+        this._getZenkoObjectMetadata(log, sourceEntry, (err, zenkoObjMd) => {
             if (err) {
                 this._normalizePendingMetric(location);
-                this.logger.error('error processing object queue entry', {
+                log.end().error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                     location,
@@ -457,7 +459,7 @@ class MongoQueueProcessor {
             const content = getContentType(sourceEntry, zenkoObjMd);
             if (content.length === 0) {
                 this._normalizePendingMetric(location);
-                this.logger.debug('skipping duplicate entry', {
+                log.end().debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                     location,
@@ -481,10 +483,10 @@ class MongoQueueProcessor {
             // S3 takes care of the versioning logic so consuming the queue
             // is sufficient to replay the version logic in the consumer.
             return this._mongoClient.putObject(bucket, key, objVal, undefined,
-                this.logger, err => {
+                log, err => {
                     if (err) {
                         this._normalizePendingMetric(location);
-                        this.logger.error('error putting object metadata ' +
+                        log.end().error('error putting object metadata ' +
                         'to mongo', {
                             bucket,
                             key,
@@ -494,7 +496,7 @@ class MongoQueueProcessor {
                         return done(err);
                     }
                     this._produceMetricCompletionEntry(location);
-                    this.logger.info('object metadata put to mongo', {
+                    log.end().info('object metadata put to mongo', {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
@@ -532,9 +534,10 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
-            this.logger.error('error processing source entry',
+            log.end().error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
@@ -542,9 +545,9 @@ class MongoQueueProcessor {
         const bucketName = sourceEntry.getBucket();
         return async.series([
             next => this._mongoClient.getBucketAttributes(bucketName,
-                this.logger, (err, bucketInfo) => {
+                log, (err, bucketInfo) => {
                     if (err) {
-                        this.logger.error('error getting bucket owner ' +
+                        log.error('error getting bucket owner ' +
                         'details', {
                             method: 'MongoQueueProcessor.processKafkaEntry',
                             entry: sourceEntry.getLogInfo(),
@@ -557,7 +560,7 @@ class MongoQueueProcessor {
             next => this._s3Client.getBucketLocation({ Bucket: bucketName },
                 (err, data) => {
                     if (err) {
-                        this.logger.error('error getting bucket location ' +
+                        log.error('error getting bucket location ' +
                         'constraint', {
                             method: 'MongoQueueProcessor.processKafkaEntry',
                             error: err,
@@ -569,20 +572,21 @@ class MongoQueueProcessor {
                 }),
         ], (err, results) => {
             if (err) {
+                log.end();
                 return done(err);
             }
             const bucketInfo = results[0];
             const location = results[1];
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._processDeleteOpQueueEntry(sourceEntry, location,
-                    done);
+                return this._processDeleteOpQueueEntry(log, sourceEntry,
+                    location, done);
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
-                return this._processObjectQueueEntry(sourceEntry, location,
+                return this._processObjectQueueEntry(log, sourceEntry, location,
                     bucketInfo, done);
             }
-            this.logger.warn('skipping unknown source entry', {
+            log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),
                 entryType: sourceEntry.constructor.name,
                 method: 'MongoQueueProcessor.processKafkaEntry',
