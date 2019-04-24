@@ -53,6 +53,7 @@ function queueBatch(ingestionPopulator, taskState, log) {
 
     // TODO: set maxRead based on Zenko param
     const maxRead = 1000;
+    // const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates(err => {
         if (err) {
