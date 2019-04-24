@@ -32,7 +32,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
-        this.publish(this.config.topic,
+        this.publish(entry.id,
                      `${entry.bucket}/${entry.key}`,
                      JSON.stringify(entry));
 
