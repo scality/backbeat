@@ -62,11 +62,18 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
-        this.publish(entry.id,
+        this.publish(entry.zenkoBucket,
                      `${entry.bucket}/${entry.key}`,
                      JSON.stringify(entry));
 
         this._incrementMetrics(entry.bucket);
+    }
+
+    // in-mem saved to batch
+    cleanup(zenkoBucket) {
+        if (this._batch[zenkoBucket]) {
+            delete this._batch[zenkoBucket];
+        }
     }
 
     /**
