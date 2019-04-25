@@ -65,9 +65,10 @@ class MongoQueueProcessor {
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} serviceAuth - ingestion service auth
      * @param {Object} mConfig - metrics config
+     * @param {ProcessorMemState} memo - memo
      */
     constructor(kafkaConfig, s3Config, mongoProcessorConfig, mongoClientConfig,
-                serviceAuth, mConfig) {
+                serviceAuth, mConfig, memo) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
@@ -81,6 +82,9 @@ class MongoQueueProcessor {
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
+
+        // TODO: cleanup
+        this._memo = memo;
     }
 
     _setupMetricsClients(cb) {
@@ -441,6 +445,7 @@ class MongoQueueProcessor {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
 
+        // TODO: if replicationConfig is set, then we should fetch object md
         this._getZenkoObjectMetadata(log, sourceEntry, (err, zenkoObjMd) => {
             if (err) {
                 this._normalizePendingMetric(location);
@@ -548,43 +553,69 @@ class MongoQueueProcessor {
             return process.nextTick(() => done(errors.InternalError));
         }
 
+        // TODO: memoize based off bucket
+        //       on bootstrapList change, if the location was removed, I can
+        //       remove from memo
+        /*
+            {
+                bucket-name: {
+                    location: 'site-name',
+                }
+            }
+
+            Object.keys(memo).forEach(bucket => {
+                if (memo[bucket].location === siteName) {
+                    delete memo[bucket]
+                }
+            })
+        */
         const bucketName = sourceEntry.getBucket();
-        return async.series([
-            // every 1000 entries
-            next => this._mongoClient.getBucketAttributes(bucketName,
-                log, (err, bucketInfo) => {
-                    if (err) {
-                        log.error('error getting bucket owner ' +
-                        'details', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            entry: sourceEntry.getLogInfo(),
-                            error: err.message,
-                        });
-                        return done(err);
-                    }
-                    return next(null, bucketInfo);
-                }),
-            // memoize
-            next => this._s3Client.getBucketLocation({ Bucket: bucketName },
-                (err, data) => {
-                    if (err) {
-                        log.error('error getting bucket location ' +
-                        'constraint', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            error: err,
-                        });
-                        return done(err);
-                    }
-                    const location = data.LocationConstraint;
-                    return next(null, location);
-                }),
-        ], (err, results) => {
+        // const key = sourceEntry.getObjectKey();
+        // const params = {};
+        // if (sourceEntry.getVersionId()) {
+        //     params.versionId = sourceEntry.getVersionId();
+        // }
+
+        // TODO: if not in memo, getBucketAttributes
+        //       then getObject
+        //       if in memo, getObject only
+
+        const bucketInfo = this._memo.getBucketInfo(bucketName);
+        if (bucketInfo) {
+            const location = bucketInfo.getLocationConstraint();
+            if (sourceEntry instanceof DeleteOpQueueEntry) {
+                return this._processDeleteOpQueueEntry(log, sourceEntry,
+                    location, done);
+            }
+            if (sourceEntry instanceof ObjectQueueEntry) {
+                return this._processObjectQueueEntry(log, sourceEntry, location,
+                    bucketInfo, done);
+            }
+            log.end().warn('skipping unknown source entry', {
+                entry: sourceEntry.getLogInfo(),
+                entryType: sourceEntry.constructor.name,
+                method: 'MongoQueueProcessor.processKafkaEntry',
+            });
+            this._normalizePendingMetric(location);
+            return process.nextTick(done);
+        }
+
+        // TODO: if replicationConfig is set, then we should fetch object md
+        return this._mongoClient.getBucketAttributes(bucketName, log,
+        (err, bucketInfo) => {
             if (err) {
-                log.end();
+                log.end().error('error getting bucket owner ' +
+                'details', {
+                    method: 'MongoQueueProcessor.processKafkaEntry',
+                    entry: sourceEntry.getLogInfo(),
+                    error: err.message,
+                });
                 return done(err);
             }
-            const bucketInfo = results[0];
-            const location = results[1];
+
+            this._memo.memoize(bucketName, bucketInfo);
+
+            const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
                 return this._processDeleteOpQueueEntry(log, sourceEntry,

@@ -6,6 +6,7 @@ const { HealthProbeServer } = require('arsenal').network.probe;
 const MongoQueueProcessor = require('./MongoQueueProcessor');
 const config = require('../../conf/Config');
 const { initManagement } = require('../../lib/management/index');
+const ProcessorMemState = require('./utils/ProcessorMemState');
 
 const kafkaConfig = config.kafka;
 const s3Config = config.s3;
@@ -25,8 +26,9 @@ const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
+const memo = new ProcessorMemState(config);
 const mqp = new MongoQueueProcessor(kafkaConfig, s3Config, mongoProcessorConfig,
-    mongoClientConfig, ingestionServiceAuth, mConfig);
+    mongoClientConfig, ingestionServiceAuth, mConfig, memo);
 
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
