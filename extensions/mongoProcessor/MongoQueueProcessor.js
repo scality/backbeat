@@ -214,14 +214,22 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(log, entry, done) {
+    _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
+        // NOTE: this is only used for updating replication info.
+        //       if the zenko bucket does not have repInfo set, then we can
+        //       ignore fetching
+        const bucketRepInfo = bucketInfo.getReplicationConfiguration();
+        if (!bucketRepInfo) {
+            return done();
+        }
+
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
         if (entry.getVersionId()) {
             params.versionId = entry.getVersionId();
         }
-        this._mongoClient.getObject(bucket, key, params, log,
+        return this._mongoClient.getObject(bucket, key, params, log,
         (err, data) => {
             if (err && err.NoSuchKey) {
                 return done();
@@ -445,8 +453,9 @@ class MongoQueueProcessor {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
 
-        // TODO: if replicationConfig is set, then we should fetch object md
-        this._getZenkoObjectMetadata(log, sourceEntry, (err, zenkoObjMd) => {
+        // NOTE: this will fetch if bucketRepInfo is set
+        this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
+        (err, zenkoObjMd) => {
             if (err) {
                 this._normalizePendingMetric(location);
                 log.end().error('error processing object queue entry', {
@@ -457,6 +466,7 @@ class MongoQueueProcessor {
                 return done(err);
             }
 
+            // TODO: if we want, we can skip this if !bucketRepInfo
             const content = getContentType(sourceEntry, zenkoObjMd);
             if (content.length === 0) {
                 this._normalizePendingMetric(location);
@@ -600,7 +610,6 @@ class MongoQueueProcessor {
             return process.nextTick(done);
         }
 
-        // TODO: if replicationConfig is set, then we should fetch object md
         return this._mongoClient.getBucketAttributes(bucketName, log,
         (err, bucketInfo) => {
             if (err) {
