@@ -544,6 +544,7 @@ class MongoQueueProcessor {
 
         const bucketName = sourceEntry.getBucket();
         return async.series([
+            // every 1000 entries
             next => this._mongoClient.getBucketAttributes(bucketName,
                 log, (err, bucketInfo) => {
                     if (err) {
@@ -557,6 +558,7 @@ class MongoQueueProcessor {
                     }
                     return next(null, bucketInfo);
                 }),
+            // memoize
             next => this._s3Client.getBucketLocation({ Bucket: bucketName },
                 (err, data) => {
                     if (err) {
