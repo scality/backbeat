@@ -7,7 +7,6 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
-const monitoringClient = require('../../../lib/clients/monitoringHandler');
 
 const {
     metricsExtension,
@@ -107,9 +106,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     });
                 }
             });
-            // TODO: promclient metrics can now report failed metrics. add here
-            monitoringClient.crrOpDone.inc();
-            monitoringClient.crrBytesDone.inc(bytes);
+            // TODO: update ZenkoMetrics
         }
         return undefined;
     }

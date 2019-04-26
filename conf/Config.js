@@ -8,7 +8,6 @@ const joi = require('joi');
 
 const extensions = require('../extensions');
 const backbeatConfigJoi = require('./config.joi.js');
-const monitoringClient = require('../lib/clients/monitoringHandler');
 
 const locationTypeMatch = {
     'location-mem-v1': 'mem',
@@ -166,7 +165,6 @@ class Config extends EventEmitter {
     }
 
     getBootstrapList() {
-        monitoringClient.crrSiteCount.set(this.bootstrapList.length);
         return this.bootstrapList;
     }
 
