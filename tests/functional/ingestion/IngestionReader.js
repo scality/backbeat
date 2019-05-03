@@ -21,7 +21,7 @@ const zookeeper = require('../../../lib/clients/zookeeper');
 
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
-const CONSUMER_TIMEOUT = 50000;
+const CONSUMER_TIMEOUT = 10000;
 
 const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
 const expectedOOBEntries = [];
@@ -102,9 +102,23 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
 function checkEntryInQueue2(kafkaEntry, expectedEntries, done) {
     // 2 entries per object - 1 with version key and 1 with master key
 
-    console.log(expectedEntries)
-    console.log('---')
-    console.log(kafkaEntry)
+    // console.log(expectedEntries)
+    // console.log('---')
+    // console.log(kafkaEntry)
+    //
+    // console.log(kafkaEntry.value.toString())
+    // console.log(kafkaEntry.key.toString())
+
+    // 1. parse value of kafkaEntry
+
+    const entry = kafkaEntry.value.toString();
+
+    console.log(typeof entry)
+
+    // 2. find from expectedEntries the given kafkaEntry
+
+
+    // 3. compare
 
     // assert.strictEqual(kafkaEntries.length, expectedEntries.length * 2);
     //
@@ -136,7 +150,7 @@ function checkEntryInQueue2(kafkaEntry, expectedEntries, done) {
 }
 
 describe('ingestion reader tests with mock', function fD() {
-    this.timeout(60000);
+    this.timeout(15000);
     let httpServer;
 
     before(done => {
@@ -332,32 +346,78 @@ describe('ingestion reader tests with mock', function fD() {
             // update zookeeper status to indicate snapshot phase
             const path =
                 `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
+            const consumer = new kafka.KafkaConsumer.createReadStream(
+                consumerParams, {}, { objectMode: true, waitInterval: 10, topics: testConfig.extensions.ingestion.topic });
+
+
+            // consumer.on('ready', (a, b, c) => {
+            //     console.log('READY', a, b, c);
+            // });
+
+            consumer.on('disconnected', (a, b, c) => {
+                console.log('DISCONNECTED', a, b, c);
+            });
+            consumer.on('event', (a, b, c) => {
+                console.log('EVENT', a, b, c);
+            });
+            consumer.on('event.log', (a, b, c) => {
+                console.log('EVENT.LOG', a, b, c);
+            });
+            consumer.on('event.stats', (a, b, c) => {
+                console.log('EVENT.STATS', a, b, c);
+            });
+            consumer.on('event.error', (a, b, c) => {
+                console.log('EVENT.ERROR', a, b, c);
+            });
+            consumer.on('event.throttle', (a, b, c) => {
+                console.log('EVENT.THROTTLE', a, b, c);
+            });
+
             async.waterfall([
+                next => {
+                    consumer.once('ready', () => {
+                        console.log('READY??')
+                        next();
+                    })
+                },
                 next => zkClient.setData(path, Buffer.from('false'), -1,
                     err => {
                         assert.ifError(err);
                         return next();
                     }),
-                next => {
-                    const consumer = new kafka.KafkaConsumer.createReadStream(
-                        consumerParams, {}, { objectMode: true, waitInterval: 10, topics: testConfig.extensions.ingestion.topic });
+                // next => {
+                //     let count = 0;
+                //     const expectedCount = expectedNewIngestionEntry.length;
+                //     consumer.on('data', d => {
+                //         checkEntryInQueue2(d, expectedNewIngestionEntry, () => {
+                //             count++;
+                //
+                //             if (count === expectedCount) {
+                //                 return next();
+                //             }
+                //         });
+                //     });
+                // },
+                next => this.ingestionReader.processLogEntries({}, err => {
+                    assert.ifError(err);
 
                     let count = 0;
-                    const expectedCount = expectedNewIngestionEntry.length;
+                    const expectedCount = 1;
+
+                    console.log(`EXP_COUNT: ${expectedCount}`)
+
                     consumer.on('data', d => {
-                        checkEntryInQueue2(d, expectedNewIngestionEntry, () => {
+                        console.log(d)
+                        checkEntryInQueue2(d, [expectedNewIngestionEntry],
+                        () => {
                             count++;
 
+                            console.log(count, expectedCount)
                             if (count === expectedCount) {
                                 return next();
                             }
                         });
                     });
-                }
-                next => this.ingestionReader.processLogEntries({}, err => {
-                    assert.ifError(err);
-
-
 
                     // setTimeout(next, CONSUMER_TIMEOUT);
                 }),
