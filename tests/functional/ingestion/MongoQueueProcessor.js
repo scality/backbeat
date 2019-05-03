@@ -207,7 +207,7 @@ describe('MongoQueueProcessor', function mqp() {
             const key = 'nonexistant';
             const objmd = new ObjectMD().setKey(key);
             const entry = new ObjectQueueEntry(BUCKET, key, objmd);
-            mqp._getZenkoObjectMetadata(entry, (err, res) => {
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
                 assert.ifError(err);
 
                 assert.strictEqual(res, undefined);
@@ -222,7 +222,7 @@ describe('MongoQueueProcessor', function mqp() {
                                 .setKey(KEY)
                                 .setVersionId(NEW_VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(entry, (err, res) => {
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
                 assert.ifError(err);
 
                 assert.strictEqual(res, undefined);
@@ -236,7 +236,7 @@ describe('MongoQueueProcessor', function mqp() {
                                 .setKey(KEY)
                                 .setVersionId(VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(entry, (err, res) => {
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
                 assert.ifError(err);
                 assert(res);
                 assert.strictEqual(res.versionId, VERSION_ID);
@@ -258,8 +258,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -317,8 +317,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -346,8 +346,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -369,8 +369,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -397,8 +397,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -423,8 +423,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(entry,
-                    LOCATION, bucketInfo, next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -451,8 +451,8 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
-                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(entry,
-                    LOCATION, next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, next),
             ], err => {
                 assert.ifError(err);
 
