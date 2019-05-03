@@ -14,13 +14,10 @@ const MongoQueueProcessor =
 const authdata = require('../../../conf/authdata.json');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const fakeLogger = require('../../utils/fakeLogger');
-const { getClients } = require('./S3Mock');
 
 const kafkaConfig = config.kafka;
-const s3Config = config.s3;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
 const mongoClientConfig = config.queuePopulator.mongo;
-const ingestionServiceAuth = config.extensions.ingestion.auth;
 const mConfig = {};
 
 const bootstrapList = config.extensions.replication.destination.bootstrapList;
@@ -152,7 +149,6 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
             close: () => {},
             publishMetrics: () => {},
         };
-        this._s3Client = getClients(s3Config.port).awsClient;
         this._bootstrapList = bootstrapList;
     }
 
@@ -177,29 +173,18 @@ describe('MongoQueueProcessor', function mqp() {
     this.timeout(5000);
 
     let mqp;
-    let s3;
     let mongoClient;
 
-    before(done => {
-        mqp = new MongoQueueProcessorMock(kafkaConfig, s3Config,
-            mongoProcessorConfig, mongoClientConfig, ingestionServiceAuth,
-            mConfig);
+    before(() => {
+        mqp = new MongoQueueProcessorMock(kafkaConfig, mongoProcessorConfig,
+            mongoClientConfig, mConfig);
         mqp.start();
 
         mongoClient = mqp._mongoClient;
-        s3 = mqp._s3Client;
-        return s3.createBucket({ Bucket: BUCKET }, err => {
-            assert.ifError(err);
-            setTimeout(done, 2000);
-        });
     });
 
     afterEach(() => {
         mqp.reset();
-    });
-
-    after(done => {
-        s3.deleteBucket({ Bucket: BUCKET }, done);
     });
 
     describe('::_getZenkoObjectMetadata', () => {
