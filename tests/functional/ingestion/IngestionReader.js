@@ -83,7 +83,8 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
                 if (typeof entryValue[key] === 'object') {
                     assert.strictEqual(JSON.stringify(entryValue[key]),
                                        JSON.stringify(kafkaValue[key]));
-                } else {
+               } else if (key !== 'md-model-version') {
+                   // ignore model version, but compare all other fields
                     assert.strictEqual(entryValue[key], kafkaValue[key]);
                 }
             });
