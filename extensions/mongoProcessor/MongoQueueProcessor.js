@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const AWS = require('aws-sdk');
-const http = require('http');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -17,8 +15,6 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
-const { getAccountCredentials } =
-    require('../../lib/credentials/AccountCredentials');
 const MetricsProducer = require('../../lib/MetricsProducer');
 const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
@@ -40,9 +36,6 @@ class MongoQueueProcessor {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {String} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {Object} s3Config - s3 config
-     * @param {String} s3Config.host - host ip
-     * @param {String} s3Config.port - port
      * @param {Object} mongoProcessorConfig - mongo processor configuration
      *   object
      * @param {String} mongoProcessorConfig.topic - topic name
@@ -63,19 +56,14 @@ class MongoQueueProcessor {
      * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
-     * @param {Object} serviceAuth - ingestion service auth
      * @param {Object} mConfig - metrics config
      */
-    constructor(kafkaConfig, s3Config, mongoProcessorConfig, mongoClientConfig,
-                serviceAuth, mConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
-        this._serviceAuth = serviceAuth;
         this._mConfig = mConfig;
 
-        this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
-        this._s3Client = null;
         this._consumer = null;
         this._bootstrapList = null;
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
@@ -90,40 +78,12 @@ class MongoQueueProcessor {
     }
 
     /**
-     * Return an S3 client instance using the given account credentials.
-     * @param {Object} accountCreds - Object containing account credentials
-     * @param {String} accountCreds.accessKeyId - The account access key
-     * @param {String} accountCreds.secretAccessKey - The account secret key
-     * @return {AWS.S3} The S3 client instance to make requests with
-     */
-    _getS3Client(accountCreds) {
-        return new AWS.S3({
-            endpoint: this._s3Endpoint,
-            credentials: {
-                accessKeyId: accountCreds.accessKeyId,
-                secretAccessKey: accountCreds.secretAccessKey,
-            },
-            sslEnabled: false,
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: {
-                agent: new http.Agent({ keepAlive: true }),
-                timeout: 0,
-            },
-            maxRetries: 0,
-        });
-    }
-
-    /**
      * Start kafka consumer
      *
      * @return {undefined}
      */
     start() {
         this.logger.info('starting mongo queue processor');
-        const credentials = getAccountCredentials(this._serviceAuth,
-                                                  this.logger);
-        this._s3Client = this._getS3Client(credentials);
         async.series([
             next => this._setupMetricsClients(err => {
                 if (err) {
@@ -543,40 +503,19 @@ class MongoQueueProcessor {
         }
 
         const bucketName = sourceEntry.getBucket();
-        return async.series([
-            next => this._mongoClient.getBucketAttributes(bucketName,
-                log, (err, bucketInfo) => {
-                    if (err) {
-                        log.error('error getting bucket owner ' +
-                        'details', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            entry: sourceEntry.getLogInfo(),
-                            error: err.message,
-                        });
-                        return done(err);
-                    }
-                    return next(null, bucketInfo);
-                }),
-            next => this._s3Client.getBucketLocation({ Bucket: bucketName },
-                (err, data) => {
-                    if (err) {
-                        log.error('error getting bucket location ' +
-                        'constraint', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            error: err,
-                        });
-                        return done(err);
-                    }
-                    const location = data.LocationConstraint;
-                    return next(null, location);
-                }),
-        ], (err, results) => {
+
+        return this._mongoClient.getBucketAttributes(bucketName, log,
+        (err, bucketInfo) => {
             if (err) {
-                log.end();
+                log.error('error getting bucket owner ' +
+                'details', {
+                    method: 'MongoQueueProcessor.processKafkaEntry',
+                    entry: sourceEntry.getLogInfo(),
+                    error: err.message,
+                });
                 return done(err);
             }
-            const bucketInfo = results[0];
-            const location = results[1];
+            const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
                 return this._processDeleteOpQueueEntry(log, sourceEntry,
