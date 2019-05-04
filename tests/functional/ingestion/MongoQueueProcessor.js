@@ -29,6 +29,21 @@ const VERSION_ID = '98445230573829999999RG001  15.144.0';
 // new version id > existing version id
 const NEW_VERSION_ID = '98445235075994999999RG001  14.90.2';
 
+const mockReplicationInfo = {
+    role: 'arn:aws:iam::root:role/s3-replication-role',
+    destination: `arn:aws:s3:::${BUCKET}`,
+    rules: [
+        {
+            prefix: '',
+            enabled: true,
+            id:
+            'ZDA1YzQ4N2EtMmU1Zi00OTc0LTkxOGEtYzI0YjI0ZjI3NmY4',
+            storageClass: bootstrapList[1].site,
+        },
+    ],
+    preferredReadLocation: null,
+};
+
 class MongoClientMock {
     constructor() {
         this._added = [];
@@ -73,20 +88,7 @@ class MongoClientMock {
                 locationConstraint: LOCATION,
                 readLocationConstraint: null,
                 cors: null,
-                replicationConfiguration: {
-                    role: 'arn:aws:iam::root:role/s3-replication-role',
-                    destination: `arn:aws:s3:::${BUCKET}`,
-                    rules: [
-                        {
-                            prefix: '',
-                            enabled: true,
-                            id:
-                            'ZDA1YzQ4N2EtMmU1Zi00OTc0LTkxOGEtYzI0YjI0ZjI3NmY4',
-                            storageClass: bootstrapList[1].site,
-                        },
-                    ],
-                    preferredReadLocation: null,
-                },
+                replicationConfiguration: mockReplicationInfo,
                 lifecycleConfiguration: null,
                 uid: 'ecf97531-3627-4fac-9492-e53e9dfc9470',
                 isNFS: null,
@@ -444,6 +446,31 @@ describe('MongoQueueProcessor', function mqp() {
                 const deleted = mqp.getDeleted();
                 assert.strictEqual(deleted.length, 1);
                 assert.strictEqual(deleted[0], versionKey);
+                done();
+            });
+        });
+    });
+
+    describe('::_getBucketInfo', () => {
+        it('should memoize bucket info', done => {
+            const objmd = new ObjectMD();
+            const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+            const bucketMemState = mqp._bucketMemState;
+            // bucket should not be memoized
+            assert.strictEqual(bucketMemState.getBucketInfo(BUCKET), undefined);
+
+            mqp._getBucketInfo(entry, fakeLogger, (err, bucketInfo) => {
+                assert.ifError(err);
+                // has it memoized?
+                const bucketInfoInMem = bucketMemState.getBucketInfo(BUCKET);
+                assert(bucketInfoInMem);
+                const location = bucketInfoInMem.getLocationConstraint();
+                const repConfig = bucketInfoInMem.getReplicationConfiguration();
+                assert(location);
+                assert(repConfig);
+                assert.deepStrictEqual(bucketInfoInMem, bucketInfo);
+                assert.strictEqual(location, LOCATION);
+                assert.deepStrictEqual(repConfig, mockReplicationInfo);
                 done();
             });
         });
