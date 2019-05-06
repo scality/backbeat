@@ -11,6 +11,7 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const { isMasterKey } = require('arsenal/lib/versioning/Version');
 
 const Config = require('../../conf/Config');
+const BackbeatTask = require('../../lib/tasks/BackbeatTask');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
@@ -30,7 +31,7 @@ const BucketMemState = require('./utils/BucketMemState');
  * @classdesc Background task that processes entries from the
  * ingestion for kafka queue and pushes entries to mongo
  */
-class MongoQueueProcessor {
+class MongoQueueProcessor extends BackbeatTask {
 
     /**
      * @constructor
@@ -60,10 +61,12 @@ class MongoQueueProcessor {
      * @param {Object} mConfig - metrics config
      */
     constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
+        super();
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
         this._mConfig = mConfig;
+        this.retryParams = this.mongoProcessorConfig.retry;
 
         this._consumer = null;
         this._bootstrapList = null;
@@ -100,7 +103,7 @@ class MongoQueueProcessor {
                 if (err) {
                     this.logger.error('could not connect to MongoDB', {
                         method: 'MongoQueueProcessor.start',
-                        error: err.message,
+                        error: err,
                     });
                 }
                 return next(err);
@@ -172,7 +175,7 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
+    _getZenkoObjectMetadataOnce(log, entry, bucketInfo, done) {
         // NOTE: This is only used for updating replication info. If the Zenko
         //   bucket does not have repInfo set, then we can ignore fetching
         const bucketRepInfo = bucketInfo.getReplicationConfiguration();
@@ -196,15 +199,28 @@ class MongoQueueProcessor {
                 return done();
             }
             if (err) {
-                log.error('error getting zenko object metadata', {
+                log.trace('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
-                    error: err.message,
+                    error: err,
                     entry: entry.getLogInfo(),
                 });
                 return done(err);
             }
             return done(null, data);
         });
+    }
+
+    _getZenkoObjectMetadata(log, entry, bucketInfo, cb) {
+        return this.retry({
+            actionDesc: 'get object metadata from Mongo if exists',
+            logFields: { entry: entry.getLogInfo() },
+            actionFunc: done => this._getZenkoObjectMetadataOnce(log, entry,
+                bucketInfo, done),
+            // this call uses MongoClientInterface which does not set
+            // the 'retryable' field
+            shouldRetryFunc: err => err.code === 500,
+            log,
+        }, cb);
     }
 
     /**
@@ -362,15 +378,7 @@ class MongoQueueProcessor {
         }
     }
 
-    /**
-     * Process a delete object entry
-     * @param {Logger.newRequestLogger} log - request logger object
-     * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
-     * @param {string} location - zenko storage location name
-     * @param {function} done - callback(error)
-     * @return {undefined}
-     */
-    _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
+    _deleteObjectOnce(log, sourceEntry, location, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectVersionedKey();
 
@@ -382,21 +390,74 @@ class MongoQueueProcessor {
         return this._mongoClient.deleteObject(bucket, key, undefined, log,
             err => {
                 if (err) {
-                    this._normalizePendingMetric(location);
-                    log.end().error('error deleting object metadata ' +
-                    'from mongo', {
+                    log.trace('error deleting object metadata from mongo', {
                         bucket,
                         key,
-                        error: err.message,
+                        error: err,
                         location,
                     });
                     return done(err);
                 }
-                this._produceMetricCompletionEntry(location);
-                log.end().info('object metadata deleted from mongo', {
-                    entry: sourceEntry.getLogInfo(),
-                    location,
+                return done();
+            });
+    }
+
+    /**
+     * Process a delete object entry
+     * @param {Logger.newRequestLogger} log - request logger object
+     * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
+     * @param {string} location - zenko storage location name
+     * @param {function} cb - callback(error)
+     * @return {undefined}
+     */
+    _processDeleteOpQueueEntry(log, sourceEntry, location, cb) {
+        return this.retry({
+            actionDesc: 'delete object metadata from mongo',
+            logFields: { entry: sourceEntry.getLogInfo() },
+            actionFunc: done => this._deleteObjectOnce(log,
+                sourceEntry, location, done),
+            // this call uses MongoClientInterface which does not set
+            // the 'retryable' field
+            shouldRetryFunc: err => err.code === 500,
+            log,
+        }, error => {
+            if (error) {
+                log.end().error('failed to delete object metadata from mongo', {
+                    error,
                 });
+                this._normalizePendingMetric(location);
+                return cb(error);
+            }
+            this._produceMetricCompletionEntry(location);
+            log.end().info('object metadata deleted from mongo', {
+                entry: sourceEntry.getLogInfo(),
+                location,
+            });
+            return cb();
+        });
+    }
+
+    _putObjectOnce(log, sourceEntry, objVal, location, done) {
+        const bucket = sourceEntry.getBucket();
+        // always use versioned key so putting full version state to mongo
+        const key = sourceEntry.getObjectVersionedKey();
+
+        // Always call putObject with version params undefined so
+        // that mongoClient will use putObjectNoVer which just puts
+        // the object without further manipulation/actions.
+        // S3 takes care of the versioning logic so consuming the queue
+        // is sufficient to replay the version logic in the consumer.
+        return this._mongoClient.putObject(bucket, key, objVal, undefined,
+            log, err => {
+                if (err) {
+                    log.trace('error putting object metadata to mongo', {
+                        bucket,
+                        key,
+                        error: err,
+                        location,
+                    });
+                    return done(err);
+                }
                 return done();
             });
     }
@@ -407,14 +468,10 @@ class MongoQueueProcessor {
      * @param {ObjectQueueEntry} sourceEntry - object metadata entry
      * @param {string} location - zenko storage location name
      * @param {BucketInfo} bucketInfo - bucket info object
-     * @param {function} done - callback(error)
+     * @param {function} cb - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
-        const bucket = sourceEntry.getBucket();
-        // always use versioned key so putting full version state to mongo
-        const key = sourceEntry.getObjectVersionedKey();
-
+    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, cb) {
         this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
         (err, zenkoObjMd) => {
             if (err) {
@@ -424,7 +481,7 @@ class MongoQueueProcessor {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
-                return done(err);
+                return cb(err);
             }
 
             const content = getContentType(sourceEntry, zenkoObjMd);
@@ -436,7 +493,7 @@ class MongoQueueProcessor {
                     location,
                 });
                 // identified as duplicate entry, do not store in mongo
-                return done();
+                return cb();
             }
 
             // update necessary metadata fields before saving to Zenko MongoDB
@@ -448,31 +505,32 @@ class MongoQueueProcessor {
                 zenkoObjMd);
 
             const objVal = sourceEntry.getValue();
-            // Always call putObject with version params undefined so
-            // that mongoClient will use putObjectNoVer which just puts
-            // the object without further manipulation/actions.
-            // S3 takes care of the versioning logic so consuming the queue
-            // is sufficient to replay the version logic in the consumer.
-            return this._mongoClient.putObject(bucket, key, objVal, undefined,
-                log, err => {
-                    if (err) {
-                        this._normalizePendingMetric(location);
-                        log.end().error('error putting object metadata ' +
-                        'to mongo', {
-                            bucket,
-                            key,
-                            error: err.message,
-                            location,
-                        });
-                        return done(err);
-                    }
-                    this._produceMetricCompletionEntry(location);
-                    log.end().info('object metadata put to mongo', {
+            return this.retry({
+                actionDesc: 'put object metadata to mongo',
+                logFields: { entry: sourceEntry.getLogInfo() },
+                actionFunc: done => this._putObjectOnce(log, sourceEntry,
+                    objVal, location, done),
+                // this call uses MongoClientInterface which does not set
+                // the 'retryable' field
+                shouldRetryFunc: err => err.code === 500,
+                log,
+            }, error => {
+                if (error) {
+                    log.end().error('failed to put object metadata in mongo', {
                         entry: sourceEntry.getLogInfo(),
+                        error: err,
                         location,
                     });
-                    return done();
+                    this._normalizePendingMetric(location);
+                    return cb(err);
+                }
+                this._produceMetricCompletionEntry(location);
+                log.end().info('object metadata put to mongo', {
+                    entry: sourceEntry.getLogInfo(),
+                    location,
                 });
+                return cb();
+            });
         });
     }
 
@@ -495,14 +553,7 @@ class MongoQueueProcessor {
             metricsExtension, () => {});
     }
 
-    /**
-     * Get bucket info in memoize state if exists, otherwise fetch from Mongo
-     * @param {ObjectQueueEntry} sourceEntry - object metadata entry
-     * @param {Logger.newRequestLogger} log - request logger object
-     * @param {function} cb - callback(error, BucketInfo)
-     * @return {undefined}
-     */
-    _getBucketInfo(sourceEntry, log, cb) {
+    _getBucketInfoOnce(sourceEntry, log, cb) {
         const bucketName = sourceEntry.getBucket();
         const bucketInfo = this._bucketMemState.getBucketInfo(bucketName);
         if (bucketInfo) {
@@ -511,11 +562,10 @@ class MongoQueueProcessor {
         return this._mongoClient.getBucketAttributes(bucketName, log,
         (err, bucketInfo) => {
             if (err) {
-                log.error('error getting bucket owner ' +
-                'details', {
-                    method: 'MongoQueueProcessor.processKafkaEntry',
+                log.trace('error getting bucket owner details', {
+                    method: 'MongoQueueProcessor._getBucketInfoOnce',
                     entry: sourceEntry.getLogInfo(),
-                    error: err.message,
+                    error: err,
                 });
                 return cb(err);
             }
@@ -523,6 +573,25 @@ class MongoQueueProcessor {
             this._bucketMemState.memoize(bucketName, bucketInfo);
             return cb(null, bucketInfo);
         });
+    }
+
+    /**
+     * Get bucket info in memoize state if exists, otherwise fetch from Mongo
+     * @param {ObjectQueueEntry} sourceEntry - object metadata entry
+     * @param {Logger.newRequestLogger} log - request logger object
+     * @param {function} cb - callback(error, BucketInfo)
+     * @return {undefined}
+     */
+    _getBucketInfo(sourceEntry, log, cb) {
+        return this.retry({
+            actionDesc: 'get bucket info',
+            logFields: { entry: sourceEntry.getLogInfo() },
+            actionFunc: done => this._getBucketInfoOnce(sourceEntry, log, done),
+            // this call uses MongoClientInterface which does not set
+            // the 'retryable' field
+            shouldRetryFunc: err => err.code === 500,
+            log,
+        }, cb);
     }
 
     /**
@@ -545,6 +614,12 @@ class MongoQueueProcessor {
 
         return this._getBucketInfo(sourceEntry, log, (err, bucketInfo) => {
             if (err) {
+                log.end().error('failed to get bucket info', {
+                    error: err,
+                    entry: sourceEntry.getLogInfo(),
+                    entryType: sourceEntry.constructor.name,
+                    method: 'MongoQueueProcessor.processKafkaEntry',
+                });
                 return done(err);
             }
             const location = bucketInfo.getLocationConstraint();
