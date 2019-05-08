@@ -2,6 +2,10 @@ const { Logger } = require('werelogs');
 
 const MetricsModel = require('../../lib/models/MetricsModel');
 
+/**
+ * Legacy: consider converting replication metrics with
+ * Prometheus-based {@link ReplicationMetrics} class
+ */
 class ReplicationMetric {
     constructor() {
         this._log = new Logger('ReplicationMetric');

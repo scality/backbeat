@@ -4,8 +4,10 @@ const AWS = require('aws-sdk');
 
 const Logger = require('werelogs').Logger;
 
+const ReplicationAPI =
+      require('../../../extensions/replication/ReplicationAPI');
 const LifecycleTask = require('../../../extensions/lifecycle' +
-    '/tasks/LifecycleTask');
+                              '/tasks/LifecycleTask');
 const Rule = require('../../utils/Rule');
 const testConfig = require('../../config.json');
 const { objectMD } = require('../utils/MetadataMock');
@@ -332,7 +334,11 @@ class ProducerMock {
             this.sendCount.transitions++;
             this.entries.transitions.push(entry);
         }
-        return process.nextTick(cb);
+        return process.nextTick(() => cb(null, entries.map(() => ({
+            topic: topicName,
+            partition: 1,
+            offset: 2,
+        }))));
     }
 
     getCount() {
@@ -389,6 +395,9 @@ class LifecycleBucketProcessorMock {
         this._producer = new ProducerMock();
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
+
+        // set test topic name
+        ReplicationAPI.setDataMoverTopic('data-mover');
     }
 
     getCount() {
@@ -411,7 +420,6 @@ class LifecycleBucketProcessorMock {
             s3Auth: lifecycle.auth,
             bucketTasksTopic: 'bucket-tasks',
             objectTasksTopic: 'object-tasks',
-            dataMoverTopic: 'data-mover',
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
         };
