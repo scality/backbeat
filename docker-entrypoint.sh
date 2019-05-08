@@ -68,6 +68,10 @@ if [[ "$QUEUE_POPULATOR_DMD_PORT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.dmd.port=\"$QUEUE_POPULATOR_DMD_PORT\""
 fi
 
+if [[ "$QUEUE_POPULATOR_BATCH_MAX_READ" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.batchMaxRead=\"$QUEUE_POPULATOR_BATCH_MAX_READ\""
+fi
+
 if [[ "$MONGODB_HOSTS" ]]; then
    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.logSource=\"mongo\""
    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.mongo.replicaSetHosts=\"$MONGODB_HOSTS\""
