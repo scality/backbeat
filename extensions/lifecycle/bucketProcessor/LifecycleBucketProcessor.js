@@ -103,7 +103,6 @@ class LifecycleBucketProcessor {
             s3Auth: this._lcConfig.auth,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
-            dataMoverTopic: this._repConfig.dataMoverTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
         };

@@ -14,6 +14,8 @@ const Logger = werelogs.Logger;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const ReplicationAPI =
+      require('../../../extensions/replication/ReplicationAPI');
 const QueueProcessor = require('../../../extensions/replication' +
                                '/queueProcessor/QueueProcessor');
 const ReplicationStatusProcessor =
@@ -675,20 +677,22 @@ function onCopyLocationResultsMessage(kafkaEntry, cb) {
 }
 
 function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
-    const actionEntry = ActionQueueEntry.create('copyLocation')
-          .setAttribute('target', {
-              bucket: s3mock.getParam('source.bucket'),
-              key: s3mock.getParam('key'),
-              version: s3mock.getParam('versionIdEncoded'),
-          })
-          .setAttribute('toLocation', 'sf')
+    const actionEntry = ReplicationAPI.createCopyLocationAction({
+        bucketName: s3mock.getParam('source.bucket'),
+        objectKey: s3mock.getParam('key'),
+        versionId: s3mock.getParam('versionIdEncoded'),
+        toLocation: 'sf',
+        originLabel: 'functionalTest',
+        fromLocation: 'local',
+        contentLength: s3mock.getParam('source.md.contentLength'),
+        resultsTopic: constants.copyLocationResultsTopic,
+    });
     // use role-based authentication here to ease test integration
     // with CRR, lifecycle will normally use its own service account
     // so will not need to provide the "auth" attribute.
-          .setAttribute('auth', {
-              roleArn: s3mock.getParam('source.role'),
-          })
-          .setResultsTopic(constants.copyLocationResultsTopic);
+    actionEntry.setAttribute('auth', {
+        roleArn: s3mock.getParam('source.role'),
+    });
     const actionId = actionEntry.getActionId();
     copyLocationResultsCb = kafkaEntry => {
         const response = ActionQueueEntry

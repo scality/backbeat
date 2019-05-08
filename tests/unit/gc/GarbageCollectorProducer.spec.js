@@ -27,7 +27,11 @@ class KafkaProducerMock {
                                    JSON.parse(messages[0].message));
             this._expectedMessage = null;
         }
-        return process.nextTick(cb);
+        return process.nextTick(() => cb(null, messages.map(() => ({
+            topic: 'gc-topic',
+            partition: 1,
+            offset: 2,
+        }))));
     }
 }
 

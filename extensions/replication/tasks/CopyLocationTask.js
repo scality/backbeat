@@ -8,6 +8,7 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ReplicationMetric = require('../ReplicationMetric');
+const ReplicationMetrics = require('../ReplicationMetrics');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
@@ -140,8 +141,19 @@ class CopyLocationTask extends BackbeatTask {
                 }
                 return this._getAndPutObject(actionEntry, objMD, log, next);
             },
-        ], err => this._publishCopyLocationStatus(
-            err, actionEntry, kafkaEntry, log, done));
+        ], err => {
+            const retArgs = this._publishCopyLocationStatus(
+                err, actionEntry, kafkaEntry, log);
+
+            const { origin, fromLocation, contentLength } =
+                  actionEntry.getAttribute('metrics');
+            ReplicationMetrics.onReplicationProcessed(
+                origin, fromLocation, this.site, contentLength,
+                actionEntry.getStatus(),
+                actionEntry.getElapsedMs());
+
+            return done(null, retArgs);
+        });
     }
 
     _getSourceMD(actionEntry, log, cb) {
@@ -761,14 +773,14 @@ class CopyLocationTask extends BackbeatTask {
         return null;
     }
 
-    _publishCopyLocationStatus(err, actionEntry, kafkaEntry, log, done) {
+    _publishCopyLocationStatus(err, actionEntry, kafkaEntry, log) {
         if (err && !actionEntry.getError()) {
             actionEntry.setError(err);
         }
         log.info('action execution ended', actionEntry.getLogInfo());
         if (!actionEntry.getResultsTopic()) {
             // no result requested, we may commit immediately
-            return process.nextTick(() => done(null, { committable: true }));
+            return { committable: true };
         }
         this.replicationStatusProducer.sendToTopic(
             actionEntry.getResultsTopic(),
@@ -788,7 +800,7 @@ class CopyLocationTask extends BackbeatTask {
                     this.dataMoverConsumer.onEntryCommittable(kafkaEntry);
                 }
             });
-        return process.nextTick(() => done(null, { committable: false }));
+        return { committable: false };
     }
 }
 
