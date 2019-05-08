@@ -190,11 +190,20 @@ describe('MongoQueueProcessor', function mqp() {
     });
 
     describe('::_getZenkoObjectMetadata', () => {
+        function testGetZenkoObjectMetadata(entry, cb) {
+            mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+            (error, bucketInfo) => {
+                assert.ifError(error);
+
+                mqp._getZenkoObjectMetadata(fakeLogger, entry, bucketInfo, cb);
+            });
+        }
+
         it('should return empty if key does not exist in mongo', done => {
             const key = 'nonexistant';
             const objmd = new ObjectMD().setKey(key);
             const entry = new ObjectQueueEntry(BUCKET, key, objmd);
-            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
+            testGetZenkoObjectMetadata(entry, (err, res) => {
                 assert.ifError(err);
 
                 assert.strictEqual(res, undefined);
@@ -209,12 +218,34 @@ describe('MongoQueueProcessor', function mqp() {
                                 .setKey(KEY)
                                 .setVersionId(NEW_VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
+            testGetZenkoObjectMetadata(entry, (err, res) => {
                 assert.ifError(err);
 
                 assert.strictEqual(res, undefined);
                 return done();
             });
+        });
+
+        it('should return empty if bucket replication info is disabled',
+        done => {
+            const disabledRepInfo = Object.assign({}, mockReplicationInfo, {
+                rules: [{ enabled: false }],
+            });
+            const disabledMockBucketInfo = {
+                getReplicationConfiguration: () => disabledRepInfo,
+            };
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                                .setKey(KEY)
+                                .setVersionId(NEW_VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry,
+                disabledMockBucketInfo, (err, res) => {
+                    assert.ifError(err);
+
+                    assert.strictEqual(res, undefined);
+                    return done();
+                });
         });
 
         it('should return object metadata for existing version', done => {
@@ -223,8 +254,9 @@ describe('MongoQueueProcessor', function mqp() {
                                 .setKey(KEY)
                                 .setVersionId(VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(fakeLogger, entry, (err, res) => {
+            testGetZenkoObjectMetadata(entry, (err, res) => {
                 assert.ifError(err);
+
                 assert(res);
                 assert.strictEqual(res.versionId, VERSION_ID);
                 return done();

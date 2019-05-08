@@ -172,7 +172,15 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(log, entry, done) {
+    _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
+        // NOTE: This is only used for updating replication info. If the Zenko
+        //   bucket does not have repInfo set, then we can ignore fetching
+        const bucketRepInfo = bucketInfo.getReplicationConfiguration();
+        if (!bucketRepInfo || !bucketRepInfo.rules ||
+            !bucketRepInfo.rules[0].enabled) {
+            return done();
+        }
+
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
@@ -182,7 +190,7 @@ class MongoQueueProcessor {
             params.versionId = entry.getVersionId();
         }
 
-        this._mongoClient.getObject(bucket, key, params, log,
+        return this._mongoClient.getObject(bucket, key, params, log,
         (err, data) => {
             if (err && err.NoSuchKey) {
                 return done();
@@ -407,7 +415,8 @@ class MongoQueueProcessor {
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
-        this._getZenkoObjectMetadata(log, sourceEntry, (err, zenkoObjMd) => {
+        this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
+        (err, zenkoObjMd) => {
             if (err) {
                 this._normalizePendingMetric(location);
                 log.end().error('error processing object queue entry', {
