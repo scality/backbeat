@@ -1,5 +1,8 @@
 const assert = require('assert');
 const async = require('async');
+
+const { metrics } = require('arsenal');
+
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
@@ -77,6 +80,12 @@ describe('BackbeatConsumer main tests', () => {
         let topicOffset;
         let consumerOffset;
         const zkMetricsPath = `/test/kafka-backlog-metrics/${topic}/0`;
+        const latestConsumedMetric = metrics.ZenkoMetrics.getMetric(
+            'zenko_queue_latest_consumed_message_timestamp');
+        const beforeConsume = Date.now();
+        // reset to 0 before the test
+        latestConsumedMetric.reset();
+
         function _checkZkMetrics(done) {
             async.waterfall([
                 next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
@@ -91,6 +100,12 @@ describe('BackbeatConsumer main tests', () => {
                 assert.strictEqual(topicOffset, consumerOffset);
                 done();
             });
+        }
+        function _checkPromMetrics() {
+            const latestConsumedMetricValues =
+                  latestConsumedMetric.get().values;
+            assert.strictEqual(latestConsumedMetricValues.length, 1);
+            assert(latestConsumedMetricValues[0].value >= beforeConsume / 1000);
         }
         consumer.subscribe();
         consumer.on('consumed', messagesConsumed => {
@@ -111,6 +126,9 @@ describe('BackbeatConsumer main tests', () => {
                 assert.deepStrictEqual(
                     messages.map(e => e.message),
                     consumedMessages.map(buffer => buffer.toString()));
+                // Prometheus metrics are updated locally in memory so
+                // immediately visible
+                _checkPromMetrics();
             }
         });
         consumeCb = done;

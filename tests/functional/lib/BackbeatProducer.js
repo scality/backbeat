@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { errors } = require('arsenal');
+const { errors, metrics } = require('arsenal');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-producer-spec';
@@ -27,9 +27,19 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
         });
         after(() => { producer = null; });
 
-        it('should be able to send one message', done => {
+        it('should be able to send one message and update metrics', done => {
+            const beforeSend = Date.now();
+            const latestPublishedMetric = metrics.ZenkoMetrics.getMetric(
+                'zenko_queue_latest_published_message_timestamp');
+            // reset to 0 before the test
+            latestPublishedMetric.reset();
             producer.send(oneMessage, err => {
                 assert.ifError(err);
+                const latestPublishedMetricValues =
+                      latestPublishedMetric.get().values;
+                assert.strictEqual(latestPublishedMetricValues.length, 1);
+                assert(
+                    latestPublishedMetricValues[0].value >= beforeSend / 1000);
                 done();
             });
         }).timeout(30000);
