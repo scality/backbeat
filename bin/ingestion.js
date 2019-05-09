@@ -42,15 +42,8 @@ function getIngestionZkPath() {
     return `${zookeeperNamespace}${zkStatePath}`;
 }
 
-/* eslint-disable no-param-reassign */
-function queueBatch(ingestionPopulator, taskState, log) {
-    if (taskState.batchInProgress) {
-        log.warn('skipping ingestion batch: previous one still in progress');
-        return undefined;
-    }
+function queueBatch(ingestionPopulator, log) {
     log.debug('start queueing ingestion batch');
-    taskState.batchInProgress = true;
-
     const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates(err => {
@@ -63,7 +56,6 @@ function queueBatch(ingestionPopulator, taskState, log) {
             process.exit(1);
         }
         ingestionPopulator.processLogEntries({ maxRead }, err => {
-            taskState.batchInProgress = false;
             if (err) {
                 log.fatal('an error occurred during ingestion', {
                     method: 'bin::ingestion.queueBatch',
@@ -76,7 +68,6 @@ function queueBatch(ingestionPopulator, taskState, log) {
     });
     return undefined;
 }
-/* eslint-enable no-param-reassign */
 
 /**
  * Remove zookeeper state for a location that has been removed
@@ -276,11 +267,8 @@ function initAndStart(zkClient) {
         async.series([
             done => ingestionPopulator.open(done),
             done => {
-                const taskState = {
-                    batchInProgress: false,
-                };
                 scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
-                    () => queueBatch(ingestionPopulator, taskState, log));
+                    () => queueBatch(ingestionPopulator, log));
                 done();
             },
         ], err => {
