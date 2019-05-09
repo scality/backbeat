@@ -5,6 +5,7 @@ const { EventEmitter } = require('events');
 const fs = require('fs');
 const path = require('path');
 const joi = require('joi');
+const crypto = require('crypto');
 
 const extensions = require('../extensions');
 const backbeatConfigJoi = require('./config.joi.js');
@@ -212,6 +213,16 @@ class Config extends EventEmitter {
 
     getIsTransientLocation(locationName) {
         return this.transientLocations[locationName] || false;
+    }
+
+    getPublicInstanceId() {
+        return this.publicInstanceId;
+    }
+
+    setPublicInstanceId(instanceId) {
+        this.publicInstanceId = crypto.createHash('sha256')
+                                .update(instanceId)
+                                .digest('hex');
     }
 }
 

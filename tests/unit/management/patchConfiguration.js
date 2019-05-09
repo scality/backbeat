@@ -51,6 +51,7 @@ const configOverlay = {
             locationType: 'location-azure-v1',
         },
     },
+    instanceId: 'hello-zenko',
 };
 
 function createBucketMDObject(bucketName, locationName, ingestion) {
