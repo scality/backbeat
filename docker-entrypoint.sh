@@ -60,6 +60,10 @@ if [[ "$REDIS_PORT" ]] && [[ -z "$REDIS_SENTINELS" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .redis.port=$REDIS_PORT"
 fi
 
+if [[ "$QUEUE_POPULATOR_BATCH_MAX_READ" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.batchMaxRead=\"$QUEUE_POPULATOR_BATCH_MAX_READ\""
+fi
+
 if [[ "$QUEUE_POPULATOR_DMD_HOST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.dmd.host=\"$QUEUE_POPULATOR_DMD_HOST\""
 fi
