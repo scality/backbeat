@@ -3,7 +3,9 @@ const config = require('../../conf/Config');
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');
 
-let { dataMoverTopic } = config.extensions.replication;
+const repConfig = config.extensions.replication;
+let { dataMoverTopic } = repConfig;
+const dataMoverGroupPrefix = `${repConfig.queueProcessor.groupId}-`;
 
 class ReplicationAPI {
     /**
@@ -94,6 +96,42 @@ class ReplicationAPI {
 
     static setDataMoverTopic(newTopicName) {
         dataMoverTopic = newTopicName;
+    }
+
+    /**
+     * Extract the location name from the consumer group
+     * name's suffix (e.g. "backbeat-consumer-group-aws" -> "aws")
+     *
+     * @param {string} consumerGroup - name of kafka consumer group
+     * @return {string} location name
+     */
+    static consumerGroupToLocation(consumerGroup) {
+        if (!consumerGroup.startsWith(dataMoverGroupPrefix)) {
+            return null;
+        }
+        return consumerGroup.slice(dataMoverGroupPrefix.length);
+    }
+
+    /**
+     * Build the consumer group name from the location name
+     * (e.g. "aws" -> "backbeat-consumer-group-aws")
+     *
+     * @param {string} locationName - name of Zenko location
+     * @return {string} Kafka consumer group name
+     */
+    static locationToConsumerGroup(locationName) {
+        return `${dataMoverGroupPrefix}${locationName}`;
+    }
+
+    /**
+     * Get a regular expression that matches the name of all
+     * replication consumer groups
+     *
+     * @return {string} regular expression that matches the name of
+     * all replication consumer groups
+     */
+    static getConsumerGroupRegexp() {
+        return `${dataMoverGroupPrefix}.*`;
     }
 }
 

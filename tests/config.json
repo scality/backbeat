@@ -130,6 +130,12 @@
             "conductor": {
                 "cronRule": "0 */5 * * * *"
             },
+            "bucketProcessor": {
+                "groupId": "backbeat-test-lifecycle-bucket-processor-group"
+            },
+            "objectProcessor": {
+                "groupId": "backbeat-test-lifecycle-object-processor-group"
+            },
             "rules": {
                 "expiration": {
                     "enabled": true
@@ -159,7 +165,8 @@
         "dumpLevel": "error"
     },
     "metrics": {
-        "topic": "backbeat-test-metrics"
+        "topic": "backbeat-test-metrics",
+        "prometheusEndpoint": "127.0.0.1:80"
     },
     "server": {
         "healthChecks": {

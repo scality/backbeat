@@ -49,6 +49,7 @@ const joiSchema = {
     extensions: joi.object(),
     metrics: {
         topic: joi.string().required(),
+        prometheusEndpoint: joi.string().required(),
     },
     server: {
         healthChecks: joi.object({
