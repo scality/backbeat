@@ -260,7 +260,8 @@
         "dumpLevel": "error"
     },
     "metrics": {
-        "topic": "backbeat-metrics"
+        "topic": "backbeat-metrics",
+        "prometheusEndpoint": "127.0.0.1:80"
     },
     "server": {
         "healthChecks": {

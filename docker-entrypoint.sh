@@ -89,6 +89,10 @@ if [[ "$CLOUDSERVER_PORT" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .s3.port=\"$CLOUDSERVER_PORT\""
 fi
 
+if [[ "$PROMETHEUS_ENDPOINT" ]]; then
+   JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .metrics.prometheusEndpoint=\"$PROMETHEUS_ENDPOINT\""
+fi
+
 if [[ "$EXTENSIONS_REPLICATION_SOURCE_S3_HOST" ]]; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.source.s3.host=\"$EXTENSIONS_REPLICATION_SOURCE_S3_HOST\""
 fi

@@ -209,6 +209,100 @@ for the specified object.
 }
 ```
 
+### `/_/backbeat/api/metrics/lifecycle`
+
+This route returns a set of instant metrics related to Lifecycle feature.
+
+#### Backlog metrics
+
+Backlog metrics relate to items queued but not yet processed by Lifecycle.
+
+They are exposed for the following components:
+
+* **bucketTasks**: lifecycle policy matching tasks
+
+* **transitions**: data copy to another location for lifecycle
+  transitions, metrics are exposed separately for each target location
+
+* **objectTasks**: metadata updates related to lifecycle actions
+
+The following info is exposed for each backlog component:
+
+* **count**: number of items in backlog, i.e. queued but not yet
+    processed (summed across all partitions)
+
+* **bytes**: only for transitions: number of bytes scheduled but yet
+    to be transferred to a location for transitioning object data
+    (summed across all partitions)
+
+* **ageSeconds**: time between the latest consumed and the latest
+  published message in seconds (the maximum over all partitions of the
+  associated topic)
+
+* **ageApprox**: a human-readable approximation of `ageSeconds`,
+  e.g. `35 minutes`
+
+#### Notes
+
+* Because of a technical limitation, **ageSeconds** and **ageApprox**
+  do not use the timestamp of the oldest unconsumed message as a
+  starting point, as they should ideally, but the timestamp of the
+  newest consumed message. Generally speaking the latter should give a
+  good approximation of the former, but it's possible to see sudden
+  spikes of age for a few seconds when new lifecycle tasks arrive,
+  because the latest consumed message may be much older than the new
+  messages that just arrived without having been consumed yet.
+
+* The metrics returned are an approximation of the real backlog
+  values, because of the use of Prometheus functions that can
+  interpolate the raw scraped samples, and because we query Prometheus
+  based on instant backlog age per partition, which depends on the
+  current time and on timing of previous scrapes. While the metrics
+  will not give sample-level accuracy, notably for small backlogs,
+  they should be accurate enough to give a good idea of the scale of
+  the backlog.
+
+**Example Output**:
+
+```
+{
+  "lifecycle": {
+    "backlog": {
+      "bucketTasks": {
+        "count": 2,
+        "ageSeconds": 0,
+        "ageApprox": "0 seconds"
+      },
+      "objectTasks": {
+        "count": 39,
+        "ageSeconds": 43,
+        "ageApprox": "43 seconds"
+      },
+      "transitions": {
+        "aws": {
+          "count": 883,
+          "bytes": 70640252,
+          "ageSeconds": 18,
+          "ageApprox": "18 seconds"
+        },
+        "gcp": {
+          "count": 0,
+          "bytes": 0,
+          "ageSeconds": 0,
+          "ageApprox": "0 seconds"
+        },
+        "us-east-2": {
+          "count": 0,
+          "bytes": 0,
+          "ageSeconds": 0,
+          "ageApprox": "0 seconds"
+        }
+      }
+    }
+  }
+}
+```
+
 ## Design
 
 ### Cross-Region Replication (CRR)
