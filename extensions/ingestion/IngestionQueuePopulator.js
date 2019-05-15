@@ -29,7 +29,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
         this.log.debug('publishing entry',
                        { entryBucket: entry.bucket, entryKey: entry.key });
-        this.publish(this.config.topic,
+        // entry.bucket === zenko target bucket name
+        this.publish(entry.bucket,
                      `${entry.bucket}/${entry.key}`,
                      JSON.stringify(entry));
 
