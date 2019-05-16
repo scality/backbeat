@@ -9,6 +9,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         super(params);
         this.config = params.config;
         this._instanceId = params.instanceId;
+
+        this._batch = [];
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
@@ -114,6 +116,21 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             }
         }
         return false;
+    }
+
+    publish(zenkoBucket, key, message) {
+        const kafkaEntry = { key: encodeURIComponent(key), message };
+        this.log.trace('queueing kafka entry to topic', {
+            key: kafkaEntry.key,
+            bucket: zenkoBucket,
+        });
+        this._batch.push(kafkaEntry);
+    }
+
+    getEntries() {
+        const dupe = this._batch.slice();
+        this._batch.splice(0, dupe.length);
+        return dupe;
     }
 
     /**
