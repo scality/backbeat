@@ -27,16 +27,22 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
         });
         after(() => { producer = null; });
 
-        it('should be able to send one message', done => {
-            producer.send(oneMessage, err => {
+        it('should be able to send one message and get delivery reports back',
+        done => {
+            producer.send(oneMessage, (err, reports) => {
                 assert.ifError(err);
+                assert(Array.isArray(reports));
+                assert.strictEqual(reports.length, 1);
                 done();
             });
         }).timeout(30000);
 
-        it('should be able to send a batch of messages', done => {
-            producer.send(multipleMessages, err => {
+        it('should be able to send a batch of messages and get delivery ' +
+        'reports back', done => {
+            producer.send(multipleMessages, (err, reports) => {
                 assert.ifError(err);
+                assert(Array.isArray(reports));
+                assert.strictEqual(reports.length, 3);
                 done();
             });
         }).timeout(30000);

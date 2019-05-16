@@ -8,6 +8,7 @@ const config = require('../../../conf/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const ReplicationAPI = require('../../replication/ReplicationAPI');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -64,10 +65,10 @@ class LifecycleTask extends BackbeatTask {
     _snapshotDataMoverTopicOffsets(log) {
         this.kafkaBacklogMetrics.snapshotTopicOffsets(
             this.producer.getKafkaProducer(),
-            this.dataMoverTopic, 'lifecycle', err => {
+            ReplicationAPI.getDataMoverTopic(), 'lifecycle', err => {
                 if (err) {
                     log.error('error during snapshot of topic offsets', {
-                        topic: this.dataMoverTopic,
+                        topic: ReplicationAPI.getDataMoverTopic(),
                         error: err.message,
                     });
                 }
@@ -83,34 +84,6 @@ class LifecycleTask extends BackbeatTask {
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
         this.producer.sendToTopic(this.objectTasksTopic, entries, cb);
-    }
-
-    /**
-     * Send entry to the data mover topic
-     * @param {ActionQueueEntry} entry - The action entry to send to the topic
-     * @param {Logger.newRequestLogger} log - logger object
-     * @param {Function} cb - The callback to call
-     * @return {undefined}
-     */
-    _sendDataMoverAction(entry, log, cb) {
-        const { bucket, key } = entry.getAttribute('target');
-        const entries = [{ key: `${bucket}/${key}`,
-                           message: entry.toKafkaMessage() }];
-        this.producer.sendToTopic(this.dataMoverTopic, entries, err => {
-            if (err) {
-                log.error('could not send entry for consumption',
-                    Object.assign({
-                        method: 'LifecycleTask._sendDataMoverAction',
-                        error: err,
-                    }, entry.getLogInfo()));
-                return cb(err);
-            }
-            log.debug('sent entry for consumption',
-                Object.assign({
-                    method: 'LifecycleTask._sendDataMoverAction',
-                }, entry.getLogInfo()));
-            return cb();
-        });
     }
 
     /**
@@ -883,21 +856,23 @@ class LifecycleTask extends BackbeatTask {
     }
 
     _getTransitionActionEntry(params, objectMD, log, cb) {
-        const entry = ActionQueueEntry.create('copyLocation')
-            .setResultsTopic(this.objectTasksTopic)
-            .addContext({
-                origin: 'lifecycle',
-                ruleType: 'transition',
-                reqId: log.getSerializedUids(),
-            })
-            .setAttribute('target', {
-                bucket: params.bucket,
-                key: params.objectKey,
-                version: params.encodedVersionId,
-                eTag: params.eTag,
-                lastModified: params.lastModified,
-            })
-            .setAttribute('toLocation', params.site);
+        const entry = ReplicationAPI.createCopyLocationAction({
+            bucketName: params.bucket,
+            objectKey: params.objectKey,
+            versionId: params.encodedVersionId,
+            eTag: params.eTag,
+            lastModified: params.lastModified,
+            toLocation: params.site,
+            originLabel: 'lifecycle',
+            fromLocation: objectMD.getDataStoreName(),
+            contentLength: objectMD.getContentLength(),
+            resultsTopic: this.objectTasksTopic,
+        });
+        entry.addContext({
+            origin: 'lifecycle',
+            ruleType: 'transition',
+            reqId: log.getSerializedUids(),
+        });
 
         if (this._canUnconditionallyGarbageCollect(objectMD)) {
             return cb(null, entry);
@@ -940,7 +915,8 @@ class LifecycleTask extends BackbeatTask {
             (objectMD, next) =>
                 this._getTransitionActionEntry(params, objectMD, log, next),
             (entry, next) =>
-                this._sendDataMoverAction(entry, log, next),
+                ReplicationAPI.sendDataMoverAction(
+                    this.producer, entry, log, next),
         ], err => {
             if (err) {
                 log.error('could not apply transition rule', {
