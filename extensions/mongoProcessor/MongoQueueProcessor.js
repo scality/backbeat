@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const AWS = require('aws-sdk');
-const http = require('http');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -17,12 +15,11 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
-const { getAccountCredentials } =
-    require('../../lib/credentials/AccountCredentials');
 const MetricsProducer = require('../../lib/MetricsProducer');
 const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
 const getContentType = require('./utils/contentTypeHelper');
+const BucketMemState = require('./utils/BucketMemState');
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -40,9 +37,6 @@ class MongoQueueProcessor {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {String} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {Object} s3Config - s3 config
-     * @param {String} s3Config.host - host ip
-     * @param {String} s3Config.port - port
      * @param {Object} mongoProcessorConfig - mongo processor configuration
      *   object
      * @param {String} mongoProcessorConfig.topic - topic name
@@ -63,24 +57,20 @@ class MongoQueueProcessor {
      * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
-     * @param {Object} serviceAuth - ingestion service auth
      * @param {Object} mConfig - metrics config
      */
-    constructor(kafkaConfig, s3Config, mongoProcessorConfig, mongoClientConfig,
-                serviceAuth, mConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
-        this._serviceAuth = serviceAuth;
         this._mConfig = mConfig;
 
-        this._s3Endpoint = `http://${s3Config.host}:${s3Config.port}`;
-        this._s3Client = null;
         this._consumer = null;
         this._bootstrapList = null;
         this.logger = new Logger('Backbeat:Ingestion:MongoProcessor');
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
+        this._bucketMemState = new BucketMemState(Config);
     }
 
     _setupMetricsClients(cb) {
@@ -90,40 +80,12 @@ class MongoQueueProcessor {
     }
 
     /**
-     * Return an S3 client instance using the given account credentials.
-     * @param {Object} accountCreds - Object containing account credentials
-     * @param {String} accountCreds.accessKeyId - The account access key
-     * @param {String} accountCreds.secretAccessKey - The account secret key
-     * @return {AWS.S3} The S3 client instance to make requests with
-     */
-    _getS3Client(accountCreds) {
-        return new AWS.S3({
-            endpoint: this._s3Endpoint,
-            credentials: {
-                accessKeyId: accountCreds.accessKeyId,
-                secretAccessKey: accountCreds.secretAccessKey,
-            },
-            sslEnabled: false,
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: {
-                agent: new http.Agent({ keepAlive: true }),
-                timeout: 0,
-            },
-            maxRetries: 0,
-        });
-    }
-
-    /**
      * Start kafka consumer
      *
      * @return {undefined}
      */
     start() {
         this.logger.info('starting mongo queue processor');
-        const credentials = getAccountCredentials(this._serviceAuth,
-                                                  this.logger);
-        this._s3Client = this._getS3Client(credentials);
         async.series([
             next => this._setupMetricsClients(err => {
                 if (err) {
@@ -210,7 +172,15 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(entry, done) {
+    _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
+        // NOTE: This is only used for updating replication info. If the Zenko
+        //   bucket does not have repInfo set, then we can ignore fetching
+        const bucketRepInfo = bucketInfo.getReplicationConfiguration();
+        if (!bucketRepInfo || !bucketRepInfo.rules ||
+            !bucketRepInfo.rules[0].enabled) {
+            return done();
+        }
+
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
@@ -220,13 +190,13 @@ class MongoQueueProcessor {
             params.versionId = entry.getVersionId();
         }
 
-        this._mongoClient.getObject(bucket, key, params, this.logger,
+        return this._mongoClient.getObject(bucket, key, params, log,
         (err, data) => {
             if (err && err.NoSuchKey) {
                 return done();
             }
             if (err) {
-                this.logger.error('error getting zenko object metadata', {
+                log.error('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
                     error: err.message,
                     entry: entry.getLogInfo(),
@@ -394,12 +364,13 @@ class MongoQueueProcessor {
 
     /**
      * Process a delete object entry
+     * @param {Logger.newRequestLogger} log - request logger object
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
      * @param {string} location - zenko storage location name
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processDeleteOpQueueEntry(sourceEntry, location, done) {
+    _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectVersionedKey();
 
@@ -408,11 +379,11 @@ class MongoQueueProcessor {
         // the object without further manipulation/actions.
         // S3 takes care of the versioning logic so consuming the queue
         // is sufficient to replay the version logic in the consumer.
-        return this._mongoClient.deleteObject(bucket, key, undefined,
-            this.logger, err => {
+        return this._mongoClient.deleteObject(bucket, key, undefined, log,
+            err => {
                 if (err) {
                     this._normalizePendingMetric(location);
-                    this.logger.error('error deleting object metadata ' +
+                    log.end().error('error deleting object metadata ' +
                     'from mongo', {
                         bucket,
                         key,
@@ -422,7 +393,7 @@ class MongoQueueProcessor {
                     return done(err);
                 }
                 this._produceMetricCompletionEntry(location);
-                this.logger.info('object metadata deleted from mongo', {
+                log.end().info('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
@@ -432,21 +403,23 @@ class MongoQueueProcessor {
 
     /**
      * Process an object entry
+     * @param {Logger.newRequestLogger} log - request logger object
      * @param {ObjectQueueEntry} sourceEntry - object metadata entry
      * @param {string} location - zenko storage location name
      * @param {BucketInfo} bucketInfo - bucket info object
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(sourceEntry, location, bucketInfo, done) {
+    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
 
-        this._getZenkoObjectMetadata(sourceEntry, (err, zenkoObjMd) => {
+        this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
+        (err, zenkoObjMd) => {
             if (err) {
                 this._normalizePendingMetric(location);
-                this.logger.error('error processing object queue entry', {
+                log.end().error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                     location,
@@ -457,7 +430,7 @@ class MongoQueueProcessor {
             const content = getContentType(sourceEntry, zenkoObjMd);
             if (content.length === 0) {
                 this._normalizePendingMetric(location);
-                this.logger.debug('skipping duplicate entry', {
+                log.end().debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
                     location,
@@ -481,10 +454,10 @@ class MongoQueueProcessor {
             // S3 takes care of the versioning logic so consuming the queue
             // is sufficient to replay the version logic in the consumer.
             return this._mongoClient.putObject(bucket, key, objVal, undefined,
-                this.logger, err => {
+                log, err => {
                     if (err) {
                         this._normalizePendingMetric(location);
-                        this.logger.error('error putting object metadata ' +
+                        log.end().error('error putting object metadata ' +
                         'to mongo', {
                             bucket,
                             key,
@@ -494,7 +467,7 @@ class MongoQueueProcessor {
                         return done(err);
                     }
                     this._produceMetricCompletionEntry(location);
-                    this.logger.info('object metadata put to mongo', {
+                    log.end().info('object metadata put to mongo', {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
@@ -523,6 +496,36 @@ class MongoQueueProcessor {
     }
 
     /**
+     * Get bucket info in memoize state if exists, otherwise fetch from Mongo
+     * @param {ObjectQueueEntry} sourceEntry - object metadata entry
+     * @param {Logger.newRequestLogger} log - request logger object
+     * @param {function} cb - callback(error, BucketInfo)
+     * @return {undefined}
+     */
+    _getBucketInfo(sourceEntry, log, cb) {
+        const bucketName = sourceEntry.getBucket();
+        const bucketInfo = this._bucketMemState.getBucketInfo(bucketName);
+        if (bucketInfo) {
+            return cb(null, bucketInfo);
+        }
+        return this._mongoClient.getBucketAttributes(bucketName, log,
+        (err, bucketInfo) => {
+            if (err) {
+                log.error('error getting bucket owner ' +
+                'details', {
+                    method: 'MongoQueueProcessor.processKafkaEntry',
+                    entry: sourceEntry.getLogInfo(),
+                    error: err.message,
+                });
+                return cb(err);
+            }
+            // memoize BucketInfo
+            this._bucketMemState.memoize(bucketName, bucketInfo);
+            return cb(null, bucketInfo);
+        });
+    }
+
+    /**
      * Put kafka queue entry into mongo
      *
      * @param {object} kafkaEntry - entry generated by ingestion populator
@@ -532,57 +535,29 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
-            this.logger.error('error processing source entry',
+            log.end().error('error processing source entry',
                               { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
 
-        const bucketName = sourceEntry.getBucket();
-        return async.series([
-            next => this._mongoClient.getBucketAttributes(bucketName,
-                this.logger, (err, bucketInfo) => {
-                    if (err) {
-                        this.logger.error('error getting bucket owner ' +
-                        'details', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            entry: sourceEntry.getLogInfo(),
-                            error: err.message,
-                        });
-                        return done(err);
-                    }
-                    return next(null, bucketInfo);
-                }),
-            next => this._s3Client.getBucketLocation({ Bucket: bucketName },
-                (err, data) => {
-                    if (err) {
-                        this.logger.error('error getting bucket location ' +
-                        'constraint', {
-                            method: 'MongoQueueProcessor.processKafkaEntry',
-                            error: err,
-                        });
-                        return done(err);
-                    }
-                    const location = data.LocationConstraint;
-                    return next(null, location);
-                }),
-        ], (err, results) => {
+        return this._getBucketInfo(sourceEntry, log, (err, bucketInfo) => {
             if (err) {
                 return done(err);
             }
-            const bucketInfo = results[0];
-            const location = results[1];
+            const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._processDeleteOpQueueEntry(sourceEntry, location,
-                    done);
+                return this._processDeleteOpQueueEntry(log, sourceEntry,
+                    location, done);
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
-                return this._processObjectQueueEntry(sourceEntry, location,
+                return this._processObjectQueueEntry(log, sourceEntry, location,
                     bucketInfo, done);
             }
-            this.logger.warn('skipping unknown source entry', {
+            log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),
                 entryType: sourceEntry.constructor.name,
                 method: 'MongoQueueProcessor.processKafkaEntry',

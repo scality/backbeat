@@ -8,13 +8,11 @@ const config = require('../../conf/Config');
 const { initManagement } = require('../../lib/management/index');
 
 const kafkaConfig = config.kafka;
-const s3Config = config.s3;
 const mConfig = config.metrics;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
 // TODO: consider whether we would want a separate mongo config
 // for the consumer side
 const mongoClientConfig = config.queuePopulator.mongo;
-const ingestionServiceAuth = config.extensions.ingestion.auth;
 
 const healthServer = new HealthProbeServer({
     bindAddress: config.healthcheckServer.bindAddress,
@@ -25,8 +23,8 @@ const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-const mqp = new MongoQueueProcessor(kafkaConfig, s3Config, mongoProcessorConfig,
-    mongoClientConfig, ingestionServiceAuth, mConfig);
+const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
+    mongoClientConfig, mConfig);
 
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
@@ -42,6 +40,7 @@ function loadHealthcheck() {
 }
 
 function loadManagementDatabase() {
+    const ingestionServiceAuth = config.extensions.ingestion.auth;
     initManagement({
         serviceName: 'md-ingestion',
         serviceAccount: ingestionServiceAuth.account,
