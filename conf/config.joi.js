@@ -45,6 +45,7 @@ const joiSchema = {
                 port: joi.number().required(),
             })
         ),
+        sentinelPassword: joi.string().default('').allow(''),
     },
     certFilePaths: certFilePathsJoi,
     internalCertFilePaths: certFilePathsJoi,
