@@ -18,7 +18,6 @@ const redisConfig = {
     host: config.redis.host,
     port: config.redis.port,
 };
-const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = {
@@ -63,15 +62,14 @@ describe('CRR Pause/Resume status updates', function d() {
             const zkClient = zkHelper.getClient();
 
             // qpSite1 (first site) is not paused
-            qpSite1 = new QueueProcessor(zkConfig, zkClient,
-                kafkaConfig, sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, {}, {}, firstSite);
+            qpSite1 = new QueueProcessor(zkClient, kafkaConfig, sourceConfig,
+                destConfig, repConfig, redisConfig, mConfig, {}, {}, firstSite);
             qpSite1.start();
 
             // qpSite2 (second site) is paused and has a scheduled resume
-            qpSite2 = new QueueProcessor(zkConfig, zkClient,
-               kafkaConfig, sourceConfig, destConfig, repConfig,
-               redisConfig, mConfig, {}, {}, secondSite);
+            qpSite2 = new QueueProcessor(zkClient, kafkaConfig, sourceConfig,
+                destConfig, repConfig, redisConfig, mConfig, {}, {},
+                secondSite);
             qpSite2.start({ paused: true });
             qpSite2.scheduleResume(futureDate);
 

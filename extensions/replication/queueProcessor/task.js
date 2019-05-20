@@ -162,8 +162,7 @@ function initAndStart(zkClient) {
                 if (updatedSites.includes(site)) {
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(
-                            zkConfig, zkClient, kafkaConfig,
-                            sourceConfig, destConfig,
+                            zkClient, kafkaConfig, sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig, site);
                         activeQProcessors[site] = qp;
@@ -196,7 +195,7 @@ function initAndStart(zkClient) {
         // Start QueueProcessor for each site
         const siteNames = bootstrapList.map(i => i.site);
         async.each(siteNames, (site, next) => {
-            const qp = new QueueProcessor(zkConfig, zkClient,
+            const qp = new QueueProcessor(zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig, site);
             activeQProcessors[site] = qp;

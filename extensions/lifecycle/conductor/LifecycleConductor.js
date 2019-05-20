@@ -9,7 +9,6 @@ const Logger = require('werelogs').Logger;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
-const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -31,9 +30,6 @@ class LifecycleConductor {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {String} [kafkaConfig.backlogMetrics] - kafka topic
-     * metrics config object (see {@link BackbeatConsumer} constructor
-     * for params)
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.zookeeperPath - base path for
      * lifecycle nodes in zookeeper
@@ -43,26 +39,26 @@ class LifecycleConductor {
      * control params
      * @param {Boolean} [lcConfig.backlogControl.enabled] - enable
      * lifecycle backlog control
+     * @param {String} [lcConfig.backlogMetrics] - backlog metrics
+     * config object to hold on if backlog is non-null (see
+     * {@link BackbeatConsumer} constructor for params)
      * @param {String} lcConfig.conductor - config object specific to
      *   lifecycle conductor
      * @param {String} [lcConfig.conductor.cronRule="* * * * *"] -
      *   cron rule for bucket processing periodic task
      * @param {Number} [lcConfig.conductor.concurrency=10] - maximum
      *   number of concurrent bucket-to-kafka operations allowed
-     * @param {Object} repConfig - replication configuration object
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, repConfig) {
+    constructor(zkConfig, kafkaConfig, lcConfig) {
         this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
-        this.repConfig = repConfig;
         this._cronRule =
             this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
         this._concurrency =
             this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
         this._producer = null;
         this._zkClient = null;
-        this._kafkaBacklogMetrics = null;
         this._started = false;
         this._cronJob = null;
         this._totalProcessingCycles = 0;
@@ -72,6 +68,18 @@ class LifecycleConductor {
 
     getBucketsZkPath() {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
+    }
+
+    _getPartitionsOffsetsZkPath(topic) {
+        return `${this.lcConfig.backlogMetrics.zkPath}/${topic}`;
+    }
+
+    _getOffsetZkPath(topic, partition, offsetType, groupId) {
+        const basePath =
+                  `${this._getPartitionsOffsetsZkPath(topic)}/${partition}`;
+        return (offsetType === 'topic' ?
+                `${basePath}/topic` :
+                `${basePath}/consumers/${groupId}`);
     }
 
     initZkPaths(cb) {
@@ -140,54 +148,103 @@ class LifecycleConductor {
     }
 
     _controlBacklog(done) {
-        // skip backlog control step in the following cases:
-        // - disabled in config
-        // - backlog metrics not configured
-        // - on first processing cycle (to guarantee progress in case
-        //   of restarts)
+        /* skip backlog control step in the following cases:
+         * - disabled in config
+         * - backlog metrics not configured
+         * - on first processing cycle (to guarantee progress in case
+         *   of restarts)
+         */
         if (!this.lcConfig.conductor.backlogControl.enabled ||
-            !this.kafkaConfig.backlogMetrics ||
+            !this.lcConfig.backlogMetrics ||
             this._totalProcessingCycles === 0) {
             return process.nextTick(done);
         }
-        // check that previous lifecycle batch has completely been
-        // processed from all topics before starting a new one
-        return async.series({
-            // check that bucket tasks topic consumer lag is 0 (no
-            // need to allow any lag because the conductor expects
-            // everything to be processed in a single cycle before
-            // starting another one, so pass maxLag=0)
-            bucketTasksCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerLag(
+        return async.series([
+            next => this._controlBacklogForTopic(
                 this.lcConfig.bucketTasksTopic,
-                this.lcConfig.bucketProcessor.groupId, 0, next),
-
-            // check that object tasks topic consumer lag is 0
-            objectTasksCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerLag(
+                this.lcConfig.bucketProcessor.groupId, next),
+            next => this._controlBacklogForTopic(
                 this.lcConfig.objectTasksTopic,
-                this.lcConfig.objectProcessor.groupId, 0, next),
+                this.lcConfig.objectProcessor.groupId, next),
+        ], err => done(err));
+    }
 
-            // check that data mover topic consumer has progressed
-            // beyond the latest lifecycle snapshot of topic offsets,
-            // which means everything from the latest lifecycle batch
-            // has been consumed
-            dataMoverCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerProgress(
-                this.repConfig.dataMoverTopic, null, 'lifecycle', next),
-        }, (err, checkResults) => {
+    _readZkOffset(topic, partition, offsetType, groupId, done) {
+        const zkPath = this._getOffsetZkPath(topic, partition, offsetType,
+                                             groupId);
+        this._zkClient.getData(zkPath, (err, offsetData) => {
             if (err) {
+                this.logger.error('error reading offset from zookeeper',
+                                  { topic, partition, offsetType,
+                                    error: err.message });
                 return done(err);
             }
-            const doSkip = Object.keys(checkResults).some(
-                checkType => checkResults[checkType] !== undefined);
-            if (doSkip) {
-                this.logger.info('skipping lifecycle batch due to ' +
-                                 'previous operation still in progress',
-                                 checkResults);
-                return done(errors.Throttling);
+            let offset;
+            try {
+                offset = JSON.parse(offsetData);
+            } catch (err) {
+                this.logger.error('malformed JSON data for offset',
+                                  { topic, partition, offsetType,
+                                    error: err.message });
+                return done(errors.InternalError);
             }
-            return done();
+            if (!Number.isInteger(offset)) {
+                this.logger.error('offset not a number',
+                                  { topic, partition, offsetType });
+                return done(errors.InternalError);
+            }
+            return done(null, offset);
+        });
+    }
+
+    _controlBacklogForTopic(topic, groupId, done) {
+        const partitionsZkPath = this._getPartitionsOffsetsZkPath(topic);
+        this._zkClient.getChildren(partitionsZkPath, (err, partitions) => {
+            if (err) {
+                if (err.getCode() === zookeeper.Exception.NO_NODE) {
+                    // no consumer has yet published his offset
+                    return done();
+                }
+                this.logger.error(
+                    'error getting list of consumer offsets from zookeeper',
+                    { topic, error: err.message });
+                return done(err);
+            }
+            return async.eachSeries(partitions, (partition, partitionDone) => {
+                let consumerOffset;
+                let topicOffset;
+                async.waterfall([
+                    next => this._readZkOffset(topic, partition,
+                                               'consumer', groupId, next),
+                    (offset, next) => {
+                        consumerOffset = offset;
+                        this._readZkOffset(topic, partition,
+                                           'topic', null, next);
+                    },
+                    (offset, next) => {
+                        topicOffset = offset;
+                        const backlog = topicOffset - consumerOffset;
+                        this.logger.debug(
+                            'backlog computed for consumer/topic',
+                            { topic, partition,
+                              consumerOffset, topicOffset, backlog });
+                        // No need to allow any backlog because the
+                        // conductor expects everything to be
+                        // processed in a single cycle before starting
+                        // another one.
+                        if (backlog <= 0) {
+                            // partition has been consumed timely enough
+                            return next();
+                        }
+                        this.logger.info(
+                            'skipping lifecycle batch due to ' +
+                                'operation backlog still in progress',
+                            { topic, partition,
+                              consumerOffset, topicOffset, backlog });
+                        return next(errors.Throttling);
+                    },
+                ], partitionDone);
+            }, done);
         });
     }
 
@@ -242,26 +299,7 @@ class LifecycleConductor {
                     next();
                 });
             },
-            next => this._initKafkaBacklogMetrics(next),
         ], done);
-    }
-
-    _initKafkaBacklogMetrics(cb) {
-        this._kafkaBacklogMetrics = new KafkaBacklogMetrics(
-            this.zkConfig.connectionString, this.kafkaConfig.backlogMetrics);
-        this._kafkaBacklogMetrics.init();
-        this._kafkaBacklogMetrics.once('error', cb);
-        this._kafkaBacklogMetrics.once('ready', () => {
-            // just in case there would be more 'error' events emitted
-            this._kafkaBacklogMetrics.removeAllListeners('error');
-            this._kafkaBacklogMetrics.on('error', err => {
-                this._log.error('error from kafka topic metrics', {
-                    error: err.message,
-                    method: 'LifecycleConductor._initKafkaBacklogMetrics',
-                });
-            });
-            cb();
-        });
     }
 
     _startCronJob() {
@@ -332,8 +370,7 @@ class LifecycleConductor {
     isReady() {
         const state = this._zkClient && this._zkClient.getState();
         return this._producer && this._producer.isReady() && state &&
-            state.code === zookeeper.State.SYNC_CONNECTED.code &&
-            this._kafkaBacklogMetrics.isReady();
+            state.code === zookeeper.State.SYNC_CONNECTED.code;
     }
 }
 

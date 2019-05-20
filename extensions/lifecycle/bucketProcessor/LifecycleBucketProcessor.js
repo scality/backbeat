@@ -9,7 +9,6 @@ const { errors } = require('arsenal');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const LifecycleTask = require('../tasks/LifecycleTask');
 const { getAccountCredentials } =
@@ -39,9 +38,6 @@ class LifecycleBucketProcessor {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {Object} [kafkaConfig.backlogMetrics] - param object to
-     * publish kafka topic metrics to zookeeper (see {@link
-     * BackbeatConsumer} constructor)
      * @param {Object} extensions - backbeat config extensions object
      * @param {Object} extensions.lifecycle - lifecycle config
      * @param {Object} extensions.lifecycle.auth - authentication info
@@ -56,6 +52,9 @@ class LifecycleBucketProcessor {
      * @param {Object} extensions.replication.source - replication source
      * @param {Number} [lcConfig.bucketProcessor.concurrency] - number
      *  of max allowed concurrent operations
+     * @param {Object} [lcConfig.backlogMetrics] - param object to
+     * publish backlog metrics to zookeeper (see {@link
+     * BackbeatConsumer} constructor)
      * @param {Object} s3Config - s3 config
      * @param {String} s3Config.host - host ip
      * @param {String} s3Config.port - port
@@ -70,7 +69,6 @@ class LifecycleBucketProcessor {
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
         this._transport = transport;
         this._producer = null;
-        this._kafkaBacklogMetrics = null;
         this.accountCredsCache = {};
 
         // The task scheduler for processing lifecycle tasks concurrently.
@@ -103,7 +101,6 @@ class LifecycleBucketProcessor {
             s3Auth: this._lcConfig.auth,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
-            kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
         };
     }
@@ -269,14 +266,12 @@ class LifecycleBucketProcessor {
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
             },
-            kafka: {
-                hosts: this._kafkaConfig.hosts,
-                backlogMetrics: this._kafkaConfig.backlogMetrics,
-            },
+            kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,
             concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
+            backlogMetrics: this._lcConfig.backlogMetrics,
         });
         this._consumer.on('error', err => {
             if (!consumerReady) {
@@ -412,29 +407,9 @@ class LifecycleBucketProcessor {
                 });
                 process.exit(1);
             }
+            this._setupConsumer();
             this._producer = producer;
-            this._initKafkaBacklogMetrics(() => {
-                this._setupConsumer();
-                this._log.info(
-                    'lifecycle bucket processor successfully started');
-            });
-        });
-    }
-
-    _initKafkaBacklogMetrics(cb) {
-        this._kafkaBacklogMetrics = new KafkaBacklogMetrics(
-            this._zkConfig.connectionString, this._kafkaConfig.backlogMetrics);
-        this._kafkaBacklogMetrics.init();
-        this._kafkaBacklogMetrics.once('ready', () => {
-            this._kafkaBacklogMetrics.removeAllListeners('error');
-            cb();
-        });
-        this._kafkaBacklogMetrics.once('error', err => {
-            this._log.error('error setting up kafka topic metrics', {
-                error: err,
-                method: 'LifecycleBucketProcessor._initKafkaBacklogMetrics',
-            });
-            process.exit(1);
+            this._log.info('lifecycle bucket processor successfully started');
         });
     }
 

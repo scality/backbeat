@@ -36,9 +36,6 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
-     * @param {Object} [kafkaConfig.backlogMetrics] - param object to
-     * publish kafka topic metrics to zookeeper (see {@link
-     * BackbeatConsumer} constructor)
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
@@ -47,6 +44,9 @@ class LifecycleObjectProcessor extends EventEmitter {
      * consumer group id
      * @param {Number} [lcConfig.objectProcessor.concurrency] - number
      *  of max allowed concurrent operations
+     * @param {Object} [lcConfig.backlogMetrics] - param object to
+     * publish backlog metrics to zookeeper (see {@link
+     * BackbeatConsumer} constructor)
      * @param {Object} s3Config - S3 configuration
      * @param {Object} s3Config.host - s3 endpoint host
      * @param {Number} s3Config.port - s3 endpoint port
@@ -88,14 +88,12 @@ class LifecycleObjectProcessor extends EventEmitter {
                     zookeeper: {
                         connectionString: this.zkConfig.connectionString,
                     },
-                    kafka: {
-                        hosts: this.kafkaConfig.hosts,
-                        backlogMetrics: this.kafkaConfig.backlogMetrics,
-                    },
+                    kafka: { hosts: this.kafkaConfig.hosts },
                     topic: this.lcConfig.objectTasksTopic,
                     groupId: this.lcConfig.objectProcessor.groupId,
                     concurrency: this.lcConfig.objectProcessor.concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
+                    backlogMetrics: this.lcConfig.backlogMetrics,
                 });
                 this._consumer.on('error', () => {
                     if (!consumerReady) {

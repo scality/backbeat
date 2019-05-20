@@ -22,6 +22,10 @@ const joiSchema = {
             adminCredentialsFile: joi.string().optional(),
         }).when('type', { is: 'vault', then: joi.required() }),
     }).required(),
+    backlogMetrics: {
+        zkPath: joi.string().default('/lifecycle/run/backlog-metrics'),
+        intervalS: joi.number().default(60),
+    },
     conductor: {
         cronRule: joi.string().required(),
         concurrency: joi.number().greater(0).default(10),

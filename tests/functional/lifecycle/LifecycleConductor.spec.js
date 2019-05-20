@@ -18,17 +18,15 @@ const zkConfig = {
 };
 const kafkaConfig = {
     hosts: '127.0.0.1:9092',
-    backlogMetrics: {
-        zkPath: '/test/lifecycle/kafka-backlog-metrics',
-        intervalS: 1,
-    },
 };
-
 const lcConfig = {
     zookeeperPath: '/test/lifecycle',
     bucketTasksTopic: 'backbeat-lifecycle-bucket-tasks-spec',
     objectTasksTopic: 'backbeat-lifecycle-object-tasks-spec',
-    kafka: kafkaConfig,
+    backlogMetrics: {
+        zkPath: '/test/lifecycle/backlog-metrics',
+        intervalS: 1,
+    },
     conductor: {
         cronRule: '*/5 * * * * *',
         backlogControl: {
@@ -48,12 +46,8 @@ const lcConfig = {
     },
 };
 
-const repConfig = {
-    dataMoverTopic: 'backbeat-data-mover-spec',
-};
-
 const lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-                                           kafkaConfig, lcConfig, repConfig);
+                                           kafkaConfig, lcConfig);
 
 const TIMEOUT = 120000;
 const CONSUMER_TIMEOUT = 60000;

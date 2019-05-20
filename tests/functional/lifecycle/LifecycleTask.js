@@ -20,7 +20,7 @@ const s3config = {
 };
 
 const backbeatMetadataProxyMock = {
-    headLocation: (headLocationParams, log, cb) => {
+    headObject: (headObjectParams, log, cb) => {
         cb(null, {
             lastModified: 'Thu, 28 Mar 2019 21:33:15 GMT',
         });
@@ -348,31 +348,6 @@ class ProducerMock {
     getEntries() {
         return this.entries;
     }
-
-    getKafkaProducer() {
-        return null;
-    }
-}
-
-class KafkaBacklogMetricsMock {
-    constructor() {
-        this.reset();
-        this.producer = null;
-    }
-
-    setProducer(producer) {
-        this.producer = producer;
-    }
-
-    reset() {
-        this.sendCountAtLastSnapshot = null;
-    }
-
-    snapshotTopicOffsets(kafkaClient, topic, snapshotName, cb) {
-        this.sendCountAtLastSnapshot = JSON.parse(
-            JSON.stringify(this.producer.sendCount));
-        return process.nextTick(cb);
-    }
 }
 
 class LifecycleBucketProcessorMock {
@@ -393,8 +368,6 @@ class LifecycleBucketProcessorMock {
         };
 
         this._producer = new ProducerMock();
-        this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
-        this._kafkaBacklogMetrics.setProducer(this._producer);
 
         // set test topic name
         ReplicationAPI.setDataMoverTopic('data-mover');
@@ -420,14 +393,12 @@ class LifecycleBucketProcessorMock {
             s3Auth: lifecycle.auth,
             bucketTasksTopic: 'bucket-tasks',
             objectTasksTopic: 'object-tasks',
-            kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
         };
     }
 
     reset() {
         this._producer.reset();
-        this._kafkaBacklogMetrics.reset();
     }
 }
 
@@ -457,10 +428,7 @@ s3mock, params, cb) {
         // timeout for it to complete.
         const timeout = params.timeout || 0;
         return setTimeout(() => {
-            const count = params.lcp.getCount();
-            assert.deepStrictEqual(
-                count, params.lcp._kafkaBacklogMetrics.sendCountAtLastSnapshot);
-            cb(null, { count, entries });
+            cb(null, { count: params.lcp.getCount(), entries });
         }, timeout);
     });
 }
