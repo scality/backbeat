@@ -31,6 +31,19 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
+class AWSLogger {
+    constructor() {
+        this.logger = new Logger('AWS');
+    }
+    log(message) {
+        this.logger.info(message);
+    }
+}
+
+const AWS = require('aws-sdk');
+AWS.config.logger = new AWSLogger();
+
+
 const {
     zookeeperNamespace,
     zkStatePath,
@@ -170,6 +183,19 @@ class QueueProcessor extends EventEmitter {
                 ctx.entry, ctx.kafkaEntry, done),
             ctx => getTaskSchedulerQueueKey(ctx.entry),
             ctx => getTaskSchedulerDedupeKey(ctx.entry));
+
+        let previousTick;
+        setInterval(function() {
+            const now = Date.now();
+            if(previousTick) {
+                if (now - 1000 - previousTick > 1000) {
+                    this.logger.warn(
+                        'event loop stuck for more than one second',
+                        { delay: `${now - 1000 - previousTick}ms` });
+                }
+            }
+            previousTick = now;
+        }, 1000);
     }
 
     _setupVaultclientCache() {

@@ -20,8 +20,6 @@ const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
 
 const MPU_CONC_LIMIT = 10;
 
-AWS.config.logger = console;
-
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }

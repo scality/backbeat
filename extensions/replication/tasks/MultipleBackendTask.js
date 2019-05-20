@@ -47,6 +47,8 @@ class MultipleBackendTask extends ReplicateObject {
 
         this._setupSourceClients(this.sourceRole, log);
 
+        log.debug('getting bucket replication right now',
+                  { entry: entry.getLogInfo() });
         const req = this.S3source.getBucketReplication({
             Bucket: entry.getBucket(),
         });
@@ -65,6 +67,8 @@ class MultipleBackendTask extends ReplicateObject {
                 err.origin = 'source';
                 return cb(err);
             }
+            log.debug('received bucket replication response',
+                      { entry: entry.getLogInfo() });
             const replicationEnabled = data.ReplicationConfiguration.Rules
                 .some(rule => rule.Status === 'Enabled' &&
                     entry.getObjectKey().startsWith(rule.Prefix));
