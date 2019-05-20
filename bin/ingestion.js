@@ -53,6 +53,8 @@ function queueBatch(ingestionPopulator, log) {
                 method: 'bin::ingestion.queueBatch',
             });
             scheduler.cancel();
+            console.log(`\n---> EXIT in apply updates`)
+            console.log(err)
             process.exit(1);
         }
         ingestionPopulator.processLogEntries({ maxRead }, err => {
@@ -62,6 +64,8 @@ function queueBatch(ingestionPopulator, log) {
                     error: err,
                 });
                 scheduler.cancel();
+                console.log(`\n---> EXIT in process log entries`)
+                console.log(err);
                 process.exit(1);
             }
         });
@@ -217,6 +221,8 @@ function updateProcessors(zkClient, bootstrapList) {
             log.fatal('error setting location state in zookeeper', {
                 method: 'bin::ingestion.updateProcessors',
             });
+            console.log(`\n---> EXIT in update processors`)
+            console.log(err)
             process.exit(1);
         }
     });
@@ -228,6 +234,7 @@ function loadHealthcheck() {
         if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
             return true;
         }
+        console.log(`\n---> STATE CODE: ${state.code}`)
         log.error(`Zookeeper is not connected! ${state}`);
         return false;
     });
@@ -277,6 +284,8 @@ function initAndStart(zkClient) {
                     method: 'bin::ingestion.initAndStart',
                     error: err,
                 });
+                console.log(`\n---> EXIT in initAndStart`)
+                console.log(err)
                 process.exit(1);
             }
             loadHealthcheck();
@@ -294,6 +303,8 @@ zkClient.once('error', err => {
     });
     // error occurred at startup trying to start internal clients,
     // fail immediately
+    console.log(`\n---> EXIT in zkClient setup - should not happen`)
+    console.log(err)
     process.exit(1);
 });
 zkClient.once('ready', () => {
@@ -308,6 +319,8 @@ zkClient.once('ready', () => {
             });
             // error occurred at startup trying to start internal clients,
             // fail immediately
+            console.log(`\n---> EXIT in zkClient.mkdirp - should not happen`)
+            console.log(err)
             process.exit(1);
         }
         return initAndStart(zkClient);

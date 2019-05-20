@@ -24,6 +24,10 @@ const BucketMemState = require('./utils/BucketMemState');
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
 
+function getElapsedTime(elapsedTime) {
+    return elapsedTime[0] * 1000 + elapsedTime[1] / 1000000;
+}
+
 /**
  * @class MongoQueueProcessor
  *
@@ -71,6 +75,13 @@ class MongoQueueProcessor {
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
         this._bucketMemState = new BucketMemState(Config);
+
+        this._avg = { count: 0, total: 0 };
+        this._accruedMetrics = {};
+
+        setInterval(() => {
+            this._sendMetrics();
+        }, 5000);
     }
 
     _setupMetricsClients(cb) {
@@ -370,7 +381,7 @@ class MongoQueueProcessor {
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
+    _processDeleteOpQueueEntry(log, sourceEntry, location, done, st) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectVersionedKey();
 
@@ -393,10 +404,16 @@ class MongoQueueProcessor {
                     return done(err);
                 }
                 this._produceMetricCompletionEntry(location);
-                log.end().info('object metadata deleted from mongo', {
+                log.end().debug('object metadata deleted from mongo', {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
+                // TODO end
+                const elapsedTime = process.hrtime(st);
+                // console.log(getElapsedTime(elapsedTime))
+                this._avg.count++;
+                this._avg.total += getElapsedTime(elapsedTime);
+                console.log((this._avg.total / this._avg.count).toFixed(4), this._avg.count);
                 return done();
             });
     }
@@ -410,7 +427,7 @@ class MongoQueueProcessor {
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
+    _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done, st) {
         const bucket = sourceEntry.getBucket();
         // always use versioned key so putting full version state to mongo
         const key = sourceEntry.getObjectVersionedKey();
@@ -467,19 +484,40 @@ class MongoQueueProcessor {
                         return done(err);
                     }
                     this._produceMetricCompletionEntry(location);
-                    log.end().info('object metadata put to mongo', {
+                    log.end().debug('object metadata put to mongo', {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
+                    // TODO end
+                    const elapsedTime = process.hrtime(st);
+                    // console.log(getElapsedTime(elapsedTime))
+                    this._avg.count++;
+                    this._avg.total += getElapsedTime(elapsedTime);
+                    console.log((this._avg.total / this._avg.count).toFixed(4), this._avg.count);
                     return done();
                 });
         });
     }
 
+    _sendMetrics() {
+        Object.keys(this._accruedMetrics).forEach(loc => {
+            const count = this._accruedMetrics[loc];
+            this._accruedMetrics[loc] -= count;
+            const metric = { [loc]: { ops: count } };
+            this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+                metricsExtension, () => {});
+        });
+    }
+
     _produceMetricCompletionEntry(location) {
-        const metric = { [location]: { ops: 1 } };
-        this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-            metricsExtension, () => {});
+        if (this._accruedMetrics[location]) {
+            this._accruedMetrics[location] += 1;
+        } else {
+            this._accruedMetrics[location] = 0;
+        }
+        // const metric = { [location]: { ops: 1 } };
+        // this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+        //     metricsExtension, () => {});
     }
 
     /**
@@ -535,6 +573,7 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        const startTime = process.hrtime();
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
@@ -551,11 +590,11 @@ class MongoQueueProcessor {
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
                 return this._processDeleteOpQueueEntry(log, sourceEntry,
-                    location, done);
+                    location, done, startTime);
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
                 return this._processObjectQueueEntry(log, sourceEntry, location,
-                    bucketInfo, done);
+                    bucketInfo, done, startTime);
             }
             log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),

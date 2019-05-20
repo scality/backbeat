@@ -129,7 +129,17 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
 
     getEntries() {
         const dupe = this._batch.slice();
-        this._batch.splice(0, dupe.length);
+        if (dupe.length > 0) {
+            // const log = this.log.newRequestLogger();
+            // const before = this._batch.length;
+            this._batch.splice(0, dupe.length);
+            // console.log('-----')
+            // log.end().info('============', {
+            //     before,
+            //     after: this._batch.length,
+            //     dupe: dupe.length,
+            // });
+        }
         return dupe;
     }
 
