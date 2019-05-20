@@ -1,4 +1,4 @@
-FROM node:8-alpine
+FROM zenko/node:8-alpine
 
 WORKDIR /usr/src/app
 
