@@ -3,7 +3,7 @@ const assert = require('assert');
 const ReplicationTaskScheduler = require(
     '../../../extensions/replication/utils/ReplicationTaskScheduler');
 
-describe('replication task scheduler', () => {
+describe.skip('replication task scheduler', () => {
     it('should ensure serialization of updates to the same versioned object',
     done => {
         const taskScheduler = new ReplicationTaskScheduler(
