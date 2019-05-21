@@ -173,9 +173,8 @@ class IngestionPopulatorMock extends IngestionPopulator {
         this._added.push(newSource);
     }
 
-    _closeLogState(source, cb) {
+    _closeLogState(source) {
         this._removed.push(source);
-        return cb();
     }
 }
 
