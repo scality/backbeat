@@ -568,7 +568,8 @@ class MongoQueueProcessor {
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady();
+        return this._consumer && this._consumer.isReady() &&
+               this._mongoClient && this._mongoClient.isConnected();
     }
 }
 

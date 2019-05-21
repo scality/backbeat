@@ -224,11 +224,13 @@ function updateProcessors(zkClient, bootstrapList) {
 
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
-        const state = ingestionPopulator.zkStatus();
-        if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
+        const zkState = ingestionPopulator.zkStatus();
+        const readyState = ingestionPopulator.isReady();
+        if (zkState.code === zookeeper.State.SYNC_CONNECTED.code &&
+            readyState) {
             return true;
         }
-        log.error(`Zookeeper is not connected! ${state}`);
+        log.error('Ingestion populator is not ready', { zkState, readyState });
         return false;
     });
     log.info('Starting health probe server');
