@@ -21,6 +21,9 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
 
+// batch metrics and send based on timer
+const SEND_METRIC_TIMER = 5000;
+
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
 
@@ -71,6 +74,8 @@ class MongoQueueProcessor {
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
         this._bucketMemState = new BucketMemState(Config);
+
+        this._accruedMetrics = {};
     }
 
     _setupMetricsClients(cb) {
@@ -115,6 +120,10 @@ class MongoQueueProcessor {
             Config.on('bootstrap-list-update', () => {
                 this._bootstrapList = Config.getBootstrapList();
             });
+
+            setInterval(() => {
+                this._sendMetrics();
+            }, SEND_METRIC_TIMER);
 
             let consumerReady = false;
             this._consumer = new BackbeatConsumer({
@@ -476,10 +485,22 @@ class MongoQueueProcessor {
         });
     }
 
+    _sendMetrics() {
+        Object.keys(this._accruedMetrics).forEach(loc => {
+            const count = this._accruedMetrics[loc];
+            this._accruedMetrics[loc] -= count;
+            const metric = { [loc]: { ops: count } };
+            this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+                metricsExtension, () => {});
+        });
+    }
+
     _produceMetricCompletionEntry(location) {
-        const metric = { [location]: { ops: 1 } };
-        this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-            metricsExtension, () => {});
+        if (!this._accruedMetrics[location]) {
+            this._accruedMetrics[location] = 1;
+        } else {
+            this._accruedMetrics[location] += 1;
+        }
     }
 
     /**
