@@ -33,7 +33,6 @@ const healthServer = new HealthProbeServer({
     port: config.healthcheckServer.port,
 });
 
-let scheduler;
 let ingestionPopulator;
 // memoize
 const configuredLocations = {};
@@ -52,7 +51,6 @@ function queueBatch(ingestionPopulator, log) {
                 error: err,
                 method: 'bin::ingestion.queueBatch',
             });
-            scheduler.cancel();
             console.log(`\n---> EXIT in apply updates`)
             console.log(err)
             process.exit(1);
@@ -63,7 +61,6 @@ function queueBatch(ingestionPopulator, log) {
                     method: 'bin::ingestion.queueBatch',
                     error: err,
                 });
-                scheduler.cancel();
                 console.log(`\n---> EXIT in process log entries`)
                 console.log(err);
                 process.exit(1);
@@ -274,7 +271,7 @@ function initAndStart(zkClient) {
         async.series([
             done => ingestionPopulator.open(done),
             done => {
-                scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
+                schedule.scheduleJob(ingestionExtConfigs.cronRule,
                     () => queueBatch(ingestionPopulator, log));
                 done();
             },
@@ -329,7 +326,6 @@ zkClient.once('ready', () => {
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
-    scheduler.cancel();
     ingestionPopulator.close(error => {
         if (error) {
             log.error('failed to exit properly', {
