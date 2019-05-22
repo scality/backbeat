@@ -53,6 +53,42 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: entry.getBucket(),
         });
         attachReqUids(req, log);
+        req.on('validate', () => {
+            log.debug('"validate" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('build', () => {
+            log.debug('"build" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('sign', () => {
+            log.debug('"sign" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('send', () => {
+            log.debug('"send" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('retry', () => {
+            log.debug('"retry" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('success', () => {
+            log.debug('"success" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+            });
+        });
+        req.on('error', err => {
+            log.debug('"error" event received for getBucketReplication"', {
+                entry: entry.getLogInfo(),
+                error: err.message
+            });
+        });
         return req.send((err, data) => {
             if (err) {
                 log.error('error getting replication configuration from S3', {
