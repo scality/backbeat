@@ -459,7 +459,7 @@ class ReplicateObject extends BackbeatTask {
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
-            signatureVersion: 'v4',
+            signatureVersion: 'v2',
             httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
