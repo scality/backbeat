@@ -47,6 +47,7 @@
             "topic": "backbeat-ingestion",
             "zookeeperPath": "/ingestion",
             "cronRule": "*/5 * * * * *",
+            "maxParallelReaders": 5,
             "sources": [
                 {
                     "name": "zenko-bucket",

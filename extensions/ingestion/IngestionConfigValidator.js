@@ -8,6 +8,7 @@ const joiSchema = {
     topic: joi.string().required(),
     zookeeperPath: joi.string().required(),
     cronRule: joi.string().default('*/5 * * * * *'),
+    maxParallelReaders: joi.number().greater(0).default(5),
     sources: joi.array().required(),
 };
 
