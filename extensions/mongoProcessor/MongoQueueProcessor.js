@@ -86,6 +86,12 @@ class MongoQueueProcessor {
 
     _setupMetricsClients(cb) {
         // Metrics Producer
+        // TODO: MOCKED OUT METRICS
+        // this._mProducer = {
+        //     publishMetrics: () => {},
+        //     close: () => {},
+        // }
+        // return cb()
         this._mProducer = new MetricsProducer(this.kafkaConfig, this._mConfig);
         this._mProducer.setupProducer(cb);
     }
@@ -502,15 +508,18 @@ class MongoQueueProcessor {
     _sendMetrics() {
         Object.keys(this._accruedMetrics).forEach(loc => {
             const count = this._accruedMetrics[loc];
-            this._accruedMetrics[loc] -= count;
-            const metric = { [loc]: { ops: count } };
-            this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-                metricsExtension, () => {});
+
+            if (count > 0) {
+                this._accruedMetrics[loc] -= count;
+                const metric = { [loc]: { ops: count } };
+                this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+                    metricsExtension, () => {});
+            }
         });
     }
 
     _produceMetricCompletionEntry(location) {
-        if (this._accruedMetrics[location]) {
+        if (Object.keys(this._accruedMetrics).includes(location)) {
             this._accruedMetrics[location] += 1;
         } else {
             this._accruedMetrics[location] = 0;

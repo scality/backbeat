@@ -1,6 +1,7 @@
 const async = require('async');
 const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
+const memwatch = require('memwatch-next');
 
 const werelogs = require('werelogs');
 const { HealthProbeServer } = require('arsenal').network.probe;
@@ -37,12 +38,21 @@ let ingestionPopulator;
 // memoize
 const configuredLocations = {};
 
+memwatch.on('leak', info => {
+    console.log(`[[ MEMWATCH LEAK ]]: ${JSON.stringify(info)}`);
+});
+memwatch.on('stats', stats => {
+    console.log(`- MEMWATCH STATS ${JSON.stringify(stats)}`)
+});
+
 function getIngestionZkPath() {
     return `${zookeeperNamespace}${zkStatePath}`;
 }
 
 function queueBatch(ingestionPopulator, log) {
+    // const hd = new memwatch.HeapDiff();
     log.debug('start queueing ingestion batch');
+    process.stdout.write('---> START CHECK:  ')
     const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates(err => {
@@ -65,6 +75,11 @@ function queueBatch(ingestionPopulator, log) {
                 console.log(err);
                 process.exit(1);
             }
+
+            console.log(process.memoryUsage().heapUsed);
+            // const diff = hd.end();
+            // console.log('===========\nMEMORY REPORT:')
+            // console.log(JSON.stringify(diff))
         });
     });
     return undefined;
@@ -228,13 +243,14 @@ function updateProcessors(zkClient, bootstrapList) {
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
         const state = ingestionPopulator.zkStatus();
+        console.log(`\n---> HEALTH PROBE STATE CODE: ${state.code} | ${zookeeper.State.SYNC_CONNECTED.code}`)
         if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
             return true;
         }
-        console.log(`\n---> STATE CODE: ${state.code}`)
         log.error(`Zookeeper is not connected! ${state}`);
         return false;
     });
+
     log.info('Starting health probe server');
     healthServer.start();
 }
@@ -326,6 +342,10 @@ zkClient.once('ready', () => {
 
 process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
+
+    const state = ingestionPopulator.zkStatus();
+    console.log(JSON.stringify(state))
+
     ingestionPopulator.close(error => {
         if (error) {
             log.error('failed to exit properly', {

@@ -47,6 +47,7 @@
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^3.2.2",
     "joi": "^10.6",
+    "memwatch-next": "^0.3.0",
     "mongodb": "^3.1.13",
     "node-forge": "^0.7.6",
     "node-rdkafka": "2.5.1",
