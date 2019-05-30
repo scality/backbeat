@@ -147,18 +147,38 @@ class UpdateReplicationStatus extends BackbeatTask {
         return undefined;
     }
 
-    _getUpdatedSourceEntry(params) {
+    _getUpdatedSourceEntry(params, log) {
         const { sourceEntry, refreshedEntry } = params;
         const site = sourceEntry.getSite();
-        const status = sourceEntry.getReplicationSiteStatus(site);
+        const oldStatus = refreshedEntry.getReplicationSiteStatus(site);
+        if (oldStatus === 'COMPLETED') {
+            // COMPLETED is to be considered a final state, we should
+            // not be able to override it.
+            //
+            // This in particular might happen with transient sources
+            // because we cannot read the data anymore once it's
+            // replicated everywhere and garbage collected, so any new
+            // attempt to replicate after the GC happens is bound to
+            // fail, but we don't want to set a FAILED status over a
+            // COMPLETED status since that means the replication
+            // already happened successfully.
+
+            log.info('entry replication is already COMPLETED for this ' +
+                     'location, skipping metadata update', {
+                         entry: sourceEntry.getLogInfo(),
+                         location: site,
+                     });
+            return null;
+        }
+        const newStatus = sourceEntry.getReplicationSiteStatus(site);
         let entry;
-        if (status === 'COMPLETED' && sourceEntry.getReplicationIsNFS()) {
+        if (newStatus === 'COMPLETED' && sourceEntry.getReplicationIsNFS()) {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
-        } else if (status === 'COMPLETED') {
+        } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
-        } else if (status === 'FAILED') {
+        } else if (newStatus === 'FAILED') {
             entry = refreshedEntry.toFailedEntry(site);
-        } else if (status === 'PENDING') {
+        } else if (newStatus === 'PENDING') {
             entry = refreshedEntry.toPendingEntry(site);
         }
         const versionId =
@@ -226,7 +246,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                 return done(err);
             }
             const params = { sourceEntry, refreshedEntry };
-            const updatedSourceEntry = this._getUpdatedSourceEntry(params);
+            const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
+            if (!updatedSourceEntry) {
+                return done();
+            }
             return this._putMetadata(updatedSourceEntry, log, err => {
                 if (err) {
                     return done(err);

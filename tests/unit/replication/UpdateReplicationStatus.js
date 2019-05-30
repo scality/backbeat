@@ -5,6 +5,9 @@ const UpdateReplicationStatus =
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const { replicationEntry } = require('../../utils/kafkaEntries');
 
+const { Logger } = require('werelogs');
+const log = new Logger('test:UpdateReplicationStatus');
+
 function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)
         .toCompletedEntry('sf')
@@ -17,32 +20,60 @@ function getRefreshedEntry() {
 }
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {
-    const versionId =
-        updatedSourceEntry.getReplicationSiteDataStoreVersionId(site);
     assert.strictEqual(
         updatedSourceEntry.getReplicationSiteStatus(site), status);
-    assert.strictEqual(
-        updatedSourceEntry.getReplicationSiteDataStoreVersionId(site),
-        versionId);
 }
 
-describe('update replication status', () => {
-    const rspMock = {
-        getStateVars: () => ({
-            repConfig: {
-                replicationStatusProcessor: {},
+const rspMock = {
+    getStateVars: () => ({
+        repConfig: {
+            replicationStatusProcessor: {},
+        },
+        sourceConfig: {
+            auth: {},
+            s3: {
+                host: 'localhost',
+                port: 8000,
             },
-            sourceConfig: {
-                auth: {},
-                s3: {
-                    host: 'localhost',
-                    port: 8000,
-                },
-                transport: 'http',
-            },
-        }),
-    };
+            transport: 'http',
+        },
+    }),
+};
 
+describe('UpdateReplicationStatus._getUpdatedSourceEntry()', () => {
+    const updateReplicationStatus = new UpdateReplicationStatus(rspMock);
+
+    it('should return a COMPLETED entry when site status is PENDING', () => {
+        const sourceEntry = getCompletedEntry();
+        const refreshedEntry = getRefreshedEntry();
+        const updatedSourceEntry = updateReplicationStatus
+              ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+        checkReplicationInfo('sf', 'COMPLETED', updatedSourceEntry);
+        checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
+    });
+
+    it('should return null when site status is COMPLETED and existing site ' +
+    'status is COMPLETED', () => {
+        const sourceEntry = getCompletedEntry();
+        const refreshedEntry = getCompletedEntry();
+        const updatedSourceEntry = updateReplicationStatus
+              ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+        assert.strictEqual(updatedSourceEntry, null);
+    });
+
+    it('should return null when site status is FAILED and existing site ' +
+    'status is COMPLETED', () => {
+        const sourceEntry = getCompletedEntry()
+              .toFailedEntry('sf')
+              .setSite('sf');
+        const refreshedEntry = getCompletedEntry();
+        const updatedSourceEntry = updateReplicationStatus
+              ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+        assert.strictEqual(updatedSourceEntry, null);
+    });
+});
+
+describe('UpdateReplicationStatus._getNFSUpdatedSourceEntry()', () => {
     const updateReplicationStatus = new UpdateReplicationStatus(rspMock);
 
     it('should return a COMPLETED entry when metadata has not changed', () => {
