@@ -18,6 +18,7 @@ const { initManagement } = require('../../../lib/management/index');
 const testConfig = require('../../config.json');
 const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
 const zookeeper = require('../../../lib/clients/zookeeper');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 
 const testPort = testConfig.extensions.ingestion.sources[0].port;
 const mockLogOffset = 2;
@@ -96,6 +97,7 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
 describe('ingestion reader tests with mock', function fD() {
     this.timeout(40000);
     let httpServer;
+    let producer;
 
     before(done => {
         testConfig.s3.port = testPort;
@@ -112,6 +114,16 @@ describe('ingestion reader tests with mock', function fD() {
                     this.db = this.client.db('metadata', {
                         ignoreUndefined: true,
                     });
+                    next();
+                });
+            },
+            next => {
+                const topic = testConfig.extensions.ingestion.topic;
+                producer = new BackbeatProducer({
+                    kafka: testConfig.kafka,
+                    topic,
+                });
+                producer.once('ready', () => {
                     next();
                 });
             },
@@ -211,6 +223,7 @@ describe('ingestion reader tests with mock', function fD() {
                 extensions: [ingestionQP],
                 metricsProducer: { publishMetrics: () => {} },
                 s3Config: testConfig.s3,
+                producer,
             });
             this.ingestionReader.setup(() => {
                 async.series([
@@ -348,6 +361,7 @@ describe('ingestion reader tests with mock', function fD() {
                 extensions: [ingestionQP],
                 metricsProducer: { publishMetrics: () => {} },
                 s3Config: testConfig.s3,
+                producer,
             });
             this.ingestionReader.setup(() => {
                 async.series([
