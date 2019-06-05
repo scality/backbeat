@@ -636,19 +636,6 @@ class MetricsMock {
     }
 }
 
-function aggregateMetrics(metricsArray) {
-    return metricsArray.reduce((agg, item) => {
-        Object.keys(item).forEach(site => {
-            // eslint-disable-next-line no-param-reassign
-            agg[site] = (agg[site] ? ({
-                ops: agg[site].ops + item[site].ops,
-                bytes: agg[site].bytes + item[site].bytes,
-            }) : item[site]);
-        });
-        return agg;
-    }, {});
-}
-
 /* eslint-enable max-len */
 
 describe('queue processor functional tests with mocking', () => {
@@ -754,23 +741,6 @@ describe('queue processor functional tests with mocking', () => {
                                 assert.strictEqual(s3mock.hasPutTargetData,
                                                    testCase.nbParts > 0);
                                 assert(s3mock.hasPutTargetMd);
-                                // since metrics are gathered
-                                // unordered and may be aggregated
-                                // internally, we should only check
-                                // that the aggregated numbers match
-                                // what we expect.
-                                // assert.deepStrictEqual(
-                                //     aggregateMetrics(
-                                //         metricsMock.getPublishedMetrics()),
-                                //     aggregateMetrics(
-                                //         constants.partsContents
-                                //             .slice(0, testCase.nbParts)
-                                //             .map(partContents => ({
-                                //                 sf: {
-                                //                     ops: 1,
-                                //                     bytes: partContents.length,
-                                //                 },
-                                //             }))));
                                 done();
                             }),
                     ], done);

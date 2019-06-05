@@ -375,13 +375,6 @@ class ReplicateObject extends BackbeatTask {
                 return doneOnce(err);
             }
             partObj.setDataLocation(data.Location[0]);
-            // const extMetrics = {};
-            // extMetrics[this.site] = {
-            //     ops: 1,
-            //     bytes: partObj.getPartSize(),
-            // };
-            // this.mProducer.publishMetrics(
-            //     extMetrics, metricsTypeCompleted, metricsExtension, () => {});
             return doneOnce(null, partObj.getValue());
         });
     }
