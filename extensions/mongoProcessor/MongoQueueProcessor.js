@@ -21,6 +21,9 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
 
+// batch metrics by location and send to kafka metrics topic every 5 seconds
+const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
+
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
 
@@ -71,6 +74,14 @@ class MongoQueueProcessor {
         this.mongoClientConfig.logger = this.logger;
         this._mongoClient = new MongoClient(this.mongoClientConfig);
         this._bucketMemState = new BucketMemState(Config);
+
+        // in-mem batch of metrics, we only track total entry count by location
+        // this._accruedMetrics = { zenko-location: 10 }
+        this._accruedMetrics = {};
+
+        setInterval(() => {
+            this._sendMetrics();
+        }, METRIC_REPORT_INTERVAL_MS);
     }
 
     _setupMetricsClients(cb) {
@@ -476,10 +487,35 @@ class MongoQueueProcessor {
         });
     }
 
+    /**
+     * Send accrued metrics by location to kafka
+     * @return {undefined}
+     */
+    _sendMetrics() {
+        Object.keys(this._accruedMetrics).forEach(loc => {
+            const count = this._accruedMetrics[loc];
+
+            // only report metrics if something has been recorded for location
+            if (count > 0) {
+                this._accruedMetrics[loc] = 0;
+                const metric = { [loc]: { ops: count } };
+                this._mProducer.publishMetrics(metric, metricsTypeCompleted,
+                    metricsExtension, () => {});
+            }
+        });
+    }
+
+    /**
+     * Accrue metrics in-mem every METRIC_REPORT_INTERVAL_MS
+     * @param {string} location - zenko storage location name
+     * @return {undefined}
+     */
     _produceMetricCompletionEntry(location) {
-        const metric = { [location]: { ops: 1 } };
-        this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-            metricsExtension, () => {});
+        if (this._accruedMetrics[location]) {
+            this._accruedMetrics[location] += 1;
+        } else {
+            this._accruedMetrics[location] = 1;
+        }
     }
 
     /**

@@ -149,17 +149,29 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
         this._mongoClient = new MongoClientMock();
         this._mProducer = {
             close: () => {},
-            publishMetrics: () => {},
+            publishMetrics: (metric, type, ext) => {
+                this.addToMetricsStore({ metric, type, ext });
+            },
         };
         this._bootstrapList = bootstrapList;
+        this._metricsStore = [];
     }
 
     sendMockEntry(entry, cb) {
         return this._consumer.sendMockEntry(entry, cb);
     }
 
+    addToMetricsStore(obj) {
+        this._metricsStore.push(obj);
+    }
+
     reset() {
+        this._accruedMetrics = {};
         this._mongoClient.reset();
+    }
+
+    resetMetricsStore() {
+        this._metricsStore = [];
     }
 
     getAdded() {
@@ -168,6 +180,10 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
 
     getDeleted() {
         return this._mongoClient.getDeleted();
+    }
+
+    getMetricsStore() {
+        return this._metricsStore;
     }
 }
 
@@ -265,6 +281,32 @@ describe('MongoQueueProcessor', function mqp() {
     });
 
     describe('::_processObjectQueueEntry', () => {
+        function validateMetricReport(type, done) {
+            // only 2 types of metric type reports
+            assert(type === 'completed' || type === 'pendingOnly');
+
+            const expectedMetricStore = [{
+                ext: 'ingestion',
+                metric: {
+                    [LOCATION]: { ops: 1 },
+                },
+                type,
+            }];
+
+            const checker = setInterval(() => {
+                const ms = mqp.getMetricsStore();
+                if (ms.length !== 0) {
+                    clearInterval(checker);
+                    assert.deepStrictEqual(expectedMetricStore, ms);
+                    done();
+                }
+            }, 1000);
+        }
+
+        afterEach(() => {
+            mqp.resetMetricsStore();
+        });
+
         it('should save to mongo a new version entry and update fields',
         done => {
             const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
@@ -321,7 +363,8 @@ describe('MongoQueueProcessor', function mqp() {
                     bootstrapList[1].site);
                 assert.strictEqual(repInfo.storageType, 'aws_s3');
                 assert.strictEqual(repInfo.dataStoreVersionId, '');
-                done();
+
+                validateMetricReport('completed', done);
             });
         });
 
@@ -346,7 +389,8 @@ describe('MongoQueueProcessor', function mqp() {
                 // since specifying content-length, should update Content
                 const repInfo = added[0].objVal.replicationInfo;
                 assert.deepStrictEqual(repInfo.content, ['DATA', 'METADATA']);
-                done();
+
+                validateMetricReport('completed', done);
             });
         });
 
@@ -372,7 +416,8 @@ describe('MongoQueueProcessor', function mqp() {
 
                 const added = mqp.getAdded();
                 assert.strictEqual(added.length, 0);
-                done();
+
+                validateMetricReport('pendingOnly', done);
             });
         });
 
@@ -399,7 +444,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.deepStrictEqual(objVal.replicationInfo.content,
                     ['METADATA', 'DELETE_TAGGING']);
 
-                done();
+                validateMetricReport('completed', done);
             });
         });
 
@@ -427,7 +472,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.deepStrictEqual(objVal.replicationInfo.content,
                     ['METADATA', 'PUT_TAGGING']);
 
-                done();
+                validateMetricReport('completed', done);
             });
         });
 
@@ -454,7 +499,7 @@ describe('MongoQueueProcessor', function mqp() {
                 const loc = objVal.location[0];
                 assert.strictEqual(decode(loc.dataStoreVersionId),
                     nullVersionId);
-                done();
+                validateMetricReport('completed', done);
             });
         });
     });
