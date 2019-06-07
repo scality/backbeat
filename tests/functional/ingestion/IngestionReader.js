@@ -63,8 +63,8 @@ function setZookeeperInitState(ingestionReader, cb) {
 }
 
 function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
-    // 2 entries per object - 1 with version key and 1 with master key
-    assert.strictEqual(kafkaEntries.length, expectedEntries.length * 2);
+    // 2 entries per object, but the master key is filtered
+    assert.strictEqual(kafkaEntries.length, expectedEntries.length);
 
     const retrievedEntries = kafkaEntries.map(entry => JSON.parse(entry.value));
 
@@ -85,7 +85,7 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
                     assert.strictEqual(JSON.stringify(entryValue[key]),
                                        JSON.stringify(kafkaValue[key]));
                 } else if (key !== 'md-model-version') {
-                   // ignore model version, but compare all other fields
+                    // ignore model version, but compare all other fields
                     assert.strictEqual(entryValue[key], kafkaValue[key]);
                 }
             });
