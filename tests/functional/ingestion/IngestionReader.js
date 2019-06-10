@@ -54,11 +54,16 @@ const consumerParams = {
 const consumer = new kafka.KafkaConsumer(consumerParams, {});
 
 function setZookeeperInitState(ingestionReader, cb) {
-    const path = `${ingestionReader.bucketInitPath}/isStatusComplete`;
+    const path = ingestionReader.bucketInitPath;
+    const statusPath = `${path}/isStatusComplete`;
+    const keyPath = `${path}/keyMarker`;
     async.series([
-        next => zkClient.mkdirp(path, next),
-        next => zkClient.setData(path, Buffer.from('true'),
+        next => zkClient.mkdirp(statusPath, next),
+        next => zkClient.setData(statusPath, Buffer.from('true'),
             -1, next),
+        // added to skip getting cseq
+        next => zkClient.mkdirp(keyPath, next),
+        next => zkClient.setData(keyPath, Buffer.from('abcd'), -1, next),
     ], cb);
 }
 
@@ -225,21 +230,20 @@ describe('ingestion reader tests with mock', function fD() {
                 s3Config: testConfig.s3,
                 producer,
             });
-            this.ingestionReader.setup(() => {
-                async.series([
-                    next => setZookeeperInitState(this.ingestionReader, next),
-                    next => zkClient.setData(
-                        this.ingestionReader.pathToLogOffset,
-                        Buffer.from('2'), -1, err => {
-                            assert.ifError(err);
-                            return next(err);
-                        }
-                    ),
-                    next => setupS3Mock(sourceConfig, next),
-                ], err => {
-                    assert.ifError(err);
-                    return done();
-                });
+            async.series([
+                next => setupS3Mock(sourceConfig, next),
+                next => this.ingestionReader.setup(next),
+                next => setZookeeperInitState(this.ingestionReader, next),
+                next => zkClient.setData(
+                    this.ingestionReader.pathToLogOffset,
+                    Buffer.from('2'), -1, err => {
+                        assert.ifError(err);
+                        return next(err);
+                    }
+                ),
+            ], err => {
+                assert.ifError(err);
+                return done();
             });
         });
 
@@ -363,14 +367,13 @@ describe('ingestion reader tests with mock', function fD() {
                 s3Config: testConfig.s3,
                 producer,
             });
-            this.ingestionReader.setup(() => {
-                async.series([
-                    next => setZookeeperInitState(this.ingestionReader, next),
-                    next => setupS3Mock(sourceConfig, next),
-                ], err => {
-                    assert.ifError(err);
-                    return done();
-                });
+            async.series([
+                next => setupS3Mock(sourceConfig, next),
+                next => this.ingestionReader.setup(next),
+                next => setZookeeperInitState(this.ingestionReader, next),
+            ], err => {
+                assert.ifError(err);
+                return done();
             });
         });
 

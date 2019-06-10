@@ -1,7 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
-const async = require('async');
 
 const config = require('../../../conf/Config');
 const IngestionPopulator =
@@ -80,33 +79,15 @@ const previousBuckets = [oldBucket, existingBucket];
 const currentLocations = Object.assign({}, existingLocation, newLocation);
 const currentBuckets = [existingBucket, newBucket];
 
-class IngestionReaderMock extends IngestionReader {
-    reset() {
-        this._updated = false;
-    }
-
-    hasUpdated() {
-        return this._updated;
-    }
-
-    /**
-     * Mock to avoid creating S3 client, avoid decrypting secret key.
-     * `IngestionReader.refresh` is called to check and update IngestionReaders.
-     * Every time this method is called indicates a valid update was found.
-     * @param {Function} cb - callback()
-     * @return {undefined}
-     */
-    _setupIngestionProducer(cb) {
-        this._updated = true;
-        return cb();
-    }
-}
-
 class IngestionPopulatorMock extends IngestionPopulator {
     reset() {
+        this.clearChanges();
+        this._ingestionSources = {};
+    }
+
+    clearChanges() {
         this._added = [];
         this._removed = [];
-        this._ingestionSources = {};
     }
 
     getAdded() {
@@ -117,45 +98,17 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return this._removed;
     }
 
-    getUpdated() {
-        const updated = [];
-        Object.keys(this._ingestionSources).forEach(s => {
-            if (this._ingestionSources[s].hasUpdated()) {
-                updated.push(s);
-            }
-        });
-        return updated;
-    }
-
-    _setupPriorState(cb) {
+    setupMock() {
+        // set previous state
         config.setIngestionBuckets(previousLocations, previousBuckets);
-        this.applyUpdates(err => {
-            if (err) {
-                return cb(err);
-            }
-            this._added = [];
-            this._removed = [];
-            return cb();
-        });
-    }
+        this.applyUpdates();
 
-    setupMock(cb) {
-        // for testing purposes
-        this.reset();
+        // reset for tests
+        this.clearChanges();
 
-        this._setupPriorState(err => {
-            if (err) {
-                return cb(err);
-            }
-
-            // mocks
-            this._extension = {
-                createZkPath: cb => cb(),
-            };
-            config.setIngestionBuckets(currentLocations, currentBuckets);
-
-            return cb();
-        });
+        // set current state
+        config.setIngestionBuckets(currentLocations, currentBuckets);
+        this.applyUpdates();
     }
 
     _setupZkLocationNode(list, cb) {
@@ -165,7 +118,7 @@ class IngestionPopulatorMock extends IngestionPopulator {
 
     addNewLogSource(newSource) {
         const zenkoBucket = newSource.name;
-        this._ingestionSources[zenkoBucket] = new IngestionReaderMock({
+        this._ingestionSources[zenkoBucket] = new IngestionReader({
             bucketdConfig: newSource,
             logger: fakeLogger,
             ingestionConfig: {},
@@ -184,13 +137,16 @@ describe('Ingestion Populator', () => {
     before(() => {
         ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
             mConfig, rConfig, ingestionConfig, s3Config);
+        ip.reset();
     });
 
-    beforeEach(done => {
-        async.series([
-            next => ip.setupMock(next),
-            next => ip.applyUpdates(next),
-        ], done);
+    beforeEach(() => {
+        ip.setupMock();
+        ip.applyUpdates();
+    });
+
+    afterEach(() => {
+        ip.reset();
     });
 
     it('should fetch correctly formed ingestion bucket object information',
@@ -264,24 +220,24 @@ describe('Ingestion Populator', () => {
         });
 
         it('should update an ingestion reader when the ingestion source ' +
-        'information is updated', done => {
-            assert.deepStrictEqual(ip.getUpdated(), []);
+        'information is updated', () => {
+            ip.clearChanges();
+
+            assert.strictEqual(Object.keys(ip._ingestionSources).length, 3);
 
             // hack to update a valid editable field
+            const updatedKeyName = 'anUpdatedKey';
             const locationName = Object.keys(existingLocation)[0];
             const dupeExistingLoc = Object.assign({}, existingLocation);
-            dupeExistingLoc[locationName].details.accessKey = 'anUpdatedKey';
+            dupeExistingLoc[locationName].details.accessKey = updatedKeyName;
             config.setIngestionBuckets(dupeExistingLoc, [existingBucket]);
 
-            ip.applyUpdates(err => {
-                assert.ifError(err);
-                const updated = ip.getUpdated();
+            ip.applyUpdates();
 
-                assert.strictEqual(updated.length, 1);
-                assert.strictEqual(updated[0], EXISTING_BUCKET);
-
-                done();
-            });
+            const added = ip.getAdded();
+            assert.strictEqual(added.length, 1);
+            assert.strictEqual(added[0].locationConstraint, locationName);
+            assert.deepStrictEqual(added[0].auth.accessKey, updatedKeyName);
         });
     });
 });

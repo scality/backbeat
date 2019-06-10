@@ -229,7 +229,8 @@ describe('Ingestion Pause/Resume', function d() {
             next => {
                 this.iPopulator._resumeService(firstLocation);
                 this.iPopulator._pauseService(secondLocation);
-                return this.iPopulator.applyUpdates(next);
+                this.iPopulator.applyUpdates();
+                return next();
             },
         ], err => {
             if (err) {
