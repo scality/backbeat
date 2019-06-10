@@ -610,7 +610,9 @@ class MongoQueueProcessor {
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady();
+        const internalClient = this._mongoClient.client;
+        return this._consumer && this._consumer.isReady() &&
+               internalClient && internalClient.isConnected();
     }
 }
 
