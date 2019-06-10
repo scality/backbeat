@@ -436,6 +436,7 @@ class MongoQueueProcessor extends BackbeatTask {
             if (error) {
                 log.end().error('failed to delete object metadata from mongo', {
                     error,
+                    method: 'MongoQueueProcessor._processDeleteOpQueueEntry',
                 });
                 this._normalizePendingMetric(location);
                 return cb(error);
@@ -539,6 +540,7 @@ class MongoQueueProcessor extends BackbeatTask {
             }, error => {
                 if (error) {
                     log.end().error('failed to put object metadata in mongo', {
+                        method: 'MongoQueueProcessor._processObjectQueueEntry',
                         entry: sourceEntry.getLogInfo(),
                         error,
                         location,
@@ -609,8 +611,7 @@ class MongoQueueProcessor extends BackbeatTask {
         return this._mongoClient.getBucketAttributes(bucketName, log,
         (err, bucketInfo) => {
             if (err) {
-                log.error('error getting bucket owner ' +
-                'details', {
+                log.error('error getting bucket owner details', {
                     method: 'MongoQueueProcessor._getBucketInfoOnce',
                     entry: sourceEntry.getLogInfo(),
                     error: err,
