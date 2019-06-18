@@ -100,7 +100,7 @@ describe('ReplicationMetrics', () => {
 
         // Check that the elapsed time histogram is accurate.
         //
-        // Focusing on the metric labeled as "success" and "10..30MB"
+        // Focusing on the metric labeled as "success" and "10MB..30MB"
         // range, we have pushed one metric in this category with 2
         // seconds of elapsed time, check that time buckets reflect
         // this. We will not check the other values pushed to keep the
@@ -115,7 +115,7 @@ describe('ReplicationMetrics', () => {
         // metric was pushed with timing less than 2 seconds)
         const leBelowTwoSeconds10M = elapsedValues.filter(
             value => (value.labels.status === 'success' &&
-                      value.labels.contentLengthRange === '10..30MB' &&
+                      value.labels.contentLengthRange === '10MB..30MB' &&
                       value.labels.le < 2));
         assert(leBelowTwoSeconds10M.length > 0);
         assert(leBelowTwoSeconds10M.every(value => value.value === 0));
@@ -125,7 +125,7 @@ describe('ReplicationMetrics', () => {
         // pushed a metric in this size range with 2 seconds elapsed)
         const leAboveTwoSeconds10M = elapsedValues.filter(
             value => (value.labels.status === 'success' &&
-                      value.labels.contentLengthRange === '10..30MB' &&
+                      value.labels.contentLengthRange === '10MB..30MB' &&
                       value.labels.le > 2));
         assert(leAboveTwoSeconds10M.length > 0);
         assert(leAboveTwoSeconds10M.every(value => value.value === 1));
