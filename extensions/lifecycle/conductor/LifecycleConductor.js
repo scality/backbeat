@@ -65,7 +65,6 @@ class LifecycleConductor {
         this._kafkaBacklogMetrics = null;
         this._started = false;
         this._cronJob = null;
-        this._totalProcessingCycles = 0;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
@@ -134,9 +133,7 @@ class LifecycleConductor {
                 }
                 return this._producer.send(entries, next);
             },
-        ], () => {
-            ++this._totalProcessingCycles;
-        });
+        ], () => {});
     }
 
     _controlBacklog(done) {
@@ -146,8 +143,7 @@ class LifecycleConductor {
         // - on first processing cycle (to guarantee progress in case
         //   of restarts)
         if (!this.lcConfig.conductor.backlogControl.enabled ||
-            !this.kafkaConfig.backlogMetrics ||
-            this._totalProcessingCycles === 0) {
+            !this.kafkaConfig.backlogMetrics) {
             return process.nextTick(done);
         }
         // check that previous lifecycle batch has completely been

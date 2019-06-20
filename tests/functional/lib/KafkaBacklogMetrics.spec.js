@@ -18,7 +18,7 @@ const kafkaConfig = {
     hosts: '127.0.0.1:9092',
     backlogMetrics: {
         zkPath: '/test/kafka-backlog-metrics',
-        intervalS: 1,
+        intervalS: 5,
     },
 };
 
@@ -161,9 +161,33 @@ describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
         });
     });
 
+    it('should ignore nodes updated before "now - 2*intervalS"', done => {
+        async.series([
+            next => zkClient.setOrCreate(
+                `${zkPath}/${TOPIC}/0/topic`, Buffer.from('5'), next),
+            next => zkClient.setOrCreate(
+                `${zkPath}/${TOPIC}/0/consumers/${GROUP_ID}`,
+                Buffer.from('3'), next),
+            next => setTimeout(
+                next, 2 * kafkaConfig.backlogMetrics.intervalS * 1000),
+            next => kafkaBacklogMetrics.checkConsumerLag(
+                TOPIC, GROUP_ID, 1, (err, info) => {
+                    assert.ifError(err);
+                    // there shall be no lag as nodes shall be ignored
+                    assert.strictEqual(info, undefined);
+                    next();
+                }),
+        ], err => {
+            assert.ifError(err);
+            done();
+        });
+    });
+
     it('should snapshot latest topic offsets and check progress', done => {
         const message = { key: 'k2', message: 'm2' };
         async.series([
+            next => kafkaBacklogMetrics.publishConsumerBacklog(
+                consumer._consumer, TOPIC, GROUP_ID, next),
             next => {
                 consumer.expectOrderedMessages(
                     [message], CONSUMER_TIMEOUT, next);
@@ -176,8 +200,9 @@ describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
             next => kafkaBacklogMetrics.checkConsumerProgress(
                 TOPIC, GROUP_ID, 'test-snapshot', (err, info) => {
                     assert.ifError(err);
-                    // there shall be lag because the consumer did not
-                    // publish its backlog yet
+                    // there shall be lag because the consumer did
+                    // consume the new message but did not publish its
+                    // offsets to zookeeper yet
                     assert.notStrictEqual(info, undefined);
                     assert.strictEqual(info.lag, 1);
                     assert.strictEqual(info.topic, TOPIC);
