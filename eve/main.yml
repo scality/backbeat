@@ -8,10 +8,10 @@ branches:
 stages:
   pre-merge:
     worker:
-      type: docker
-      path: eve/workers/unit_and_feature_tests
-      volumes:
-        - '/home/eve/workspace'
+      type: kube_pod
+      path: eve/workers/pod.yml
+      images:
+        unit_and_feature_tests: eve/workers/unit_and_feature_tests
     steps:
       - Git:
           name: fetch source
