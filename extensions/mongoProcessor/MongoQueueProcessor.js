@@ -459,16 +459,18 @@ class MongoQueueProcessor {
             const params = {};
             if (sourceEntry.getVersionId()) {
                 params.versionId = sourceEntry.getVersionId();
-                params.usePHD = true;
+                params.repairMaster = true;
             }
 
-            // For single null versions, their version id is undefined
-            // and isNull is undefined. Always call putObject with version
-            // params undefined so that mongoClient will use putObjectNoVer
-            // which just puts the object without further manipulation/actions.
-            // For all other entries, we specify `usePHD` and `versionId` in
-            // params to putObject to use putObjectVerCase4. We rely on
-            // internal logic in mongoClient for handling master version ops.
+            /**
+             * For single null versions, their version id is undefined
+             * and isNull is undefined. Always call putObject with version
+             * params undefined so that mongoClient will use putObjectNoVer
+             * which just puts the object without further manipulation/actions.
+             * For all other entries, we specify `repairMaster` and `versionId`
+             * in params to putObject to use putObjectVerCase4. We rely on
+             * internal logic in mongoClient for handling master version ops.
+             */
             return this._mongoClient.putObject(bucket, key, objVal, params,
                 this.logger, err => {
                     if (err) {
