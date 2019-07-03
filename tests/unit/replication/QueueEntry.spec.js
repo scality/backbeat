@@ -85,6 +85,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -93,6 +94,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ];
             entry.setLocation(locations);
@@ -109,6 +111,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: 'deebfb287cfcee1d137b0136562d2d776ba491e1',
@@ -117,6 +120,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -125,6 +129,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
@@ -135,6 +140,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -143,6 +149,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
         });
@@ -157,6 +164,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: 'deebfb287cfcee1d137b0136562d2d776ba491e1',
@@ -165,6 +173,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -173,6 +182,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
@@ -183,6 +193,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -191,6 +202,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
         });
@@ -205,6 +217,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: 'd1d1e055b19eb5a61adb8a665e626ff589cff233',
@@ -213,6 +226,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: 'deebfb287cfcee1d137b0136562d2d776ba491e1',
@@ -221,6 +235,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -229,6 +244,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
             assert.deepStrictEqual(entry.getReducedLocations(), [
@@ -239,6 +255,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '1:0e5a6f42662652d44fcf978399ef5709',
                     dataStoreVersionId: 'version1',
+                    blockId: undefined,
                 },
                 {
                     key: '4e67844b674b093a9e109d42172922ea1f32ec12',
@@ -247,6 +264,7 @@ describe('QueueEntry helper class', () => {
                     dataStoreName: 'file',
                     dataStoreETag: '2:9ca655158ca025aa00a818b6b81f9e48',
                     dataStoreVersionId: 'version2',
+                    blockId: undefined,
                 },
             ]);
         });
