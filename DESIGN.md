@@ -89,9 +89,9 @@ crr-what-is-isnot-replicated.html).
 **Note:** For Active/Passive setups, the target is READONLY. In a
 disaster-recovery setup, on losing Site A, a customer can point to
 Site B for READONLY actions until Site A is back up. Although the
-customer can write to Site B, these writes are not replicated to
-Site A (among other reasons because Site A may have data that is
-not fully replicated to Site B when the failure occurred).
+customer can write to Site B, these writes are not replicated to Site
+A (among other reasons, Site A may have data that is not fully
+replicated to Site B when the failure occurred).
 
 * All replication actions go through S3. S3 exposes routes for
   metadata and data backends to Backbeat.
@@ -162,9 +162,9 @@ not fully replicated to Site B when the failure occurred).
 
 There are two ways to approach this:
 
-1. Use Pub/Sub events in addition to the MetaData log in a separate topic.
-   Leverage the records in this topic by comparing to the active queue to
-   generate statistics like:
+* Use Pub/Sub events in addition to the MetaData log in a separate topic.
+  Leverage the records in this topic by comparing to the active queue to
+  generate statistics like:
 
    - RPO (Recovery Point Objective)
    - RTO (Recovery Time Objective)
@@ -173,17 +173,17 @@ There are two ways to approach this:
    - Number of objects in backlog
    - Number of objects replicated so far etc.
 
-2. Use a decoupled topic in addition to the queue topic. The
-   producers/consumers will manage this by adding records for
-   non-replicated and replicated entries. Because each entry has
-   a sequence number, calculating the difference between sequence
-   numbers of the latest non-replicated and replicated records
-   can provide the required statistics.
+* Use a decoupled topic in addition to the queue topic. The
+  producers/consumers will manage this by adding records for
+  non-replicated and replicated entries. Because each entry has
+  a sequence number, calculating the difference between sequence
+  numbers of the latest non-replicated and replicated records
+  can provide the required statistics.
 
 ## Writing Extensions
 
 A Backbeat extension enables adding more functionality to the core
-backbeat asynchronous processor. Asynchronous Replication, for example,
+backbeat asynchronous processor. Asynchronous replication, for example,
 is one of the extensions available for Backbeat.
 
 Extensions are located in the extensions/directory, with a
