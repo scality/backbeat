@@ -25,3 +25,6 @@ ARG BUILDBOT_VERSION=0.9.1
 
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
+
+RUN echo "message.max.bytes=5000020" \
+    >> /opt/kafka_2.11-0.10.1.0/config/server.properties
