@@ -1,6 +1,6 @@
 const assert = require('assert');
 const { errors } = require('arsenal');
-const BackbeatProducer = require('../../lib/BackbeatProducer');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const kafkaConf = { hosts: 'localhost:9092' };
 const topic = 'backbeat-producer-spec';
 const multipleMessages = [
@@ -9,6 +9,8 @@ const multipleMessages = [
     { key: 'qux', message: 'hi' },
 ];
 const oneMessage = [{ key: 'foo', message: 'hello world' }];
+const oneBigMessage = [{ key: 'large-foo',
+                         message: new Buffer(3000000).fill('x').toString() }];
 
 
 [
@@ -36,6 +38,14 @@ const oneMessage = [{ key: 'foo', message: 'hello world' }];
 
         it('should be able to send a batch of messages', done => {
             producer.send(multipleMessages, err => {
+                assert.ifError(err);
+                done();
+            });
+        }).timeout(30000);
+
+        it('should be able to send a big ' +
+        `${oneBigMessage[0].message.length / 1000000}MB message`, done => {
+            producer.send(oneBigMessage, err => {
                 assert.ifError(err);
                 done();
             });
