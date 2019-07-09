@@ -5,6 +5,10 @@ FROM spotify/kafka
 #
 COPY ./backbeat_packages.list ./buildbot_worker_packages.list /tmp/
 
+# Workaround since Jessie release has been archived recently
+# (https://lists.debian.org/debian-devel-announce/2019/03/msg00006.html)
+RUN rm -f /etc/apt/sources.list.d/jessie-backports.list
+
 RUN curl -sL https://deb.nodesource.com/setup_6.x | bash - \
     && cat /tmp/*packages.list | xargs apt-get install -y \
     && pip install pip==9.0.1 \
