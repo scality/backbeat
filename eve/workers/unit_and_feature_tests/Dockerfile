@@ -1,4 +1,4 @@
-FROM buildpack-deps:bionic
+FROM buildpack-deps:stretch-curl
 
 #
 # Install apt packages needed by backbeat and buildbot_worker
