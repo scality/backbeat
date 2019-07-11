@@ -1,4 +1,4 @@
-FROM buildpack-deps:xenial-curl
+FROM spotify/kafka
 
 #
 # Install apt packages needed by backbeat and buildbot_worker
