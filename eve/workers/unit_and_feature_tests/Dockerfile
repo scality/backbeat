@@ -31,3 +31,5 @@ ARG BUILDBOT_VERSION=0.9.7
 
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
+
+CMD ["supervisord", "-n"]
