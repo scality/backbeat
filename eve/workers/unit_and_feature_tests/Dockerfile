@@ -10,7 +10,6 @@ RUN curl -sL https://deb.nodesource.com/setup_10.x | bash - \
     && pip install pip==9.0.1 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /tmp/*packages.list
-    && rm -f /etc/supervisor/conf.d/*.conf
 
 #
 # Add user eve
@@ -22,7 +21,7 @@ RUN adduser -u 1042 --home /home/eve --disabled-password --gecos "" eve \
 #
 # Run buildbot-worker on startup through supervisor
 #
-ARG BUILDBOT_VERSION=2.3.0
+ARG BUILDBOT_VERSION=0.9.7
 
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
