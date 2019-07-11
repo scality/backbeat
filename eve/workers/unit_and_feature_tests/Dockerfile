@@ -1,4 +1,4 @@
-FROM spotify/kafka
+FROM buildpack-deps:bionic
 
 #
 # Install apt packages needed by backbeat and buildbot_worker
