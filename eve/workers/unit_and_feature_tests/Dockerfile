@@ -1,4 +1,4 @@
-FROM buildpack-deps:jessie-curl
+FROM buildpack-deps:xenial-curl
 
 #
 # Install apt packages needed by backbeat and buildbot_worker
