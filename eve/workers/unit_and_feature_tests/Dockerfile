@@ -34,4 +34,4 @@ ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
 
 WORKDIR /home/eve/workspace
 CMD buildbot-worker create-worker . "$BUILDMASTER:$BUILDMASTER_PORT" "$WORKERNAME" "$WORKERPASS" \
-&& buildbot-worker start --nodaemon
+    && buildbot-worker start --nodaemon
