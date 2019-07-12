@@ -1,4 +1,6 @@
 const assert = require('assert');
+const jsutil = require('arsenal').jsutil;
+
 const config = require('../../config.json');
 const MultipleBackendTask =
     require('../../../extensions/replication/tasks/MultipleBackendTask');
@@ -71,8 +73,9 @@ describe('MultipleBackendTask', function test() {
 
     describe('::initiateMultipartUpload', () => {
         it('should use exponential backoff if retryable error ', done => {
-            setTimeout(() => done(), 4000); // Retries will exceed test timeout.
-            requestInitiateMPU({ retryable: true }, done);
+            const doneOnce = jsutil.once(done);
+            setTimeout(doneOnce, 4000); // Retries will exceed test timeout.
+            requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
         it('should not use exponential backoff if non-retryable error ', done =>
