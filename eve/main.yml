@@ -22,7 +22,17 @@ models:
 
 stages:
   pre-merge:
-    worker:
+    worker: &pod
+      type: kube_pod
+      path: eve/workers/pod.yml
+    steps:
+    - TriggerStages:
+        name: trigger all the tests
+        stage_names:
+        - run-tests
+        - docker-build
+  run-tests:
+    worker: &workspace
       type: kube_pod
       path: eve/workers/pod.yml
       images:
