@@ -1,0 +1,40 @@
+---
+apiVersion: v1
+kind: Pod
+metadata:
+  name: worker
+spec:
+  containers:
+    - name: unit-and-feature-tests
+      image: "{{ images.unit_and_feature_tests }}"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: 1Gi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+      volumeMounts:
+        - name: workspace
+          mountPath: /home/eve/workspace
+    - name: kafka
+      image: "{{ images.kafka }}"
+      resources:
+        requests:
+          cpu: "250m"
+          memory: 1Gi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+    - name: redis
+      image: redis:alpine
+      resources:
+        requests:
+          cpu: "250m"
+          memory: 1Gi
+        limits:
+          cpu: "1"
+          memory: 1Gi
+  volumes:
+    - name: workspace
+      emptyDir: {}
