@@ -18,9 +18,7 @@ spec:
         - name: workspace
           mountPath: /home/eve/workspace
     - name: kafka
-      image: spotify/kafka
-      command: ["/bin/sh"]
-      args: ["-c", "echo", "message.max.bytes=5000020", ">> /opt/kafka_2.11-0.10.1.0/config/server.properties"]
+      image: "{{ images.kafka }}"
       resources:
         requests:
           cpu: "250m"
