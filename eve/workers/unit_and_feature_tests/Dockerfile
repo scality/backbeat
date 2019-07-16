@@ -1,18 +1,20 @@
-FROM spotify/kafka
+FROM buildpack-deps:xenial-curl
 
 #
 # Install apt packages needed by backbeat and buildbot_worker
 #
+ENV LANG C.UTF-8
 COPY ./backbeat_packages.list ./buildbot_worker_packages.list /tmp/
 
-# Workaround since Jessie release has been archived recently
-# (https://lists.debian.org/debian-devel-announce/2019/03/msg00006.html)
-RUN rm -f /etc/apt/sources.list.d/jessie-backports.list
-
-RUN curl -sL https://deb.nodesource.com/setup_8.x | bash - \
-    && curl -fsSL https://get.docker.com | bash - \
+RUN curl -sS http://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
+    && echo "deb http://dl.yarnpkg.com/debian/ stable main" | tee /etc/apt/sources.list.d/yarn.list \
+    && apt-get update \
     && cat /tmp/*packages.list | xargs apt-get install -y \
+    && git clone https://github.com/tj/n.git \
+    && make -C ./n \
+    && n 10 latest \
     && pip install pip==9.0.1 \
+    && rm -rf ./n \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /tmp/*packages.list
 
@@ -31,5 +33,4 @@ ARG BUILDBOT_VERSION=0.9.1
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
 
-RUN echo "message.max.bytes=5000020" \
-    >> /opt/kafka_2.11-0.10.1.0/config/server.properties
+CMD ["/bin/bash", "-l", "-c", "buildbot-worker create-worker . $BUILDMASTER:$BUILDMASTER_PORT $WORKERNAME $WORKERPASS   && buildbot-worker start --nodaemon"]

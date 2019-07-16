@@ -36,6 +36,7 @@ stages:
       path: eve/workers/pod.yml
       images:
         aggressor: eve/workers/unit_and_feature_tests
+        kafka: eve/workers/kafka
     steps:
       - Git: &git
           name: fetch source
