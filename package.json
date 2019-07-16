@@ -36,11 +36,11 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
-    "arsenal": "scality/Arsenal#9da1a8e",
+    "arsenal": "scality/Arsenal#b03f5b8",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#520d164",
+    "bucketclient": "scality/bucketclient#36e1279",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^4.9.5",
@@ -51,8 +51,8 @@
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
-    "vaultclient": "github:scality/vaultclient#754b6e1",
-    "werelogs": "scality/werelogs#74b121b"
+    "vaultclient": "scality/vaultclient#401288f",
+    "werelogs": "scality/werelogs#4e0d97c"
   },
   "devDependencies": {
     "@zenko/cloudserver": "scality/cloudserver#5839daf",

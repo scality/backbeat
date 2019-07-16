@@ -22,21 +22,12 @@ models:
 
 stages:
   pre-merge:
-    worker: &pod
+    worker:
       type: kube_pod
       path: eve/workers/pod.yml
-    steps:
-    - TriggerStages:
-        name: trigger all the tests
-        stage_names:
-        - run-tests
-        - docker-build
-  run-tests:
-    worker: &workspace
-      type: docker
-      path: eve/workers/unit_and_feature_tests
-      volumes:
-        - '/home/eve/workspace'
+      images:
+        unit_and_feature_tests: eve/workers/unit_and_feature_tests
+        kafka: eve/workers/kafka
     steps:
       - Git: &git
           name: fetch source
