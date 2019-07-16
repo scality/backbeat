@@ -9,7 +9,7 @@ stages:
   pre-merge:
     worker:
       type: kube_pod
-      path: eve/workers/pod.yml
+      path: eve/workers/unit_and_feature_tests/pod.yml
       images:
         unit_and_feature_tests: eve/workers/unit_and_feature_tests
         kafka: eve/workers/kafka
