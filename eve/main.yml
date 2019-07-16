@@ -22,9 +22,8 @@ models:
 
 stages:
   pre-merge:
-    worker: &pod
-      type: kube_pod
-      path: eve/workers/pod.yml
+    worker:
+      type: local
     steps:
     - TriggerStages:
         name: trigger all the tests
@@ -92,18 +91,16 @@ stages:
             BACKBEAT_CONFIG_FILE: "tests/config.json"
 
   docker-build:
-    worker:
+    worker: &image_builder
       type: kube_pod
-      path: eve/workers/pod.yml
+      path: eve/workers/image-builder.yml
     steps:
       - Git: *git
       - SetProperty: *docker_image_name
       - ShellCommand: *docker_build
 
   post-merge:
-    worker:
-      type: kube_pod
-      path: eve/workers/pod.yml
+    worker: *image_builder
     steps:
       - Git: *git
       - ShellCommand: &docker_login

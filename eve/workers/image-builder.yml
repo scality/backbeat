@@ -1,7 +1,7 @@
 apiVersion: v1
 kind: Pod
 metadata:
-  name: "zenko-test-pod"
+  name: "image-builder"
 spec:
   activeDeadlineSeconds: 3600
   restartPolicy: Never
