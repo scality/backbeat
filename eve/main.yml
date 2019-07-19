@@ -33,9 +33,10 @@ stages:
   run-tests:
     worker: &workspace
       type: kube_pod
-      path: eve/workers/pod.yml
+      path: eve/workers/unit_and_feature_tests/pod.yml
       images:
-        aggressor: eve/workers/unit_and_feature_tests
+        unit_and_feature_tests: eve/workers/unit_and_feature_tests
+        kafka: eve/workers/kafka
     steps:
       - Git: &git
           name: fetch source
@@ -98,14 +99,16 @@ stages:
             BACKBEAT_CONFIG_FILE: "tests/config.json"
 
   docker-build:
-    worker: *workspace
+    worker: &image_builder
+      type: kube_pod
+      path: eve/workers/image-builder.yml
     steps:
       - Git: *git
       - SetProperty: *docker_image_name
       - ShellCommand: *docker_build
 
   post-merge:
-    worker: *workspace
+    worker: *image_builder
     steps:
       - Git: *git
       - ShellCommand: &docker_login
