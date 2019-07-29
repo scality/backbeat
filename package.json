@@ -36,6 +36,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
+    "@hapi/joi": "^15.1.0",
     "arsenal": "scality/Arsenal#dd6fde6",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
@@ -44,7 +45,6 @@
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^4.9.5",
-    "joi": "^10.6",
     "node-forge": "^0.7.1",
     "node-rdkafka": "2.5.1",
     "node-schedule": "^1.2.0",

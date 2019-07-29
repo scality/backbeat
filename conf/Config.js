@@ -4,7 +4,7 @@ const { EventEmitter } = require('events');
 
 const fs = require('fs');
 const path = require('path');
-const joi = require('joi');
+const joi = require('@hapi/joi');
 
 const extensions = require('../extensions');
 const backbeatConfigJoi = require('./config.joi.js');
