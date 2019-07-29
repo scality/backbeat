@@ -1,5 +1,5 @@
 const fs = require('fs');
-const joi = require('joi');
+const joi = require('@hapi/joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi } =
     require('../../lib/config/configItems.joi.js');

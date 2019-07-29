@@ -1,4 +1,4 @@
-const joi = require('joi');
+const joi = require('@hapi/joi');
 const { zenkoAuthJoi, retryParamsJoi } =
     require('../../lib/config/configItems.joi.js');
 
