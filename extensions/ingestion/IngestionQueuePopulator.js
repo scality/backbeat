@@ -13,7 +13,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     }
 
     // called by _processLogEntry in lib/queuePopulator/LogReader.js
-    filter(entry) {
+    filter(entry, entriesToPublish) {
         if (entry.type !== 'put' && entry.type !== 'del') {
             this.log.trace('skipping entry because not type put or del');
             return;
@@ -32,7 +32,8 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
                        { entryBucket: entry.bucket, entryKey: entry.key });
         this.publish(this.config.topic,
                      `${entry.bucket}/${entry.key}`,
-                     JSON.stringify(entry));
+                     JSON.stringify(entry),
+                    entriesToPublish);
 
         this._incrementMetrics(entry.bucket);
     }
