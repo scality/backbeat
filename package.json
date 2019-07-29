@@ -28,6 +28,7 @@
   },
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
+    "@hapi/joi": "^15.1.0",
     "arsenal": "scality/Arsenal#b03f5b8",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
@@ -38,7 +39,6 @@
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#71a059ad",
     "eslint-plugin-react": "^4.2.3",
-    "joi": "^10.6",
     "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
