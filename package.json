@@ -44,7 +44,8 @@
     "node-zookeeper-client": "^0.2.2",
     "uuid": "^3.1.0",
     "vaultclient": "scality/vaultclient#90762d2",
-    "werelogs": "scality/werelogs#4e0d97c"
+    "werelogs": "scality/werelogs#4e0d97c",
+    "yarn": "^1.17.3"
   },
   "devDependencies": {
     "mocha": "^3.3.0"
