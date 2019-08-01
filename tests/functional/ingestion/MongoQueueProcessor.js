@@ -3,7 +3,7 @@
 const assert = require('assert');
 const async = require('async');
 const { ObjectMD, BucketInfo } = require('arsenal').models;
-const { decode } = require('arsenal').versioning.VersionID;
+const { decode, encode } = require('arsenal').versioning.VersionID;
 const errors = require('arsenal').errors;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
           .VersionId.Separator;
@@ -369,11 +369,38 @@ describe('MongoQueueProcessor', function mqp() {
         });
 
         it('should save to mongo a new object key with data', done => {
+            const objKey = `new-${KEY}`;
             const versionKey = `new-${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const contentLength = 110;
+            const contentMD5 = '7cccfcef3abdfaba48b2d193cb146074';
+            const objLocations = [{
+                key: objKey,
+                start: 0,
+                size: 50,
+                dataStoreName: LOCATION,
+                dataStoreETag: `1:${contentMD5}`,
+                dataStoreVersionId: encode(NEW_VERSION_ID),
+            }, {
+                key: objKey,
+                start: 50,
+                size: 50,
+                dataStoreName: LOCATION,
+                dataStoreETag: `2:${contentMD5}`,
+                dataStoreVersionId: encode(NEW_VERSION_ID),
+            }, {
+                key: objKey,
+                start: 100,
+                size: 50,
+                dataStoreName: LOCATION,
+                dataStoreETag: `3:${contentMD5}`,
+                dataStoreVersionId: encode(NEW_VERSION_ID),
+            }];
             const objmd = new ObjectMD()
-                                .setKey(`new-${KEY}`)
-                                .setVersionId(NEW_VERSION_ID)
-                                .setContentLength(110);
+                            .setKey(objKey)
+                            .setVersionId(NEW_VERSION_ID)
+                            .setContentLength(contentLength)
+                            .setContentMd5(contentMD5)
+                            .setLocation(objLocations);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
 
             async.waterfall([
@@ -386,10 +413,22 @@ describe('MongoQueueProcessor', function mqp() {
 
                 const added = mqp.getAdded();
                 assert.strictEqual(added.length, 1);
+                const obj = added[0];
                 // since specifying content-length, should update Content
-                const repInfo = added[0].objVal.replicationInfo;
+                const repInfo = obj.objVal.replicationInfo;
                 assert.deepStrictEqual(repInfo.content, ['DATA', 'METADATA']);
 
+                // assert location data
+                assert.strictEqual(obj.objVal.location.length, 1);
+                const loc = obj.objVal.location[0];
+                assert.strictEqual(loc.key, objKey);
+                assert.strictEqual(loc.size, contentLength);
+                assert.strictEqual(loc.start, 0);
+                assert.strictEqual(loc.dataStoreName, LOCATION);
+                assert.strictEqual(loc.dataStoreType, 'aws_s3');
+                assert.strictEqual(loc.dataStoreETag, `1:${contentMD5}`);
+                assert.strictEqual(decode(loc.dataStoreVersionId),
+                    NEW_VERSION_ID);
                 validateMetricReport('completed', done);
             });
         });
