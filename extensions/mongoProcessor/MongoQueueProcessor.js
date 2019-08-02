@@ -270,8 +270,9 @@ class MongoQueueProcessor {
         // as its dataStoreVersionId
         const dataStoreVersionId = entry.getVersionId() ?
             entry.getEncodedVersionId() : encode('null');
+        let zenkoDataLocations;
         if (!locations || locations.length === 0) {
-            const editLocation = [{
+            zenkoDataLocations = [{
                 key: entry.getObjectKey(),
                 size: 0,
                 start: 0,
@@ -280,19 +281,18 @@ class MongoQueueProcessor {
                 dataStoreETag: `1:${emptyFileMd5}`,
                 dataStoreVersionId,
             }];
-            entry.setLocation(editLocation);
         } else {
-            const editLocations = locations.map(location => {
-                const newValues = {
-                    key: entry.getObjectKey(),
-                    dataStoreName: zenkoLocation,
-                    dataStoreType: 'aws_s3',
-                    dataStoreVersionId,
-                };
-                return Object.assign({}, location, newValues);
-            });
-            entry.setLocation(editLocations);
+            zenkoDataLocations = [{
+                key: entry.getObjectKey(),
+                size: entry.getContentLength(),
+                start: 0,
+                dataStoreName: zenkoLocation,
+                dataStoreType: 'aws_s3',
+                dataStoreETag: `1:${entry.getContentMd5()}`,
+                dataStoreVersionId,
+            }];
         }
+        entry.setLocation(zenkoDataLocations);
     }
 
     /**
