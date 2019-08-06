@@ -165,7 +165,7 @@ hasn't been fully replicated to site B when the failure occurred).
 
 * Kafka and Zookeeper are the only dependencies of Backbeat which are licensed
     under Apache License 2.0.
-* `node-rdkafka` npm module which is be used for the
+* `node-rdkafka` yarn module which is be used for the
     producer/consumer actions and maintained by Blizzard Entertainment
     is licensed under the MIT license.
 
