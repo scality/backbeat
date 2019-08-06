@@ -45,20 +45,18 @@ stages:
           retryFetch: True
           haltOnFailure: True
       - ShellCommand:
-          name: Npm install
-          command: rm -rf node_modules && npm install --unsafe-perm
+          name: yarn install
+          command: rm -rf node_modules && yarn install --unsafe-perm
           haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
-          command: npm run --silent lint_md
+          command: yarn run --silent lint_md
       - ShellCommand:
           name: run static analysis tools on code
-          command: npm run --silent lint
+          command: yarn run --silent lint
       - ShellCommand:
           name: run unit tests
-          command: npm test
-          env:
-            BACKBEAT_CONFIG_FILE: "tests/config.json"
+          command: yarn test
       - ShellCommand:
           name: run backbeat routes test
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes

@@ -111,82 +111,89 @@ replicated to Site B when the failure occurred).
   within a partition. This offers the advantage balancing records across all
   Kafka nodes and assigning multiple consumers to process the queue.
 * A consumer picks up from the last committed offset and processes one entry
-  at a time. The consumer first copies data to the target site, updates the
-  object's metadata with the new location, sets replicationStatus to
-  `REPLICA` and writes the metadata entry at the target. Once the metadata
-  and data operations are completed on the target bucket, the object's
-  source bucket metadata is updated to reflect replicationStatus as
-  `COMPLETED`.
-* On any failure in this sequence of operations for an entry, the object
-  metadata on the source is updated with replicationStatus `FAILED`.
-  The consumer commits the offset of the last successful entry
-  processed to Kafka. This entry is retried on the next run.
+    at a time. The consumer first copies data to the target site, updates the
+    object's metadata with the new location, sets the replicationStatus to
+    `REPLICA` and writes the metadata entry at the target. Once the metadata
+    and data operations are completed on the target bucket, the object's
+    metadata in source bucket is updated to reflect replicationStatus as
+    `COMPLETED`.
 
-## Security
+* If there has been any failure in these sequence of operations for an entry
+    then the object metadata on the source is updated with replicationStatus
+    `FAILED`. The consumer will commit the offset of the last successful entry
+    processed to Kafka. On the next run, this entry is tried again.
 
-* **End-to-End SSL:** Use PKI certificates with TLS for trusted communication
-  between servers. All sites (SF, NY, and Paris, for example),
-  communicating through a private route establish a TCP connection
-  using PKI certificates.
-* **Temporary credentials:** Backbeat shall have no credentials (access key,
-  secret key pair) by default and must acquire temporary credentials from IAM
-  to perform actions on users' resources.
-* **Trust Policy:** A trust policy (IAM actions) will be created, letting
-  the user assume a role to gain temporary credentials to the
-  source/destination account's resources.
-* **ACL Account Management Permissions:** Cross-account permissions can be
-  managed using ACLs. Access policies (S3 actions) will be created
-  allowing the role to perform specific actions to achieve replications.
-  On establishing a trusted connection using the certificates, Backbeat
-  requests temporary credentials from IAM. Temporary credentials expire
-  every hour (or some set time). These credentials are used to communicate
-  with S3 for replications.
-* **Credential Renewal:** Credentials are renewed when they expire.
-  Temporary credentials don’t span across sites, so Backbeat must renew
-  credentials on all sites individually.
-* **AWS conformity:** The setup and behavior must conform to AWS's
-  specifications for asynchronous replication. Conformity assures that
-  credentials in Backbeat and roles aren't hardcoded and that policies
-  are transparent to customers, who can see what actions we use for
-  replication. Customers are not expected to maintain or alter these
-  policies: Scality will manage them at deploy time.
+## SECURITY
 
-## OSS Licenses
+* End to End SSL - Use PKI certificates with TLS for trusted communication
+    between the servers.
+    On all the sites(SF, NY, Paris for example), communication occurs
+    through a private route by establishing a TCP connection using the PKI
+    certificates.
 
-* Kafka and ZooKeeper are the only Backbeat dependencies licensed
-  under Apache License 2.0.
-* `node-rdkafka` npm module, used for producer/consumer actions
-  and maintained by Blizzard Entertainment is MIT-licensed.
+* Temporary credentials - Backbeat will have no credentials (access key,
+    secret key pair) by default and will acquire temporary credentials from IAM
+    to perform actions on users' resources.
 
-## Statistics for SLA, Metrics and So Forth
+* A trust policy (IAM actions) will be created allowing the user to assume the
+    role to gain temporary credentials to the source/destination accounts’
+    resources.
 
-There are two ways to approach this:
+* Cross account permissions can be managed using ACLs.
+    Access policies (S3 actions) will be created allowing the role to perform
+    specific actions to achieve replication actions.
+    Backbeat first requests temporary credentials from IAM after establishing a
+    trusted communication connection using the certificates.
+    Temporary credentials expire every hour(or some set time). These
+    credentials will be used to communicate with S3 for performing replication
+    actions.
 
-* Use Pub/Sub events in addition to the MetaData log in a separate topic.
-  Leverage the records in this topic by comparing to the active queue to
-  generate statistics like:
+* Credentials are renewed when they expire.
+    Temporary credentials don’t span across the sites, so Backbeat has to renew
+    credentials on all the sites individually.
 
-   - RPO (Recovery Point Objective)
-   - RTO (Recovery Time Objective)
-   - Storage backlog in bytes
-   - Storage replicated so far in bytes
-   - Number of objects in backlog
-   - Number of objects replicated so far etc.
+* The setup and behavior will be inline with AWS' specifications for
+    asynchronous replication. Benefits are that we don't
+    hardcode any credentials in Backbeat and roles, policies are transparent to
+    the customer who can see what actions we are using for replication.
+    Customers are not expected to maintain or alter these policies,
+    they will be managed by Scality at deploy time.
 
-* Use a decoupled topic in addition to the queue topic. The
-  producers/consumers will manage this by adding records for
-  non-replicated and replicated entries. Because each entry has
-  a sequence number, calculating the difference between sequence
-  numbers of the latest non-replicated and replicated records
-  can provide the required statistics.
+## OSS LICENSES
 
-## Writing Extensions
+* Kafka and Zookeeper are the only dependencies of Backbeat which are licensed
+    under Apache License 2.0.
+* `node-rdkafka` yarn module which is be used for the
+    producer/consumer actions and maintained by Blizzard Entertainment
+    is licensed under the MIT license.
 
-A Backbeat extension enables adding more functionality to the core
-backbeat asynchronous processor. Asynchronous replication, for example,
-is one of the extensions available for Backbeat.
+## STATISTICS FOR SLA, METRICS etc
 
-Extensions are located in the extensions/directory, with a
+There are two ways we can approach this.
+Pub/Sub events can be used in addition to the MetaData log in a separate topic
+(let’s call it statistics). The records in this topic can be leveraged by
+comparing to the active queue to generate statistics like
+
+- RPO (Recovery Point Objective)
+- RTO(Recovery Time Objective)
+- Storage backlog in bytes
+- Storage replicated so far in bytes
+- Number of objects in backlog
+- Number of objects replicated so far etc.
+
+Use a decoupled topic in addition to the queue topic. This will be managed by
+the producers/consumers adding records for non-replicated and replicated
+entries. Since each entry would have a sequence number, calculating the
+difference between the sequence numbers of the latest non-replicated and
+replicated records would give us the required statistics.
+
+## WRITING EXTENSIONS
+
+A backbeat extension allows to add more functionality to the core
+backbeat asynchronous processor. E.g. Asynchronous Replication is one
+of the extensions available for backbeat.
+
+Extensions are located in the extensions/ directory, with a
 sub-directory named after the extension name (lowercase).
 
 ### Extending the Queue Populator
