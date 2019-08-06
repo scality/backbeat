@@ -36,7 +36,7 @@ This guide assumes the following:
 * Using MacOS
 * `brew` is installed (get it [here](https://brew.sh/))
 * `node` is installed (version 6.9.5)
-* `npm` is installed (version 3.10.10)
+* `yarn` is installed (version 3.10.10)
 * `aws` is installed (version 1.11.1)
 
 ### Run kafka and zookeeper
@@ -117,7 +117,7 @@ Start the Vault server (this requires access to the private Vault repository):
 ```
 git clone https://github.com/scality/Vault ~/replication/vault && \
 cd ~/replication/vault && \
-npm i && \
+yarn i && \
 chmod 400 ./tests/utils/keyfile && \
 VAULT_DB_BACKEND=MEMORY node vaultd.js
 ```
@@ -127,8 +127,8 @@ In a new shell, start the Scality S3 server:
 ```
 git clone https://github.com/scality/s3 ~/replication/s3 && \
 cd ~/replication/s3 && \
-npm i && \
-S3BACKEND=file S3VAULT=scality npm start
+yarn i && \
+S3BACKEND=file S3VAULT=scality yarn start
 ```
 
 #### Setup replication with backbeat
@@ -138,7 +138,7 @@ In a new shell, clone backbeat:
 ```
 git clone https://github.com/scality/backbeat ~/replication/backbeat && \
 cd ~/replication/backbeat && \
-npm i
+yarn i
 ```
 
 Now, create an account and keys:
@@ -198,13 +198,13 @@ node ~/replication/backbeat/bin/setupReplication.js setup \
 Run the backbeat queue populator:
 
 ```
-npm --prefix ~/replication/backbeat run queue_populator
+yarn --prefix ~/replication/backbeat run queue_populator
 ```
 
 In a new shell, run the backbeat queue processor:
 
 ```
-npm --prefix ~/replication/backbeat run queue_processor
+yarn --prefix ~/replication/backbeat run queue_processor
 ```
 
 You are now ready to put data on `source-bucket` and watch it replicate to
