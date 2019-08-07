@@ -16,11 +16,9 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
     && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
-COPY package.json package-lock.json /usr/src/app/
-RUN npm install --production \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf ~/.node-gyp \
-    && rm -rf /tmp/npm-*
+COPY package.json yarn.lock /usr/src/app/
+RUN yarn install --production \
+    && yarn cache clean
 
 # Keep the .git directory in order to properly report version
 COPY . /usr/src/app
