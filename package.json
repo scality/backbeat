@@ -64,6 +64,6 @@
     "eslint-config-scality": "scality/Guidelines#1d6f287b",
     "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
-    "mocha": "^3.3.0"
+      "mocha": "^3.3.0"
   }
 }
