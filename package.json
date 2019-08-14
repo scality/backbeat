@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "7.5.0",
+  "version": "7.5.1",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -29,22 +29,22 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "@hapi/joi": "^15.1.0",
-    "arsenal": "scality/Arsenal#b03f5b8",
+    "arsenal": "scality/Arsenal#32c895b",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#36e1279",
+    "bucketclient": "scality/bucketclient#6d2d5a4",
     "commander": "^2.11.0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#71a059ad",
+    "eslint-config-scality": "scality/Guidelines#20dfffc",
     "eslint-plugin-react": "^4.2.3",
     "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "uuid": "^3.1.0",
-    "vaultclient": "scality/vaultclient#401288f",
-    "werelogs": "scality/werelogs#4e0d97c"
+    "vaultclient": "scality/vaultclient#478710c",
+    "werelogs": "scality/werelogs#0a4c576"
   },
   "devDependencies": {
     "mocha": "^3.3.0"
