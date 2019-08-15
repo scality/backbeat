@@ -18,5 +18,5 @@ killandsleep () {
   sleep 10
 }
 
-cd node_modules/@zenko/cloudserver && npm run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
-npm run $1
+cd node_modules/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
+yarn run $1

@@ -46,7 +46,7 @@ stages:
           haltOnFailure: True
       - ShellCommand:
           name: yarn install
-          command: rm -rf node_modules && yarn install --unsafe-perm
+          command: yarn install --frozen-lockfile
           haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown

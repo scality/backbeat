@@ -16,16 +16,16 @@ machine:
 dependencies:
     override:
         - rm -rf node_modules
-        - npm install
+        - yarn install --frozen-lockfile
     post:
-        - cd node_modules/@zenko/cloudserver && npm run mem_backend: {background: true}
+        - cd node_modules/@zenko/cloudserver && yarn run mem_backend: {background: true}
 
 test:
     override:
         - docker run -e AUTO_CREATE_TOPICS=true -d --net=host --name kafka spotify/kafka
-        - npm run --silent lint_md -- --max-warnings 0
-        - npm run --silent lint -- --max-warnings 0
+        - yarn run --silent lint_md -- --max-warnings 0
+        - yarn run --silent lint -- --max-warnings 0
         - npm test
-        - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && npm run ft_test:api:routes
-        - CI=true BACKBEAT_CONFIG_FILE=tests/config.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && BACKBEAT_CONFIG_FILE=tests/config.json npm run ft_test:api:retry
-        - CI=true npm run ft_test
+        - CI=true npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && yarn run ft_test:api:routes
+        - CI=true BACKBEAT_CONFIG_FILE=tests/config.json npm start & bash tests/utils/wait_for_local_port.bash 8900 40 && BACKBEAT_CONFIG_FILE=tests/config.json yarn run ft_test:api:retry
+        - CI=true yarn run ft_test
