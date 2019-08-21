@@ -254,6 +254,11 @@
                 },
                 "concurrency": 10
             }
+        },
+        "workflowEngineDataSource": {
+            "zookeeperPath": "/workflow-engine-data-source",
+            "topic": "backbeat-workflow-engine",
+            "groupId": "backbeat-workflow-engine-group"
         }
     },
     "log": {

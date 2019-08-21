@@ -276,6 +276,10 @@ if [[ "$REPLICATION_GROUP_ID" ]] ; then
     JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .replicationGroupId=\"$REPLICATION_GROUP_ID\""
 fi
 
+if [[ "$EXTENSIONS_WE_DATA_SOURCE_TOPIC" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.workflowEngineDataSource.topic=\"$EXTENSIONS_WE_DATA_SOURCE_TOPIC\""
+fi
+
 if [[ $JQ_FILTERS_CONFIG != "." ]]; then
     jq "$JQ_FILTERS_CONFIG" conf/config.json > conf/config.json.tmp
     mv conf/config.json.tmp conf/config.json

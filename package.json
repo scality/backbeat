@@ -47,6 +47,7 @@
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^4.9.5",
+    "minimatch": "^3.0.4",
     "mongodb": "^3.1.13",
     "node-forge": "^0.7.6",
     "node-rdkafka": "2.5.1",
@@ -55,7 +56,8 @@
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
     "vaultclient": "github:scality/vaultclient#767c58d",
-    "werelogs": "scality/werelogs#22bca9c"
+    "werelogs": "scality/werelogs#22bca9c",
+    "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
   },
   "devDependencies": {
     "@zenko/cloudserver": "scality/cloudserver#bac9a10",
@@ -64,6 +66,7 @@
     "eslint-config-scality": "scality/Guidelines#28e73a2",
     "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
-      "mocha": "^3.3.0"
+    "mocha": "^3.3.0",
+    "zookeeper-mock": "github:scality/zookeeper-mock"
   }
 }
