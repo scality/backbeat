@@ -5,7 +5,7 @@ const querystring = require('querystring');
 const { RedisClient } = require('arsenal').metrics;
 const { StatsModel } = require('arsenal').metrics;
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const getUrl = require('../utils/getUrl');
 const { addMembers, addManyMembers } = require('../utils/sortedSetHelpers');
 const { makeRetryPOSTRequest, getRequest, getResponseBody } =

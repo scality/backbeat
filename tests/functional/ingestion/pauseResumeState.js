@@ -9,7 +9,7 @@ const ZKStateHelper = require('../utils/pauseResumeUtils/zkStateHelper');
 const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
 
 // Configs
-const Config = require('../../../conf/Config');
+const Config = require('../../../lib/Config');
 const { zookeeperNamespace } =
     require('../../../extensions/ingestion/constants');
 

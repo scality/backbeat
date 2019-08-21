@@ -7,7 +7,7 @@ const zookeeper = require('node-zookeeper-client');
 const { RedisClient } = require('arsenal').metrics;
 const { StatsModel } = require('arsenal').metrics;
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const { makeRequest, getRequest, getResponseBody } =
     require('../utils/httpHelpers');
 const getUrl = require('../utils/getUrl');

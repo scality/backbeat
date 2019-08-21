@@ -2,7 +2,7 @@ const assert = require('assert');
 
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const fakeLogger = require('../../utils/fakeLogger');
 const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 

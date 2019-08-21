@@ -2,7 +2,7 @@ const async = require('async');
 const AWS = require('aws-sdk');
 const werelogs = require('werelogs');
 
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 const management = require('../../lib/management/index');
 
 const logger = new werelogs.Logger('mdManagement:replication');

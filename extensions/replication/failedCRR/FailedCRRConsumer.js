@@ -7,7 +7,7 @@ const redisClient = require('../../replication/utils/getRedisClient')();
 const FailedCRRProducer = require('./FailedCRRProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 
 // BackbeatConsumer constant defaults
 const CONSUMER_FETCH_MAX_BYTES = 5000020;

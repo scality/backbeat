@@ -5,7 +5,7 @@ const BucketInfo = require('arsenal').models.BucketInfo;
 
 const patchConfiguration =
     require('../../../lib/management/patchConfiguration');
-const Config = require('../../../conf/Config');
+const Config = require('../../../lib/Config');
 const testConfig = require('../../config.json');
 const fakeLogger = require('../../utils/fakeLogger');
 

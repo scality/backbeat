@@ -1,6 +1,6 @@
 const { ZenkoMetrics } = require('arsenal').metrics;
 
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 const { promMetricNames } = require('./constants');
 
 const SIZE_BUCKETS = [

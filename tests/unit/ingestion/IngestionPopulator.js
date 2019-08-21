@@ -3,7 +3,7 @@
 const assert = require('assert');
 const async = require('async');
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');

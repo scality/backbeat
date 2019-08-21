@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
 const MongoQueueProcessor = require('./MongoQueueProcessor');
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 const { initManagement } = require('../../lib/management/index');
 
 const kafkaConfig = config.kafka;

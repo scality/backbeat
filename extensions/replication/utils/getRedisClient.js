@@ -1,5 +1,5 @@
 const { RedisClient } = require('arsenal').metrics;
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const werelogs = require('werelogs');
 
 const log = new werelogs.Logger('Backbeat:RedisClient');

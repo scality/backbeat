@@ -5,7 +5,7 @@ const { initManagement } = require('../../../lib/management/index');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const { HealthProbeServer } = require('arsenal').network.probe;
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const lcConfig = config.extensions.lifecycle;

@@ -4,7 +4,7 @@ const async = require('async');
 const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');

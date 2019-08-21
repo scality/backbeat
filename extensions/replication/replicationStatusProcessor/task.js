@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const ReplicationStatusProcessor = require('./ReplicationStatusProcessor');
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;

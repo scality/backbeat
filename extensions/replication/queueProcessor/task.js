@@ -4,7 +4,7 @@ const async = require('async');
 const werelogs = require('werelogs');
 
 const QueueProcessor = require('./QueueProcessor');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { HealthProbeServer } = require('arsenal').network.probe;

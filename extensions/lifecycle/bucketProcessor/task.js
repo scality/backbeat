@@ -4,7 +4,7 @@ const { HealthProbeServer } = require('arsenal').network.probe;
 const { initManagement } = require('../../../lib/management/index');
 const LifecycleBucketProcessor = require('./LifecycleBucketProcessor');
 const { applyBucketLifecycleWorkflows } = require('../management');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const { zookeeper, kafka, extensions, s3, transport, log, healthcheckServer } =
     config;
 

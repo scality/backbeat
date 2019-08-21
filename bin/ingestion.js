@@ -7,7 +7,7 @@ const { HealthProbeServer } = require('arsenal').network.probe;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
-const config = require('../conf/Config');
+const config = require('../lib/Config');
 const { initManagement } = require('../lib/management/index');
 const zookeeperWrapper = require('../lib/clients/zookeeper');
 const { zookeeperNamespace, zkStatePath } =

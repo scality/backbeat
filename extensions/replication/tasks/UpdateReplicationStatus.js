@@ -1,7 +1,7 @@
 const errors = require('arsenal').errors;
 const assert = require('assert');
 
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');

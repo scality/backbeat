@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const GarbageCollector = require('./GarbageCollector');
 
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 const kafkaConfig = config.kafka;
 const s3Config = config.s3;
 const gcConfig = config.extensions.gc;

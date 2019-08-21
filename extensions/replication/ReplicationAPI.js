@@ -1,4 +1,4 @@
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');

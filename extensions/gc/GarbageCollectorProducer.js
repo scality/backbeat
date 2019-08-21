@@ -3,7 +3,7 @@
 const { Logger } = require('werelogs');
 
 const BackbeatProducer = require('../../lib/BackbeatProducer');
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 
 class GarbageCollectorProducer {
     /**

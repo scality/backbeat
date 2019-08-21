@@ -10,7 +10,7 @@ const MongoClient = require('arsenal').storage
 const ObjectMD = require('arsenal').models.ObjectMD;
 const { encode } = require('arsenal').versioning.VersionID;
 
-const Config = require('../../conf/Config');
+const Config = require('../../lib/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');

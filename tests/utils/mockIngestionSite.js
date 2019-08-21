@@ -1,4 +1,4 @@
-const config = require('../../conf/Config');
+const config = require('../../lib/Config');
 
 /**
  * Mock the setting of ingestion buckets. We use the existing bootstrap list

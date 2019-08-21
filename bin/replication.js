@@ -5,7 +5,7 @@ const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 const { RoundRobin } = require('arsenal').network;
 
-const config = require('../conf/Config');
+const config = require('../lib/Config');
 const SetupReplication =
           require('../extensions/replication/utils/SetupReplication');
 const version = require('../package.json').version;
