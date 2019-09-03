@@ -13,5 +13,5 @@ killandsleep () {
   sleep 10
 }
 
-npm start & bash tests/utils/wait_for_local_port.bash $PORT 40
-npm run $1
+yarn start & bash tests/utils/wait_for_local_port.bash $PORT 40
+yarn run $1

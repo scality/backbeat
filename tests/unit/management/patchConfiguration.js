@@ -58,7 +58,7 @@ function createBucketMDObject(bucketName, locationName, ingestion) {
     const mockCreationDate = new Date().toString();
     return new BucketInfo(bucketName, 'owner', 'ownerDisplayName',
         mockCreationDate, null, null, null, null, null, null, locationName,
-        null, null, null, null, null, null, null, ingestion);
+        null, null, null, null, null, null, null, null, ingestion);
 }
 
 describe('patchConfiguration', () => {

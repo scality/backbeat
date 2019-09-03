@@ -45,18 +45,18 @@ stages:
           retryFetch: True
           haltOnFailure: True
       - ShellCommand:
-          name: Npm install
-          command: rm -rf node_modules && npm install --unsafe-perm
+          name: yarn install
+          command: yarn install --frozen-lockfile
           haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
-          command: npm run --silent lint_md
+          command: yarn run --silent lint_md
       - ShellCommand:
           name: run static analysis tools on code
-          command: npm run --silent lint
+          command: yarn run --silent lint
       - ShellCommand:
           name: run unit tests
-          command: npm test
+          command: yarn test
           env:
             BACKBEAT_CONFIG_FILE: "tests/config.json"
       - ShellCommand:
