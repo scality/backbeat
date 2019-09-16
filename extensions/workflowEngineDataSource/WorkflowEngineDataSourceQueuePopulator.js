@@ -24,7 +24,10 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.wed = new WorkflowEngineDefs();
+        // active filters
         this.filterDescriptors = {};
+        // hash map for ZK children
+        this.hashMap = {};
         // set an interval in case of missed events
         // we intentionally set this in the constructor to
         // avoid tests having being woke up
@@ -49,55 +52,66 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
-     * Load a specified child content in the filterDescriptors map do
-     * some sanity checks before
+     * Load a specified child content in the filterDescriptors
+     * map. Perform some sanity checks. Create the entry or update
+     * refcount if already exists
      *
-     * @param {string} name - the ZK child name (must obey syntax wf_id_ver)
-     * @param {object} fd - the filter descriptor object
+     * @note We assume that data sources for a
+     * (workflowId,workflowVersion) pair are identical since versions
+     * are immutable.
+     *
+     * @param {string} name - the ZK child name
+     * @param {object} value - the filter descriptor object
      *
      * @return {object} validationResult - {isValid, message}
      */
-    _loadFilterDescriptor(name, fd) {
-        this.log.info(`WEDSQP: loading new filter for ${name}`, fd);
-        const arr = name.split('_');
-        if (arr[0] !== 'wf') {
-            return {
-                isValid: false,
-                message: `invalid child name: ${arr[0]}`
-            };
-        }
-        if (fd.workflowId === undefined ||
-            fd.workflowVersion === undefined ||
-            fd.type === undefined ||
-            fd.subType === undefined ||
-            fd.nextNodes === undefined) {
+    _loadFilterDescriptor(name, value) {
+        this.log.debug(`WEDSQP: loading ${name}`, value);
+        // sanity checks
+        if (value.workflowId === undefined ||
+            value.workflowVersion === undefined ||
+            value.subType === undefined ||
+            value.nextNodes === undefined) {
             return {
                 isValid: false,
                 message: 'missing some fields'
             };
         }
-        if (fd.subType === this.wed.SUB_TYPE_BASIC) {
-            if (fd.bucket === undefined) {
+        if (value.subType === this.wed.SUB_TYPE_BASIC) {
+            if (value.bucket === undefined) {
                 return {
                     isValid: false,
                     message: 'basic: missing bucket'
                 };
             }
+            if (value.key === undefined) {
+                return {
+                    isValid: false,
+                    message: 'basic: missing key'
+                };
+            }
         }
-        if (fd.workflowId !== arr[1]) {
-            return {
-                isValid: false,
-                message: `non matching workflow id: ${arr[1]}`
-            };
+        // official name of the entry
+        const fdName = this._getHashString(
+            value.workflowId, value.workflowVersion);
+        let fd = this.filterDescriptors[fdName];
+        if (fd === undefined) {
+            fd = value;
+            this.log.info(
+                `WEDSQP: adding fd ${fdName} for ${fd.bucket}:${fd.key}`);
+            this.filterDescriptors[fdName] = fd;
+            fd.name = fdName;
+            fd.refCount = 1;
+            this.hashMap[name] = fd;
+        } else {
+            // do not refcount if already registered
+            if (!this.hashMap[name]) {
+                this.hashMap[name] = fd;
+                fd.refCount++;
+                this.log.info(
+                    `WEDSQP: fd ${fdName} refcount updated ${fd.refCount}`);
+            }
         }
-        // eslint-disable-next-line
-        if (fd.workflowVersion != arr[2]) {
-            return {
-                isValid: false,
-                message: `non matching workflow version: ${arr[2]}`
-            };
-        }
-        this.filterDescriptors[name] = fd;
         return {
             isValid: true
         };
@@ -114,12 +128,13 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
-     * Delete all active filter descriptors (for tests)
+     * Delete all active filter descriptors and hashMap (for tests)
      *
      * @return {undefined}
      */
     _deleteAllFilterDescriptors() {
         this.filterDescriptors = [];
+        this.hashMap = {};
     }
 
     /**
@@ -133,6 +148,56 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
             return;
         }
         this._updateFilterDescriptors();
+    }
+
+    /**
+     * Update the filter descriptor table acc/to new information
+     *
+     * @param {array} results - array of name/values
+     *
+     * @return {undefined}
+     */
+    _processFilterDescriptors(results) {
+        this.log.debug('WEDSQP: processing filter descriptors');
+        // track missing children
+        const _children = {};
+        // create entries / update refcounts
+        Object.values(results).forEach(kv => {
+            const name = kv[0];
+            const value = JSON.parse(kv[1]);
+            _children[name] = true;
+            const { isValid, message } =
+                  this._loadFilterDescriptor(name, value);
+            if (!isValid) {
+                this.log.error(
+                    `error loading filter descr: ${message}`, {
+                        method:
+                        'WEDSQP._updateFilterDescriptors',
+                        error: errors.InvalidArgument,
+                    });
+            }
+        });
+        // unref missing children
+        Object.keys(this.hashMap).forEach(key => {
+            if (!_children[key]) {
+                this.log.debug(
+                    `WEDSQP: ${key} not found any more`);
+                const fd = this.hashMap[key];
+                delete this.hashMap[key];
+                fd.refCount--;
+                this.log.info(
+                    `WEDSQP: fd ${fd.name} refcount updated ${fd.refCount}`);
+            }
+        });
+        // check for unreferenced entries
+        Object.keys(this.filterDescriptors).forEach(key => {
+            const fd = this.filterDescriptors[key];
+            if (fd.refCount === 0) {
+                this.log.info(
+                    `WEDSQP: deleting filter descr ${key}`);
+                delete this.filterDescriptors[key];
+            }
+        });
     }
 
     /**
@@ -164,9 +229,14 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
                 this.log.debug(
                     `WEDSQP: reading children data ${children.length}`);
                 async.map(children, (child, next) => {
+                    const kv = [];
+                    kv[0] = child;
                     this.zkClient.getData(
                         `${zookeeperPath}/${child}`,
-                        (err, data) => next(err, data));
+                        (err, data) => {
+                            kv[1] = data;
+                            next(err, kv);
+                        });
                 }, (err, results) => {
                     if (err) {
                         this.log.error(
@@ -180,36 +250,7 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
                         }
                         return undefined;
                     }
-                    this.log.debug('WEDSQP: processing children data');
-                    const _children = {};
-                    // check for new children
-                    Object.values(results).forEach(value => {
-                        const fd = JSON.parse(value);
-                        const fdName = this._getHashString(
-                            fd.workflowId, fd.workflowVersion);
-                        _children[fdName] = true;
-                        if (!this.filterDescriptors[fdName]) {
-                            const { isValid, message } =
-                                  this._loadFilterDescriptor(fdName, fd);
-                            if (!isValid) {
-                                this.log.error(
-                                    `error loading filter descr: ${message}`, {
-                                        method:
-                                        'WEDSQP._updateFilterDescriptors',
-                                        error: errors.InvalidArgument,
-                                    });
-                            }
-                        }
-                    });
-                    // check for missing children
-                    const keys = Object.keys(this.filterDescriptors);
-                    keys.forEach(key => {
-                        if (!_children[key]) {
-                            this.log.debug(
-                                `WEDSQP: deleting filter descr ${key}`);
-                            delete this.filterDescriptors[key];
-                        }
-                    });
+                    this._processFilterDescriptors(results);
                     if (cb) {
                         return cb();
                     }
@@ -345,8 +386,7 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
         for (let i = 0; i < keys.length; i++) {
             const fd = this.filterDescriptors[keys[i]];
             const _gLH = this._getLogHelper(fd);
-            // ignore any entries that are not matching types
-            if (entry.type !== fd.type) {
+            if (entry.type !== 'put') {
                 this.log.debug(`${_gLH}: skipping non matching entry type`, {
                     entry: queueEntry.getLogInfo(),
                 });
@@ -355,14 +395,9 @@ class WorkflowEngineDataSourceQueuePopulator extends QueuePopulatorExtension {
             }
             let output = false;
             if (fd.subType === this.wed.SUB_TYPE_BASIC) {
-                if (minimatch(bucket, fd.bucket)) {
-                    if (fd.key) {
-                        if (minimatch(key, fd.key)) {
-                            output = true;
-                        }
-                    } else {
-                        output = true;
-                    }
+                if (minimatch(bucket, fd.bucket) &&
+                    minimatch(key, fd.key)) {
+                    output = true;
                 }
             } else {
                 this.log.error(`${_gLH}: scripts not yet supported`, {
