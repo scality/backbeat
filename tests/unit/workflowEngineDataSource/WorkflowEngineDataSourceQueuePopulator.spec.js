@@ -1,7 +1,11 @@
 const assert = require('assert');
+const async = require('async');
 const WorkflowEngineDefs = require('workflow-engine-defs');
 const ZookeeperMock = require('zookeeper-mock');
 const NodeZookeeperClient = require('node-zookeeper-client');
+const uuid = require('uuid/v4');
+// const werelogs = require('werelogs');
+
 // const Logger = require('werelogs').Logger;
 
 const WorkflowEngineDataSourceQueuePopulator =
@@ -70,6 +74,10 @@ describe('workflow engine queue populator', () => {
             // logger:
             // new Logger('WorkflowEngineDataSourceQueuePopulator.spec.js')
         };
+        // werelogs.configure({
+        // level: 'debug',
+        // dump: 'error'
+        // });
         wedsqp = new WorkflowEngineDataSourceQueuePopulatorMock(params);
     });
 
@@ -80,68 +88,48 @@ describe('workflow engine queue populator', () => {
     });
 
     it('should validate filter descriptor', () => {
-        const fd = {
+        const value = {
             workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
             workflowVersion: 42,
-            type: 'put',
             subType: 'basic',
             bucket: 'foo',
             key: 'bar',
             nextNodes: []
         };
-        const name = wedsqp._getHashString(
-            fd.workflowId, fd.workflowVersion);
-        const validationResult = wedsqp._loadFilterDescriptor(name, fd);
+        const name = uuid();
+        const validationResult = wedsqp._loadFilterDescriptor(name, value);
         assert(validationResult.isValid);
     });
 
     it('should not validate filter descriptor with missing fields', () => {
-        const fd = {
+        const value = {
             workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
             workflowVersion: 42,
-            type: 'put',
             bucket: 'foo',
             key: 'bar',
             nextNodes: []
         };
-        const name = wedsqp._getHashString(
-            fd.workflowId, fd.workflowVersion);
-        const validationResult = wedsqp._loadFilterDescriptor(name, fd);
-        assert(!validationResult.isValid);
-    });
-
-    it('should not validate filter descriptor with wrong version', () => {
-        const fd = {
-            workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
-            workflowVersion: 42,
-            type: 'put',
-            subType: 'basic',
-            bucket: 'foo',
-            key: 'bar',
-            nextNodes: []
-        };
-        const name = wedsqp._getHashString(
-            fd.workflowId, 43);
-        const validationResult = wedsqp._loadFilterDescriptor(name, fd);
+        const name = uuid();
+        const validationResult = wedsqp._loadFilterDescriptor(name, value);
         assert(!validationResult.isValid);
     });
 
     it('should register a filter descriptor if added', done => {
-        const fd = {
+        const value = {
             workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
             workflowVersion: 42,
-            type: 'put',
             subType: 'basic',
             bucket: 'foo',
             key: 'bar',
             nextNodes: []
         };
-        const data = new Buffer(JSON.stringify(fd));
+        const fdName = wedsqp._getHashString(
+            value.workflowId, value.workflowVersion);
+        const data = new Buffer(JSON.stringify(value));
         const zkc = new ZookeeperMock();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
-        const name = wedsqp._getHashString(
-            fd.workflowId, fd.workflowVersion);
+        const name = uuid();
         zkc.create(
             `${ZKPATH}/${name}`,
             data,
@@ -153,27 +141,29 @@ describe('workflow engine queue populator', () => {
                 wedsqp._updateFilterDescriptors(err => {
                     assert.ifError(err);
                     assert(wedsqp._getFilterDescriptorsLength() === 1);
+                    const fd = wedsqp.filterDescriptors[fdName];
+                    assert(fd.refCount === 1);
                     done();
                 });
             });
     });
 
     it('should unregister a filter descriptor if deleted', done => {
-        const fd = {
+        const value = {
             workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
             workflowVersion: 42,
-            type: 'put',
             subType: 'basic',
             bucket: 'foo',
             key: 'bar',
             nextNodes: []
         };
-        const data = new Buffer(JSON.stringify(fd));
+        const fdName = wedsqp._getHashString(
+            value.workflowId, value.workflowVersion);
+        const data = new Buffer(JSON.stringify(value));
         const zkc = new ZookeeperMock();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
-        const name = wedsqp._getHashString(
-            fd.workflowId, fd.workflowVersion);
+        const name = uuid();
         zkc.create(
             `${ZKPATH}/${name}`,
             data,
@@ -185,6 +175,8 @@ describe('workflow engine queue populator', () => {
                 wedsqp._updateFilterDescriptors(err => {
                     assert.ifError(err);
                     assert(wedsqp._getFilterDescriptorsLength() === 1);
+                    const fd = wedsqp.filterDescriptors[fdName];
+                    assert(fd.refCount === 1);
                     // destroy ephemeral nodes
                     zkc.close();
                     wedsqp._updateFilterDescriptors(err => {
@@ -194,6 +186,90 @@ describe('workflow engine queue populator', () => {
                     });
                 });
             });
+    });
+
+    it('refcounting shall work', done => {
+        const value = {
+            workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
+            workflowVersion: 42,
+            subType: 'basic',
+            bucket: 'foo',
+            key: 'bar',
+            nextNodes: []
+        };
+        const fdName = wedsqp._getHashString(
+            value.workflowId, value.workflowVersion);
+        const data = new Buffer(JSON.stringify(value));
+        assert(wedsqp._getFilterDescriptorsLength() === 0);
+        const zkc1 = new ZookeeperMock();
+        zkc1.connect();
+        const zkc2 = new ZookeeperMock();
+        zkc2.connect();
+        async.waterfall([
+            next => {
+                const name = uuid();
+                zkc1.create(
+                    `${ZKPATH}/${name}`,
+                    data,
+                    {},
+                    NodeZookeeperClient.CreateMode.EPHEMERAL,
+                    err => {
+                        assert.ifError(err);
+                        // watchers are deactivated because asynchronous
+                        wedsqp._updateFilterDescriptors(err => {
+                            assert.ifError(err);
+                            assert(wedsqp._getFilterDescriptorsLength() === 1);
+                            const fd = wedsqp.filterDescriptors[fdName];
+                            assert(fd.refCount === 1);
+                            return next(null);
+                        });
+                    });
+            },
+            next => {
+                const name = uuid();
+                zkc2.create(
+                    `${ZKPATH}/${name}`,
+                    data,
+                    {},
+                    NodeZookeeperClient.CreateMode.EPHEMERAL,
+                    err => {
+                        assert.ifError(err);
+                        // watchers are deactivated because asynchronous
+                        wedsqp._updateFilterDescriptors(err => {
+                            assert.ifError(err);
+                            assert(wedsqp._getFilterDescriptorsLength() === 1);
+                            const fd = wedsqp.filterDescriptors[fdName];
+                            assert(fd.refCount === 2);
+                            return next(null);
+                        });
+                    });
+            },
+            next => {
+                // destroy ephemeral nodes of first client
+                zkc1.close();
+                wedsqp._updateFilterDescriptors(err => {
+                    assert.ifError(err);
+                    // entry shall remain
+                    assert(wedsqp._getFilterDescriptorsLength() === 1);
+                    const fd = wedsqp.filterDescriptors[fdName];
+                    assert(fd.refCount === 1);
+                    return next(null);
+                });
+            },
+            next => {
+                // destroy ephemeral nodes of second client
+                zkc2.close();
+                wedsqp._updateFilterDescriptors(err => {
+                    assert.ifError(err);
+                    // entry shall disappear
+                    assert(wedsqp._getFilterDescriptorsLength() === 0);
+                    return next(null);
+                });
+            }
+        ], err => {
+            assert.ifError(err);
+            return done();
+        });
     });
 
     /* eslint-disable */
@@ -253,18 +329,6 @@ describe('workflow engine queue populator', () => {
             results: { key: 'a-test-key' },
         },
         {
-            desc: 'basic: accept right_bucket:undefined',
-            workflow: overwriteScript(JSON.parse(JSON.stringify(dataWorkflow)),
-                                      wed.SUB_TYPE_BASIC, undefined,
-                                      'test-bucket-source', undefined),
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key2',
-            }, { value: JSON.stringify(objectKafkaValue) }),
-            results: { key: 'a-test-key2' },
-        },
-        {
             desc: 'basic: ignore wrong_bucket:*',
             workflow: overwriteScript(JSON.parse(JSON.stringify(dataWorkflow)),
                                       wed.SUB_TYPE_BASIC, undefined,
@@ -322,22 +386,20 @@ describe('workflow engine queue populator', () => {
             assert(validationResult.isValid);
 
             // register a filter descriptor
-            const fd = {
+            const value = {
                 workflowId: '24b0af11-a366-4e64-8c7a-7c637ec1b93b',
                 workflowVersion: 42,
-                type: 'put',
                 subType: dataNodes[0].subType,
                 bucket: dataNodes[0].key,
                 key: dataNodes[0].value,
                 nextNodes: wed.findNextNodes(dataNodes[0])
             };
-            const data = new Buffer(JSON.stringify(fd));
+            const data = new Buffer(JSON.stringify(value));
 
             // simulate a client
             const zkc = new ZookeeperMock();
             zkc.connect();
-            const name = wedsqp._getHashString(
-                fd.workflowId, fd.workflowVersion);
+            const name = uuid();
             zkc.create(
                 `${ZKPATH}/${name}`,
                 data,
