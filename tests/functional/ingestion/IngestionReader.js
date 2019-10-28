@@ -103,7 +103,7 @@ describe('ingestion reader tests with mock', function fD() {
         testConfig.s3.port = testPort;
         const mongoUrl =
             `mongodb://admin:scality@${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-            '/db?replicaSet=rs0';
+            '/db?replicaSet=rs0&authSource=admin';
         async.waterfall([
             next => {
                 MongoClient.connect(mongoUrl, {}, (err, client) => {
