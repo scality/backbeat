@@ -101,6 +101,8 @@ describe('ingestion reader tests with mock', function fD() {
 
     before(done => {
         testConfig.s3.port = testPort;
+        const util = require('util');
+        console.log(`\n\n------- mongo config: ${util.inspect(testConfig.queuePopulator.mongo, false, null)}\n\n`);
         const mongoUrl =
             `mongodb://admin:scality@${testConfig.queuePopulator.mongo.replicaSetHosts}` +
             '/db?replicaSet=rs0&authSource=admin';
