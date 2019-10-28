@@ -103,10 +103,14 @@ describe('ingestion reader tests with mock', function fD() {
         testConfig.s3.port = testPort;
         const util = require('util');
         console.log(`\n\n------- mongo config: ${util.inspect(testConfig.queuePopulator.mongo, false, null)}\n\n`);
+        let mongoAuth = '';
+        if (process.env.MONGO_AUTH_PASSWORD && process.env.MONGO_AUTH_USERNAME) {
+            mongoAuth = `${process.env.MONGO_AUTH_USERNAME}:${process.env.MONGO_AUTH_PASSWORD}@`;
+        }
         const mongoUrl =
-            `mongodb://${process.env.MONGO_AUTH_USERNAME}:${process.env.MONGO_AUTH_PASSWORD}@` +
-            `${testConfig.queuePopulator.mongo.replicaSetHosts}` +
+            `mongodb://${mongoAuth}${testConfig.queuePopulator.mongo.replicaSetHosts}` +
             '/db?replicaSet=rs0&authSource=admin';
+        console.log(`\n------ mongo URL: ${mongoUrl}\n\n`);
         async.waterfall([
             next => {
                 MongoClient.connect(mongoUrl, {}, (err, client) => {
