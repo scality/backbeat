@@ -28,6 +28,10 @@ const mongoConfig = {
     replicaSet: 'rs0',
     readPreference: 'primary',
     logger: fakeLogger,
+    authCredentials: {
+        username: 'admin',
+        password: 'scality',
+    },
 };
 const configOverlay = {
     version: PATCH_VERSION + 1,
