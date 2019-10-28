@@ -104,7 +104,8 @@ describe('ingestion reader tests with mock', function fD() {
         const util = require('util');
         console.log(`\n\n------- mongo config: ${util.inspect(testConfig.queuePopulator.mongo, false, null)}\n\n`);
         const mongoUrl =
-            `mongodb://admin:scality@${testConfig.queuePopulator.mongo.replicaSetHosts}` +
+            `mongodb://${process.env.MONGO_AUTH_USERNAME}:${process.env.MONGO_AUTH_PASSWORD}@` +
+            `${testConfig.queuePopulator.mongo.replicaSetHosts}` +
             '/db?replicaSet=rs0&authSource=admin';
         async.waterfall([
             next => {
