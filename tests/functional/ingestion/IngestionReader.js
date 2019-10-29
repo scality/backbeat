@@ -109,7 +109,7 @@ describe('ingestion reader tests with mock', function fD() {
         }
         const mongoUrl =
             `mongodb://${mongoAuth}${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-            '/db?replicaSet=rs0&authSource=admin?authMechanism=SCRAM-SHA-1';
+            '/db?replicaSet=rs0&authSource=admin?authMechanism=MONGODB-CR';
         console.log(`\n------ mongo URL: ${mongoUrl}\n\n`);
         async.waterfall([
             next => {
