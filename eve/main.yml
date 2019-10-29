@@ -97,7 +97,7 @@ stages:
             MONGO_AUTH_PASSWORD: "scality"
       - ShellCommand:
           name: run feature ingestion tests
-          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:ingestion
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:ingestion ; sleep 6000
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
