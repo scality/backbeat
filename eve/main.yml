@@ -87,6 +87,7 @@ stages:
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+            MANAGEMENT_BACKEND: operator
       - ShellCommand:
           name: run backbeat retry tests with account authentication
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry

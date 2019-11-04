@@ -62,6 +62,7 @@ describe('BackbeatAPI', () => {
         { url: `/_/ingestion/pause/${ingestSite}`, method: 'POST' },
         { url: `/_/ingestion/resume/${ingestSite}`, method: 'POST' },
         { url: `/_/ingestion/status/${ingestSite}`, method: 'GET' },
+        { url: '/_/configuration/workflows', method: 'POST' },
     ].forEach(request => {
         it(`should validate route: ${request.method} ${request.url}`, () => {
             const req = new BackbeatRequest(request);

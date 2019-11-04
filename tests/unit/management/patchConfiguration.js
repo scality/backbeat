@@ -3,7 +3,7 @@ const async = require('async');
 const Metadata = require('arsenal').storage.metadata.MetadataWrapper;
 const BucketInfo = require('arsenal').models.BucketInfo;
 
-const patchConfiguration =
+const { patchConfiguration } =
     require('../../../lib/management/patchConfiguration');
 const Config = require('../../../lib/Config');
 const testConfig = require('../../config.json');

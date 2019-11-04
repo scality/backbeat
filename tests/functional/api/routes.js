@@ -1218,6 +1218,31 @@ describe('API routes', () => {
                     done();
                 });
             });
+
+            it('should reject workflow apply request with bad json', done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: '/_/configuration/workflows',
+                });
+                const body = '{';
+                makeRequest(options, body, (err, res) => {
+                    assert.ifError(err);
+                    assert.strictEqual(res.statusCode, 400);
+                    done();
+                });
+            });
+
+            it('should succeed on empty workflow apply request', done => {
+                const options = Object.assign({}, defaultOptions, {
+                    method: 'POST',
+                    path: '/_/configuration/workflows',
+                });
+                makeRequest(options, '{}', (err, res) => {
+                    assert.ifError(err);
+                    assert.strictEqual(res.statusCode, 200);
+                    done();
+                });
+            });
         });
     });
 });
