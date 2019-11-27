@@ -101,7 +101,9 @@ stages:
   docker-build:
     worker: &image_builder
       type: kube_pod
-      path: eve/workers/image-builder.yml
+      path: eve/workers/release/pod.yaml
+      images:
+        release: eve/workers/release
     steps:
       - Git: *git
       - SetProperty: *docker_image_name
