@@ -13,6 +13,7 @@ class MetadataMock {
         // TODO: for PUT/POST, edit the mockRes object
         if (req.method === 'GET') {
             const [url, queryparams] = req.url.split('?');
+            const queryParamsObj = new URLSearchParams(queryparams);
             const resObj = mockRes.GET.responses[url];
             if (!resObj && req.url.startsWith('/default/attributes')) {
                 const err = errors.NoSuchBucket;
@@ -48,17 +49,23 @@ class MetadataMock {
                                 JSON.stringify(entry.value);
                         });
                     });
+                    const beginParam = queryParamsObj.get('begin');
+                    const begin = beginParam ? Number.parseInt(beginParam, 10) : undefined;
+                    if (begin !== undefined) {
+                        resContent.log = resContent.log.slice(begin - resContent.info.start);
+                        resContent.info.start = begin;
+                    }
+                    const limitParam = queryParamsObj.get('limit');
+                    const limit = limitParam ? Number.parseInt(limitParam, 10) : undefined;
+                    if (limit !== undefined) {
+                        resContent.log = resContent.log.slice(0, limit);
+                    }
                 }
                 if (resObj.resType === 'objectMD') {
-                    let versionParam;
-                    if (queryparams) {
-                        const params = queryparams.split('&')
-                                                  .map(i => i.split('='));
-                        versionParam = params.find(i => i[0] === 'versionId');
-                    }
+                    const versionParam = queryParamsObj.get('versionId');
                     let decodedVersionId;
                     if (versionParam) {
-                        decodedVersionId = decode(versionParam[1]);
+                        decodedVersionId = decode(versionParam);
                     }
                     const objMd = Object.assign({}, resContent, {
                         versionId: decodedVersionId,
