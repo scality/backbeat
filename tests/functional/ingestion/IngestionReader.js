@@ -21,7 +21,7 @@ const zookeeper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 
 const testPort = testConfig.extensions.ingestion.sources[0].port;
-const mockLogOffset = 2;
+const mockLogOffset = 1;
 const CONSUMER_TIMEOUT = 35000;
 
 const expectedLogs = JSON.parse(JSON.stringify(mockLogs));
@@ -48,8 +48,6 @@ const consumerParams = {
     // contiguous offset fully processed by a worker, so
     // disabling automatic offset store is needed
     'enable.auto.offset.store': false,
-    // this function is called periodically based on
-    // auto-commit of stored offsets
 };
 const consumer = new kafka.KafkaConsumer(consumerParams, {});
 
@@ -205,6 +203,7 @@ describe('ingestion reader tests with mock', function fD() {
                 logStats: {
                     nbLogRecordsRead: 0,
                     nbLogEntriesRead: 0,
+                    hasMoreLog: false,
                 },
                 entriesToPublish: {},
                 publishedEntries: {},
@@ -230,7 +229,7 @@ describe('ingestion reader tests with mock', function fD() {
                     next => setZookeeperInitState(this.ingestionReader, next),
                     next => zkClient.setData(
                         this.ingestionReader.pathToLogOffset,
-                        Buffer.from('2'), -1, err => {
+                        Buffer.from(mockLogOffset.toString()), -1, err => {
                             assert.ifError(err);
                             return next(err);
                         }
@@ -244,7 +243,10 @@ describe('ingestion reader tests with mock', function fD() {
         });
 
         afterEach(done => {
-            emptyAndDeleteVersionedBucket(sourceConfig, done);
+            async.series([
+                next => emptyAndDeleteVersionedBucket(sourceConfig, next),
+                next => zkClient.remove(this.ingestionReader.pathToLogOffset, -1, next),
+            ], done);
         });
 
         it('_processReadRecords should retrieve logRes stream', done => {
@@ -279,6 +281,7 @@ describe('ingestion reader tests with mock', function fD() {
                 // we expect total log entries to be 9
                 assert.deepStrictEqual(batchState.logStats, {
                     nbLogRecordsRead: 8, nbLogEntriesRead: 9,
+                    hasMoreLog: false,
                 });
                 return done();
             });
@@ -323,28 +326,32 @@ describe('ingestion reader tests with mock', function fD() {
             ], done);
         });
 
-        it('should successfully generate entries from raft logs', done => {
-            async.waterfall([
-                next => this.ingestionReader.processLogEntries({}, err => {
-                    assert.ifError(err);
-                    setTimeout(next, CONSUMER_TIMEOUT);
-                }),
-                next => {
-                    consumer.consume(10, (err, entries) => {
-                        // the mockLogs have 9 entries, but only 3 entries
-                        // pertain to the test so the expected length is 3
-                        assert.strictEqual(entries.length, 3);
-                        entries.forEach(entry => {
-                            const receivedEntry =
-                                JSON.parse(entry.value.toString());
-                            assert(expectedOOBEntries.
-                                indexOf(receivedEntry.value) > -1);
-                        });
-                        return next();
-                    });
-                },
-            ], done);
-        });
+        [{}, { maxRead: 2 }].forEach(params => {
+             it('should successfully generate entries from raft logs ' +
+             `with processLogEntries params ${JSON.stringify(params)}`,
+             done => {
+                 async.waterfall([
+                     next => this.ingestionReader.processLogEntries({}, err => {
+                         assert.ifError(err);
+                         setTimeout(next, CONSUMER_TIMEOUT);
+                     }),
+                     next => {
+                         consumer.consume(10, (err, entries) => {
+                             // the mockLogs have 9 entries, but only 3 entries
+                             // pertain to the test so the expected length is 3
+                             assert.strictEqual(entries.length, 3);
+                             entries.forEach(entry => {
+                                 const receivedEntry =
+                                       JSON.parse(entry.value.toString());
+                                 assert(expectedOOBEntries.
+                                        indexOf(receivedEntry.value) > -1);
+                             });
+                             return next();
+                         });
+                     },
+                 ], done);
+             });
+         });
     });
 
     describe('testing with `bucket2` configuration', () => {
