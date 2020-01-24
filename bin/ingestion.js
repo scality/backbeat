@@ -141,7 +141,8 @@ function checkAndApplyScheduleResume(zkClient, data, location, cb) {
  */
 function setupZkLocationNode(zkClient, location, done) {
     const path = `${getIngestionZkPath()}/${location}`;
-    const data = JSON.stringify({ paused: false });
+    // set initial ingestion `paused` state of a new location to `true`
+    const data = JSON.stringify({ paused: true });
     zkClient.create(path, Buffer.from(data), err => {
         if (err && err.name === 'NODE_EXISTS') {
             return zkClient.getData(path, (err, data) => {
@@ -181,6 +182,8 @@ function setupZkLocationNode(zkClient, location, done) {
             });
             return done(err);
         }
+        // add the new location to paused locations
+        ingestionPopulator.setPausedLocationState(location);
         return done();
     });
 }
