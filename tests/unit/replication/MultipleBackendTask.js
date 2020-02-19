@@ -7,17 +7,21 @@ const MultipleBackendTask =
 const log = require('../../utils/fakeLogger');
 const { sourceEntry, destEntry } = require('../../utils/mockEntries');
 
-const multipleBackendTask = new MultipleBackendTask({
-    getStateVars: () => ({
-        repConfig: {
-            queueProcessor: {
-                retryTimeoutS: 300,
+let multipleBackendTask = null;
+
+function createMultipleBackendTask() {
+    return new MultipleBackendTask({
+        getStateVars: () => ({
+            repConfig: {
+                queueProcessor: {
+                    retryTimeoutS: 300,
+                },
             },
-        },
-        destConfig: config.extensions.replication.destination,
-        site: 'test-site-2',
-    }),
-});
+            destConfig: config.extensions.replication.destination,
+            site: 'test-site-2',
+        }),
+    });
+}
 
 function requestInitiateMPU(params, done) {
     const { retryable } = params;
@@ -32,9 +36,7 @@ function requestInitiateMPU(params, done) {
 
     multipleBackendTask
         ._getAndPutMultipartUpload(sourceEntry, destEntry, log, err => {
-            if (retryable) {
-                assert.ifError(err);
-            }
+            assert(err);
             return done();
         });
 }
@@ -43,9 +45,16 @@ describe('MultipleBackendTask', function test() {
     this.timeout(5000);
 
     describe('::initiateMultipartUpload', () => {
+        beforeEach(() => {
+            multipleBackendTask = createMultipleBackendTask();
+        });
         it('should use exponential backoff if retryable error ', done => {
             const doneOnce = jsutil.once(done);
-            setTimeout(doneOnce, 4000); // Retries will exceed test timeout.
+            setTimeout(() => {
+                // inhibits further retries
+                multipleBackendTask.config.retryTimeoutS = 0;
+                doneOnce();
+            }, 4000); // Retries will exceed test timeout.
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
