@@ -150,7 +150,9 @@ class QueueProcessor extends EventEmitter {
         }
 
         this._setupVaultclientCache();
-        this._setupRedis(redisConfig);
+        if (redisConfig && !redisConfig.noRedis) {
+            this._setupRedis(redisConfig);
+        }
 
         // FIXME support multiple scality destination sites
         if (Array.isArray(destConfig.bootstrapList)) {
