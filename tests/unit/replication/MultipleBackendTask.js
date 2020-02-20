@@ -7,17 +7,21 @@ const MultipleBackendTask =
 const log = require('../../utils/fakeLogger');
 const { sourceEntry, destEntry } = require('../../utils/mockEntries');
 
-const multipleBackendTask = new MultipleBackendTask({
-    getStateVars: () => ({
-        repConfig: {
-            queueProcessor: {
-                retryTimeoutS: 300,
+let multipleBackendTask = null;
+
+function createMultipleBackendTask() {
+    return new MultipleBackendTask({
+        getStateVars: () => ({
+            repConfig: {
+                queueProcessor: {
+                    retryTimeoutS: 300,
+                },
             },
-        },
-        destConfig: config.extensions.replication.destination,
-        site: 'test-site-2',
-    }),
-});
+            destConfig: config.extensions.replication.destination,
+            site: 'test-site-2',
+        }),
+    });
+}
 
 function requestInitiateMPU(params, done) {
     const { retryable } = params;
@@ -32,10 +36,11 @@ function requestInitiateMPU(params, done) {
 
     multipleBackendTask
         ._getAndPutMultipartUpload(sourceEntry, destEntry, log, err => {
-            if (retryable) {
-                assert.ifError(err);
-            }
-            return done();
+            assert(err);
+            // in case of retryable error, this call shall be ignored
+            // thanks to jsutil.once(), where the non-retryable test
+            // expects an error.
+            return done(err);
         });
 }
 
@@ -43,13 +48,23 @@ describe('MultipleBackendTask', function test() {
     this.timeout(5000);
 
     describe('::initiateMultipartUpload', () => {
+        beforeEach(() => {
+            multipleBackendTask = createMultipleBackendTask();
+        });
         it('should use exponential backoff if retryable error ', done => {
             const doneOnce = jsutil.once(done);
-            setTimeout(doneOnce, 4000); // Retries will exceed test timeout.
+            setTimeout(() => {
+                // inhibits further retries
+                multipleBackendTask.config.retryTimeoutS = 0;
+                doneOnce();
+            }, 4000); // Retries will exceed test timeout.
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
         it('should not use exponential backoff if non-retryable error ', done =>
-            requestInitiateMPU({ retryable: false }, done));
+           requestInitiateMPU({ retryable: false }, err => {
+               assert(err);
+               done();
+           }));
     });
 });
