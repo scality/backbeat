@@ -36,9 +36,7 @@ describe('MultipleBackendTask', function test() {
         };
 
         task._getAndPutMultipartUpload(sourceEntry, fakeLogger, err => {
-                if (retryable) {
-                    assert.ifError(err);
-                }
+                assert(err);
                 return done();
             });
     }
@@ -74,7 +72,11 @@ describe('MultipleBackendTask', function test() {
     describe('::initiateMultipartUpload', () => {
         it('should use exponential backoff if retryable error ', done => {
             const doneOnce = jsutil.once(done);
-            setTimeout(doneOnce, 4000); // Retries will exceed test timeout.
+            setTimeout(() => {
+                // inhibits further retries
+                task.retryParams.timeoutS = 0;
+                doneOnce();
+            }, 4000); // Retries will exceed test timeout.
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
