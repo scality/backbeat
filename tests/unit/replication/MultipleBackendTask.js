@@ -36,11 +36,12 @@ describe('MultipleBackendTask', function test() {
         };
 
         task._getAndPutMultipartUpload(sourceEntry, fakeLogger, err => {
-                if (retryable) {
-                    assert.ifError(err);
-                }
-                return done();
-            });
+            assert(err);
+            // in case of retryable error, this call shall be ignored
+            // thanks to jsutil.once(), where the non-retryable test
+            // expects an error.
+            return done(err);
+        });
     }
 
     beforeEach(() => {
@@ -74,12 +75,19 @@ describe('MultipleBackendTask', function test() {
     describe('::initiateMultipartUpload', () => {
         it('should use exponential backoff if retryable error ', done => {
             const doneOnce = jsutil.once(done);
-            setTimeout(doneOnce, 4000); // Retries will exceed test timeout.
+            setTimeout(() => {
+                // inhibits further retries
+                task.retryParams.timeoutS = 0;
+                doneOnce();
+            }, 4000); // Retries will exceed test timeout.
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
         it('should not use exponential backoff if non-retryable error ', done =>
-            requestInitiateMPU({ retryable: false }, done));
+           requestInitiateMPU({ retryable: false }, err => {
+               assert(err);
+               done();
+           }));
     });
 
     describe('::_getRangeSize', () => {
