@@ -335,6 +335,9 @@ class ReplicateObject extends BackbeatTask {
         const doneOnce = jsutil.once(done);
         const partObj = new ObjectMDLocation(part);
         const partNumber = partObj.getPartNumber();
+        let destReq = null;
+        let sourceReqAborted = false;
+        let destReqAborted = false;
         const sourceReq = this.S3source.getObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
@@ -343,39 +346,51 @@ class ReplicateObject extends BackbeatTask {
         });
         attachReqUids(sourceReq, log);
         sourceReq.on('error', err => {
+            if (!sourceReqAborted && !destReqAborted) {
+                destReq.abort();
+                destReqAborted = true;
+            }
             // eslint-disable-next-line no-param-reassign
             err.origin = 'source';
             if (err.statusCode === 404) {
                 return doneOnce(err);
             }
-            log.error('an error occurred on getObject from S3',
-                { method: 'ReplicateObject._getAndPutPartOnce',
-                    entry: sourceEntry.getLogInfo(),
-                    part,
-                    origin: 'source',
-                    peer: this.sourceConfig.s3,
-                    error: err.message,
-                    httpStatus: err.statusCode });
+            if (!sourceReqAborted) {
+                log.error('an error occurred on getObject from S3',
+                          { method: 'ReplicateObject._getAndPutPartOnce',
+                            entry: sourceEntry.getLogInfo(),
+                            part,
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
+                            error: err.message,
+                            httpStatus: err.statusCode });
+            }
             return doneOnce(err);
         });
         const incomingMsg = sourceReq.createReadStream();
         incomingMsg.on('error', err => {
+            if (!sourceReqAborted && !destReqAborted) {
+                destReq.abort();
+                destReqAborted = true;
+            }
             if (err.statusCode === 404) {
                 return doneOnce(errors.ObjNotFound);
             }
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            log.error('an error occurred when streaming data from S3',
-                { method: 'ReplicateObject._getAndPutPartOnce',
-                    entry: destEntry.getLogInfo(),
-                    part,
-                    origin: 'source',
-                    peer: this.sourceConfig.s3,
-                    error: err.message });
+            if (!sourceReqAborted) {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                log.error('an error occurred when streaming data from S3',
+                          { method: 'ReplicateObject._getAndPutPartOnce',
+                            entry: destEntry.getLogInfo(),
+                            part,
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
+                            error: err.message });
+            }
             return doneOnce(err);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo(), part });
-        const destReq = this.backbeatDest.putData({
+        destReq = this.backbeatDest.putData({
             Bucket: destEntry.getBucket(),
             Key: destEntry.getObjectKey(),
             CanonicalID: destEntry.getOwnerId(),
@@ -386,15 +401,19 @@ class ReplicateObject extends BackbeatTask {
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
-                log.error('an error occurred on putData to S3',
-                    { method: 'ReplicateObject._getAndPutPartOnce',
-                        entry: destEntry.getLogInfo(),
-                        part,
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message });
+                if (!destReqAborted) {
+                    sourceReq.abort();
+                    sourceReqAborted = true;
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'target';
+                    log.error('an error occurred on putData to S3',
+                              { method: 'ReplicateObject._getAndPutPartOnce',
+                                entry: destEntry.getLogInfo(),
+                                part,
+                                origin: 'target',
+                                peer: this.destBackbeatHost,
+                                error: err.message });
+                }
                 return doneOnce(err);
             }
             partObj.setDataLocation(data.Location[0]);
