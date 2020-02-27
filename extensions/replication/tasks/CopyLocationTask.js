@@ -306,10 +306,12 @@ class CopyLocationTask extends BackbeatTask {
             Body: incomingMsg,
         });
         let aborted = false;
-        incomingMsg.once('error', () => {
-            destReq.abort();
-            aborted = true;
-        });
+        if (incomingMsg) {
+            incomingMsg.once('error', () => {
+                destReq.abort();
+                aborted = true;
+            });
+        }
         attachReqUids(destReq, log);
         return destReq.send((err, data) => {
             if (err) {

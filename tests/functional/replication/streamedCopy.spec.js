@@ -78,6 +78,26 @@ const mockSourceEntry = {
     setReplicationSiteDataStoreVersionId: () => {},
 };
 
+const mockEmptySourceEntry = {
+    getLogInfo: () => ({}),
+    getContentLength: () => 0,
+    getBucket: () => constants.bucket,
+    getObjectKey: () => constants.objectKey,
+    getEncodedVersionId: () => constants.versionId,
+    getDataStoreName: () => constants.dataStoreName,
+    getReplicationIsNFS: () => false,
+    getOwnerId: () => 'bart',
+    getContentMd5: () => 'bac4bea7bac4bea7bac4bea7bac4bea7',
+    getReplicationStorageType: () => 'aws_s3',
+    getUserMetadata: () => {},
+    getContentType: () => 'application/octet-stream',
+    getCacheControl: () => undefined,
+    getContentDisposition: () => undefined,
+    getContentEncoding: () => undefined,
+    getTags: () => {},
+    setReplicationSiteDataStoreVersionId: () => {},
+};
+
 const mockPartInfo = {
     key: 'bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7',
     start: 0,
@@ -94,6 +114,9 @@ const mockActionEntry = ActionQueueEntry.create('copyLocation')
 
 const mockObjectMD = new ObjectMD()
       .setContentLength(constants.contents.length);
+
+const mockEmptyObjectMD = new ObjectMD()
+      .setContentLength(0);
 
 const log = new Logger('test:streamedCopy');
 
@@ -254,4 +277,33 @@ describe('streamed copy functional tests', () => {
                });
         });
     });
+
+    [{ name: 'MultipleBackendTask::_getAndPutObjectOnce (empty object)',
+       call: cb => {
+           const mbTask = new MultipleBackendTask(qp);
+           mbTask._setupSourceClients('dummyrole', log);
+           mbTask._getAndPutObjectOnce(
+               mockEmptySourceEntry, log.newRequestLogger(), cb);
+       },
+     },
+     { name: 'CopyLocationTask::_getAndPutObjectOnce (empty object)',
+       call: cb => {
+           const clTask = new CopyLocationTask(qp);
+           clTask._setupClients(mockActionEntry, log);
+           clTask._getAndPutObjectOnce(
+               mockActionEntry, mockEmptyObjectMD, log.newRequestLogger(), cb);
+       },
+     }].forEach(testedFunc => {
+         ['noError'].forEach(testScenario => {
+             it(`${testedFunc.name} with test scenario ${testScenario}`,
+                done => {
+                    s3mock.setTestScenario(testScenario);
+                    testedFunc.call(err => {
+                        assert.ifError(err);
+                        s3mock.setTestScenario(null);
+                        done();
+                    });
+                });
+         });
+     });
 });
