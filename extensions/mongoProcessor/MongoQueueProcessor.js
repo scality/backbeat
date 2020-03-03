@@ -455,6 +455,10 @@ class MongoQueueProcessor {
             this._updateReplicationInfo(sourceEntry, bucketInfo, content,
                 zenkoObjMd);
 
+            // Some object stores we are ingesting from (e.g. S3C) do
+            // not populate the value.key property.
+            sourceEntry.setKey(key);
+
             const objVal = sourceEntry.getValue();
             const params = {};
             if (sourceEntry.getVersionId()) {

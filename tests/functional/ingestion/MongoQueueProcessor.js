@@ -328,6 +328,8 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(added.length, 1);
                 const objVal = added[0].objVal;
                 assert.strictEqual(added[0].key, versionKey);
+                // key shall now be always populated
+                assert.deepStrictEqual(objVal.key, KEY);
                 // acl should reset
                 assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
                 // owner md should update
