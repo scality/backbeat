@@ -456,6 +456,11 @@ class MongoQueueProcessor {
                 zenkoObjMd);
 
             const objVal = sourceEntry.getValue();
+
+            // Some object stores we are ingesting from (e.g. S3C) do
+            // not populate the value.key property.
+            objVal.setKey(key);
+
             const params = {};
             if (sourceEntry.getVersionId()) {
                 params.versionId = sourceEntry.getVersionId();
