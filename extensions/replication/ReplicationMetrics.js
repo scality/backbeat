@@ -57,7 +57,7 @@ const replicationProcessedElapsedSeconds = ZenkoMetrics.createHistogram({
 });
 
 let bootstrapList = config.getBootstrapList();
-config.on('bootstrap-list-update', () => {
+config.on('location-constraints-update', () => {
     bootstrapList = config.getBootstrapList();
 });
 

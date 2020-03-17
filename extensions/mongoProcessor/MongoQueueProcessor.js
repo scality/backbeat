@@ -123,7 +123,7 @@ class MongoQueueProcessor {
             }
 
             this._bootstrapList = Config.getBootstrapList();
-            Config.on('bootstrap-list-update', () => {
+            Config.on('location-constraints-update', () => {
                 this._bootstrapList = Config.getBootstrapList();
             });
 

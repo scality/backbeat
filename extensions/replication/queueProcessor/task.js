@@ -151,7 +151,7 @@ function initAndStart(zkClient) {
         const destConfig = Object.assign({}, repConfig.destination);
         destConfig.bootstrapList = bootstrapList;
 
-        config.on('bootstrap-list-update', () => {
+        config.on('location-constraints-update', () => {
             destConfig.bootstrapList = config.getBootstrapList();
 
             const activeSites = Object.keys(activeQProcessors);

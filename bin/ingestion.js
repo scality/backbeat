@@ -242,7 +242,7 @@ function loadProcessors(zkClient) {
     let bootstrapList = config.getBootstrapList();
     updateProcessors(zkClient, bootstrapList);
 
-    config.on('bootstrap-list-update', () => {
+    config.on('location-constraints-update', () => {
         bootstrapList = config.getBootstrapList();
         updateProcessors(zkClient, bootstrapList);
     });

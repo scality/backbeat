@@ -32,7 +32,7 @@ function initAndStart() {
         const bootstrapList = config.getBootstrapList();
         repConfig.destination.bootstrapList = bootstrapList;
 
-        config.on('bootstrap-list-update', () => {
+        config.on('location-constraints-update', () => {
             repConfig.destination.bootstrapList = config.getBootstrapList();
         });
 
