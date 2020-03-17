@@ -25,7 +25,7 @@ function updateBootstrapList() {
     const { replication } = config.extensions;
     replication.destination.bootstrapList = config.getBootstrapList();
 
-    config.on('bootstrap-list-update', () => {
+    config.on('location-constraints-update', () => {
         replication.destination.bootstrapList = config.getBootstrapList();
     });
 }

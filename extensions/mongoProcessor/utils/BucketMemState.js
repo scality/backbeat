@@ -16,7 +16,7 @@ class BucketMemState {
         // i.e.: { bucketName: BucketInfo() }
         this._memo = {};
 
-        this._config.on('bootstrap-list-update', this._cleanup.bind(this));
+        this._config.on('location-constraints-update', this._cleanup.bind(this));
     }
 
     /**
