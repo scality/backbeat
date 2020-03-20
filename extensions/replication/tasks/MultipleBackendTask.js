@@ -1,9 +1,11 @@
 const async = require('async');
 const uuid = require('uuid/v4');
+const querystring = require('querystring');
 
-const errors = require('arsenal').errors;
-const jsutil = require('arsenal').jsutil;
-const ObjectMD = require('arsenal').models.ObjectMD;
+const { errors, jsutil, models, storage } = require('arsenal');
+const { ObjectMD } = models;
+const { parseLC } = storage.data;
+const config = require('../../../lib/Config');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
@@ -15,6 +17,19 @@ const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
 
 const MPU_CONC_LIMIT = 10;
 const MPU_GCP_MAX_PARTS = 1024;
+
+let clients = {};
+config.on('location-constraints-update', () => {
+    clients = parseLC(config);
+});
+
+function toObjectGetInfo(objectKey, bucketName, location) {
+    const client = clients[location];
+    if (!client || !client.toObjectGetInfo) {
+        return null;
+    }
+    return client.toObjectGetInfo(objectKey, bucketName);
+}
 
 class MultipleBackendTask extends ReplicateObject {
 
@@ -703,68 +718,50 @@ class MultipleBackendTask extends ReplicateObject {
         let sourceReq = null;
         let incomingMsg = null;
         let aborted = false;
+        const client = clients[sourceEntry.getDataStoreName()];
         if (size !== 0) {
-            sourceReq = this.backbeatSource.getObject({
-                Bucket: sourceEntry.getBucket(),
-                Key: sourceEntry.getObjectKey(),
-                VersionId: sourceEntry.getEncodedVersionId(),
-                LocationConstraint: sourceEntry.getDataStoreName(),
+            const objectGetInfo = toObjectGetInfo(
+                sourceEntry.getObjectKey(),
+                sourceEntry.getBucket(),
+                sourceEntry.getDataStoreName()
+            );
+            if (!objectGetInfo) {
+                return done(errors.ObjNotFound);
+            }
+            objectGetInfo.dataStoreVersionId = sourceEntry.getDataStoreVersionId();
+            log.debug('getting source object', {
+                method: 'MultipleBackendTask._getAndPutObjectOnce',
+                entry: sourceEntry.getLogInfo(),
+                objectGetInfo,
+                origin: 'source',
             });
-            attachReqUids(sourceReq, log);
-            sourceReq.on('error', err => {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                if (err.statusCode === 404) {
-                    log.error('the source object was not found', {
-                        method: 'MultipleBackendTask._getAndPutObjectOnce',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    });
-                    return doneOnce(err);
-                }
-                if (!aborted) {
-                    log.error('an error occurred getting object from S3', {
-                        method: 'MultipleBackendTask._getAndPutObjectOnce',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    });
-                }
-                return doneOnce(err);
-            });
+            sourceReq = client.get(objectGetInfo, null, log.getSerializedUids());
             incomingMsg = sourceReq.createReadStream();
-            incomingMsg.on('error', err => {
-                if (err.statusCode === 404) {
-                    log.error('the source object was not found', {
-                        method: 'MultipleBackendTask._getAndPutObjectOnce',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    });
-                    return doneOnce(errors.ObjNotFound);
+            incomingMsg.once('error', err => {
+                let logLevel;
+                let retError;
+                if (err.code === 'NotFound') {
+                    logLevel = 'info';
+                    retError = errors.ObjNotFound;
+                } else if (!aborted) {
+                    logLevel = 'error';
+                    retError = errors.ServiceUnavailable.customizeDescription(
+                        `Error returned from ${client.type}: ${err.message}`);
                 }
-                if (!aborted) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('an error occurred when streaming data from S3', {
+                if (logLevel) {
+                    retError.origin = 'source';
+                    log.error('an error occurred when streaming replication data', {
                         entry: sourceEntry.getLogInfo(),
                         method: 'MultipleBackendTask._getAndPutObjectOnce',
                         origin: 'source',
                         peer: this.sourceConfig.s3,
-                        error: err.message,
+                        error: retError.message,
                     });
                 }
-                return doneOnce(err);
+                return doneOnce(retError);
             });
-            log.debug('putting object', { entry: sourceEntry.getLogInfo() });
         }
+        log.debug('putting object', { entry: sourceEntry.getLogInfo() });
         const putDone = err => {
             if (err && sourceReq) {
                 sourceReq.abort();
@@ -777,12 +774,11 @@ class MultipleBackendTask extends ReplicateObject {
                 if (err) {
                     return doneOnce(err);
                 }
-                return this._sendMultipleBackendPutObject(sourceEntry,
-                    size, incomingMsg, log, putDone);
+                return this._putObject(
+                    sourceEntry, size, incomingMsg, log, putDone);
             });
         }
-        return this._sendMultipleBackendPutObject(sourceEntry,
-            size, incomingMsg, log, putDone);
+        return this._putObject(sourceEntry, size, incomingMsg, log, putDone);
     }
 
     /**
@@ -854,56 +850,58 @@ class MultipleBackendTask extends ReplicateObject {
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
-    _sendMultipleBackendPutObject(sourceEntry, size,
-        incomingMsg, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendPutObject({
-            Bucket: sourceEntry.getBucket(),
-            Key: sourceEntry.getObjectKey(),
-            CanonicalID: sourceEntry.getOwnerId(),
-            ContentLength: size,
-            ContentMD5: sourceEntry.getContentMd5(),
-            StorageType: sourceEntry.getReplicationStorageType(),
-            StorageClass: this.site,
-            VersionId: sourceEntry.getEncodedVersionId(),
-            UserMetaData: sourceEntry.getUserMetadata(),
-            ContentType: sourceEntry.getContentType() || undefined,
-            CacheControl: sourceEntry.getCacheControl() || undefined,
-            ContentDisposition:
-                sourceEntry.getContentDisposition() || undefined,
-            ContentEncoding: sourceEntry.getContentEncoding() || undefined,
-            Tags: JSON.stringify(sourceEntry.getTags()),
-            Body: incomingMsg,
-        });
+    _putObject(sourceEntry, size, incomingMsg, log, doneOnce) {
+        const client = clients[this.site];
         let aborted = false;
+        const metaHeaders = { 'x-amz-meta-scal-replication-status': 'REPLICA' };
+        const sourceVersionId = sourceEntry.getEncodedVersionId();
+        if (sourceVersionId) {
+            metaHeaders['x-amz-meta-scal-version-id'] = sourceVersionId;
+        }
+        const userMetadata = sourceEntry.getUserMetadata();
+        if (userMetadata !== undefined) {
+            Object.assign(metaHeaders, userMetadata);
+        }
+        const keyContext = {
+            namespace: 'default',
+            bucketName: sourceEntry.getBucket(),
+            objectKey: sourceEntry.getObjectKey(),
+            metaHeaders,
+            tagging: querystring.stringify(sourceEntry.getTags()),
+            contentType: sourceEntry.getContentType(),
+            cacheControl: sourceEntry.getCacheControl(),
+            contentDisposition: sourceEntry.getContentDisposition(),
+            contentEncoding: sourceEntry.getContentEncoding(),
+        };
+        const destReq = client.put(
+            incomingMsg, size, keyContext, log.getSerializedUids(),
+            (err, destKey, destVersionId) => {
+                if (err) {
+                    if (!aborted) {
+                        // eslint-disable-next-line no-param-reassign
+                        err.origin = 'source';
+                        log.error(`an error occurred putting object to ${client.type}`, {
+                            method: 'MultipleBackendTask._putObject',
+                            entry: sourceEntry.getLogInfo(),
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
+                            error: err.message,
+                        });
+                    }
+                    return doneOnce(err);
+                }
+                sourceEntry.setReplicationSiteDataStoreVersionId(this.site, destVersionId);
+                const extMetrics = getExtMetrics(this.site, size, sourceEntry);
+                this.mProducer.publishMetrics(
+                    extMetrics, metricsTypeCompleted, metricsExtension, () => {});
+                return doneOnce();
+            });
         if (incomingMsg) {
             incomingMsg.once('error', () => {
                 destReq.abort();
                 aborted = true;
             });
         }
-        attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
-                if (!aborted) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('an error occurred putting object to S3', {
-                        method: 'MultipleBackendTask._sendMultipleBackendPutObject',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                    });
-                }
-                return doneOnce(err);
-            }
-            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                data.versionId);
-            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
-            return doneOnce(null, data);
-        });
     }
 
     _putObjectTagging(sourceEntry, log, cb) {
