@@ -141,7 +141,7 @@ describe('patchConfiguration', () => {
 
     beforeEach(() => {
         // empty configs
-        Config.setBootstrapList({});
+        Config.setLocationConstraints({});
         Config.setIngestionBuckets({}, []);
     });
 

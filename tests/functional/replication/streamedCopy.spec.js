@@ -6,6 +6,8 @@ const Logger = werelogs.Logger;
 
 const { ObjectMD } = require('arsenal').models;
 
+const config = require('../../../lib/Config');
+
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
 const QueueProcessor = require('../../../extensions/replication' +
@@ -21,7 +23,8 @@ const constants = {
     bucket: 'test-bucket',
     objectKey: 'test-object',
     versionId: 'test-object-versionId',
-    dataStoreName: 'us-east-1',
+    sourceLocation: 'zenko-source-location',
+    targetLocation: 'zenko-target-location',
     // data size should be sufficient to have data held in the socket
     // buffers, 10MB seems to work
     contents: Buffer.alloc(10000000).fill('Z'),
@@ -39,7 +42,7 @@ const qpParams = [
     },
     { auth: { type: 'account', account: 'bart' },
       bootstrapList: [{
-          site: 'sf', servers: ['127.0.0.2:7777'],
+          site: 'zenko-target-location', servers: ['127.0.0.2:7777'],
       }],
       transport: 'http' },
     { topic: 'backbeat-func-test-dummy-topic',
@@ -55,7 +58,7 @@ const qpParams = [
     { topic: 'metrics-test-topic' },
     {},
     {},
-    'sf',
+    'zenko-target-location',
 ];
 
 const mockSourceEntry = {
@@ -64,7 +67,7 @@ const mockSourceEntry = {
     getBucket: () => constants.bucket,
     getObjectKey: () => constants.objectKey,
     getEncodedVersionId: () => constants.versionId,
-    getDataStoreName: () => constants.dataStoreName,
+    getDataStoreName: () => constants.sourceLocation,
     getReplicationIsNFS: () => false,
     getOwnerId: () => 'bart',
     getContentMd5: () => 'bac4bea7bac4bea7bac4bea7bac4bea7',
@@ -84,7 +87,7 @@ const mockEmptySourceEntry = {
     getBucket: () => constants.bucket,
     getObjectKey: () => constants.objectKey,
     getEncodedVersionId: () => constants.versionId,
-    getDataStoreName: () => constants.dataStoreName,
+    getDataStoreName: () => constants.targetLocation,
     getReplicationIsNFS: () => false,
     getOwnerId: () => 'bart',
     getContentMd5: () => 'bac4bea7bac4bea7bac4bea7bac4bea7',
@@ -120,6 +123,49 @@ const mockEmptyObjectMD = new ObjectMD()
 
 const log = new Logger('test:streamedCopy');
 
+const locationConstraints = {
+    'zenko-source-location': {
+        locationType: 'location-scality-ring-s3-v1',
+        objectId: '44bf13a4-4c4e-11ea-bb25-f2291cdcb467',
+        details: {
+            credentials: {
+                accessKey: '4OU7W5SI61NM37797059',
+                secretKey: 'qHDO1NUBC9OH1a0cbRk7ghue3Gb9aQsAwEc7PHBi'
+            },
+            bucketName: 'zenko-source-bucket',
+            serverSideEncryption: false,
+            awsEndpoint: '127.0.0.3:7777',
+            supportsVersioning: true,
+            pathStyle: true,
+            https: false
+        },
+        type: 'aws_s3',
+        sizeLimitGB: null,
+        isTransient: false,
+        legacyAwsBehavior: false
+    },
+    'zenko-target-location': {
+        locationType: 'location-scality-ring-s3-v1',
+        objectId: '927057d9-4c4b-11ea-b5a1-6e95057283c8',
+        details: {
+            credentials: {
+                accessKey: '4OU7W5SI61NM37797059',
+                secretKey: 'qHDO1NUBC9OH1a0cbRk7ghue3Gb9aQsAwEc7PHBi'
+            },
+            bucketName: 'zenko-target-bucket',
+            serverSideEncryption: false,
+            awsEndpoint: '127.0.0.4:7777',
+            supportsVersioning: true,
+            pathStyle: true,
+            https: false
+        },
+        type: 'aws_s3',
+        sizeLimitGB: null,
+        isTransient: false,
+        legacyAwsBehavior: false
+    },
+};
+
 class S3Mock {
     constructor() {
         this.log = new Logger('test:streamedCopy:S3Mock');
@@ -131,31 +177,8 @@ class S3Mock {
         this.testScenario = testScenario;
     }
 
-    onRequest(req, res) {
-        if (req.method === 'PUT') {
-            const expectedUrls = ['putobject', 'putpart'].map(
-                op => `/_/backbeat/multiplebackenddata/${constants.bucket}` +
-                    `/${constants.objectKey}?operation=${op}`)
-                  .concat([`/_/backbeat/data/${constants.bucket}` +
-                           `/${constants.objectKey}`]);
-            assert(expectedUrls.includes(req.url));
-            const chunks = [];
-            req.on('data', chunk => {
-                if (this.testScenario === 'abortPut') {
-                    log.info('aborting PUT request');
-                    res.socket.end();
-                    res.socket.destroy();
-                } else {
-                    chunks.push(chunk);
-                }
-            });
-            req.on('end', () => {
-                if (req.url.startsWith('/_/backbeat/data/')) {
-                    res.write('[{"key":"target-key","dataStoreName":"us-east-2"}]');
-                }
-                res.end();
-            });
-        } else if (req.method === 'GET') {
+    onRequestToCloudserver(req, res) {
+        if (req.method === 'GET') {
             const expectedUrls = ['', 'partNumber=1&'].map(
                 partArg => `/${constants.bucket}/${constants.objectKey}` +
                     `?${partArg}versionId=${constants.versionId}`);
@@ -168,9 +191,134 @@ class S3Mock {
                 res.write(constants.contents);
                 res.end();
             }
+        } else if (req.method === 'PUT') {
+            const expectedUrls = ['putobject', 'putpart'].map(
+                op => `/_/backbeat/multiplebackenddata/${constants.bucket}` +
+                    `/${constants.objectKey}?operation=${op}`)
+                  .concat([`/_/backbeat/data/${constants.bucket}` +
+                           `/${constants.objectKey}`]);
+            assert(expectedUrls.includes(req.url));
+            req.on('data', () => {
+                if (this.testScenario === 'abortPut') {
+                    log.info('aborting PUT request');
+                    res.socket.end();
+                    res.socket.destroy();
+                }
+            });
+            req.on('end', () => {
+                if (req.url.startsWith('/_/backbeat/data/')) {
+                    res.write('[{"key":"target-key","dataStoreName":"us-east-2"}]');
+                }
+                res.end();
+            });
         } else {
             assert(false, `did not expect HTTP method ${req.method}`);
         }
+    }
+
+    onRequestToSourceLocation(req, res) {
+        if (req.method === 'GET') {
+            if (req.url === '/zenko-source-bucket?location') {
+                res.end('<?xml version="1.0" encoding="UTF-8"?>'
+                        + '<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                        + `${constants.sourceLocation}`
+                        + '</LocationConstraint>');
+            } else if (req.url === '/zenko-source-bucket/test-bucket/test-object'
+                       + '?versionId=test-object-versionId') {
+                if (this.testScenario === 'abortGet') {
+                    log.info('aborting GET request');
+                    res.socket.end();
+                    res.socket.destroy();
+                } else {
+                    res.write(constants.contents);
+                    res.end();
+                }
+            } else {
+                assert(false, `did not expect HTTP GET on source location URL ${req.url}`);
+            }
+        } else {
+            assert(false, `did not expect HTTP method ${req.method} on source location`);
+        }
+    }
+
+    onRequestToTargetLocation(req, res) {
+        if (req.method === 'GET') {
+            if (req.url === '/zenko-target-bucket?location') {
+                res.end('<?xml version="1.0" encoding="UTF-8"?>'
+                        + '<LocationConstraint xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                        + `${constants.targetLocation}`
+                        + '</LocationConstraint>');
+            } else {
+                assert(false, `did not expect HTTP GET on target location URL ${req.url}`);
+            }
+        } else if (req.method === 'POST') {
+            req.on('data', () => {
+                if (this.testScenario === 'abortPut') {
+                    log.info('aborting PUT request');
+                    res.socket.end();
+                    res.socket.destroy();
+                }
+            });
+            req.on('end', () => {
+                if (req.url === '/zenko-target-bucket/test-bucket/test-object?uploads') {
+                    res.end('<?xml version="1.0" encoding="UTF-8"?>'
+                            + '<InitiateMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                            + `<Bucket>${locationConstraints[constants.targetLocation].details.bucketName}</Bucket>`
+                            + `<Key>${constants.bucket}/${constants.objectKey}</Key>`
+                            + '<UploadId>test-upload-id</UploadId>'
+                            + '</InitiateMultipartUploadResult>');
+                } else if (req.url === '/zenko-target-bucket/test-bucket/test-object?uploadId=test-upload-id') {
+                    res.setHeader('x-amz-version-id', 'target-version');
+                    res.end('<?xml version="1.0" encoding="UTF-8"?>'
+                            + '<CompleteMultipartUploadResult xmlns="http://s3.amazonaws.com/doc/2006-03-01/">'
+                            + `<Location>http://127.0.0.4:7777/${constants.bucket}/${constants.objectKey}</Location>`
+                            + `<Bucket>${constants.bucket}</Bucket>`
+                            + `<Key>${constants.objectKey}</Key>`
+                            + '<ETag>&quot;22545f0b26f292a02ae12dcde07a6094-2&quot;</ETag>'
+                            + '</CompleteMultipartUploadResult>');
+                } else {
+                    assert(false, `did not expect HTTP method ${req.method} on target location URL ${req.url}`);
+                }
+            });
+        } else if (req.method === 'PUT') {
+            req.on('data', () => {});
+            req.on('end', () => {
+                if (req.url === '/zenko-target-bucket/test-bucket/test-object') {
+                    res.setHeader('x-amz-version-id', 'target-version');
+                    res.setHeader('etag', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+                    res.end();
+                } else if (req.url.startsWith('/zenko-target-bucket/test-bucket/test-object?partNumber=')) {
+                    res.setHeader('etag', 'aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa');
+                    res.end();
+                } else {
+                    assert(false, `did not expect HTTP method ${req.method} on target location URL ${req.url}`);
+                }
+            });
+        } else if (req.method === 'DELETE') {
+            if (req.url === '/zenko-target-bucket/test-bucket/test-object?uploadId=test-upload-id') {
+                res.writeHead(204);
+                res.end();
+            } else {
+                assert(false, `did not expect HTTP DELETE on target location URL ${req.url}`);
+            }
+        } else {
+            assert(false, `did not expect HTTP method ${req.method} on target location`);
+        }
+    }
+
+    onRequest(req, res) {
+        const host = req.headers.host.split(':')[0];
+        if (host === '127.0.0.1' || host === '127.0.0.2') {
+            return this.onRequestToCloudserver(req, res);
+        }
+        if (host === '127.0.0.3') {
+            return this.onRequestToSourceLocation(req, res);
+        }
+        if (host === '127.0.0.4') {
+            return this.onRequestToTargetLocation(req, res);
+        }
+        assert(false, `did not expect HTTP request to ${host} (${req.method} ${req.url})`);
+        return undefined;
     }
 }
 
@@ -178,11 +326,15 @@ describe('streamed copy functional tests', () => {
     let httpServer;
     let s3mock;
     let qp;
+
     beforeEach(done => {
         s3mock = new S3Mock();
         httpServer = http.createServer(
             (req, res) => s3mock.onRequest(req, res));
-        httpServer.listen(7777);
+        httpServer.listen(7777, () => {
+            config.setLocationConstraints(locationConstraints);
+            done();
+        });
         qp = new QueueProcessor(...qpParams);
         qp._mProducer = {
             getProducer: () => ({
@@ -190,7 +342,6 @@ describe('streamed copy functional tests', () => {
             }),
             publishMetrics: () => {},
         };
-        process.nextTick(done);
     });
 
     afterEach(done => {
