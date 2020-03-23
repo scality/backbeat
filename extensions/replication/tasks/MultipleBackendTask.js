@@ -728,7 +728,7 @@ class MultipleBackendTask extends ReplicateObject {
             if (!objectGetInfo) {
                 return done(errors.ObjNotFound);
             }
-            objectGetInfo.dataStoreVersionId = sourceEntry.getEncodedVersionId();
+            objectGetInfo.dataStoreVersionId = sourceEntry.getDataStoreVersionId();
             log.debug('getting source object', {
                 method: 'MultipleBackendTask._getAndPutObjectOnce',
                 entry: sourceEntry.getLogInfo(),
