@@ -7,6 +7,8 @@ ENV LANG C.UTF-8
 ENV PATH=$PATH:/backbeat/node_modules/.bin
 ENV NODE_PATH=/backbeat/node_modules
 
+VOLUME /home/eve/workspace
+
 COPY eve/workers/unit_and_feature_tests/backbeat_packages.list \
     eve/workers/unit_and_feature_tests/buildbot_worker_packages.list /tmp/
 
@@ -48,5 +50,7 @@ ARG BUILDBOT_VERSION=0.9.1
 
 RUN pip install buildbot-worker==$BUILDBOT_VERSION
 ADD eve/workers/unit_and_feature_tests/supervisor/buildbot_worker.conf /etc/supervisor/conf.d/
+
+WORKDIR /home/eve/workspace
 
 CMD ["/bin/bash", "-l", "-c", "buildbot-worker create-worker . $BUILDMASTER:$BUILDMASTER_PORT $WORKERNAME $WORKERPASS   && buildbot-worker start --nodaemon"]
