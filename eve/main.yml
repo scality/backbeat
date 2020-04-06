@@ -11,7 +11,9 @@ stages:
       type: kube_pod
       path: eve/workers/unit_and_feature_tests/pod.yml
       images:
-        unit_and_feature_tests: eve/workers/unit_and_feature_tests
+        unit_and_feature_tests:
+          context: .
+          dockerfile: eve/workers/unit_and_feature_tests/Dockerfile
         kafka: eve/workers/kafka
     steps:
       - Git:
@@ -19,10 +21,6 @@ stages:
           repourl: '%(prop:git_reference)s'
           shallow: True
           retryFetch: True
-          haltOnFailure: True
-      - ShellCommand:
-          name: yarn install
-          command: rm -rf node_modules && yarn install --unsafe-perm
           haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
