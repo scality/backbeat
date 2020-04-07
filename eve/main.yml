@@ -56,7 +56,9 @@ stages:
       type: kube_pod
       path: eve/workers/unit_and_feature_tests/pod.yml
       images:
-        unit_and_feature_tests: eve/workers/unit_and_feature_tests
+        unit_and_feature_tests:
+          context: .
+          dockerfile: eve/workers/unit_and_feature_tests/Dockerfile
         kafka: eve/workers/kafka
     steps:
       - Git: &git
@@ -64,10 +66,6 @@ stages:
           repourl: '%(prop:git_reference)s'
           shallow: True
           retryFetch: True
-          haltOnFailure: True
-      - ShellCommand:
-          name: yarn install
-          command: yarn install --frozen-lockfile
           haltOnFailure: True
       - ShellCommand:
           name: run static analysis tools on markdown
