@@ -1,1 +1,10 @@
-{ "extends": "scality" }
+{
+    "extends": "scality",
+    "settings": {
+        "import/resolver": {
+          "node": {
+            "paths": ["/backbeat/node_modules", "node_modules"]
+          }
+        }
+      }
+}
