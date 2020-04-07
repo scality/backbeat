@@ -8,15 +8,26 @@ branches:
 stages:
   pre-merge:
     worker:
+      type: local
+    steps:
+      - TriggerStages:
+          stage_names:
+            - lint-unit
+            - routes-tests
+            - retry-account-tests
+            - retry-role-tests
+            - lib-feature-tests
+            - replication-feature-tests
+  lint-unit:
+    worker: &simple_worker
       type: kube_pod
-      path: eve/workers/unit_and_feature_tests/pod.yml
+      path: eve/workers/simple-pod.yml
       images:
-        unit_and_feature_tests:
+        unit_and_feature_tests: &unit_and_feature_image
           context: .
           dockerfile: eve/workers/unit_and_feature_tests/Dockerfile
-        kafka: eve/workers/kafka
     steps:
-      - Git:
+      - Git: &git
           name: fetch source
           repourl: '%(prop:git_reference)s'
           shallow: True
@@ -31,12 +42,32 @@ stages:
       - ShellCommand:
           name: run unit tests
           command: yarn test
+  routes-tests:
+    worker: &ft_test_worker
+      type: kube_pod
+      path: eve/workers/ft-test-pod.yml
+      images:
+        unit_and_feature_tests: *unit_and_feature_image
+        kafka: eve/workers/kafka
+    steps:
+      - Git: *git
+      - ShellCommand: &wait_for_services
+          name: Ensure side services are up before running tests
+          command: |
+            ./wait_for_local_port.bash 9092 60
+            ./wait_for_local_port.bash 6379 60
+          workdir: build/tests/utils
       - ShellCommand:
           name: run backbeat routes test
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
           workdir: '%(prop:builddir)s/build'
           env:
             CI: "true"
+  retry-account-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat retry tests with account authentication
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
@@ -45,6 +76,11 @@ stages:
             CI: "true"
             CI_AUTH_TYPE: "account"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  retry-role-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat retry tests with role authentication
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
@@ -53,11 +89,21 @@ stages:
             CI: "true"
             CI_AUTH_TYPE: "role"
             BACKBEAT_CONFIG_FILE: "tests/config.roleAuth.json"
+  lib-feature-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat lib feature tests
           command: yarn run ft_test:lib
           env:
             CI: "true"
+  replication-feature-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat replication feature tests
           command: yarn run ft_test:replication
