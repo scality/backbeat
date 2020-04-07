@@ -1,11 +1,14 @@
 FROM buildpack-deps:xenial-curl
 
+ARG NODE_ENV=development
+
 #
 # Install apt packages needed by backbeat and buildbot_worker
 #
 ENV LANG C.UTF-8
 ENV PATH=$PATH:/backbeat/node_modules/.bin
 ENV NODE_PATH=/backbeat/node_modules
+ENV NODE_ENV=${NODE_ENV}
 
 VOLUME /home/eve/workspace
 
