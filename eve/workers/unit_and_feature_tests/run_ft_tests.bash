@@ -3,6 +3,7 @@
 set -x
 set -eu -o pipefail
 
+NODE_PATH=${NODE_PATH:-node_modules}
 # port for cloudserver
 PORT=8000
 
@@ -18,5 +19,5 @@ killandsleep () {
   sleep 10
 }
 
-cd node_modules/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
+cd ${NODE_PATH}/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
 yarn run $1
