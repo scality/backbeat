@@ -31,5 +31,12 @@
         "no-undef-init": "off",
         "newline-per-chained-call": "off",
         "no-useless-escape": "off"
-    }
+    },
+    "settings": {
+        "import/resolver": {
+          "node": {
+            "paths": ["/backbeat/node_modules", "node_modules"]
+          }
+        }
+      }
 }
