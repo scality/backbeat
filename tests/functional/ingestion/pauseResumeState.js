@@ -258,7 +258,7 @@ describe('Ingestion Pause/Resume', function d() {
     afterEach(() => {
         const redisClient = this.iPopulator.getRedisPubSubClient();
         if (redisClient) {
-            redisClient.quit();
+            redisClient.quit().catch(_err => {});
         }
     });
 
