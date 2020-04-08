@@ -38,35 +38,12 @@ let ingestionPopulator;
 // memoize
 const configuredLocations = {};
 
+const zkClient = zookeeperWrapper.createClient(connectionString, {
+    autoCreateNamespace,
+});
+
 function getIngestionZkPath() {
     return `${zookeeperNamespace}${zkStatePath}`;
-}
-
-function queueBatch(ingestionPopulator, log) {
-    log.debug('start queueing ingestion batch');
-    const maxRead = qpConfig.batchMaxRead;
-    // apply updates to Ingestion Readers
-    ingestionPopulator.applyUpdates(err => {
-        if (err) {
-            log.fatal('error occurred applying updates to ingestion readers', {
-                error: err,
-                method: 'bin::ingestion.queueBatch',
-            });
-            scheduler.cancel();
-            process.exit(1);
-        }
-        ingestionPopulator.processLogEntries({ maxRead }, err => {
-            if (err) {
-                log.fatal('an error occurred during ingestion', {
-                    method: 'bin::ingestion.queueBatch',
-                    error: err,
-                });
-                scheduler.cancel();
-                process.exit(1);
-            }
-        });
-    });
-    return undefined;
 }
 
 /**
@@ -225,6 +202,61 @@ function updateProcessors(zkClient, bootstrapList) {
     });
 }
 
+/**
+ * Refresh processors by checking zookeeper states and use the state(s) to,
+ * update ingestionPopulator's paused locations list.
+ * @param {node-zookeeper-client.Client} zkClient - zookeeper client
+ * @param {Logger.newRequestLogger} log - request logger object
+ * @param {Function} cb - callback(error)
+ * @return {undefined}
+ */
+function refreshProcessors(zkClient, log, cb) {
+    const bootstrapList = config.getBootstrapList();
+    const active = Object.keys(configuredLocations);
+    const update = bootstrapList.map(i => i.site);
+    const locations = [...new Set(active.concat(update))];
+    const ingestionZkPath = getIngestionZkPath();
+
+    return async.each(locations, (location, next) => {
+        const path = `${ingestionZkPath}/${location}`;
+        return zkClient.getData(path, (err, data) => {
+            if (err) {
+                log.fatal('could not check location status in zookeeper',
+                    { method: 'bin::ingestion.refreshProcessors',
+                      zookeeperPath: path,
+                      error: err.message });
+                return next(err);
+            }
+            let d;
+            try {
+                d = JSON.parse(data.toString());
+            } catch (e) {
+                log.fatal('error getting state for location', {
+                    method: 'bin::ingestion.refreshProcessors',
+                    location,
+                    error: reshapeExceptionError(e),
+                });
+                return next(e);
+            }
+            if (d[RESUME_NODE]) {
+                return checkAndApplyScheduleResume(zkClient, d, location, next);
+            }
+            if (d.paused === true) {
+                ingestionPopulator.setPausedLocationState(location);
+            }
+            return next();
+        });
+    }, err => {
+        if (err) {
+            log.fatal('error in refreshing zk location node', {
+                method: 'bin::ingestion.refreshProcessors',
+            });
+            return cb(err);
+        }
+        return cb();
+    });
+}
+
 function loadHealthcheck() {
     healthServer.onReadyCheck(() => {
         const state = ingestionPopulator.zkStatus();
@@ -245,6 +277,49 @@ function loadProcessors(zkClient) {
     config.on('bootstrap-list-update', () => {
         bootstrapList = config.getBootstrapList();
         updateProcessors(zkClient, bootstrapList);
+    });
+}
+
+function queueBatch(ingestionPopulator, zkClient, log) {
+    log.debug('start queueing ingestion batch');
+    const maxRead = qpConfig.batchMaxRead;
+    // refresh processors before applying updates to Ingestion Readers
+    return async.series([
+        next => refreshProcessors(zkClient, log, err => {
+            if (err) {
+                log.fatal('error refreshing processors', {
+                    error: err,
+                    method: 'bin::ingestion.queueBatch',
+                });
+                return next(new Error('refresh processors failed'));
+            }
+            return next();
+        }),
+        next => ingestionPopulator.applyUpdates(err => {
+            if (err) {
+                log.fatal('error applying updates to ingestion readers', {
+                    error: err,
+                    method: 'bin::ingestion.queueBatch',
+                });
+                return next(new Error('apply updates failed'));
+            }
+            return ingestionPopulator.processLogEntries({ maxRead }, err => {
+                if (err) {
+                    log.fatal('an error occurred during ingestion', {
+                        method: 'bin::ingestion.queueBatch',
+                        error: err,
+                    });
+                    return next(new Error('process log entries failed'));
+                }
+                return next();
+            });
+        }),
+    ], err => {
+        if (err) {
+            scheduler.cancel();
+            process.exit(1);
+        }
+        return undefined;
     });
 }
 
@@ -271,7 +346,7 @@ function initAndStart(zkClient) {
             done => ingestionPopulator.open(done),
             done => {
                 scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
-                    () => queueBatch(ingestionPopulator, log));
+                    () => queueBatch(ingestionPopulator, zkClient, log));
                 done();
             },
         ], err => {
@@ -287,9 +362,6 @@ function initAndStart(zkClient) {
     });
 }
 
-const zkClient = zookeeperWrapper.createClient(connectionString, {
-    autoCreateNamespace,
-});
 zkClient.connect();
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {
