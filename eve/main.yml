@@ -46,15 +46,20 @@ stages:
     worker:
       type: local
     steps:
-    - TriggerStages:
-        name: trigger all the tests
-        stage_names:
-        - run-tests
-        - docker-build
-  run-tests:
-    worker: &workspace
+      - TriggerStages:
+          stage_names:
+            - lint-unit
+            - routes-tests
+            - retry-account-tests
+            - replication-feature-tests
+            - lifecycle-feature-tests
+            - ingestion-feature-tests
+            - misc-functional-tests
+            - docker-build
+  lint-unit:
+    worker: &ft_test_worker
       type: kube_pod
-      path: eve/workers/unit_and_feature_tests/pod.yml
+      path: eve/workers/ft-test-pod.yml
       images:
         unit_and_feature_tests:
           context: .
@@ -67,6 +72,13 @@ stages:
           shallow: True
           retryFetch: True
           haltOnFailure: True
+      - ShellCommand: &wait_for_services
+          name: Ensure side services are up before running tests
+          command: |
+            ./wait_for_local_port.bash 9092 60
+            ./wait_for_local_port.bash 6379 60
+            ./wait_for_local_port.bash 27018 60
+          workdir: build/tests/utils
       - ShellCommand:
           name: run static analysis tools on markdown
           command: yarn run --silent lint_md
@@ -78,6 +90,11 @@ stages:
           command: yarn test
           env:
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  routes-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat routes test
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
@@ -85,6 +102,11 @@ stages:
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  retry-account-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run backbeat retry tests with account authentication
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:retry
@@ -92,24 +114,44 @@ stages:
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  replication-feature-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run feature replication tests
           command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:replication
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  lifecycle-feature-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run feature lifecycle tests
           command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:lifecycle
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  ingestion-feature-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run feature ingestion tests
           command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:ingestion
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+  misc-functional-tests:
+    worker: *ft_test_worker
+    steps:
+      - Git: *git
+      - ShellCommand: *wait_for_services
       - ShellCommand:
           name: run misc functional tests
           command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:lib
