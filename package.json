@@ -24,7 +24,9 @@
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')",
-    "start": "node bin/backbeat.js"
+    "start": "node bin/backbeat.js",
+    "snyk-protect": "snyk protect",
+    "prepublish": "npm run snyk-protect"
   },
   "repository": {
     "type": "git",
@@ -57,7 +59,8 @@
     "uuid": "^3.1.0",
     "vaultclient": "github:scality/vaultclient#767c58d",
     "werelogs": "scality/werelogs#22bca9c",
-    "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
+    "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0",
+    "snyk": "^1.316.1"
   },
   "devDependencies": {
     "@zenko/cloudserver": "scality/cloudserver#bac9a10",
@@ -68,5 +71,6 @@
     "lolex": "^2.7.5",
     "mocha": "^3.3.0",
     "zookeeper-mock": "github:scality/zookeeper-mock"
-  }
+  },
+  "snyk": true
 }
