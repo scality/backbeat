@@ -37,7 +37,7 @@
     "commander": "^2.11.0",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#71a059ad",
+    "eslint-config-scality": "scality/Guidelines#20dfffc",
     "eslint-plugin-react": "^4.2.3",
     "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",

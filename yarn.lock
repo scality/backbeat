@@ -716,9 +716,9 @@ eslint-config-airbnb@^6.0.0:
   resolved "https://registry.yarnpkg.com/eslint-config-airbnb/-/eslint-config-airbnb-6.2.0.tgz#4a28196aa4617de01b8c914e992a82e5d0886a6e"
   integrity sha1-SigZaqRhfeAbjJFOmSqC5dCIam4=
 
-eslint-config-scality@scality/Guidelines#71a059ad:
+eslint-config-scality@scality/Guidelines#20dfffc:
   version "1.1.0"
-  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/71a059ad3fa0598d5bbb923badda58ccf06cc8a6"
+  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/20dfffcc863bdb3c6bbc93b283e99a33b2fd6136"
   dependencies:
     commander "1.3.2"
     markdownlint "0.0.8"
