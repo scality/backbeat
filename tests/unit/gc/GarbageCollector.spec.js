@@ -8,7 +8,8 @@ const GarbageCollectorTask =
       require('../../../extensions/gc/tasks/GarbageCollectorTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
-describe('garbage collector', () => {
+describe('garbage collector', function garbageCollector() {
+    this.timeout(10000);
     let gc;
     let gcTask;
     let httpServer;
