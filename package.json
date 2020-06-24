@@ -54,7 +54,7 @@
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
-    "uuid": "^3.1.0",
+    "uuid": "^8.2.0",
     "vaultclient": "github:scality/vaultclient#767c58d",
     "werelogs": "scality/werelogs#22bca9c",
     "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
