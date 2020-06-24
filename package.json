@@ -50,7 +50,7 @@
     "minimatch": "^3.0.4",
     "mongodb": "^3.1.13",
     "node-forge": "^0.7.6",
-    "node-rdkafka": "2.5.1",
+    "node-rdkafka": "2.9.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
