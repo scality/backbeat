@@ -1,5 +1,6 @@
 const assert = require('assert');
 const async = require('async');
+
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const zookeeperConf = { connectionString: 'localhost:2181' };
@@ -217,3 +218,100 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         });
     });
 });
+
+describe('BackbeatConsumer statistics logging tests', () => {
+    const topic = 'backbeat-consumer-spec-statistics';
+    const groupId = `replication-group-${Math.random()}`;
+    const messages = [
+        { key: 'foo', message: '{"hello":"foo"}' },
+        { key: 'bar', message: '{"world":"bar"}' },
+        { key: 'qux', message: '{"hi":"qux"}' },
+    ];
+    let producer;
+    let consumer;
+    let consumedMessages = [];
+
+    function queueProcessor(message, cb) {
+        consumedMessages.push(message.value);
+        process.nextTick(cb);
+    }
+    before(function before(done) {
+        this.timeout(60000);
+
+        producer = new BackbeatProducer({
+            kafka: kafkaConf,
+            topic,
+            pollIntervalMs: 100,
+        });
+        consumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: kafkaConf, groupId, topic,
+            queueProcessor,
+            concurrency: 10,
+            bootstrap: true,
+            // this enables statistics logging
+            logConsumerMetricsIntervalS: 1,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer.on('ready', innerDone),
+        ], done);
+    });
+    afterEach(() => {
+        consumedMessages = [];
+        consumer.removeAllListeners('consumed');
+    });
+    after(done => {
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer.close(innerDone),
+        ], done);
+    });
+
+    it('should be able to log consumer statistics', done => {
+        producer.send(messages, err => {
+            assert.ifError(err);
+        });
+        let totalConsumed = 0;
+        // It would have been nice to check that the lag is strictly
+        // positive when we haven't consumed yet, but the lag seems
+        // off when no consumer offset has been written yet to Kafka,
+        // so it cannot be tested reliably until we start consuming.
+        consumer.subscribe();
+        consumer.on('consumed', messagesConsumed => {
+            totalConsumed += messagesConsumed;
+            assert(totalConsumed <= messages.length);
+            if (totalConsumed === messages.length) {
+                let firstTime = true;
+                setTimeout(() => {
+                    consumer._log = {
+                        error: () => {},
+                        warn: () => {},
+                        info: (message, args) => {
+                            if (firstTime && message.indexOf('statistics') !== -1) {
+                                firstTime = false;
+                                assert.strictEqual(args.topic, topic);
+                                const consumerStats = args.consumerStats;
+                                assert.strictEqual(typeof consumerStats, 'object');
+                                const lagStats = consumerStats.lag;
+                                assert.strictEqual(typeof lagStats, 'object');
+                                // there should be one consumed partition
+                                assert.strictEqual(Object.keys(lagStats).length, 1);
+                                // everything should have been
+                                // consumed hence consumer offsets
+                                // stored equal topic offset, and lag
+                                // should be 0.
+                                const partitionLag = lagStats['0'];
+                                assert.strictEqual(partitionLag, 0);
+                                done();
+                            }
+                        },
+                        debug: () => {},
+                        trace: () => {},
+                    };
+                }, 5000);
+            }
+        });
+    }).timeout(30000);
+});
+
