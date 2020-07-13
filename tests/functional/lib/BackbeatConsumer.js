@@ -1,7 +1,7 @@
 const assert = require('assert');
 const async = require('async');
 
-const { metrics } = require('arsenal');
+const { metrics, jsutil } = require('arsenal');
 
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -410,3 +410,100 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         });
     });
 });
+
+describe('BackbeatConsumer statistics logging tests', () => {
+    const topic = 'backbeat-consumer-spec-statistics';
+    const groupId = `replication-group-${Math.random()}`;
+    const messages = [
+        { key: 'foo', message: '{"hello":"foo"}' },
+        { key: 'bar', message: '{"world":"bar"}' },
+        { key: 'qux', message: '{"hi":"qux"}' },
+    ];
+    let zookeeper;
+    let producer;
+    let consumer;
+    let consumedMessages = [];
+
+    function queueProcessor(message, cb) {
+        consumedMessages.push(message.value);
+        process.nextTick(cb);
+    }
+    before(function before(done) {
+        this.timeout(60000);
+
+        producer = new BackbeatProducer({ kafka: producerKafkaConf, topic,
+                                          pollIntervalMs: 100 });
+        consumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf, groupId, topic,
+            queueProcessor,
+            bootstrap: true,
+            // this enables statistics logging
+            logLagMetricsIntervalS: 1,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer.on('ready', innerDone),
+            innerDone => {
+                zookeeper = zookeeperHelper.createClient(
+                    zookeeperConf.connectionString);
+                zookeeper.connect();
+                zookeeper.on('ready', innerDone);
+            },
+        ], done);
+    });
+    afterEach(() => {
+        consumedMessages = [];
+        consumer.removeAllListeners('consumed');
+    });
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer.close(innerDone),
+            innerDone => {
+                zookeeper.close();
+                innerDone();
+            },
+        ], done);
+    });
+
+    it('should be able to log consumer lag statistics', done => {
+        const doneOnce = jsutil.once(done);
+        producer.send(messages, err => {
+            assert.ifError(err);
+        });
+        let totalConsumed = 0;
+        // It would have been nice to check that the lag is strictly
+        // positive when we haven't consumed yet, but the lag seems
+        // off when no consumer offset has been written yet to Kafka,
+        // so it cannot be tested reliably until we start consuming.
+        consumer.subscribe();
+        consumer.on('consumed', messagesConsumed => {
+            totalConsumed += messagesConsumed;
+            assert(totalConsumed <= messages.length);
+            if (totalConsumed === messages.length) {
+                setTimeout(() => {
+                    consumer._log = {
+                        error: () => {},
+                        warn: () => {},
+                        info: (message, args) => {
+                            if (message.indexOf('statistics') !== -1) {
+                                assert.strictEqual(args.topic, topic);
+                                // everything should have been
+                                // consumed hence consumer offsets
+                                // stored equal topic offset, and lag
+                                // should be 0.
+                                assert.strictEqual(args.consumerLag, 0);
+                                doneOnce();
+                            }
+                        },
+                        debug: () => {},
+                        trace: () => {},
+                    };
+                }, 5000);
+            }
+        });
+    }).timeout(30000);
+});
+

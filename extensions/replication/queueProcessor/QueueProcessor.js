@@ -297,6 +297,7 @@ class QueueProcessor extends EventEmitter {
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
             canary: true,
+            logLagMetricsIntervalS: this.repConfig.queueProcessor.logLagMetricsIntervalS,
         });
         consumer.on('error', () => {
             if (!consumerReady) {

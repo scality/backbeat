@@ -63,6 +63,7 @@ const joiSchema = {
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
+        logLagMetricsIntervalS: joi.number().greater(0).default(60),
     },
     replicationStatusProcessor: {
         groupId: joi.string().required(),
