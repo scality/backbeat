@@ -309,6 +309,7 @@ class QueueProcessor extends EventEmitter {
                 groupId,
                 concurrency: this.repConfig.queueProcessor.concurrency,
                 queueProcessor: this.processKafkaEntry.bind(this),
+                logLagMetricsIntervalS: this.repConfig.queueProcessor.logLagMetricsIntervalS,
             });
             this._consumer.on('error', () => {});
             this._consumer.on('ready', () => {
