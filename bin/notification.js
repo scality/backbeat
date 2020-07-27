@@ -6,12 +6,14 @@ const werelogs = require('werelogs');
 const config = require('../conf/Config');
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
-const extConfigs = config.extensions;
-const qpConfig = config.queuePopulator;
 const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
+const qpConfig = config.queuePopulator;
+let extConfigs = config.extensions;
+
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const notifConstants = require('../extensions/notification/constants');
 
 const log = new werelogs.Logger('Backbeat:NotificationQueuePopulator');
 
@@ -45,6 +47,29 @@ function queueBatch(queuePopulator, taskState) {
     });
     return undefined;
 }
+
+// remove other extensions config, only use notification configuration
+// TODO: probably handle this in federation
+const notifConf = extConfigs[notifConstants.extensionName];
+if (notifConf) {
+    extConfigs = {
+        [notifConstants.extensionName]: notifConf,
+    };
+} else {
+    log.error('no notification configuration available for queue populator', {
+        method: 'bin.notification',
+    });
+    process.exit(1);
+}
+
+// use correct zookeeper path for the populator, the extensions design uses
+// zookeeper path from generic configuration property,
+// `queuePopulator.zookeeperPath`, use the path from the extension specific conf
+// TODO: probably handle this in federation
+const notifZookeeperPath = notifConf.zookeeperPath;
+if (notifZookeeperPath) {
+    qpConfig.zookeeperPath = notifZookeeperPath;
+}
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(
@@ -64,7 +89,7 @@ async.waterfall([
 ], err => {
     if (err) {
         log.error('error during queue populator initialization', {
-            method: 'QueuePopulator::task',
+            method: 'bin.notification',
             error: err,
         });
         process.exit(1);
