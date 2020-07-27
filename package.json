@@ -15,7 +15,8 @@
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')",
-    "start": "node index.js"
+    "start": "node index.js",
+    "notification_populator": "node bin/notification.js"
   },
   "repository": {
     "type": "git",
