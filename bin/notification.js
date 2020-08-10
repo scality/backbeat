@@ -3,7 +3,7 @@ const schedule = require('node-schedule');
 
 const werelogs = require('werelogs');
 
-const config = require('../conf/Config');
+const config = require('../lib/Config');
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const extConfigs = config.extensions;
