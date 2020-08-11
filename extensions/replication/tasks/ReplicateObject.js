@@ -418,6 +418,7 @@ class ReplicateObject extends BackbeatTask {
         const req = this.backbeatDest.putMetadata({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
+            VersionId: entry.getEncodedVersionId(),
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
             ReplicationContent: replicationContent,

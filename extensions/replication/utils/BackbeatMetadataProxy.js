@@ -61,6 +61,7 @@ class BackbeatMetadataProxy extends BackbeatTask {
         const req = this.backbeatSource.putMetadata({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
+            VersionId: entry.getEncodedVersionId(),
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
         });
