@@ -25,7 +25,8 @@
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '*.md')",
     "start": "node bin/backbeat.js",
-    "notification_populator": "node bin/notification.js"
+    "notification_populator": "node bin/notification.js",
+    "notification_processor": "node extensions/notification/queueProcessor/task.js"
   },
   "repository": {
     "type": "git",
@@ -71,3 +72,4 @@
     "zookeeper-mock": "github:scality/zookeeper-mock"
   }
 }
+
