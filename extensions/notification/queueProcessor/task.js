@@ -3,7 +3,7 @@
 const werelogs = require('werelogs');
 
 const QueueProcessor = require('./QueueProcessor');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const notifConfig = config.extensions.notification;
 
