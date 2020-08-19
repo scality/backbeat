@@ -8,6 +8,7 @@ const constants = {
     bucketNotifConfigPropName: 'notificationConfiguration',
     notificationEventPropName: 'originOp',
     eventTimePropName: 'last-modified',
+    zkConfigParentNode: 'config',
 };
 
 module.exports = constants;

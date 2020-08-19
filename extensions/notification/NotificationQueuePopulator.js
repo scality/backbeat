@@ -17,7 +17,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     _getBucketNodeZkPath(bucket) {
-        return `/${notifConstants.zkBucketNotificationPath}/${bucket}`;
+        const { zkBucketNotificationPath, zkConfigParentNode }
+            = notifConstants;
+        return `/${zkBucketNotificationPath}/${zkConfigParentNode}/${bucket}`;
     }
 
     _getBucketNotifConfig(bucket, done) {
