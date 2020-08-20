@@ -6,18 +6,11 @@ const testConfigs = [
     {
         bucket: 'bucket1',
         notificationConfiguration: {
-            queueConfigurations: [
+            queueConfig: [
                 {
                     events: ['s3:ObjectCreated:Put'],
                     queueArn: 'q1',
-                    filter: {
-                        filterRules: [
-                            {
-                                name: 'prefix',
-                                value: 'test',
-                            },
-                        ],
-                    },
+                    filterRules: [],
                     id: 'config1',
                 },
             ],
@@ -26,39 +19,17 @@ const testConfigs = [
     {
         bucket: 'bucket2',
         notificationConfiguration: {
-            queueConfigurations: [
+            queueConfig: [
                 {
                     events: ['s3:ObjectRemoved:Delete'],
                     queueArn: 'q2',
-                    filter: {
-                        filterRules: [
-                            {
-                                name: 'prefix',
-                                value: 'abcd',
-                            },
-                        ],
-                    },
+                    filterRules: [
+                        {
+                            name: 'prefix',
+                            value: 'abcd',
+                        },
+                    ],
                     id: 'config2',
-                },
-            ],
-        },
-    },
-    {
-        bucket: 'bucket1',
-        notificationConfiguration: {
-            queueConfigurations: [
-                {
-                    events: ['s3:ObjectCreated:Copy'],
-                    queueArn: 'q3',
-                    filter: {
-                        filterRules: [
-                            {
-                                name: 'suffix',
-                                value: '.png',
-                            },
-                        ],
-                    },
-                    id: 'config3',
                 },
             ],
         },
@@ -66,12 +37,17 @@ const testConfigs = [
     {
         bucket: 'bucket3',
         notificationConfiguration: {
-            queueConfigurations: [
+            queueConfig: [
                 {
-                    events: ['s3:ObjectCreated:Copy'],
-                    queueArn: 'q4',
-                    filter: {},
-                    id: 'config4',
+                    events: ['s3:ObjectRemoved:DeleteMarkerCreated'],
+                    queueArn: 'q3',
+                    filterRules: [
+                        {
+                            name: 'suffix',
+                            value: '.png',
+                        },
+                    ],
+                    id: 'config3',
                 },
             ],
         },
@@ -79,9 +55,22 @@ const testConfigs = [
     {
         bucket: 'bucket4',
         notificationConfiguration: {
-            queueConfigurations: [
+            queueConfig: [
                 {
                     events: ['s3:ObjectCreated:Copy'],
+                    queueArn: 'q4',
+                    filterRules: [],
+                    id: 'config4',
+                },
+            ],
+        },
+    },
+    {
+        bucket: 'bucket5',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:CompleteMultipartUpload'],
                     queueArn: 'q5',
                     filterRules: [
                         {
@@ -98,14 +87,41 @@ const testConfigs = [
             ],
         },
     },
+    {
+        bucket: 'bucket6',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:Copy'],
+                    queueArn: 'q61',
+                    id: 'config61',
+                },
+                {
+                    events: ['s3:ObjectCreated:Copy'],
+                    queueArn: 'q62',
+                    filterRules: [
+                        {
+                            name: 'prefix',
+                            value: 'abcd',
+                        },
+                        {
+                            name: 'suffix',
+                            value: '.png',
+                        },
+                    ],
+                    id: 'config62',
+                },
+            ],
+        },
+    },
 ];
 
 const tests = [
     {
         desc: 'pass if the event matches a bucket notification configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket3',
+            type: 's3:ObjectCreated:Put',
+            bucket: 'bucket1',
             key: 'test.png',
         },
         pass: true,
@@ -113,17 +129,17 @@ const tests = [
     {
         desc: 'pass if the object key prefix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:Put',
-            bucket: 'bucket1',
-            key: 'test.png',
+            type: 's3:ObjectRemoved:Delete',
+            bucket: 'bucket2',
+            key: 'abcd.png',
         },
         pass: true,
     },
     {
         desc: 'pass if the object key suffix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket1',
+            type: 's3:ObjectRemoved:DeleteMarkerCreated',
+            bucket: 'bucket3',
             key: 'test.png',
         },
         pass: true,
@@ -131,20 +147,20 @@ const tests = [
     {
         desc: 'pass if object key prefix & suffix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket4',
+            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            bucket: 'bucket5',
             key: 'abcdef.png',
         },
         pass: true,
     },
     {
-        desc: 'fail if the object bucket has no configuration setup',
+        desc: 'pass if object passes at least one notification configuration',
         entry: {
-            type: 's3:ObjectCreated:Put',
-            bucket: 'bucket10',
-            key: 'test.png',
+            type: 's3:ObjectCreated:Copy',
+            bucket: 'bucket6',
+            key: 'test.jpg',
         },
-        pass: false,
+        pass: true,
     },
     {
         desc: 'fail if the event type does not match the configuration',
@@ -158,8 +174,8 @@ const tests = [
     {
         desc: 'fail if the object key does not match configuration prefix',
         entry: {
-            type: 's3:ObjectCreated:Put',
-            bucket: 'bucket1',
+            type: 's3:ObjectRemoved:Delete',
+            bucket: 'bucket2',
             key: 'one.png',
         },
         pass: false,
@@ -167,8 +183,8 @@ const tests = [
     {
         desc: 'fail if the object key does not match configuration suffix',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket1',
+            type: 's3:ObjectRemoved:DeleteMarkerCreated',
+            bucket: 'bucket3',
             key: 'test.jpg',
         },
         pass: false,
@@ -176,20 +192,29 @@ const tests = [
     {
         desc: 'fail if only key prefix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket4',
+            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            bucket: 'bucket5',
             key: 'abcdef.jpg',
         },
-        pass: true,
+        pass: false,
     },
     {
         desc: 'fail if only key suffix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
-            bucket: 'bucket4',
+            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            bucket: 'bucket5',
             key: 'abc.png',
         },
-        pass: true,
+        pass: false,
+    },
+    {
+        desc: 'fail if object passes no notification configuration filter',
+        entry: {
+            type: 's3:ObjectCreated:Post',
+            bucket: 'bucket6',
+            key: 'abcd.png',
+        },
+        pass: false,
     },
 ];
 
@@ -201,20 +226,33 @@ describe('Notification configuration util', () => {
             testConfigs.forEach(config => {
                 const bucket = config.bucket;
                 assert(configMap.has(bucket));
-                const currentConfig = configMap.get(bucket);
-                const bucketConfig
-                    = testConfigs.filter(c => c.bucket === bucket);
-                assert.strictEqual(bucketConfig.length, currentConfig.length);
             });
         });
     });
 
     describe('ValidateEntry', () => {
-        const configMap = notifConfUtil.configArrayToMap(testConfigs);
+        let configMap = null;
+        function getBucketNotifConfig(bucket, bnConfigMap) {
+            const bnConfigs
+                = bnConfigMap.get(bucket);
+            return {
+                bucket,
+                notificationConfiguration: {
+                    queueConfig: bnConfigs,
+                },
+            };
+        }
+
+        before(() => {
+            configMap = notifConfUtil.configArrayToMap(testConfigs);
+        });
+
         tests.forEach(test => {
             it(`should ${test.desc}`, () => {
+                const bnConfig
+                    = getBucketNotifConfig(test.entry.bucket, configMap);
                 const result
-                    = notifConfUtil.validateEntry(configMap, test.entry);
+                    = notifConfUtil.validateEntry(bnConfig, test.entry);
                 assert.strictEqual(test.pass, result);
             });
         });
