@@ -23,6 +23,7 @@ class KafkaProducer extends EventEmitter {
     * constructor
     * @param {Object} config - config
     * @param {string} config.topic - Kafka topic to write to
+    * @param {string} config.auth - kafka auth configuration
     * @param {Object} config.kafka - kafka connection config
     * @param {string} config.kafka.hosts - kafka hosts list
     */

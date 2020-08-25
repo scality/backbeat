@@ -9,6 +9,10 @@ const constants = {
     notificationEventPropName: 'originOp',
     eventTimePropName: 'last-modified',
     zkConfigParentNode: 'config',
+    arn: {
+        partition: 'scality',
+        service: 'bucketnotif',
+    },
 };
 
 module.exports = constants;
