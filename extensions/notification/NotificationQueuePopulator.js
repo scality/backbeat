@@ -28,7 +28,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         const zkPath = this._getBucketNodeZkPath(bucket);
         return this.zkClient.getData(zkPath, (err, data) => {
             if (err && err.name !== 'NO_NODE') {
-                this.log.error('Could not fetch bucket notif config', {
+                const errMsg
+                    = 'error fetching bucket notification configuration';
+                this.log.error(errMsg, {
                     method,
                     error: err,
                 });
@@ -40,7 +42,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     this.log.error('invalid config', { method, zkPath, data });
                     return done(null, 1);
                 }
-                this.log.debug('fetched bucket notification config', {
+                this.log.debug('fetched bucket notification configuration', {
                     method,
                     zkPath,
                     data: result,
@@ -96,7 +98,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 return done(err);
             }
             if (!err) {
-                this.log.info('removed bucket notif config zookeeper node', {
+                const errMsg
+                    = 'removed notification configuration zookeeper node';
+                this.log.info(errMsg, {
                     method,
                     bucket,
                 });
@@ -146,9 +150,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         },
                     ], error => {
                         if (error) {
-                            this.log.error('error setting bucket notif conf', {
-                                error,
-                            });
+                            const errMsg = 'error setting bucket notification '
+                                + 'configuration';
+                            this.log.error(errMsg, { error });
                         }
                         return undefined;
                     });
@@ -165,9 +169,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     },
                 ], error => {
                     if (error) {
-                        this.log.err('error removing bucket notif conf', {
-                            error,
-                        });
+                        const errMsg = 'error removing bucket notification '
+                            + 'configuration';
+                        this.log.err(errMsg, { error });
                     }
                     return undefined;
                 });
