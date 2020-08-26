@@ -10,7 +10,7 @@ function configArrayToMap(bnConfigs) {
     bnConfigs.forEach(config => {
         if (config.bucket && config.notificationConfiguration) {
             const bucket = config.bucket;
-            const conf = config.notificationConfiguration.queueConfigurations;
+            const conf = config.notificationConfiguration.queueConfig;
             if (configMap.has(bucket)) {
                 const val = configMap.get(bucket);
                 configMap.set(bucket, [...val, ...conf]);
@@ -43,41 +43,42 @@ function validateEntryWithFilter(filterRules, entry) {
 }
 
 /**
- * Validate event against bucket notification configuration event type
- * @param  {Object[]} bnConfigs - Array of bucket specific notification
+ * Validate event against bucket queue configuration event type
+ * @param  {Object[]} bnConfigs - Array of bucket specific queue
  * configurations
  * @param  {string} event - Type of event
- * @return {undefined|Object} A bucket notification configuration if found
+ * @return {undefined|Object[]} Bucket queue configurations if found
  */
-function validateConfigsEvent(bnConfigs, event) {
-    const config = bnConfigs.filter(config => config.events.includes(event));
-    return config.length > 0 ? config[0] : undefined;
+function filterConfigsByEvent(bnConfigs, event) {
+    return bnConfigs.filter(config => config.events.includes(event));
 }
 
 /**
  * Validates an entry from log against bucket notification configurations to see
  * if the entry has to be published. Validations include, bucket specific
  * configuration check, event type check, object name specific filter checks
- * @param  {Object[]} bnConfigs - Array of bucket notifications configuration
+ * @param  {Object} bnConfig - Bucket notification configuration
  * @param  {Object} entry - An entry from the log
  * @return {boolean} true if event qualifies for notification
  */
-function validateEntry(bnConfigs, entry) {
+function validateEntry(bnConfig, entry) {
     const { bucket, type } = entry;
-    // check if the entry belongs to any bucket in the configuration
-    if (bnConfigs.has(bucket)) {
-        const bnConfig = bnConfigs.get(bucket);
-        // check if the event type matches
-        const qConfig = validateConfigsEvent(bnConfig, type);
-        if (qConfig) {
-            // check if there are filters and the object matches it
-            const configFilter = qConfig.filter;
-            if (configFilter && configFilter.filterRules) {
-                return validateEntryWithFilter(configFilter.filterRules, entry);
-            }
+    const notifConf = bnConfig.notificationConfiguration;
+    // check if the entry belongs to the bucket in the configuration
+    if (bucket !== bnConfig.bucket) {
+        return false;
+    }
+    // check if the event type matches
+    const qConfigs = filterConfigsByEvent(notifConf.queueConfig, type);
+    if (qConfigs.length > 0) {
+        const qConfigWithFilters
+            = qConfigs.filter(c => c.filterRules && c.filterRules.length > 0);
+        // if there are configs without filters, make the entry valid
+        if (qConfigs.length > qConfigWithFilters.length) {
             return true;
         }
-        return false;
+        return qConfigWithFilters.some(
+            c => validateEntryWithFilter(c.filterRules, entry));
     }
     return false;
 }
