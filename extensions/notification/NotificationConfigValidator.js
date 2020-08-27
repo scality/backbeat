@@ -1,7 +1,7 @@
 const joi = require('@hapi/joi');
 
 const joiSchema = {
-    topic: joi.string().required(),
+    topic: joi.string(),
     monitorNotificationFailures: joi.boolean().default(true),
     notificationFailedTopic: joi.string().required(),
     queueProcessor: {

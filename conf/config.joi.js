@@ -1,8 +1,12 @@
 'use strict'; // eslint-disable-line
 
 const joi = require('@hapi/joi');
-const { hostPortJoi, transportJoi, logJoi, certFilePathsJoi } =
-      require('../lib/config/configItems.joi.js');
+const {
+    hostPortJoi,
+    transportJoi,
+    logJoi,
+    certFilePathsJoi,
+} = require('../lib/config/configItems.joi.js');
 
 const joiSchema = {
     zookeeper: {
@@ -43,12 +47,13 @@ const joiSchema = {
             joi.object({
                 host: joi.string().required(),
                 port: joi.number().required(),
-            })
+            }),
         ),
         sentinelPassword: joi.string().default('').allow(''),
     },
     certFilePaths: certFilePathsJoi,
     internalCertFilePaths: certFilePathsJoi,
+    bucketNotificationDestinations: joi.array().items(joi.object()).default([]),
 };
 
 module.exports = joiSchema;
