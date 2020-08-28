@@ -23,26 +23,26 @@ class Config {
         let config;
         try {
             const data = fs.readFileSync(this._configPath,
-                                         { encoding: 'utf-8' });
+                { encoding: 'utf-8' });
             config = JSON.parse(data);
         } catch (err) {
             throw new Error(`could not parse config file: ${err.message}`);
         }
 
         const parsedConfig = joi.attempt(config, backbeatConfigJoi,
-                                         'invalid backbeat config');
+            'invalid backbeat config');
 
         if (parsedConfig.extensions) {
             Object.keys(parsedConfig.extensions).forEach(extName => {
                 const index = extensions[extName];
                 if (!index) {
                     throw new Error(`configured extension ${extName}: ` +
-                                    'not found in extensions directory');
+                        'not found in extensions directory');
                 }
                 if (index.configValidator) {
                     const extConfig = parsedConfig.extensions[extName];
                     const validatedConfig =
-                              index.configValidator(this, extConfig);
+                        index.configValidator(this, extConfig);
                     parsedConfig.extensions[extName] = validatedConfig;
                 }
             });
@@ -76,8 +76,8 @@ class Config {
         const { key, cert, ca } = certFilePaths;
 
         const makePath = value =>
-              (value.startsWith('/') ?
-               value : `${this._basePath}/${value}`);
+            (value.startsWith('/') ?
+                value : `${this._basePath}/${value}`);
         const https = {};
         if (key && cert) {
             const keypath = makePath(key);

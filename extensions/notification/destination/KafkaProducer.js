@@ -6,6 +6,8 @@ const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const Logger = require('werelogs').Logger;
 
+const authUtil = require('../utils/auth');
+
 // waits for an ack for messages
 const REQUIRE_ACKS = 1;
 // time in ms. to wait for acks from Kafka
@@ -41,19 +43,26 @@ class KafkaProducer extends EventEmitter {
         };
         const validConfig = joi.attempt(config, configJoi,
             'invalid config params');
-        const { kafka, topic, pollIntervalMs, messageMaxBytes } = validConfig;
-
+        const {
+            kafka,
+            topic,
+            pollIntervalMs,
+            messageMaxBytes,
+            auth,
+        } = validConfig;
         this._kafkaHosts = kafka.hosts;
         this._log = new Logger(CLIENT_ID);
         this._topic = topic;
         this._ready = false;
-
-        // create a new producer instance
-        this._producer = new Producer({
+        const authObject = auth ? authUtil.generateKafkaAuthObject(auth) : {};
+        const producerOptions = {
             'metadata.broker.list': this._kafkaHosts,
             'message.max.bytes': messageMaxBytes,
             'dr_cb': true,
-        }, {
+        };
+        Object.assign(producerOptions, authObject);
+        // create a new producer instance
+        this._producer = new Producer(producerOptions, {
             'request.required.acks': REQUIRE_ACKS,
             'request.timeout.ms': ACK_TIMEOUT,
         });
@@ -77,7 +86,6 @@ class KafkaProducer extends EventEmitter {
                 this.emit('error', error);
             }
         });
-        // TODO: implement authentication checks
         return this;
     }
 
@@ -127,10 +135,11 @@ class KafkaProducer extends EventEmitter {
             pendingReportsCount: entries.length,
         };
         try {
+            // TODO: try to avoid stringify operation
             entries.forEach(item => this._producer.produce(
                 this._topic,
                 null, // partition
-                new Buffer(item.message), // value
+                Buffer.from(JSON.stringify(item.message)), // value
                 item.key, // key (for keyed partitioning)
                 Date.now(), // timestamp
                 sendCtx // opaque

@@ -4,7 +4,7 @@ const constants = {
         prefix: 'prefix',
         suffix: 'suffix',
     },
-    zkBucketNotificationPath: '/bucket-notification',
+    zkBucketNotificationPath: 'bucket-notification',
     bucketNotifConfigPropName: 'notificationConfiguration',
     notificationEventPropName: 'originOp',
     eventTimePropName: 'last-modified',
@@ -13,6 +13,8 @@ const constants = {
         partition: 'scality',
         service: 'bucketnotif',
     },
+    authFilesFolder: 'ssl',
+    supportedAuthTypes: ['kerberos'],
 };
 
 module.exports = constants;

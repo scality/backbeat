@@ -55,8 +55,8 @@ class QueueProcessor extends EventEmitter {
         const populatorZkPath = this.notifConfig.zookeeperPath;
         const zookeeperUrl =
             `${this.zkConfig.connectionString}${populatorZkPath}`;
-        this.logger.info('opening zookeeper connection for persisting ' +
-            'populator state',
+        this.logger.info('opening zookeeper connection for reading ' +
+            'bucket notification configuration',
             { zookeeperUrl });
         this.zkClient = zookeeper.createClient(zookeeperUrl, {
             autoCreateNamespace: this.zkConfig.autoCreateNamespace,
@@ -77,13 +77,17 @@ class QueueProcessor extends EventEmitter {
             logger: this.logger,
         };
         this._destination = new Destination(params);
-        return this._destination.init(done);
+        done();
     }
 
     _getBucketNodeZkPath(bucket) {
         const { zkBucketNotificationPath, zkConfigParentNode }
             = notifConstants;
         return `/${zkBucketNotificationPath}/${zkConfigParentNode}/${bucket}`;
+    }
+
+    _getResourceIdFromArn(arn) {
+        return arn.split(/[\s,]+/).pop();
     }
 
     _getBucketNotifConfig(bucket, done) {
@@ -101,7 +105,8 @@ class QueueProcessor extends EventEmitter {
             if (data) {
                 const { error, result } = safeJsonParse(data);
                 if (error) {
-                    this.logger.error('invalid config', { method, zkPath, data });
+                    this.logger.error('invalid config',
+                        { method, zkPath, data });
                     return done(null, 1);
                 }
                 this.logger.debug('fetched bucket notification config', {
@@ -130,7 +135,8 @@ class QueueProcessor extends EventEmitter {
     start(options) {
         async.series([
             next => this._setupZookeeper(next),
-            next => this._setupDestination(this.destinationConfig.type, () => {
+            next => this._setupDestination(this.destinationConfig.type, next),
+            next => this._destination.init(() => {
                 if (options && options.disableConsumer) {
                     this.emit('ready');
                     return undefined;
@@ -189,19 +195,14 @@ class QueueProcessor extends EventEmitter {
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
         const { bucket, key } = sourceEntry;
-
         return async.waterfall([
             next => this._getBucketNotifConfig(bucket, next),
             (config, next) => {
                 if (config && Object.keys(config).length > 0) {
-                    const { error, result } = safeJsonParse(config);
-                    if (error) {
-                        // skip, invalid configuration
-                        return next();
-                    }
-                    // TODO: handle the following in config util
-                    const destBnConf = result.notificationConfiguration.find(
-                        c => c.queueConfig.queueArn === this.destinationId);
+                    const notifConfig = config.notificationConfiguration;
+                    const destBnConf = notifConfig.queueConfig.find(
+                        c => c.queueArn.split(':').pop()
+                            === this.destinationId);
                     if (!destBnConf) {
                         // skip, if there is no config for the current
                         // destination resource
@@ -211,10 +212,16 @@ class QueueProcessor extends EventEmitter {
                     // validate entry
                     const bnConfig = {
                         bucket,
-                        notificationConfiguration: [destBnConf],
+                        notificationConfiguration: {
+                            queueConfig: [destBnConf],
+                        },
                     };
                     if (configUtil.validateEntry(bnConfig, sourceEntry)) {
-                        return this._destination.send(sourceEntry, next);
+                        const msg = {
+                            key: this.destinationId,
+                            message: sourceEntry,
+                        };
+                        return this._destination.send([msg], next);
                     }
                     return next();
                 }
