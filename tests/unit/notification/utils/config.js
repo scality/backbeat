@@ -114,6 +114,19 @@ const testConfigs = [
             ],
         },
     },
+    {
+        bucket: 'bucket7',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:*'],
+                    queueArn: 'q7',
+                    filterRules: [],
+                    id: 'config7',
+                },
+            ],
+        },
+    },
 ];
 
 const tests = [
@@ -159,6 +172,15 @@ const tests = [
             type: 's3:ObjectCreated:Copy',
             bucket: 'bucket6',
             key: 'test.jpg',
+        },
+        pass: true,
+    },
+    {
+        desc: 'pass if the event matches wildcard event',
+        entry: {
+            type: 's3:ObjectCreated:Post',
+            bucket: 'bucket7',
+            key: 'abcd.png',
         },
         pass: true,
     },
@@ -212,6 +234,15 @@ const tests = [
         entry: {
             type: 's3:ObjectCreated:Post',
             bucket: 'bucket6',
+            key: 'abcd.png',
+        },
+        pass: false,
+    },
+    {
+        desc: 'fail if the event does not match the wildcard event',
+        entry: {
+            type: 's3:ObjectRemoved:Post',
+            bucket: 'bucket7',
             key: 'abcd.png',
         },
         pass: false,

@@ -50,7 +50,11 @@ function validateEntryWithFilter(filterRules, entry) {
  * @return {undefined|Object[]} Bucket queue configurations if found
  */
 function filterConfigsByEvent(bnConfigs, event) {
-    return bnConfigs.filter(config => config.events.includes(event));
+    return bnConfigs.filter(config => config.events.some(evt => {
+        // support wildcard events
+        const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
+        return event.toLowerCase().startsWith(starts.toLowerCase());
+    }));
 }
 
 /**

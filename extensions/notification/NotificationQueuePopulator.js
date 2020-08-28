@@ -10,6 +10,12 @@ const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 
 class NotificationQueuePopulator extends QueuePopulatorExtension {
+    /**
+     * @constructor
+     * @param {Object} params - constructor params
+     * @param {Object} params.config - notification configuration object
+     * @param {Logger} params.logger - logger object
+     */
     constructor(params) {
         super(params);
         this.notificationConfig = params.config;
@@ -194,7 +200,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             = value[notifConstants.notificationEventPropName];
                         const lastModified
                             = value[notifConstants.eventTimePropName];
-                        // TODO: publish necessary object properties
+                        // TODO: publish necessary object properties, keeping it
+                        // simple for first iteration
                         const ent = { bucket, key, type, lastModified };
                         if (configUtil.validateEntry(bnConfig.result, ent)) {
                             this.publish(this.notificationConfig.topic,
