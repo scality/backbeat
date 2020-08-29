@@ -133,7 +133,7 @@ const tests = [
     {
         desc: 'pass if the event matches a bucket notification configuration',
         entry: {
-            type: 's3:ObjectCreated:Put',
+            eventType: 's3:ObjectCreated:Put',
             bucket: 'bucket1',
             key: 'test.png',
         },
@@ -142,7 +142,7 @@ const tests = [
     {
         desc: 'pass if the object key prefix matches the configuration',
         entry: {
-            type: 's3:ObjectRemoved:Delete',
+            eventType: 's3:ObjectRemoved:Delete',
             bucket: 'bucket2',
             key: 'abcd.png',
         },
@@ -151,7 +151,7 @@ const tests = [
     {
         desc: 'pass if the object key suffix matches the configuration',
         entry: {
-            type: 's3:ObjectRemoved:DeleteMarkerCreated',
+            eventType: 's3:ObjectRemoved:DeleteMarkerCreated',
             bucket: 'bucket3',
             key: 'test.png',
         },
@@ -160,7 +160,7 @@ const tests = [
     {
         desc: 'pass if object key prefix & suffix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            eventType: 's3:ObjectCreated:CompleteMultipartUpload',
             bucket: 'bucket5',
             key: 'abcdef.png',
         },
@@ -169,7 +169,7 @@ const tests = [
     {
         desc: 'pass if object passes at least one notification configuration',
         entry: {
-            type: 's3:ObjectCreated:Copy',
+            eventType: 's3:ObjectCreated:Copy',
             bucket: 'bucket6',
             key: 'test.jpg',
         },
@@ -178,7 +178,7 @@ const tests = [
     {
         desc: 'pass if the event matches wildcard event',
         entry: {
-            type: 's3:ObjectCreated:Post',
+            eventType: 's3:ObjectCreated:Post',
             bucket: 'bucket7',
             key: 'abcd.png',
         },
@@ -187,7 +187,7 @@ const tests = [
     {
         desc: 'fail if the event type does not match the configuration',
         entry: {
-            type: 's3:ObjectCreated:Post',
+            eventType: 's3:ObjectCreated:Post',
             bucket: 'bucket1',
             key: 'test.png',
         },
@@ -196,7 +196,7 @@ const tests = [
     {
         desc: 'fail if the object key does not match configuration prefix',
         entry: {
-            type: 's3:ObjectRemoved:Delete',
+            eventType: 's3:ObjectRemoved:Delete',
             bucket: 'bucket2',
             key: 'one.png',
         },
@@ -205,7 +205,7 @@ const tests = [
     {
         desc: 'fail if the object key does not match configuration suffix',
         entry: {
-            type: 's3:ObjectRemoved:DeleteMarkerCreated',
+            eventType: 's3:ObjectRemoved:DeleteMarkerCreated',
             bucket: 'bucket3',
             key: 'test.jpg',
         },
@@ -214,7 +214,7 @@ const tests = [
     {
         desc: 'fail if only key prefix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            eventType: 's3:ObjectCreated:CompleteMultipartUpload',
             bucket: 'bucket5',
             key: 'abcdef.jpg',
         },
@@ -223,7 +223,7 @@ const tests = [
     {
         desc: 'fail if only key suffix matches the configuration',
         entry: {
-            type: 's3:ObjectCreated:CompleteMultipartUpload',
+            eventType: 's3:ObjectCreated:CompleteMultipartUpload',
             bucket: 'bucket5',
             key: 'abc.png',
         },
@@ -232,7 +232,7 @@ const tests = [
     {
         desc: 'fail if object passes no notification configuration filter',
         entry: {
-            type: 's3:ObjectCreated:Post',
+            eventType: 's3:ObjectCreated:Post',
             bucket: 'bucket6',
             key: 'abcd.png',
         },
@@ -241,7 +241,7 @@ const tests = [
     {
         desc: 'fail if the event does not match the wildcard event',
         entry: {
-            type: 's3:ObjectRemoved:Post',
+            eventType: 's3:ObjectRemoved:Post',
             bucket: 'bucket7',
             key: 'abcd.png',
         },

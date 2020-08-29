@@ -15,6 +15,7 @@ const constants = {
     },
     authFilesFolder: 'ssl',
     supportedAuthTypes: ['kerberos'],
+    deleteEvent: 's3:ObjectRemoved:Delete',
 };
 
 module.exports = constants;

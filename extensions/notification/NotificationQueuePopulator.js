@@ -1,6 +1,9 @@
 const async = require('async');
 
+const { isMasterKey } = require('arsenal/lib/versioning/Version');
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
+const VID_SEP = require('arsenal').versioning.VersioningConstants
+    .VersionId.Separator;
 
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
@@ -69,7 +72,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 return done(err);
             }
             this.log.debug('config saved', { method, zkPath, data });
-            return done(null, 1);
+            return done();
         });
     }
 
@@ -86,7 +89,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 });
                 return done(err);
             }
-            return done(null, 1);
+            return done();
         });
     }
 
@@ -111,12 +114,33 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     bucket,
                 });
             }
-            return done(null, 1);
+            return done();
         });
     }
 
+    _isBucketEntry(bucket, key) {
+        return ((bucket.toLowerCase() === 'metastore' && key)
+            || key === undefined);
+    }
+
+    _getBucketNotificationConfiguration(value) {
+        if (value && value.attributes) {
+            const { error, result } = safeJsonParse(value.attributes);
+            if (error) {
+                return undefined;
+            }
+
+            return result.notificationConfiguration;
+        }
+        return undefined;
+    }
+
+    _extractVersionedBaseKey(key) {
+        return key.split(VID_SEP)[0];
+    }
+
     filter(entry) {
-        const { bucket, key, value } = entry;
+        const { bucket, key, value, type } = entry;
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
         if (error) {
@@ -129,84 +153,93 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
         // bucket notification configuration updates
-        if (key === undefined) {
-            if (bucket && result) {
-                const notificationConfiguration
-                    = result.notificationConfiguration;
-                if (notificationConfiguration &&
-                    Object.keys(notificationConfiguration).length > 0) {
-                    // bucket notification config is available, update node
-                    return async.waterfall([
-                        next => this._getBucketNotifConfig(bucket, next),
-                        (config, next) => {
-                            // config: 0 - node does not exists, create one
-                            if (config === 0) {
-                                return this._createBucketNotifConfigNode(
-                                    bucket, next);
-                            }
-                            return next();
-                        },
-                        next => {
-                            const bnConfig = {
-                                bucket,
-                                notificationConfiguration,
-                            };
-                            return this._setBucketNotifConfig(
-                                bucket, JSON.stringify(bnConfig), next);
-                        },
-                    ], error => {
-                        if (error) {
-                            const errMsg = 'error setting bucket notification '
-                                + 'configuration';
-                            this.log.error(errMsg, { error });
-                        }
-                        return undefined;
-                    });
-                }
-                // bucket notification conf has been removed, so remove zk node
+        if (bucket && result && this._isBucketEntry(bucket, key)) {
+            const bucketName = result.name;
+            const notificationConfiguration
+                = this._getBucketNotificationConfiguration(result);
+            if (notificationConfiguration &&
+                Object.keys(notificationConfiguration).length > 0) {
+                // bucket notification config is available, update node
                 return async.waterfall([
-                    next => this._getBucketNotifConfig(bucket, next),
+                    next => this._getBucketNotifConfig(bucketName, next),
                     (config, next) => {
-                        // config: 0 - node does not exists, continue
+                        // config: 0 - node does not exists, create one
                         if (config === 0) {
-                            return next();
+                            return this._createBucketNotifConfigNode(
+                                bucketName, next);
                         }
-                        return this._removeBucketNotifConfigNode(bucket, next);
+                        return next();
+                    },
+                    next => {
+                        const bnConfig = {
+                            bucket: bucketName,
+                            notificationConfiguration,
+                        };
+                        return this._setBucketNotifConfig(
+                            bucketName, JSON.stringify(bnConfig), next);
                     },
                 ], error => {
                     if (error) {
-                        const errMsg = 'error removing bucket notification '
+                        const errMsg = 'error setting bucket notification '
                             + 'configuration';
-                        this.log.err(errMsg, { error });
+                        this.log.error(errMsg, { error });
                     }
                     return undefined;
                 });
             }
+            // bucket notification conf has been removed, so remove zk node
+            return async.waterfall([
+                next => this._getBucketNotifConfig(bucketName, next),
+                (config, next) => {
+                    // config: 0 - node does not exists, continue
+                    if (config === 0) {
+                        return next();
+                    }
+                    return this._removeBucketNotifConfigNode(bucketName, next);
+                },
+            ], error => {
+                if (error) {
+                    const errMsg = 'error removing bucket notification '
+                        + 'configuration';
+                    this.log.err(errMsg, { error });
+                }
+                return undefined;
+            });
         }
-
         // object entry processing - filter and publish
         if (key && result) {
-            // TODO: handle versioned object entry
+            let versionId = null;
+            let objectKey = key;
+            if (!isMasterKey(entry.key)) {
+                objectKey = this._extractVersionedBaseKey(key);
+                versionId = result.versionId;
+            }
             return async.waterfall([
                 next => this._getBucketNotifConfig(bucket, next),
                 (config, next) => {
                     if (config && Object.keys(config).length > 0) {
-                        const bnConfig = safeJsonParse(config);
-                        if (bnConfig.error) {
-                            // skip, invalid configuration
-                            return next();
-                        }
-                        const type
-                            = value[notifConstants.notificationEventPropName];
+                        let eventType
+                            = result[notifConstants.notificationEventPropName];
                         const lastModified
-                            = value[notifConstants.eventTimePropName];
+                            = result[notifConstants.eventTimePropName];
+                        if (eventType === undefined &&
+                            (type === 'delete' || type === 'del')) {
+                            eventType = notifConstants.deleteEvent;
+                        }
                         // TODO: publish necessary object properties, keeping it
-                        // simple for first iteration
-                        const ent = { bucket, key, type, lastModified };
-                        if (configUtil.validateEntry(bnConfig.result, ent)) {
+                        // simple for the first iteration
+                        const ent = {
+                            bucket,
+                            key: objectKey,
+                            eventType,
+                            versionId,
+                            lastModified,
+                        };
+                        if (configUtil.validateEntry(config, ent)) {
                             this.publish(this.notificationConfig.topic,
                                 bucket,
                                 JSON.stringify(ent));
+                            return undefined;
                         }
                         return next();
                     }
@@ -217,7 +250,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 if (error) {
                     this.log.err('error processing entry', {
                         bucket,
-                        key,
+                        key: objectKey,
                         error,
                     });
                 }
