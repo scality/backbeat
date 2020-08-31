@@ -1,0 +1,90 @@
+{
+    "zookeeper": {
+        "connectionString": "localhost:2181/backbeat"
+    },
+    "kafka": {
+        "hosts": "localhost:9092"
+    },
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 100,
+        "zookeeperPath": "/bucket-notification",
+        "logSource": "bucketd",
+        "bucketd": {
+            "host": "localhost",
+            "port": 9000
+        }
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "extensions": {
+        "notification": {
+            "topic": "backbeat-bucket-notification",
+            "monitorNotificationFailures": true,
+            "zookeeperPath": "/bucket-notification",
+            "queueProcessor": {
+                "groupId": "backbeat-bucket-notification-group",
+                "logConsumerMetricsIntervalS": 60
+            }
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": [
+                "10.100.5.138",
+                "fe80::f816:3eff:fe3a:dfda",
+                "10.100.2.191",
+                "10.100.5.122",
+                "10.100.2.88",
+                "10.100.5.145",
+                "10.100.5.207"
+            ]
+        },
+        "host": "localhost",
+        "port": 8901
+    },
+    "certFilePaths": {},
+    "redis": {
+        "name": "scality-s3",
+        "password": "",
+        "sentinels": [
+            {
+                "host": "10.100.5.138",
+                "port": 16379
+            },
+            {
+                "host": "10.100.2.191",
+                "port": 16379
+            },
+            {
+                "host": "10.100.5.122",
+                "port": 16379
+            },
+            {
+                "host": "10.100.2.88",
+                "port": 16379
+            },
+            {
+                "host": "10.100.5.145",
+                "port": 16379
+            }
+        ],
+        "sentinelPassword": ""
+    },
+    "bucketNotificationDestinations": [
+        {
+            "resource": "destination1",
+            "type": "kafka",
+            "host": "localhost:9092",
+            "port": 9092,
+            "topic": "destination-topic",
+            "auth": {}
+        }
+    ]
+}
+

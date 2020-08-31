@@ -6,11 +6,12 @@ const werelogs = require('werelogs');
 const config = require('../lib/Config');
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
-const extConfigs = config.extensions;
-const qpConfig = config.queuePopulator;
 const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
+const qpConfig = config.queuePopulator;
+const extConfigs = config.extensions;
+
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 
 const log = new werelogs.Logger('Backbeat:NotificationQueuePopulator');
@@ -64,7 +65,7 @@ async.waterfall([
 ], err => {
     if (err) {
         log.error('error during queue populator initialization', {
-            method: 'QueuePopulator::task',
+            method: 'bin.notification',
             error: err,
         });
         process.exit(1);
