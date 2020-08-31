@@ -1,10 +1,15 @@
 'use strict'; // eslint-disable-line
 
 const { EventEmitter } = require('events');
-
 const Logger = require('werelogs').Logger;
+const async = require('async');
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const NotificationDestination = require('../destination');
+const zookeeper = require('../../../lib/clients/zookeeper');
+const configUtil = require('../utils/config');
+const safeJsonParse = require('../utils/safeJsonParse');
+const notifConstants = require('../constants');
 
 class QueueProcessor extends EventEmitter {
 
@@ -13,6 +18,7 @@ class QueueProcessor extends EventEmitter {
      * kafka topic dedicated to dispatch messages to a destination/target.
      *
      * @constructor
+     * @param {Object} zkConfig - zookeeper configuration object
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -24,31 +30,94 @@ class QueueProcessor extends EventEmitter {
      *   consumer group ID
      * @param {String} notifConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
-     * @param {String} destinationType - destination type
+     * @param {Object} destinationConfig - destination configuration object
+     * @param {String} destinationConfig.type - destination type
+     * @param {String} destinationConfig.host - destination host
+     * @param {String} destinationConfig.auth - destination auth configuration
+     * @param {String} destinationId - resource name/id of destination
      */
-    constructor(kafkaConfig, notifConfig, destinationType) {
+    constructor(zkConfig, kafkaConfig, notifConfig, destinationConfig,
+        destinationId) {
         super();
+        this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
+        this.destinationConfig = destinationConfig;
+        this.destinationId = destinationId;
+        this.zkClient = null;
         this._consumer = null;
-        this._destinationType = destinationType;
         this._destination = null;
 
         this.logger = new Logger('Backbeat:Notification:QueueProcessor');
     }
 
-    _getDestinationConfiguration() {
-        // TODO: util function to fetch destination configuration from a file
-        // check if this has to be moved to destination class.
-        return undefined;
+    _setupZookeeper(done) {
+        const populatorZkPath = this.notifConfig.zookeeperPath;
+        const zookeeperUrl =
+            `${this.zkConfig.connectionString}${populatorZkPath}`;
+        this.logger.info('opening zookeeper connection for reading ' +
+            'bucket notification configuration',
+            { zookeeperUrl });
+        this.zkClient = zookeeper.createClient(zookeeperUrl, {
+            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
+        });
+        this.zkClient.connect();
+        this.zkClient.once('error', done);
+        this.zkClient.once('ready', () => {
+            // just in case there would be more 'error' events emitted
+            this.zkClient.removeAllListeners('error');
+            done();
+        });
     }
 
     _setupDestination(destinationType, done) {
-        // get the destination configuration
-        // get destination object using the destination type
-        // set the destination object to this._destination
-        // this._destination.start();
+        const Destination = NotificationDestination[destinationType];
+        const params = {
+            destConfig: this.destinationConfig,
+            logger: this.logger,
+        };
+        this._destination = new Destination(params);
         done();
+    }
+
+    _getBucketNodeZkPath(bucket) {
+        const { zkBucketNotificationPath, zkConfigParentNode }
+            = notifConstants;
+        return `/${zkBucketNotificationPath}/${zkConfigParentNode}/${bucket}`;
+    }
+
+    _getResourceIdFromArn(arn) {
+        return arn.split(/[\s,]+/).pop();
+    }
+
+    _getBucketNotifConfig(bucket, done) {
+        const method
+            = 'notification.QueueProcessor._getBucketNotifConfig';
+        const zkPath = this._getBucketNodeZkPath(bucket);
+        return this.zkClient.getData(zkPath, (err, data) => {
+            if (err && err.name !== 'NO_NODE') {
+                this.logger.error('error fetching bucket notification config', {
+                    method,
+                    error: err,
+                });
+                return done(err);
+            }
+            if (data) {
+                const { error, result } = safeJsonParse(data);
+                if (error) {
+                    this.logger.error('invalid config',
+                        { method, zkPath, data });
+                    return done(null, 1);
+                }
+                this.logger.debug('fetched bucket notification config', {
+                    method,
+                    zkPath,
+                    data: result,
+                });
+                return done(null, result);
+            }
+            return done(null, 0);
+        });
     }
 
     /**
@@ -64,33 +133,39 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     start(options) {
-        this._setupDestination(this.destinationType, err => {
+        async.series([
+            next => this._setupZookeeper(next),
+            next => this._setupDestination(this.destinationConfig.type, next),
+            next => this._destination.init(() => {
+                if (options && options.disableConsumer) {
+                    this.emit('ready');
+                    return undefined;
+                }
+                const { groupId, concurrency, logConsumerMetricsIntervalS }
+                    = this.notifConfig.queueProcessor;
+                this._consumer = new BackbeatConsumer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: this.notifConfig.topic,
+                    groupId,
+                    concurrency,
+                    queueProcessor: this.processKafkaEntry.bind(this),
+                    logConsumerMetricsIntervalS,
+                });
+                this._consumer.on('error', () => { });
+                this._consumer.on('ready', () => {
+                    this._consumer.subscribe();
+                    this.logger.info('queue processor is ready to consume ' +
+                        'notification entries');
+                    this.emit('ready');
+                });
+                return next();
+            }),
+        ], err => {
             if (err) {
-                this.logger.info('error setting up destination',
+                this.logger.info('error starting notification queue processor',
                     { error: err.message });
                 return undefined;
             }
-            if (options && options.disableConsumer) {
-                this.emit('ready');
-                return undefined;
-            }
-            const { groupId, concurrency, logConsumerMetricsIntervalS }
-                = this.notifConfig.queueProcessor;
-            this._consumer = new BackbeatConsumer({
-                kafka: { hosts: this.kafkaConfig.hosts },
-                topic: this.notifConfig.topic,
-                groupId,
-                concurrency,
-                queueProcessor: this.processKafkaEntry.bind(this),
-                logConsumerMetricsIntervalS,
-            });
-            this._consumer.on('error', () => { });
-            this._consumer.on('ready', () => {
-                this._consumer.subscribe();
-                this.logger.info('queue processor is ready to consume ' +
-                    'notification entries');
-                this.emit('ready');
-            });
             return undefined;
         });
     }
@@ -119,11 +194,50 @@ class QueueProcessor extends EventEmitter {
      */
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
-        if (this._destination) {
-            this._destination.send(sourceEntry);
-        }
-
-        return process.nextTick(done);
+        const { bucket, key } = sourceEntry;
+        return async.waterfall([
+            next => this._getBucketNotifConfig(bucket, next),
+            (config, next) => {
+                if (config && Object.keys(config).length > 0) {
+                    const notifConfig = config.notificationConfiguration;
+                    const destBnConf = notifConfig.queueConfig.find(
+                        c => c.queueArn.split(':').pop()
+                            === this.destinationId);
+                    if (!destBnConf) {
+                        // skip, if there is no config for the current
+                        // destination resource
+                        return next();
+                    }
+                    // pass only destination resource specific config to
+                    // validate entry
+                    const bnConfig = {
+                        bucket,
+                        notificationConfiguration: {
+                            queueConfig: [destBnConf],
+                        },
+                    };
+                    if (configUtil.validateEntry(bnConfig, sourceEntry)) {
+                        const msg = {
+                            key: this.destinationId,
+                            message: sourceEntry,
+                        };
+                        return this._destination.send([msg], next);
+                    }
+                    return next();
+                }
+                // skip if there is no bucket notification configuration
+                return next();
+            },
+        ], error => {
+            if (error) {
+                this.logger.err('error processing entry', {
+                    bucket,
+                    key,
+                    error,
+                });
+            }
+            return done();
+        });
     }
 }
 

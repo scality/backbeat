@@ -50,7 +50,11 @@ function validateEntryWithFilter(filterRules, entry) {
  * @return {undefined|Object[]} Bucket queue configurations if found
  */
 function filterConfigsByEvent(bnConfigs, event) {
-    return bnConfigs.filter(config => config.events.includes(event));
+    return bnConfigs.filter(config => config.events.some(evt => {
+        // support wildcard events
+        const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
+        return event.toLowerCase().startsWith(starts.toLowerCase());
+    }));
 }
 
 /**
@@ -62,14 +66,14 @@ function filterConfigsByEvent(bnConfigs, event) {
  * @return {boolean} true if event qualifies for notification
  */
 function validateEntry(bnConfig, entry) {
-    const { bucket, type } = entry;
+    const { bucket, eventType } = entry;
     const notifConf = bnConfig.notificationConfiguration;
     // check if the entry belongs to the bucket in the configuration
     if (bucket !== bnConfig.bucket) {
         return false;
     }
     // check if the event type matches
-    const qConfigs = filterConfigsByEvent(notifConf.queueConfig, type);
+    const qConfigs = filterConfigsByEvent(notifConf.queueConfig, eventType);
     if (qConfigs.length > 0) {
         const qConfigWithFilters
             = qConfigs.filter(c => c.filterRules && c.filterRules.length > 0);
