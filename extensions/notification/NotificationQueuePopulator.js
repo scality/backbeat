@@ -129,7 +129,6 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             if (error) {
                 return undefined;
             }
-
             return result.notificationConfiguration;
         }
         return undefined;
@@ -139,18 +138,24 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         return key.split(VID_SEP)[0];
     }
 
-    filter(entry) {
+    /**
+     * Asynchronous filter
+     * @param {Object} entry - constructor params
+     * @param {function} cb - callback
+     * @return {undefined}
+     */
+    filterAsync(entry, cb) {
         const { bucket, key, value, type } = entry;
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
         if (error) {
             this.log.error('could not parse log entry', { value, error });
-            return undefined;
+            return cb();
         }
         // ignore bucket op, mpu's or if the entry has no bucket
         if (!bucket || bucket === usersBucket ||
             (key && key.startsWith(mpuBucketPrefix))) {
-            return undefined;
+            return cb();
         }
         // bucket notification configuration updates
         if (bucket && result && this._isBucketEntry(bucket, key)) {
@@ -184,7 +189,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             + 'configuration';
                         this.log.error(errMsg, { error });
                     }
-                    return undefined;
+                    return cb();
                 });
             }
             // bucket notification conf has been removed, so remove zk node
@@ -203,7 +208,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         + 'configuration';
                     this.log.err(errMsg, { error });
                 }
-                return undefined;
+                return cb();
             });
         }
         // object entry processing - filter and publish
@@ -220,12 +225,12 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     if (config && Object.keys(config).length > 0) {
                         let eventType
                             = result[notifConstants.notificationEventPropName];
-                        const lastModified
-                            = result[notifConstants.eventTimePropName];
                         if (eventType === undefined &&
                             (type === 'delete' || type === 'del')) {
                             eventType = notifConstants.deleteEvent;
                         }
+                        const lastModified
+                            = result[notifConstants.eventTimePropName];
                         // TODO: publish necessary object properties, keeping it
                         // simple for the first iteration
                         const ent = {
@@ -239,7 +244,6 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             this.publish(this.notificationConfig.topic,
                                 bucket,
                                 JSON.stringify(ent));
-                            return undefined;
                         }
                         return next();
                     }
@@ -254,10 +258,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         error,
                     });
                 }
-                return undefined;
+                return cb();
             });
         }
-        return undefined;
+        return cb();
     }
 }
 
