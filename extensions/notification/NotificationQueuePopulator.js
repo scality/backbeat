@@ -154,7 +154,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         return key.split(VID_SEP)[0];
     }
 
-    filter(entry) {
+    filter(entry, cb) {
         const { bucket, key, value, type } = entry;
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -199,7 +199,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             + 'configuration';
                         this.log.error(errMsg, { error });
                     }
-                    return undefined;
+                    return cb();
                 });
             }
             // bucket notification conf has been removed, so remove zk node
@@ -218,7 +218,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         + 'configuration';
                     this.log.err(errMsg, { error });
                 }
-                return undefined;
+                return cb();
             });
         }
         // object entry processing - filter and publish
@@ -253,7 +253,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             this.publish(this.notificationConfig.topic,
                                 bucket,
                                 JSON.stringify(ent));
-                            return undefined;
+                            return next();
                         }
                         return next();
                     }
@@ -268,7 +268,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         error,
                     });
                 }
-                return undefined;
+                return cb();
             });
         }
         return undefined;
