@@ -7,6 +7,7 @@ const VID_SEP = require('arsenal').versioning.VersioningConstants
 
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
+const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
 
 const QueuePopulatorExtension =
@@ -218,27 +219,25 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 next => this._getBucketNotifConfig(bucket, next),
                 (config, next) => {
                     if (config && Object.keys(config).length > 0) {
+                        const { eventMessageProperty }
+                            = notifConstants;
                         let eventType
-                            = result[notifConstants.notificationEventPropName];
-                        const lastModified
-                            = result[notifConstants.eventTimePropName];
-                        if (eventType === undefined &&
-                            (type === 'delete' || type === 'del')) {
+                            = result[eventMessageProperty.eventType];
+                        if (eventType === undefined && type === 'del') {
                             eventType = notifConstants.deleteEvent;
                         }
-                        // TODO: publish necessary object properties, keeping it
-                        // simple for the first iteration
                         const ent = {
                             bucket,
                             key: objectKey,
                             eventType,
                             versionId,
-                            lastModified,
                         };
                         if (configUtil.validateEntry(config, ent)) {
+                            const message
+                                = messageUtil.addLogAttributes(result, ent);
                             this.publish(this.notificationConfig.topic,
                                 bucket,
-                                JSON.stringify(ent));
+                                JSON.stringify(message));
                             return undefined;
                         }
                         return next();
