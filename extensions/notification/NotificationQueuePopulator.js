@@ -123,13 +123,29 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             || key === undefined);
     }
 
-    _getBucketNotificationConfiguration(value) {
+    _getBucketAttributes(value) {
         if (value && value.attributes) {
             const { error, result } = safeJsonParse(value.attributes);
             if (error) {
                 return undefined;
             }
-            return result.notificationConfiguration;
+            return result;
+        }
+        return undefined;
+    }
+
+    _getBucketNameFromAttributes(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.name) {
+            return attributes.name;
+        }
+        return undefined;
+    }
+
+    _getBucketNotificationConfiguration(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.notificationConfiguration) {
+            return attributes.notificationConfiguration;
         }
         return undefined;
     }
@@ -159,7 +175,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // bucket notification configuration updates
         if (bucket && result && this._isBucketEntry(bucket, key)) {
-            const bucketName = result.name;
+            const bucketName = this._getBucketNameFromAttributes(result);
             const notificationConfiguration
                 = this._getBucketNotificationConfiguration(result);
             if (notificationConfiguration &&
@@ -225,8 +241,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     if (config && Object.keys(config).length > 0) {
                         let eventType
                             = result[notifConstants.notificationEventPropName];
-                        if (eventType === undefined &&
-                            (type === 'delete' || type === 'del')) {
+                        if (eventType === undefined && type === 'del') {
                             eventType = notifConstants.deleteEvent;
                         }
                         const lastModified
