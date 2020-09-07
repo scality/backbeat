@@ -8,6 +8,7 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
 const zookeeper = require('../../../lib/clients/zookeeper');
 const configUtil = require('../utils/config');
+const messageUtil = require('../utils/message');
 const safeJsonParse = require('../utils/safeJsonParse');
 const notifConstants = require('../constants');
 
@@ -81,9 +82,8 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getBucketNodeZkPath(bucket) {
-        const { zkBucketNotificationPath, zkConfigParentNode }
-            = notifConstants;
-        return `/${zkBucketNotificationPath}/${zkConfigParentNode}/${bucket}`;
+        const { zkConfigParentNode } = notifConstants;
+        return `/${zkConfigParentNode}/${bucket}`;
     }
 
     _getResourceIdFromArn(arn) {
@@ -217,9 +217,13 @@ class QueueProcessor extends EventEmitter {
                         },
                     };
                     if (configUtil.validateEntry(bnConfig, sourceEntry)) {
+                        // add notification configuration id to the message
+                        sourceEntry.configurationId = destBnConf.id;
+                        const message
+                            = messageUtil.transformToSpec(sourceEntry);
                         const msg = {
                             key: this.destinationId,
-                            message: sourceEntry,
+                            message,
                         };
                         return this._destination.send([msg], next);
                     }

@@ -25,7 +25,7 @@ const testConfigs = [
                     queueArn: 'q2',
                     filterRules: [
                         {
-                            name: 'prefix',
+                            name: 'Prefix',
                             value: 'abcd',
                         },
                     ],
@@ -43,7 +43,7 @@ const testConfigs = [
                     queueArn: 'q3',
                     filterRules: [
                         {
-                            name: 'suffix',
+                            name: 'Suffix',
                             value: '.png',
                         },
                     ],
@@ -74,11 +74,11 @@ const testConfigs = [
                     queueArn: 'q5',
                     filterRules: [
                         {
-                            name: 'prefix',
+                            name: 'Prefix',
                             value: 'abcd',
                         },
                         {
-                            name: 'suffix',
+                            name: 'Suffix',
                             value: '.png',
                         },
                     ],
@@ -101,11 +101,11 @@ const testConfigs = [
                     queueArn: 'q62',
                     filterRules: [
                         {
-                            name: 'prefix',
+                            name: 'Prefix',
                             value: 'abcd',
                         },
                         {
-                            name: 'suffix',
+                            name: 'Suffix',
                             value: '.png',
                         },
                     ],
