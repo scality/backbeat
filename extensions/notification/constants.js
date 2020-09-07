@@ -1,10 +1,9 @@
 const constants = {
     extensionName: 'notification',
     nameFilter: {
-        prefix: 'prefix',
-        suffix: 'suffix',
+        prefix: 'Prefix',
+        suffix: 'Suffix',
     },
-    zkBucketNotificationPath: 'bucket-notification',
     bucketNotifConfigPropName: 'notificationConfiguration',
     zkConfigParentNode: 'config',
     arn: {
