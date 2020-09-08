@@ -6,8 +6,6 @@ const constants = {
     },
     zkBucketNotificationPath: 'bucket-notification',
     bucketNotifConfigPropName: 'notificationConfiguration',
-    notificationEventPropName: 'originOp',
-    eventTimePropName: 'last-modified',
     zkConfigParentNode: 'config',
     arn: {
         partition: 'scality',
@@ -16,6 +14,17 @@ const constants = {
     authFilesFolder: 'ssl',
     supportedAuthTypes: ['kerberos'],
     deleteEvent: 's3:ObjectRemoved:Delete',
+    eventMessageProperty: {
+        dateTime: 'last-modified',
+        eventType: 'originOp',
+        region: 'dataStoreName',
+        schemaVersion: 'md-model-version',
+        size: 'content-length',
+        versionId: 'versionId',
+    },
+    eventVersion: '1.0',
+    eventSource: 'scality:s3',
+    eventS3SchemaVersion: '1.0',
 };
 
 module.exports = constants;
