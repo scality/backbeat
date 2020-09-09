@@ -143,10 +143,11 @@ class QueueProcessor extends EventEmitter {
                 }
                 const { groupId, concurrency, logConsumerMetricsIntervalS }
                     = this.notifConfig.queueProcessor;
+                const consumerGroupId = `${groupId}-${this.destinationId}`;
                 this._consumer = new BackbeatConsumer({
                     kafka: { hosts: this.kafkaConfig.hosts },
                     topic: this.notifConfig.topic,
-                    groupId,
+                    groupId: consumerGroupId,
                     concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
                     logConsumerMetricsIntervalS,
