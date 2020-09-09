@@ -32,11 +32,13 @@ function configArrayToMap(bnConfigs) {
 function validateEntryWithFilter(filterRules, entry) {
     const { key } = entry;
     return filterRules.every(rule => {
-        if (rule.name === constants.nameFilter.prefix) {
-            return key.startsWith(rule.value);
+        const { name, value } = rule;
+        const { prefix, suffix } = constants.nameFilter;
+        if (name.toLowerCase() === prefix.toLowerCase()) {
+            return key.startsWith(value);
         }
-        if (rule.name === constants.nameFilter.suffix) {
-            return key.endsWith(rule.value);
+        if (name.toLowerCase() === suffix.toLowerCase()) {
+            return key.endsWith(value);
         }
         return false;
     });

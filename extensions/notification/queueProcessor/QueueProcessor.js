@@ -82,9 +82,8 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getBucketNodeZkPath(bucket) {
-        const { zkBucketNotificationPath, zkConfigParentNode }
-            = notifConstants;
-        return `/${zkBucketNotificationPath}/${zkConfigParentNode}/${bucket}`;
+        const { zkConfigParentNode } = notifConstants;
+        return `/${zkConfigParentNode}/${bucket}`;
     }
 
     _getResourceIdFromArn(arn) {
