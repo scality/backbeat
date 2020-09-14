@@ -660,6 +660,12 @@
                         "location": "uri",
                         "locationName": "Key"
                     },
+                    "VersionId": {
+                        "type": "string",
+                        "documentation": "VersionId used to reference a specific version of the object.",
+                        "location": "querystring",
+                        "locationName": "versionId"
+                    },
                     "ContentLength": {
                         "location": "header",
                         "locationName": "Content-Length",
