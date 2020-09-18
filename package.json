@@ -67,7 +67,7 @@
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#28e73a2",
     "eslint-plugin-import": "^2.14.0",
-    "lolex": "^2.7.5",
+    "lolex": "^6.0.0",
     "mocha": "^3.3.0",
     "zookeeper-mock": "github:scality/zookeeper-mock"
   }
