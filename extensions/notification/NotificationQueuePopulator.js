@@ -1,15 +1,13 @@
-const async = require('async');
+const assert = require('assert');
 
 const { isMasterKey } = require('arsenal/lib/versioning/Version');
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
     .VersionId.Separator;
-
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
 const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
-
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 
@@ -19,110 +17,35 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @param {Object} params - constructor params
      * @param {Object} params.config - notification configuration object
      * @param {Logger} params.logger - logger object
+     * @param {Object} params.bnConfigManager - bucket notification config
+     * manager
      */
     constructor(params) {
         super(params);
         this.notificationConfig = params.config;
-        this.zkClient = params.zkClient;
+        this.bnConfigManager = params.bnConfigManager;
+        assert(this.bnConfigManager, 'bucket notification configuration manager'
+            + ' is not set');
     }
 
-    _getBucketNodeZkPath(bucket) {
-        const { zkConfigParentNode } = notifConstants;
-        return `/${zkConfigParentNode}/${bucket}`;
-    }
-
-    _getBucketNotifConfig(bucket, done) {
-        const method
-            = 'NotificationQueuePopulator._getBucketNotifConfig';
-        const zkPath = this._getBucketNodeZkPath(bucket);
-        return this.zkClient.getData(zkPath, (err, data) => {
-            if (err && err.name !== 'NO_NODE') {
-                const errMsg
-                    = 'error fetching bucket notification configuration';
-                this.log.error(errMsg, {
-                    method,
-                    error: err,
-                });
-                return done(err);
-            }
-            if (data) {
-                const { error, result } = safeJsonParse(data);
-                if (error) {
-                    this.log.error('invalid config', { method, zkPath, data });
-                    return done(null, 1);
-                }
-                this.log.debug('fetched bucket notification configuration', {
-                    method,
-                    zkPath,
-                    data: result,
-                });
-                return done(null, result);
-            }
-            return done(null, 0);
-        });
-    }
-
-    _setBucketNotifConfig(bucket, data, done) {
-        const method
-            = 'NotificationQueuePopulator._setBucketNotifConfig';
-        const zkPath = this._getBucketNodeZkPath(bucket);
-        return this.zkClient.setData(zkPath, Buffer.from(data), -1, err => {
-            if (err) {
-                this.log.error('error saving config', { method, zkPath, data });
-                return done(err);
-            }
-            this.log.debug('config saved', { method, zkPath, data });
-            return done();
-        });
-    }
-
-    _createBucketNotifConfigNode(bucket, done) {
-        const method
-            = 'NotificationQueuePopulator._createBucketNotifConfigNode';
-        const zkPath = this._getBucketNodeZkPath(bucket);
-        return this.zkClient.mkdirp(zkPath, err => {
-            if (err) {
-                this.log.error('Could not pre-create path in zookeeper', {
-                    method,
-                    zkPath,
-                    error: err,
-                });
-                return done(err);
-            }
-            return done();
-        });
-    }
-
-    _removeBucketNotifConfigNode(bucket, done) {
-        const method
-            = 'NotificationQueuePopulator._removeBucketNotifConfigNode';
-        const zkPath = this._getBucketNodeZkPath(bucket);
-        return this.zkClient.remove(zkPath, err => {
-            if (err && err.name !== 'NO_NODE') {
-                this.log.error('Could not remove zookeeper node', {
-                    method,
-                    zkPath,
-                    error: err,
-                });
-                return done(err);
-            }
-            if (!err) {
-                const errMsg
-                    = 'removed notification configuration zookeeper node';
-                this.log.info(errMsg, {
-                    method,
-                    bucket,
-                });
-            }
-            return done();
-        });
-    }
-
+    /**
+     * Check if bucket entry based on bucket and key params
+     *
+     * @param {String} bucket - bucket
+     * @param {String} key - object key
+     * @return {boolean} - true if bucket entry
+     */
     _isBucketEntry(bucket, key) {
         return ((bucket.toLowerCase() === 'metastore' && key)
             || key === undefined);
     }
 
+    /**
+     * Get bucket attributes from log entry
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - bucket attributes if available
+     */
     _getBucketAttributes(value) {
         if (value && value.attributes) {
             const { error, result } = safeJsonParse(value.attributes);
@@ -134,6 +57,12 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         return undefined;
     }
 
+    /**
+     * Get bucket name from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {String|undefined} - bucket name if available
+     */
     _getBucketNameFromAttributes(value) {
         const attributes = this._getBucketAttributes(value);
         if (attributes && attributes.name) {
@@ -142,6 +71,12 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         return undefined;
     }
 
+    /**
+     * Get notification configuration from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - notification configuration if available
+     */
     _getBucketNotificationConfiguration(value) {
         const attributes = this._getBucketAttributes(value);
         if (attributes && attributes.notificationConfiguration) {
@@ -150,132 +85,112 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         return undefined;
     }
 
+    /**
+     * Extract base key from versioned key
+     *
+     * @param {String} key - object key
+     * @return {String} - versioned base key
+     */
     _extractVersionedBaseKey(key) {
         return key.split(VID_SEP)[0];
     }
 
     /**
-     * Asynchronous filter
-     * @param {Object} entry - constructor params
-     * @param {function} cb - callback
+     * Process bucket entry from the log
+     *
+     * @param {Object} value - log entry object
      * @return {undefined}
      */
-    filterAsync(entry, cb) {
+    _processBucketEntry(value) {
+        const bucketName = this._getBucketNameFromAttributes(value);
+        const notificationConfiguration
+            = this._getBucketNotificationConfiguration(value);
+        if (notificationConfiguration &&
+            Object.keys(notificationConfiguration).length > 0) {
+            const bnConfig = {
+                bucket: bucketName,
+                notificationConfiguration,
+            };
+            // bucket notification config is available, update node
+            this.bnConfigManager.setConfig(bucketName, bnConfig);
+            return undefined;
+        }
+        // bucket notification conf has been removed, so remove zk node
+        return this.bnConfigManager.removeConfig(bucketName);
+    }
+
+    /**
+     * Process object entry from the log
+     *
+     * @param {String} bucket - bucket
+     * @param {String} key - object key
+     * @param {Object} value - log entry object
+     * @param {String} type - entry type
+     * @return {undefined}
+     */
+    _processObjectEntry(bucket, key, value, type) {
+        let versionId = null;
+        let objectKey = key;
+        if (!isMasterKey(key)) {
+            objectKey = this._extractVersionedBaseKey(key);
+            versionId = value.versionId;
+        }
+        const config = this.bnConfigManager.getConfig(bucket);
+        if (config && Object.keys(config).length > 0) {
+            const { eventMessageProperty }
+                = notifConstants;
+            let eventType
+                = value[eventMessageProperty.eventType];
+            if (eventType === undefined && type === 'del') {
+                eventType = notifConstants.deleteEvent;
+            }
+            const ent = {
+                bucket,
+                key: objectKey,
+                eventType,
+                versionId,
+            };
+            if (configUtil.validateEntry(config, ent)) {
+                const message
+                    = messageUtil.addLogAttributes(value, ent);
+                this.publish(this.notificationConfig.topic,
+                    bucket,
+                    JSON.stringify(message));
+            }
+            return undefined;
+        }
+        // skip if there is no bucket notification configuration
+        return undefined;
+    }
+
+    /**
+     * filter
+     *
+     * @param {Object} entry - log entry
+     * @return {undefined}
+     */
+    filter(entry) {
         const { bucket, key, value, type } = entry;
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
         if (error) {
             this.log.error('could not parse log entry', { value, error });
-            return cb();
+            return undefined;
         }
         // ignore bucket op, mpu's or if the entry has no bucket
         if (!bucket || bucket === usersBucket ||
             (key && key.startsWith(mpuBucketPrefix))) {
-            return cb();
+            return undefined;
         }
         // bucket notification configuration updates
         if (bucket && result && this._isBucketEntry(bucket, key)) {
-            const bucketName = this._getBucketNameFromAttributes(result);
-            const notificationConfiguration
-                = this._getBucketNotificationConfiguration(result);
-            if (notificationConfiguration &&
-                Object.keys(notificationConfiguration).length > 0) {
-                // bucket notification config is available, update node
-                return async.waterfall([
-                    next => this._getBucketNotifConfig(bucketName, next),
-                    (config, next) => {
-                        // config: 0 - node does not exists, create one
-                        if (config === 0) {
-                            return this._createBucketNotifConfigNode(
-                                bucketName, next);
-                        }
-                        return next();
-                    },
-                    next => {
-                        const bnConfig = {
-                            bucket: bucketName,
-                            notificationConfiguration,
-                        };
-                        return this._setBucketNotifConfig(
-                            bucketName, JSON.stringify(bnConfig), next);
-                    },
-                ], error => {
-                    if (error) {
-                        const errMsg = 'error setting bucket notification '
-                            + 'configuration';
-                        this.log.error(errMsg, { error });
-                    }
-                    return cb();
-                });
-            }
-            // bucket notification conf has been removed, so remove zk node
-            return async.waterfall([
-                next => this._getBucketNotifConfig(bucketName, next),
-                (config, next) => {
-                    // config: 0 - node does not exists, continue
-                    if (config === 0) {
-                        return next();
-                    }
-                    return this._removeBucketNotifConfigNode(bucketName, next);
-                },
-            ], error => {
-                if (error) {
-                    const errMsg = 'error removing bucket notification '
-                        + 'configuration';
-                    this.log.err(errMsg, { error });
-                }
-                return cb();
-            });
+            return this._processBucketEntry(result);
         }
         // object entry processing - filter and publish
         if (key && result) {
-            let versionId = null;
-            let objectKey = key;
-            if (!isMasterKey(entry.key)) {
-                objectKey = this._extractVersionedBaseKey(key);
-                versionId = result.versionId;
-            }
-            return async.waterfall([
-                next => this._getBucketNotifConfig(bucket, next),
-                (config, next) => {
-                    if (config && Object.keys(config).length > 0) {
-                        const { eventMessageProperty }
-                            = notifConstants;
-                        let eventType
-                            = result[eventMessageProperty.eventType];
-                        if (eventType === undefined && type === 'del') {
-                            eventType = notifConstants.deleteEvent;
-                        }
-                        const ent = {
-                            bucket,
-                            key: objectKey,
-                            eventType,
-                            versionId,
-                        };
-                        if (configUtil.validateEntry(config, ent)) {
-                            const message
-                                = messageUtil.addLogAttributes(result, ent);
-                            this.publish(this.notificationConfig.topic,
-                                bucket,
-                                JSON.stringify(message));
-                        }
-                        return next();
-                    }
-                    // skip if there is no bucket notification configuration
-                    return next();
-                },
-            ], error => {
-                if (error) {
-                    this.log.err('error processing entry', {
-                        bucket,
-                        key: objectKey,
-                        error,
-                    });
-                }
-                return cb();
-            });
+            return this._processObjectEntry(bucket, key, result, type);
         }
-        return cb();
+        return undefined;
     }
 }
 

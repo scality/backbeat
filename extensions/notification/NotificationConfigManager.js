@@ -29,7 +29,7 @@ class NotificationConfigManager {
     constructor(params) {
         joi.attempt(params, paramsJoi);
         this._zkClient = params.zkClient;
-        this._parentNode = params.parentNode || '';
+        this._parentNode = params.parentNode || constants.zkConfigParentNode;
         this.log = params.logger;
         this._configs = new Map();
         this._concurrency = constants.configManager.concurrency;
