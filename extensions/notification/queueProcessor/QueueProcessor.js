@@ -9,11 +9,9 @@ const NotificationDestination = require('../destination');
 const zookeeper = require('../../../lib/clients/zookeeper');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
-const safeJsonParse = require('../utils/safeJsonParse');
-const notifConstants = require('../constants');
+const NotificationConfigManager = require('../NotificationConfigManager');
 
 class QueueProcessor extends EventEmitter {
-
     /**
      * Create a queue processor object to activate notification from a
      * kafka topic dedicated to dispatch messages to a destination/target.
@@ -46,6 +44,7 @@ class QueueProcessor extends EventEmitter {
         this.destinationConfig = destinationConfig;
         this.destinationId = destinationId;
         this.zkClient = null;
+        this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;
 
@@ -57,8 +56,7 @@ class QueueProcessor extends EventEmitter {
         const zookeeperUrl =
             `${this.zkConfig.connectionString}${populatorZkPath}`;
         this.logger.info('opening zookeeper connection for reading ' +
-            'bucket notification configuration',
-            { zookeeperUrl });
+            'bucket notification configuration', { zookeeperUrl });
         this.zkClient = zookeeper.createClient(zookeeperUrl, {
             autoCreateNamespace: this.zkConfig.autoCreateNamespace,
         });
@@ -71,6 +69,18 @@ class QueueProcessor extends EventEmitter {
         });
     }
 
+    _setupNotificationConfigManager(done) {
+        try {
+            this.bnConfigManager = new NotificationConfigManager({
+                zkClient: this.zkClient,
+                logger: this.logger,
+            });
+            return this.bnConfigManager.init(done);
+        } catch (err) {
+            return done(err);
+        }
+    }
+
     _setupDestination(destinationType, done) {
         const Destination = NotificationDestination[destinationType];
         const params = {
@@ -79,45 +89,6 @@ class QueueProcessor extends EventEmitter {
         };
         this._destination = new Destination(params);
         done();
-    }
-
-    _getBucketNodeZkPath(bucket) {
-        const { zkConfigParentNode } = notifConstants;
-        return `/${zkConfigParentNode}/${bucket}`;
-    }
-
-    _getResourceIdFromArn(arn) {
-        return arn.split(/[\s,]+/).pop();
-    }
-
-    _getBucketNotifConfig(bucket, done) {
-        const method
-            = 'notification.QueueProcessor._getBucketNotifConfig';
-        const zkPath = this._getBucketNodeZkPath(bucket);
-        return this.zkClient.getData(zkPath, (err, data) => {
-            if (err && err.name !== 'NO_NODE') {
-                this.logger.error('error fetching bucket notification config', {
-                    method,
-                    error: err,
-                });
-                return done(err);
-            }
-            if (data) {
-                const { error, result } = safeJsonParse(data);
-                if (error) {
-                    this.logger.error('invalid config',
-                        { method, zkPath, data });
-                    return done(null, 1);
-                }
-                this.logger.debug('fetched bucket notification config', {
-                    method,
-                    zkPath,
-                    data: result,
-                });
-                return done(null, result);
-            }
-            return done(null, 0);
-        });
     }
 
     /**
@@ -135,6 +106,7 @@ class QueueProcessor extends EventEmitter {
     start(options) {
         async.series([
             next => this._setupZookeeper(next),
+            next => this._setupNotificationConfigManager(next),
             next => this._setupDestination(this.destinationConfig.type, next),
             next => this._destination.init(() => {
                 if (options && options.disableConsumer) {
@@ -196,44 +168,42 @@ class QueueProcessor extends EventEmitter {
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
         const { bucket, key } = sourceEntry;
-        return async.waterfall([
-            next => this._getBucketNotifConfig(bucket, next),
-            (config, next) => {
-                if (config && Object.keys(config).length > 0) {
-                    const notifConfig = config.notificationConfiguration;
-                    const destBnConf = notifConfig.queueConfig.find(
-                        c => c.queueArn.split(':').pop()
-                            === this.destinationId);
-                    if (!destBnConf) {
-                        // skip, if there is no config for the current
-                        // destination resource
-                        return next();
-                    }
-                    // pass only destination resource specific config to
-                    // validate entry
-                    const bnConfig = {
-                        bucket,
-                        notificationConfiguration: {
-                            queueConfig: [destBnConf],
-                        },
-                    };
-                    if (configUtil.validateEntry(bnConfig, sourceEntry)) {
-                        // add notification configuration id to the message
-                        sourceEntry.configurationId = destBnConf.id;
-                        const message
-                            = messageUtil.transformToSpec(sourceEntry);
-                        const msg = {
-                            key: this.destinationId,
-                            message,
-                        };
-                        return this._destination.send([msg], next);
-                    }
-                    return next();
+        try {
+            const config = this.bnConfigManager.getConfig(bucket);
+            if (config && Object.keys(config).length > 0) {
+                const notifConfig = config.notificationConfiguration;
+                const destBnConf = notifConfig.queueConfig.find(
+                    c => c.queueArn.split(':').pop()
+                        === this.destinationId);
+                if (!destBnConf) {
+                    // skip, if there is no config for the current
+                    // destination resource
+                    return done();
                 }
-                // skip if there is no bucket notification configuration
-                return next();
-            },
-        ], error => {
+                // pass only destination resource specific config to
+                // validate entry
+                const bnConfig = {
+                    bucket,
+                    notificationConfiguration: {
+                        queueConfig: [destBnConf],
+                    },
+                };
+                if (configUtil.validateEntry(bnConfig, sourceEntry)) {
+                    // add notification configuration id to the message
+                    sourceEntry.configurationId = destBnConf.id;
+                    const message
+                        = messageUtil.transformToSpec(sourceEntry);
+                    const msg = {
+                        key: this.destinationId,
+                        message,
+                    };
+                    return this._destination.send([msg], done);
+                }
+                return done();
+            }
+            // skip if there is no bucket notification configuration
+            return done();
+        } catch (error) {
             if (error) {
                 this.logger.err('error processing entry', {
                     bucket,
@@ -242,7 +212,7 @@ class QueueProcessor extends EventEmitter {
                 });
             }
             return done();
-        });
+        }
     }
 }
 
