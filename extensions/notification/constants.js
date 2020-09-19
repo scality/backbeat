@@ -28,6 +28,7 @@ const constants = {
         concurrency: 50,
         maxListeners: 0,
     },
+    bucketMetastore: 'metastore',
 };
 
 module.exports = constants;

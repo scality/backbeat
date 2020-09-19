@@ -36,7 +36,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {boolean} - true if bucket entry
      */
     _isBucketEntry(bucket, key) {
-        return ((bucket.toLowerCase() === 'metastore' && key)
+        return ((bucket.toLowerCase() === notifConstants.bucketMetastore && key)
             || key === undefined);
     }
 
