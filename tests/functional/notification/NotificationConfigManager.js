@@ -36,9 +36,8 @@ function populateTestConfigs(zkClient, numberOfConfigs, cb) {
         const strVal = JSON.stringify(val);
         const node = `/${zkConfigParentNode}/${bucket}`;
         async.series([
-            nxt => zkClient.mkdirp(node, nxt),
-            // nxt => zkClient.setData(node, strVal, nxt),
-            nxt => zkClient.setData(node, Buffer.from(strVal), nxt),
+            next => zkClient.mkdirp(node, next),
+            next => zkClient.setData(node, Buffer.from(strVal), next),
         ], done);
     }, cb);
 }
@@ -50,10 +49,10 @@ function listBuckets(zkClient, cb) {
 
 function deleteTestConfigs(zkClient, cb) {
     const node = `/${zkConfigParentNode}`;
-    listBuckets(zkClient, (e, children) => {
-        if (e) {
-            assert.ifError(e);
-            cb(e);
+    listBuckets(zkClient, (error, children) => {
+        if (error) {
+            assert.ifError(error);
+            cb(error);
         } else {
             async.eachLimit(children, concurrency, (child, next) => {
                 const childNode = `${node}/${child}`;

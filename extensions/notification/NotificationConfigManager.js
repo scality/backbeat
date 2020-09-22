@@ -34,10 +34,10 @@ class NotificationConfigManager {
         this._configs = new Map();
         this._concurrency = constants.configManager.concurrency;
         this._emitter = new EventEmitter();
-        this._setupEmitterListeners();
+        this._setupEventListeners();
     }
 
-    _emitterErrorListener(error, listener) {
+    _errorListener(error, listener) {
         this.log.error('BucketNotifConfigManager.emitter.error', {
             listener,
             error,
@@ -102,10 +102,10 @@ class NotificationConfigManager {
         });
     }
 
-    _setupEmitterListeners() {
+    _setupEventListeners() {
         this._emitter.setMaxListeners(constants.configManager.maxListeners);
         this._emitter
-            .on('error', error => this._emitterErrorListener(error))
+            .on('error', error => this._errorListener(error))
             .on('setConfig',
                 (bucket, config) => this._setConfigListener(bucket, config))
             .on('getConfig', bucket => this._getConfigListener(bucket))
@@ -292,13 +292,13 @@ class NotificationConfigManager {
         async.eachSeries(buckets, (bucket, next) => {
             this._getBucketNotifConfig(bucket, (err, data) => {
                 if (err) {
-                    next(err);
+                    return next(err);
                 }
                 const configObject = this._getConfigDataFromBuffer(data);
                 if (configObject) {
                     this._configs.set(bucket, configObject);
                 }
-                next();
+                return next();
             });
         }, err => this._callbackHandler(cb, err));
     }
@@ -318,7 +318,7 @@ class NotificationConfigManager {
      *
      * @param {String} bucket - bucket
      * @param {Object} config - bucket notification configuration
-     * @return {boolean|undefined} - true if removed or undefined
+     * @return {boolean} - true if set
      */
     setConfig(bucket, config) {
         try {
@@ -339,7 +339,7 @@ class NotificationConfigManager {
                 bucket,
                 config,
             });
-            return undefined;
+            return false;
         }
     }
 
@@ -348,7 +348,7 @@ class NotificationConfigManager {
      *
      * @param {String} bucket - bucket
      * @param {boolean} removeNode - remove the zookeeper node (optional)
-     * @return {boolean|undefined} - true if removed or undefined
+     * @return {boolean} - true if removed
      */
     removeConfig(bucket, removeNode = true) {
         try {
@@ -370,7 +370,7 @@ class NotificationConfigManager {
                 error: err,
                 bucket,
             });
-            return undefined;
+            return false;
         }
     }
 
@@ -390,11 +390,11 @@ class NotificationConfigManager {
      * @return {undefined}
      */
     init(cb) {
-        this._listBucketsWithConfig((err, buckets) => {
+        return this._listBucketsWithConfig((err, buckets) => {
             if (err) {
-                cb(err);
+                return cb(err);
             }
-            this._updateLocalStore(buckets, cb);
+            return this._updateLocalStore(buckets, cb);
         });
     }
 }

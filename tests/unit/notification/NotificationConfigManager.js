@@ -36,8 +36,8 @@ function populateTestConfigs(zkClient, numberOfConfigs, cb) {
         const strVal = JSON.stringify(val);
         const node = `/${zkConfigParentNode}/${bucket}`;
         async.series([
-            nxt => zkClient.mkdirp(node, nxt),
-            nxt => zkClient.setData(node, strVal, nxt),
+            next => zkClient.mkdirp(node, next),
+            next => zkClient.setData(node, strVal, next),
         ], done);
     }, cb);
 }
@@ -49,10 +49,10 @@ function listBuckets(zkClient, cb) {
 
 function deleteTestConfigs(zkClient, cb) {
     const node = `/${zkConfigParentNode}`;
-    listBuckets(zkClient, (e, children) => {
-        if (e) {
-            assert.ifError(e);
-            cb(e);
+    listBuckets(zkClient, (error, children) => {
+        if (error) {
+            assert.ifError(error);
+            cb(error);
         } else {
             async.eachLimit(children, concurrency, (child, next) => {
                 const childNode = `${node}/${child}`;
@@ -117,7 +117,7 @@ describe('NotificationConfigManager', () => {
         });
     });
 
-    it('should return undefined for an invalid bucket', () => {
+    it('should return undefined for a non-existing bucket', () => {
         const manager = new NotificationConfigManager(params);
         managerInit(manager, () => {
             const bucket = 'bucket100';
@@ -158,9 +158,11 @@ describe('NotificationConfigManager', () => {
         const manager = new NotificationConfigManager(params);
         managerInit(manager, () => {
             const bucket = 'bucket1';
-            const result = manager.removeConfig(bucket);
+            let result = manager.removeConfig(bucket);
             assert(result);
             setTimeout(() => {
+                result = manager.getConfig(bucket);
+                assert.strictEqual(result, undefined);
                 checkCount(manager, done);
             }, timeoutMs);
         });
@@ -171,7 +173,7 @@ describe('NotificationConfigManager', () => {
         async.series([
             next => managerInit(manager, next),
             next => deleteTestConfigs(zkClient, next),
-            next => setTimeout(next, 100),
+            next => setTimeout(next, timeoutMs),
             next => checkCount(manager, next),
         ], done);
     });
