@@ -117,6 +117,11 @@ stages:
           env:
             CI: "true"
             BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
+          name: run backbeat notification feature tests
+          command: yarn run ft_test:notification
+          env:
+            CI: "true"
 
   docker-build:
     worker: &image_builder
@@ -153,3 +158,4 @@ stages:
           command: |
             docker push %(prop:docker_tag_revision)s
             docker push %(prop:docker_tag_latest)s
+
