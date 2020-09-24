@@ -14,7 +14,14 @@
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
+<<<<<<< HEAD
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
+||||||| merged common ancestors
+    "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
+=======
+    "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",
+    "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
+>>>>>>> origin/improvement/S3C-3331-sync-zookeeper-calls
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
@@ -57,9 +64,18 @@
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
+<<<<<<< HEAD
     "vaultclient": "github:scality/vaultclient#767c58d",
     "werelogs": "scality/werelogs#22bca9c",
     "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
+||||||| merged common ancestors
+    "vaultclient": "scality/vaultclient#478710c",
+    "werelogs": "scality/werelogs#0a4c576"
+=======
+    "vaultclient": "scality/vaultclient#478710c",
+    "werelogs": "scality/werelogs#0a4c576",
+    "zookeeper-mock": "^1.0.0"
+>>>>>>> origin/improvement/S3C-3331-sync-zookeeper-calls
   },
   "devDependencies": {
     "@zenko/cloudserver": "scality/cloudserver#bac9a10",
