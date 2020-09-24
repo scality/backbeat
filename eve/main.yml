@@ -63,3 +63,9 @@ stages:
           command: yarn run ft_test:replication
           env:
             CI: "true"
+      - ShellCommand:
+          name: run backbeat notification feature tests
+          command: yarn run ft_test:notification
+          env:
+            CI: "true"
+
