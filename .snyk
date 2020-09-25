@@ -1,0 +1,117 @@
+# Snyk (https://snyk.io) policy file, patches or ignores known vulnerabilities.
+version: v1.19.0
+ignore: {}
+# patches apply the minimum changes required to fix a vulnerability
+patch:
+  'npm:debug:20170905':
+    - arsenal > bson > arsenal > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > engine.io > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-adapter > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > engine.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > engine.io > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-adapter > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > engine.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > engine.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > engine.io-client > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-adapter > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-adapter > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > socket.io-parser > debug:
+        patched: '2020-09-25T07:30:44.619Z'
+  SNYK-JS-LODASH-567746:
+    - arsenal > bson > arsenal > async > lodash:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > async > lodash:
+        patched: '2020-09-25T07:30:44.619Z'
+  'npm:minimatch:20160620':
+    - arsenal > bson > arsenal > simple-glob > glob > minimatch:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > simple-glob > glob > minimatch:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > simple-glob > minimatch:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > simple-glob > minimatch:
+        patched: '2020-09-25T07:30:44.619Z'
+  'npm:ms:20170412':
+    - arsenal > bson > arsenal > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > engine.io > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-adapter > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > engine.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > engine.io > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-adapter > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > engine.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > engine.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > engine.io-client > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io-client > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-adapter > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - arsenal > bson > arsenal > socket.io > socket.io-client > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io-client > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-adapter > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
+    - bucketclient > arsenal > bson > arsenal > socket.io > socket.io-client > socket.io-parser > debug > ms:
+        patched: '2020-09-25T07:30:44.619Z'
