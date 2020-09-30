@@ -153,6 +153,13 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             if (configUtil.validateEntry(config, ent)) {
                 const message
                     = messageUtil.addLogAttributes(value, ent);
+                this.log.info('publishing message', {
+                    method: 'NotificationQueuePopulator._processObjectEntry',
+                    bucket,
+                    key: message.key,
+                    eventType,
+                    eventTime: message.dateTime,
+                });
                 this.publish(this.notificationConfig.topic,
                     bucket,
                     JSON.stringify(message));

@@ -197,6 +197,16 @@ class QueueProcessor extends EventEmitter {
                         key: this.destinationId,
                         message,
                     };
+                    const msgDesc = 'sending message to external destination';
+                    const eventRecord = message.Records[0];
+                    this.logger.info(msgDesc, {
+                        method: 'QueueProcessor.processKafkaEntry',
+                        bucket,
+                        key,
+                        eventType: eventRecord.eventName,
+                        eventTime: eventRecord.eventTime,
+                        destination: this.destinationId,
+                    });
                     return this._destination.send([msg], done);
                 }
                 return done();

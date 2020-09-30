@@ -60,9 +60,12 @@ class KafkaNotificationDestination extends NotificationDestination {
      * @return {undefined}
      */
     send(messages, done) {
-        this._notificationProducer.send(messages, err => {
-            if (err) {
-                this._log.trace('error publishing message');
+        this._notificationProducer.send(messages, error => {
+            if (error) {
+                this._log.error('error publishing message', {
+                    method: 'KafkaNotificationDestination.send',
+                    error,
+                });
             }
             done();
         });
