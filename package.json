@@ -69,7 +69,7 @@
     "eslint-config-scality": "scality/Guidelines#28e73a2",
     "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
-    "mocha": "^3.3.0",
+    "mocha": "^8.2.0",
     "zookeeper-mock": "^1.0.0"
   }
 }
