@@ -210,6 +210,34 @@ class NotificationConfigManager {
         });
     }
 
+    _checkConfigurationParentNode(cb) {
+        const method
+            = 'BucketNotificationConfigManager._checkConfigurationParentNode';
+        const zkPath = `/${this._parentNode}`;
+        return async.waterfall([
+            next => this._checkNodeExists(zkPath, next),
+            (exists, next) => {
+                if (!exists) {
+                    this.log.info('parent configuration zookeeper node does ' +
+                        'not exist', { method, zkPath });
+                    return this._zkClient.mkdirp(zkPath, err => next(err));
+                }
+                this.log.info('parent configuration zookeeper node exists',
+                    { method, zkPath });
+                return next();
+            },
+        ], err => {
+            if (err) {
+                const errMsg
+                    = 'error checking configuration zookeeper parent node';
+                this.log.error(errMsg, { method, zkPath });
+            }
+            this.log.info('parent configuration zookeeper checked/added',
+                { method, zkPath });
+            return this._callbackHandler(cb);
+        });
+    }
+
     _createBucketNotifConfigNode(bucket, cb) {
         const method
             = 'BucketNotificationConfigManager._createBucketNotifConfigNode';
@@ -390,12 +418,14 @@ class NotificationConfigManager {
      * @return {undefined}
      */
     init(cb) {
-        return this._listBucketsWithConfig((err, buckets) => {
-            if (err) {
-                return cb(err);
-            }
-            return this._updateLocalStore(buckets, cb);
-        });
+        return this._checkConfigurationParentNode(() => {
+            return this._listBucketsWithConfig((err, buckets) => {
+                if (err) {
+                    return cb(err);
+                }
+                return this._updateLocalStore(buckets, cb);
+            });
+        })
     }
 }
 
