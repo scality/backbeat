@@ -59,6 +59,8 @@ function generateKafkaAuthObject(auth) {
         authObject['security.protocol'] = protocol;
         authObject['sasl.kerberos.service.name'] = serviceName;
         authObject['sasl.kerberos.principal'] = principal;
+        // optional, sasl protocols will have GSSAPI as their default mechanism
+        authObject['sasl.mechanisms'] = 'GSSAPI';
         const keytabPath = getAuthFilePath(keytab);
         if (keytabPath) {
             authObject['sasl.kerberos.keytab'] = keytabPath;
