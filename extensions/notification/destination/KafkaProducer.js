@@ -67,7 +67,14 @@ class KafkaProducer extends EventEmitter {
             'request.timeout.ms': ACK_TIMEOUT,
         });
         this._ready = false;
-        this._producer.connect();
+        this._producer.connect({}, error => {
+            if (error) {
+                this._log.info('error connecting to broker', {
+                    error,
+                    method: 'KafkaProducer.constructor',
+                });
+            }
+        });
         this._producer.on('ready', () => {
             this._ready = true;
             this.emit('ready');
