@@ -313,7 +313,7 @@ are-we-there-yet@~1.1.2:
     delegates "^1.0.0"
     readable-stream "^2.0.6"
 
-argparse@^1.0.7:
+argparse@^1.0.7, argparse@~1.0.2:
   version "1.0.10"
   resolved "https://registry.yarnpkg.com/argparse/-/argparse-1.0.10.tgz#bcd6791ea5ae09725e17e5ad988134cd40b3d911"
   integrity sha512-o5Roy6tNG4SL/FOkCAN6RzjiakZS25RLYFrcMttJqbdd8BWrnA+fGz57iN5Pb06pvBGvl5gQ0B48dJlslXvoTg==
@@ -337,6 +337,41 @@ arraybuffer.slice@~0.0.7:
   version "0.0.7"
   resolved "https://registry.yarnpkg.com/arraybuffer.slice/-/arraybuffer.slice-0.0.7.tgz#3bbc4275dd584cc1b10809b89d4e8b63a69e7675"
   integrity sha512-wGUIVQXuehL5TCqQun8OW81jGzAWycqzFF8lFp+GOM5BXLYj3bKNsYC4daB7n6XjCqxQA/qgTJ+8ANR3acjrog==
+
+"arsenal@github:scality/Arsenal#4bba3b8":
+  version "8.2.1"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/4bba3b817cc31c04ba8be80857fec8fd96964e22"
+  dependencies:
+    "@hapi/joi" "^15.1.0"
+    JSONStream "^1.0.0"
+    ajv "6.12.2"
+    async "~2.6.1"
+    aws-sdk "2.80.0"
+    azure-storage "^2.1.0"
+    backo "^1.1.0"
+    bson "4.0.0"
+    debug "~4.1.0"
+    diskusage "^1.1.1"
+    fcntl "github:scality/node-fcntl"
+    hdclient scality/hdclient#5145e04e5ed33e85106765b1caa90cd245ef482b
+    https-proxy-agent "^2.2.0"
+    ioredis "4.9.5"
+    ipaddr.js "1.9.1"
+    level "~5.0.1"
+    level-sublevel "~6.6.5"
+    mongodb "^3.0.1"
+    node-forge "^0.7.1"
+    prom-client "10.2.3"
+    simple-glob "^0.2.0"
+    socket.io "~2.3.0"
+    socket.io-client "~2.3.0"
+    sproxydclient "github:scality/sproxydclient#30e7115"
+    utf8 "3.0.0"
+    uuid "^3.0.1"
+    werelogs scality/werelogs#0ff7ec82
+    xml2js "~0.4.23"
+  optionalDependencies:
+    ioctl "2.0.1"
 
 "arsenal@github:scality/Arsenal#5de8571":
   version "8.1.4"
@@ -373,44 +408,34 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "2.0.1"
 
-"arsenal@github:scality/Arsenal#b25867f9":
-  version "8.2.1"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/b25867f9c2d6a1f06c5cfc01f573ec130f78288e"
+arsenal@scality/Arsenal#32c895b:
+  version "7.4.3"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/32c895b21a31eb67dacc6e76d7f58b8142bf3ad1"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
-    ajv "6.12.2"
-    async "~2.6.1"
-    aws-sdk "2.80.0"
-    azure-storage "^2.1.0"
-    backo "^1.1.0"
-    bson "4.0.0"
-    debug "~4.1.0"
+    ajv "4.10.0"
+    async "~2.1.5"
+    debug "~2.3.3"
     diskusage "^1.1.1"
-    fcntl "github:scality/node-fcntl"
-    hdclient scality/hdclient#5145e04e5ed33e85106765b1caa90cd245ef482b
-    https-proxy-agent "^2.2.0"
     ioredis "4.9.5"
-    ipaddr.js "1.9.1"
+    ipaddr.js "1.2.0"
     level "~5.0.1"
     level-sublevel "~6.6.5"
-    mongodb "^3.0.1"
     node-forge "^0.7.1"
-    prom-client "10.2.3"
-    simple-glob "^0.2.0"
-    socket.io "~2.3.0"
-    socket.io-client "~2.3.0"
-    sproxydclient "github:scality/sproxydclient#30e7115"
-    utf8 "3.0.0"
+    simple-glob "^0.1"
+    socket.io "~1.7.3"
+    socket.io-client "~1.7.3"
+    utf8 "2.1.2"
     uuid "^3.0.1"
     werelogs scality/werelogs#0ff7ec82
-    xml2js "~0.4.23"
+    xml2js "~0.4.16"
   optionalDependencies:
-    ioctl "2.0.1"
+    ioctl "2.0.0"
 
-arsenal@scality/Arsenal#9f2e74e:
+arsenal@scality/Arsenal#b03f5b8:
   version "7.4.3"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/9f2e74ec6972527c2a9ca6ecb4155618f123fc19"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/b03f5b80acd6acaaf8dd2d49cd955e6b95279ab3"
   dependencies:
     JSONStream "^1.0.0"
     ajv "4.10.0"
@@ -780,9 +805,6 @@ bson@4.0.0:
   dependencies:
     buffer "^5.1.0"
     long "^4.0.0"
-    arsenal scality/Arsenal#9f2e74e
-    werelogs scality/werelogs#4e0d97c
-    yarn "^1.17.3"
 
 bson@^1.1.1:
   version "1.1.1"
@@ -980,10 +1002,12 @@ combined-stream@^1.0.6, combined-stream@~1.0.6:
   dependencies:
     delayed-stream "~1.0.0"
 
-commander@2.19.0:
-  version "2.19.0"
-  resolved "https://registry.yarnpkg.com/commander/-/commander-2.19.0.tgz#f6198aa84e5b83c46054b94ddedbfed5ee9ff12a"
-  integrity sha512-6tvAOO+D6OENvRAh524Dh9jcfKTYDQAqvqezbCW82xj5X0pSrcpxtvRKHLG0yBY6SD7PSDrJaj+0AiOcKVd1Xg==
+commander@1.3.2:
+  version "1.3.2"
+  resolved "https://registry.yarnpkg.com/commander/-/commander-1.3.2.tgz#8a8f30ec670a6fdd64af52f1914b907d79ead5b5"
+  integrity sha1-io8w7GcKb91kr1LxkUuQfXnq1bU=
+  dependencies:
+    keypress "0.1.x"
 
 commander@2.20.0, commander@^2.11.0, commander@^2.9.0:
   version "2.20.0"
@@ -1501,8 +1525,8 @@ eslint-config-scality@scality/Guidelines#28e73a2:
   version "8.1.0"
   resolved "https://codeload.github.com/scality/Guidelines/tar.gz/28e73a21752aa52a314901f0926683b46cee7fe2"
   dependencies:
-    commander "2.19.0"
-    markdownlint "0.11.0"
+    commander "1.3.2"
+    markdownlint "0.0.8"
 
 eslint-import-resolver-node@^0.3.2:
   version "0.3.2"
@@ -2535,6 +2559,11 @@ kefir@^3.7.3:
   dependencies:
     symbol-observable "1.0.4"
 
+keypress@0.1.x:
+  version "0.1.0"
+  resolved "https://registry.yarnpkg.com/keypress/-/keypress-0.1.0.tgz#4a3188d4291b66b4f65edb99f806aa9ae293592a"
+  integrity sha1-SjGI1CkbZrT2XtuZ+AaqmuKTWSo=
+
 level-codec@^9.0.0:
   version "9.0.1"
   resolved "https://registry.yarnpkg.com/level-codec/-/level-codec-9.0.1.tgz#042f4aa85e56d4328ace368c950811ba802b7247"
@@ -2651,10 +2680,10 @@ levn@^0.3.0, levn@~0.3.0:
     prelude-ls "~1.1.2"
     type-check "~0.3.2"
 
-linkify-it@^2.0.0:
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/linkify-it/-/linkify-it-2.2.0.tgz#e3b54697e78bf915c70a38acd78fd09e0058b1cf"
-  integrity sha512-GnAl/knGn+i1U/wjBz3akz2stz+HrHLsxMwHQGofCDfPvlf+gDKN58UtfmUquTY4/MXeE2x7k19KQmeoZi94Iw==
+linkify-it@~1.2.0:
+  version "1.2.4"
+  resolved "https://registry.yarnpkg.com/linkify-it/-/linkify-it-1.2.4.tgz#0773526c317c8fd13bd534ee1d180ff88abf881a"
+  integrity sha1-B3NSbDF8j9E71TTuHRgP+Iq/iBo=
   dependencies:
     uc.micro "^1.0.1"
 
@@ -2843,23 +2872,23 @@ ltgt@~2.1.1:
   resolved "https://registry.yarnpkg.com/ltgt/-/ltgt-2.1.3.tgz#10851a06d9964b971178441c23c9e52698eece34"
   integrity sha1-EIUaBtmWS5cReEQcI8nlJpjuzjQ=
 
-markdown-it@8.4.2:
-  version "8.4.2"
-  resolved "https://registry.yarnpkg.com/markdown-it/-/markdown-it-8.4.2.tgz#386f98998dc15a37722aa7722084f4020bdd9b54"
-  integrity sha512-GcRz3AWTqSUphY3vsUqQSFMbgR38a4Lh3GWlHRh/7MRwz8mcu9n2IO7HOh+bXHrR9kOPDl5RNCaEsrneb+xhHQ==
+markdown-it@^4.4.0:
+  version "4.4.0"
+  resolved "https://registry.yarnpkg.com/markdown-it/-/markdown-it-4.4.0.tgz#3df373dbea587a9a7fef3e56311b68908f75c414"
+  integrity sha1-PfNz2+pYepp/7z5WMRtokI91xBQ=
   dependencies:
-    argparse "^1.0.7"
+    argparse "~1.0.2"
     entities "~1.1.1"
-    linkify-it "^2.0.0"
-    mdurl "^1.0.1"
-    uc.micro "^1.0.5"
+    linkify-it "~1.2.0"
+    mdurl "~1.0.0"
+    uc.micro "^1.0.0"
 
-markdownlint@0.11.0:
-  version "0.11.0"
-  resolved "https://registry.yarnpkg.com/markdownlint/-/markdownlint-0.11.0.tgz#3858bbdbc1ab78abf0c098d841c72b63dd3206a0"
-  integrity sha512-wE5WdKD6zW2DQaPQ5TFBTXh5j76DnWd/IFffnDQgHmi6Y61DJXBDfLftZ/suJHuv6cwPjM6gKw2GaRLJMOR+Mg==
+markdownlint@0.0.8:
+  version "0.0.8"
+  resolved "https://registry.yarnpkg.com/markdownlint/-/markdownlint-0.0.8.tgz#ed2a0fc6cba3aae6af09ae08bdbfa4de178a4677"
+  integrity sha1-7SoPxsujquavCa4Ivb+k3heKRnc=
   dependencies:
-    markdown-it "8.4.2"
+    markdown-it "^4.4.0"
 
 md5.js@1.3.4:
   version "1.3.4"
@@ -2869,7 +2898,7 @@ md5.js@1.3.4:
     hash-base "^3.0.0"
     inherits "^2.0.1"
 
-mdurl@^1.0.1:
+mdurl@~1.0.0:
   version "1.0.1"
   resolved "https://registry.yarnpkg.com/mdurl/-/mdurl-1.0.1.tgz#fe85b2ec75a59037f2adfec100fd6c601761152e"
   integrity sha1-/oWy7HWlkDfyrf7BAP1sYBdhFS4=
@@ -4499,7 +4528,7 @@ typewiselite@~1.0.0:
   resolved "https://registry.yarnpkg.com/typewiselite/-/typewiselite-1.0.0.tgz#c8882fa1bb1092c06005a97f34ef5c8508e3664e"
   integrity sha1-yIgvobsQksBgBal/NO9chQjjZk4=
 
-uc.micro@^1.0.1, uc.micro@^1.0.5:
+uc.micro@^1.0.0, uc.micro@^1.0.1:
   version "1.0.6"
   resolved "https://registry.yarnpkg.com/uc.micro/-/uc.micro-1.0.6.tgz#9c411a802a409a91fc6cf74081baba34b24499ac"
   integrity sha512-8Y75pvTYkLJW2hWQHXxoqRgV7qb9B+9vFEtidML+7koHUFapnVJAZ6cKs+Qjz5Aw3aZWHMC6u0wJE3At+nSGwA==
@@ -4625,11 +4654,11 @@ validator@~9.4.1:
     werelogs scality/werelogs#4e0d97c
     xml2js "0.4.19"
 
-vaultclient@scality/vaultclient#cc9ba34:
-  version "7.4.0"
-  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/cc9ba34b9abf3aac8324e912671547f5fc31baf4"
+vaultclient@scality/vaultclient#478710c:
+  version "7.5.1"
+  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/478710cbe2c479f35ba3f302f73b2932ec0716d9"
   dependencies:
-    arsenal scality/Arsenal#9f2e74e
+    arsenal scality/Arsenal#b03f5b8
     commander "2.20.0"
     werelogs scality/werelogs#4e0d97c
     xml2js "0.4.19"
@@ -4642,6 +4671,12 @@ verror@1.10.0:
     assert-plus "^1.0.0"
     core-util-is "1.0.2"
     extsprintf "^1.2.0"
+
+werelogs@scality/werelogs#0a4c576:
+  version "7.4.1"
+  resolved "https://codeload.github.com/scality/werelogs/tar.gz/0a4c57658f9cf56838628f3a328cdee5f5b5adc3"
+  dependencies:
+    safe-json-stringify "1.0.3"
 
 werelogs@scality/werelogs#0ff7ec82:
   version "7.4.0"
