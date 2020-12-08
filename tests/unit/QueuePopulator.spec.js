@@ -32,10 +32,7 @@ class MockLogReader extends LogReader {
             ];
         }
         const processedAll = (this.id === 'raft_2');
-        process.nextTick(() => done(null, {
-            queuedEntries: {},
-            processedAll,
-        }));
+        process.nextTick(() => done(null, processedAll));
     }
 }
 
