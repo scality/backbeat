@@ -300,6 +300,7 @@ class ReplicateObject extends BackbeatTask {
         };
         return this.backbeatSource.getMetadata(params, (err, blob) => {
             if (err) {
+                err.origin = 'source';
                 log.error('error getting metadata blob from S3', {
                     method: 'ReplicateObject._refreshSourceEntry',
                     error: err,
