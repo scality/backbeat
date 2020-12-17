@@ -12,7 +12,7 @@ const multipleMessages = [
 ];
 const oneMessage = [{ key: 'foo', message: 'hello world' }];
 const oneBigMessage = [{ key: 'large-foo',
-                         message: new Buffer(3000000).fill('x').toString() }];
+                         message: Buffer.alloc(3000000).fill('x').toString() }];
 
 
 [
