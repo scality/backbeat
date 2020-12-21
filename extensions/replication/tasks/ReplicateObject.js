@@ -355,6 +355,7 @@ class ReplicateObject extends BackbeatTask {
             if (!sourceReqAborted) {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
+                err.retryable = true;
                 log.error('an error occurred when streaming data from S3',
                           { method: 'ReplicateObject._getAndPutPartOnce',
                             entry: destEntry.getLogInfo(),
