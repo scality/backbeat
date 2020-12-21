@@ -1101,6 +1101,36 @@ describe('queue processor functional tests with mocking', () => {
                     done();
                 });
             });
+
+            it('should retry on error streaming from source S3 on getObject', done => {
+                s3mock.setParam('routes.source.s3.getObject.handler', (req, url, query, res) => {
+                    const partNumber = Number.parseInt(query.partNumber, 10);
+                    const resBody = s3mock.getParam('partsContents')[partNumber - 1];
+                    assert.strictEqual(query.versionId,
+                                       s3mock.getParam('versionIdEncoded'));
+
+                    res.setHeader('content-type', 'application/octet-stream');
+                    res.setHeader('content-length', resBody.length);
+                    res.writeHead(200);
+                    res.write(resBody.slice(0, -1));
+                    setTimeout(() => res.socket.destroy(), 1000);
+                    // restore original GET handler so that the next retry will succeed
+                    s3mock.resetParam('routes.source.s3.getObject.handler');
+                }, { _static: true });
+
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(s3mock.hasPutTargetData);
+                            assert(s3mock.hasPutTargetMd);
+                            done();
+                        }),
+                ], done);
+            });
         });
 
         describe('target Vault errors', () => {
