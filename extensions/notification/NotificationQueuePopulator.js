@@ -129,11 +129,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     _processObjectEntry(bucket, key, value, type) {
-        let versionId = null;
-        let objectKey = key;
+        const versionId = value.versionId || null;
         if (!isMasterKey(key)) {
-            objectKey = this._extractVersionedBaseKey(key);
-            versionId = value.versionId;
+            return undefined;
         }
         const config = this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
@@ -146,7 +144,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             }
             const ent = {
                 bucket,
-                key: objectKey,
+                key,
                 eventType,
                 versionId,
             };
