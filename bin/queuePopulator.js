@@ -24,10 +24,15 @@ function queueBatch(queuePopulator, taskState) {
         log.debug('skipping replication batch: previous one still in progress');
         return undefined;
     }
+    const onTimeout = () => {
+        // reset the flag to allow a new batch to start in case the
+        // previous batch timed out
+        taskState.batchInProgress = false;
+    };
     log.debug('start queueing replication batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
-    queuePopulator.processAllLogEntries({ maxRead }, err => {
+    queuePopulator.processAllLogEntries({ maxRead, onTimeout }, err => {
         taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during replication', {
