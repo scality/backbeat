@@ -246,7 +246,7 @@ class S3Mock extends TestConfigurator {
                 }),
                 batchDelete: () => ({
                     method: 'POST',
-                    path: '/_/backbeat/batchdelete',
+                    path: `/_/backbeat/batchdelete/${this.getParam('target.bucket')}/${this.getParam('encodedKey')}`,
                     query: {},
                     handler: () => this._batchDelete,
                 }),
