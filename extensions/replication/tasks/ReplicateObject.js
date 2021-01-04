@@ -331,7 +331,7 @@ class ReplicateObject extends BackbeatTask {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
         }, (err, destLocations) => {
             if (err) {
-                return this._deleteOrphans(sourceEntry, destLocations, log, () => cb(err));
+                return this._deleteOrphans(destEntry, destLocations, log, () => cb(err));
             }
             return cb(null, destLocations);
         });
@@ -484,6 +484,8 @@ class ReplicateObject extends BackbeatTask {
                    peer: this.destBackbeatHost,
                  });
         const req = this.backbeatDest.batchDelete({
+            Bucket: entry.getBucket(),
+            Key: entry.getObjectKey(),
             Locations: writtenLocations,
         });
         attachReqUids(req, log);
@@ -614,7 +616,7 @@ class ReplicateObject extends BackbeatTask {
                 this._putMetadata(destEntry, mdOnly, log, err => {
                     if (err) {
                         return this._deleteOrphans(
-                            sourceEntry, destLocations, log, () => next(err));
+                            destEntry, destLocations, log, () => next(err));
                     }
                     return next();
                 });
