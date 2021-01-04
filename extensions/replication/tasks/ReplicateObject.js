@@ -6,6 +6,7 @@ const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const AccountCredentials =
@@ -302,9 +303,14 @@ class ReplicateObject extends BackbeatTask {
             return cb(errors.InvalidObjectState);
         }
         const locations = sourceEntry.getReducedLocations();
-        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) => {
+        return mapLimitWaitPendingIfError(locations, MPU_CONC_LIMIT, (part, done) => {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
-        }, cb);
+        }, (err, destLocations) => {
+            if (err) {
+                return this._deleteOrphans(sourceEntry, destLocations, log, () => cb(err));
+            }
+            return cb(null, destLocations);
+        });
     }
 
     _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
@@ -443,6 +449,44 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
+    _deleteOrphans(entry, locations, log, cb) {
+        const writtenLocations = locations
+              .filter(loc => loc)
+              .map(loc => ({ key: loc.key, dataStoreName: loc.dataStoreName }));
+        if (writtenLocations.length === 0) {
+            return process.nextTick(cb);
+        }
+        log.info('deleting orphan data after replication failure',
+                 { method: 'ReplicateObject._deleteOrphans',
+                   entry: entry.getLogInfo(),
+                   peer: this.destBackbeatHost,
+                 });
+        const req = this.backbeatDest.batchDelete({
+            Locations: writtenLocations,
+        });
+        attachReqUids(req, log);
+        return req.send(err => {
+            if (err) {
+                log.error('an error occurred during batch delete of orphan data',
+                          { method: 'ReplicateObject._deleteOrphans',
+                            entry: entry.getLogInfo(),
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
+                            error: err.message,
+                          });
+                writtenLocations.forEach(location => {
+                    log.error('orphan data location was not deleted', {
+                        method: 'ReplicateObject._deleteOrphans',
+                        entry: entry.getLogInfo(),
+                        location,
+                    });
+                });
+            }
+            // do not return the batch delete error, only log it
+            return cb();
+        });
+    }
+
     _setupSourceClients(sourceRole, log) {
         this.s3sourceCredentials =
             this._createCredentials('source', this.sourceConfig.auth,
@@ -533,9 +577,15 @@ class ReplicateObject extends BackbeatTask {
             },
             // update location, replication status and put metadata in
             // target bucket
-            (location, next) => {
-                destEntry.setLocation(location);
-                this._putMetadata(destEntry, mdOnly, log, next);
+            (destLocations, next) => {
+                destEntry.setLocation(destLocations);
+                this._putMetadata(destEntry, mdOnly, log, err => {
+                    if (err) {
+                        return this._deleteOrphans(
+                            sourceEntry, destLocations, log, () => next(err));
+                    }
+                    return next();
+                });
             },
         ], err => this._handleReplicationOutcome(
             err, sourceEntry, destEntry, kafkaEntry, log, done));
