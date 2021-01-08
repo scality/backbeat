@@ -13,7 +13,9 @@ const SecretAccessKey = 'qscwdvefb1234567890';
 const SessionToken = '1234567890-=+asdfg';
 const vaultHost = '127.0.0.1';
 const vaultPort = 8080;
-const server = http.createServer((req, res) => {
+let simulateServerError = false;
+const server = http.createServer();
+server.on('request', (req, res) => {
     const Expiration = Date.now() + 1000; // expire on 1 second
     const payload = JSON.stringify({
         Credentials: {
@@ -23,6 +25,9 @@ const server = http.createServer((req, res) => {
             Expiration,
         },
     });
+    if (simulateServerError) {
+        req.socket.destroy();
+    }
     res.writeHead(200, {
         'content-type': 'application/json',
         'content-length': Buffer.byteLength(payload),
@@ -44,7 +49,6 @@ function _assertCredentials(err, roleCredentials, cb) {
     return cb();
 }
 
-
 describe('Credentials Manager', () => {
     let roleCredentials = null;
     let vaultServer = null;
@@ -57,6 +61,9 @@ describe('Credentials Manager', () => {
             new Logger('test:RoleCredentials').newRequestLogger('requids'));
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
+    });
+    afterEach(() => {
+        simulateServerError = false;
     });
     after(() => {
         roleCredentials = null;
@@ -85,5 +92,22 @@ describe('Credentials Manager', () => {
                     roleCredentials, done));
             }, retryTimeout);
         });
+    });
+
+    it('should handle non arsenal errors on refresh', function test(done) {
+        this.timeout(10000);
+        // wait for an extra second after timeout to ensure credentials
+        // have expired
+        const retryTimeout = (roleCredentials.expiration - Date.now()) +
+            1000;
+        return setTimeout(() => {
+            assert(roleCredentials.expired === false,
+                'expected credentials to expire');
+            simulateServerError = true;
+            roleCredentials.get(err => {
+                assert(err);
+                done();
+            });
+        }, retryTimeout);
     });
 });
