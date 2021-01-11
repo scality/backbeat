@@ -8,8 +8,6 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
 
-const MPU_CONC_LIMIT = 10;
-
 class MultipleBackendTask extends ReplicateObject {
 
     _getReplicationEndpointType() {
@@ -251,7 +249,8 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             }
             const locations = sourceEntry.getReducedLocations();
-            return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+            const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
+            return async.mapLimit(locations, mpuConcLimit, (part, done) =>
                 this._getAndPutMPUPart(sourceEntry, destEntry, part, uploadId,
                     log, (err, data) => {
                         if (err) {
@@ -528,7 +527,8 @@ class MultipleBackendTask extends ReplicateObject {
         if (locations.length === 0) {
             return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);
         }
-        return async.mapLimit(locations, MPU_CONC_LIMIT, (part, done) =>
+        const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
+        return async.mapLimit(locations, mpuConcLimit, (part, done) =>
             this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
     }
 

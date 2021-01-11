@@ -50,6 +50,7 @@ const joiSchema = {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         concurrency: joi.number().greater(0).default(10),
+        mpuPartsConcurrency: joi.number().greater(0).default(10),
         logConsumerMetricsIntervalS: joi.number().greater(0).default(60),
     },
     replicationStatusProcessor: {
