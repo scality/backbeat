@@ -13,7 +13,6 @@ const getExtMetrics = require('../utils/getExtMetrics');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
 
-const MPU_CONC_LIMIT = 10;
 const MPU_GCP_MAX_PARTS = 1024;
 
 class MultipleBackendTask extends ReplicateObject {
@@ -567,7 +566,8 @@ class MultipleBackendTask extends ReplicateObject {
         const isGCP = this._getReplicationEndpointType() === 'gcp';
         const isAzure = this._getReplicationEndpointType() === 'azure';
         const ranges = this._getRanges(sourceEntry.getContentLength(), isGCP);
-        return async.timesLimit(ranges.length, MPU_CONC_LIMIT, (n, next) =>
+        const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
+        return async.timesLimit(ranges.length, mpuConcLimit, (n, next) =>
             this._getRangeAndPutMPUPart(sourceEntry, ranges[n],
                 n + 1, uploadId, log, (err, data) => {
                     if (err) {

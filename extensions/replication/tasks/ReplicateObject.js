@@ -19,8 +19,6 @@ const RoleCredentials =
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
 
-const MPU_CONC_LIMIT = 10;
-
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
@@ -327,7 +325,8 @@ class ReplicateObject extends BackbeatTask {
             return cb(errors.InternalError.customizeDescription(errMessage));
         }
         const locations = sourceEntry.getReducedLocations();
-        return mapLimitWaitPendingIfError(locations, MPU_CONC_LIMIT, (part, done) => {
+        const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
+        return mapLimitWaitPendingIfError(locations, mpuConcLimit, (part, done) => {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
         }, (err, destLocations) => {
             if (err) {
