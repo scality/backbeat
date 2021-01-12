@@ -51,6 +51,9 @@
                     "account": "bart"
                 }
             },
+            "queueProcessor": {
+                "groupId": "backbeat-replication-group"
+            },
             "topic": "backbeat-replication",
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed"
