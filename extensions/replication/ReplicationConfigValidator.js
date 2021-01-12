@@ -46,13 +46,13 @@ const joiSchema = {
     replicationFailedTopic: joi.string().required(),
     monitorReplicationFailureExpiryTimeS:
         joi.number().default(CRR_FAILURE_EXPIRY),
-    queueProcessor: {
+    queueProcessor: joi.object({
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         logConsumerMetricsIntervalS: joi.number().greater(0).default(60),
-    },
+    }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
