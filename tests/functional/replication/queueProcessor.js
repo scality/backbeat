@@ -697,6 +697,7 @@ describe('queue processor functional tests with mocking', () => {
               queueProcessor: {
                   retryTimeoutS: 5,
                   groupId: 'backbeat-func-test-group-id',
+                  mpuPartsConcurrency: 10,
               },
             }, {
             }, {
