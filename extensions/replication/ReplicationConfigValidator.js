@@ -58,13 +58,13 @@ const joiSchema = {
     replicationFailedTopic: joi.string().required(),
     monitorReplicationFailureExpiryTimeS:
         joi.number().default(CRR_FAILURE_EXPIRY),
-    queueProcessor: {
+    queueProcessor: joi.object({
         groupId: joi.string().required(),
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
-    },
+    }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
         retry: retryParamsJoi,

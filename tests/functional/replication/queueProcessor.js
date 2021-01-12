@@ -764,6 +764,7 @@ describe('queue processor functional tests with mocking', () => {
                       azure: { timeoutS: 5 },
                   },
                   groupId: 'backbeat-func-test-group-id',
+                  mpuPartsConcurrency: 10,
               },
             },
             { host: '127.0.0.1',
