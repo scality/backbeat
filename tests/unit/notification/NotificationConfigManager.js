@@ -91,7 +91,8 @@ function checkParentConfigZkNode(manager, cb) {
 }
 
 describe('NotificationConfigManager', () => {
-    const zkClient = new ZookeeperMock();
+    const zk = new ZookeeperMock({ doLog: false });
+    const zkClient = zk.createClient();
     const params = {
         zkClient,
         parentNode: zkConfigParentNode,
@@ -100,7 +101,7 @@ describe('NotificationConfigManager', () => {
 
     describe('Constructor', () => {
         after(() => {
-            zkClient._resetState();
+            zk._resetState();
         });
 
         it('constructor and init checks', done => {
@@ -123,7 +124,7 @@ describe('NotificationConfigManager', () => {
         beforeEach(done => populateTestConfigs(zkClient, 5, done));
 
         afterEach(() => {
-            zkClient._resetState();
+            zk._resetState();
         });
 
         it('should get bucket notification configuration', () => {
