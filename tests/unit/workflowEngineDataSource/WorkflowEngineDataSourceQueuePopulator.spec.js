@@ -125,7 +125,7 @@ describe('workflow engine queue populator', () => {
         };
         const fdName = wedsqp._getHashString(
             value.workflowId, value.workflowVersion);
-        const data = new Buffer(JSON.stringify(value));
+        const data = Buffer.from(JSON.stringify(value));
         const zkc = new ZookeeperMock();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
@@ -159,7 +159,7 @@ describe('workflow engine queue populator', () => {
         };
         const fdName = wedsqp._getHashString(
             value.workflowId, value.workflowVersion);
-        const data = new Buffer(JSON.stringify(value));
+        const data = Buffer.from(JSON.stringify(value));
         const zkc = new ZookeeperMock();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
@@ -199,7 +199,7 @@ describe('workflow engine queue populator', () => {
         };
         const fdName = wedsqp._getHashString(
             value.workflowId, value.workflowVersion);
-        const data = new Buffer(JSON.stringify(value));
+        const data = Buffer.from(JSON.stringify(value));
         assert(wedsqp._getFilterDescriptorsLength() === 0);
         const zkc1 = new ZookeeperMock();
         zkc1.connect();
@@ -274,7 +274,7 @@ describe('workflow engine queue populator', () => {
 
     /* eslint-disable */
     const dataWorkflow = require('./DataWorkflow.json');
-    
+
     const kafkaValue = {
         'owner-display-name': 'test_1522198049',
         'owner-id': 'e166a2080a0c2cf1474dce54654f3f224dd5ae01379f20f338d106b8bc964bb1',
@@ -394,7 +394,7 @@ describe('workflow engine queue populator', () => {
                 key: dataNodes[0].value,
                 nextNodes: wed.findNextNodes(dataNodes[0])
             };
-            const data = new Buffer(JSON.stringify(value));
+            const data = Buffer.from(JSON.stringify(value));
 
             // simulate a client
             const zkc = new ZookeeperMock();
