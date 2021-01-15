@@ -24,10 +24,10 @@ const ZKPATH = '/workflow-engine-data-source';
  */
 class WorkflowEngineDataSourceQueuePopulatorMock extends
 WorkflowEngineDataSourceQueuePopulator {
-    constructor(params) {
+    constructor(params, zk) {
         super(params);
         this._state = {};
-        this.zkClient = new ZookeeperMock();
+        this.zkClient = zk.createClient();
         // artifically call class method
         this.createZkPath(err => {
             assert.ifError(err);
@@ -63,6 +63,7 @@ function overwriteScript(obj, subType, script, key, value) {
 describe('workflow engine queue populator', () => {
     let wedsqp;
     const wed = new WorkflowEngineDefs();
+    const zk = new ZookeeperMock({ doLog: false });
 
     before(() => {
         const params = {
@@ -71,20 +72,14 @@ describe('workflow engine queue populator', () => {
                 zookeeperPath: ZKPATH
             },
             logger: fakeLogger,
-            // logger:
-            // new Logger('WorkflowEngineDataSourceQueuePopulator.spec.js')
         };
-        // werelogs.configure({
-        // level: 'debug',
-        // dump: 'error'
-        // });
-        wedsqp = new WorkflowEngineDataSourceQueuePopulatorMock(params);
+        wedsqp = new WorkflowEngineDataSourceQueuePopulatorMock(params, zk);
     });
 
     afterEach(() => {
         wedsqp.resetState();
         wedsqp._deleteAllFilterDescriptors();
-        wedsqp.zkClient._resetState();
+        zk._resetState();
     });
 
     it('should validate filter descriptor', () => {
@@ -126,11 +121,11 @@ describe('workflow engine queue populator', () => {
         const fdName = wedsqp._getHashString(
             value.workflowId, value.workflowVersion);
         const data = new Buffer(JSON.stringify(value));
-        const zkc = new ZookeeperMock();
+        const zkc = zk.createClient();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
         const name = uuid();
-        zkc.create(
+        zkc.mkdirp(
             `${ZKPATH}/${name}`,
             data,
             {},
@@ -160,11 +155,11 @@ describe('workflow engine queue populator', () => {
         const fdName = wedsqp._getHashString(
             value.workflowId, value.workflowVersion);
         const data = new Buffer(JSON.stringify(value));
-        const zkc = new ZookeeperMock();
+        const zkc = zk.createClient();
         zkc.connect();
         assert(wedsqp._getFilterDescriptorsLength() === 0);
         const name = uuid();
-        zkc.create(
+        zkc.mkdirp(
             `${ZKPATH}/${name}`,
             data,
             {},
@@ -201,14 +196,14 @@ describe('workflow engine queue populator', () => {
             value.workflowId, value.workflowVersion);
         const data = new Buffer(JSON.stringify(value));
         assert(wedsqp._getFilterDescriptorsLength() === 0);
-        const zkc1 = new ZookeeperMock();
+        const zkc1 = zk.createClient();
         zkc1.connect();
-        const zkc2 = new ZookeeperMock();
+        const zkc2 = zk.createClient();
         zkc2.connect();
         async.waterfall([
             next => {
                 const name = uuid();
-                zkc1.create(
+                zkc1.mkdirp(
                     `${ZKPATH}/${name}`,
                     data,
                     {},
@@ -227,7 +222,7 @@ describe('workflow engine queue populator', () => {
             },
             next => {
                 const name = uuid();
-                zkc2.create(
+                zkc2.mkdirp(
                     `${ZKPATH}/${name}`,
                     data,
                     {},
@@ -274,7 +269,7 @@ describe('workflow engine queue populator', () => {
 
     /* eslint-disable */
     const dataWorkflow = require('./DataWorkflow.json');
-    
+
     const kafkaValue = {
         'owner-display-name': 'test_1522198049',
         'owner-id': 'e166a2080a0c2cf1474dce54654f3f224dd5ae01379f20f338d106b8bc964bb1',
@@ -397,10 +392,10 @@ describe('workflow engine queue populator', () => {
             const data = new Buffer(JSON.stringify(value));
 
             // simulate a client
-            const zkc = new ZookeeperMock();
+            const zkc = zk.createClient();
             zkc.connect();
             const name = uuid();
-            zkc.create(
+            zkc.mkdirp(
                 `${ZKPATH}/${name}`,
                 data,
                 {},
