@@ -2299,14 +2299,19 @@ xtend@~3.0.0:
   resolved "https://registry.yarnpkg.com/xtend/-/xtend-3.0.0.tgz#5cce7407baf642cba7becda568111c493f59665a"
   integrity sha1-XM50B7r2Qsunvs2laBEcST9ZZlo=
 
+yarn@^1.17.3:
+  version "1.22.10"
+  resolved "https://registry.yarnpkg.com/yarn/-/yarn-1.22.10.tgz#c99daa06257c80f8fa2c3f1490724e394c26b18c"
+  integrity sha512-IanQGI9RRPAN87VGTF7zs2uxkSyQSrSPsju0COgbsKQOOXr5LtcVPeyXWgwVa0ywG3d8dg6kSYKGBuYK021qeA==
+
 yeast@0.1.2:
   version "0.1.2"
   resolved "https://registry.yarnpkg.com/yeast/-/yeast-0.1.2.tgz#008e06d8094320c372dbc2f8ed76a0ca6c8ac419"
   integrity sha1-AI4G2AlDIMNy28L47XagymyKxBk=
 
-zookeeper-mock@^1.0.0:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/zookeeper-mock/-/zookeeper-mock-1.0.0.tgz#8844b27974f954a6eb5e9438e04610c7ad34049d"
-  integrity sha512-UfTVSXHcjq08fT8s3GVjH2AGQ7EdzhVOSeKiNAe4H1bTtqIxkB236kPkBjxVVaXEQd7GW/etj3XHxCX0QQnW8A==
+zookeeper-mock@^1.1.0:
+  version "1.1.0"
+  resolved "https://registry.yarnpkg.com/zookeeper-mock/-/zookeeper-mock-1.1.0.tgz#c7799fbc3bbb876afebc884387445eedf67b2c74"
+  integrity sha512-uM2WS7Ci7i36QNlUKrH2T1NxwOfLRQOGQ9WBGXrZ+Rf6BWnys3TCI3eDPhYGEcBf0HrYB9Kpij5HK1I+EvzeTg==
   dependencies:
     node-zookeeper-client "^0.2.2"

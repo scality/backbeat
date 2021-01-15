@@ -63,7 +63,8 @@ function deleteTestConfigs(zkClient, cb) {
 }
 
 describe('NotificationConfigManager multiple managers functional tests', () => {
-    const zkClient = new ZookeeperMock();
+    const zk = new ZookeeperMock({ doLog: false });
+    const zkClient = zk.createClient();
     const params = {
         zkClient,
         parentNode: zkConfigParentNode,
@@ -96,7 +97,7 @@ describe('NotificationConfigManager multiple managers functional tests', () => {
     });
 
     afterEach(() => {
-        zkClient._resetState();
+        zk._resetState();
     });
 
     it('managers should have the same config values after init', done => {

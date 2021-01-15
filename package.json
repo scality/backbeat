@@ -48,7 +48,7 @@
     "uuid": "^3.1.0",
     "vaultclient": "scality/vaultclient#478710c",
     "werelogs": "scality/werelogs#0a4c576",
-    "zookeeper-mock": "^1.0.0"
+    "zookeeper-mock": "^1.1.0"
   },
   "devDependencies": {
     "mocha": "^3.3.0"
