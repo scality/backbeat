@@ -24,25 +24,20 @@ werelogs.configure({
 /* eslint-disable no-param-reassign */
 function queueBatch(queuePopulator, taskState) {
     if (taskState.batchInProgress) {
-        log.warn('skipping notification batch: previous one still in progress');
+        log.debug('skipping notification batch: previous one still in progress');
         return undefined;
     }
     log.debug('start queueing notification batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
-    queuePopulator.processAllLogEntries({ maxRead }, (err, counters) => {
+    queuePopulator.processAllLogEntries({ maxRead }, err => {
         taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during notification', {
                 method: 'QueuePopulator::task.queueBatch',
                 error: err,
             });
-            return undefined;
         }
-        const logFunc = (counters.some(counter => counter.readRecords > 0) ?
-            log.info : log.debug).bind(log);
-        logFunc('notification batch finished', { counters });
-        return undefined;
     });
     return undefined;
 }
