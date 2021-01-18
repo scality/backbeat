@@ -142,6 +142,14 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             if (eventType === undefined && type === 'del') {
                 eventType = notifConstants.deleteEvent;
             }
+            /**
+             * if the event type is still undefined after the check above, it is
+             * most likely entries that are placeholders for deletion or cleanup
+             * these entries should be ignored and not be processed.
+            */
+            if (eventType === undefined) {
+                return undefined;
+            }
             const ent = {
                 bucket,
                 key,
