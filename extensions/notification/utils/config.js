@@ -69,6 +69,14 @@ function filterConfigsByEvent(bnConfigs, event) {
  */
 function validateEntry(bnConfig, entry) {
     const { bucket, eventType } = entry;
+    /**
+     * if the event type is undefined, it is most likely an entry that is a
+     * placeholder for deletion or cleanup, these entries should be ignored and
+     * not be processed.
+    */
+    if (!eventType) {
+        return false;
+    }
     const notifConf = bnConfig.notificationConfiguration;
     // check if the entry belongs to the bucket in the configuration
     if (bucket !== bnConfig.bucket) {
