@@ -63,13 +63,7 @@
     "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/cloudserver#bac9a10",
-    "eslint": "^5.3.0",
-    "eslint-config-airbnb-base": "^13.1.0",
-    "eslint-config-scality": "scality/Guidelines#28e73a2",
-    "eslint-plugin-import": "^2.14.0",
-    "lolex": "^2.7.5",
-    "mocha": "^3.3.0",
+    "mocha": "^3.3.0",    
     "zookeeper-mock": "^1.1.0"
   }
 }
