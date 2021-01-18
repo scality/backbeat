@@ -247,6 +247,15 @@ const tests = [
         },
         pass: false,
     },
+    {
+        desc: 'fail if the event type is unavailable',
+        entry: {
+            eventType: undefined,
+            bucket: 'bucket8',
+            key: 'abcd.png',
+        },
+        pass: false,
+    },
 ];
 
 describe('Notification configuration util', () => {
