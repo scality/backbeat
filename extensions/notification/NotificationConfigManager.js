@@ -231,6 +231,7 @@ class NotificationConfigManager {
                 const errMsg
                     = 'error checking configuration zookeeper parent node';
                 this.log.error(errMsg, { method, zkPath });
+                return this._callbackHandler(cb, err);
             }
             this.log.debug('parent configuration zookeeper checked/added',
                 { method, zkPath });
@@ -418,7 +419,10 @@ class NotificationConfigManager {
      * @return {undefined}
      */
     init(cb) {
-        return this._checkConfigurationParentNode(() => {
+        return this._checkConfigurationParentNode(err => {
+            if (err) {
+                return cb(err);
+            }
             return this._listBucketsWithConfig((err, buckets) => {
                 if (err) {
                     return cb(err);

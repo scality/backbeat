@@ -2,6 +2,7 @@ const assert = require('assert');
 const async = require('async');
 const werelogs = require('werelogs');
 const ZookeeperMock = require('zookeeper-mock');
+const sinon = require('sinon');
 
 const NotificationConfigManager
     = require('../../../extensions/notification/NotificationConfigManager');
@@ -100,7 +101,12 @@ describe('NotificationConfigManager', () => {
     };
 
     describe('Constructor', () => {
+        function checkConfigParentNodeStub(cb) {
+            return cb(new Error('error checking config parent node'));
+        }
+
         after(() => {
+            sinon.restore();
             zk._resetState();
         });
 
@@ -117,6 +123,17 @@ describe('NotificationConfigManager', () => {
                 next => managerInit(manager, next),
                 next => checkParentConfigZkNode(manager, next),
             ], done);
+        });
+
+        it('should return error if checkConfigParentNode fails', done => {
+            sinon.stub(NotificationConfigManager.prototype,
+                '_checkConfigurationParentNode')
+                .callsFake(checkConfigParentNodeStub);
+            const manager = new NotificationConfigManager(params);
+            manager.init(err => {
+                assert(err);
+                return done();
+            });
         });
     });
 
