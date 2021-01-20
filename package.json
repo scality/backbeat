@@ -48,6 +48,7 @@
     "yarn": "^1.17.3"
   },
   "devDependencies": {
-    "mocha": "^3.3.0"
+    "mocha": "^3.3.0",    
+    "zookeeper-mock": "^1.1.0"
   }
 }
