@@ -4959,9 +4959,9 @@ yeast@0.1.2:
   resolved "https://registry.yarnpkg.com/yeast/-/yeast-0.1.2.tgz#008e06d8094320c372dbc2f8ed76a0ca6c8ac419"
   integrity sha1-AI4G2AlDIMNy28L47XagymyKxBk=
 
-zookeeper-mock@^1.1.0:
-  version "1.1.0"
-  resolved "https://registry.yarnpkg.com/zookeeper-mock/-/zookeeper-mock-1.1.0.tgz#c7799fbc3bbb876afebc884387445eedf67b2c74"
-  integrity sha512-uM2WS7Ci7i36QNlUKrH2T1NxwOfLRQOGQ9WBGXrZ+Rf6BWnys3TCI3eDPhYGEcBf0HrYB9Kpij5HK1I+EvzeTg==
+zookeeper-mock@^1.2.0:
+  version "1.2.0"
+  resolved "https://registry.yarnpkg.com/zookeeper-mock/-/zookeeper-mock-1.2.0.tgz#874c172e09e26e6c3fe00a5ff6c5e6bb964a7905"
+  integrity sha512-Xbt6RVwBjGAV+E8tMr6ZkUTCTnChQnKidRbOK3cg2ltfAGb176mgHOCJq0k4QzRkrXlDTyk0zp1LlQcORiVCHQ==
   dependencies:
     node-zookeeper-client "^0.2.2"
