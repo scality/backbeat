@@ -10,8 +10,6 @@ const ProvisionDispatcher =
 
 const ZK_TEST_PATH = '/tests/prov-test';
 
-const DO_RAND_DELAY = true;
-
 describe('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
     const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
@@ -20,7 +18,10 @@ function testDispatch() {
 
     this.timeout(60000);
 
-    const zk = new ZookeeperMock({ doLog: false });
+    const zk = new ZookeeperMock({
+        doLog: false,
+        maxRandomDelay: 100,
+    });
 
     before(done => {
         const zkClient = zk.createClient('localhost:2181');
@@ -135,7 +136,6 @@ function testDispatch() {
         }
         for (let i = 0; i < 10; ++i) {
             clients[i] = new ProvisionDispatcher(zkConf, zk);
-            clients[i]._setDoRandDelay(DO_RAND_DELAY);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {
@@ -185,7 +185,6 @@ function testDispatch() {
         }
         for (let i = 0; i < 10; ++i) {
             clients[i] = new ProvisionDispatcher(zkConf, zk);
-            clients[i]._setDoRandDelay(DO_RAND_DELAY);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {
