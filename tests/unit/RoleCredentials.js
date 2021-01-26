@@ -16,7 +16,7 @@ const vaultPort = 8080;
 let simulateServerError = false;
 const server = http.createServer();
 server.on('request', (req, res) => {
-    const Expiration = Date.now() + 1000; // expire on 1 second
+    const Expiration = Date.now() + 2000; // expire after 2 seconds
     const payload = JSON.stringify({
         Credentials: {
             AccessKeyId,
@@ -59,7 +59,7 @@ describe('Credentials Manager', () => {
         roleCredentials = new RoleCredentials(
             vaultclient, role, extension,
             new Logger('test:RoleCredentials').newRequestLogger('requids'),
-            110);
+            1);
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
     });
@@ -86,7 +86,7 @@ describe('Credentials Manager', () => {
             // wait for less than the expiration time minus the
             // anticipation delay to ensure credentials have not
             // expired
-            const retryTimeout = (roleCredentials.expiration - Date.now()) - 200;
+            const retryTimeout = (roleCredentials.expiration - Date.now()) - 1500;
             return setTimeout(() => roleCredentials.get(
                 err => _assertCredentials(err, roleCredentials, err => {
                     assert.ifError(err);
@@ -162,6 +162,6 @@ describe('Credentials Manager', () => {
         const rc = new RoleCredentials(
             vaultclient, role, extension,
             new Logger('test:RoleCredentials').newRequestLogger('requids'));
-        assert(rc._refreshCredsAnticipationMs > 0);
+        assert(rc._refreshCredsAnticipationSeconds > 0);
     });
 });
