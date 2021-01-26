@@ -55,7 +55,7 @@
     "node-forge": "^0.7.6",
     "node-rdkafka": "2.5.1",
     "node-schedule": "^1.2.0",
-    "node-zookeeper-client": "^0.2.2",
+    "node-zookeeper-client": "^1.1.0",
     "prom-client": "^10.2.3",
     "uuid": "^3.1.0",
     "vaultclient": "github:scality/vaultclient#767c58d",
