@@ -1,19 +1,41 @@
 const assert = require('assert');
 
+const ZookeeperMock = require('zookeeper-mock');
+
 const { versioning } = require('arsenal');
 const { DbPrefixes } = versioning.VersioningConstants;
 
+const { Logger } = require('werelogs');
+
 const LogReader = require('../../../../lib/queuePopulator/LogReader');
 
+class MockLogConsumer {
+    readRecords(params, cb) {
+        process.nextTick(() => {
+            cb(null, {
+                info: {
+                    cseq: 12345,
+                },
+            });
+        });
+    }
+}
+
 describe('LogReader', () => {
+    let zkMock;
     let logReader;
     let filteredEntry;
 
-    before(() => {
+    beforeEach(() => {
+        zkMock = new ZookeeperMock();
         logReader = new LogReader({
+            logId: 'test-log-reader',
+            zkClient: zkMock.createClient('localhost:2181'),
+            logConsumer: new MockLogConsumer(),
             extensions: [{
                 filter: entry => { filteredEntry = entry; },
             }],
+            logger: new Logger('test:LogReader'),
         });
     });
 
@@ -46,6 +68,14 @@ describe('LogReader', () => {
                 key: testCase.processedKey,
                 value: '{}',
             });
+        });
+    });
+
+    it('should start from latest log cseq plus one if no zookeeper log offset', done => {
+        logReader.setup(err => {
+            assert.ifError(err);
+            assert.strictEqual(logReader.logOffset, 12346);
+            done();
         });
     });
 });
