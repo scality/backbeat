@@ -2,14 +2,24 @@ const assert = require('assert');
 
 const ZookeeperMock = require('zookeeper-mock');
 
+const { errors } = require('arsenal');
+
 const { Logger } = require('werelogs');
 
 const LogReader = require('../../../../lib/queuePopulator/LogReader');
 
 class MockLogConsumer {
+    constructor(params) {
+        this.params = params || {};
+    }
+
     readRecords(params, cb) {
         process.nextTick(() => {
-            cb(null, {});
+            if (this.params.readRecordsError) {
+                cb(this.params.readRecordsError);
+            } else {
+                cb(null, {});
+            }
         });
     }
 }
@@ -37,6 +47,25 @@ describe('LogReader', () => {
         logReader.setup(err => {
             assert.ifError(err);
             assert.strictEqual(logReader.logOffset, 1);
+            done();
+        });
+    });
+
+    // TODO there is currently no initialization of log offset with
+    // mongodb backend, re-enable when implementing initial log offset
+    // fetching with mongodb backend.
+    it.skip('should start from offset 1 on log consumer readRecords error', done => {
+        const errorLogReader = new LogReader({
+            logId: 'test-log-reader',
+            zkClient: zkMock.createClient('localhost:2181'),
+            logConsumer: new MockLogConsumer({
+                readRecordsError: errors.InternalError,
+            }),
+            logger: new Logger('test:ErrorLogReader'),
+        });
+        errorLogReader.setup(err => {
+            assert.ifError(err);
+            assert.strictEqual(errorLogReader.logOffset, 1);
             done();
         });
     });
