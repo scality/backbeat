@@ -83,15 +83,11 @@ class KafkaProducer extends EventEmitter {
                 this._onDeliveryReport.bind(this));
         });
         this._producer.on('event.error', error => {
-            if (!['broker transport failure',
-                'all broker connections are down']
-                .includes(error.message)) {
-                this._log.error('error with producer', {
-                    error: error.message,
-                    method: 'KakfaProducer.constructor',
-                });
-                this.emit('error', error);
-            }
+            this._log.error('error with producer', {
+                error: error.message,
+                method: 'KakfaProducer.constructor',
+            });
+            this.emit('error', error);
         });
         return this;
     }
