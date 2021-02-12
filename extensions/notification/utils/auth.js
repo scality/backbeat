@@ -64,6 +64,9 @@ function generateKafkaAuthObject(auth) {
         const keytabPath = getAuthFilePath(keytab);
         if (keytabPath) {
             authObject['sasl.kerberos.keytab'] = keytabPath;
+            // default kinit command
+            const kinitCommand = `kinit -k ${principal} -t ${keytabPath}`;
+            authObject['sasl.kerberos.kinit.cmd'] = kinitCommand;
         }
     }
     return authObject;
