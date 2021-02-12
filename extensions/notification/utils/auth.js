@@ -24,8 +24,7 @@ function getAuthFilePath(fileName) {
 function generateKafkaAuthObject(auth) {
     const authObject = {};
     const { supportedAuthTypes } = constants;
-    // TODO: auth object is fluid at the moment, once a solid structure is
-    // defined, introduce a schema
+    // TODO: S3C-3985 auth object should be validated/checked
     const {
         type,
         ssl,
@@ -64,6 +63,9 @@ function generateKafkaAuthObject(auth) {
         const keytabPath = getAuthFilePath(keytab);
         if (keytabPath) {
             authObject['sasl.kerberos.keytab'] = keytabPath;
+            // default kinit command
+            const kinitCommand = `kinit -k ${principal} -t ${keytabPath}`;
+            authObject['sasl.kerberos.kinit.cmd'] = kinitCommand;
         }
     }
     return authObject;
