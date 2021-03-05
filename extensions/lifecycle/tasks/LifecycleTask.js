@@ -14,6 +14,8 @@ const ReplicationAPI = require('../../replication/ReplicationAPI');
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
+// moves lifecycle transition deadlines 1 day earlier, mostly for testing
+const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
 
 function isLifecycleUser(canonicalID) {
     const canonicalIDArray = canonicalID.split('/');
@@ -581,7 +583,9 @@ class LifecycleTask extends BackbeatTask {
         if (transition.Days !== undefined) {
             const lastModifiedTime = this._getTimestamp(lastModified);
             const oneDay = 24 * 60 * 60 * 1000; // Milliseconds in a day.
-            return lastModifiedTime + (transition.Days * oneDay);
+            const timeTravel = transitionOneDayEarlier ? -oneDay : 0;
+
+            return lastModifiedTime + (transition.Days * oneDay) + timeTravel;
         }
         return undefined;
     }
