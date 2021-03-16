@@ -14,7 +14,7 @@
     "ft_test:api:retry": "mocha tests/functional/api/retry.js --timeout 30000",
     "bh_test": "mocha --recursive tests/behavior",
     "lint": "eslint $(git ls-files '*.js')",
-    "lint_md": "mdlint $(git ls-files '*.md')",
+    "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node index.js"
   },
   "repository": {
