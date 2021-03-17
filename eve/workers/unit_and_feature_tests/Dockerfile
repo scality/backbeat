@@ -10,6 +10,11 @@ ENV PATH=$PATH:/backbeat/node_modules/.bin
 ENV NODE_PATH=/backbeat/node_modules
 ENV NODE_ENV=${NODE_ENV}
 
+ENV GO_VERSION=1.16.2
+ENV GINKGO_VERSION=v1.15.2
+
+ENV GO_ARCHIVE=go${GO_VERSION}.linux-amd64.tar.gz
+
 VOLUME /home/eve/workspace
 
 COPY eve/workers/unit_and_feature_tests/backbeat_packages.list \
@@ -25,6 +30,11 @@ RUN curl -sS http://dl.yarnpkg.com/debian/pubkey.gpg | apt-key add - \
     && make -C ./n \
     && n 10 latest \
     && pip install pip==9.0.1 \
+    && curl -LO https://golang.org/dl/${GO_ARCHIVE} \
+    && tar zxvf ${GO_ARCHIVE} -C /usr/local \
+    && GOPATH=/usr/local /usr/local/go/bin/go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION} \
+    && ln -s /usr/local/go/bin/go /usr/local/bin \
+    && rm -f ${GO_ARCHIVE} \
     && rm -rf ./n \
     && rm -rf /var/lib/apt/lists/* \
     && rm -f /tmp/*packages.list
