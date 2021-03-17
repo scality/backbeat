@@ -93,22 +93,23 @@ class ReplicationMetrics extends ZenkoMetrics {
             origin: originLabel,
             fromLocation, fromLocationType,
             toLocation, toLocationType, partition,
-        }, contentLength);
+        }, Number.parseInt(contentLength, 10));
     }
 
     static onReplicationProcessed(originLabel, fromLocation, toLocation,
                                   contentLength, status, elapsedMs) {
         const fromLocationType = _getReplicationEndpointType(fromLocation);
         const toLocationType = _getReplicationEndpointType(toLocation);
+        const contentLengthAsNumber = Number.parseInt(contentLength, 10);
 
         replicationProcessedBytes.inc({
             origin: originLabel,
             fromLocation, fromLocationType,
             toLocation, toLocationType, status,
-        }, contentLength);
+        }, contentLengthAsNumber);
 
         const sizeBucket = SIZE_BUCKETS.find(
-            bucket => contentLength < bucket.lt);
+            bucket => contentLengthAsNumber < bucket.lt);
         replicationProcessedElapsedSeconds.observe({
             origin: originLabel,
             fromLocation, fromLocationType,
