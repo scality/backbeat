@@ -32,6 +32,10 @@ stages:
           name: run unit tests
           command: yarn test
       - ShellCommand:
+          name: run bucket scanner unit tests
+          command: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 4
+          workdir: '%(prop:builddir)s/build/bucket-scanner'
+      - ShellCommand:
           name: run backbeat routes test
           command: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
           workdir: '%(prop:builddir)s/build'
