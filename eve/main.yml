@@ -33,7 +33,7 @@ stages:
           command: yarn test
       - ShellCommand:
           name: run bucket scanner unit tests
-          command: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 4
+          command: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
           workdir: '%(prop:builddir)s/build/bucket-scanner'
       - ShellCommand:
           name: run backbeat routes test
