@@ -1,7 +1,7 @@
 {
     "zookeeper": {
-        "connectionString": "127.0.0.1:2181/backbeat",
-        "autoCreateNamespace": false
+        "connectionString": "127.0.0.1:2181",
+        "autoCreateNamespace": true
     },
     "kafka": {
         "hosts": "127.0.0.1:9092"
@@ -9,7 +9,7 @@
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
-        "zookeeperPath": "/queue-populator",
+        "zookeeperPath": "/replication-populator",
         "logSource": "dmd",
         "bucketd": {
             "host": "127.0.0.1",
@@ -30,7 +30,7 @@
                 },
                 "auth": {
                     "type": "account",
-                    "account": "bart",
+                    "account": "backbeatuser",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -41,13 +41,15 @@
             "destination": {
                 "transport": "http",
                 "bootstrapList": [
-                    { "site": "sf", "servers": ["127.0.0.1:9443"],
-                      "echo": false },
-                    { "site": "us-east-1", "type": "aws_s3" }
+                    {
+                        "site": "sf",
+                        "servers": ["127.0.0.1:8000"],
+                        "echo": false
+                    }
                 ],
                 "auth": {
                     "type": "account",
-                    "account": "lisa"
+                    "account": "backbeatuser"
                 }
             },
             "topic": "backbeat-replication",

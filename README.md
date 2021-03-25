@@ -2,9 +2,6 @@
 
 ![backbeat logo](res/backbeat-logo.png)
 
-[![CircleCI][badgepub]](https://circleci.com/gh/scality/backbeat)
-[![Scality CI][badgepriv]](http://ci.ironmann.io/gh/scality/backbeat)
-
 ## OVERVIEW
 
 Backbeat is an engine with a messaging system at its heart.
@@ -36,57 +33,23 @@ Please refer to the ****[Design document](/DESIGN.md)****
 
 This guide assumes the following:
 
-* Using MacOS
-* `brew` is installed (get it [here](https://brew.sh/))
-* `node` is installed (version 6.9.5)
-* `yarn` is installed (version 3.10.10)
-* `aws` is installed (version 1.11.1)
+* `node` is installed (check package.json for supported versions)
+* `yarn` is installed (anything recent)
+* `aws cli` is installed (latest)
 
-### Run kafka and zookeeper
+### Run Kafka and Zookeeper
 
-#### Install kafka and zookeeper
+#### Install Kafka and Zookeeper
 
-```
-brew install kafka && brew install zookeeper
-```
-
-Make sure you have `/usr/local/bin` in your `PATH` env variable (or wherever
-your homebrew programs are installed):
-
-```
-echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bash_profile
-```
-
-#### Start kafka and zookeeper servers
-
-```
-mkdir ~/kafka && \
-cd ~/kafka && \
-curl http://apache.claz.org/kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz | tar xvz && \
-sed 's/zookeeper.connect=.*/zookeeper.connect=localhost:2181\/backbeat/' \
-kafka_2.11-0.11.0.0/config/server.properties > \
-kafka_2.11-0.11.0.0/config/server.properties.backbeat
-```
-
-Start the zookeeper server:
-
-```
-zookeeper-server-start ~/kafka/kafka_2.11-0.11.0.0/config/zookeeper.properties
-```
-
-In a new shell, start the kafka server:
-
-```
-kafka-server-start ~/kafka/kafka_2.11-0.11.0.0/config/server.properties.backbeat
-```
+Follow the [quick start guide](https://kafka.apache.org/quickstart) to get up and running.
+Be sure to create a Kafka topic, the guide here uses the name of `backbeat-replication`.
 
 #### Create a zookeeper node and kafka topic
 
-In a new shell, connect to the zookeeper server with the ZooKeeper chroot
-`/backbeat` path:
+Use the kafka provided zookeeper shell located in the bin directory:
 
 ```
-zkCli -server localhost:2181/backbeat
+$ bin/zookeeper-shell.sh localhost:2181
 ```
 
 Create the `replication-populator` node:
@@ -101,117 +64,45 @@ We may leave the zookeeper server now:
 quit
 ```
 
-Create the `backbeat-replication` kafka topic:
-
-```
-kafka-topics --create \
---zookeeper localhost:2181/backbeat \
---replication-factor 1 \
---partitions 1 \
---topic backbeat-replication
-```
-
 ### Run Scality Components
 
-#### Start Vault and Scality S3 servers
+#### Start Vault and Scality Cloudserver
 
-Start the Vault server (this requires access to the private Vault repository):
-
-```
-git clone https://github.com/scality/Vault ~/replication/vault && \
-cd ~/replication/vault && \
-yarn i && \
-chmod 400 ./tests/utils/keyfile && \
-VAULT_DB_BACKEND=MEMORY node vaultd.js
-```
-
-In a new shell, start the Scality S3 server:
-
-```
-git clone https://github.com/scality/s3 ~/replication/s3 && \
-cd ~/replication/s3 && \
-yarn i && \
-S3BACKEND=file S3VAULT=scality yarn start
-```
+1. Run an instance of [Vault](https://github.com/scality/vault)
+    * Vault is a private repository so you will need access
+1. Run an instance of [Cloudserver](https://github.com/scality/cloudserver)
+    * Be sure to configure cloudserver to use Vault
+1. Create a vault account and credentials using the [Vault Client](https://github.com/scality/vaultclient)
+    * Note: Vault client is included as a dependency and can be ran from
+    `node_modules/vaultclient/bin/vaultclient`
+    * The examples below use the username of `backbeatuser`
+    * Be sure to include this new user in your aws credentials
 
 #### Setup replication with backbeat
-
-In a new shell, clone backbeat:
-
-```
-git clone https://github.com/scality/backbeat ~/replication/backbeat && \
-cd ~/replication/backbeat && \
-yarn i
-```
-
-Now, create an account and keys:
-
-```
-VAULTCLIENT=~/replication/backbeat/node_modules/vaultclient/bin/vaultclient && \
-$VAULTCLIENT create-account \
---name backbeatuser \
---email dev@null \
---port 8600 >> backbeat_user_credentials && \
-$VAULTCLIENT generate-account-access-key \
---name backbeatuser \
---port 8600 >> backbeat_user_credentials && \
-cat backbeat_user_credentials
-```
-
-Output will look something like (this output is stored for reference in the file
-`backbeat_user_credentials`):
-
-```
-...
-{
-    "id": "8CFJQ2Z3R6LR0WTP5VDS",
-    "value": "gB53GM7/LpKrm6DktUUarcAOcqHS2tvKI/=CxFxR",
-    "createDate": "2017-08-03T00:17:57Z",
-    "lastUsedDate": "2017-08-03T00:17:57Z",
-    "status": "Active",
-    "userId": "038628340774"
-}
-```
-
-Store the account's credentials using the "id" and "value" fields:
-
-```
-aws configure --profile backbeatuser
-```
-
-The completed prompt should look like:
-
-```
-AWS Access Key ID [None]: 8CFJQ2Z3R6LR0WTP5VDS
-AWS Secret Access Key [None]: gB53GM7/LpKrm6DktUUarcAOcqHS2tvKI/=CxFxR
-Default region name [None]:
-Default output format [None]:
-```
 
 Set up replication on your buckets:
 
 ```
-node ~/replication/backbeat/bin/setupReplication.js setup \
---source-bucket source-bucket \
---source-profile backbeatuser \
---target-bucket target-bucket \
---target-profile backbeatuser
+node bin/replication.js setup \
+  --source-bucket source-bucket \
+  --source-profile backbeatuser \
+  --target-bucket target-bucket \
+  --target-profile backbeatuser
 ```
 
 Run the backbeat queue populator:
 
 ```
-yarn --prefix ~/replication/backbeat run queue_populator
+yarn queue_populator
 ```
 
 In a new shell, run the backbeat queue processor:
 
 ```
-yarn --prefix ~/replication/backbeat run queue_processor
+yarn queue_processor SITE
 ```
 
-You are now ready to put data on `source-bucket` and watch it replicate to
-`target-bucket`!
+You are now ready to put data on `source-bucket` and watch it replicate to `target-bucket`!
 
 Put an object on the `source-bucket`:
 
@@ -249,21 +140,3 @@ aws s3api head-object \
 ```
 
 After some time, the object's "ReplicationStatus" should be "REPLICA".
-:smiley_cat:
-
-### Structure
-
-In our `$HOME` directory, we now have the following directories:
-
-```
-$HOME
-├── kafka
-│   └── kafka_2.11-0.11.0.0
-├── replication
-    ├── backbeat
-    ├── s3
-    └── vault
-```
-
-[badgepriv]: http://ci.ironmann.io/gh/scality/backbeat.svg?style=svg&circle-token=32e5dfd968e673450c44f0a255d1a812bae9b00c
-[badgepub]: https://circleci.com/gh/scality/backbeat.svg?style=svg
