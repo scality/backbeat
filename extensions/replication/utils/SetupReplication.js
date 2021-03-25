@@ -127,6 +127,7 @@ class SetupReplication extends BackbeatTask {
                 source.transport,
                 `${source.vault.host}:${source.vault.adminPort}`,
                 source.credentials, internalHttps),
+            // What is the proper way to use vault with the target?
             target: target.isExternal ? undefined : _setupIAMClient(
                 target.transport, `${destHost.host}:${destHost.port}`,
                 target.credentials, https),
