@@ -72,4 +72,9 @@ stages:
           command: yarn run ft_test:notification
           env:
             CI: "true"
-
+      - ShellCommand:
+          name: run feature lifecycle tests
+          command: yarn run ft_test:lifecycle
+          env:
+            CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
