@@ -16,6 +16,7 @@ const joiSchema = {
     kafka: {
         hosts: joi.string().required(),
     },
+    s3: hostPortJoi.required(),
     queuePopulator: {
         cronRule: joi.string().required(),
         batchMaxRead: joi.number().default(10000),

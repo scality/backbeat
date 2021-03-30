@@ -6,6 +6,10 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
