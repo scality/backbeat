@@ -894,7 +894,7 @@ class LifecycleTask extends BackbeatTask {
                     lastModified,
                 });
                 return cb(null, entry);
-        });
+            });
     }
 
     /**
