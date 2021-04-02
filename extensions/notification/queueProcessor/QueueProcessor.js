@@ -167,7 +167,7 @@ class QueueProcessor extends EventEmitter {
      */
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
-        const { bucket, key } = sourceEntry;
+        const { bucket, key, eventType } = sourceEntry;
         try {
             const config = this.bnConfigManager.getConfig(bucket);
             if (config && Object.keys(config).length > 0) {
@@ -188,6 +188,13 @@ class QueueProcessor extends EventEmitter {
                         queueConfig: [destBnConf],
                     },
                 };
+                this.logger.debug('validating entry', {
+                    method: 'QueueProcessor.processKafkaEntry',
+                    bucket,
+                    key,
+                    eventType,
+                    destination: this.destinationId,
+                });
                 if (configUtil.validateEntry(bnConfig, sourceEntry)) {
                     // add notification configuration id to the message
                     sourceEntry.configurationId = destBnConf.id;
