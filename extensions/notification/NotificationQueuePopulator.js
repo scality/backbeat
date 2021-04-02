@@ -148,6 +148,12 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 eventType,
                 versionId,
             };
+            this.log.debug('validating entry', {
+                method: 'NotificationQueuePopulator._processObjectEntry',
+                bucket,
+                key,
+                eventType,
+            });
             if (configUtil.validateEntry(config, ent)) {
                 const message
                     = messageUtil.addLogAttributes(value, ent);
