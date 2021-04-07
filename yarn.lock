@@ -433,31 +433,6 @@ arsenal@scality/Arsenal#32c895b:
   optionalDependencies:
     ioctl "2.0.0"
 
-arsenal@scality/Arsenal#9f2e74e:
-  version "7.4.3"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/9f2e74ec6972527c2a9ca6ecb4155618f123fc19"
-  dependencies:
-    JSONStream "^1.0.0"
-    ajv "4.10.0"
-    async "~2.1.5"
-    debug "~2.3.3"
-    diskusage "^1.1.1"
-    ioredis "4.9.5"
-    ipaddr.js "1.2.0"
-    joi "^10.6"
-    level "~5.0.1"
-    level-sublevel "~6.6.5"
-    node-forge "^0.7.1"
-    simple-glob "^0.1"
-    socket.io "~1.7.3"
-    socket.io-client "~1.7.3"
-    utf8 "2.1.2"
-    uuid "^3.0.1"
-    werelogs scality/werelogs#0ff7ec82
-    xml2js "~0.4.16"
-  optionalDependencies:
-    ioctl "2.0.0"
-
 arsenal@scality/Arsenal#b03f5b8:
   version "7.4.3"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/b03f5b80acd6acaaf8dd2d49cd955e6b95279ab3"
@@ -4915,9 +4890,9 @@ xtend@~3.0.0:
   integrity sha1-XM50B7r2Qsunvs2laBEcST9ZZlo=
 
 y18n@^4.0.0:
-  version "4.0.0"
-  resolved "https://registry.yarnpkg.com/y18n/-/y18n-4.0.0.tgz#95ef94f85ecc81d007c264e190a120f0a3c8566b"
-  integrity sha512-r9S/ZyXu/Xu9q1tYlpsLIsa3EeLXXk0VwlxqTcFRfg9EhMW+17kbt9G0NrgCmhGb5vT2hyhJZLfDGx+7+5Uj/w==
+  version "4.0.2"
+  resolved "https://registry.yarnpkg.com/y18n/-/y18n-4.0.2.tgz#c504495ba9b59230dd60226d1dd89c3c0a1b745e"
+  integrity sha512-DnBDwcL54b5xWMM/7RfFg4xs5amYxq2ot49aUfLjQSAracXkGvlZq0txzqr3Pa6Q0ayuCxBcwTzrPUScKY0O8w==
 
 yallist@^2.1.2:
   version "2.1.2"
