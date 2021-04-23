@@ -52,6 +52,10 @@
             "/_/metadata/default/informations/bucket1": {
                 "resType": "raftInformation",
                 "name": "1"
+            },
+            "/_/metadata/default/informations/bucket2": {
+                "resType": "raftInformation",
+                "name": "1"
             }
         }
     },

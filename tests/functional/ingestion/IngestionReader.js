@@ -92,8 +92,7 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
     return done();
 }
 
-// TODO: ZENKO-3366 fix failing ingestion reader tests
-describe.skip('ingestion reader tests with mock', function fD() {
+describe('ingestion reader tests with mock', function fD() {
     this.timeout(40000);
     let httpServer;
     let producer;
@@ -302,7 +301,8 @@ describe.skip('ingestion reader tests with mock', function fD() {
             done();
         });
 
-        it('should successfully ingest new bucket with existing object',
+        // TODO: ZENKO-3420
+        it.skip('should successfully ingest new bucket with existing object',
             done => {
                 // update zookeeper status to indicate snapshot phase
                 const path =
