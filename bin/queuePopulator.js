@@ -12,7 +12,9 @@ const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const zookeeper = require('node-zookeeper-client');
 
+const { HealthProbeServer } = require('arsenal').network.probe;
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
 werelogs.configure({ level: config.log.logLevel,
@@ -48,6 +50,11 @@ function queueBatch(queuePopulator, taskState) {
 const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
+
 async.waterfall([
     done => queuePopulator.open(done),
     done => {
@@ -57,6 +64,19 @@ async.waterfall([
         schedule.scheduleJob(qpConfig.cronRule, () => {
             queueBatch(queuePopulator, taskState);
         });
+        done();
+    },
+    done => {
+        healthServer.onReadyCheck(log => {
+            const state = queuePopulator.zkStatus();
+            if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
+                return true;
+            }
+            log.error(`Zookeeper is not connected! ${state}`);
+            return false;
+        });
+        log.info('Starting HealthProbe server');
+        healthServer.start();
         done();
     },
 ], err => {

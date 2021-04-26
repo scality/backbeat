@@ -47,6 +47,10 @@ const joiSchema = {
         ),
         sentinelPassword: joi.string().default('').allow(''),
     },
+    healthcheckServer: joi.object({
+        bindAddress: joi.string().default('127.0.0.1'),
+        port: joi.number().default(4042),
+    }).required(),
     certFilePaths: certFilePathsJoi,
     internalCertFilePaths: certFilePathsJoi,
 };
