@@ -54,6 +54,11 @@ const healthServer = new HealthProbeServer({
 });
 
 
+const healthServer = new HealthProbeServer({
+    bindAddress: config.healthcheckServer.bindAddress,
+    port: config.healthcheckServer.port,
+});
+
 async.waterfall([
     done => queuePopulator.open(done),
     done => {
