@@ -35,10 +35,6 @@
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient#36e1279",
     "commander": "^2.11.0",
-    "eslint": "^2.4.0",
-    "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#20dfffc",
-    "eslint-plugin-react": "^4.2.3",
     "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
@@ -48,7 +44,12 @@
     "yarn": "^1.17.3"
   },
   "devDependencies": {
-    "mocha": "^3.3.0",    
+    "eslint": "^2.4.0",
+    "eslint-config-airbnb": "^6.0.0",
+    "eslint-config-scality": "scality/Guidelines#20dfffc",
+    "eslint-plugin-react": "^4.2.3",
+    "mocha": "^3.3.0",
+    "sinon": "^10.0.0",
     "zookeeper-mock": "^1.2.0"
   }
 }
