@@ -49,9 +49,17 @@ function queueBatch(queuePopulator, taskState) {
 const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
-const probeServer = new ProbeServer({});
+const probeServer = new ProbeServer(qpConfig.probeServer);
 
 async.waterfall([
+    done => {
+        probeServer.addHandler(
+            DEFAULT_LIVE_ROUTE,
+            (res, log) => queuePopulator.handleLiveness(res, log)
+        );
+        probeServer._cbOnListening = done;
+        probeServer.start();
+    },
     done => queuePopulator.open(done),
     done => {
         const taskState = {
@@ -61,11 +69,6 @@ async.waterfall([
             queueBatch(queuePopulator, taskState);
         });
         done();
-    },
-    done => {
-        probeServer.addHandler(DEFAULT_LIVE_ROUTE, queuePopulator.handleLiveness);
-        probeServer._cbOnListening = done;
-        probeServer.start();
     },
 ], err => {
     if (err) {

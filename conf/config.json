@@ -18,6 +18,10 @@
         "dmd": {
             "host": "127.0.0.1",
             "port": 9990
+        },
+        "probeServer": {
+            "bindAddress": "localhost",
+            "port": 4042
         }
     },
     "extensions": {

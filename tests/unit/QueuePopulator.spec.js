@@ -56,13 +56,12 @@ describe('QueuePopulator', () => {
         });
     });
 
-    describe.only('handle liveness', () => {
+    describe('handle liveness', () => {
         let mockRes;
         let mockLog;
         beforeEach(() => {
             mockRes = sinon.spy();
             mockLog = sinon.spy();
-            // create children spies?
             mockLog.debug = sinon.spy();
             mockRes.writeHead = sinon.spy();
             mockRes.end = sinon.spy();
