@@ -24,7 +24,7 @@ const joiSchema = {
             logName: joi.string().default('s3-recordlog'),
         }).when('logSource', { is: 'dmd', then: joi.required() }),
         probeServer: joi.object({
-            bindAddress: joi.string().optional(),
+            bindAddress: joi.string().default('localhost'),
             port: joi.number().required(),
         }),
     },
