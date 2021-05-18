@@ -136,8 +136,16 @@ describe('QueuePopulator', () => {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
             const response = qp.handleLiveness(mockRes, mockLog);
-            assert.notStrictEqual(response.indexOf('topicB'), -1);
-            assert.notStrictEqual(response.indexOf('is not ready'), -1);
+            assert.deepStrictEqual(
+                JSON.parse(response),
+                [
+                    {
+                        component: 'log reader',
+                        status: 'not ready',
+                        topic: 'topicB',
+                    },
+                ]
+            );
             sinon.assert.calledOnceWithExactly(
                 mockLog.debug,
                 sinon.match.any, // we don't care about the debug label
