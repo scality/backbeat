@@ -36,6 +36,10 @@
             "replicaSet": "rs0",
             "readPreference": "primary",
             "database": "metadata"
+        },
+        "probeServer": {
+            "bindAddress": "localhost",
+            "port": 4042
         }
     },
     "extensions": {

@@ -42,7 +42,7 @@
   "dependencies": {
     "@hapi/joi": "^15.1.0",
     "JSONStream": "^1.3.5",
-    "arsenal": "github:scality/Arsenal#dd38e32",
+    "arsenal": "scality/Arsenal#e1a3b05",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
