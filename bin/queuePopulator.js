@@ -12,6 +12,7 @@ const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
+const { ProbeServer, DEFAULT_LIVE_ROUTE } = require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -48,7 +49,17 @@ function queueBatch(queuePopulator, taskState) {
 const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
+const probeServer = new ProbeServer(qpConfig.probeServer);
+
 async.waterfall([
+    done => {
+        probeServer.addHandler(
+            DEFAULT_LIVE_ROUTE,
+            (res, log) => queuePopulator.handleLiveness(res, log)
+        );
+        probeServer._cbOnListening = done;
+        probeServer.start();
+    },
     done => queuePopulator.open(done),
     done => {
         const taskState = {
