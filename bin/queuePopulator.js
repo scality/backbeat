@@ -46,16 +46,24 @@ function queueBatch(queuePopulator, taskState) {
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
     qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
-const probeServer = new ProbeServer(qpConfig.probeServer);
+let probeServer;
+if (process.env.BACKBEAT_ENABLE_PROBE_SERVER === 'true' &&
+    qpConfig.probeServer !== undefined) {
+    probeServer = new ProbeServer(qpConfig.probeServer);
+}
 
 async.waterfall([
     done => {
+        if (probeServer === undefined) {
+            return done();
+        }
         probeServer.addHandler(
             DEFAULT_LIVE_ROUTE,
             (res, log) => queuePopulator.handleLiveness(res, log)
         );
         probeServer._cbOnListening = done;
         probeServer.start();
+        return undefined;
     },
     done => queuePopulator.open(done),
     done => {
