@@ -75,6 +75,7 @@ describe('LogReader', () => {
                 bucket: 'db',
                 key: testCase.processedKey,
                 value: '{}',
+                logReader,
             });
         });
     });

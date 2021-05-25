@@ -9,6 +9,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.repConfig = params.config;
+        this.metricsHandler = params.metricsHandler;
     }
 
     filter(entry) {
@@ -46,14 +47,29 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
+
+        // TODO: getSite is always null
+        this._incrementMetrics(queueEntry.getSite(),
+            queueEntry.getContentLength());
+
+        // TODO: replication specific metrics go here
+        this.metricsHandler.bytes(
+            entry.logReader.getMetricLabels(),
+            queueEntry.getContentLength()
+        );
+        this.metricsHandler.objects(
+            entry.logReader.getMetricLabels()
+        );
+
+        // remove logReader to prevent circular stringify
+        const publishedEntry = Object.assign({}, entry);
+        delete publishedEntry.logReader;
+
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(entry));
-
-        this._incrementMetrics(queueEntry.getSite(),
-            queueEntry.getContentLength());
+                     JSON.stringify(publishedEntry));
     }
 }
 
