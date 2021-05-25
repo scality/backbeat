@@ -1,4 +1,5 @@
 const assert = require('assert');
+const sinon = require('sinon');
 
 const ReplicationQueuePopulator =
     require('../../../extensions/replication/ReplicationQueuePopulator');
@@ -53,6 +54,7 @@ describe('replication queue populator', () => {
                 topic: TOPIC,
             },
             logger: fakeLogger,
+            metricHandler: sinon.spy('metrics handler'),
         };
         rqp = new ReplicationQueuePopulatorMock(params);
     });
