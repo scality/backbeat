@@ -12,7 +12,8 @@ const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
-const { ProbeServer, DEFAULT_LIVE_ROUTE } = require('arsenal').network.probe.ProbeServer;
+const { ProbeServer, DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -63,6 +64,10 @@ async.waterfall([
         probeServer.addHandler(
             DEFAULT_LIVE_ROUTE,
             (res, log) => queuePopulator.handleLiveness(res, log)
+        );
+        probeServer.addHandler(
+            DEFAULT_METRICS_ROUTE,
+            (res, log) => queuePopulator.handleMetrics(res, log)
         );
         probeServer._cbOnListening = done;
         probeServer.start();
