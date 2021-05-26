@@ -45,7 +45,7 @@ function overwriteBackends(obj, backends) {
     /* eslint-enable no-param-reassign */
 }
 
-describe('replication queue populator', () => {
+describe.only('replication queue populator', () => {
     let rqp;
 
     before(() => {
@@ -54,7 +54,10 @@ describe('replication queue populator', () => {
                 topic: TOPIC,
             },
             logger: fakeLogger,
-            metricHandler: sinon.spy('metrics handler'),
+            metricsHandler: {
+                bytes: sinon.spy(),
+                objects: sinon.spy(),
+            },
         };
         rqp = new ReplicationQueuePopulatorMock(params);
     });
@@ -123,6 +126,9 @@ describe('replication queue populator', () => {
                 type: 'put',
                 bucket: 'test-bucket-source',
                 key: 'a-test-key',
+                logReader: {
+                    getMetricLabels: sinon.spy(),
+                },
             }, { value: JSON.stringify(objectKafkaValue) }),
             results: {},
         },
@@ -132,6 +138,9 @@ describe('replication queue populator', () => {
                 type: 'put',
                 bucket: 'test-bucket-source',
                 key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                logReader: {
+                    getMetricLabels: sinon.spy(),
+                },
             }, { value: JSON.stringify(objectKafkaValue) }),
             results: { [SITE]: { ops: 1, bytes: 128 } },
         },
@@ -141,6 +150,9 @@ describe('replication queue populator', () => {
                 type: 'put',
                 bucket: 'test-bucket-source',
                 key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
+                logReader: {
+                    getMetricLabels: sinon.spy(),
+                },
             }, { value:
                 overwriteBackends(objectKafkaValue, [
                     { site: SITE, status: 'PENDING' },
@@ -158,6 +170,9 @@ describe('replication queue populator', () => {
                 type: 'put',
                 bucket: 'test-bucket-source',
                 key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
+                logReader: {
+                    getMetricLabels: sinon.spy(),
+                },
             }, { value: JSON.stringify(mdOnlyKafkaValue) }),
             results: { [SITE]: { ops: 1, bytes: 0 } },
         },
