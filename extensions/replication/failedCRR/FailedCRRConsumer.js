@@ -104,7 +104,8 @@ class FailedCRRConsumer {
             if (err && err.retryable === true) {
                 log.info('publishing entry back into the kafka queue');
                 const entry = Buffer.from(kafkaEntry.value).toString();
-                return this._failedCRRProducer.publishFailedCRREntry(entry, cb);
+                this._failedCRRProducer.publishFailedCRREntry(entry);
+                return cb();
             }
             if (err) {
                 log.error('could not add redis sorted set member', {
