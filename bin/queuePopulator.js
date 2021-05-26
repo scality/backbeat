@@ -51,7 +51,7 @@ const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
 let probeServer;
-if (qpConfig.probeServer === undefined) {
+if (qpConfig.probeServer !== undefined) {
     probeServer = new ProbeServer(qpConfig.probeServer);
 }
 
