@@ -2,7 +2,6 @@
 
 const http = require('http');
 const https = require('https');
-const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -15,10 +14,6 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
-const {
-    getSortedSetMember,
-    getSortedSetKey,
-} = require('../../../lib/util/sortedSetHelper');
 
 /**
  * @class ReplicationStatusProcessor
@@ -110,6 +105,8 @@ class ReplicationStatusProcessor {
             internalHttpsConfig: this.internalHttpsConfig,
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
+            statsClient: this._statsClient,
+            failedCRRProducer: this._FailedCRRProducer,
             logger: this.logger,
         };
     }
@@ -157,38 +154,6 @@ class ReplicationStatusProcessor {
     }
 
     /**
-     * Push any failed entry to the "failed" topic.
-     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
-     * @param {Function} cb - The callback function
-     * @return {undefined}
-     */
-    _pushFailedEntry(queueEntry, cb) {
-        const { status, backends } = queueEntry.getReplicationInfo();
-        if (status !== 'FAILED') {
-            return process.nextTick(cb);
-        }
-        const backend = backends.find(b =>
-            b.status === 'FAILED' && b.site === queueEntry.getSite());
-        if (backend) {
-            const bucket = queueEntry.getBucket();
-            const objectKey = queueEntry.getObjectKey();
-            const versionId = queueEntry.getEncodedVersionId();
-            const role = queueEntry.getReplicationRoles().split(',')[0];
-            const score = Date.now();
-            const { site } = backend;
-            const latestHour = this._statsClient.getSortedSetCurrentHour(score);
-            const message = {
-                key: getSortedSetKey(site, latestHour),
-                member: getSortedSetMember(bucket, objectKey, versionId, role),
-                score,
-            };
-            return this._FailedCRRProducer
-                .publishFailedCRREntry(JSON.stringify(message), cb);
-        }
-        return cb();
-    }
-
-    /**
      * Proceed with updating the replication status of an object given
      * a kafka replication status queue entry
      *
@@ -209,13 +174,6 @@ class ReplicationStatusProcessor {
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
             task = new UpdateReplicationStatus(this);
-        }
-        if (task && this.repConfig.monitorReplicationFailures) {
-            return async.parallel([
-                next => this._pushFailedEntry(sourceEntry, next),
-                next => this.taskScheduler.push({ task, entry: sourceEntry },
-                    sourceEntry.getCanonicalKey(), next),
-            ], done);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
