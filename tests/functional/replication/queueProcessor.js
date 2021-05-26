@@ -12,6 +12,7 @@ const errors = require('arsenal').errors;
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 
+const replicationConstants = require('../../../extensions/replication/constants');
 const QueueProcessor = require('../../../extensions/replication' +
                                '/queueProcessor/QueueProcessor');
 const ReplicationStatusProcessor =
@@ -707,6 +708,7 @@ describe('queue processor functional tests with mocking', () => {
                       retryTimeoutS: 5,
                       groupId: 'backbeat-func-test-group-id',
                   },
+                  monitorReplicationFailures: true,
                 }, {
                 });
             replicationStatusProcessor.start({ bootstrap: true }, done);
@@ -1032,15 +1034,28 @@ describe('queue processor functional tests with mocking', () => {
         });
 
         describe('retry behavior', () => {
-            it('should give up retries after configured timeout (5s)',
-            done => {
+            it('should give up retries after configured timeout (5s)', done => {
                 s3mock.installS3ErrorResponder('source.s3.getObject',
                                                errors.InternalError);
                 s3mock.setExpectedReplicationStatus('FAILED');
-
                 async.parallel([
                     done => {
                         s3mock.onPutSourceMd = done;
+                    },
+                    done => {
+                        const failedCRRProducer = replicationStatusProcessor._FailedCRRProducer;
+                        const origPublishFailedMethod = failedCRRProducer.publishFailedCRREntry;
+                        failedCRRProducer.publishFailedCRREntry = message => {
+                            const parsedFailedQueueMessage = JSON.parse(message);
+                            assert(parsedFailedQueueMessage.key.startsWith(
+                                `${replicationConstants.redisKeys.failedCRR}:${queueProcessor.site}:`));
+                            assert.strictEqual(
+                                parsedFailedQueueMessage.member,
+                                `${s3mock.getParam('source.bucket')}:${s3mock.getParam('key')}`
+                              + `:${s3mock.getParam('versionIdEncoded')}`);
+                            failedCRRProducer.publishFailedCRREntry = origPublishFailedMethod;
+                            done();
+                        };
                     },
                     done => queueProcessor.processKafkaEntry(
                         s3mock.getParam('kafkaEntry'), err => {
