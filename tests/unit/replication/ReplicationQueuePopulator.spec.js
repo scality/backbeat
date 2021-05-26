@@ -45,7 +45,7 @@ function overwriteBackends(obj, backends) {
     /* eslint-enable no-param-reassign */
 }
 
-describe.only('replication queue populator', () => {
+describe('replication queue populator', () => {
     let rqp;
 
     before(() => {
