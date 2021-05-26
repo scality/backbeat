@@ -51,8 +51,7 @@ const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
 let probeServer;
-if (process.env.BACKBEAT_ENABLE_PROBE_SERVER === 'true' &&
-    qpConfig.probeServer !== undefined) {
+if (qpConfig.probeServer === undefined) {
     probeServer = new ProbeServer(qpConfig.probeServer);
 }
 
