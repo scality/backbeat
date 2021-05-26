@@ -8,9 +8,11 @@ const config = require('../../../conf/Config');
 class FailedCRRProducer {
     /**
      * Create the retry producer.
+     *
+     * @param {object} kafkaConfig - kafka config param
      */
-    constructor() {
-        this._kafkaConfig = config.kafka;
+    constructor(kafkaConfig) {
+        this._kafkaConfig = kafkaConfig;
         this._topic = config.extensions.replication.replicationFailedTopic;
         this._producer = null;
         this._log = new Logger('Backbeat:FailedCRRProducer');
