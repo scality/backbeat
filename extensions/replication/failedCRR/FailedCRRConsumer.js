@@ -22,7 +22,7 @@ class FailedCRRConsumer {
         this._kafkaConfig = config.kafka;
         this._topic = config.extensions.replication.replicationFailedTopic;
         this.logger = new Logger('Backbeat:FailedCRRConsumer');
-        this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
+        this._failedCRRProducer = new FailedCRRProducer(this._kafkaConfig);
         this._backbeatTask = new BackbeatTask();
         this._statsClient = new StatsModel(redisClient);
     }
