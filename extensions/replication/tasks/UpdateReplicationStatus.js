@@ -13,6 +13,10 @@ const {
     metricsTypeCompleted,
     metricsTypeFailed,
 } = require('../constants');
+const {
+    getSortedSetMember,
+    getSortedSetKey,
+} = require('../../../lib/util/sortedSetHelper');
 
 class UpdateReplicationStatus extends BackbeatTask {
     /**
@@ -76,6 +80,26 @@ class UpdateReplicationStatus extends BackbeatTask {
                 sourceEntry.getObjectVersionedKey(), parsedEntry.result);
             return cb(null, refreshedEntry);
         });
+    }
+
+    /**
+     * Push any failed entry to the "failed" topic.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @return {undefined}
+     */
+    _pushFailedEntry(queueEntry) {
+        const site = queueEntry.getSite();
+        const bucket = queueEntry.getBucket();
+        const objectKey = queueEntry.getObjectKey();
+        const versionId = queueEntry.getEncodedVersionId();
+        const score = Date.now();
+        const latestHour = this.statsClient.getSortedSetCurrentHour(score);
+        const message = {
+            key: getSortedSetKey(site, latestHour),
+            member: getSortedSetMember(bucket, objectKey, versionId),
+            score,
+        };
+        this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
     }
 
     /**
@@ -178,6 +202,9 @@ class UpdateReplicationStatus extends BackbeatTask {
             entry = refreshedEntry.toCompletedEntry(site);
         } else if (newStatus === 'FAILED') {
             entry = refreshedEntry.toFailedEntry(site);
+            if (this.repConfig.monitorReplicationFailures) {
+                this._pushFailedEntry(sourceEntry);
+            }
         } else if (newStatus === 'PENDING') {
             entry = refreshedEntry.toPendingEntry(site);
         }
