@@ -8,16 +8,15 @@ const fakeLogger = require('../../utils/fakeLogger');
 
 const TOPIC = 'test-topic';
 const SITE = 'test-site';
-const SITE2 = 'test-site2';
 
 const repInfo = {
     status: 'PENDING',
     backends: [{
-        'site': SITE,
-        'status': 'PENDING',
-        'dataStoreVersionId': '',
+        site: SITE,
+        status: 'PENDING',
+        dataStoreVersionId: '',
     }],
-    content: [ 'DATA', 'METADATA' ],
+    content: ['DATA', 'METADATA'],
     destination: 'arn:aws:s3:::test-bucket-target',
     storageClass: 'awsbackend',
     role: 'arn:aws:iam::922268666771:role/bb-replication-1522257577471',
@@ -37,22 +36,22 @@ const kafkaValue = {
     'x-amz-server-side-encryption-aws-kms-key-id': '',
     'x-amz-server-side-encryption-customer-algorithm': '',
     'x-amz-website-redirect-location': '',
-    acl: {
+    'acl': {
         Canned: 'private',
         FULL_CONTROL: [],
         WRITE_ACP: [],
         READ: [],
-        READ_ACP: []
+        READ_ACP: [],
     },
-    key: '',
-    location: null,
-    isDeleteMarker: false,
-    tags: {},
-    dataStoreName: 'dc-1',
+    'key': '',
+    'location': null,
+    'isDeleteMarker': false,
+    'tags': {},
+    'dataStoreName': 'dc-1',
     'last-modified': '2018-03-28T22:10:00.534Z',
     'md-model-version': 3,
-    versionId: '98477724999464999999RG001  1.30.12',
-    replicationInfo: repInfo,
+    'versionId': '98477724999464999999RG001  1.30.12',
+    'replicationInfo': repInfo,
 };
 
 const mdOnlyKafkaValue = Object.assign({}, kafkaValue);
@@ -86,13 +85,6 @@ class ReplicationQueuePopulatorMock extends ReplicationQueuePopulator {
     }
 }
 
-function overwriteBackends(obj, backends) {
-    /* eslint-disable no-param-reassign */
-    obj.replicationInfo.backends = backends;
-    return JSON.stringify(obj);
-    /* eslint-enable no-param-reassign */
-}
-
 describe('replication queue populator', () => {
     let params;
     let rqp;
@@ -116,7 +108,7 @@ describe('replication queue populator', () => {
     });
 
     it('publish prom metrics', () => {
-        const labels = {a: 10}; // dummy metric labels
+        const labels = { a: 10 }; // dummy metric labels
         const metricLabelsStub = sinon.stub();
         metricLabelsStub.returns(labels);
         const entry = Object.assign({}, {
@@ -133,11 +125,11 @@ describe('replication queue populator', () => {
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.bytes,
             labels,
-            128,
+            128
         );
         sinon.assert.calledOnceWithExactly(
             params.metricsHandler.objects,
-            labels,
+            labels
         );
-    })
+    });
 });
