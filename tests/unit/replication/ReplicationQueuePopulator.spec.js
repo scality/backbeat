@@ -23,7 +23,7 @@ class ReplicationQueuePopulatorMock extends ReplicationQueuePopulator {
     }
 
     publish(topic, key, message) {
-        assert.equal(topic, TOPIC);
+        assert.strictEqual(topic, TOPIC);
 
         this._state.key = encodeURIComponent(key);
         this._state.message = message;
@@ -47,9 +47,13 @@ function overwriteBackends(obj, backends) {
 
 describe('replication queue populator', () => {
     let rqp;
+    let params;
+    const labels = { a: 10 }; // dummy metric labels
+    const metricLabelsStub = sinon.stub();
+    metricLabelsStub.returns(labels);
 
-    before(() => {
-        const params = {
+    beforeEach(() => {
+        params = {
             config: {
                 topic: TOPIC,
             },
@@ -127,7 +131,7 @@ describe('replication queue populator', () => {
                 bucket: 'test-bucket-source',
                 key: 'a-test-key',
                 logReader: {
-                    getMetricLabels: sinon.spy(),
+                    getMetricLabels: metricLabelsStub,
                 },
             }, { value: JSON.stringify(objectKafkaValue) }),
             results: {},
@@ -136,13 +140,16 @@ describe('replication queue populator', () => {
             desc: 'object entry, master key',
             entry: Object.assign({}, {
                 type: 'put',
-                bucket: 'test-bucket-source',
                 key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                bucket: 'test-bucket-source',
                 logReader: {
-                    getMetricLabels: sinon.spy(),
+                    getMetricLabels: metricLabelsStub,
                 },
             }, { value: JSON.stringify(objectKafkaValue) }),
             results: { [SITE]: { ops: 1, bytes: 128 } },
+            metrics: {
+                bytes: 128,
+            }
         },
         {
             desc: 'object entry, master key, multiple backend',
@@ -151,7 +158,7 @@ describe('replication queue populator', () => {
                 bucket: 'test-bucket-source',
                 key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
                 logReader: {
-                    getMetricLabels: sinon.spy(),
+                    getMetricLabels: metricLabelsStub,
                 },
             }, { value:
                 overwriteBackends(objectKafkaValue, [
@@ -163,6 +170,9 @@ describe('replication queue populator', () => {
                 [SITE]: { ops: 1, bytes: 128 },
                 [SITE2]: { ops: 1, bytes: 128 },
             },
+            metrics: {
+                bytes: 128,
+            }
         },
         {
             desc: 'metadata only entry, master key',
@@ -171,7 +181,7 @@ describe('replication queue populator', () => {
                 bucket: 'test-bucket-source',
                 key: 'a-test-key2\u000098477724999464999999RG001  1.30.12',
                 logReader: {
-                    getMetricLabels: sinon.spy(),
+                    getMetricLabels: metricLabelsStub,
                 },
             }, { value: JSON.stringify(mdOnlyKafkaValue) }),
             results: { [SITE]: { ops: 1, bytes: 0 } },
@@ -190,6 +200,47 @@ describe('replication queue populator', () => {
             } else {
                 assert.deepStrictEqual(rqp.getState(), {});
             }
+
+            if (input.metrics) {
+                sinon.assert.calledOnceWithExactly(
+                    params.metricsHandler.bytes,
+                    labels,
+                    input.metrics.bytes,
+                );
+                sinon.assert.calledOnceWithExactly(
+                    params.metricsHandler.objects,
+                    labels,
+                );
+            }
         });
     });
+            /*
+=======
+    it('publish prom metrics', () => {
+        const labels = {a: 10}; // dummy metric labels
+        const metricLabelsStub = sinon.stub();
+        metricLabelsStub.returns(labels);
+        const entry = Object.assign({}, {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+            logReader: {
+                getMetricLabels: metricLabelsStub,
+            },
+        }, { value: JSON.stringify(kafkaValue) });
+
+        rqp._filterVersionedKey(entry);
+
+        sinon.assert.calledOnceWithExactly(
+            params.metricsHandler.bytes,
+            labels,
+            128,
+        );
+        sinon.assert.calledOnceWithExactly(
+            params.metricsHandler.objects,
+            labels,
+        );
+    })
+>>>>>>> origin/w/7.10/feature/S3C-4345_PromClientAndMetricsForPopulator
+*/
 });
