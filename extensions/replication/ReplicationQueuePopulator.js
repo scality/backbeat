@@ -9,6 +9,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.repConfig = params.config;
+        this.metricsHandler = params.metricsHandler;
     }
 
     filter(entry) {
@@ -51,12 +52,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
-        this.log.trace('publishing object replication entry',
-                       { entry: queueEntry.getLogInfo() });
-        this.publish(this.repConfig.topic,
-                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(entry));
 
+        // remove logReader to prevent circular stringify
         const repSites = queueEntry.getReplicationInfo().backends;
         const content = queueEntry.getReplicationContent();
         const bytes = content.includes('DATA') ?
@@ -67,6 +64,24 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             .forEach(backend => {
                 this._incrementMetrics(backend.site, bytes);
             });
+
+        // TODO: replication specific metrics go here
+        this.metricsHandler.bytes(
+            entry.logReader.getMetricLabels(),
+            bytes
+        );
+        this.metricsHandler.objects(
+            entry.logReader.getMetricLabels()
+        );
+
+        const publishedEntry = Object.assign({}, entry);
+        delete publishedEntry.logReader;
+
+        this.log.trace('publishing object replication entry',
+                       { entry: queueEntry.getLogInfo() });
+        this.publish(this.repConfig.topic,
+                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
+                     JSON.stringify(publishedEntry));
     }
 }
 
