@@ -1,0 +1,87 @@
+---
+name: pre-merge
+
+env:
+  GINKGO_VERSION: v1.15.2
+on:
+  push:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Cache Docker layers
+      uses: actions/cache@v2
+      with:
+        path: /tmp/.buildx-cache
+        key: ${{ runner.os }}-buildx-${{ github.sha }}
+        restore-keys: |
+          ${{ runner.os }}-buildx-
+    - name: Set up Docker Buildk
+      uses: docker/setup-buildx-action@v1
+      with:
+        buildkitd-flags: --debug
+    - name: Login to Registry
+      uses: docker/login-action@v1
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ secrets.GITHUB_TOKEN }}
+
+    - name: Build and push kafka
+      uses: docker/build-push-action@v2
+      with:
+        push: true
+        context: .github/dockerfiles/kafka
+        tags: "ghcr.io/scality/backbeat/ci-kafka:${{ github.sha }}"
+        cache-from: type=local,src=/tmp/.buildx-cache
+        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+
+# Temp fix
+# https://github.com/docker/build-push-action/issues/252
+# https://github.com/moby/buildkit/issues/1896
+    - name: Move cache
+      run: |
+        rm -rf /tmp/.buildx-cache
+        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+
+  tests:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+        - 6379:6379
+      kafka:
+        image: ghcr.io/scality/backbeat/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+        ports:
+        - 2181:2181
+        - 9092:9092
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v2
+    - name: Install build dependencies
+      run: |
+        sudo apt-get update
+        sudo apt-get install -y build-essential
+    - uses: actions/setup-go@v2
+      with:
+        go-version: '1.16.2'
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '10'
+        cache: yarn
+    - run: yarn install --frozen-lockfile
+    - run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
+    - run: yarn run --silent lint_md
+    - run: yarn run --silent lint
+    - run: yarn test
+    - run: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
+      working-directory: bucket-scanner
+    - run: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
