@@ -385,6 +385,65 @@ class QueueProcessor extends EventEmitter {
                           { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
+
+    /**
+     * Handle ProbeServer liveness check
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {string} Error response string or undefined
+     */
+    handleLiveness(res, log) {
+        const verboseLiveness = {};
+        // track and return all errors in one response
+        const responses = [];
+        if (this.replicationStatusProducer === undefined ||
+            this.replicationStatusProducer === null) {
+            verboseLiveness.replicationStatusProducer = 'undefined';
+            responses.push({
+                component: 'Replication Status Producer',
+                status: 'undefined',
+                site: this.site,
+            });
+        } else if (!this.replicationStatusProducer.isReady()) {
+            verboseLiveness.replicationStatusProducer = 'not ready';
+            responses.push({
+                component: 'Replication Status Producer',
+                status: 'not ready',
+                site: this.site,
+            });
+        } else {
+            verboseLiveness.replicationStatusProducer = 'ready';
+        }
+
+        if (this._consumer === undefined || this._consumer === null) {
+            verboseLiveness.consumer = 'undefined';
+            responses.push({
+                component: 'Consumer',
+                status: 'undefined',
+                site: this.site,
+            });
+        } else if (!this._consumer.isReady()) {
+            verboseLiveness.consumer = 'not ready';
+            responses.push({
+                component: 'Consumer',
+                status: 'not ready',
+                site: this.site,
+            });
+        } else {
+            verboseLiveness.consumer = 'ready';
+        }
+
+        log.debug('verbose liveness', verboseLiveness);
+
+        if (responses.length > 0) {
+            return JSON.stringify(responses);
+        }
+
+        res.writeHead(200);
+        res.end();
+        return undefined;
+    }
 }
 
 module.exports = QueueProcessor;
