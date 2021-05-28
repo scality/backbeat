@@ -48,7 +48,8 @@ const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
     qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
 let probeServer;
-if (qpConfig.probeServer !== undefined) {
+if (process.env.CRR_METRICS_PROBE === 'true' &&
+    qpConfig.probeServer !== undefined) {
     probeServer = new ProbeServer(qpConfig.probeServer);
 }
 
