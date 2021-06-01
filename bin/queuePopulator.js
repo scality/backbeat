@@ -12,7 +12,8 @@ const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
-const { ProbeServer, DEFAULT_LIVE_ROUTE } = require('arsenal').network.probe.ProbeServer;
+const { ProbeServer, DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -50,7 +51,7 @@ const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
 let probeServer;
-if (process.env.BACKBEAT_ENABLE_PROBE_SERVER === 'true' &&
+if (process.env.CRR_METRICS_PROBE !== 'false' &&
     qpConfig.probeServer !== undefined) {
     probeServer = new ProbeServer(qpConfig.probeServer);
 }
@@ -63,6 +64,10 @@ async.waterfall([
         probeServer.addHandler(
             DEFAULT_LIVE_ROUTE,
             (res, log) => queuePopulator.handleLiveness(res, log)
+        );
+        probeServer.addHandler(
+            DEFAULT_METRICS_ROUTE,
+            (res, log) => queuePopulator.handleMetrics(res, log)
         );
         probeServer._cbOnListening = done;
         probeServer.start();
