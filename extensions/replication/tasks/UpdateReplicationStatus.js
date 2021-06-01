@@ -3,6 +3,10 @@ const errors = require('arsenal').errors;
 const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
+const {
+    getSortedSetMember,
+    getSortedSetKey,
+} = require('../../../lib/util/sortedSetHelper');
 
 class UpdateReplicationStatus extends BackbeatTask {
     /**
@@ -70,6 +74,27 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
     }
 
+    /**
+     * Push any failed entry to the "failed" topic.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @return {undefined}
+     */
+    _pushFailedEntry(queueEntry) {
+        const site = queueEntry.getSite();
+        const bucket = queueEntry.getBucket();
+        const objectKey = queueEntry.getObjectKey();
+        const versionId = queueEntry.getEncodedVersionId();
+        const role = queueEntry.getReplicationRoles().split(',')[0];
+        const score = Date.now();
+        const latestHour = this.statsClient.getSortedSetCurrentHour(score);
+        const message = {
+            key: getSortedSetKey(site, latestHour),
+            member: getSortedSetMember(bucket, objectKey, versionId, role),
+            score,
+        };
+        this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -83,6 +108,9 @@ class UpdateReplicationStatus extends BackbeatTask {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
             } else if (status === 'FAILED') {
                 updatedSourceEntry = refreshedEntry.toFailedEntry(site);
+                if (this.repConfig.monitorReplicationFailures) {
+                    this._pushFailedEntry(sourceEntry);
+                }
             } else if (status === 'PENDING') {
                 updatedSourceEntry = refreshedEntry.toPendingEntry(site);
             } else {
