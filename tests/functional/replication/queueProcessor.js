@@ -1313,7 +1313,7 @@ describe('queue processor functional tests with mocking', () => {
                         s3mock.onPutSourceMd = done;
                     },
                     done => {
-                        const failedCRRProducer = replicationStatusProcessor._FailedCRRProducer;
+                        const failedCRRProducer = replicationStatusProcessor._failedCRRProducer;
                         const origPublishFailedMethod = failedCRRProducer.publishFailedCRREntry;
                         failedCRRProducer.publishFailedCRREntry = message => {
                             const parsedFailedQueueMessage = JSON.parse(message);
