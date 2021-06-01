@@ -162,7 +162,11 @@
                     }
                 },
                 "concurrency": 10,
-                "mpuPartsConcurrency": 10
+                "mpuPartsConcurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4043
+                }
             },
             "replicationStatusProcessor": {
                 "groupId": "backbeat-replication-group",
