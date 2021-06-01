@@ -8,9 +8,11 @@ const config = require('../../../lib/Config');
 class FailedCRRProducer {
     /**
      * Create the retry producer.
+     *
+     * @param {object} kafkaConfig - kafka config param
      */
-    constructor() {
-        this._kafkaConfig = config.kafka;
+    constructor(kafkaConfig) {
+        this._kafkaConfig = kafkaConfig;
         this._topic = config.extensions.replication.replicationFailedTopic;
         this._producer = null;
         this._log = new Logger('Backbeat:FailedCRRProducer');
@@ -45,15 +47,18 @@ class FailedCRRProducer {
     /**
      * Publish the given message to the retry Kafka topic.
      * @param {String} message - The message to publish
-     * @param {Function} cb - The callback function
+     * @param {Function} [deliveryReportCb] - called when Kafka
+     * returns a delivery report
      * @return {undefined}
      */
-    publishFailedCRREntry(message, cb) {
+    publishFailedCRREntry(message, deliveryReportCb) {
         this._producer.send([{ message }], err => {
             if (err) {
                 this._log.trace('error publishing retry entry');
             }
-            return cb();
+            if (deliveryReportCb) {
+                deliveryReportCb();
+            }
         });
     }
 
