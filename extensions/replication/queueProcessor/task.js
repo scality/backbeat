@@ -1,5 +1,4 @@
 'use strict'; // eslint-disable-line
-
 const async = require('async');
 const werelogs = require('werelogs');
 
@@ -7,7 +6,6 @@ const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../lib/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
-const { HealthProbeServer } = require('arsenal').network.probe;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
 const { zookeeperNamespace, zkStatePath } =
@@ -22,8 +20,9 @@ const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
-
 const RESUME_NODE = 'scheduledResume';
+const { ProbeServer, DEFAULT_LIVE_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -31,10 +30,11 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
-const healthServer = new HealthProbeServer({
-    bindAddress: config.healthcheckServer.bindAddress,
-    port: config.healthcheckServer.port,
-});
+let probeServer;
+if (process.env.CRR_METRICS_PROBE === 'true' &&
+    repConfig.queueProcessor.probeServer !== undefined) {
+    probeServer = new ProbeServer(repConfig.queueProcessor.probeServer);
+}
 
 const activeQProcessors = {};
 
@@ -213,18 +213,28 @@ function initAndStart(zkClient) {
                 process.exit(1);
             }
         });
-        healthServer.onReadyCheck(() => {
-            let passed = true;
-            Object.keys(activeQProcessors).forEach(site => {
-                if (!activeQProcessors[site].isReady()) {
-                    passed = false;
-                    log.error(`QueueProcessor for ${site} is not ready!`);
+
+        if (probeServer !== undefined) {
+            probeServer.addHandler(
+                DEFAULT_LIVE_ROUTE,
+                (res, log) => {
+                    // take all our processors and create one liveness response
+                    let responses = [];
+                    Object.keys(activeQProcessors).forEach(site => {
+                        const qp = activeQProcessors[site];
+                        responses = responses.concat(qp.handleLiveness(log));
+                    });
+                    if (responses.length > 0) {
+                        return JSON.stringify(responses);
+                    }
+                    res.writeHead(200);
+                    res.end();
+                    return undefined;
                 }
-            });
-            return passed;
-        });
-        log.info('Starting HealthProbe server');
-        healthServer.start();
+            );
+            probeServer.start();
+            log.info('Starting probe server');
+        }
     });
 }
 
