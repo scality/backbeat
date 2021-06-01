@@ -135,7 +135,7 @@ class ReplicationStatusProcessor {
             gcProducer: this._gcProducer,
             mProducer: this._mProducer,
             statsClient: this._statsClient,
-            failedCRRProducer: this._FailedCRRProducer,
+            failedCRRProducer: this._failedCRRProducer,
             logger: this.logger,
         };
     }
