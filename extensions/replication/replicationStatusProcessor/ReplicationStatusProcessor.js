@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 
-const http = require('http');
 const async = require('async');
+const http = require('http');
 const https = require('https');
 
 const Logger = require('werelogs').Logger;
@@ -16,10 +16,6 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
-const {
-    getSortedSetMember,
-    getSortedSetKey,
-} = require('../../../lib/util/sortedSetHelper');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 // StatsClient constant default for site metrics
@@ -138,6 +134,8 @@ class ReplicationStatusProcessor {
             vaultclientCache: this.vaultclientCache,
             gcProducer: this._gcProducer,
             mProducer: this._mProducer,
+            statsClient: this._statsClient,
+            failedCRRProducer: this._failedCRRProducer,
             logger: this.logger,
         };
     }
@@ -154,7 +152,7 @@ class ReplicationStatusProcessor {
     start(options, cb) {
         async.parallel([
             done => {
-                this._failedCRRProducer = new FailedCRRProducer();
+                this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
                 this._failedCRRProducer.setupProducer(done);
             },
             done => {
@@ -230,37 +228,6 @@ class ReplicationStatusProcessor {
     }
 
     /**
-     * Push any failed entry to the "failed" topic.
-     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
-     * @param {Function} cb - The callback function
-     * @return {undefined}
-     */
-    _pushFailedEntry(queueEntry, cb) {
-        const { status, backends } = queueEntry.getReplicationInfo();
-        if (status !== 'FAILED') {
-            return process.nextTick(cb);
-        }
-        const backend = backends.find(b =>
-            b.status === 'FAILED' && b.site === queueEntry.getSite());
-        if (backend) {
-            const bucket = queueEntry.getBucket();
-            const objectKey = queueEntry.getObjectKey();
-            const versionId = queueEntry.getEncodedVersionId();
-            const score = Date.now();
-            const { site } = backend;
-            const latestHour = this._statsClient.getSortedSetCurrentHour(score);
-            const message = {
-                key: getSortedSetKey(site, latestHour),
-                member: getSortedSetMember(bucket, objectKey, versionId),
-                score,
-            };
-            return this._failedCRRProducer
-                .publishFailedCRREntry(JSON.stringify(message), cb);
-        }
-        return cb();
-    }
-
-    /**
      * Proceed with updating the replication status of an object given
      * a kafka replication status queue entry
      *
@@ -281,13 +248,6 @@ class ReplicationStatusProcessor {
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
             task = new UpdateReplicationStatus(this);
-        }
-        if (task && this.repConfig.monitorReplicationFailures) {
-            return async.parallel([
-                next => this._pushFailedEntry(sourceEntry, next),
-                next => this.taskScheduler.push({ task, entry: sourceEntry },
-                    next),
-            ], done);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
