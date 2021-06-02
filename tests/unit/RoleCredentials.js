@@ -2,6 +2,7 @@ const assert = require('assert');
 const http = require('http');
 const { Client } = require('vaultclient');
 const { Logger } = require('werelogs');
+const { errors } = require('arsenal');
 const { proxyPath } = require('../../extensions/replication/constants');
 const RoleCredentials = require('../../lib/credentials/RoleCredentials');
 
@@ -17,16 +18,18 @@ let simulateServerError = false;
 const server = http.createServer();
 server.on('request', (req, res) => {
     const Expiration = Date.now() + 2000; // expire after 2 seconds
-    const payload = JSON.stringify({
-        Credentials: {
-            AccessKeyId,
-            SecretAccessKey,
-            SessionToken,
-            Expiration,
-        },
-    });
+    let payload;
     if (simulateServerError) {
-        req.socket.destroy();
+        payload = '{INVALIDJSON}';
+    } else {
+        payload = JSON.stringify({
+            Credentials: {
+                AccessKeyId,
+                SecretAccessKey,
+                SessionToken,
+                Expiration,
+            },
+        });
     }
     res.writeHead(200, {
         'content-type': 'application/json',
@@ -149,6 +152,9 @@ describe('Credentials Manager', () => {
             simulateServerError = true;
             roleCredentials.get(err => {
                 assert(err);
+                // check that err is another instance distinct from
+                // the global arsenal error
+                assert.notStrictEqual(err, errors.InternalError);
                 done();
             });
         }, retryTimeout);
