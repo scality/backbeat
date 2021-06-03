@@ -30,7 +30,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
-const probeUtils = require('../../../lib/util/probeUtils');
+const libConstants = require('../../../lib/constants');
 
 const {
     zookeeperNamespace,
@@ -847,39 +847,39 @@ class QueueProcessor extends EventEmitter {
         const responses = [];
         if (this.replicationStatusProducer === undefined ||
             this.replicationStatusProducer === null) {
-            verboseLiveness.replicationStatusProducer = probeUtils.statusUndefined;
+            verboseLiveness.replicationStatusProducer = libConstants.statusUndefined;
             responses.push({
                 component: 'Replication Status Producer',
-                status: probeUtils.statusUndefined,
+                status: libConstants.statusUndefined,
                 site: this.site,
             });
         } else if (!this.replicationStatusProducer.isReady()) {
-            verboseLiveness.replicationStatusProducer = probeUtils.statusNotReady;
+            verboseLiveness.replicationStatusProducer = libConstants.statusNotReady;
             responses.push({
                 component: 'Replication Status Producer',
-                status: probeUtils.statusNotReady,
+                status: libConstants.statusNotReady,
                 site: this.site,
             });
         } else {
-            verboseLiveness.replicationStatusProducer = probeUtils.statusReady;
+            verboseLiveness.replicationStatusProducer = libConstants.statusReady;
         }
 
         if (this._consumer === undefined || this._consumer === null) {
-            verboseLiveness.consumer = probeUtils.statusUndefined;
+            verboseLiveness.consumer = libConstants.statusUndefined;
             responses.push({
                 component: 'Consumer',
-                status: probeUtils.statusUndefined,
+                status: libConstants.statusUndefined,
                 site: this.site,
             });
         } else if (!this._consumer.isReady()) {
-            verboseLiveness.consumer = probeUtils.statusNotReady;
+            verboseLiveness.consumer = libConstants.statusNotReady;
             responses.push({
                 component: 'Consumer',
-                status: probeUtils.statusNotReady,
+                status: libConstants.statusNotReady,
                 site: this.site,
             });
         } else {
-            verboseLiveness.consumer = probeUtils.statusReady;
+            verboseLiveness.consumer = libConstants.statusReady;
         }
 
         log.debug('verbose liveness', verboseLiveness);

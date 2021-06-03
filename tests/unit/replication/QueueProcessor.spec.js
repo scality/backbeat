@@ -1,6 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const probeUtils = require('../../../lib/util/probeUtils');
+const constants = require('../../../lib/constants');
 
 const QueueProcessor =
     require('../../../extensions/replication/queueProcessor/QueueProcessor');
@@ -79,11 +79,11 @@ describe('Queue Processor', () => {
                 [
                     {
                         component: 'Replication Status Producer',
-                        status: probeUtils.statusUndefined,
+                        status: constants.statusUndefined,
                         site: 'site',
                     }, {
                         component: 'Consumer',
-                        status: probeUtils.statusUndefined,
+                        status: constants.statusUndefined,
                         site: 'site',
                     },
                 ]
@@ -93,8 +93,8 @@ describe('Queue Processor', () => {
                 mockLog.debug,
                 sinon.match.any, // we don't care about the debug label
                 {
-                    replicationStatusProducer: probeUtils.statusUndefined,
-                    consumer: probeUtils.statusUndefined,
+                    replicationStatusProducer: constants.statusUndefined,
+                    consumer: constants.statusUndefined,
                 }
             );
         });
@@ -115,11 +115,11 @@ describe('Queue Processor', () => {
                 [
                     {
                         component: 'Replication Status Producer',
-                        status: probeUtils.statusNotReady,
+                        status: constants.statusNotReady,
                         site: 'site',
                     }, {
                         component: 'Consumer',
-                        status: probeUtils.statusNotReady,
+                        status: constants.statusNotReady,
                         site: 'site',
                     },
                 ]
