@@ -57,7 +57,7 @@ describe('Probe server', () => {
         startProbeServer(mockQp, config, probeServer => {
             probeServer.onStop(done);
             http.get(`http://localhost:52555${DEFAULT_LIVE_ROUTE}`, res => {
-                assert.strictEqual(500, res.statusCode);
+                assert.strictEqual(res.statusCode, 500);
 
                 const rawData = [];
                 res.on('data', chunk => {
