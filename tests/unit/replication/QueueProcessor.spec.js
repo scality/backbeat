@@ -1,6 +1,4 @@
 const assert = require('assert');
-
-const { Logger } = require('werelogs');
 const sinon = require('sinon');
 const probeUtils = require('../../../lib/util/probeUtils');
 
@@ -17,31 +15,31 @@ describe('Queue Processor', () => {
                     type: 'role',
                     vault: {
                         host: 'localhost:9093',
-                        port: 7777
-                    }
+                        port: 7777,
+                    },
                 },
                 s3: {
                     host: 'localhost:9094',
-                    port: 7777
+                    port: 7777,
                 },
                 transport: 'http',
             },
             {
                 auth: {
-                    type: 'role'
+                    type: 'role',
                 },
                 bootstrapList: [
-                    { site: 'sf', servers: [ 'localhost:9094', ]}
+                    { site: 'sf', servers: ['localhost:9094'] },
                 ],
-                transport: 'http'
+                transport: 'http',
             },
             {
                 topic: 'backbeat-func-test-dummy-topic',
                 replicationStatusTopic: 'backbeat-func-test-repstatus',
-                    queueProcessor: {
-                      retryTimeoutS: 5,
-                      groupId: 'backbeat-func-test-group-id',
-                      mpuPartsConcurrency: 10,
+                queueProcessor: {
+                    retryTimeoutS: 5,
+                    groupId: 'backbeat-func-test-group-id',
+                    mpuPartsConcurrency: 10,
                 },
             },
             { }, { }, 'site', undefined
@@ -65,10 +63,10 @@ describe('Queue Processor', () => {
 
         it('with ready components', () => {
             const mockConsumer = {
-                isReady: sinon.stub().returns(true)
+                isReady: sinon.stub().returns(true),
             };
             const mockProducer = {
-                isReady: sinon.stub().returns(true)
+                isReady: sinon.stub().returns(true),
             };
 
             qp.replicationStatusProducer = mockProducer;
@@ -87,12 +85,12 @@ describe('Queue Processor', () => {
                     {
                         component: 'Replication Status Producer',
                         status: probeUtils.statusUndefined,
-                        site: 'site'
-                    },{
+                        site: 'site',
+                    }, {
                         component: 'Consumer',
                         status: probeUtils.statusUndefined,
-                        site: 'site'
-                    }
+                        site: 'site',
+                    },
                 ]
             );
             // only need to test this once as it matches the response anyway
@@ -108,10 +106,10 @@ describe('Queue Processor', () => {
 
         it('with not ready components', () => {
             const mockConsumer = {
-                isReady: sinon.stub().returns(false)
+                isReady: sinon.stub().returns(false),
             };
             const mockProducer = {
-                isReady: sinon.stub().returns(false)
+                isReady: sinon.stub().returns(false),
             };
 
             qp.replicationStatusProducer = mockProducer;
@@ -123,12 +121,12 @@ describe('Queue Processor', () => {
                     {
                         component: 'Replication Status Producer',
                         status: probeUtils.statusNotReady,
-                        site: 'site'
-                    },{
+                        site: 'site',
+                    }, {
                         component: 'Consumer',
                         status: probeUtils.statusNotReady,
-                        site: 'site'
-                    }
+                        site: 'site',
+                    },
                 ]
             );
         });
