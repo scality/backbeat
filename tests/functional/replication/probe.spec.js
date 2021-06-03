@@ -5,7 +5,8 @@ const { startProbeServer } =
 const { DEFAULT_LIVE_ROUTE } = require('arsenal').network.probe.ProbeServer;
 const http = require('http');
 
-/** Return a mock queue processor for testing
+/**
+ * @returns {Map<string, Object>} Map of site>Queue Processors
 */
 function mockQueueProcessor() {
     return {
@@ -55,19 +56,19 @@ describe('Probe server', () => {
         };
         startProbeServer(mockQp, config, probeServer => {
             probeServer.onStop(done);
-            http.get('http://localhost:52555' + DEFAULT_LIVE_ROUTE, res => {
+            http.get(`http://localhost:52555${DEFAULT_LIVE_ROUTE}`, res => {
                 assert.strictEqual(500, res.statusCode);
 
-                let rawData = [];
+                const rawData = [];
                 res.on('data', chunk => {
                     rawData.push(chunk);
                 });
                 res.on('end', () => {
-                    data = JSON.parse(rawData.join(''));
+                    const data = JSON.parse(rawData.join(''));
                     assert.strictEqual(data.errorMessage, '["error msg"]');
                     probeServer.stop();
                 });
             });
         });
-    })
+    });
 });

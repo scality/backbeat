@@ -19,6 +19,7 @@ const { ProbeServer, DEFAULT_LIVE_ROUTE } =
  * @param {Map<string, QueueProcessor>} queueProcessor - Queue processor
  * @param {ProbeServerConfig} config - Configuration for probe server
  * @param {DoneCallback} [callback] - Callback when probe server is up
+ * @returns {undefined}
  */
 function startProbeServer(queueProcessors, config, callback) {
     if (process.env.CRR_METRICS_PROBE === 'false' || config === undefined) {
@@ -47,7 +48,6 @@ function startProbeServer(queueProcessors, config, callback) {
         probeServer._cbOnListening = () => callback(probeServer);
     }
     probeServer.start();
-    return undefined;
 }
 
 module.exports = { startProbeServer };
