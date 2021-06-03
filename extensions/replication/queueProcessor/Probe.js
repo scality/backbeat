@@ -21,7 +21,7 @@ const { ProbeServer, DEFAULT_LIVE_ROUTE } =
  * @param {DoneCallback} callback - Callback when probe server is up
  */
 function startProbeServer(queueProcessor, config, callback) {
-    if (process.env.CRR_METRICS_PROBE !== 'true' || config === undefined) {
+    if (process.env.CRR_METRICS_PROBE === 'false' || config === undefined) {
         callback();
         return;
     }
