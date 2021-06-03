@@ -28,7 +28,8 @@ function startProbeServer(queueProcessors, config, callback) {
     }
     const probeServer = new ProbeServer(config);
     probeServer.addHandler(
-        DEFAULT_LIVE_ROUTE,
+        // for backwards compatibility we also include readiness
+        [DEFAULT_LIVE_ROUTE, '/_/health/readiness'],
         (res, log) => {
             // take all our processors and create one liveness response
             let responses = [];
