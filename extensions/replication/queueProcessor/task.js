@@ -13,8 +13,7 @@ const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
-const { ProbeServer, DEFAULT_LIVE_ROUTE } =
-    require('arsenal').network.probe.ProbeServer;
+const { startProbeServer } = require('./Probe');
 
 const site = process.argv[2];
 assert(site, 'QueueProcessor task must be started with a site as argument');
@@ -37,25 +36,12 @@ const queueProcessor = new QueueProcessor(
     httpsConfig, internalHttpsConfig, site, metricsProducer
 );
 
-let probeServer;
-if (process.env.CRR_METRICS_PROBE === 'true' &&
-    repConfig.queueProcessor.probeServer !== undefined) {
-    probeServer = new ProbeServer(repConfig.queueProcessor.probeServer);
-}
-
 async.waterfall([
-    done => {
-        if (probeServer === undefined) {
-            return done();
-        }
-        probeServer.addHandler(
-            DEFAULT_LIVE_ROUTE,
-            (res, log) => queueProcessor.handleLiveness(res, log)
-        );
-        probeServer._cbOnListening = done;
-        probeServer.start();
-        return undefined;
-    },
+    done => startProbeServer(
+        queueProcessor,
+        repConfig.queueProcessor.probeServer,
+        done
+    ),
     done => {
         metricsProducer.setupProducer(err => {
             if (err) {
