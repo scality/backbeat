@@ -30,6 +30,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+const probeUtils = require('../../../lib/util/probeUtils');
 
 const {
     zookeeperNamespace,
@@ -846,39 +847,39 @@ class QueueProcessor extends EventEmitter {
         const responses = [];
         if (this.replicationStatusProducer === undefined ||
             this.replicationStatusProducer === null) {
-            verboseLiveness.replicationStatusProducer = 'undefined';
+            verboseLiveness.replicationStatusProducer = probeUtils.statusUndefined;
             responses.push({
                 component: 'Replication Status Producer',
-                status: 'undefined',
+                status: probeUtils.statusUndefined,
                 site: this.site,
             });
         } else if (!this.replicationStatusProducer.isReady()) {
-            verboseLiveness.replicationStatusProducer = 'not ready';
+            verboseLiveness.replicationStatusProducer = probeUtils.statusNotReady;
             responses.push({
                 component: 'Replication Status Producer',
-                status: 'not ready',
+                status: probeUtils.statusNotReady,
                 site: this.site,
             });
         } else {
-            verboseLiveness.replicationStatusProducer = 'ready';
+            verboseLiveness.replicationStatusProducer = probeUtils.statusReady;
         }
 
         if (this._consumer === undefined || this._consumer === null) {
-            verboseLiveness.consumer = 'undefined';
+            verboseLiveness.consumer = probeUtils.statusUndefined;
             responses.push({
                 component: 'Consumer',
-                status: 'undefined',
+                status: probeUtils.statusUndefined,
                 site: this.site,
             });
         } else if (!this._consumer.isReady()) {
-            verboseLiveness.consumer = 'not ready';
+            verboseLiveness.consumer = probeUtils.statusNotReady;
             responses.push({
                 component: 'Consumer',
-                status: 'not ready',
+                status: probeUtils.statusNotReady,
                 site: this.site,
             });
         } else {
-            verboseLiveness.consumer = 'ready';
+            verboseLiveness.consumer = probeUtils.statusReady;
         }
 
         log.debug('verbose liveness', verboseLiveness);

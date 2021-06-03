@@ -21,8 +21,7 @@ const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
-const { ProbeServer, DEFAULT_LIVE_ROUTE } =
-    require('arsenal').network.probe.ProbeServer;
+const { startProbeServer } = require('./Probe');
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -30,11 +29,6 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
-let probeServer;
-if (process.env.CRR_METRICS_PROBE === 'true' &&
-    repConfig.queueProcessor.probeServer !== undefined) {
-    probeServer = new ProbeServer(repConfig.queueProcessor.probeServer);
-}
 
 const activeQProcessors = {};
 
@@ -214,27 +208,10 @@ function initAndStart(zkClient) {
             }
         });
 
-        if (probeServer !== undefined) {
-            probeServer.addHandler(
-                DEFAULT_LIVE_ROUTE,
-                (res, log) => {
-                    // take all our processors and create one liveness response
-                    let responses = [];
-                    Object.keys(activeQProcessors).forEach(site => {
-                        const qp = activeQProcessors[site];
-                        responses = responses.concat(qp.handleLiveness(log));
-                    });
-                    if (responses.length > 0) {
-                        return JSON.stringify(responses);
-                    }
-                    res.writeHead(200);
-                    res.end();
-                    return undefined;
-                }
-            );
-            probeServer.start();
-            log.info('Starting probe server');
-        }
+        startProbeServer(
+            activeQProcessors,
+            repConfig.queueProcessor.probeServer,
+        );
     });
 }
 
