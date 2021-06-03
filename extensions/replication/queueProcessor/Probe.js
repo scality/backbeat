@@ -16,7 +16,7 @@ const { ProbeServer, DEFAULT_LIVE_ROUTE } =
 
 /**
  * Start probe server for Queue Processor
- * @param {Map<string, QueueProcessor>} queueProcessor - Queue processor
+ * @param {Map<string, QueueProcessor>} queueProcessors - Queue processor
  * @param {ProbeServerConfig} config - Configuration for probe server
  * @param {DoneCallback} [callback] - Callback when probe server is up
  * @returns {undefined}

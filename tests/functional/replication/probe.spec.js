@@ -13,7 +13,7 @@ function mockQueueProcessor() {
         site: {
             handleLiveness: sinon.stub(),
         }
-    }
+    };
 }
 
 describe('Probe server', () => {

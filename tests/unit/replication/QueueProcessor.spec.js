@@ -9,52 +9,49 @@ describe('Queue Processor', () => {
     let qp;
     beforeEach(() => {
         qp = new QueueProcessor(
+            { connectionString: '127.0.0.1:2181/backbeat',
+              autoCreateNamespace: false },
+            null,
             { hosts: 'localhost:9092' },
-            {
-                auth: {
-                    type: 'role',
-                    vault: {
-                        host: 'localhost:9093',
-                        port: 7777,
-                    },
-                },
-                s3: {
-                    host: 'localhost:9094',
-                    port: 7777,
-                },
+            { auth: { type: 'role',
+                vault: { host: 'localhost:9093',
+                    port: 7777 } },
+                s3: { host: 'localhost:9094',
+                    port: 7777 },
                 transport: 'http',
             },
-            {
-                auth: {
-                    type: 'role',
-                },
-                bootstrapList: [
-                    { site: 'sf', servers: ['localhost:9094'] },
-                ],
-                transport: 'http',
+            { auth: { type: 'role' },
+                bootstrapList: [{
+                    site: 'site', servers: ['localhost:9095'],
+                }, {
+                    site: 'toazure', type: 'azure',
+                }],
+                transport: 'http' },
+            { topic: 'backbeat-func-test-dummy-topic',
+              replicationStatusTopic: 'backbeat-func-test-repstatus',
+              queueProcessor: {
+                  retry: {
+                      scality: { timeoutS: 5 },
+                      azure: { timeoutS: 5 },
+                  },
+                  groupId: 'backbeat-func-test-group-id',
+                  mpuPartsConcurrency: 10,
+              },
             },
-            {
-                topic: 'backbeat-func-test-dummy-topic',
-                replicationStatusTopic: 'backbeat-func-test-repstatus',
-                queueProcessor: {
-                    retryTimeoutS: 5,
-                    groupId: 'backbeat-func-test-group-id',
-                    mpuPartsConcurrency: 10,
-                },
-            },
-            { }, { }, 'site', undefined
+            { host: '127.0.0.1',
+              port: 6379 },
+            { topic: 'metrics-test-topic' },
+            {},
+            {},
+            'site',
         );
     });
 
     describe('handle liveness', () => {
-        let mockRes;
         let mockLog;
         beforeEach(() => {
-            mockRes = sinon.spy();
             mockLog = sinon.spy();
             mockLog.debug = sinon.spy();
-            mockRes.writeHead = sinon.spy();
-            mockRes.end = sinon.spy();
         });
 
         afterEach(() => {
@@ -71,16 +68,14 @@ describe('Queue Processor', () => {
 
             qp.replicationStatusProducer = mockProducer;
             qp._consumer = mockConsumer;
-            const response = qp.handleLiveness(mockRes, mockLog);
-            assert.strictEqual(response, undefined);
-            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 200);
-            sinon.assert.calledOnce(mockRes.end);
+            const response = qp.handleLiveness(mockLog);
+            assert.deepStrictEqual(response, []);
         });
 
         it('with undefined components', () => {
-            const response = qp.handleLiveness(mockRes, mockLog);
+            const response = qp.handleLiveness(mockLog);
             assert.deepStrictEqual(
-                JSON.parse(response),
+                response,
                 [
                     {
                         component: 'Replication Status Producer',
@@ -114,9 +109,9 @@ describe('Queue Processor', () => {
 
             qp.replicationStatusProducer = mockProducer;
             qp._consumer = mockConsumer;
-            const response = qp.handleLiveness(mockRes, mockLog);
+            const response = qp.handleLiveness(mockLog);
             assert.deepStrictEqual(
-                JSON.parse(response),
+                response,
                 [
                     {
                         component: 'Replication Status Producer',
