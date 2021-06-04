@@ -20,6 +20,7 @@ const EchoBucket = require('../tasks/EchoBucket');
 
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const BucketQueueEntry = require('../utils/BucketQueueEntry');
+const constants = require('../../../lib/constants');
 
 const {
     proxyVaultPath,
@@ -384,6 +385,65 @@ class QueueProcessor extends EventEmitter {
         this.logger.debug('skip source entry',
                           { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
+    }
+
+    /**
+     * Handle ProbeServer liveness check
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {string} Error response string or undefined
+     */
+    handleLiveness(res, log) {
+        const verboseLiveness = {};
+        // track and return all errors in one response
+        const responses = [];
+        if (this.replicationStatusProducer === undefined ||
+            this.replicationStatusProducer === null) {
+            verboseLiveness.replicationStatusProducer = constants.statusUndefined;
+            responses.push({
+                component: 'Replication Status Producer',
+                status: constants.statusUndefined,
+                site: this.site,
+            });
+        } else if (!this.replicationStatusProducer.isReady()) {
+            verboseLiveness.replicationStatusProducer = constants.statusNotReady;
+            responses.push({
+                component: 'Replication Status Producer',
+                status: constants.statusNotReady,
+                site: this.site,
+            });
+        } else {
+            verboseLiveness.replicationStatusProducer = constants.statusReady;
+        }
+
+        if (this._consumer === undefined || this._consumer === null) {
+            verboseLiveness.consumer = constants.statusUndefined;
+            responses.push({
+                component: 'Consumer',
+                status: constants.statusUndefined,
+                site: this.site,
+            });
+        } else if (!this._consumer.isReady()) {
+            verboseLiveness.consumer = constants.statusNotReady;
+            responses.push({
+                component: 'Consumer',
+                status: constants.statusNotReady,
+                site: this.site,
+            });
+        } else {
+            verboseLiveness.consumer = constants.statusReady;
+        }
+
+        log.debug('verbose liveness', verboseLiveness);
+
+        if (responses.length > 0) {
+            return JSON.stringify(responses);
+        }
+
+        res.writeHead(200);
+        res.end();
+        return undefined;
     }
 }
 

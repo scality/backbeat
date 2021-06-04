@@ -1,4 +1,5 @@
 'use strict'; // eslint-disable-line
+const async = require('async');
 const assert = require('assert');
 const werelogs = require('werelogs');
 
@@ -12,6 +13,7 @@ const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
+const { startProbeServer } = require('./Probe');
 
 const site = process.argv[2];
 assert(site, 'QueueProcessor task must be started with a site as argument');
@@ -29,16 +31,45 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
-metricsProducer.setupProducer(err => {
-    if (err) {
-        log.error('error starting metrics producer for queue processor', {
-            error: err,
-            method: 'MetricsProducer::setupProducer',
+const queueProcessor = new QueueProcessor(
+    kafkaConfig, sourceConfig, destConfig, repConfig,
+    httpsConfig, internalHttpsConfig, site, metricsProducer
+);
+
+async.waterfall([
+    done => startProbeServer(
+        queueProcessor,
+        repConfig.queueProcessor.probeServer,
+        done
+    ),
+    done => {
+        metricsProducer.setupProducer(err => {
+            if (err) {
+                log.error('error starting metrics producer for queue processor', {
+                    error: err,
+                    method: 'MetricsProducer::setupProducer',
+                });
+            }
+            done(err);
         });
-        return undefined;
+    },
+    done => {
+        queueProcessor.on('ready', done);
+        queueProcessor.start();
+    },
+], err => {
+    if (err) {
+        log.error('error during queue processor initialization', {
+            method: 'QueueProcessor::task',
+            error: err,
+        });
+        process.exit(1);
     }
-    const queueProcessor = new QueueProcessor(
-        kafkaConfig, sourceConfig, destConfig, repConfig,
-        httpsConfig, internalHttpsConfig, site, metricsProducer);
-    return queueProcessor.start();
+});
+
+process.on('SIGTERM', () => {
+    log.info('received SIGTERM, exiting');
+    queueProcessor.stop(() => {
+        process.exit(0);
+    });
 });

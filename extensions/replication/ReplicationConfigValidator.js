@@ -52,6 +52,10 @@ const joiSchema = {
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         logConsumerMetricsIntervalS: joi.number().greater(0).default(60),
+        probeServer: joi.object({
+            bindAddress: joi.string().default('localhost'),
+            port: joi.number().required(),
+        }),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),

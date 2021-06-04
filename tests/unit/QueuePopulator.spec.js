@@ -6,6 +6,7 @@ const sinon = require('sinon');
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 const LogReader = require('../../lib/queuePopulator/LogReader');
+const constants = require('../../lib/constants');
 
 class MockLogReader extends LogReader {
     constructor(queuePopulator, id) {
@@ -141,7 +142,7 @@ describe('QueuePopulator', () => {
                 [
                     {
                         component: 'log reader',
-                        status: 'not ready',
+                        status: constants.statusNotReady,
                         topic: 'topicB',
                     },
                 ]
