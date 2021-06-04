@@ -28,10 +28,14 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             entry.key.startsWith(mpuBucketPrefix)) {
             return;
         }
+        // remove logReader to prevent circular stringify
+        const publishedEntry = Object.assign({}, entry);
+        delete publishedEntry.logReader;
+
         this.log.trace('publishing bucket replication entry',
                        { bucket: entry.bucket });
         this.publish(this.repConfig.topic,
-                     entry.bucket, JSON.stringify(entry));
+                     entry.bucket, JSON.stringify(publishedEntry));
     }
 
     _filterKeyOp(entry) {
