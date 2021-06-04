@@ -132,4 +132,21 @@ describe('replication queue populator', () => {
             labels
         );
     });
+
+    it('can publish when filtering bucket op', () => {
+        const labels = { a: 10 }; // dummy metric labels
+        const metricLabelsStub = sinon.stub();
+        metricLabelsStub.returns(labels);
+        const entry = Object.assign({}, {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+            logReader: {},
+        }, { value: JSON.stringify(kafkaValue) });
+        // force the circular reference
+        entry.logReader.entry = entry;
+
+        // should not throw
+        rqp._filterBucketOp(entry);
+    });
 });
