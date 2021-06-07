@@ -10,11 +10,11 @@ Under `conf/config.json` you can specify the probe server settings.
 
 > Currently SSL/TLS is not supported
 
-When starting processes you will have to enable the probe server by setting an
-environment variable.
+When starting processes you can disable the probe server by setting an environment
+variable.
 
 ```
-export CRR_METRICS_PROBE=true
+export CRR_METRICS_PROBE=false
 ```
 
 After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.
