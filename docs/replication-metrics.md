@@ -1,14 +1,18 @@
 # Replication Metrics
+
 Prometheus metrics are provided for replication through HTTP routes.
 
 > Currently metrics are only provided for the queue populator.
 
 ## Configuration
+
 Under `conf/config.json` you can specify the probe server settings.
 
 > Currently SSL/TLS is not supported
 
-When starting processes you will have to enable the probe server by setting an environment variable.
+When starting processes you will have to enable the probe server by setting an
+environment variable.
+
 ```
 export CRR_METRICS_PROBE=true
 ```
@@ -16,11 +20,13 @@ export CRR_METRICS_PROBE=true
 After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.
 
 ## Connecting to Prometheus
+
 Download and get started with [Prometheus](https://prometheus.io/) by following the
 official [getting started](https://prometheus.io/docs/prometheus/latest/getting_started/)
 guide.
 
 Below is a sample configuration using the default queue populator configuration values.
+
 ```
 # prom.yml
 global:
