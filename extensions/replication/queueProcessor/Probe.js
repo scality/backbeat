@@ -33,7 +33,7 @@ function startProbeServer(queueProcessor, config, callback) {
         DEFAULT_LIVE_ROUTE,
         (res, log) => queueProcessor.handleLiveness(res, log)
     );
-    probeServer.onListening(() => callback(undefined, probeServer));
+    probeServer.onListening(() => callback(null, probeServer));
     probeServer.onError(err => callback(err));
     probeServer.start();
 }
