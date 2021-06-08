@@ -47,14 +47,11 @@ function startProbeServer(queueProcessors, config, callback) {
             return undefined;
         }
     );
-<<<<<<< HEAD
     if (callback) {
         probeServer._cbOnListening = () => callback(probeServer);
+        probeServer.onListening(() => callback(null, probeServer));
+        probeServer.onError(err => callback(err));
     }
-=======
-    probeServer.onListening(() => callback(undefined, probeServer));
-    probeServer.onError(err => callback(err));
->>>>>>> origin/w/7.10/bugfix/S3C-4541_ReturnErrAndProbeServerOnCallback
     probeServer.start();
 }
 
