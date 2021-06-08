@@ -14,7 +14,7 @@ function mockQueueProcessor() {
     };
 }
 
-describe('Probe server', () => {
+describe.only('Probe server', () => {
     afterEach(() => {
         // reset any possible env var set
         delete process.env.CRR_METRICS_PROBE;
@@ -27,7 +27,8 @@ describe('Probe server', () => {
             bindAddress: 'localhost',
             port: 52555,
         };
-        startProbeServer(mockQp, config, probeServer => {
+        startProbeServer(mockQp, config, (err, probeServer) => {
+            assert.ifError(err);
             assert.strictEqual(probeServer, undefined);
             done();
         });
@@ -37,7 +38,23 @@ describe('Probe server', () => {
         process.env.CRR_METRICS_PROBE = 'true';
         const mockQp = mockQueueProcessor();
         const config = undefined;
-        startProbeServer(mockQp, config, probeServer => {
+        startProbeServer(mockQp, config, (err, probeServer) => {
+            assert.ifError(err);
+            assert.strictEqual(probeServer, undefined);
+            done();
+        });
+    });
+
+    it('calls back with error if one occurred', done => {
+        process.env.CRR_METRICS_PROBE = 'true';
+        const mockQp = mockQueueProcessor();
+        const config = {
+            bindAddress: 'httppp://badaddress',
+            // inject an error with a bad port
+            port: 52525,
+        };
+        startProbeServer(mockQp, config, (err, probeServer) => {
+            assert.notStrictEqual(err, undefined);
             assert.strictEqual(probeServer, undefined);
             done();
         });
@@ -52,7 +69,8 @@ describe('Probe server', () => {
             bindAddress: 'localhost',
             port: 52555,
         };
-        startProbeServer(mockQp, config, probeServer => {
+        startProbeServer(mockQp, config, (err, probeServer) => {
+            assert.ifError(err);
             probeServer.onStop(done);
             http.get(`http://localhost:52555${DEFAULT_LIVE_ROUTE}`, res => {
                 assert.strictEqual(res.statusCode, 500);
