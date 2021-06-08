@@ -211,6 +211,14 @@ function initAndStart(zkClient) {
         startProbeServer(
             activeQProcessors,
             repConfig.queueProcessor.probeServer,
+            err => {
+                if (err) {
+                    log.fatal('error creating probe server', {
+                        error: err,
+                    });
+                    process.exit(1);
+                }
+            }
         );
     });
 }
