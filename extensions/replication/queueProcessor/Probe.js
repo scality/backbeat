@@ -9,8 +9,10 @@ const { ProbeServer, DEFAULT_LIVE_ROUTE } =
  */
 
 /**
- * Callback when Queue Processor Probe server is listening
+ * Callback when Queue Processor Probe server is listening.
+ * Note that a disabled probe server does not pass an error to the callback.
  * @callback DoneCallback
+ * @param {Object} [err] - Possible error creating a probe server
  * @param {ProbeServer} [probeServer] - Probe server or undefined if disabled
  */
 
@@ -31,7 +33,8 @@ function startProbeServer(queueProcessor, config, callback) {
         DEFAULT_LIVE_ROUTE,
         (res, log) => queueProcessor.handleLiveness(res, log)
     );
-    probeServer._cbOnListening = () => callback(probeServer);
+    probeServer.onListening(() => callback(undefined, probeServer));
+    probeServer.onError(err => callback(err));
     probeServer.start();
 }
 
