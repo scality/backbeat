@@ -40,7 +40,15 @@ async.waterfall([
     done => startProbeServer(
         queueProcessor,
         repConfig.queueProcessor.probeServer,
-        done
+        err => {
+            if (err) {
+                log.error('error starting probe server', {
+                    error: err,
+                    method: 'QueueProcessor::startProbeServer',
+                });
+            }
+            done(err);
+        }
     ),
     done => {
         metricsProducer.setupProducer(err => {
