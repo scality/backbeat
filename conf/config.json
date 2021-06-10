@@ -64,10 +64,17 @@
                 "retryTimeoutS": 300,
                 "concurrency": 10,
                 "mpuPartsConcurrency": 10,
-                "probeServer": {
-                    "bindAddress": "localhost",
-                    "port": 4043
-                }
+                "probeServer": [
+                    {
+                        "site": "sf",
+                        "bindAddress": "localhost",
+                        "port": "4043"
+                    }, {
+                        "site" : "us-east-1",
+                        "bindAddress": "localhost",
+                        "port": "4044"
+                    }
+                ]
             },
             "replicationStatusProcessor": {
                 "groupId": "backbeat-replication-group",
