@@ -14,7 +14,7 @@ function mockQueueProcessor() {
     };
 }
 
-describe.only('Probe server', () => {
+describe('Probe server', () => {
     afterEach(() => {
         // reset any possible env var set
         delete process.env.CRR_METRICS_PROBE;
