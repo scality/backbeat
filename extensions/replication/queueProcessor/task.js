@@ -13,7 +13,7 @@ const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
-const { startProbeServer } = require('./Probe');
+const { startProbeServer, getProbeConfig } = require('./Probe');
 
 const site = process.argv[2];
 assert(site, 'QueueProcessor task must be started with a site as argument');
@@ -22,6 +22,8 @@ const bootstrapList = repConfig.destination.bootstrapList
     .filter(item => item.site === site);
 assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
     'one of the replication endpoints defined');
+
+const probeServerConfig = getProbeConfig(repConfig.queueProcessor, site);
 
 const destConfig = Object.assign({}, repConfig.destination);
 destConfig.bootstrapList = bootstrapList;
@@ -39,7 +41,7 @@ const queueProcessor = new QueueProcessor(
 async.waterfall([
     done => startProbeServer(
         queueProcessor,
-        repConfig.queueProcessor.probeServer,
+        probeServerConfig,
         err => {
             if (err) {
                 log.error('error starting probe server', {
