@@ -21,7 +21,7 @@ const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
-const { startProbeServer } = require('./Probe');
+const { startProbeServer, getProbeConfig } = require('./Probe');
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -208,9 +208,10 @@ function initAndStart(zkClient) {
             }
         });
 
+        const probeServerConfig = getProbeConfig(repConfig.queueProcessor, site);
         startProbeServer(
             activeQProcessors,
-            repConfig.queueProcessor.probeServer,
+            probeServerConfig,
             err => {
                 if (err) {
                     log.fatal('error creating probe server', {

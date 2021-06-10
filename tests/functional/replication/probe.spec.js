@@ -1,6 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
-const { startProbeServer } =
+const { startProbeServer, getProbeConfig } =
     require('../../../extensions/replication/queueProcessor/Probe');
 const { DEFAULT_LIVE_ROUTE } = require('arsenal').network.probe.ProbeServer;
 const http = require('http');
@@ -16,7 +16,7 @@ function mockQueueProcessor() {
     };
 }
 
-describe('Probe server', () => {
+describe.only('Probe server', () => {
     afterEach(() => {
         // reset any possible env var set
         delete process.env.CRR_METRICS_PROBE;
@@ -88,5 +88,60 @@ describe('Probe server', () => {
                 });
             });
         });
+    });
+
+    it('can get config', () => {
+        const qpConfig = {
+            probeServer: [
+                {
+                    site: 'sf',
+                    bindAddress: 'localhost',
+                    port: '4043',
+                }, {
+                    site: 'us-east-1',
+                    bindAddress: 'localhost',
+                    port: '4044',
+                },
+            ],
+        };
+        const cfg = getProbeConfig(qpConfig, 'us-east-1');
+        assert.deepStrictEqual(cfg, {
+            site: 'us-east-1',
+            bindAddress: 'localhost',
+            port: '4044',
+        });
+    });
+
+    it('returns undefined if site not listed', () => {
+        const qpConfig = {
+            probeServer: [
+                {
+                    site: 'sf',
+                    bindAddress: 'localhost',
+                    port: '4043',
+                },
+            ],
+        };
+        const cfg = getProbeConfig(qpConfig, 'missing site');
+        assert.deepStrictEqual(cfg, undefined);
+    });
+
+    it('returns undefined if no sites', () => {
+        const qpConfig = {
+            probeServer: [],
+        };
+        const cfg = getProbeConfig(qpConfig, 'no configs');
+        assert.deepStrictEqual(cfg, undefined);
+    });
+
+    it('returns undefined if no probe server config', () => {
+        const qpConfig = {};
+        const cfg = getProbeConfig(qpConfig, 'no server configs');
+        assert.deepStrictEqual(cfg, undefined);
+    });
+
+    it('returns undefined if no config at all', () => {
+        const cfg = getProbeConfig(undefined, 'no server configs');
+        assert.deepStrictEqual(cfg, undefined);
     });
 });
