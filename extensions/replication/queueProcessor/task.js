@@ -13,7 +13,9 @@ const sourceConfig = repConfig.source;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
-const { startProbeServer, getProbeConfig } = require('./Probe');
+const { startProbeServer } = require('../../../lib/util/probe');
+const { DEFAULT_LIVE_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 
 const site = process.argv[2];
 assert(site, 'QueueProcessor task must be started with a site as argument');
@@ -23,7 +25,6 @@ const bootstrapList = repConfig.destination.bootstrapList
 assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
     'one of the replication endpoints defined');
 
-const probeServerConfig = getProbeConfig(repConfig.queueProcessor, site);
 
 const destConfig = Object.assign({}, repConfig.destination);
 destConfig.bootstrapList = bootstrapList;
@@ -38,18 +39,40 @@ const queueProcessor = new QueueProcessor(
     httpsConfig, internalHttpsConfig, site, metricsProducer
 );
 
+/**
+ * Get probe config will pull the configuration for the probe server based on
+ * the provided site key.
+ *
+ * @param {Object} queueProcessorConfig - Configuration of the queue processor that
+ *      holds the probe server configs for all sites
+ * @param {string} site - Name of the site we are processing
+ * @returns {ProbeServerConfig|undefined} Config for site or undefined if not found
+ */
+function getProbeConfig(queueProcessorConfig, site) {
+    return queueProcessorConfig &&
+        queueProcessorConfig.probeServer &&
+        queueProcessorConfig.probeServer.filter(c => c.site === site)[0];
+}
+
 async.waterfall([
     done => startProbeServer(
-        queueProcessor,
-        probeServerConfig,
-        err => {
+        getProbeConfig(repConfig.queueProcessor, site),
+        (err, probeServer) => {
             if (err) {
                 log.error('error starting probe server', {
                     error: err,
                     method: 'QueueProcessor::startProbeServer',
                 });
+                done(err);
+                return;
             }
-            done(err);
+            if (probeServer !== undefined) {
+                probeServer.addHandler(
+                    DEFAULT_LIVE_ROUTE,
+                    (res, log) => queueProcessor.handleLiveness(res, log)
+                );
+            }
+            done();
         }
     ),
     done => {

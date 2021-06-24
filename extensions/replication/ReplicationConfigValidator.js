@@ -64,6 +64,10 @@ const joiSchema = {
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),
         concurrency: joi.number().greater(0).default(10),
+        probeServer: joi.object({
+            bindAddress: joi.string().default('localhost'),
+            port: joi.number().required(),
+        }),
     },
 };
 

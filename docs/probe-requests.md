@@ -5,7 +5,8 @@ This endpoint can be used for healthchecks in tools like HAProxy or liveness che
 in Kubernetes.
 It can also be manually viewed for verbose logs if needed.
 
-> Currently the probe is only in Queue Populator and Queue Processor.
+> Currently the probe is only in Queue Populator, Queue Processor, and Replication
+> Status Processor.
 
 ## Configuration
 
