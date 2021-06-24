@@ -25,22 +25,20 @@ class FailedCRRProducer {
      * @return {undefined}
      */
     setupProducer(cb) {
-        const producer = new BackbeatProducer({
+        this._producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._topic,
         });
-        producer.once('error', () => {});
-        producer.once('ready', () => {
-            producer.removeAllListeners('error');
-            producer.on('error', err =>
+        this._producer.once('error', () => {});
+        this._producer.once('ready', () => {
+            this._producer.removeAllListeners('error');
+            this._producer.on('error', err =>
                 this._log.error('error from backbeat producer', {
                     error: err,
                 }));
-            this._producer = producer;
             if (cb) {
-                return cb();
+                cb();
             }
-            return undefined;
         });
     }
 

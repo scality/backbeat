@@ -180,7 +180,11 @@
                         "factor": 1.5
                     }
                 },
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4045
+                }
             }
         },
         "lifecycle": {
