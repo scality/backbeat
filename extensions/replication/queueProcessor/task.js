@@ -21,7 +21,9 @@ const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
-const { startProbeServer } = require('./Probe');
+const { startProbeServer } = require('../../../lib/util/probe');
+const { DEFAULT_LIVE_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -34,6 +36,21 @@ const activeQProcessors = {};
 
 function getCRRStateZkPath() {
     return `${zookeeperNamespace}${zkStatePath}`;
+}
+
+/**
+ * Get probe config will pull the configuration for the probe server based on
+ * the provided site key.
+ *
+ * @param {Object} queueProcessorConfig - Configuration of the queue processor that
+ *      holds the probe server configs for all sites
+ * @param {string} site - Name of the site we are processing
+ * @returns {ProbeServerConfig|undefined} Config for site or undefined if not found
+ */
+function getProbeConfig(queueProcessorConfig, site) {
+    return queueProcessorConfig &&
+        queueProcessorConfig.probeServer &&
+        queueProcessorConfig.probeServer.filter(c => c.site === site)[0];
 }
 
 /**
@@ -209,14 +226,33 @@ function initAndStart(zkClient) {
         });
 
         startProbeServer(
-            activeQProcessors,
             repConfig.queueProcessor.probeServer,
-            err => {
+            (err, probeServer) => {
                 if (err) {
                     log.fatal('error creating probe server', {
                         error: err,
                     });
                     process.exit(1);
+                }
+                if (probeServer !== undefined) {
+                     probeServer.addHandler(
+                        // for backwards compatibility we also include readiness
+                        [DEFAULT_LIVE_ROUTE, '/_/health/readiness'],
+                        (res, log) => {
+                            // take all our processors and create one liveness response
+                            let responses = [];
+                            Object.keys(queueProcessors).forEach(site => {
+                                const qp = queueProcessors[site];
+                                responses = responses.concat(qp.handleLiveness(log));
+                            });
+                            if (responses.length > 0) {
+                                return JSON.stringify(responses);
+                            }
+                            res.writeHead(200);
+                            res.end();
+                            return undefined;
+                        }
+                    );
                 }
             }
         );
