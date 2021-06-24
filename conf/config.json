@@ -79,7 +79,11 @@
             "replicationStatusProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4045
+                }
             }
         }
     },

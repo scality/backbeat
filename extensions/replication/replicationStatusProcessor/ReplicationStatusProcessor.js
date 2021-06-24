@@ -14,6 +14,15 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const promClient = require('prom-client');
+const constants = require('../../../lib/constants');
+
+// TEMP: Not used until we add our first metrics
+// const metricLabels = ['origin', 'logName', 'logId', 'containerName'];
+// promClient.register.setDefaultLabels({
+    // origin: 'replication',
+    // containerName: process.env.CONTAINER_NAME || '',
+// });
 
 /**
  * @class ReplicationStatusProcessor
@@ -182,6 +191,78 @@ class ReplicationStatusProcessor {
         this.logger.warn('skipping unknown source entry',
                          { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
+    }
+
+    /**
+     * Handle ProbeServer liveness check
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {string} Error response string or undefined
+     */
+    handleLiveness(res, log) {
+        const verboseLiveness = {};
+        // track and return all errors in one response
+        const responses = [];
+
+        if (this._consumer === undefined || this._consumer === null) {
+            verboseLiveness.consumer = constants.statusUndefined;
+            responses.push({
+                component: 'Consumer',
+                status: constants.statusUndefined,
+            });
+        } else if (!this._consumer._consumerReady) {
+            verboseLiveness.consumer = constants.statusNotReady;
+            responses.push({
+                component: 'Consumer',
+                status: constants.statusNotReady,
+            });
+        } else {
+            verboseLiveness.consumer = constants.statusReady;
+        }
+
+        if (this._FailedCRRProducer === undefined || this._FailedCRRProducer === null ||
+            this._FailedCRRProducer._producer === undefined ||
+            this._FailedCRRProducer._producer === null) {
+            verboseLiveness.failedCRRProducer = constants.statusUndefined;
+            responses.push({
+                component: 'Failed CRR Producer',
+                status: constants.statusUndefined,
+            });
+        } else if (!this._FailedCRRProducer._producer.isReady()) {
+            verboseLiveness.failedCRRProducer = constants.statusNotReady;
+            responses.push({
+                component: 'Failed CRR Producer',
+                status: constants.statusNotReady,
+            });
+        } else {
+            verboseLiveness.failedCRRProducer = constants.statusReady;
+        }
+
+        log.debug('verbose liveness', verboseLiveness);
+
+        if (responses.length > 0) {
+            return JSON.stringify(responses);
+        }
+
+        res.writeHead(200);
+        res.end();
+        return undefined;
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {string} Error response string or undefined
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+        res.writeHead(200, {
+            'Content-Type': promClient.register.contentType,
+        });
+        res.end(promClient.register.metrics());
     }
 }
 

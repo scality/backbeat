@@ -12,7 +12,8 @@ const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
-const { ProbeServer, DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
+const { startProbeServer } = require('../lib/util/probe');
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
@@ -50,29 +51,28 @@ function queueBatch(queuePopulator, taskState) {
 const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
 
-let probeServer;
-if (process.env.CRR_METRICS_PROBE === 'true' &&
-    qpConfig.probeServer !== undefined) {
-    probeServer = new ProbeServer(qpConfig.probeServer);
-}
-
 async.waterfall([
-    done => {
-        if (probeServer === undefined) {
-            return done();
+    done => startProbeServer(qpConfig.probeServer, (err, probeServer) => {
+        if (err) {
+            log.error('error starting probe server', {
+                error: err,
+                method: 'QueuePopulator::startProbeServer',
+            });
+            done(err);
+            return;
         }
-        probeServer.addHandler(
-            DEFAULT_LIVE_ROUTE,
-            (res, log) => queuePopulator.handleLiveness(res, log)
-        );
-        probeServer.addHandler(
-            DEFAULT_METRICS_ROUTE,
-            (res, log) => queuePopulator.handleMetrics(res, log)
-        );
-        probeServer._cbOnListening = done;
-        probeServer.start();
-        return undefined;
-    },
+        if (probeServer !== undefined) {
+            probeServer.addHandler(
+                DEFAULT_LIVE_ROUTE,
+                (res, log) => queuePopulator.handleLiveness(res, log)
+            );
+            probeServer.addHandler(
+                DEFAULT_METRICS_ROUTE,
+                (res, log) => queuePopulator.handleMetrics(res, log)
+            );
+        }
+        done();
+    }),
     done => queuePopulator.open(done),
     done => {
         const taskState = {
