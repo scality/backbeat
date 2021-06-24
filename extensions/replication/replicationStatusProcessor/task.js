@@ -1,6 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
 const werelogs = require('werelogs');
 
 const ReplicationStatusProcessor = require('./ReplicationStatusProcessor');
@@ -73,40 +72,4 @@ process.on('SIGTERM', () => {
             process.exit(1);
         }
     });
-}
-
-async.waterfall([
-    done => startProbeServer(
-        repConfig.replicationStatusProcessor.probeServer,
-        (err, probeServer) => {
-            if (err) {
-                log.error('error starting probe server', {
-                    error: err,
-                    method: 'ReplicationStatusProcessor::startProbeServer',
-                });
-                done(err);
-                return;
-            }
-            if (probeServer !== undefined) {
-                probeServer.addHandler(
-                    DEFAULT_LIVE_ROUTE,
-                    (res, log) => replicationStatusProcessor.handleLiveness(res, log)
-                );
-                probeServer.addHandler(
-                    DEFAULT_METRICS_ROUTE,
-                    (res, log) => replicationStatusProcessor.handleMetrics(res, log)
-                );
-            }
-            done();
-        }
-    ),
-    done => replicationStatusProcessor.start(undefined, done),
-], err => {
-    if (err) {
-        log.error('error during queue processor initialization', {
-            method: 'ReplicationStatusProcessor::task',
-            error: err,
-        });
-        process.exit(1);
-    }
 });
