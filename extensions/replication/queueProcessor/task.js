@@ -39,21 +39,6 @@ function getCRRStateZkPath() {
 }
 
 /**
- * Get probe config will pull the configuration for the probe server based on
- * the provided site key.
- *
- * @param {Object} queueProcessorConfig - Configuration of the queue processor that
- *      holds the probe server configs for all sites
- * @param {string} site - Name of the site we are processing
- * @returns {ProbeServerConfig|undefined} Config for site or undefined if not found
- */
-function getProbeConfig(queueProcessorConfig, site) {
-    return queueProcessorConfig &&
-        queueProcessorConfig.probeServer &&
-        queueProcessorConfig.probeServer.filter(c => c.site === site)[0];
-}
-
-/**
  * A scheduled resume is where consumers for a given site are paused and are
  * scheduled to be resumed at a later date.
  * If any scheduled resumes exist for a given site, the date is saved within
@@ -241,8 +226,8 @@ function initAndStart(zkClient) {
                         (res, log) => {
                             // take all our processors and create one liveness response
                             let responses = [];
-                            Object.keys(queueProcessors).forEach(site => {
-                                const qp = queueProcessors[site];
+                            Object.keys(activeQProcessors).forEach(site => {
+                                const qp = activeQProcessors[site];
                                 responses = responses.concat(qp.handleLiveness(log));
                             });
                             if (responses.length > 0) {
