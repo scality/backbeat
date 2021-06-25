@@ -2,7 +2,7 @@ const sinon = require('sinon');
 const { wrapCounterInc, wrapGaugeSet } =
     require('../../../../lib/util/metrics');
 
-describe.only('Metrics', () => {
+describe('Metrics', () => {
     it('can wrap counter inc', () => {
         const mockCounter = sinon.spy();
         mockCounter.inc = sinon.spy();
