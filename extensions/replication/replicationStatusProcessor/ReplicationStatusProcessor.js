@@ -16,13 +16,36 @@ const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
+const { wrapCounterInc } = require('../../../lib/util/metrics');
 
-// TEMP: Not used until we add our first metrics
-// const metricLabels = ['origin', 'logName', 'logId', 'containerName'];
-// promClient.register.setDefaultLabels({
-    // origin: 'replication',
-    // containerName: process.env.CONTAINER_NAME || '',
-// });
+const metricLabels = ['origin', 'containerName', 'replicationStatus'];
+promClient.register.setDefaultLabels({
+    origin: 'replication',
+    containerName: process.env.CONTAINER_NAME || '',
+});
+
+/**
+ * Labels used for Prometheus metrics
+ * @typedef {Object} MetricLabels
+ * @property {string} origin - Method that began the replication
+ * @property {string} containerName - Name of the container running our process
+ * @property {string} replicationStatus - Result of the replications status
+ */
+
+const replicationStatusMetric = new promClient.Counter({
+    name: 'replication_status_changed_total',
+    help: 'Number of objects updated',
+    labelNames: metricLabels,
+});
+
+/**
+ * Contains methods to incrememt different metrics
+ * @typedef {Object} MetricsHandler
+ * @property {CounterInc} status - Increments the replication status metric
+ */
+const metricsHandler = {
+    status: wrapCounterInc(replicationStatusMetric),
+};
 
 /**
  * @class ReplicationStatusProcessor
@@ -182,7 +205,7 @@ class ReplicationStatusProcessor {
         }
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
-            task = new UpdateReplicationStatus(this);
+            task = new UpdateReplicationStatus(this, metricsHandler);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
