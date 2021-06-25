@@ -36,22 +36,30 @@ class Config {
             Object.keys(parsedConfig.extensions).forEach(extName => {
                 const index = extensions[extName];
                 if (!index) {
-                    throw new Error(`configured extension ${extName}: ` +
-                        'not found in extensions directory');
+                    throw new Error(`configured extension ${extName}: `
+                        + 'not found in extensions directory');
                 }
                 if (index.configValidator) {
                     const extConfig = parsedConfig.extensions[extName];
-                    const validatedConfig =
-                        index.configValidator(this, extConfig);
+                    const validatedConfig = index.configValidator(this, extConfig);
                     parsedConfig.extensions[extName] = validatedConfig;
                 }
             });
         }
+
+        if (parsedConfig.extensions && parsedConfig.extensions.replication
+            && parsedConfig.extensions.replication.destination
+            && parsedConfig.extensions.replication.destination.bootstrapList) {
+            this.bootstrapList = parsedConfig.extensions.replication
+                .destination.bootstrapList;
+        } else {
+            this.bootstrapList = [];
+        }
+
         // whitelist IP, CIDR for health checks
         const defaultHealthChecks = ['127.0.0.1/8', '::1'];
-        const healthChecks = parsedConfig.server.healthChecks;
-        healthChecks.allowFrom =
-            healthChecks.allowFrom.concat(defaultHealthChecks);
+        const { healthChecks } = parsedConfig.server;
+        healthChecks.allowFrom = healthChecks.allowFrom.concat(defaultHealthChecks);
 
         // default to standalone configuration if sentinel not setup
         if (!parsedConfig.redis || !parsedConfig.redis.sentinels) {
@@ -62,11 +70,13 @@ class Config {
         // additional certs checks
         if (parsedConfig.certFilePaths) {
             parsedConfig.https = this._parseCertFilePaths(
-                parsedConfig.certFilePaths);
+                parsedConfig.certFilePaths
+            );
         }
         if (parsedConfig.internalCertFilePaths) {
             parsedConfig.internalHttps = this._parseCertFilePaths(
-                parsedConfig.internalCertFilePaths);
+                parsedConfig.internalCertFilePaths
+            );
         }
         // config is validated, safe to assign directly to the config object
         Object.assign(this, parsedConfig);
@@ -75,9 +85,8 @@ class Config {
     _parseCertFilePaths(certFilePaths) {
         const { key, cert, ca } = certFilePaths;
 
-        const makePath = value =>
-            (value.startsWith('/') ?
-                value : `${this._basePath}/${value}`);
+        const makePath = value => (value.startsWith('/')
+            ? value : `${this._basePath}/${value}`);
         const https = {};
         if (key && cert) {
             const keypath = makePath(key);
@@ -101,6 +110,10 @@ class Config {
 
     getConfigPath() {
         return this._configPath;
+    }
+
+    getBootstrapList() {
+        return this.bootstrapList;
     }
 }
 

@@ -6,6 +6,10 @@
     "kafka": {
         "hosts": "127.0.0.1:9092"
     },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
@@ -16,9 +20,6 @@
             "port": 9990,
             "logName": "s3-recordlog"
         }
-    },
-    "kafka": {
-        "hosts": "127.0.0.1:9092"
     },
     "extensions": {
         "replication": {
@@ -57,6 +58,29 @@
             "topic": "backbeat-replication",
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed"
+        },
+	"lifecycle": {
+            "zookeeperPath": "/lifecycletest",
+            "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
+            "objectTasksTopic": "backbeat-test-dummy-object-task",
+            "conductor": {
+                "cronRule": "0 */5 * * * *"
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
+                }
+            },
+            "auth": {
+                "type": "account",
+                "account": "bart"
+            }
         }
     },
     "log": {

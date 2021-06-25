@@ -68,8 +68,13 @@ stages:
           env:
             CI: "true"
       - ShellCommand:
+          name: run feature lifecycle tests
+          command: bash ./eve/workers/unit_and_feature_tests/run_ft_tests.bash ft_test:lifecycle
+          env:
+            CI: "true"
+            BACKBEAT_CONFIG_FILE: "tests/config.json"
+      - ShellCommand:
           name: run backbeat notification feature tests
           command: yarn run ft_test:notification
           env:
             CI: "true"
-
