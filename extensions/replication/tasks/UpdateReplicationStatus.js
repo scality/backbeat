@@ -15,8 +15,9 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @constructor
      * @param {ReplicationStatusProcessor} rsp - replication status
      *   processor instance
+     * @param {MetricsHandler} metricsHandler - instance of metric handler
      */
-    constructor(rsp) {
+    constructor(rsp, metricsHandler) {
         const rspState = rsp.getStateVars();
         super({
             retryTimeoutS:
@@ -24,6 +25,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
         Object.assign(this, rspState);
 
+        this.metricsHandler = metricsHandler;
         this.sourceRole = null;
         this.s3sourceCredentials = null;
         this.backbeatSourceClient =
@@ -133,6 +135,9 @@ class UpdateReplicationStatus extends BackbeatTask {
                           error: err.message });
                     return done(err);
                 }
+                this.metricsHandler.status({
+                    replicationStatus: status,
+                });
                 log.end().info('replication status updated', {
                     entry: updatedSourceEntry.getLogInfo(),
                     replicationStatus:
