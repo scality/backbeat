@@ -16,9 +16,8 @@ const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
-const { wrapCounterInc } = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
 
-const metricLabels = ['origin', 'containerName', 'replicationStatus'];
 promClient.register.setDefaultLabels({
     origin: 'replication',
     containerName: process.env.CONTAINER_NAME || '',
@@ -29,13 +28,20 @@ promClient.register.setDefaultLabels({
  * @typedef {Object} MetricLabels
  * @property {string} origin - Method that began the replication
  * @property {string} containerName - Name of the container running our process
- * @property {string} replicationStatus - Result of the replications status
+ * @property {string} [replicationStatus] - Result of the replications status
+ * @property {string} [partition] - What kafka partition relates to the metric
  */
 
 const replicationStatusMetric = new promClient.Counter({
     name: 'replication_status_changed_total',
     help: 'Number of objects updated',
-    labelNames: metricLabels,
+    labelNames: ['origin', 'containerName', 'replicationStatus'],
+});
+
+const kafkaLagMetric = new promClient.Gauge({
+    name: 'kafka_lag',
+    help: 'Number of objects behind we are in the Kafka log',
+    labelNames: ['origin', 'containerName', 'partition'],
 });
 
 /**
@@ -45,6 +51,7 @@ const replicationStatusMetric = new promClient.Counter({
  */
 const metricsHandler = {
     status: wrapCounterInc(replicationStatusMetric),
+    lag: wrapGaugeSet(kafkaLagMetric),
 };
 
 /**
@@ -282,6 +289,14 @@ class ReplicationStatusProcessor {
      */
     handleMetrics(res, log) {
         log.debug('metrics requested');
+
+        // consumer stats lag is on a different update cycle so we need to
+        // update the metrics when requested
+        const lagStats = this._consumer.consumerStats.lag;
+        Object.keys(lagStats).forEach(partition => {
+            metricsHandler.lag({ partition }, lagStats[partition]);
+        });
+
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
         });
