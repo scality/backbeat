@@ -17,5 +17,14 @@
             "access": "accessKey2",
             "secret": "verySecretKey2"
         }
+    }, {
+        "name": "lifecycle",
+        "arn": "arn:aws:iam::000000000000:user/lifecycle",
+        "canonicalID": "79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2c0",
+        "displayName": "lifecycle",
+        "keys": {
+            "access": "lifecycleKey",
+            "secret": "lifecycleSecret"
+        }
     }]
 }

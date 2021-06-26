@@ -1,10 +1,10 @@
 const joi = require('@hapi/joi');
-const { zenkoAuthJoi, retryParamsJoi } =
+const { authJoi, retryParamsJoi } =
     require('../../lib/config/configItems.joi.js');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
-    auth: zenkoAuthJoi.required(),
+    auth: authJoi.required(),
     consumer: {
         groupId: joi.string().required(),
         retry: retryParamsJoi,
