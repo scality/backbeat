@@ -89,6 +89,71 @@
                     "port": 4045
                 }
             }
+        },
+        "lifecycle": {
+            "auth": {
+                "type": "vault",
+                "vault": {
+                    "roleName": "lifecycle-role",
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "serviceCredentials": {
+                        "type": "account",
+                        "account": "lifecycle"
+                    },
+                    "adminPort": 8600,
+                    "adminCredentialsFile": "./admincredentials.json"
+                }
+            },
+            "zookeeperPath": "/lifecycle",
+            "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
+            "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+            "conductor": {
+                "cronRule": "0 */5 * * * *",
+                "concurrency": 10
+            },
+            "bucketProcessor": {
+                "groupId": "backbeat-lifecycle-bucket-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10
+            },
+            "objectProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10
+            },
+            "rules": {
+                "expiration": {
+                    "enabled": true
+                },
+                "noncurrentVersionExpiration": {
+                    "enabled": true
+                },
+                "transitions": {
+                    "enabled": false
+                },
+                "abortIncompleteMultipartUpload": {
+                    "enabled": true
+                }
+            }
         }
     },
     "log": {
