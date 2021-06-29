@@ -40,7 +40,7 @@ const replicationStatusMetric = new promClient.Counter({
 
 const kafkaLagMetric = new promClient.Gauge({
     name: 'kafka_lag',
-    help: 'Number of objects behind we are in the Kafka log',
+    help: 'Number of update entries waiting to be consumed from the Kafka topic',
     labelNames: ['origin', 'containerName', 'partition'],
 });
 
@@ -48,6 +48,7 @@ const kafkaLagMetric = new promClient.Gauge({
  * Contains methods to incrememt different metrics
  * @typedef {Object} MetricsHandler
  * @property {CounterInc} status - Increments the replication status metric
+ * @property {GaugeSet} lag - Set the kafka lag metric
  */
 const metricsHandler = {
     status: wrapCounterInc(replicationStatusMetric),
