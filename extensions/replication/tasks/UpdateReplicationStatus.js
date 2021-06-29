@@ -284,9 +284,6 @@ class UpdateReplicationStatus extends BackbeatTask {
                     return done(err);
                 }
                 this._reportMetrics(sourceEntry, updatedSourceEntry);
-                this.metricsHandler.status({
-                    replicationStatus: status,
-                });
                 return this._handleGarbageCollection(
                     updatedSourceEntry, log, done);
             });

@@ -370,13 +370,6 @@ class ReplicationStatusProcessor {
     handleMetrics(res, log) {
         log.debug('metrics requested');
 
-        // consumer stats lag is on a different update cycle so we need to
-        // update the metrics when requested
-        const lagStats = this._consumer.consumerStats.lag;
-        Object.keys(lagStats).forEach(partition => {
-            metricsHandler.lag({ partition }, lagStats[partition]);
-        });
-
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
         });
