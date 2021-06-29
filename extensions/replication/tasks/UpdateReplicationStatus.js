@@ -2,7 +2,7 @@ const errors = require('arsenal').errors;
 
 const ObjectQueueEntry = require('../../replication/utils/ObjectQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const BackbeatMetadataProxy = require('../utils/BackbeatMetadataProxy');
+const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const {
     getSortedSetMember,
     getSortedSetKey,
