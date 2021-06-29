@@ -25,12 +25,14 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @constructor
      * @param {ReplicationStatusProcessor} rsp - replication status
      *   processor instance
+     * @param {MetricsHandler} metricsHandler - instance of metric handler
      */
-    constructor(rsp) {
+    constructor(rsp, metricsHandler) {
         const rspState = rsp.getStateVars();
         super();
         Object.assign(this, rspState);
         this.retryParams = this.repConfig.replicationStatusProcessor.retry;
+        this.metricsHandler = metricsHandler;
         this.sourceRole = null;
         this.s3sourceCredentials = null;
         const { transport, s3, auth } = this.sourceConfig;

@@ -22,13 +22,44 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 const INTERVAL = 300; // 5 minutes;
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
+const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
 
-// TEMP: Not used until we add our first metrics
-// const metricLabels = ['origin', 'logName', 'logId', 'containerName'];
-// promClient.register.setDefaultLabels({
-    // origin: 'replication',
-    // containerName: process.env.CONTAINER_NAME || '',
-// });
+promClient.register.setDefaultLabels({
+    origin: 'replication',
+    containerName: process.env.CONTAINER_NAME || '',
+});
+
+/**
+ * Labels used for Prometheus metrics
+ * @typedef {Object} MetricLabels
+ * @property {string} origin - Method that began the replication
+ * @property {string} containerName - Name of the container running our process
+ * @property {string} [replicationStatus] - Result of the replications status
+ * @property {string} [partition] - What kafka partition relates to the metric
+ */
+
+const replicationStatusMetric = new promClient.Counter({
+    name: 'replication_status_changed_total',
+    help: 'Number of objects updated',
+    labelNames: ['origin', 'containerName', 'replicationStatus'],
+});
+
+const kafkaLagMetric = new promClient.Gauge({
+    name: 'kafka_lag',
+    help: 'Number of update entries waiting to be consumed from the Kafka topic',
+    labelNames: ['origin', 'containerName', 'partition'],
+});
+
+/**
+ * Contains methods to incrememt different metrics
+ * @typedef {Object} MetricsHandler
+ * @property {CounterInc} status - Increments the replication status metric
+ * @property {GaugeSet} lag - Set the kafka lag metric
+ */
+const metricsHandler = {
+    status: wrapCounterInc(replicationStatusMetric),
+    lag: wrapGaugeSet(kafkaLagMetric),
+};
 
 /**
  * @class ReplicationStatusProcessor
@@ -256,7 +287,7 @@ class ReplicationStatusProcessor {
         }
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
-            task = new UpdateReplicationStatus(this);
+            task = new UpdateReplicationStatus(this, metricsHandler);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
@@ -338,6 +369,7 @@ class ReplicationStatusProcessor {
      */
     handleMetrics(res, log) {
         log.debug('metrics requested');
+
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
         });
