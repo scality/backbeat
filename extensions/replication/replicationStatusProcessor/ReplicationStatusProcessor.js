@@ -30,6 +30,7 @@ promClient.register.setDefaultLabels({
  * @property {string} containerName - Name of the container running our process
  * @property {string} [replicationStatus] - Result of the replications status
  * @property {string} [partition] - What kafka partition relates to the metric
+ * @property {string} [serviceName] - Name of our service to match generic metrics
  */
 
 const replicationStatusMetric = new promClient.Counter({
@@ -41,7 +42,7 @@ const replicationStatusMetric = new promClient.Counter({
 const kafkaLagMetric = new promClient.Gauge({
     name: 'kafka_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition'],
+    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
 });
 
 /**
@@ -291,11 +292,13 @@ class ReplicationStatusProcessor {
     handleMetrics(res, log) {
         log.debug('metrics requested');
 
+        const serviceName = 'ReplicationStatusProcessor';
+
         // consumer stats lag is on a different update cycle so we need to
         // update the metrics when requested
         const lagStats = this._consumer.consumerStats.lag;
         Object.keys(lagStats).forEach(partition => {
-            metricsHandler.lag({ partition }, lagStats[partition]);
+            metricsHandler.lag({ partition, serviceName }, lagStats[partition]);
         });
 
         res.writeHead(200, {
