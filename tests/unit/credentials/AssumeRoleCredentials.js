@@ -3,8 +3,8 @@ const assert = require('assert');
 
 const { Logger } = require('werelogs');
 
-const { VaultServiceCredentials } =
-    require('../../../lib/credentials/VaultServiceCredentials');
+const { AssumeRoleCredentials } =
+    require('../../../lib/credentials/AssumeRoleCredentials');
 
 const extension = 'test-extension';
 const roleArn = 'arn:aws:iam::000000000000:role/test-role';
@@ -33,13 +33,13 @@ function assertCredentials(vaultCredentials, expectedCredentials) {
     }
 }
 
-describe('VaultServiceCredentials', () => {
+describe('AssumeRoleCredentials', () => {
     const stsclient = { assumeRole: sinon.stub() };
-    const log = new Logger('test:VaultServiceCredentials');
+    const log = new Logger('test:AssumeRoleCredentials');
     let vaultCredentials = null;
 
     beforeEach(() => {
-        vaultCredentials = new VaultServiceCredentials(
+        vaultCredentials = new AssumeRoleCredentials(
             stsclient, extension, roleArn, log.newRequestLogger(), 1);
     });
 
