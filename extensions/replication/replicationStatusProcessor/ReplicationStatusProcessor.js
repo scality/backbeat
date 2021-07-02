@@ -44,6 +44,7 @@ const replicationStatusMetric = new promClient.Counter({
     labelNames: ['origin', 'containerName', 'replicationStatus'],
 });
 
+// TODO: Kafka lag is not set in 8.x branches see BB-1
 const kafkaLagMetric = new promClient.Gauge({
     name: 'kafka_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
