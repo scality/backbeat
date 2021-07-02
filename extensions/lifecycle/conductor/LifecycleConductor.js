@@ -10,9 +10,13 @@ const Logger = require('werelogs').Logger;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
+const { authTypeAssumeRole } = require('../../../lib/constants');
+const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
+
+const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle:conductor';
 
 /**
  * @class LifecycleConductor
@@ -65,6 +69,7 @@ class LifecycleConductor {
         this._kafkaBacklogMetrics = null;
         this._started = false;
         this._cronJob = null;
+        this._vaultClientCache = null;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
@@ -79,7 +84,11 @@ class LifecycleConductor {
     }
 
     _processBucket(ownerId, bucketName, done) {
-        this.logger.debug('processing bucket', { ownerId, bucketName });
+        this.logger.debug('processing bucket', {
+            method: 'LifecycleConductor::_processBucket',
+            ownerId,
+            bucketName,
+        });
         return process.nextTick(() => done(null, [{
             message: JSON.stringify({
                 action: 'processObjects',
@@ -90,6 +99,48 @@ class LifecycleConductor {
                 details: {},
             }),
         }]));
+    }
+
+    _processBucketWithAccountId(ownerId, bucketName, done) {
+        this.logger.debug('processing bucket', {
+            method: 'LifecycleConductor::_processBucketWithAccountId',
+            ownerId,
+            bucketName,
+        });
+        const client = this._vaultClientCache.getClient(LIFEYCLE_CONDUCTOR_CLIENT_ID);
+        const opts = {};
+        return client.getAccountIds([ownerId], opts, (err, res) => {
+            if (err) {
+                this.logger.error(
+                    'failed to retrieve bucket owner account id, skipping', {
+                        error: err,
+                        bucket: bucketName,
+                        canonicalId: ownerId,
+                    });
+                return process.nextTick(done);
+            }
+
+            /*
+             *  res = {
+             *      message: {
+             *          body: { canonicalId[*]: accountId },
+             *          code: 200,
+             *          message: 'Attributes retrieved'
+             *      }
+             *  }
+             */
+            return process.nextTick(() => done(null, [{
+                message: JSON.stringify({
+                    action: 'processObjects',
+                    target: {
+                        bucket: bucketName,
+                        owner: ownerId,
+                        accountId: res.message.body[ownerId],
+                    },
+                    details: {},
+                }),
+            }]));
+        });
     }
 
     processBuckets() {
@@ -120,6 +171,9 @@ class LifecycleConductor {
                             'malformed zookeeper bucket entry, skipping',
                             { zkPath: zkBucketsPath, bucket });
                         return process.nextTick(done);
+                    }
+                    if (this.lcConfig.auth.type === authTypeAssumeRole) {
+                        return this._processBucketWithAccountId(ownerId, bucketName, done);
                     }
                     return this._processBucket(ownerId, bucketName, done);
                 }, next),
@@ -187,6 +241,29 @@ class LifecycleConductor {
         });
     }
 
+    _setupProducer(cb) {
+        const producer = new BackbeatProducer({
+            kafka: { hosts: this.kafkaConfig.hosts },
+            topic: this.lcConfig.bucketTasksTopic,
+        });
+        producer.once('error', cb);
+        producer.once('ready', () => {
+            this.logger.debug(
+                'producer is ready',
+                { kafkaConfig: this.kafkaConfig,
+                    topic: this.lcConfig.bucketTasksTopic });
+            producer.removeAllListeners('error');
+            producer.on('error', err => {
+                this.logger.error('error from backbeat producer', {
+                    topic: this.lcConfig.bucketTasksTopic,
+                    error: err,
+                });
+            });
+            this._producer = producer;
+            cb();
+        });
+    }
+
     /**
      * Initialize kafka producer and zookeeper client
      *
@@ -198,29 +275,10 @@ class LifecycleConductor {
             // already initialized
             return process.nextTick(done);
         }
+
+        this._setupVaultClientCache();
         return async.series([
-            next => {
-                const producer = new BackbeatProducer({
-                    kafka: { hosts: this.kafkaConfig.hosts },
-                    topic: this.lcConfig.bucketTasksTopic,
-                });
-                producer.once('error', next);
-                producer.once('ready', () => {
-                    this.logger.debug(
-                        'producer is ready',
-                        { kafkaConfig: this.kafkaConfig,
-                          topic: this.lcConfig.bucketTasksTopic });
-                    producer.removeAllListeners('error');
-                    producer.on('error', err => {
-                        this.logger.error('error from backbeat producer', {
-                            topic: this.lcConfig.bucketTasksTopic,
-                            error: err,
-                        });
-                    });
-                    this._producer = producer;
-                    next();
-                });
-            },
+            next => this._setupProducer(next),
             next => {
                 this._zkClient = zookeeperHelper.createClient(
                     this.zkConfig.connectionString);
@@ -240,6 +298,18 @@ class LifecycleConductor {
             },
             next => this._initKafkaBacklogMetrics(next),
         ], done);
+    }
+
+    _setupVaultClientCache() {
+        if (this.lcConfig.auth.type !== authTypeAssumeRole) {
+            return;
+        }
+
+        this._vaultClientCache = new VaultClientCache();
+        const { host, port } = this.lcConfig.auth.vault;
+        this._vaultClientCache
+            .setHost(LIFEYCLE_CONDUCTOR_CLIENT_ID, host)
+            .setPort(LIFEYCLE_CONDUCTOR_CLIENT_ID, port);
     }
 
     _initKafkaBacklogMetrics(cb) {
@@ -329,7 +399,7 @@ class LifecycleConductor {
         const state = this._zkClient && this._zkClient.getState();
         return this._producer && this._producer.isReady() && state &&
             state.code === zookeeper.State.SYNC_CONNECTED.code &&
-            this._kafkaBacklogMetrics.isReady();
+            (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady());
     }
 }
 
