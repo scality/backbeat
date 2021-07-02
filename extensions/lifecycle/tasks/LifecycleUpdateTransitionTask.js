@@ -21,8 +21,19 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _getMetadata(entry, log, done) {
+        const { owner: canonicalId, accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatClieent(canonicalId, accountId);
+        if (!backbeatClient) {
+            this.log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+
         const { bucket, key, version } = entry.getAttribute('target');
-        this.backbeatClient.getMetadata({
+        return backbeatClient.getMetadata({
             bucket,
             objectKey: key,
             versionId: version,
@@ -59,9 +70,20 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _putMetadata(entry, objMD, log, done) {
+        const { owner: canonicalId, accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatClieent(canonicalId, accountId);
+        if (!backbeatClient) {
+            this.log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+        //
         // TODO add a condition on metadata cookie and retry if needed
         const { bucket, key, version } = entry.getAttribute('target');
-        this.backbeatClient.putMetadata({
+        return backbeatClient.putMetadata({
             bucket,
             objectKey: key,
             versionId: version,
