@@ -80,6 +80,7 @@
                 "groupId": "backbeat-replication-group",
                 "retryTimeoutS": 300,
                 "concurrency": 10,
+                "logConsumerMetricsIntervalS": 60,
                 "probeServer": {
                     "bindAddress": "localhost",
                     "port": 4045

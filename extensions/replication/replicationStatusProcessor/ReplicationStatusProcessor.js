@@ -171,6 +171,7 @@ class ReplicationStatusProcessor {
             this.repConfig.replicationStatusProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
             bootstrap: options && options.bootstrap,
+            logConsumerMetricsIntervalS: this.repConfig.replicationStatusProcessor.logConsumerMetricsIntervalS,
         });
         this._consumer.on('error', () => {});
         this._consumer.on('ready', () => {
