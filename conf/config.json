@@ -93,7 +93,7 @@
         "lifecycle": {
             "auth": {
                 "type": "assumeRole",
-                "role": "lifecycle-role",
+                "roleName": "lifecycle-role",
                 "sts": {
                     "host": "127.0.0.1",
                     "port": 8800,
