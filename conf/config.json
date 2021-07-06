@@ -93,17 +93,17 @@
         },
         "lifecycle": {
             "auth": {
-                "type": "vault",
-                "vault": {
-                    "roleName": "lifecycle-role",
+                "type": "assumeRole",
+                "roleName": "lifecycle-role",
+                "sts": {
                     "host": "127.0.0.1",
                     "port": 8800,
-                    "serviceCredentials": {
-                        "type": "account",
-                        "account": "lifecycle"
-                    },
-                    "adminPort": 8600,
-                    "adminCredentialsFile": "./admincredentials.json"
+                    "accessKey": "lifecycleKey",
+                    "secretKey": "lifecycleSecret"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8500
                 }
             },
             "zookeeperPath": "/lifecycle",
