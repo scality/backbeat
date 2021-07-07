@@ -12,11 +12,7 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const LifecycleTask = require('../tasks/LifecycleTask');
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
-const {
-    ClientCache,
-    createBackbeatClient,
-    createS3Client,
-} = require('../../../lib/clients/ClientCache');
+const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
 const safeJsonParse = require('../util/safeJsonParse');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 
@@ -91,8 +87,8 @@ class LifecycleBucketProcessor {
         }
 
         this._stsConfig = null;
-        this.s3ClientCache = new ClientCache(createS3Client);
-        this.backbeatClientCache = new ClientCache(createBackbeatClient);
+        this.s3Clients = {};
+        this.backbeatClients = {};
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
 
         // The task scheduler for processing lifecycle tasks concurrently.
@@ -149,18 +145,21 @@ class LifecycleBucketProcessor {
         }
 
         const clientId = canonicalId;
-        const client = this.s3ClientCache.getClient(clientId, this._log);
+        const client = this.s3Clients[clientId];
+
         if (client) {
             return client;
         }
 
-        return this.s3ClientCache
-            .setHost(clientId, this._s3Config.host)
-            .setPort(clientId, this._s3Config.port)
-            .setTransport(clientId, this._transport)
-            .setCredentials(clientId, credentials)
-            .setAgent(clientId, this.s3Agent)
-            .getClient(clientId, this._log);
+        this.s3Clients[clientId] = createS3Client({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return this.s3Clients[clientId];
     }
 
     /**
@@ -182,18 +181,22 @@ class LifecycleBucketProcessor {
         }
 
         const clientId = canonicalId;
-        let client = this.backbeatClientCache.getClient(clientId, this._log);
-        if (!client) {
-            client = this.backbeatClientCache
-                .setHost(clientId, this._s3Config.host)
-                .setPort(clientId, this._s3Config.port)
-                .setTransport(clientId, this._transport)
-                .setCredentials(clientId, credentials)
-                .setAgent(clientId, this.s3Agent)
-                .getClient(clientId, this._log);
+        const client = this.backbeatClients[clientId];
+
+        if (client) {
+            return client;
         }
 
-        return new BackbeatMetadataProxy(this._lcConfig).setBackbeatClient(client);
+        this.backbeatClients[clientId] = createBackbeatClient({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return new BackbeatMetadataProxy(this._lcConfig)
+            .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
     /**
@@ -422,9 +425,9 @@ class LifecycleBucketProcessor {
     }
 
     _initCredentialsManager() {
-        this.credentialsManager.on('deleteCredentials', canonicalId => {
-            this.s3ClientCache.deleteProfile(canonicalId);
-            this.backbeatClientCache.deleteProfile(canonicalId);
+        this.credentialsManager.on('deleteCredentials', clientId => {
+            delete this.s3Clients[clientId];
+            delete this.backbeatClients[clientId];
         });
 
         this._deleteInactiveCredentialsInterval = setInterval(() => {
