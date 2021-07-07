@@ -16,13 +16,7 @@ const zkConfig = {
         autoCreateNamespace: true,
     },
 };
-const kafkaConfig = {
-    hosts: '127.0.0.1:9092',
-    backlogMetrics: {
-        zkPath: '/test/lifecycle/kafka-backlog-metrics',
-        intervalS: 1,
-    },
-};
+const kafkaConfig = { hosts: '127.0.0.1:9092' };
 
 const lcConfig = {
     zookeeperPath: '/test/lifecycle',
@@ -46,6 +40,7 @@ const lcConfig = {
             enabled: true,
         },
     },
+    auth: { type: 'account', account: 'lifecycle' },
 };
 
 const repConfig = {
