@@ -1,4 +1,5 @@
 const async = require('async');
+const { errors } = require('arsenal');
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -18,6 +19,14 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     _checkDate(entry, log, done) {
+        const { owner: canonicalId, accountId } = entry.getAttribute('target');
+        const s3Client = this.getS3Client(canonicalId, accountId);
+        if (!s3Client) {
+            log.error('failed to get S3 client', { canonicalId, accountId });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+
         const bucket = entry.getAttribute('target.bucket');
         const key = entry.getAttribute('target.key');
         const lastModified = entry.getAttribute('details.lastModified');
@@ -28,7 +37,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 Key: key,
                 IfUnmodifiedSince: lastModified,
             };
-            const req = this.s3Client.headObject(reqParams);
+            const req = s3Client.headObject(reqParams);
             attachReqUids(req, log);
             return req.send(done);
         }
@@ -36,6 +45,14 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     _executeDelete(entry, log, done) {
+        const { owner: canonicalId, accountId } = entry.getAttribute('target');
+        const s3Client = this.getS3Client(canonicalId, accountId);
+        if (!s3Client) {
+            log.error('failed to get S3 client', { canonicalId, accountId });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+
         const reqParams = {
             Bucket: entry.getAttribute('target.bucket'),
             Key: entry.getAttribute('target.key'),
@@ -53,7 +70,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             reqParams.UploadId = entry.getAttribute('details.UploadId');
             reqMethod = 'abortMultipartUpload';
         }
-        const req = this.s3Client[reqMethod](reqParams);
+        const req = s3Client[reqMethod](reqParams);
         attachReqUids(req, log);
         return req.send(err => {
             if (err) {
