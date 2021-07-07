@@ -1,10 +1,15 @@
 'use strict'; // eslint-disable-line
 
+const async = require('async');
 const werelogs = require('werelogs');
+const { errors } = require('arsenal');
+const {
+    DEFAULT_LIVE_ROUTE,
+    DEFAULT_READY_ROUTE,
+} = require('arsenal').network.probe.ProbeServer;
 
 const LifecycleConductor = require('./LifecycleConductor');
-const { HealthProbeServer } = require('arsenal').network.probe;
-
+const { sendSuccess, sendError, startProbeServer } = require('../../../lib/util/probe');
 const config = require('../../../conf/Config');
 
 const zkConfig = config.zookeeper;
@@ -21,28 +26,43 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Conductor:service');
-const healthServer = new HealthProbeServer({
-    bindAddress: config.healthcheckServer.bindAddress,
-    port: config.healthcheckServer.port,
-});
 
-lcConductor.start(err => {
+function livenessCheck(res, log) {
+    if (lcConductor.isReady()) {
+        sendSuccess(res, log);
+    } else {
+        sendError(res, log, errors.ServiceUnavailable, 'unhealthy');
+    }
+}
+
+function probeServerSetup(config, done) {
+    startProbeServer(config, (err, probeServer) => {
+        if (err) {
+            return done(err);
+        }
+
+        if (!probeServer) {
+            logger.info('Skipping lifecycle conductor server setup');
+            return done();
+        }
+
+        probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
+        probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
+        logger.info('Starting lifecycle conductor server');
+        return done();
+    });
+}
+
+async.waterfall([
+    done => lcConductor.start(err => done(err)),
+    done => probeServerSetup(lcConfig.conductor.probeServer, done),
+], err => {
     if (err) {
         logger.error('error during lifecycle conductor initialization',
             { error: err.message });
         process.exit(1);
     }
-    healthServer.onReadyCheck(log => {
-        if (lcConductor.isReady()) {
-            return true;
-        }
-        log.error('lifecycle conductor is not ready!');
-        return false;
-    });
-    logger.info('Starting HealthProbe server');
-    healthServer.start();
-    logger.info('lifecycle conductor process is running');
-    return undefined;
+    logger.info('lifecycle conductor running!');
 });
 
 process.on('SIGTERM', () => {
