@@ -16,12 +16,16 @@ const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 const CONCURRENCY_DEFAULT = 10;
 // moves lifecycle transition deadlines 1 day earlier, mostly for testing
 const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
+// moves lifecycle expiration deadlines 1 day earlier, mostly for testing
+const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
 
 function isLifecycleUser(canonicalID) {
     const canonicalIDArray = canonicalID.split('/');
     const serviceName = canonicalIDArray[canonicalIDArray.length - 1];
     return serviceName === 'lifecycle';
 }
+
+const oneDay = 24 * 60 * 60 * 1000; // Milliseconds in a day.
 
 class LifecycleTask extends BackbeatTask {
     /**
@@ -583,7 +587,6 @@ class LifecycleTask extends BackbeatTask {
         }
         if (transition.Days !== undefined) {
             const lastModifiedTime = this._getTimestamp(lastModified);
-            const oneDay = 24 * 60 * 60 * 1000; // Milliseconds in a day.
             const timeTravel = transitionOneDayEarlier ? -oneDay : 0;
 
             return lastModifiedTime + (transition.Days * oneDay) + timeTravel;
@@ -745,9 +748,14 @@ class LifecycleTask extends BackbeatTask {
      * @return {number} Days passed
      */
     _findDaysSince(date) {
-        const now = Date.now();
+        const now = this._getCurrentDate();
         const diff = now - date;
         return Math.floor(diff / (1000 * 60 * 60 * 24));
+    }
+
+    _getCurrentDate() {
+        const timeTravel = expireOneDayEarlier ? oneDay : 0;
+        return Date.now() + timeTravel;
     }
 
     /**
@@ -780,9 +788,10 @@ class LifecycleTask extends BackbeatTask {
         const daysSinceInitiated = this._findDaysSince(
             new Date(obj.LastModified)
         );
+        const currentDate = this._getCurrentDate();
 
         if (rules.Expiration.Date
-            && rules.Expiration.Date < Date.now()) {
+            && rules.Expiration.Date < currentDate) {
             // expiration date passed for this object
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
@@ -792,6 +801,7 @@ class LifecycleTask extends BackbeatTask {
                 })
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
+                .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', obj.Key)
                 .setAttribute('details.lastModified', obj.LastModified);
             this._sendObjectAction(entry, err => {
@@ -814,6 +824,7 @@ class LifecycleTask extends BackbeatTask {
                 })
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
+                .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', obj.Key)
                 .setAttribute('details.lastModified', obj.LastModified);
             this._sendObjectAction(entry, err => {
@@ -1017,6 +1028,8 @@ class LifecycleTask extends BackbeatTask {
                         .setAttribute('target.bucket',
                             bucketData.target.bucket)
                         .setAttribute('target.key', deleteMarker.Key)
+                        .setAttribute('target.accountId',
+                            bucketData.target.accountId)
                         .setAttribute('target.version',
                             deleteMarker.VersionId);
                     this._sendObjectAction(entry, err => {
@@ -1060,6 +1073,7 @@ class LifecycleTask extends BackbeatTask {
                 })
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
+                .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', version.Key)
                 .setAttribute('target.version', version.VersionId);
             this._sendObjectAction(entry, err => {
@@ -1313,6 +1327,7 @@ class LifecycleTask extends BackbeatTask {
                     })
                     .setAttribute('target.owner', bucketData.target.owner)
                     .setAttribute('target.bucket', bucketData.target.bucket)
+                    .setAttribute('target.accountId', bucketData.target.accountId)
                     .setAttribute('target.key', upload.Key)
                     .setAttribute('details.UploadId', upload.UploadId);
                 this._sendObjectAction(entry, err => {
