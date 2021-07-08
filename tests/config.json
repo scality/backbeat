@@ -59,7 +59,7 @@
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed"
         },
-	"lifecycle": {
+        "lifecycle": {
             "zookeeperPath": "/lifecycletest",
             "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
             "objectTasksTopic": "backbeat-test-dummy-object-task",

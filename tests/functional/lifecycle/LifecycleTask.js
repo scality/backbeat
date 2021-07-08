@@ -19,6 +19,9 @@ const s3config = {
     credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
 };
 
+const bucketTasksTopic = 'bucket-tasks';
+const objectTasksTopic = 'object-tasks';
+
 const backbeatMetadataProxyMock = {
     headLocation: (headLocationParams, log, cb) => {
         cb(null, {
@@ -305,8 +308,9 @@ class S3Helper {
 }
 
 class ProducerMock {
-    constructor() {
+    constructor(topic) {
         this.reset();
+        this.topic = topic;
     }
 
     reset() {
@@ -320,6 +324,10 @@ class ProducerMock {
             object: [],
             transitions: [],
         };
+    }
+
+    send(entries, cb) {
+        this.sendToTopic(this.topic, entries, cb);
     }
 
     sendToTopic(topicName, entries, cb) {
@@ -392,7 +400,7 @@ class LifecycleBucketProcessorMock {
             },
         };
 
-        this._producer = new ProducerMock();
+        this._producer = new ProducerMock(objectTasksTopic);
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
 
@@ -418,8 +426,8 @@ class LifecycleBucketProcessorMock {
             bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
             s3Endpoint: s3config.endpoint,
             s3Auth: lifecycle.auth,
-            bucketTasksTopic: 'bucket-tasks',
-            objectTasksTopic: 'object-tasks',
+            bucketTasksTopic,
+            objectTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
         };
