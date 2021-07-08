@@ -16,6 +16,11 @@ const constants = {
         bytesDone: testIsOn ? 'test:bb:bytesdone' : 'bb:crr:bytesdone',
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
+    replicationStages: {
+        sourceDataRead: 'ReplicationSourceDataRead',
+        destinationDataWrite: 'ReplicationDestinationDataWrite',
+        destinationMetadataWrite: 'ReplicationDestinationMetadataWrite',
+    },
 };
 
 module.exports = constants;

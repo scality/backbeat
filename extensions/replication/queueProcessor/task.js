@@ -14,7 +14,7 @@ const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { startProbeServer } = require('../../../lib/util/probe');
-const { DEFAULT_LIVE_ROUTE } =
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 
 const site = process.argv[2];
@@ -70,6 +70,10 @@ async.waterfall([
                 probeServer.addHandler(
                     DEFAULT_LIVE_ROUTE,
                     (res, log) => queueProcessor.handleLiveness(res, log)
+                );
+                probeServer.addHandler(
+                    DEFAULT_METRICS_ROUTE,
+                    (res, log) => queueProcessor.handleMetrics(res, log)
                 );
             }
             done();
