@@ -38,6 +38,10 @@ function buildLocations(keysArray, bodiesArray, options) {
         if (!(options && options.doNotIncludeETag)) {
             location.dataStoreETag = `${i + 1}:${getMD5(bodiesArray[i])}`;
         }
+        if (options && options.encrypted) {
+            location.cryptoScheme = 1;
+            location.cipheredDataKey = `encryption-key-data-part-${i}`;
+        }
         locations.push(location);
         start += bodiesArray[i].length;
     }
@@ -119,8 +123,11 @@ class S3Mock extends TestConfigurator {
                     'x-amz-version-id': 'null',
                     'x-amz-server-version-id': '',
                     'x-amz-storage-class': 'sf',
-                    'x-amz-server-side-encryption': '',
-                    'x-amz-server-side-encryption-aws-kms-key-id': '',
+                    // set some dummy source encryption params for non-empty objects
+                    'x-amz-server-side-encryption':
+                    this.getParam('source.md.location') !== null ? 'AES123' : '',
+                    'x-amz-server-side-encryption-aws-kms-key-id':
+                    this.getParam('source.md.location') !== null ? 'MySourceEncryptionKey' : '',
                     'x-amz-server-side-encryption-customer-algorithm': '',
                     'x-amz-website-redirect-location': '',
                     'acl': {
@@ -261,6 +268,7 @@ class S3Mock extends TestConfigurator {
                 dataPartsKeys: () =>
                     constants.target.dataPartsKeys.slice(
                         0, this.getParam('nbParts')),
+                bucketIsEncrypted: false,
                 role: () =>
                     `arn:aws:iam::${this.getParam('target.accountId')}:role/backbeat`,
                 assumedRole: () =>
@@ -268,7 +276,8 @@ class S3Mock extends TestConfigurator {
                 md: {
                     location: () =>
                         buildLocations(this.getParam('target.dataPartsKeys'),
-                                       this.getParam('partsContents')),
+                                       this.getParam('partsContents'),
+                                       { encrypted: this.getParam('target.bucketIsEncrypted') }),
                 },
             },
             key: 'key_to_replicate_with_some_utf8_䆩鈁櫨㟔罳_and_encoded_chars_%EA%9D%8B',
@@ -518,6 +527,8 @@ class S3Mock extends TestConfigurator {
     }
 
     _putData(req, url, query, res, reqBody) {
+        // make sure backbeat sends 'v2' query param, for encryption support
+        assert.strictEqual(query.v2, '');
         const srcLocations = this.getParam('source.md.location');
         const destLocations = this.getParam('target.md.location');
         const md5 = req.headers['content-md5'];
@@ -528,6 +539,11 @@ class S3Mock extends TestConfigurator {
             reqBody, this.getParam('partsContents')[partNumber - 1]);
 
         res.setHeader('content-type', 'application/json');
+        if (this.getParam('target.bucketIsEncrypted')) {
+            res.setHeader('x-amz-server-side-encryption', 'AES256');
+            res.setHeader('x-amz-server-side-encryption-aws-kms-key-id',
+                          'MyEncryptionKeyId');
+        }
         res.writeHead(200);
         res.end(JSON.stringify([destLocations[partNumber - 1]]));
         this.partsWritten[partNumber - 1] = true;
@@ -578,7 +594,22 @@ class S3Mock extends TestConfigurator {
             assert.deepStrictEqual(parsedMd.location,
                                    this.getParam('target.md.location'));
         }
-
+        // for metadata-only updates, cloudserver preserves target
+        // encryption values and source values are ignored
+        if (req.headers['x-scal-replication-content'] !== 'METADATA') {
+            if (this.getParam('target.bucketIsEncrypted')) {
+                // if target bucket has encryption enabled, encryption
+                // params should have been set in the target metadata
+                assert.strictEqual(parsedMd['x-amz-server-side-encryption'], 'AES256');
+                assert.strictEqual(parsedMd['x-amz-server-side-encryption-aws-kms-key-id'],
+                                   'MyEncryptionKeyId');
+            } else {
+                // if target bucket has encryption disabled, encryption
+                // params should have been emptied in the target metadata
+                assert.strictEqual(parsedMd['x-amz-server-side-encryption'], '');
+                assert.strictEqual(parsedMd['x-amz-server-side-encryption-aws-kms-key-id'], '');
+            }
+        }
         res.writeHead(200);
         res.end();
         this.hasPutTargetMd = true;
@@ -752,12 +783,21 @@ describe('queue processor functional tests with mocking', () => {
 
         [{ caption: 'object with single part',
             nbParts: 1 },
+        { caption: 'encrypted object with single part',
+            nbParts: 1,
+            encrypted: true },
         { caption: 'object with multiple parts',
             nbParts: 2 },
+        { caption: 'encrypted object with multiple parts',
+            nbParts: 2,
+            encrypted: true },
         { caption: 'empty object',
             nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
                 before(() => {
                     s3mock.setParam('nbParts', testCase.nbParts);
+                    if (testCase.encrypted) {
+                        s3mock.setParam('target.bucketIsEncrypted', true);
+                    }
                 });
                 it('should complete a replication end-to-end', done => {
                     async.parallel([

@@ -63,6 +63,9 @@ const mockSourceEntry = {
     getContentDisposition: () => undefined,
     getContentEncoding: () => undefined,
     getTags: () => {},
+    setAmzServerSideEncryption: () => {},
+    setAmzEncryptionKeyId: () => {},
+    setAmzEncryptionCustomerAlgorithm: () => {},
     setReplicationSiteDataStoreVersionId: () => {},
 };
 
@@ -90,8 +93,7 @@ class S3Mock {
     onRequest(req, res) {
         if (req.method === 'PUT') {
             assert.strictEqual(
-                req.url, `/_/backbeat/data/${constants.bucket}` +
-                    `/${constants.objectKey}`);
+                req.url, `/_/backbeat/data/${constants.bucket}/${constants.objectKey}?v2`);
             const chunks = [];
             req.on('data', chunk => {
                 if (this.testScenario === 'abortPut') {
