@@ -5,16 +5,18 @@ const { initManagement } = require('../../../lib/management/index');
 const LifecycleBucketProcessor = require('./LifecycleBucketProcessor');
 const { applyBucketLifecycleWorkflows } = require('../management');
 const config = require('../../../lib/Config');
-const { zookeeper, kafka, extensions, s3, transport, log, healthcheckServer } =
-    config;
+const { zookeeper, kafka, extensions, s3, log, healthcheckServer } = config;
+const lcConfig = extensions.lifecycle;
+const repConfig = extensions.replication;
 
 werelogs.configure({ level: log.logLevel,
     dump: log.dumpLevel });
 
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
-const bucketProcessor =
-    new LifecycleBucketProcessor(zookeeper, kafka, extensions, s3, transport);
+const bucketProcessor = new LifecycleBucketProcessor(
+    zookeeper, kafka, lcConfig, repConfig, s3, lcConfig.transport
+);
 
 const healthServer = new HealthProbeServer({
     bindAddress: healthcheckServer.bindAddress,

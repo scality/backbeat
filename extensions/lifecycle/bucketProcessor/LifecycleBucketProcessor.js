@@ -1,9 +1,8 @@
 'use strict'; // eslint-disable-line
 
-const fs = require('fs');
 const async = require('async');
-const AWS = require('aws-sdk');
 const http = require('http');
+const https = require('https');
 const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
 
@@ -12,12 +11,16 @@ const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const LifecycleTask = require('../tasks/LifecycleTask');
-const { getAccountCredentials } =
-      require('../../../lib/credentials/AccountCredentials');
-const VaultClientCache = require('../../../lib/clients/VaultClientCache');
+const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
+const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
 const safeJsonParse = require('../util/safeJsonParse');
+const { authTypeAssumeRole } = require('../../../lib/constants');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
+
+// TODO: test inactive credential deletion
+const DELETE_INACTIVE_CREDENTIALS_INTERVAL = 1000 * 60 * 30; // 30m
+const MAX_INACTIVE_DURATION = 1000 * 60 * 60 * 2; // 2hr
 
 /**
  * @class LifecycleBucketProcessor
@@ -42,18 +45,17 @@ class LifecycleBucketProcessor {
      * @param {Object} [kafkaConfig.backlogMetrics] - param object to
      * publish kafka topic metrics to zookeeper (see {@link
      * BackbeatConsumer} constructor)
-     * @param {Object} extensions - backbeat config extensions object
-     * @param {Object} extensions.lifecycle - lifecycle config
-     * @param {Object} extensions.lifecycle.auth - authentication info
-     * @param {String} extensions.lifecycle.bucketTasksTopic - lifecycle bucket
+     * @param {Object} lcConfig - lifecycle config
+     * @param {Object} lcConfig.lifecycle.auth - authentication info
+     * @param {String} lcConfig.lifecycle.bucketTasksTopic - lifecycle bucket
      * topic name
-     * @param {Object} extensions.lifecycle.bucketProcessor - kafka consumer
+     * @param {Object} lcConfig.lifecycle.bucketProcessor - kafka consumer
      * object
-     * @param {String} extensions.lifecycle.bucketProcessor.groupId - kafka
+     * @param {String} lcConfig.lifecycle.bucketProcessor.groupId - kafka
      * consumer group id
-     * @param {Object} extensions.replication - replication config
-     * @param {String} extensions.replication.topic - kafka replication topic
-     * @param {Object} extensions.replication.source - replication source
+     * @param {Object} repConfig - replication config
+     * @param {String} repConfig.topic - kafka replication topic
+     * @param {Object} repConfig.source - replication source
      * @param {Number} [lcConfig.bucketProcessor.concurrency] - number
      *  of max allowed concurrent operations
      * @param {Object} s3Config - s3 config
@@ -61,17 +63,33 @@ class LifecycleBucketProcessor {
      * @param {String} s3Config.port - port
      * @param {String} transport - http or https
      */
-    constructor(zkConfig, kafkaConfig, extensions, s3Config, transport) {
+    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, transport = 'http') {
         this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
-        this._lcConfig = extensions.lifecycle;
-        this._repConfig = extensions.replication;
+        this._lcConfig = lcConfig;
+        this._repConfig = repConfig;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
+        this._s3Config = s3Config;
         this._transport = transport;
         this._producer = null;
         this._kafkaBacklogMetrics = null;
-        this.accountCredsCache = {};
+
+        this._producerReady = false;
+        this._consumerReady = false;
+
+        if (transport === 'https') {
+            this.s3Agent = new https.Agent({ keepAlive: true });
+            this.stsAgent = new https.Agent({ keepAlive: true });
+        } else {
+            this.s3Agent = new http.Agent({ keepAlive: true });
+            this.stsAgent = new http.Agent({ keepAlive: true });
+        }
+
+        this._stsConfig = null;
+        this.s3Clients = {};
+        this.backbeatClients = {};
+        this.credentialsManager = new CredentialsManager('lifecycle', this._log);
 
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
@@ -109,28 +127,76 @@ class LifecycleBucketProcessor {
     }
 
     /**
-     * Return an S3 client instance using the given account credentials.
-     * @param {Object} accountCreds - Object containing account credentials
-     * @param {String} accountCreds.accessKeyId - The account access key
-     * @param {String} accountCreds.secretAccessKey - The account secret key
+     * Return an S3 client instance
+     * @param {String} canonicalId - The canonical ID of the bucket owner.
+     * @param {String} accountId - The account ID of the bucket owner .
      * @return {AWS.S3} The S3 client instance to make requests with
      */
-    _getS3Client(accountCreds) {
-        return new AWS.S3({
-            endpoint: this._s3Endpoint,
-            credentials: {
-                accessKeyId: accountCreds.accessKeyId,
-                secretAccessKey: accountCreds.secretAccessKey,
-            },
-            sslEnabled: this._transport === 'https',
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: {
-                agent: new http.Agent({ keepAlive: true }),
-                timeout: 0,
-            },
-            maxRetries: 0,
+    _getS3Client(canonicalId, accountId) {
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._lcConfig.auth,
         });
+
+        if (credentials === null) {
+            return null;
+        }
+
+        const clientId = canonicalId;
+        const client = this.s3Clients[clientId];
+
+        if (client) {
+            return client;
+        }
+
+        this.s3Clients[clientId] = createS3Client({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return this.s3Clients[clientId];
+    }
+
+    /**
+     * Return an backbeat client instance
+     * @param {String} canonicalId - The canonical ID of the bucket owner.
+     * @param {String} accountId - The account ID of the bucket owner .
+     * @return {BackbeatClient} The S3 client instance to make requests with
+     */
+    _getBackbeatClient(canonicalId, accountId) {
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._lcConfig.auth,
+        });
+
+        if (credentials === null) {
+            return null;
+        }
+
+        const clientId = canonicalId;
+        const client = this.backbeatClients[clientId];
+
+        if (client) {
+            return client;
+        }
+
+        this.backbeatClients[clientId] = createBackbeatClient({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return new BackbeatMetadataProxy(this._lcConfig)
+            .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
     /**
@@ -182,12 +248,13 @@ class LifecycleBucketProcessor {
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
-        const { bucket, owner } = result.target;
-        if (!bucket || !owner) {
+        const { bucket, owner, accountId } = result.target;
+        if (!bucket || !owner || (!accountId && this._lcConfig.auth.type === authTypeAssumeRole)) {
             this._log.error('kafka bucket entry missing required fields', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
+                accountId,
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
@@ -195,18 +262,23 @@ class LifecycleBucketProcessor {
             method: 'LifecycleBucketProcessor._processBucketEntry',
             bucket,
             owner,
+            accountId,
         });
-        return async.waterfall([
-            next => this._getAccountCredentials(owner, next),
-            (accountCreds, next) => {
-                const s3 = this._getS3Client(accountCreds);
-                const params = { Bucket: bucket };
-                return s3.getBucketLifecycleConfiguration(params,
-                (err, data) => {
-                    next(err, data, s3);
-                });
-            },
-        ], (err, config, s3) => {
+
+        const s3 = this._getS3Client(owner, accountId);
+        if (!s3) {
+            return cb(errors.InternalError
+                .customizeDescription('failed to obtain a s3 client'));
+        }
+
+        const backbeatMetadataProxy = this._getBackbeatClient(owner, accountId);
+        if (!backbeatMetadataProxy) {
+            return cb(errors.InternalError
+                .customizeDescription('failed to obtain a backbeat client'));
+        }
+
+        const params = { Bucket: bucket };
+        return s3.getBucketLifecycleConfiguration(params, (err, config) => {
             if (err) {
                 this._log.error('error getting bucket lifecycle config', {
                     method: 'LifecycleBucketProcessor._processBucketEntry',
@@ -225,9 +297,6 @@ class LifecycleBucketProcessor {
                 owner,
                 details: result.details,
             });
-            const backbeatMetadataProxy =
-                new BackbeatMetadataProxy(this._s3Endpoint, this._lcConfig.auth)
-                    .setSourceClient(this._log);
             return this._internalTaskScheduler.push({
                 task: new LifecycleTask(this),
                 rules: config.Rules,
@@ -246,25 +315,36 @@ class LifecycleBucketProcessor {
     _setupProducer(cb) {
         const producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
+            topic: this._lcConfig.objectTasksTopic,
         });
-        producer.once('error', cb);
+        producer.once('error', err => {
+            this._log.error('error setting up kafka producer', {
+                error: err,
+                method: 'LifecycleBucketProcesso::_setupProducer',
+            });
+            process.exit(1);
+        });
         producer.once('ready', () => {
+            this._log.debug('producer is ready',
+                { kafkaConfig: this.kafkaConfig });
             producer.removeAllListeners('error');
             producer.on('error', err => {
                 this._log.error('error from backbeat producer', {
                     error: err,
                 });
             });
-            return cb(null, producer);
+            this._producerReady = true;
+            this._producer = producer;
+            return cb();
         });
     }
 
     /**
      * Set up the lifecycle consumer.
+     * @param {function} cb - callback
      * @return {undefined}
      */
-    _setupConsumer() {
-        let consumerReady = false;
+    _setupConsumer(cb) {
         this._consumer = new BackbeatConsumer({
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
@@ -279,7 +359,7 @@ class LifecycleBucketProcessor {
             queueProcessor: this._processBucketEntry.bind(this),
         });
         this._consumer.on('error', err => {
-            if (!consumerReady) {
+            if (!this._consumerReady) {
                 this._log.fatal('unable to start lifecycle consumer', {
                     error: err,
                     method: 'LifecycleBucketProcessor._setupConsumer',
@@ -288,137 +368,25 @@ class LifecycleBucketProcessor {
             }
         });
         this._consumer.on('ready', () => {
-            consumerReady = true;
+            this._consumerReady = true;
             this._consumer.subscribe();
-        });
-    }
-
-    /**
-     * Set up the credentials (service account credentials or provided
-     * by vault depending on config)
-     * @return {undefined}
-     */
-    _setupCredentials() {
-        const { type } = this._lcConfig.auth;
-        if (type === 'vault') {
-            return this._setupVaultClientCache();
-        }
-        return undefined;
-    }
-
-    /**
-     * Set up the vault client cache for making requests to vault.
-     * @return {undefined}
-     */
-    _setupVaultClientCache() {
-        const { vault } = this._lcConfig.auth;
-        const { host, port, adminPort, adminCredentialsFile } = vault;
-        const adminCredsJSON = fs.readFileSync(adminCredentialsFile);
-        const adminCredsObj = JSON.parse(adminCredsJSON);
-        const accessKey = Object.keys(adminCredsObj)[0];
-        const secretKey = adminCredsObj[accessKey];
-        this._vaultClientCache = new VaultClientCache();
-        if (accessKey && secretKey) {
-            this._vaultClientCache
-                .setHost('lifecycle:admin', host)
-                .setPort('lifecycle:admin', adminPort)
-                .loadAdminCredentials('lifecycle:admin', accessKey, secretKey);
-        } else {
-            throw new Error('Lifecycle bucket processor not properly ' +
-                'configured: missing credentials for Vault admin client');
-        }
-        this._vaultClientCache
-            .setHost('lifecycle:s3', host)
-            .setPort('lifecycle:s3', port);
-    }
-
-    /**
-     * Get the account's credentials for making a request with S3.
-     * @param {String} canonicalId - The canonical ID of the bucket owner.
-     * @param {Function} cb - The callback to call with the account credentials.
-     * @return {undefined}
-     */
-    _getAccountCredentials(canonicalId, cb) {
-        const cachedAccountCreds = this.accountCredsCache[canonicalId];
-        if (cachedAccountCreds) {
-            return process.nextTick(() => cb(null, cachedAccountCreds));
-        }
-        const credentials = getAccountCredentials(this._lcConfig.auth,
-                                                  this._log);
-        if (credentials) {
-            this.accountCredsCache[canonicalId] = credentials;
-            return process.nextTick(() => cb(null, credentials));
-        }
-        const { type } = this._lcConfig.auth;
-        if (type === 'vault') {
-            return this._generateVaultAdminCredentials(canonicalId, cb);
-        }
-        return cb(errors.InternalError.customizeDescription(
-            `invalid auth type ${type}`));
-    }
-
-    _generateVaultAdminCredentials(canonicalId, cb) {
-        const vaultClient = this._vaultClientCache.getClient('lifecycle:s3');
-        const vaultAdmin = this._vaultClientCache.getClient('lifecycle:admin');
-        return async.waterfall([
-            // Get the account's display name for generating a new access key.
-            next =>
-                vaultClient.getAccounts(undefined, undefined, [canonicalId], {},
-                (err, data) => {
-                    if (err) {
-                        return next(err);
-                    }
-                    if (data.length !== 1) {
-                        return next(errors.InternalError);
-                    }
-                    return next(null, data[0].name);
-                }),
-            // Generate a new account access key beacuse it has not been cached.
-            (name, next) =>
-                vaultAdmin.generateAccountAccessKey(name, (err, data) => {
-                    if (err) {
-                        return next(err);
-                    }
-                    const accountCreds = {
-                        accessKeyId: data.id,
-                        secretAccessKey: data.value,
-                    };
-                    this.accountCredsCache[canonicalId] = accountCreds;
-                    return next(null, accountCreds);
-                }),
-        ], (err, accountCreds) => {
-            if (err) {
-                this._log.error('error generating new access key', {
-                    error: err.message,
-                    method: 'LifecycleBucketProcessor._getAccountCredentials',
-                });
-                return cb(err);
-            }
-            return cb(null, accountCreds);
+            cb();
         });
     }
 
     /**
      * Set up the producers and consumers needed for lifecycle.
+     * @param {function} done - callback
      * @return {undefined}
      */
-    start() {
-        this._setupCredentials();
-        this._setupProducer((err, producer) => {
-            if (err) {
-                this._log.error('error setting up kafka producer', {
-                    error: err,
-                    method: 'LifecycleBucketProcessor.start',
-                });
-                process.exit(1);
-            }
-            this._producer = producer;
-            this._initKafkaBacklogMetrics(() => {
-                this._setupConsumer();
-                this._log.info(
-                    'lifecycle bucket processor successfully started');
-            });
-        });
+    start(done) {
+        this._initSTSConfig();
+        this._initCredentialsManager();
+        async.series([
+            done => this._setupProducer(done),
+            done => this._initKafkaBacklogMetrics(done),
+            done => this._setupConsumer(done),
+        ], done);
     }
 
     _initKafkaBacklogMetrics(cb) {
@@ -438,12 +406,45 @@ class LifecycleBucketProcessor {
         });
     }
 
+    _initSTSConfig() {
+        if (this._lcConfig.auth.type === authTypeAssumeRole) {
+            const { sts } = this._lcConfig.auth;
+            this._stsConfig = {
+                endpoint: `${this._transport}://${sts.host}:${sts.port}`,
+                credentials: {
+                    accessKeyId: sts.accessKey,
+                    secretAccessKey: sts.secretKey,
+                },
+                region: 'us-east-1',
+                signatureVersion: 'v4',
+                sslEnabled: this._transport === 'https',
+                httpOptions: { agent: this.stsAgent, timeout: 0 },
+                maxRetries: 0,
+            };
+        }
+    }
+
+    _initCredentialsManager() {
+        this.credentialsManager.on('deleteCredentials', clientId => {
+            delete this.s3Clients[clientId];
+            delete this.backbeatClients[clientId];
+        });
+
+        this._deleteInactiveCredentialsInterval = setInterval(() => {
+            this.credentialsManager.removeInactiveCredentials(MAX_INACTIVE_DURATION);
+        }, DELETE_INACTIVE_CREDENTIALS_INTERVAL);
+    }
+
     /**
      * Close the lifecycle bucket processor
      * @param {function} cb - callback function
      * @return {undefined}
      */
     close(cb) {
+        if (this._deleteInactiveCredentialsInterval) {
+            clearInterval(this._deleteInactiveCredentialsInterval);
+        }
+
         async.parallel([
             done => {
                 this._log.debug('closing bucket tasks consumer');
@@ -457,8 +458,8 @@ class LifecycleBucketProcessor {
     }
 
     isReady() {
-        return this._producer && this._producer.isReady() &&
-               this._consumer && this._consumer.isReady();
+        return this._producer && this._producerReady &&
+               this._consumer && this._consumerReady;
     }
 }
 
