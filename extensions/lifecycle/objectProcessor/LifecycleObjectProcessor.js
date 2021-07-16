@@ -2,7 +2,7 @@
 
 const async = require('async');
 const http = require('http');
-const AWS = require('aws-sdk');
+const https = require('https');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
@@ -12,10 +12,15 @@ const LifecycleUpdateTransitionTask =
       require('../tasks/LifecycleUpdateTransitionTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
-const { getAccountCredentials } =
-      require('../../../lib/credentials/AccountCredentials');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
+const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
+const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
+const { authTypeAssumeRole } = require('../../../lib/constants');
+
+// TODO: test inactive credential deletion
+const DELETE_INACTIVE_CREDENTIALS_INTERVAL = 1000 * 60 * 30; // 30m
+const MAX_INACTIVE_DURATION = 1000 * 60 * 60 * 2; // 2hr
 
 /**
  * @class LifecycleObjectProcessor
@@ -53,102 +58,185 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {String} [transport="http"] - transport method ("http"
      *  or "https")
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, s3Config,
-                transport = 'http') {
+    constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super();
-        this.zkConfig = zkConfig;
-        this.kafkaConfig = kafkaConfig;
-        this.lcConfig = lcConfig;
-        this.authConfig = lcConfig.auth;
-        this.s3Config = s3Config;
+        this._log = new Logger('Backbeat:Lifecycle:ObjectProcessor');
+        this._zkConfig = zkConfig;
+        this._kafkaConfig = kafkaConfig;
+        this._lcConfig = lcConfig;
+        this._authConfig = lcConfig.auth;
+        this._s3Config = s3Config;
         this._transport = transport;
         this._consumer = null;
         this._gcProducer = null;
 
-        this.logger = new Logger('Backbeat:Lifecycle:ObjectProcessor');
-
         // global variables
-        // TODO: for SSL support, create HTTPS agents instead
-        this.httpAgent = new http.Agent({ keepAlive: true });
+        if (transport === 'https') {
+            this.s3Agent = new https.Agent({ keepAlive: true });
+            this.stsAgent = new https.Agent({ keepAlive: true });
+        } else {
+            this.s3Agent = new http.Agent({ keepAlive: true });
+            this.stsAgent = new http.Agent({ keepAlive: true });
+        }
+
+        this._stsConfig = null;
+        this.s3Clients = {};
+        this.backbeatClients = {};
+        this.credentialsManager = new CredentialsManager('lifecycle', this._log);
     }
 
+    _setupConsumer(cb) {
+        let consumerReady = false;
+        this._consumer = new BackbeatConsumer({
+            zookeeper: {
+                connectionString: this._zkConfig.connectionString,
+            },
+            kafka: {
+                hosts: this._kafkaConfig.hosts,
+                backlogMetrics: this._kafkaConfig.backlogMetrics,
+            },
+            topic: this._lcConfig.objectTasksTopic,
+            groupId: this._lcConfig.objectProcessor.groupId,
+            concurrency: this._lcConfig.objectProcessor.concurrency,
+            queueProcessor: this.processKafkaEntry.bind(this),
+        });
+        this._consumer.on('error', err => {
+            if (!consumerReady) {
+                this._log.fatal('unable to start lifecycle consumer', {
+                    error: err,
+                    method: 'LifecycleObjectProcessor._setupConsumer',
+                });
+                process.exit(1);
+            }
+        });
+        this._consumer.on('ready', () => {
+            consumerReady = true;
+            this._consumer.subscribe();
+            this._log.info(
+                'lifecycle object processor successfully started');
+            this.emit('ready');
+            cb();
+        });
+    }
 
     /**
      * Start kafka consumer. Emits a 'ready' event when
      * consumer is ready.
-     *
+     * @param {function} done - callback
      * @return {undefined}
      */
-    start() {
-        this._setupClients();
+    start(done) {
+        this._initSTSConfig();
+        this._initCredentialsManager();
         async.parallel([
-            done => {
-                let consumerReady = false;
-                this._consumer = new BackbeatConsumer({
-                    zookeeper: {
-                        connectionString: this.zkConfig.connectionString,
-                    },
-                    kafka: {
-                        hosts: this.kafkaConfig.hosts,
-                        backlogMetrics: this.kafkaConfig.backlogMetrics,
-                    },
-                    topic: this.lcConfig.objectTasksTopic,
-                    groupId: this.lcConfig.objectProcessor.groupId,
-                    concurrency: this.lcConfig.objectProcessor.concurrency,
-                    queueProcessor: this.processKafkaEntry.bind(this),
-                });
-                this._consumer.on('error', () => {
-                    if (!consumerReady) {
-                        this.logger.fatal(
-                            'error starting lifecycle object processor');
-                        process.exit(1);
-                    }
-                });
-                this._consumer.on('ready', () => {
-                    consumerReady = true;
-                    this._consumer.subscribe();
-                    this.logger.info(
-                        'lifecycle object processor successfully started');
-                    this.emit('ready');
-                    done();
-                });
-            },
+            done => this._setupConsumer(done),
             done => {
                 this._gcProducer = new GarbageCollectorProducer();
                 this._gcProducer.setupProducer(done);
             },
-        ], () => {});
+        ], done);
     }
 
-    _getCredentials() {
-        const credentials = getAccountCredentials(
-            this.lcConfig.auth, this.logger);
-        if (credentials) {
-            return credentials;
+    _initSTSConfig() {
+        if (this._lcConfig.auth.type === authTypeAssumeRole) {
+            const { sts } = this._lcConfig.auth;
+            this._stsConfig = {
+                endpoint: `${this._transport}://${sts.host}:${sts.port}`,
+                credentials: {
+                    accessKeyId: sts.accessKey,
+                    secretAccessKey: sts.secretKey,
+                },
+                region: 'us-east-1',
+                signatureVersion: 'v4',
+                sslEnabled: this._transport === 'https',
+                httpOptions: { agent: this.stsAgent, timeout: 0 },
+                maxRetries: 0,
+            };
         }
-        this.logger.fatal('error during lifecycle object processor startup: ' +
-                          `invalid auth type ${this.lcConfig.auth.type}`);
-        return process.exit(1);
     }
 
-    _setupClients() {
-        const accountCreds = this._getCredentials();
-        const s3 = this.s3Config;
-        const transport = this._transport;
-        this.logger.debug('creating s3 client', { transport, s3 });
-        this.s3Client = new AWS.S3({
-            endpoint: `${transport}://${s3.host}:${s3.port}`,
-            credentials: accountCreds,
-            sslEnabled: transport === 'https',
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: { agent: this.httpAgent, timeout: 0 },
-            maxRetries: 0,
+    _initCredentialsManager() {
+        this.credentialsManager.on('deleteCredentials', clientId => {
+            delete this.s3Clients[clientId];
+            delete this.backbeatClients[clientId];
         });
-        this.backbeatClient = new BackbeatMetadataProxy(
-            `${transport}://${s3.host}:${s3.port}`,
-            this.lcConfig.auth, this.httpAgent);
-        this.backbeatClient.setSourceClient(this.logger);
+
+        this._deleteInactiveCredentialsInterval = setInterval(() => {
+            this.credentialsManager.removeInactiveCredentials(MAX_INACTIVE_DURATION);
+        }, DELETE_INACTIVE_CREDENTIALS_INTERVAL);
+    }
+
+    /**
+     * Return an S3 client instance
+     * @param {String} canonicalId - The canonical ID of the bucket owner.
+     * @param {String} accountId - The account ID of the bucket owner .
+     * @return {AWS.S3} The S3 client instance to make requests with
+     */
+    _getS3Client(canonicalId, accountId) {
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._authConfig,
+        });
+
+        if (credentials === null) {
+            return null;
+        }
+
+        const clientId = canonicalId;
+        const client = this.s3Clients[clientId];
+
+        if (client) {
+            return client;
+        }
+
+        this.s3Clients[clientId] = createS3Client({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return this.s3Clients[clientId];
+    }
+
+    /**
+     * Return an backbeat client instance
+     * @param {String} canonicalId - The canonical ID of the bucket owner.
+     * @param {String} accountId - The account ID of the bucket owner .
+     * @return {BackbeatClient} The S3 client instance to make requests with
+     */
+    _getBackbeatClient(canonicalId, accountId) {
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._authConfig,
+        });
+
+        if (credentials === null) {
+            return null;
+        }
+
+        const clientId = canonicalId;
+        const client = this.backbeatClients[clientId];
+
+        if (client) {
+            return client;
+        }
+
+        this.backbeatClients[clientId] = createBackbeatClient({
+            transport: this._transport,
+            port: this._s3Config.port,
+            host: this._s3Config.host,
+            credentials,
+            agent: this.s3Agent,
+        });
+
+        return new BackbeatMetadataProxy(this._lcConfig)
+            .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
     /**
@@ -157,7 +245,12 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @return {undefined}
      */
     close(cb) {
-        this.logger.debug('closing object tasks consumer');
+        this._log.debug('closing object tasks consumer');
+
+        if (this._deleteInactiveCredentialsInterval) {
+            clearInterval(this._deleteInactiveCredentialsInterval);
+        }
+
         this._consumer.close(cb);
     }
 
@@ -170,14 +263,14 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
-        this.logger.debug('processing kafka entry');
+        this._log.debug('processing kafka entry');
 
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
         if (actionEntry.error) {
-            this.logger.error('malformed action entry', kafkaEntry.value);
+            this._log.error('malformed action entry', kafkaEntry.value);
             return process.nextTick(done);
         }
-        this.logger.debug('processing lifecycle object entry',
+        this._log.debug('processing lifecycle object entry',
                           actionEntry.getLogInfo());
         const actionType = actionEntry.getActionType();
         let task;
@@ -189,7 +282,7 @@ class LifecycleObjectProcessor extends EventEmitter {
                    === 'transition') {
             task = new LifecycleUpdateTransitionTask(this);
         } else {
-            this.logger.warn(`skipped unsupported action ${actionType}`,
+            this._log.warn(`skipped unsupported action ${actionType}`,
                              actionEntry.getLogInfo());
             return process.nextTick(done);
         }
@@ -198,13 +291,13 @@ class LifecycleObjectProcessor extends EventEmitter {
 
     getStateVars() {
         return {
-            s3Config: this.s3Config,
-            lcConfig: this.lcConfig,
-            authConfig: this.authConfig,
-            s3Client: this.s3Client,
-            backbeatClient: this.backbeatClient,
+            s3Config: this._s3Config,
+            lcConfig: this._lcConfig,
+            authConfig: this._authConfig,
+            getS3Client: this._getS3Client.bind(this),
+            getBackbeatClient: this._getBackbeatClient.bind(this),
             gcProducer: this._gcProducer,
-            logger: this.logger,
+            logger: this._log,
         };
     }
 
