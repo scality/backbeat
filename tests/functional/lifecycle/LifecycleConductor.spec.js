@@ -46,6 +46,7 @@ const lcConfig = {
             enabled: true,
         },
     },
+    auth: { type: 'account', account: 'lifecycle' },
 };
 
 const repConfig = {
