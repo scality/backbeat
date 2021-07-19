@@ -13,6 +13,9 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
     }
 
     filter(entry) {
+        if (entry.key === undefined || entry.value === undefined) {
+            return undefined;
+        }
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
