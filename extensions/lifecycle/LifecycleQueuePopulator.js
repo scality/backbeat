@@ -96,6 +96,27 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         });
     }
 
+    _isBucketdEntry(entry) {
+        // raft log entries
+        // {
+        //   bucket: bucket name
+        //   key: no key value
+        //   value: bucket value
+        // }
+        return entry.key === undefined && entry.bucket !== METASTORE;
+    }
+
+    _isFileMDEntry(entry) {
+        // file md log entries
+        // {
+        //   bucket: METASTORE
+        //   key: bucket name
+        //   value: bucket value
+        // }
+        return entry.bucket === METASTORE &&
+            (entry.key && entry.key.startsWith(mpuBucketPrefix));
+    }
+
     /**
      * Filter record log entries for those that are potentially relevant to
      * lifecycle.
@@ -103,21 +124,42 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        // We're only interested by bucket updates, which are all part
-        // of METASTORE namespace in mongodb log
-        if (entry.bucket !== METASTORE || entry.type !== 'put' ||
-            (entry.key && entry.key.startsWith(mpuBucketPrefix))) {
+        if (entry.type !== 'put') {
             return undefined;
         }
-        const { error, result } = safeJsonParse(entry.value);
-        if (error) {
-            this.log.error('could not parse mongo log entry',
-                           { value: entry.value, error });
-            return undefined;
+
+        let bucketValue = {};
+        if (this._isBucketdEntry(entry)) {
+            const parsedEntry = safeJsonParse(entry.value);
+            if (parsedEntry.error) {
+                this.log.error('could not parse raft log entry', {
+                    value: entry.value,
+                    error: parsedEntry.error,
+                });
+                return undefined;
+            }
+            const parsedAttr = safeJsonParse(parsedEntry.result.attributes);
+            if (parsedAttr.error) {
+                this.log.error('could not parse raft log entry attribute', {
+                    value: entry.value,
+                    error: parsedAttr.error,
+                });
+                return undefined;
+            }
+            bucketValue = parsedAttr.result;
+        } else if (this._isFileMDEntry(entry)) {
+            const { error, result } = safeJsonParse(entry.value);
+            if (error) {
+                this.log.error('could not parse file md log entry',
+                            { value: entry.value, error });
+                return undefined;
+            }
+            bucketValue = result;
         }
-        const { lifecycleConfiguration } = result;
+
+        const { lifecycleConfiguration } = bucketValue;
         if (lifecycleConfiguration !== undefined) {
-            return this._updateZkBucketNode(result);
+            return this._updateZkBucketNode(bucketValue);
         }
         return undefined;
     }
