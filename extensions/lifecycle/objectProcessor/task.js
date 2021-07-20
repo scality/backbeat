@@ -3,14 +3,15 @@
 const async = require('async');
 const werelogs = require('werelogs');
 const { errors } = require('arsenal');
-const {
-    DEFAULT_LIVE_ROUTE,
-    DEFAULT_READY_ROUTE,
-} = require('arsenal').network.probe.ProbeServer;
+// const {
+//     DEFAULT_LIVE_ROUTE,
+//     DEFAULT_READY_ROUTE,
+// } = require('arsenal').network.probe.ProbeServer;
 
+const { initManagement } = require('../../../lib/management/index');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const { sendSuccess, sendError, startProbeServer } = require('../../../lib/util/probe');
-const config = require('../../../conf/Config');
+const config = require('../../../lib/Config');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -45,14 +46,33 @@ function probeServerSetup(config, done) {
             return done();
         }
 
-        probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
-        probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
+        // TODO: update to use default probe routes
+        probeServer.addHandler('/_/health/liveness', livenessCheck);
+        probeServer.addHandler('/_/health/readiness', livenessCheck);
         logger.info('Starting lifecycle object processor server');
         return done();
     });
 }
 
+function initAndStart(done) {
+    initManagement({
+        serviceName: 'lifecycle',
+        serviceAccount: lcConfig.auth.account,
+    }, error => {
+        if (error) {
+            logger.error('could not load management db', { error });
+            setTimeout(initAndStart, 5000, done);
+            return;
+        }
+        logger.info('management init done');
+        done();
+        return;
+    });
+}
+
+
 async.waterfall([
+    done => initAndStart(done),
     done => objectProcessor.start(err => done(err)),
     done => probeServerSetup(lcConfig.objectProcessor.probeServer, done),
 ], err => {

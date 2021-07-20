@@ -13,6 +13,7 @@ const LifecycleUpdateTransitionTask =
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
 const { authTypeAssumeRole } = require('../../../lib/constants');
@@ -67,7 +68,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._s3Config = s3Config;
         this._transport = transport;
         this._consumer = null;
-        // this._gcProducer = null;
+        this._gcProducer = null;
 
         // global variables
         if (transport === 'https') {
@@ -92,6 +93,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             },
             kafka: {
                 hosts: this._kafkaConfig.hosts,
+                backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
             topic: this._lcConfig.objectTasksTopic,
             groupId: this._lcConfig.objectProcessor.groupId,
@@ -128,10 +130,10 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._initCredentialsManager();
         async.parallel([
             done => this._setupConsumer(done),
-            // done => {
-            //     this._gcProducer = new GarbageCollectorProducer();
-            //     this._gcProducer.setupProducer(done);
-            // },
+            done => {
+                this._gcProducer = new GarbageCollectorProducer();
+                this._gcProducer.setupProducer(done);
+            },
         ], done);
     }
 
@@ -294,7 +296,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             authConfig: this._authConfig,
             getS3Client: this._getS3Client.bind(this),
             getBackbeatClient: this._getBackbeatClient.bind(this),
-            // gcProducer: this._gcProducer,
+            gcProducer: this._gcProducer,
             logger: this._log,
         };
     }
