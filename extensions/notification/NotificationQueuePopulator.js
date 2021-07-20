@@ -181,7 +181,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        const { bucket, key, value, type } = entry;
+        const { bucket, key, type } = entry;
+        const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
         if (error) {
