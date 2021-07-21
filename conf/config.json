@@ -190,12 +190,7 @@
         "lifecycle": {
             "auth": {
                 "type": "service",
-                "account": "service-lifecycle",
-                "vault": {
-                    "host": "127.0.0.1",
-                    "port": 8500,
-                    "adminPort": 8600
-                }
+                "account": "service-lifecycle"
             },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
