@@ -16,7 +16,7 @@
         "PutData": {
             "http": {
                 "method": "PUT",
-                "requestUri": "/_/backbeat/data/{Bucket}/{Key+}"
+                "requestUri": "/_/backbeat/data/{Bucket}/{Key+}?v2"
             },
             "input": {
                 "type": "structure",
@@ -66,9 +66,27 @@
                                 },
                                 "dataStoreName": {
                                     "type": "string"
+                                },
+                                "cryptoScheme": {
+                                    "type": "long"
+                                },
+                                "cipheredDataKey": {
+                                    "type": "string"
                                 }
                             }
                         }
+                    },
+                    "ServerSideEncryption": {
+                        "location": "header",
+                        "locationName": "x-amz-server-side-encryption"
+                    },
+                    "SSECustomerAlgorithm": {
+                        "location": "header",
+                        "locationName": "x-amz-server-side-encryption-customer-algorithm"
+                    },
+                    "SSEKMSKeyId": {
+                        "location": "header",
+                        "locationName": "x-amz-server-side-encryption-aws-kms-key-id"
                     }
                 },
                 "payload": "Location"
