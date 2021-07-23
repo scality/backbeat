@@ -16,45 +16,7 @@ const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
-const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
-
-promClient.register.setDefaultLabels({
-    origin: 'replication',
-    containerName: process.env.CONTAINER_NAME || '',
-});
-
-/**
- * Labels used for Prometheus metrics
- * @typedef {Object} MetricLabels
- * @property {string} origin - Method that began the replication
- * @property {string} containerName - Name of the container running our process
- * @property {string} [replicationStatus] - Result of the replications status
- * @property {string} [partition] - What kafka partition relates to the metric
- * @property {string} [serviceName] - Name of our service to match generic metrics
- */
-
-const replicationStatusMetric = new promClient.Counter({
-    name: 'replication_status_changed_total',
-    help: 'Number of objects updated',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
-});
-
-const kafkaLagMetric = new promClient.Gauge({
-    name: 'kafka_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
-});
-
-/**
- * Contains methods to incrememt different metrics
- * @typedef {Object} MetricsHandler
- * @property {CounterInc} status - Increments the replication status metric
- * @property {GaugeSet} lag - Set the kafka lag metric
- */
-const metricsHandler = {
-    status: wrapCounterInc(replicationStatusMetric),
-    lag: wrapGaugeSet(kafkaLagMetric),
-};
+const metricsHandler = require('../../../lib/util/metricsHandler');
 
 /**
  * @class ReplicationStatusProcessor
@@ -168,15 +130,15 @@ class ReplicationStatusProcessor {
             topic: this.repConfig.replicationStatusTopic,
             groupId: this.repConfig.replicationStatusProcessor.groupId,
             concurrency:
-            this.repConfig.replicationStatusProcessor.concurrency,
+                this.repConfig.replicationStatusProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
             bootstrap: options && options.bootstrap,
             logConsumerMetricsIntervalS: this.repConfig.replicationStatusProcessor.logConsumerMetricsIntervalS,
         });
-        this._consumer.on('error', () => {});
+        this._consumer.on('error', () => { });
         this._consumer.on('ready', () => {
             this.logger.info('replication status processor is ready to ' +
-                             'consume replication status entries');
+                'consume replication status entries');
             this._consumer.subscribe();
             this._FailedCRRProducer.setupProducer(cb);
         });
@@ -210,7 +172,7 @@ class ReplicationStatusProcessor {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
-                              { error: sourceEntry.error });
+                { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
         let task;
@@ -222,7 +184,7 @@ class ReplicationStatusProcessor {
                 sourceEntry.getCanonicalKey(), done);
         }
         this.logger.warn('skipping unknown source entry',
-                         { entry: sourceEntry.getLogInfo() });
+            { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 
@@ -293,7 +255,7 @@ class ReplicationStatusProcessor {
     handleMetrics(res, log) {
         log.debug('metrics requested');
 
-        const serviceName = 'ReplicationStatusProcessor';
+        const serviceName = constants.services.replicationStatusProcessor;
 
         // consumer stats lag is on a different update cycle so we need to
         // update the metrics when requested
