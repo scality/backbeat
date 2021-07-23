@@ -2,7 +2,8 @@
 
 Prometheus metrics are provided for replication through HTTP routes.
 
-> Currently metrics are only provided for the queue populator.
+> Currently metrics are provided for the queue populator, queue processor, and status
+> processor.
 
 ## Configuration
 
@@ -13,7 +14,7 @@ Under `conf/config.json` you can specify the probe server settings.
 When starting processes you can disable the probe server by setting an environment
 variable.
 
-```
+```sh
 export CRR_METRICS_PROBE=false
 ```
 
@@ -27,7 +28,7 @@ guide.
 
 Below is a sample configuration using the default queue populator configuration values.
 
-```
+```yaml
 # prom.yml
 global:
   scrape_interval:     15s
