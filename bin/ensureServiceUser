@@ -1,0 +1,276 @@
+#! /usr/bin/env node
+
+// TODO
+// - deduplicate with Vault's seed script at https://github.com/scality/Vault/pull/1627
+// - add permission boundaries to user when https://scality.atlassian.net/browse/VAULT-4 is implemented
+
+const { errors } = require('arsenal');
+const program = require('commander');
+const werelogs = require('werelogs');
+const version = require('../package.json').version;
+const async = require('async');
+const { IAM } = require('aws-sdk');
+
+const systemPrefix = '/scality-internal/';
+
+function generateUserPolicyDocument(roleName) {
+    return {
+        "Version": "2012-10-17",
+        "Statement": {
+            "Effect": "Allow",
+            "Action": "sts:AssumeRole",
+            "Resource": `arn:aws:iam::*:role${systemPrefix}${roleName}`,
+        }
+    };
+}
+
+function createIAMClient(opts) {
+    return new IAM({
+        endpoint: opts.iamEndpoint,
+    });
+}
+
+function needsCreation(v) {
+    if (Array.isArray(v)) {
+        return !v.length;
+    }
+
+    return !v;
+}
+
+class BaseHandler {
+    constructor(serviceName, iamClient, log) {
+        this.serviceName = serviceName;
+        this.iamClient = iamClient;
+        this.log = log;
+    }
+
+    applyWaterfall(values, done) {
+        this.log.debug('applyWaterfall', { values, type: this.resourceType });
+
+        const v = values[this.resourceType];
+
+        if (needsCreation(v)) {
+            this.log.debug('creating', { v, type: this.resourceType });
+            return this.create(values)
+                .then(res =>
+                    done(null, Object.assign(values, {
+                        [this.resourceType]: res,
+                    })))
+                .catch(done);
+        }
+
+        this.log.debug('conflicts check', { v, type: this.resourceType });
+        if (this.conflicts(v)) {
+            return done(errors.EntityAlreadyExists.customizeDescription(
+                `${this.resourceType} ${this.serviceName} already exists and conflicts with the expected value.`));
+        }
+
+        this.log.debug('nothing to do', { v, type: this.resourceType });
+        return done(null, values);
+    }
+}
+
+class UserHandler extends BaseHandler {
+    get resourceType() {
+        return 'user';
+    }
+
+    collect() {
+        return this.iamClient.getUser({
+            UserName: this.serviceName,
+        })
+        .promise()
+        .then(res => res.User);
+    }
+
+    create(allResources) {
+        return this.iamClient.createUser({
+            UserName: this.serviceName,
+            Path: systemPrefix,
+        })
+        .promise()
+        .then(res => res.User);
+    }
+
+    conflicts(u) {
+        return u.Path !== systemPrefix;        
+    }
+}
+
+class PolicyHandler extends BaseHandler {
+    get resourceType() {
+        return 'policy';
+    }
+
+    collect() {
+        return this.iamClient.listPolicies({
+            MaxItems: 100,
+            OnlyAttached: false,
+            Scope: 'All',
+        })
+        .promise()
+        .then(res => res.Policies.find(p => p.PolicyName === this.serviceName));
+    }
+
+    create(allResources) {
+        const doc = generateUserPolicyDocument(this.serviceName);
+
+        return this.iamClient.createPolicy({
+            PolicyName: this.serviceName,
+            PolicyDocument: JSON.stringify(doc),
+            Path: systemPrefix,
+        })
+        .promise()
+        .then(res => res.Policy);
+    }
+
+    conflicts(p) {
+        return p.Path !== systemPrefix;
+    }
+}
+
+class PolicyAttachmentHandler extends BaseHandler {
+    get resourceType() {
+        return 'policyAttachment';
+    }
+
+    collect() {
+        return this.iamClient.listAttachedUserPolicies({
+            UserName: this.serviceName,
+            MaxItems: 100,
+        })
+        .promise()
+        .then(res => res.AttachedPolicies)
+    }
+
+    create(allResources) {
+        return this.iamClient.attachUserPolicy({
+            PolicyArn: allResources.policy.Arn,
+            UserName: this.serviceName,
+        })
+        .promise();
+    }
+
+    conflicts(p) {
+        return false;
+    }
+}
+
+class AccessKeyHandler extends BaseHandler {
+    get resourceType() {
+        return 'accessKey';
+    }
+
+    collect() {
+        return this.iamClient.listAccessKeys({
+            UserName: this.serviceName,
+            MaxItems: 100,
+        })
+        .promise()
+        .then(res => res.AccessKeyMetadata)
+    }
+
+    create(allResources) {
+        return this.iamClient.createAccessKey({
+            UserName: this.serviceName,
+        })
+        .promise()
+        .then(res => res.AccessKey);
+    }
+
+    conflicts(a) {
+        return false;
+    }
+}
+
+function collectResource(v, done) {
+    v.collect()
+        .then(res => done(null, res))
+        .catch(err => {
+            if (err.code === 'NoSuchEntity') {
+                return done(null, null);
+            }
+
+            done(err);
+        });
+}
+
+function collectResourcesFromHandlers(handlers, cb) {
+    const tasks = handlers.reduce((acc, v) => ({
+        [v.resourceType]: done => collectResource(v, done),
+        ...acc,
+    }), {});
+    async.parallel(tasks, cb);
+}
+
+function buildServiceUserHandlers(serviceName, client, log) {
+    return [
+        UserHandler,
+        PolicyHandler,
+        PolicyAttachmentHandler,
+        AccessKeyHandler,
+    ].map(h => new h(serviceName, client, log));
+}
+
+function apply(client, serviceName, log, cb) {
+    const handlers = buildServiceUserHandlers(serviceName, client, log);
+
+    async.waterfall([
+        done => collectResourcesFromHandlers(handlers, done),
+        ...handlers.map(h => h.applyWaterfall.bind(h)),
+        (values, done) => done(null, values.accessKey),
+    ], cb);
+}
+
+function wrapAction(actionFunc, serviceName, options) {
+    werelogs.configure({
+        level: options.logLevel,
+        dump: options.logDumpLevel,
+    });
+
+    const log = new werelogs.Logger(process.argv[1]).newRequestLogger();
+    const client = createIAMClient(options);
+
+    actionFunc(client, serviceName, log, (err, data) => {
+        if (err) {
+            log.error('failed', {
+                data,
+                error: err,
+            });
+            if (err.EntityAlreadyExists) {
+                log.error(`run "${process.argv[1]} purge ${serviceName}" to fix.`);
+            }
+            process.exit(1);
+        }
+        log.info("success", { data });
+        process.exit();
+    });
+}
+
+program.version(version);
+
+[
+    {
+        name: 'apply <service-name>',
+        actionFunc: apply,
+    },
+].forEach(cmd => {
+    program
+        .command(cmd.name)
+        .option('--iam-endpoint <url>', 'IAM endpoint', 'http://localhost:8600')
+        .option('--log-level <level>', 'log level', 'info')
+        .option('--log-dump-level <level>', 'log level that triggers a dump of the debug buffer', 'error')
+        .action(wrapAction.bind(null, cmd.actionFunc));
+});
+
+const validCommands = program.commands.map(n => n._name);
+
+// Is the command given invalid or are there too few arguments passed
+if (!validCommands.includes(process.argv[2])) {
+    program.outputHelp();
+    process.stdout.write('\n');
+    process.exit(1);
+} else {
+    program.parse(process.argv);
+}
