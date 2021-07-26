@@ -1,4 +1,4 @@
-FROM buildpack-deps:xenial-curl
+FROM buildpack-deps:bionic-curl
 
 ARG NODE_ENV=development
 
