@@ -70,7 +70,7 @@
     "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
     "mocha": "^3.3.0",
-    "sinon": "^10.0.0",
+    "sinon": "^11.1.2",
     "zookeeper-mock": "^1.2.0"
   }
 }
