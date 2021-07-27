@@ -47,7 +47,7 @@
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient#949f11a",
-    "commander": "^2.11.0",
+    "commander": "^8.1.0",
     "fcntl": "github:scality/node-fcntl",
     "ioredis": "^4.9.5",
     "minimatch": "^3.0.4",

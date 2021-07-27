@@ -485,6 +485,32 @@ arsenal@scality/Arsenal#32c895b:
   optionalDependencies:
     ioctl "2.0.0"
 
+arsenal@scality/Arsenal#580e25a:
+  version "7.5.0"
+  uid "580e25a9e84acf2a2a8dec6c83f69f862804d85f"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/580e25a9e84acf2a2a8dec6c83f69f862804d85f"
+  dependencies:
+    "@hapi/joi" "^15.1.0"
+    JSONStream "^1.0.0"
+    ajv "6.12.2"
+    async "~2.1.5"
+    debug "~2.3.3"
+    diskusage "^1.1.1"
+    ioredis "4.9.5"
+    ipaddr.js "1.9.1"
+    level "~5.0.1"
+    level-sublevel "~6.6.5"
+    node-forge "^0.7.1"
+    simple-glob "^0.2"
+    socket.io "~2.3.0"
+    socket.io-client "~2.3.0"
+    utf8 "2.1.2"
+    uuid "^3.0.1"
+    werelogs scality/werelogs#0ff7ec82
+    xml2js "~0.4.23"
+  optionalDependencies:
+    ioctl "2.0.0"
+
 arsenal@scality/Arsenal#856a163:
   version "8.2.3"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/856a1634d49c9029e7a95c04a00b1dcaaba93e09"
@@ -522,31 +548,6 @@ arsenal@scality/Arsenal#856a163:
     xml2js "~0.4.23"
   optionalDependencies:
     ioctl "2.0.1"
-
-arsenal@scality/Arsenal#b03f5b8:
-  version "7.4.3"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/b03f5b80acd6acaaf8dd2d49cd955e6b95279ab3"
-  dependencies:
-    "@hapi/joi" "^15.1.0"
-    JSONStream "^1.0.0"
-    ajv "6.12.2"
-    async "~2.1.5"
-    debug "~2.3.3"
-    diskusage "^1.1.1"
-    ioredis "4.9.5"
-    ipaddr.js "1.2.0"
-    level "~5.0.1"
-    level-sublevel "~6.6.5"
-    node-forge "^0.7.1"
-    simple-glob "^0.2"
-    socket.io "~2.3.0"
-    socket.io-client "~2.3.0"
-    utf8 "2.1.2"
-    uuid "^3.0.1"
-    werelogs scality/werelogs#0ff7ec82
-    xml2js "~0.4.23"
-  optionalDependencies:
-    ioctl "2.0.0"
 
 arsenal@scality/Arsenal#c57cde8:
   version "8.1.4"
@@ -1245,10 +1246,15 @@ commander@2.9.0:
   dependencies:
     graceful-readlink ">= 1.0.0"
 
-commander@^2.11.0, commander@^2.9.0:
+commander@^2.9.0:
   version "2.20.3"
   resolved "https://registry.yarnpkg.com/commander/-/commander-2.20.3.tgz#fd485e84c03eb4881c20722ba48035e8531aeb33"
   integrity sha512-GpVkmM8vF2vQUkj2LvZmD35JxeJOLCwJ9cUkugyk2nuhbv3+mJvpLYYt+0+USMxE+oj+ey/lJEnhZw75x/OMcQ==
+
+commander@^8.1.0:
+  version "8.1.0"
+  resolved "https://registry.yarnpkg.com/commander/-/commander-8.1.0.tgz#db36e3e66edf24ff591d639862c6ab2c52664362"
+  integrity sha512-mf45ldcuHSYShkplHHGKWb4TrmwQadxOn7v4WuhDJy0ZVoY5JFajaRDKD0PNe5qXzBX0rhovjTnP6Kz9LETcuA==
 
 component-bind@1.0.0:
   version "1.0.0"
