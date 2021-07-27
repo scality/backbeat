@@ -75,6 +75,9 @@ const mockSourceEntry = {
     getContentDisposition: () => undefined,
     getContentEncoding: () => undefined,
     getTags: () => {},
+    setAmzServerSideEncryption: () => {},
+    setAmzEncryptionKeyId: () => {},
+    setAmzEncryptionCustomerAlgorithm: () => {},
     setReplicationSiteDataStoreVersionId: () => {},
 };
 
@@ -136,8 +139,7 @@ class S3Mock {
             const expectedUrls = ['putobject', 'putpart'].map(
                 op => `/_/backbeat/multiplebackenddata/${constants.bucket}` +
                     `/${constants.objectKey}?operation=${op}`)
-                  .concat([`/_/backbeat/data/${constants.bucket}` +
-                           `/${constants.objectKey}`]);
+                  .concat([`/_/backbeat/data/${constants.bucket}/${constants.objectKey}?v2`]);
             assert(expectedUrls.includes(req.url));
             const chunks = [];
             req.on('data', chunk => {

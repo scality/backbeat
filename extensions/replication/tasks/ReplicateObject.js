@@ -424,6 +424,15 @@ class ReplicateObject extends BackbeatTask {
                 return doneOnce(err);
             }
             partObj.setDataLocation(data.Location[0]);
+
+            // Set encryption parameters that were used to encrypt the
+            // target data in the object metadata, or reset them if
+            // there was no encryption
+            const { ServerSideEncryption, SSECustomerAlgorithm, SSEKMSKeyId } = data;
+            destEntry.setAmzServerSideEncryption(ServerSideEncryption || '');
+            destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
+            destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
+
             const extMetrics = getExtMetrics(this.site,
                 partObj.getPartSize(), sourceEntry);
             this.mProducer.publishMetrics(extMetrics, metricsTypeCompleted,
