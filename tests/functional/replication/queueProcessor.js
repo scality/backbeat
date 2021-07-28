@@ -4,6 +4,7 @@ const crypto = require('crypto');
 const http = require('http');
 const URL = require('url');
 const querystring = require('querystring');
+const promClient = require('prom-client');
 
 const VersionIDUtils = require('arsenal').versioning.VersionID;
 const routesUtils = require('arsenal').s3routes.routesUtils;
@@ -13,11 +14,6 @@ const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 
 const replicationConstants = require('../../../extensions/replication/constants');
-const QueueProcessor = require('../../../extensions/replication' +
-                               '/queueProcessor/QueueProcessor');
-const ReplicationStatusProcessor =
-          require('../../../extensions/replication' +
-                  '/replicationStatusProcessor/ReplicationStatusProcessor');
 const TestConfigurator = require('../../utils/TestConfigurator');
 
 /* eslint-disable max-len */
@@ -703,6 +699,11 @@ describe('queue processor functional tests with mocking', () => {
     let replicationStatusProcessor;
     let httpServer;
     let s3mock;
+
+    const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
+    promClient.register.clear();
+    const ReplicationStatusProcessor = require('../../../extensions/replication' +
+                  '/replicationStatusProcessor/ReplicationStatusProcessor');
 
     before(function before(done) {
         this.timeout(60000);
