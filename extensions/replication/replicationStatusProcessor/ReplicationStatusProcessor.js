@@ -283,7 +283,7 @@ class ReplicationStatusProcessor {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
-                              { error: sourceEntry.error });
+                { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
         let task;
@@ -295,7 +295,7 @@ class ReplicationStatusProcessor {
                 done);
         }
         this.logger.warn('skipping unknown source entry',
-                         { entry: sourceEntry.getLogInfo() });
+            { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 

@@ -6,6 +6,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
+const promClient = require('prom-client');
 
 const Logger = require('werelogs').Logger;
 
@@ -31,6 +32,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
+const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
 const {
     zookeeperNamespace,
@@ -40,6 +42,103 @@ const {
     proxyIAMPath,
     replicationBackends,
 } = require('../constants');
+
+promClient.register.setDefaultLabels({
+    origin: 'replication',
+    containerName: process.env.CONTAINER_NAME || '',
+});
+
+/**
+ * Labels used for Prometheus metrics
+ * @typedef {Object} MetricLabels
+ * @property {string} origin - Method that began the replication
+ * @property {string} containerName - Name of the container running our process
+ * @property {string} [replicationStatus] - Result of the replications status
+ * @property {string} [partition] - What kafka partition relates to the metric
+ * @property {string} [serviceName] - Name of our service to match generic metrics
+ * @property {string} [replicationContent] - Data or Metadata
+ * @property {string} [replicationStage] - Name of the replication stage
+ */
+
+const dataReplicationStatusMetric = new promClient.Counter({
+    name: 'replication_data_status_changed_total',
+    help: 'Number of status updates',
+    labelNames: ['origin', 'containerName', 'replicationStatus'],
+});
+
+const metadataReplicationStatusMetric = new promClient.Counter({
+    name: 'replication_metadata_status_changed_total',
+    help: 'Number of status updates',
+    labelNames: ['origin', 'containerName', 'replicationStatus'],
+});
+
+// TODO: Kafka lag is not set in 8.x branches see BB-1
+const kafkaLagMetric = new promClient.Gauge({
+    name: 'kafka_lag',
+    help: 'Number of update entries waiting to be consumed from the Kafka topic',
+    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
+});
+
+const dataReplicationBytesMetric = new promClient.Counter({
+    name: 'replication_data_bytes',
+    help: 'Total number of bytes replicated for data operation',
+    labelNames: ['origin', 'containerName', 'serviceName'],
+});
+
+const metadataReplicationBytesMetric = new promClient.Counter({
+    name: 'replication_metadata_bytes',
+    help: 'Total number of bytes replicated for metadata operation',
+    labelNames: ['origin', 'containerName', 'serviceName'],
+});
+
+const sourceDataBytesMetric = new promClient.Counter({
+    name: 'replication_source_data_bytes',
+    help: 'Total number of data bytes read from replication source',
+    labelNames: ['origin', 'containerName', 'serviceName'],
+});
+
+const readMetric = new promClient.Counter({
+    name: 'replication_data_read',
+    help: 'Number of read operations',
+    labelNames: ['origin', 'containerName', 'serviceName'],
+});
+
+const writeMetric = new promClient.Counter({
+    name: 'replication_data_write',
+    help: 'Number of write operations',
+    labelNames: ['origin', 'containerName', 'serviceName', 'replicationContent'],
+});
+
+const timeElapsedMetric = new promClient.Histogram({
+    name: 'replication_stage_time_elapsed',
+    help: 'Elapsed time of a specific stage in replication',
+    labelNames: ['origin', 'containerName', 'serviceName', 'replicationStage'],
+});
+
+/**
+ * Contains methods to incrememt different metrics
+ * @typedef {Object} MetricsHandler
+ * @property {CounterInc} dataReplicationStatus - Increments the replication status metric for data operation
+ * @property {CounterInc} metadataReplicationStatus - Increments the replication status metric for metadata operation
+ * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
+ * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
+ * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
+ * @property {GaugeSet} lag - Set the kafka lag metric
+ * @property {CounterInc} reads - Increments the read metric
+ * @property {CounterInc} writes - Increments the write metric
+ * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
+ */
+const metricsHandler = {
+    dataReplicationStatus: wrapCounterInc(dataReplicationStatusMetric),
+    metadataReplicationStatus: wrapCounterInc(metadataReplicationStatusMetric),
+    dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric),
+    metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric),
+    sourceDataBytes: wrapCounterInc(sourceDataBytesMetric),
+    lag: wrapGaugeSet(kafkaLagMetric),
+    reads: wrapCounterInc(readMetric),
+    writes: wrapCounterInc(writeMetric),
+    timeElapsed: wrapHistogramObserve(timeElapsedMetric),
+};
 
 class QueueProcessor extends EventEmitter {
 
@@ -121,7 +220,7 @@ class QueueProcessor extends EventEmitter {
         this._mProducer = null;
         this.site = site;
         this.mConfig = mConfig;
-
+        this.serviceName = libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
 
@@ -180,7 +279,7 @@ class QueueProcessor extends EventEmitter {
 
         if (this.sourceConfig.auth.type === 'role') {
             const { host, port, adminPort, adminCredentials }
-                      = this.sourceConfig.auth.vault;
+                = this.sourceConfig.auth.vault;
             this.vaultclientCache
                 .setHost('source:s3', host)
                 .setPort('source:s3', port);
@@ -196,8 +295,8 @@ class QueueProcessor extends EventEmitter {
                     .setHost('source:admin', host)
                     .setPort('source:admin', adminPort)
                     .loadAdminCredentials('source:admin',
-                                          adminCredentials.accessKey,
-                                          adminCredentials.secretKey);
+                        adminCredentials.accessKey,
+                        adminCredentials.secretKey);
                 if (this.sourceConfig.transport === 'https') {
                     // provision HTTPS credentials for local Vault admin route
                     this.vaultclientCache.setHttps(
@@ -211,7 +310,7 @@ class QueueProcessor extends EventEmitter {
         if (this.destConfig.auth.type === 'role') {
             if (this.destConfig.auth.vault) {
                 const { host, port, adminPort, adminCredentials }
-                          = this.destConfig.auth.vault;
+                    = this.destConfig.auth.vault;
                 if (host) {
                     this.vaultclientCache.setHost('dest:s3', host);
                 }
@@ -228,7 +327,7 @@ class QueueProcessor extends EventEmitter {
                         // if dest vault admin port not configured, go
                         // through nginx proxy
                         this.vaultclientCache.setProxyPath('dest:admin',
-                                                           proxyIAMPath);
+                            proxyIAMPath);
                     }
                     this.vaultclientCache.loadAdminCredentials(
                         'dest:admin',
@@ -249,7 +348,7 @@ class QueueProcessor extends EventEmitter {
                 // if dest vault port not configured, go through nginx
                 // proxy
                 this.vaultclientCache.setProxyPath('dest:s3',
-                                                   proxyVaultPath);
+                    proxyVaultPath);
             }
             if (this.destConfig.transport === 'https') {
                 // provision HTTPS credentials for IAM route
@@ -317,20 +416,22 @@ class QueueProcessor extends EventEmitter {
     _setupEcho() {
         if (!this.sourceAdminVaultConfigured) {
             throw new Error('echo mode not properly configured: missing ' +
-                            'credentials for source Vault admin client');
+                'credentials for source Vault admin client');
         }
         if (!this.destAdminVaultConfigured) {
             throw new Error('echo mode not properly configured: missing ' +
-                            'credentials for destination Vault ' +
-                            'admin client');
+                'credentials for destination Vault ' +
+                'admin client');
         }
         if (process.env.BACKBEAT_ECHO_TEST_MODE === '1') {
             this.logger.info('starting in echo mode',
-                             { method: 'QueueProcessor.constructor',
-                               testMode: true });
+                {
+                    method: 'QueueProcessor.constructor',
+                    testMode: true,
+                });
         } else {
             this.logger.info('starting in echo mode',
-                             { method: 'QueueProcessor.constructor' });
+                { method: 'QueueProcessor.constructor' });
         }
         this.echoMode = true;
         this.accountCredsCache = {};
@@ -579,6 +680,7 @@ class QueueProcessor extends EventEmitter {
             dataMoverConsumer: this._dataMoverConsumer,
             backbeatClient: this.backbeatClient,
             backbeatMetadataProxy: this.backbeatMetadataProxy,
+            serviceName: this.serviceName,
         };
     }
 
@@ -742,8 +844,7 @@ class QueueProcessor extends EventEmitter {
     processReplicationEntry(kafkaEntry, done) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
-            this.logger.error('error processing replication entry',
-                              { error: sourceEntry.error });
+            this.logger.error('error processing replication entry', { error: sourceEntry.error });
             return process.nextTick(() => done(errors.InternalError));
         }
         if (sourceEntry.skip) {
@@ -772,14 +873,10 @@ class QueueProcessor extends EventEmitter {
             }
         }
         if (task) {
-            this.logger.debug('replication entry is being pushed',
-              { entry: sourceEntry.getLogInfo() });
-            return this.taskScheduler.push({ task, entry: sourceEntry,
-                                             kafkaEntry },
-                                           done);
+            this.logger.debug('replication entry is being pushed', { entry: sourceEntry.getLogInfo() });
+            return this.taskScheduler.push({ task, entry: sourceEntry, kafkaEntry }, done);
         }
-        this.logger.debug('skip replication entry',
-                          { entry: sourceEntry.getLogInfo() });
+        this.logger.debug('skip replication entry', { entry: sourceEntry.getLogInfo() });
         return process.nextTick(done);
     }
 
@@ -884,6 +981,22 @@ class QueueProcessor extends EventEmitter {
 
         log.debug('verbose liveness', verboseLiveness);
         return responses;
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {string} Error response string or undefined
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+
+        res.writeHead(200, {
+            'Content-Type': promClient.register.contentType,
+        });
+        res.end(promClient.register.metrics());
     }
 }
 

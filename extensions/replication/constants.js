@@ -34,6 +34,11 @@ const constants = {
         failedCRR: testIsOn ? 'test:bb:crr:failed' : 'bb:crr:failed',
     },
     replicationBackends: ['aws_s3', 'azure', 'gcp'],
+    replicationStages: {
+        sourceDataRead: 'ReplicationSourceDataRead',
+        destinationDataWrite: 'ReplicationDestinationDataWrite',
+        destinationMetadataWrite: 'ReplicationDestinationMetadataWrite',
+    },
 };
 
 module.exports = constants;

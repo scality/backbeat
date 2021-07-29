@@ -22,7 +22,7 @@ const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
 const { startProbeServer } = require('../../../lib/util/probe');
-const { DEFAULT_LIVE_ROUTE } =
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
@@ -94,9 +94,11 @@ function setupZkSiteNode(qp, zkClient, site, done) {
             return zkClient.getData(path, (err, data) => {
                 if (err) {
                     log.fatal('could not check site status in zookeeper',
-                        { method: 'QueueProcessor:task',
-                          zookeeperPath: path,
-                          error: err.message });
+                        {
+                            method: 'QueueProcessor:task',
+                            zookeeperPath: path,
+                            error: err.message
+                        });
                     return done(err);
                 }
                 let d;
@@ -177,7 +179,7 @@ function initAndStart(zkClient) {
                         if (err) {
                             return next(err);
                         }
-                        activeQProcessors[site].stop(() => {});
+                        activeQProcessors[site].stop(() => { });
                         delete activeQProcessors[site];
                         return next();
                     });
@@ -220,7 +222,7 @@ function initAndStart(zkClient) {
                     process.exit(1);
                 }
                 if (probeServer !== undefined) {
-                     probeServer.addHandler(
+                    probeServer.addHandler(
                         // for backwards compatibility we also include readiness
                         [DEFAULT_LIVE_ROUTE, '/_/health/readiness'],
                         (res, log) => {
@@ -238,6 +240,13 @@ function initAndStart(zkClient) {
                             return undefined;
                         }
                     );
+                    // TODO: implement metrics route for multi site setup, BB-23
+                    probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
+                        log.info('queue processor metrics route not implemented');
+                        res.writeHead(200);
+                        res.end();
+                        return undefined;
+                    });
                 }
             }
         );
@@ -278,14 +287,14 @@ process.on('SIGTERM', () => {
     log.info('received SIGTERM, exiting');
     const sites = Object.keys(activeQProcessors);
     async.each(sites,
-               (site, done) => activeQProcessors[site].stop(done),
-               error => {
-                   if (error) {
-                       log.error('failed to exit properly', {
-                           error,
-                       });
-                       process.exit(1);
-                   }
-                   process.exit(0);
-               });
+        (site, done) => activeQProcessors[site].stop(done),
+        error => {
+            if (error) {
+                log.error('failed to exit properly', {
+                    error,
+                });
+                process.exit(1);
+            }
+            process.exit(0);
+        });
 });
