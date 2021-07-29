@@ -1457,7 +1457,8 @@ class LifecycleTask extends BackbeatTask {
             // An optimization is possible by only publishing when
             // finishing a complete bucket listing, let it aside for
             // simplicity as it is just updating a few zookeeper nodes
-            this._snapshotDataMoverTopicOffsets(log);
+            // NOTE: Transition not implemented
+            // this._snapshotDataMoverTopicOffsets(log);
             return done(err);
         });
     }

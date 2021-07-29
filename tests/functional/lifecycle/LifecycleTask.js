@@ -429,6 +429,16 @@ class LifecycleBucketProcessorMock {
         this._producer.reset();
         this._kafkaBacklogMetrics.reset();
     }
+
+    // NOTE: for triggering snapshot
+    triggerSnapshot() {
+        this._kafkaBacklogMetrics.snapshotTopicOffsets(
+            null,
+            null,
+            null,
+            () => { this._log.debug('snapshotting backlog state'); }
+        );
+    }
 }
 
 
@@ -458,6 +468,7 @@ s3mock, params, cb) {
         const timeout = params.timeout || 0;
         return setTimeout(() => {
             const count = params.lcp.getCount();
+            params.lcp.triggerSnapshot();
             assert.deepStrictEqual(
                 count, params.lcp._kafkaBacklogMetrics.sendCountAtLastSnapshot);
             cb(null, { count, entries });

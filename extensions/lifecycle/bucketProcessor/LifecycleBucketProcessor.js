@@ -351,7 +351,7 @@ class LifecycleBucketProcessor {
             },
             kafka: {
                 hosts: this._kafkaConfig.hosts,
-                // backlogMetrics: this._kafkaConfig.backlogMetrics,
+                backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,
@@ -458,8 +458,8 @@ class LifecycleBucketProcessor {
     }
 
     isReady() {
-        return this._producer && this._producerReady &&
-               this._consumer && this._consumerReady;
+        return this._producer && this._producer.isReady() &&
+               this._consumer && this._consumer.isReady();
     }
 }
 

@@ -222,9 +222,10 @@ class LifecycleConductor {
             // beyond the latest lifecycle snapshot of topic offsets,
             // which means everything from the latest lifecycle batch
             // has been consumed
-            dataMoverCheck:
-            next => this._kafkaBacklogMetrics.checkConsumerProgress(
-                this.repConfig.dataMoverTopic, null, 'lifecycle', next),
+            // NOTE: Transition not implemented
+            // dataMoverCheck:
+            // next => this._kafkaBacklogMetrics.checkConsumerProgress(
+            //     this.repConfig.dataMoverTopic, null, 'lifecycle', next),
         }, (err, checkResults) => {
             if (err) {
                 return done(err);
