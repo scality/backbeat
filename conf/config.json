@@ -4,7 +4,11 @@
         "autoCreateNamespace": false
     },
     "kafka": {
-        "hosts": "127.0.0.1:9092"
+        "hosts": "127.0.0.1:9092",
+        "backlogMetrics": {
+            "zkPath": "/run/kafka-backlog-metrics",
+            "intervalS": 60
+        }
     },
     "s3": {
         "host": "127.0.0.1",
@@ -110,6 +114,7 @@
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
+                "backlogControl": { "enabled": true },
                 "cronRule": "0 */5 * * * *",
                 "concurrency": 10
             },
