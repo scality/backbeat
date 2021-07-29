@@ -681,6 +681,7 @@ class QueueProcessor extends EventEmitter {
             backbeatClient: this.backbeatClient,
             backbeatMetadataProxy: this.backbeatMetadataProxy,
             serviceName: this.serviceName,
+            metricsHandler,
         };
     }
 
