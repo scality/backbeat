@@ -15,7 +15,7 @@ When starting processes you will have to enable the probe server by setting an
 environment variable.
 
 ```sh
-export CRR_METRICS_PROBE=true
+export S3_REPLICATION_METRICS_PROBE=true
 ```
 
 After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.
