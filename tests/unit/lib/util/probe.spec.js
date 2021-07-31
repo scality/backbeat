@@ -5,11 +5,11 @@ const { startProbeServer } =
 describe('Probe server', () => {
     afterEach(() => {
         // reset any possible env var set
-        delete process.env.CRR_METRICS_PROBE;
+        delete process.env.S3_REPLICATION_METRICS_PROBE;
     });
 
     it('is not created when disabled', done => {
-        process.env.CRR_METRICS_PROBE = 'false';
+        process.env.S3_REPLICATION_METRICS_PROBE = 'false';
         const config = {
             bindAddress: 'localhost',
             port: 52555,
@@ -22,7 +22,7 @@ describe('Probe server', () => {
     });
 
     it('is not created with no config', done => {
-        process.env.CRR_METRICS_PROBE = 'true';
+        process.env.S3_REPLICATION_METRICS_PROBE = 'true';
         const config = undefined;
         startProbeServer(config, (err, probeServer) => {
             assert.ifError(err);
@@ -32,7 +32,7 @@ describe('Probe server', () => {
     });
 
     it('calls back with error if one occurred', done => {
-        process.env.CRR_METRICS_PROBE = 'true';
+        process.env.S3_REPLICATION_METRICS_PROBE = 'true';
         const config = {
             bindAddress: 'httppp://badaddress',
             // inject an error with a bad port
