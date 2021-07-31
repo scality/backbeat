@@ -15,7 +15,7 @@ When starting processes you can disable the probe server by setting an environme
 variable.
 
 ```sh
-export CRR_METRICS_PROBE=false
+export S3_REPLICATION_METRICS_PROBE=true
 ```
 
 After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.
