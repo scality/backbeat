@@ -43,7 +43,7 @@
     "bucketclient": "scality/bucketclient#6d2d5a4",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl#9108603d8881d7762dcadfde1db927a1653dfda5",
-    "node-rdkafka": "2.5.1",
+    "node-rdkafka": "2.2.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^12.0.0",
