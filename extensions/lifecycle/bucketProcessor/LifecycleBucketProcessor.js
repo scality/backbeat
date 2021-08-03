@@ -351,7 +351,7 @@ class LifecycleBucketProcessor {
             },
             kafka: {
                 hosts: this._kafkaConfig.hosts,
-                // backlogMetrics: this._kafkaConfig.backlogMetrics,
+                backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,

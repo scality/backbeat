@@ -114,7 +114,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         //   value: bucket value
         // }
         return entry.bucket === METASTORE &&
-            (entry.key && entry.key.startsWith(mpuBucketPrefix));
+            !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
     /**
