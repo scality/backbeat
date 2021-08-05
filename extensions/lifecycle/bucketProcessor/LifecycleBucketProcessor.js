@@ -280,6 +280,11 @@ class LifecycleBucketProcessor {
         const params = { Bucket: bucket };
         return s3.getBucketLifecycleConfiguration(params, (err, config) => {
             if (err) {
+                if (err.code === 'NoSuchLifecycleConfiguration') {
+                    this._log.debug('skipping non-lifecycled bucket', { bucket });
+                    return cb();
+                }
+
                 this._log.error('error getting bucket lifecycle config', {
                     method: 'LifecycleBucketProcessor._processBucketEntry',
                     bucket,
