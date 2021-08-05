@@ -4,14 +4,16 @@ const async = require('async');
 const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
 
-const errors = require('arsenal').errors;
+const { constants, errors } = require('arsenal');
 const Logger = require('werelogs').Logger;
+const BucketClient = require('bucketclient').RESTClient;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
+const safeJsonParse = require('../util/safeJsonParse');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -39,6 +41,9 @@ class LifecycleConductor {
      * metrics config object (see {@link BackbeatConsumer} constructor
      * for params)
      * @param {Object} lcConfig - lifecycle configuration object
+     * @param {String} lcConfig.bucketSource - whether to fetch buckets
+     * from zookeeper or bucketd
+     * @param {Object} lcConfig.bucketd - host:port bucketd configuration
      * @param {String} lcConfig.zookeeperPath - base path for
      * lifecycle nodes in zookeeper
      * @param {String} lcConfig.bucketTasksTopic - lifecycle
@@ -64,12 +69,16 @@ class LifecycleConductor {
             this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
         this._concurrency =
             this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
+        this._bucketSource = this.lcConfig.conductor.bucketSource;
+        this._bucketdConfig = this.lcConfig.conductor.bucketd;
         this._producer = null;
         this._zkClient = null;
+        this._bucketClient = null;
         this._kafkaBacklogMetrics = null;
         this._started = false;
         this._cronJob = null;
         this._vaultClientCache = null;
+        this._initialized = false;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
@@ -83,111 +92,157 @@ class LifecycleConductor {
                    (path, done) => this._zkClient.mkdirp(path, done), cb);
     }
 
-    _processBucket(ownerId, bucketName, done) {
-        this.logger.debug('processing bucket', {
-            method: 'LifecycleConductor::_processBucket',
-            ownerId,
-            bucketName,
-        });
-        return process.nextTick(() => done(null, [{
-            message: JSON.stringify({
-                action: 'processObjects',
-                target: {
-                    bucket: bucketName,
-                    owner: ownerId,
-                },
-                details: {},
-            }),
-        }]));
-    }
+    _getAccountIds(canonicalIds, cb) {
+        // if auth is not of type `assumeRole`, then
+        // the accountId can be omitted from work queue messages
+        if (this.lcConfig.auth.type !== authTypeAssumeRole) {
+            return process.nextTick(cb, null, {});
+        }
 
-    _processBucketWithAccountId(ownerId, bucketName, done) {
-        this.logger.debug('processing bucket', {
-            method: 'LifecycleConductor::_processBucketWithAccountId',
-            ownerId,
-            bucketName,
-        });
         const client = this._vaultClientCache.getClient(LIFEYCLE_CONDUCTOR_CLIENT_ID);
         const opts = {};
-        return client.getAccountIds([ownerId], opts, (err, res) => {
+        return client.getAccountIds(canonicalIds, opts, (err, res) => {
             if (err) {
-                this.logger.error(
-                    'failed to retrieve bucket owner account id, skipping', {
-                        error: err,
-                        bucket: bucketName,
-                        canonicalId: ownerId,
-                    });
-                return done();
+                return cb(err);
             }
-
-            /*
-             *  res = {
-             *      message: {
-             *          body: { canonicalId[*]: accountId },
-             *          code: 200,
-             *          message: 'Attributes retrieved'
-             *      }
-             *  }
-             */
-            return done(null, [{
-                message: JSON.stringify({
-                    action: 'processObjects',
-                    target: {
-                        bucket: bucketName,
-                        owner: ownerId,
-                        accountId: res.message.body[ownerId],
-                    },
-                    details: {},
-                }),
-            }]);
+            return cb(null, res.message.body);
         });
     }
 
     processBuckets() {
-        const zkBucketsPath = this.getBucketsZkPath();
+        const log = this.logger.newRequestLogger();
+        let nBucketsQueued = 0;
+
+        const messageSendQueue = async.cargo((tasks, done) => {
+            if (tasks.length === 0) {
+                return done();
+            }
+
+            nBucketsQueued += tasks.length;
+
+            const canonicalIds = new Set(tasks.map(t => t.canonicalId));
+            return this._getAccountIds([...canonicalIds], (err, accountIds) => {
+                if (err) {
+                    log.error('could not get account ids, skipping batch', { error: err });
+                    return done();
+                }
+                const messages = tasks.map(t => ({
+                    message: JSON.stringify({
+                        action: 'processObjects',
+                        target: {
+                            bucket: t.bucketName,
+                            owner: t.canonicalId,
+                            accountId: accountIds[t.canonicalId],
+                        },
+                        details: {},
+                    }),
+                }));
+
+                log.info('bucket push progress', { bucketsInBatch: tasks.length, nBucketsQueued });
+                return this._producer.send(messages, done);
+            });
+        }, this._concurrency);
+
         async.waterfall([
             next => this._controlBacklog(next),
             next => {
-                this.logger.info('starting new lifecycle batch');
-                this._zkClient.getChildren(
-                    zkBucketsPath,
-                    null,
-                    (err, buckets) => {
-                        if (err) {
-                            this.logger.error(
-                                'error getting list of buckets from zookeeper',
-                                { zkPath: zkBucketsPath, error: err.message });
-                        }
-                        return next(err, buckets);
-                    });
+                log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
+                this.listBuckets(messageSendQueue, log, next);
             },
-            (buckets, next) => async.concatLimit(
-                buckets, this._concurrency,
-                (bucket, done) => {
-                    const [ownerId, bucketUID, bucketName] =
+            (nBucketsListed, next) => {
+                async.until(
+                    () => nBucketsQueued === nBucketsListed,
+                    unext => setTimeout(unext, 1000),
+                    next);
+            },
+        ], err => {
+            if (err && err.Throttling) {
+                log.info('not starting new lifecycle batch', { reason: err });
+                return;
+            }
+
+            if (err) {
+                log.error('lifecycle batch failed', { error: err });
+                return;
+            }
+
+            log.info('finished pushing lifecycle batch', { nBucketsQueued });
+        });
+    }
+
+    listBuckets(queue, log, cb) {
+        if (this._bucketSource === 'zookeeper') {
+            return this.listZookeeperBuckets(queue, log, cb);
+        }
+
+        return this.listBucketdBuckets(queue, log, cb);
+    }
+
+    listZookeeperBuckets(queue, log, cb) {
+        const zkBucketsPath = this.getBucketsZkPath();
+        this._zkClient.getChildren(
+            zkBucketsPath,
+            null,
+            (err, buckets) => {
+                if (err) {
+                    log.error(
+                        'error getting list of buckets from zookeeper',
+                        { zkPath: zkBucketsPath, error: err.message });
+                    return cb(err);
+                }
+
+                const batch = buckets.map(bucket => {
+                    const [canonicalId, bucketUID, bucketName] =
                               bucket.split(':');
-                    if (!ownerId || !bucketUID || !bucketName) {
-                        this.logger.error(
+                    if (!canonicalId || !bucketUID || !bucketName) {
+                        log.error(
                             'malformed zookeeper bucket entry, skipping',
                             { zkPath: zkBucketsPath, bucket });
-                        return process.nextTick(done);
+                        return null;
                     }
-                    if (this.lcConfig.auth.type === authTypeAssumeRole) {
-                        return this._processBucketWithAccountId(ownerId, bucketName, done);
+
+                    return { canonicalId, bucketName };
+                });
+
+                queue.push(batch);
+                return process.nextTick(cb, null, batch.length);
+            });
+    }
+
+    listBucketdBuckets(queue, log, cb) {
+        let isTruncated = false;
+        let marker = null;
+        let nEnqueued = 0;
+
+        async.doWhilst(
+            next => this._bucketClient.listObject(
+                constants.usersBucket,
+                log.getSerializedUids(),
+                { marker, prefix: '', maxKeys: this._concurrency },
+                (err, resp) => {
+                    if (err) {
+                        return next(err);
                     }
-                    return this._processBucket(ownerId, bucketName, done);
-                }, next),
-            (entries, next) => {
-                this.logger.debug(
-                    'producing kafka entries',
-                    { topic: this.lcConfig.bucketTasksTopic,
-                      entries });
-                if (entries.length === 0) {
-                    return next();
+
+                    const { error, result } = safeJsonParse(resp);
+                    if (error) {
+                        return next(error);
+                    }
+
+                    isTruncated = result.IsTruncated;
+                    nEnqueued += result.Contents.length;
+
+                    result.Contents.forEach(o => {
+                        marker = o.key;
+                        const [canonicalId, bucketName] = marker.split(constants.splitter);
+                        queue.push({ canonicalId, bucketName });
+                    });
+
+                    return process.nextTick(next);
                 }
-                return this._producer.send(entries, next);
-            },
-        ], () => {});
+            ),
+            () => isTruncated,
+            err => cb(err, nEnqueued));
     }
 
     _controlBacklog(done) {
@@ -265,7 +320,21 @@ class LifecycleConductor {
         });
     }
 
+    _setupBucketdClient(cb) {
+        if (this._bucketSource === 'bucketd') {
+            const { host, port } = this._bucketdConfig;
+            // TODO https support S3C-4659
+            this._bucketClient = new BucketClient(`${host}:${port}`);
+        }
+
+        process.nextTick(cb);
+    }
+
     _setupZookeeperClient(cb) {
+        if (this._bucketSource !== 'zookeeper') {
+            process.nextTick(cb);
+            return;
+        }
         this._zkClient = zookeeperHelper.createClient(
             this.zkConfig.connectionString);
         this._zkClient.connect();
@@ -284,13 +353,13 @@ class LifecycleConductor {
     }
 
     /**
-     * Initialize kafka producer and zookeeper client
+     * Initialize kafka producer and clients
      *
      * @param {function} done - callback
      * @return {undefined}
      */
     init(done) {
-        if (this._zkClient) {
+        if (this._initialized) {
             // already initialized
             return process.nextTick(done);
         }
@@ -299,6 +368,7 @@ class LifecycleConductor {
         return async.series([
             next => this._setupProducer(next),
             next => this._setupZookeeperClient(next),
+            next => this._setupBucketdClient(next),
             next => this._initKafkaBacklogMetrics(next),
         ], done);
     }
@@ -367,6 +437,7 @@ class LifecycleConductor {
             if (err) {
                 return done(err);
             }
+            this._initialized = true;
             this._startCronJob();
             return done();
         });

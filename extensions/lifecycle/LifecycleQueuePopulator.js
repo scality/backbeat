@@ -128,6 +128,14 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
 
+        if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
+            this.log.info('bucket source is not zookeeper, skipping entry', {
+                entry,
+                bucketSource: this.extConfig.conductor.bucketSource,
+            });
+            return undefined;
+        }
+
         let bucketValue = {};
         if (this._isBucketEntryFromBucketd(entry)) {
             const parsedEntry = safeJsonParse(entry.value);
