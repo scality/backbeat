@@ -145,7 +145,10 @@ describe('lifecycle conductor', function lifecycleConductor() {
             assert.strictEqual(req.method, 'GET');
             assert.strictEqual(query.Action, 'GetAccounts');
 
-            const accountIds = query.canonicalIds.map(v => ({
+            const canonicalIds = Array.isArray(query.canonicalIds) ?
+                query.canonicalIds :
+                [query.canonicalIds];
+            const accountIds = canonicalIds.map(v => ({
                 id: v.replace('owner', 'account'),
                 canId: v,
             }));
