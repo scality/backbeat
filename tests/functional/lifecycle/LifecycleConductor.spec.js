@@ -170,15 +170,13 @@ describe('lifecycle conductor', function lifecycleConductor() {
             const thisListing = [...bucketdListing].splice(0, query.maxKeys);
             bucketdListing = [...bucketdListing].splice(query.maxKeys);
 
-            res.write(JSON.stringify({
+            res.end(JSON.stringify({
                 Contents: thisListing.map(key => ({
                     key,
                     value: {},
                 })),
                 IsTruncated: !!bucketdListing.length,
             }));
-
-            res.end();
         };
 
         if (mockBucketd) {
