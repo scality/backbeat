@@ -150,8 +150,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 canId: v,
             }));
 
-            res.write(JSON.stringify(accountIds));
-            res.end();
+            res.end(JSON.stringify(accountIds));
         };
 
         const bucketdHandler = (req, res) => {
