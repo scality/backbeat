@@ -36,7 +36,7 @@ const expected2Messages = [
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket2', owner: 'owner2' },
+            target: { bucket: 'bucket1-2', owner: 'owner1' },
             details: {},
         },
     },
@@ -53,7 +53,7 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket2', owner: 'owner2' },
+            target: { bucket: 'bucket1-2', owner: 'owner1' },
             details: {},
         },
     },
@@ -177,12 +177,12 @@ describe('lifecycle conductor', function lifecycleConductor() {
             lifecycleConfig.conductor.bucketd.port = bucketdPort;
 
             bucketPopulatorStep1 = next => {
-                bucketdListing.push('owner1..|..bucket1', 'owner2..|..bucket2');
+                bucketdListing.push('owner1..|..bucket1', 'owner1..|..bucket1-2');
                 process.nextTick(next);
             };
 
             bucketPopulatorStep2 = next => {
-                bucketdListing.push('owner1..|..bucket1', 'owner2..|..bucket2');
+                bucketdListing.push('owner1..|..bucket1', 'owner1..|..bucket1-2');
                 bucketdListing.push('owner3..|..bucket3', 'owner4..|..bucket4');
                 process.nextTick(next);
             };
@@ -203,7 +203,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
 
             bucketPopulatorStep1 = next => {
                 async.each(
-                    ['owner1:uid1:bucket1', 'owner2:uid2:bucket2'],
+                    ['owner1:uid1:bucket1', 'owner1:uid1-2:bucket1-2'],
                     (bucket, done) => zkClient.create(
                         `${validatedLifecycleConfig.zookeeperPath}/data/buckets/${bucket}`, done),
                     next);
