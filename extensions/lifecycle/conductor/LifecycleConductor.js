@@ -238,7 +238,8 @@ class LifecycleConductor {
                         queue.push({ canonicalId, bucketName });
                     });
 
-                    return process.nextTick(next);
+                    const delay = queue.length() > this._concurrency ? 0 : 500;
+                    return setTimeout(next, delay);
                 }
             ),
             () => isTruncated,
