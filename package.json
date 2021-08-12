@@ -41,7 +41,7 @@
     "prom-client": "^12.0.0",
     "uuid": "^3.1.0",
     "vaultclient": "scality/vaultclient#90762d2",
-    "werelogs": "scality/werelogs#4e0d97c",
+    "werelogs": "scality/werelogs#8.1.0",
     "yarn": "^1.17.3"
   },
   "devDependencies": {

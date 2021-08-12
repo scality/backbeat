@@ -2617,6 +2617,12 @@ werelogs@scality/werelogs#4e0d97c:
   dependencies:
     safe-json-stringify "1.0.3"
 
+werelogs@scality/werelogs#8.1.0:
+  version "8.1.0"
+  resolved "https://codeload.github.com/scality/werelogs/tar.gz/e8f828725642c54c511cdbe580b18f43d3589313"
+  dependencies:
+    safe-json-stringify "1.0.3"
+
 wordwrap@~1.0.0:
   version "1.0.0"
   resolved "https://registry.yarnpkg.com/wordwrap/-/wordwrap-1.0.0.tgz#27584810891456a4171c8d0226441ade90cbcaeb"
