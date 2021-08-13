@@ -1,5 +1,5 @@
 const joi = require('@hapi/joi');
-const { retryParamsJoi, authJoi, probeServerJoi } =
+const { retryParamsJoi, authJoi, probeServerJoi, hostPortJoi } =
     require('../../lib/config/configItems.joi.js');
 
 const joiSchema = {
@@ -8,6 +8,10 @@ const joiSchema = {
     objectTasksTopic: joi.string().required(),
     auth: authJoi.required(),
     conductor: {
+        bucketSource: joi.string().
+            valid('bucketd', 'zookeeper').default('zookeeper'),
+        bucketd: hostPortJoi.
+            when('bucketSource', { is: 'bucketd', then: joi.required() }),
         cronRule: joi.string().required(),
         concurrency: joi.number().greater(0).default(10),
         backlogControl: joi.object({
