@@ -129,8 +129,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
-            this.log.info('bucket source is not zookeeper, skipping entry', {
-                entry,
+            this.log.debug('bucket source is not zookeeper, skipping entry', {
                 bucketSource: this.extConfig.conductor.bucketSource,
             });
             return undefined;
