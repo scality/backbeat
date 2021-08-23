@@ -20,6 +20,7 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
+const IngestionMetrics = require('../ingestion/IngestionMetrics');
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
@@ -494,6 +495,7 @@ class MongoQueueProcessor {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
+                    IngestionMetrics.onIngestionProcessed(location, sourceEntry.getContentLength());
                     return done();
                 });
         });
@@ -585,6 +587,7 @@ class MongoQueueProcessor {
     processKafkaEntry(kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+        console.log('1 sourceEntry!!!', sourceEntry);
         if (sourceEntry.error) {
             log.end().error('error processing source entry',
                               { error: sourceEntry.error });

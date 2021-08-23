@@ -18,6 +18,12 @@ const constants = {
         bytesPending: testIsOn ?
             'test:bb:bytespending' : 'bb:ingestion:bytespending',
     },
+    promMetricNames: {
+        ingestionQueuedTotal: 'zenko_ingestion_queued_total',
+        ingestionQueuedBytes: 'zenko_ingestion_queued_bytes',
+        ingestionProcessedBytes: 'zenko_ingestion_processed_bytes',
+        ingestionElapsedSeconds: 'zenko_ingestion_elapsed_seconds',
+    },
 };
 
 module.exports = constants;
