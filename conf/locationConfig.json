@@ -1,0 +1,32 @@
+{
+  "us-east-1": {
+    "details": {
+      "supportsVersioning": true
+    },
+    "isTransient": false,
+    "legacyAwsBehavior": false,
+    "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+    "type": "file"
+  },
+  "wontwork-location": {
+    "details": {
+      "awsEndpoint": "http://217.182.11.36",
+      "bucketMatch": true,
+      "bucketName": "ring-bucket-1",
+      "credentials": {
+        "accessKey": "CIBMVRUCEHV66U201QVI",
+        "secretKey": "LrtVhw==Xnea/K9BPSy9LfyiswdbkZID5aFKemeM"
+      },
+      "https": false,
+      "pathStyle": true,
+      "region": "us-east-1",
+      "serverSideEncryption": false,
+      "supportsVersioning": true
+    },
+    "isTransient": false,
+    "legacyAwsBehavior": false,
+    "objectId": "06a862b3-fee4-11eb-a6ba-26bd22419be3",
+    "type": "aws_s3",
+    "locationType": "location-scality-ring-s3-v1"
+  }
+}
