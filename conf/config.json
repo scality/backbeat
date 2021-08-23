@@ -17,18 +17,8 @@
     "replicationGroupId": "RG001  ",
     "queuePopulator": {
         "cronRule": "*/5 * * * * *",
-        "batchMaxRead": 10000,
-        "batchTimeoutMs": 9000,
         "zookeeperPath": "/queue-populator",
         "logSource": "mongo",
-        "bucketd": {
-            "host": "127.0.0.1",
-            "port": 9000
-        },
-        "dmd": {
-            "host": "127.0.0.1",
-            "port": 9990
-        },
         "mongo": {
             "replicaSetHosts":
                 "localhost:27017,localhost:27018,localhost:27019",
@@ -312,6 +302,10 @@
         "port": 4042
     },
     "localCache": {
+        "host": "127.0.0.1",
+        "port": 6379
+    },
+    "redis": {
         "host": "127.0.0.1",
         "port": 6379
     },
