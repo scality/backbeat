@@ -485,31 +485,6 @@ arsenal@scality/Arsenal#32c895b:
   optionalDependencies:
     ioctl "2.0.0"
 
-arsenal@scality/Arsenal#580e25a:
-  version "7.5.0"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/580e25a9e84acf2a2a8dec6c83f69f862804d85f"
-  dependencies:
-    "@hapi/joi" "^15.1.0"
-    JSONStream "^1.0.0"
-    ajv "6.12.2"
-    async "~2.1.5"
-    debug "~2.3.3"
-    diskusage "^1.1.1"
-    ioredis "4.9.5"
-    ipaddr.js "1.9.1"
-    level "~5.0.1"
-    level-sublevel "~6.6.5"
-    node-forge "^0.7.1"
-    simple-glob "^0.2"
-    socket.io "~2.3.0"
-    socket.io-client "~2.3.0"
-    utf8 "2.1.2"
-    uuid "^3.0.1"
-    werelogs scality/werelogs#0ff7ec82
-    xml2js "~0.4.23"
-  optionalDependencies:
-    ioctl "2.0.0"
-
 arsenal@scality/Arsenal#856a163:
   version "8.2.3"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/856a1634d49c9029e7a95c04a00b1dcaaba93e09"
@@ -548,11 +523,35 @@ arsenal@scality/Arsenal#856a163:
   optionalDependencies:
     ioctl "2.0.1"
 
+arsenal@scality/Arsenal#b03f5b8:
+  version "7.4.3"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/b03f5b80acd6acaaf8dd2d49cd955e6b95279ab3"
+  dependencies:
+    "@hapi/joi" "^15.1.0"
+    JSONStream "^1.0.0"
+    ajv "6.12.2"
+    async "~2.1.5"
+    debug "~2.3.3"
+    diskusage "^1.1.1"
+    ioredis "4.9.5"
+    ipaddr.js "1.2.0"
+    level "~5.0.1"
+    level-sublevel "~6.6.5"
+    node-forge "^0.7.1"
+    simple-glob "^0.2"
+    socket.io "~2.3.0"
+    socket.io-client "~2.3.0"
+    utf8 "2.1.2"
+    uuid "^3.0.1"
+    werelogs scality/werelogs#0ff7ec82
+    xml2js "~0.4.23"
+  optionalDependencies:
+    ioctl "2.0.0"
+
 arsenal@scality/Arsenal#c57cde8:
   version "8.1.4"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/c57cde88bb04fe9803ec08c3a883f6eb986e4149"
   dependencies:
-    "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
     ajv "4.10.0"
     async "~2.6.1"
@@ -567,6 +566,7 @@ arsenal@scality/Arsenal#c57cde8:
     https-proxy-agent "^2.2.0"
     ioredis "4.9.5"
     ipaddr.js "1.8.1"
+    joi "^14.3.0"
     level "~5.0.1"
     level-sublevel "~6.6.5"
     mongodb "^3.0.1"
@@ -575,7 +575,7 @@ arsenal@scality/Arsenal#c57cde8:
     simple-glob "^0.2.0"
     socket.io "~2.2.0"
     socket.io-client "~2.2.0"
-    sproxydclient "github:scality/sproxydclient#13e87ea"
+    sproxydclient "github:scality/sproxydclient#a6ec980"
     utf8 "3.0.0"
     uuid "^3.0.1"
     werelogs scality/werelogs#0ff7ec82
@@ -617,6 +617,7 @@ arsenal@scality/Arsenal#ed446c5:
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
+    agentkeepalive "^4.1.3"
     ajv "6.12.2"
     async "~2.1.5"
     debug "~2.6.9"
