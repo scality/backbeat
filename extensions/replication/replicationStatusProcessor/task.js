@@ -34,7 +34,7 @@ function initAndStart() {
             setTimeout(initAndStart, 5000);
             return;
         }
-        replicationStatusProcessor.start(null, startProbeServer(
+        replicationStatusProcessor.start({ bootstrap: false }, startProbeServer(
             repConfig.replicationStatusProcessor.probeServer,
             (err, probeServer) => {
                 if (err) {
