@@ -585,7 +585,6 @@ class MongoQueueProcessor {
     processKafkaEntry(kafkaEntry, done) {
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-        console.log('sourceEntry!!!', sourceEntry);
         if (sourceEntry.error) {
             log.end().error('error processing source entry',
                               { error: sourceEntry.error });
