@@ -10,7 +10,7 @@
   },
   "wontwork-location": {
     "details": {
-      "awsEndpoint": "http://217.182.11.36",
+      "awsEndpoint": "217.182.11.36",
       "bucketMatch": true,
       "bucketName": "ring-bucket-1",
       "credentials": {
