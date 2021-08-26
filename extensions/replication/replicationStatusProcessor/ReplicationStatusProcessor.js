@@ -214,7 +214,7 @@ class ReplicationStatusProcessor {
                     concurrency:
                     this.repConfig.replicationStatusProcessor.concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
-                    bootstrap: options && options.bootstrap,
+                    bootstrap: (options && options.bootstrap) || false,
                 });
                 this._consumer.on('error', () => {
                     if (!consumerReady) {
