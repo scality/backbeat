@@ -496,9 +496,9 @@ arsenal@scality/Arsenal#ed446c5:
   optionalDependencies:
     ioctl "2.0.0"
 
-arsenal@scality/arsenal#888273b:
-  version "7.7.2"
-  resolved "https://codeload.github.com/scality/arsenal/tar.gz/888273bb2f448b054eb204a3e177f00696fa1a1a"
+arsenal@scality/arsenal#7.10.1:
+  version "7.10.1"
+  resolved "https://codeload.github.com/scality/arsenal/tar.gz/ce7bba1f8d8b4078335f65e8eaa49f6454ddbf46"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
@@ -520,7 +520,7 @@ arsenal@scality/arsenal#888273b:
     socket.io-client "~2.3.0"
     utf8 "2.1.2"
     uuid "^3.0.1"
-    werelogs scality/werelogs#0ff7ec82
+    werelogs scality/werelogs#8.1.0
     xml2js "~0.4.23"
   optionalDependencies:
     ioctl "2.0.0"
