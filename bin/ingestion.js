@@ -168,7 +168,7 @@ function setupZkLocationNode(zkClient, location, done) {
                     return checkAndApplyScheduleResume(zkClient, d, location,
                         done);
                 }
-                if (data.paused === true) {
+                if (d.paused === true) {
                     ingestionPopulator.setPausedLocationState(location);
                 }
                 return done();
