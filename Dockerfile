@@ -8,14 +8,32 @@ RUN apt-get update \
     build-essential \
     wget \
     bash \
-    python \
+    python3 \
     git \
-    jq
+    jq \
+    zlib1g-dev \
+    libncurses5-dev \
+    libgdbm-dev \
+    libnss3-dev \
+    libssl-dev \
+    libreadline-dev \
+    libffi-dev
 
 ENV DOCKERIZE_VERSION v0.6.1
+ENV PYTHON=python3.9
+ENV PY_VERSION=3.9.7
+
+
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
-    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
+    && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
+    && wget https://www.python.org/ftp/python/$PY_VERSION/Python-$PY_VERSION.tgz \
+    && tar -C /usr/local/bin -xzvf Python-$PY_VERSION.tgz \
+    && cd /usr/local/bin/Python-$PY_VERSION \
+    && ./configure \
+    && make \
+    && make altinstall
+
 
 COPY package.json yarn.lock /usr/src/app/
 RUN yarn install --frozen-lockfile --production \
