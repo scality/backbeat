@@ -3,10 +3,10 @@
 const async = require('async');
 const werelogs = require('werelogs');
 const { errors } = require('arsenal');
-// const {
-//     DEFAULT_LIVE_ROUTE,
-//     DEFAULT_READY_ROUTE,
-// } = require('arsenal').network.probe.ProbeServer;
+const {
+    DEFAULT_LIVE_ROUTE,
+    DEFAULT_READY_ROUTE,
+} = require('arsenal').network.probe.ProbeServer;
 
 const { initManagement } = require('../../../lib/management/index');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
@@ -46,9 +46,8 @@ function probeServerSetup(config, done) {
             return done();
         }
 
-        // TODO: update to use default probe routes
-        probeServer.addHandler('/_/health/liveness', livenessCheck);
-        probeServer.addHandler('/_/health/readiness', livenessCheck);
+        probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
+        probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
         logger.info('Starting lifecycle object processor server');
         return done();
     });
