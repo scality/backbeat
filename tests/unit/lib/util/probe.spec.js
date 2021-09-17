@@ -3,36 +3,16 @@ const { startProbeServer } =
     require('../../../../lib/util/probe');
 
 describe('Probe server', () => {
-    afterEach(() => {
-        // reset any possible env var set
-        delete process.env.S3_REPLICATION_METRICS_PROBE;
-    });
-
-    it('is not created when disabled', done => {
-        process.env.S3_REPLICATION_METRICS_PROBE = 'false';
-        const config = {
-            bindAddress: 'localhost',
-            port: 52555,
-        };
-        startProbeServer(config, (err, probeServer) => {
-            assert.ifError(err);
-            assert.strictEqual(probeServer, undefined);
-            done();
-        });
-    });
-
     it('is not created with no config', done => {
-        process.env.S3_REPLICATION_METRICS_PROBE = 'true';
         const config = undefined;
         startProbeServer(config, (err, probeServer) => {
-            assert.ifError(err);
+            assert(err);
             assert.strictEqual(probeServer, undefined);
             done();
         });
     });
 
     it('calls back with error if one occurred', done => {
-        process.env.S3_REPLICATION_METRICS_PROBE = 'true';
         const config = {
             bindAddress: 'httppp://badaddress',
             // inject an error with a bad port

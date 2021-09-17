@@ -240,13 +240,17 @@ function initAndStart(zkClient) {
                             return undefined;
                         }
                     );
-                    // TODO: implement metrics route for multi site setup, BB-23
-                    probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
-                        log.info('queue processor metrics route not implemented');
-                        res.writeHead(200);
-                        res.end();
-                        return undefined;
-                    });
+                    // TODO: set this variable during deployment
+                    // enable metrics route only when it is enabled
+                    if (process.env.ENABLE_METRICS_PROBE === 'true') {
+                        // TODO: implement metrics route for multi site setup, BB-23
+                        probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
+                            log.info('queue processor metrics route not implemented');
+                            res.writeHead(200);
+                            res.end();
+                            return undefined;
+                        });
+                    }
                 }
             }
         );
