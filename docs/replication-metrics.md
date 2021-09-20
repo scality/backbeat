@@ -11,11 +11,11 @@ Under `conf/config.json` you can specify the probe server settings.
 
 > Currently SSL/TLS is not supported
 
-When starting processes you can disable the probe server by setting an environment
-variable.
+When starting processes you can enable/disable metrics handling by setting an
+environment variable. It is disabled by default.
 
 ```sh
-export S3_REPLICATION_METRICS_PROBE=true
+export ENABLE_METRICS_PROBE=true
 ```
 
 After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.

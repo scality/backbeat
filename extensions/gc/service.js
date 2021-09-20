@@ -1,17 +1,22 @@
 'use strict'; // eslint-disable-line
 
+const { errors } = require('arsenal');
 const werelogs = require('werelogs');
+const {
+    DEFAULT_LIVE_ROUTE,
+    DEFAULT_READY_ROUTE,
+} = require('arsenal').network.probe.ProbeServer;
 
 const GarbageCollector = require('./GarbageCollector');
-
+const { sendSuccess, sendError, startProbeServer } = require('../../lib/util/probe');
+const { initManagement } = require('../../lib/management');
 const config = require('../../lib/Config');
+
 const kafkaConfig = config.kafka;
 const s3Config = config.s3;
 const gcConfig = config.extensions.gc;
 const transport = config.transport;
-const { HealthProbeServer } = require('arsenal').network.probe;
 
-const { initManagement } = require('../../lib/management');
 const garbageCollector = new GarbageCollector({
     kafkaConfig,
     s3Config,
@@ -19,14 +24,24 @@ const garbageCollector = new GarbageCollector({
     transport,
 });
 
-const healthServer = new HealthProbeServer({
-    bindAddress: config.healthcheckServer.bindAddress,
-    port: config.healthcheckServer.port,
-});
-
 werelogs.configure({ level: config.log.logLevel,
                      dump: config.log.dumpLevel });
 const logger = new werelogs.Logger('Backbeat:GC:service');
+
+/**
+ * Handle ProbeServer liveness check
+ *
+ * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+ * @param {Logger} log - Logger
+ * @returns {string} response
+ */
+ function handleLiveness(res, log) {
+    if (garbageCollector.isReady()) {
+        sendSuccess(res, log);
+    } else {
+        sendError(res, log, errors.ServiceUnavailable, 'unhealthy');
+    }
+}
 
 function initAndStart() {
     initManagement({
@@ -39,22 +54,22 @@ function initAndStart() {
             return;
         }
         logger.info('management init done');
-        healthServer.onReadyCheck(log => {
-            if (garbageCollector.isReady()) {
-                return true;
-            }
-            log.error('GarbageCollector is not ready!');
-            return false;
-        });
-        logger.info('Starting HealthProbe server');
-        healthServer.start();
-        garbageCollector.start(err => {
+        startProbeServer(gcConfig.probeServer, (err, probeServer) => {
             if (err) {
-                logger.error('error during garbage collector initialization',
-                             { error: err.message });
-            } else {
-                logger.info('garbage collector is running');
+                logger.error('error starting probe server', { error: err });
             }
+            if (probeServer !== undefined) {
+                // following the same pattern as other extensions, where liveness
+                // and readiness are handled by the same handler
+                probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+            }
+            garbageCollector.start(err => {
+                if (err) {
+                    logger.error('error during garbage collector initialization', { error: err.message });
+                } else {
+                    logger.info('garbage collector is running');
+                }
+            });
         });
     });
 }

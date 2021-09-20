@@ -63,10 +63,14 @@ async.waterfall([
                 DEFAULT_LIVE_ROUTE,
                 (res, log) => queuePopulator.handleLiveness(res, log)
             );
-            probeServer.addHandler(
-                DEFAULT_METRICS_ROUTE,
-                (res, log) => queuePopulator.handleMetrics(res, log)
-            );
+            // TODO: set this variable during deployment
+            // enable metrics route only when it is enabled
+            if (process.env.ENABLE_METRICS_PROBE === 'true') {
+                probeServer.addHandler(
+                    DEFAULT_METRICS_ROUTE,
+                    (res, log) => queuePopulator.handleMetrics(res, log)
+                );
+            }
         }
         done();
     }),
