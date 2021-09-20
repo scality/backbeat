@@ -332,15 +332,15 @@ class ReplicationStatusProcessor {
             verboseLiveness.consumer = constants.statusReady;
         }
 
-        if (this._FailedCRRProducer === undefined || this._FailedCRRProducer === null ||
-            this._FailedCRRProducer._producer === undefined ||
-            this._FailedCRRProducer._producer === null) {
+        if (this._failedCRRProducer === undefined || this._failedCRRProducer === null ||
+            this._failedCRRProducer._producer === undefined ||
+            this._failedCRRProducer._producer === null) {
             verboseLiveness.failedCRRProducer = constants.statusUndefined;
             responses.push({
                 component: 'Failed CRR Producer',
                 status: constants.statusUndefined,
             });
-        } else if (!this._FailedCRRProducer._producer.isReady()) {
+        } else if (!this._failedCRRProducer._producer.isReady()) {
             verboseLiveness.failedCRRProducer = constants.statusNotReady;
             responses.push({
                 component: 'Failed CRR Producer',
