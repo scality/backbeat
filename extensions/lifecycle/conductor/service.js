@@ -59,7 +59,7 @@ function handleMetrics(res, log) {
 }
 
 async.waterfall([
-    done => startProbeServer(config.healthcheckServer, (err, probeServer) => {
+    done => startProbeServer(lcConfig.conductor.probeServer, (err, probeServer) => {
         if (err) {
             logger.error('error starting probe server', { error: err });
             return done(err);

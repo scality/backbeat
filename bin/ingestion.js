@@ -3,7 +3,13 @@ const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
 
 const werelogs = require('werelogs');
-const { HealthProbeServer } = require('arsenal').network.probe;
+const { errors } = require('arsenal');
+const {
+    DEFAULT_LIVE_ROUTE,
+    DEFAULT_METRICS_ROUTE,
+    DEFAULT_READY_ROUTE,
+} = require('arsenal').network.probe.ProbeServer;
+const { ZenkoMetrics } = require('arsenal').metrics;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
@@ -12,6 +18,7 @@ const { initManagement } = require('../lib/management/index');
 const zookeeperWrapper = require('../lib/clients/zookeeper');
 const { zookeeperNamespace, zkStatePath } =
     require('../extensions/ingestion/constants');
+const { sendSuccess, sendError, startProbeServer } = require('../lib/util/probe');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -27,11 +34,6 @@ const RESUME_NODE = 'scheduledResume';
 const log = new werelogs.Logger('Backbeat:IngestionPopulator');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
-
-const healthServer = new HealthProbeServer({
-    bindAddress: config.healthcheckServer.bindAddress,
-    port: config.healthcheckServer.port,
-});
 
 let scheduler;
 let ingestionPopulator;
@@ -225,19 +227,6 @@ function updateProcessors(zkClient, bootstrapList) {
     });
 }
 
-function loadHealthcheck() {
-    healthServer.onReadyCheck(() => {
-        const state = ingestionPopulator.zkStatus();
-        if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
-            return true;
-        }
-        log.error(`Zookeeper is not connected! ${state}`);
-        return false;
-    });
-    log.info('Starting health probe server');
-    healthServer.start();
-}
-
 function loadProcessors(zkClient) {
     let bootstrapList = config.getBootstrapList();
     updateProcessors(zkClient, bootstrapList);
@@ -246,6 +235,38 @@ function loadProcessors(zkClient) {
         bootstrapList = config.getBootstrapList();
         updateProcessors(zkClient, bootstrapList);
     });
+}
+
+/**
+ * Handle ProbeServer liveness check
+ *
+ * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+ * @param {Logger} log - Logger
+ * @returns {string} response
+ */
+ function handleLiveness(res, log) {
+    const state = ingestionPopulator.zkStatus();
+    if (state.code === zookeeper.State.SYNC_CONNECTED.code) {
+        sendSuccess(res, log);
+    } else {
+        log.error(`Zookeeper is not connected! ${state}`);
+        sendError(res, log, errors.ServiceUnavailable, 'unhealthy');
+    }
+}
+
+/**
+ * Handle ProbeServer metrics
+ *
+ * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+ * @param {Logger} log - Logger
+ * @returns {string} response
+ */
+function handleMetrics(res, log) {
+    log.debug('metrics requested');
+    res.writeHead(200, {
+        'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+    });
+    res.end(ZenkoMetrics.asPrometheus());
 }
 
 function initAndStart(zkClient) {
@@ -272,8 +293,23 @@ function initAndStart(zkClient) {
             done => {
                 scheduler = schedule.scheduleJob(ingestionExtConfigs.cronRule,
                     () => queueBatch(ingestionPopulator, log));
-                done();
+                return done();
             },
+            done => startProbeServer(ingestionExtConfigs.probeServer, (err, probeServer) => {
+                if (err) {
+                    log.error('error starting probe server', { error: err });
+                    return done(err);
+                }
+                if (probeServer !== undefined) {
+                    // following the same pattern as other extensions, where liveness
+                    // and readiness are handled by the same handler
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                    // retaining the old route and adding support to new route, until
+                    // metrics handling is consolidated
+                    probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
+                }
+                return done();
+            }),
         ], err => {
             if (err) {
                 log.fatal('error during ingestion populator initialization', {
@@ -282,7 +318,6 @@ function initAndStart(zkClient) {
                 });
                 process.exit(1);
             }
-            loadHealthcheck();
         });
     });
 }
