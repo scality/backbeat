@@ -7,6 +7,7 @@ const https = require('https');
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const { StatsModel } = require('arsenal').metrics;
+const { sendSuccess } = require('arsenal').network.probe.Utils;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
@@ -309,7 +310,7 @@ class ReplicationStatusProcessor {
      *
      * @param {http.HTTPServerResponse} res - HTTP Response to respond with
      * @param {Logger} log - Logger
-     * @returns {string} Error response string or undefined
+     * @returns {undefined}
      */
     handleLiveness(res, log) {
         const verboseLiveness = {};
@@ -353,11 +354,19 @@ class ReplicationStatusProcessor {
         log.debug('verbose liveness', verboseLiveness);
 
         if (responses.length > 0) {
-            return JSON.stringify(responses);
+            const message = JSON.stringify(responses);
+            log.debug('service unavailable',
+                {
+                    httpCode: 500,
+                    error: message,
+                }
+            );
+            res.writeHead(500);
+            res.end(message);
+            return undefined;
         }
 
-        res.writeHead(200);
-        res.end();
+        sendSuccess();
         return undefined;
     }
 
@@ -366,7 +375,7 @@ class ReplicationStatusProcessor {
      *
      * @param {http.HTTPServerResponse} res - HTTP Response to respond with
      * @param {Logger} log - Logger
-     * @returns {string} Error response string or undefined
+     * @returns {undefined}
      */
     handleMetrics(res, log) {
         log.debug('metrics requested');

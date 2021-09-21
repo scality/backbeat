@@ -24,6 +24,7 @@ const RESUME_NODE = 'scheduledResume';
 const { startProbeServer } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
+const { sendSuccess } = require('arsenal').network.probe.Utils;
 
 const log = new werelogs.Logger('Backbeat:QueueProcessor:task');
 werelogs.configure({
@@ -233,10 +234,18 @@ function initAndStart(zkClient) {
                                 responses = responses.concat(qp.handleLiveness(log));
                             });
                             if (responses.length > 0) {
-                                return JSON.stringify(responses);
+                                const message = JSON.stringify(responses);
+                                log.debug('service unavailable',
+                                    {
+                                        httpCode: 500,
+                                        error: message,
+                                    }
+                                );
+                                res.writeHead(500);
+                                res.end(message);
+                                return undefined;
                             }
-                            res.writeHead(200);
-                            res.end();
+                            sendSuccess();
                             return undefined;
                         }
                     );
@@ -246,9 +255,7 @@ function initAndStart(zkClient) {
                         // TODO: implement metrics route for multi site setup, BB-23
                         probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
                             log.info('queue processor metrics route not implemented');
-                            res.writeHead(200);
-                            res.end();
-                            return undefined;
+                            sendSuccess();
                         });
                     }
                 }

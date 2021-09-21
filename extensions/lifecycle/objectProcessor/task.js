@@ -7,10 +7,11 @@ const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
+const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 
 const { initManagement } = require('../../../lib/management/index');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
-const { sendSuccess, sendError, startProbeServer } = require('../../../lib/util/probe');
+const { startProbeServer } = require('../../../lib/util/probe');
 const config = require('../../../lib/Config');
 
 const zkConfig = config.zookeeper;

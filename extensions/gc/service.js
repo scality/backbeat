@@ -6,9 +6,10 @@ const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
+const { sendSuccess, sendError } = require('arsenal').network.probe.ProbeServer;
 
 const GarbageCollector = require('./GarbageCollector');
-const { sendSuccess, sendError, startProbeServer } = require('../../lib/util/probe');
+const { startProbeServer } = require('../../lib/util/probe');
 const { initManagement } = require('../../lib/management');
 const config = require('../../lib/Config');
 
@@ -33,7 +34,7 @@ const logger = new werelogs.Logger('Backbeat:GC:service');
  *
  * @param {http.HTTPServerResponse} res - HTTP Response to respond with
  * @param {Logger} log - Logger
- * @returns {string} response
+ * @returns {undefined}
  */
  function handleLiveness(res, log) {
     if (garbageCollector.isReady()) {

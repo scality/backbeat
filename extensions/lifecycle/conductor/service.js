@@ -8,11 +8,12 @@ const {
     DEFAULT_METRICS_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
+const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 const LifecycleConductor = require('./LifecycleConductor');
 const config = require('../../../lib/Config');
-const { sendSuccess, sendError, startProbeServer } = require('../../../lib/util/probe');
+const { startProbeServer } = require('../../../lib/util/probe');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -59,7 +60,7 @@ function handleMetrics(res, log) {
 }
 
 async.waterfall([
-    done => startProbeServer(config.healthcheckServer, (err, probeServer) => {
+    done => startProbeServer(lcConfig.conductor.probeServer, (err, probeServer) => {
         if (err) {
             logger.error('error starting probe server', { error: err });
             return done(err);

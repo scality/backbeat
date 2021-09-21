@@ -34,11 +34,6 @@ describe('QueuePopulator', () => {
             };
             const response = qp.handleLiveness(mockRes, mockLog);
             assert.strictEqual(response, undefined);
-            sinon.assert.calledOnceWithExactly(
-                mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
-                { zookeeper: zookeeper.State.SYNC_CONNECTED.code }
-            );
             sinon.assert.calledOnceWithExactly(mockRes.writeHead, 200);
             sinon.assert.calledOnce(mockRes.end);
         });
@@ -62,15 +57,6 @@ describe('QueuePopulator', () => {
             };
             const response = qp.handleLiveness(mockRes, mockLog);
             assert.strictEqual(response, undefined);
-            sinon.assert.calledOnceWithExactly(
-                mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
-                {
-                    'zookeeper': zookeeper.State.SYNC_CONNECTED.code,
-                    'producer-topicA': true,
-                    'producer-topicB': true,
-                }
-            );
             sinon.assert.calledOnceWithExactly(mockRes.writeHead, 200);
             sinon.assert.calledOnce(mockRes.end);
         });
@@ -92,28 +78,18 @@ describe('QueuePopulator', () => {
             qp.zkClient = {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
-            const response = qp.handleLiveness(mockRes, mockLog);
-            assert.deepStrictEqual(
-                JSON.parse(response),
-                [
+            qp.handleLiveness(mockRes, mockLog);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            sinon.assert.calledOnceWithExactly(
+                mockRes.end,
+                JSON.stringify([
                     {
                         component: 'log reader',
                         status: constants.statusNotReady,
                         topic: 'topicB',
                     },
-                ]
+                ])
             );
-            sinon.assert.calledOnceWithExactly(
-                mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
-                {
-                    'zookeeper': zookeeper.State.SYNC_CONNECTED.code,
-                    'producer-topicA': true,
-                    'producer-topicB': false,
-                }
-            );
-            sinon.assert.notCalled(mockRes.writeHead);
-            sinon.assert.notCalled(mockRes.end);
         });
     });
 });
