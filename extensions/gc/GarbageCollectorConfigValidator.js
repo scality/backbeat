@@ -1,6 +1,5 @@
 const joi = require('@hapi/joi');
-const { authJoi, retryParamsJoi } =
-    require('../../lib/config/configItems.joi.js');
+const { authJoi, retryParamsJoi, probeServerJoi } = require('../../lib/config/configItems.joi.js');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
@@ -10,6 +9,7 @@ const joiSchema = joi.object({
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
     },
+    probeServer: probeServerJoi.default(),
 });
 
 function configValidator(backbeatConfig, extConfig) {

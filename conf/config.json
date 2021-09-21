@@ -66,7 +66,10 @@
                         "secretKey": "myEncryptedSecretKey"
                     }
                 }
-            ]
+            ],
+            "probeServer": {
+                "port": 8550
+            }
         },
         "mongoProcessor": {
             "topic": "backbeat-ingestion",
@@ -80,6 +83,9 @@
                     "jitter": 0.1,
                     "factor": 1.5
                 }
+            },
+            "probeServer": {
+                "port": 8551
             }
         },
         "replication": {
@@ -197,7 +203,10 @@
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
                 "cronRule": "0 */5 * * * *",
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8552
+                }
             },
             "bucketProcessor": {
                 "groupId": "backbeat-lifecycle-bucket-processor-group",
@@ -211,7 +220,10 @@
                         "factor": 1.5
                     }
                 },
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8553
+                }
             },
             "objectProcessor": {
                 "groupId": "backbeat-lifecycle-object-processor-group",
@@ -225,7 +237,10 @@
                         "factor": 1.5
                     }
                 },
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8554
+                }
             },
             "rules": {
                 "expiration": {
@@ -261,6 +276,9 @@
                     }
                 },
                 "concurrency": 10
+            },
+            "probeServer": {
+                "port": 8555
             }
         },
         "workflowEngineDataSource": {

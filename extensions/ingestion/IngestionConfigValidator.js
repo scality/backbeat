@@ -1,4 +1,5 @@
 const joi = require('@hapi/joi');
+const { probeServerJoi } = require('../../lib/config/configItems.joi.js');
 
 const joiSchema = {
     auth: joi.object({
@@ -10,6 +11,7 @@ const joiSchema = {
     cronRule: joi.string().default('*/5 * * * * *'),
     maxParallelReaders: joi.number().greater(0).default(5),
     sources: joi.array().required(),
+    probeServer: probeServerJoi.default(),
 };
 
 function configValidator(backbeatConfig, extConfig) {
