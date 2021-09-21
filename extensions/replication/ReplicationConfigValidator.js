@@ -1,7 +1,7 @@
 const fs = require('fs');
 const joi = require('@hapi/joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
-        retryParamsJoi } =
+        retryParamsJoi, probeServerJoi } =
     require('../../lib/config/configItems.joi.js');
 
 const qpRetryJoi = joi.object({
@@ -64,19 +64,13 @@ const joiSchema = {
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
-        probeServer: joi.object({
-            bindAddress: joi.string().default('localhost'),
-            port: joi.number().required(),
-        }),
+        probeServer: probeServerJoi.default(),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
-        probeServer: joi.object({
-            bindAddress: joi.string().default('localhost'),
-            port: joi.number().required(),
-        }),
+        probeServer: probeServerJoi.default(),
     },
 };
 

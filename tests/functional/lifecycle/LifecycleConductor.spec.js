@@ -88,6 +88,9 @@ const baseLCConfig = {
         backlogControl: {
             enabled: false,
         },
+        probeServer: {
+            port: 8552,
+        },
     },
     rules: {
         expiration: {

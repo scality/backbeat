@@ -24,10 +24,11 @@
         "mongo": {
             "logName": "s3-recordlog",
             "replicaSetHosts": "localhost:27018"
+        },
+        "probeServer": {
+            "bindAddress": "localhost",
+            "port": 4042
         }
-    },
-    "kafka": {
-        "hosts": "127.0.0.1:9092"
     },
     "extensions": {
         "ingestion": {
@@ -79,7 +80,10 @@
                         "secretKey": "o7Q9X25qRv9KNYUewzlXAmfUmnOycFT9yTdgfk5IMntV8kEg4+mqEYl3QhAXyrCw22vbxvSzgdtjh+YhcZBIC6BL/AWurIh5MZyktbaSQabM3ZobTGuEet+qjog0I6Dr9tjHhxM1tfcOdN5Hy2lQk9LTW5uj2/7rtF6jLn5E1HLEn25sAAy60qPqMjBt+pQ0l6Y4JQ6dymZFCv/lZluEQ2mCdH0WlfDh4ZLcNC0KslwjQVJA4kPS5ydE88bB5m5BMscvzMeeRWkObHwdxnu6xN/YJqXvsx05NIC/G4ioeKdoQrBfuRvhlU1MhoCB/+yESdbVRLoM1MppEKkxQbQLTw=="
                     }
                 }
-            ]
+            ],
+            "probeServer": {
+                "port": 8550
+            }
         },
         "mongoProcessor": {
             "topic": "backbeat-test-ingestion",
@@ -93,11 +97,12 @@
                     "jitter": 0.1,
                     "factor": 1.5
                 }
+            },
+            "probeServer": {
+                "port": 8551
             }
         },
         "replication": {
-            "topic": "backbeat-test-replication",
-            "replicationStatusTopic": "backbeat-test-replication-status",
             "monitorReplicationFailures": true,
             "monitorReplicationFailureExpiryTimeS": 86400,
             "source": {
@@ -125,20 +130,25 @@
                     "account": "bart"
                 }
             },
-            "queueProcessor": {
-                "groupId": "backbeat-replication-group"
-            },
             "topic": "backbeat-replication",
             "dataMoverTopic": "backbeat-data-mover",
             "replicationStatusTopic": "backbeat-replication-status",
             "replicationFailedTopic": "backbeat-replication-failed",
             "queueProcessor": {
                 "groupId": "backbeat-test-replication-group",
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4043
+                }
             },
             "replicationStatusProcessor": {
                 "groupId": "backbeat-test-replication-group",
-                "concurrency": 10
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4045
+                }
             }
         },
         "lifecycle": {
@@ -146,7 +156,44 @@
             "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
             "objectTasksTopic": "backbeat-test-dummy-object-task",
             "conductor": {
-                "cronRule": "0 */5 * * * *"
+                "cronRule": "0 */5 * * * *",
+                "probeServer": {
+                    "port": 8552
+                }
+            },
+            "bucketProcessor": {
+                "groupId": "backbeat-lifecycle-bucket-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8553
+                }
+            },
+            "objectProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8554
+                }
             },
             "rules": {
                 "expiration": {
@@ -169,6 +216,9 @@
             "auth": {
                 "type": "account",
                 "account": "bart"
+            },
+            "probeServer": {
+                "port": 8555
             }
         }
     },
