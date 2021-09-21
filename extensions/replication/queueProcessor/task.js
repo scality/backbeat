@@ -245,7 +245,7 @@ function initAndStart(zkClient) {
                                 res.end(message);
                                 return undefined;
                             }
-                            sendSuccess();
+                            sendSuccess(res, log);
                             return undefined;
                         }
                     );
@@ -255,7 +255,7 @@ function initAndStart(zkClient) {
                         // TODO: implement metrics route for multi site setup, BB-23
                         probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
                             log.info('queue processor metrics route not implemented');
-                            sendSuccess();
+                            sendSuccess(res, log);
                         });
                     }
                 }

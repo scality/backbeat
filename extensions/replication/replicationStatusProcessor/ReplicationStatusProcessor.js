@@ -366,7 +366,7 @@ class ReplicationStatusProcessor {
             return undefined;
         }
 
-        sendSuccess();
+        sendSuccess(res, log);
         return undefined;
     }
 
