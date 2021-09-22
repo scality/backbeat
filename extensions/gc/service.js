@@ -6,7 +6,7 @@ const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
-const { sendSuccess, sendError } = require('arsenal').network.probe.ProbeServer;
+const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 
 const GarbageCollector = require('./GarbageCollector');
 const { startProbeServer } = require('../../lib/util/probe');
