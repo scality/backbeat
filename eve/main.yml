@@ -123,10 +123,10 @@ stages:
 # It will also allow us to pull it and rename it when performing a release.
   docker-build:
     worker: &docker_worker
-      type: kube_pod
-      path: eve/workers/docker/pod.yaml
-      images:
-        worker: eve/workers/docker
+      type: openstack
+      image: focal-server-cloudimg-amd64_2021-04-29
+      flavor: m1.large
+      path: eve/workers/docker
     steps:
       - Git: *git
       - ShellCommand: *wait_docker_daemon
@@ -140,7 +140,7 @@ stages:
           haltOnFailure: true
       - ShellCommand:
           name: push docker image into the development namespace
-          command: docker push ${DEVELOPMENT_DOCKER_IMAGE_NAME}
+          command: docker push "${DEVELOPMENT_DOCKER_IMAGE_NAME}:%(prop:commit_short_revision)s"
           haltOnFailure: true
           env: *docker_env
 
