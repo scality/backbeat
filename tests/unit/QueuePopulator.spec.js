@@ -48,11 +48,22 @@ describe('QueuePopulator', () => {
 
     it('should stop processing old raft sessions after provisioning update', done => {
         const logReader1 = new MockLogReader(qp, 'raft_1');
+        let closeCalled = false;
+        logReader1.close = cb => {
+            assert(!closeCalled);
+            closeCalled = true;
+            process.nextTick(cb);
+        };
         qp.logReadersUpdate = [logReader1];
         qp.processAllLogEntries({}, err => {
             assert.ifError(err);
             assert.strictEqual(logReader1.processLogEntriesCallCount, 2);
-            done();
+            assert(!closeCalled);
+            qp.processAllLogEntries({}, err => {
+                assert.ifError(err);
+                assert(closeCalled);
+                done();
+            });
         });
     });
 
