@@ -13,7 +13,7 @@ const mConfig = config.metrics;
 const rConfig = config.redis;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 const { startProbeServer } = require('../lib/util/probe');
-const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 const log = new werelogs.Logger('Backbeat:QueuePopulator');
 
@@ -61,6 +61,7 @@ async.waterfall([
         if (probeServer !== undefined) {
             probeServer.addHandler(
                 DEFAULT_LIVE_ROUTE,
+                DEFAULT_READY_ROUTE,
                 (res, log) => queuePopulator.handleLiveness(res, log)
             );
             // TODO: set this variable during deployment

@@ -22,7 +22,7 @@ const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
 const { startProbeServer } = require('../../../lib/util/probe');
-const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
 
@@ -225,7 +225,7 @@ function initAndStart(zkClient) {
                 if (probeServer !== undefined) {
                     probeServer.addHandler(
                         // for backwards compatibility we also include readiness
-                        [DEFAULT_LIVE_ROUTE, '/_/health/readiness'],
+                        [DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, '/_/health/readiness'],
                         (res, log) => {
                             // take all our processors and create one liveness response
                             let responses = [];
