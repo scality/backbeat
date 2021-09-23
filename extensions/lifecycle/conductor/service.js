@@ -49,7 +49,7 @@ function handleLiveness(res, log) {
  *
  * @param {http.HTTPServerResponse} res - HTTP Response to respond with
  * @param {Logger} log - Logger
- * @returns {string} response
+ * @returns {undefined} response
  */
 function handleMetrics(res, log) {
     log.debug('metrics requested');

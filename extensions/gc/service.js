@@ -5,8 +5,10 @@ const werelogs = require('werelogs');
 const {
     DEFAULT_LIVE_ROUTE,
     DEFAULT_READY_ROUTE,
+    DEFAULT_METRICS_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const GarbageCollector = require('./GarbageCollector');
 const { startProbeServer } = require('../../lib/util/probe');
@@ -44,6 +46,21 @@ const logger = new werelogs.Logger('Backbeat:GC:service');
     }
 }
 
+/**
+ * Handle ProbeServer metrics
+ *
+ * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+ * @param {Logger} log - Logger
+ * @returns {undefined}
+ */
+ function handleMetrics(res, log) {
+    log.debug('metrics requested');
+    res.writeHead(200, {
+        'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+    });
+    res.end(ZenkoMetrics.asPrometheus());
+}
+
 function initAndStart() {
     initManagement({
         serviceName: 'gc',
@@ -63,6 +80,9 @@ function initAndStart() {
                 // following the same pattern as other extensions, where liveness
                 // and readiness are handled by the same handler
                 probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                // retaining the old route and adding support to new route, until
+                // metrics handling is consolidated
+                probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
             }
             garbageCollector.start(err => {
                 if (err) {
