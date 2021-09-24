@@ -18,6 +18,9 @@ const {
     metricsTypeProcessed,
     replicationStages,
 } = require('../constants');
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+
+const errorAlreadyCompleted = {};
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
@@ -309,6 +312,49 @@ class ReplicateObject extends BackbeatTask {
                 destEntry.setOwnerDisplayName(accountAttr.displayName);
                 return cb();
             });
+    }
+
+    _refreshSourceEntry(sourceEntry, log, cb) {
+        const params = {
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+        };
+        return this.backbeatSource.getMetadata(params, (err, blob) => {
+            if (err) {
+                err.origin = 'source';
+                log.error('error getting metadata blob from S3', {
+                    method: 'ReplicateObject._refreshSourceEntry',
+                    error: err,
+                });
+                return cb(err);
+            }
+            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
+            if (parsedEntry.error) {
+                log.error('error parsing metadata blob', {
+                    error: parsedEntry.error,
+                    method: 'ReplicateObject._refreshSourceEntry',
+                });
+                return cb(errors.InternalError.
+                    customizeDescription('error parsing metadata blob'));
+            }
+            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+            return cb(null, refreshedEntry);
+        });
+    }
+
+    _checkSourceReplication(sourceEntry, log, cb) {
+        this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
+            if (err) {
+                return cb(err);
+            }
+            const status = refreshedEntry.getReplicationSiteStatus(this.site);
+            if (status === 'COMPLETED') {
+                return cb(errorAlreadyCompleted);
+            }
+            return cb();
+        });
     }
 
     _getAndPutData(sourceEntry, destEntry, log, cb) {
@@ -638,6 +684,14 @@ class ReplicateObject extends BackbeatTask {
             },
             // Get data from source bucket and put it on the target bucket
             next => {
+                if (!mdOnly &&
+                    sourceEntry.getContentLength() / 1000000 >=
+                    this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB) {
+                    return this._checkSourceReplication(sourceEntry, log, next);
+                }
+                return next();
+            },
+            next => {
                 if (!mdOnly) {
                     return this._getAndPutData(sourceEntry, destEntry, log,
                         next);
@@ -698,6 +752,12 @@ class ReplicateObject extends BackbeatTask {
                     origin: err.origin,
                     error: err.description,
                 });
+            return done();
+        }
+        if (err === errorAlreadyCompleted) {
+            log.warn('replication skipped: ' +
+                     'source object version already COMPLETED',
+                     { entry: sourceEntry.getLogInfo() });
             return done();
         }
         if (err.ObjNotFound || err.code === 'ObjNotFound') {
