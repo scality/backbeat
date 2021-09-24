@@ -59,6 +59,7 @@ const joiSchema = {
                 port: joi.number().required(),
             })
         ),
+        sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
