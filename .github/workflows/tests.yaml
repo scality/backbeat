@@ -1,5 +1,5 @@
 ---
-name: pre-merge
+name: tests
 
 env:
   GINKGO_VERSION: v1.15.2
@@ -77,11 +77,32 @@ jobs:
       with:
         node-version: '10'
         cache: yarn
-    - run: yarn install --frozen-lockfile
-    - run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
-    - run: yarn run --silent lint_md
-    - run: yarn run --silent lint
-    - run: yarn test
-    - run: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
+    - name: Install node dependencies
+      run: yarn install --frozen-lockfile
+    - name: Install ginkgo
+      run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
+    - name: Lint markdown
+      run: yarn run --silent lint_md
+    - name: Lint Javascript
+      run: yarn run --silent lint
+    - name: Run unit tests
+      run: yarn test
+    - name: Run bucket scanner unit tests
+      run: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
-    - run: bash ./eve/workers/unit_and_feature_tests/run_server_tests.bash ft_test:api:routes
+    - name: Run backbeat routes test
+      run: bash .github/scripts/run_server_tests.bash ft_test:api:routes
+    - name: run backbeat retry tests with account authentication
+      run: bash .github/scripts/run_server_tests.bash ft_test:api:retry
+      env:
+        CI_AUTH_TYPE: "account"
+        BACKBEAT_CONFIG_FILE: "tests/config.json"
+    - name: run backbeat retry tests with role authentication
+      run: bash .github/scripts/run_server_tests.bash ft_test:api:retry
+      env:
+        CI_AUTH_TYPE: "role"
+        BACKBEAT_CONFIG_FILE: "tests/config.roleAuth.json"
+    - name: run backbeat lib feature tests
+      run: yarn run ft_test:lib
+    - name: run backbeat replication feature tests
+      run: yarn run ft_test:replication
