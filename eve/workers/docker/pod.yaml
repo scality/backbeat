@@ -4,6 +4,11 @@ kind: Pod
 metadata:
   name: worker
 spec:
+  initContainers:
+    - name: tmp-fix
+      image: busybox:1.28
+      command: ['/bin/sh', '-c']
+      args: ['echo success']
   containers:
     - name: build-worker
       image: "{{ images.worker }}"
