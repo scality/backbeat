@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.2.9",
+  "version": "8.2.10",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -74,4 +74,3 @@
     "zookeeper-mock": "^1.2.0"
   }
 }
-
