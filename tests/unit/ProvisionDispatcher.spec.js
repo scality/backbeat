@@ -98,6 +98,31 @@ function testDispatch() {
         }, true, 5000);
     });
 
+    it('should not notify if provisions have not changed', done => {
+        clients[0] = new ProvisionDispatcher(
+            zkConf, zk);
+        let times = 0;
+        clients[0].subscribe((err, items) => {
+            assert.ifError(err);
+            if (times === 0) {
+                // first time we shall have all provisions
+                assert(items.length === 8);
+                // simulate a watcher event loss
+                const myPath =
+                      clients[0]._client._basePath +
+                      clients[0]._getMyPath();
+                const result = clients[0]._client._getZNode(myPath);
+                assert.ifError(result.err);
+                result.parent.children[result.baseName].emitter.removeAllListeners();
+                // leave enough time for the checker to trigger and make sure it does not notify
+                setTimeout(done, 6000);
+            } else {
+                assert.fail(`unexpected provisioning update received: ${items}`);
+            }
+            times++;
+        }, true, 5000);
+    });
+
     it('should spread the load across participants with 10 participants',
     done => {
         const subscriptionLists = [];
@@ -153,7 +178,7 @@ function testDispatch() {
             remainingSortedLists.sort();
             assert.deepStrictEqual(remainingSortedLists,
                 [['0'], ['1'], ['2'], ['3'],
-                                    ['4'], ['5'], ['6'], ['7']]);
+                 ['4'], ['5'], ['6'], ['7']]);
             // end of test
             done();
         }
