@@ -5,10 +5,17 @@ metadata:
   name: worker
 spec:
   initContainers:
-    - name: tmp-fix
-      image: busybox:1.28
-      command: ['/bin/sh', '-c']
-      args: ['echo success']
+  - name: workaround
+    image: k8s.gcr.io/build-image/debian-iptables-amd64:buster-v1.6.7
+    command:
+    - sh
+    - -c
+    - "iptables -t mangle -A POSTROUTING -p tcp --tcp-flags SYN,RST SYN -j TCPMSS --clamp-mss-to-pmtu"
+    securityContext:
+      capabilities:
+        add:
+        - NET_ADMIN
+      privileged: true
   containers:
     - name: build-worker
       image: "{{ images.worker }}"
