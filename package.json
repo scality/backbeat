@@ -35,7 +35,7 @@
     "backo": "^1.1.0",
     "bucketclient": "scality/bucketclient#36e1279",
     "commander": "^2.11.0",
-    "node-rdkafka": "2.2.0",
+    "node-rdkafka": "2.10.1",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^12.0.0",
