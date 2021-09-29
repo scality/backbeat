@@ -224,7 +224,9 @@ class LifecycleObjectProcessor extends EventEmitter {
         const client = this.backbeatClients[clientId];
 
         if (client) {
-            return client;
+            return new BackbeatMetadataProxy(
+            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
+            .setBackbeatClient(client);
         }
 
         this.backbeatClients[clientId] = createBackbeatClient({
@@ -235,7 +237,8 @@ class LifecycleObjectProcessor extends EventEmitter {
             agent: this.s3Agent,
         });
 
-        return new BackbeatMetadataProxy(this._lcConfig)
+        return new BackbeatMetadataProxy(
+            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
             .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
