@@ -18,6 +18,9 @@ const {
     metricsTypeProcessed,
     replicationStages,
 } = require('../constants');
+const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
+
+const errorAlreadyCompleted = {};
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
