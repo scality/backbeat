@@ -16,6 +16,7 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
 const { authTypeAssumeRole } = require('../../../lib/constants');
+const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 
 // TODO: test inactive credential deletion
 const DELETE_INACTIVE_CREDENTIALS_INTERVAL = 1000 * 60 * 30; // 30m
@@ -82,6 +83,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.s3Clients = {};
         this.backbeatClients = {};
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
+        this.retryWrapper = new BackbeatTask();
     }
 
     _setupConsumer(cb) {
@@ -285,7 +287,13 @@ class LifecycleObjectProcessor extends EventEmitter {
                              actionEntry.getLogInfo());
             return process.nextTick(done);
         }
-        return task.processActionEntry(actionEntry, done);
+        return this.retryWrapper.retry({
+            actionDesc: 'process lifecycle object entry',
+            logFields: actionEntry.getLogInfo(),
+            actionFunc: done => task.processActionEntry(actionEntry, done),
+            shouldRetryFunc: err => err.retryable,
+            log: this._log,
+        }, done);
     }
 
     getStateVars() {
