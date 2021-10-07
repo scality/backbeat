@@ -873,6 +873,7 @@ class LifecycleTask extends BackbeatTask {
     _getTransitionActionEntry(params, objectMD, log, cb) {
         const entry = ReplicationAPI.createCopyLocationAction({
             bucketName: params.bucket,
+            owner: params.owner,
             objectKey: params.objectKey,
             versionId: params.encodedVersionId,
             eTag: params.eTag,
@@ -941,6 +942,7 @@ class LifecycleTask extends BackbeatTask {
             } else {
                 log.debug('transition rule applied', {
                     method: 'LifecycleTask._applyTransitionRule',
+                    owner: params.owner,
                     bucket: params.bucket,
                     key: params.objectKey,
                     site: params.site,
@@ -1146,6 +1148,7 @@ class LifecycleTask extends BackbeatTask {
             }
             if (rules.Transition) {
                 this._applyTransitionRule({
+                    owner: bucketData.target.owner,
                     bucket: bucketData.target.bucket,
                     objectKey: obj.Key,
                     eTag: obj.ETag,
@@ -1256,6 +1259,7 @@ class LifecycleTask extends BackbeatTask {
         }
         if (rules.Transition) {
             this._applyTransitionRule({
+                owner: bucketData.target.owner,
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
                 eTag: version.ETag,

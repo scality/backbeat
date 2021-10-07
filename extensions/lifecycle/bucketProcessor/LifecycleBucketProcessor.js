@@ -184,7 +184,9 @@ class LifecycleBucketProcessor {
         const client = this.backbeatClients[clientId];
 
         if (client) {
-            return client;
+            return new BackbeatMetadataProxy(
+                `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._lcConfig.auth)
+                .setBackbeatClient(client);
         }
 
         this.backbeatClients[clientId] = createBackbeatClient({
@@ -195,7 +197,8 @@ class LifecycleBucketProcessor {
             agent: this.s3Agent,
         });
 
-        return new BackbeatMetadataProxy(this._lcConfig)
+        return new BackbeatMetadataProxy(
+            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._lcConfig.auth)
             .setBackbeatClient(this.backbeatClients[clientId]);
     }
 

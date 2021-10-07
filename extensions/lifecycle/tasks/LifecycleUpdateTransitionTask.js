@@ -24,7 +24,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
         const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
         if (!backbeatClient) {
-            this.log.error('failed to get backbeat client', {
+            log.error('failed to get backbeat client', {
                 canonicalId,
                 accountId,
             });
@@ -73,7 +73,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
         const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
         if (!backbeatClient) {
-            this.log.error('failed to get backbeat client', {
+            log.error('failed to get backbeat client', {
                 canonicalId,
                 accountId,
             });

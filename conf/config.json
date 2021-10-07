@@ -38,7 +38,7 @@
             "database": "metadata"
         },
         "probeServer": {
-            "bindAddress": "localhost",
+            "bindAddress": "0.0.0.0",
             "port": 4042
         }
     },
@@ -68,6 +68,7 @@
                 }
             ],
             "probeServer": {
+                "bindAddress": "0.0.0.0",
                 "port": 8550
             }
         },
@@ -85,6 +86,7 @@
                 }
             },
             "probeServer": {
+                "bindAddress": "0.0.0.0",
                 "port": 8551
             }
         },
@@ -205,6 +207,7 @@
                 "cronRule": "0 */5 * * * *",
                 "concurrency": 10,
                 "probeServer": {
+                    "bindAddress": "0.0.0.0",
                     "port": 8552
                 }
             },
@@ -222,6 +225,7 @@
                 },
                 "concurrency": 10,
                 "probeServer": {
+                    "bindAddress": "0.0.0.0",
                     "port": 8553
                 }
             },
@@ -239,6 +243,7 @@
                 },
                 "concurrency": 10,
                 "probeServer": {
+                    "bindAddress": "0.0.0.0",
                     "port": 8554
                 }
             },
@@ -278,6 +283,7 @@
                 "concurrency": 10
             },
             "probeServer": {
+                "bindAddress": "0.0.0.0",
                 "port": 8555
             }
         },
