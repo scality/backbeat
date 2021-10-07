@@ -819,6 +819,10 @@ class CopyLocationTask extends BackbeatTask {
             // no result requested, we may commit immediately
             return { committable: true };
         }
+        log.debug('sending to topic', {
+            topic: actionEntry.getResultsTopic(),
+            message: actionEntry.toKafkaMessage(),
+        });
         this.replicationStatusProducer.sendToTopic(
             actionEntry.getResultsTopic(),
             [{ message: actionEntry.toKafkaMessage() }], deliveryErr => {

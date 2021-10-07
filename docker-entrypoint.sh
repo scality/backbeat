@@ -6,6 +6,35 @@ set -e
 # modifying config.json
 JQ_FILTERS_CONFIG="."
 
+if [[ "$LIVENESS_PROBE_PORT" ]]; then
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .queuePopulator.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.ingestion.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.ingestion.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.mongoProcessor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.mongoProcessor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.queueProcessor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.queueProcessor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.replicationStatusProcessor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.replication.replicationStatusProcessor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.conductor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.conductor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.bucketProcessor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.bucketProcessor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.objectProcessor.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.lifecycle.objectProcessor.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.gc.probeServer.bindAddress=\"0.0.0.0\""
+    JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .extensions.gc.probeServer.port=\"$LIVENESS_PROBE_PORT\""
+fi
+
 if [[ "$LOG_LEVEL" ]]; then
     if [[ "$LOG_LEVEL" == "info" || "$LOG_LEVEL" == "debug" || "$LOG_LEVEL" == "trace" ]]; then
         JQ_FILTERS_CONFIG="$JQ_FILTERS_CONFIG | .log.logLevel=\"$LOG_LEVEL\""
