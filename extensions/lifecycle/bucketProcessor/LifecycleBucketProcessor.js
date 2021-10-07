@@ -7,6 +7,7 @@ const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
+const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
@@ -90,12 +91,19 @@ class LifecycleBucketProcessor {
         this.s3Clients = {};
         this.backbeatClients = {};
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
+        this.retryWrapper = new BackbeatTask();
 
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
             const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
-            return task.processBucketEntry(
-                rules, value, s3target, backbeatMetadataProxy, cb);
+            return this.retryWrapper.retry({
+                actionDesc: 'process bucket lifecycle entry',
+                logFields: { value },
+                actionFunc: done => task.processBucketEntry(
+                    rules, value, s3target, backbeatMetadataProxy, done),
+                shouldRetryFunc: err => err.retryable,
+                log: this._log,
+            }, cb);
         }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
@@ -281,7 +289,7 @@ class LifecycleBucketProcessor {
         }
 
         const params = { Bucket: bucket };
-        return s3.getBucketLifecycleConfiguration(params, (err, config) => {
+        return this._getBucketLifecycleConfiguration(s3, params, (err, config) => {
             if (err) {
                 if (err.code === 'NoSuchLifecycleConfiguration') {
                     this._log.debug('skipping non-lifecycled bucket', { bucket });
@@ -313,6 +321,23 @@ class LifecycleBucketProcessor {
                 backbeatMetadataProxy,
             }, cb);
         });
+    }
+
+    /**
+     * Call AWS.S3.GetBucketLifecycleConfiguration in a retry wrapper.
+     * @param {AWS.S3} s3 - the s3 client
+     * @param {object} params - the parameters to pass to getBucketLifecycleConfiguration
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _getBucketLifecycleConfiguration(s3, params, cb) {
+        return this.retryWrapper.retry({
+            actionDesc: 'get bucket lifecycle',
+            logFields: { params },
+            actionFunc: done => s3.getBucketLifecycleConfiguration(params, done),
+            shouldRetryFunc: err => err.retryable,
+            log: this._log,
+        }, cb);
     }
 
     /**
