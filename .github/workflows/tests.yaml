@@ -66,6 +66,10 @@ jobs:
         ports:
         - 2181:2181
         - 9092:9092
+        env:
+          ADVERTISED_HOST: "localhost"
+          ADVERTISED_PORT: 9092
+
     steps:
     - name: Checkout
       uses: actions/checkout@v2
