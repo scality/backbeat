@@ -18,7 +18,7 @@ Tagged versions of backbeat will be stored in the production namespace.
 ## How to pull docker images
 
 ```sh
-docker pull registry.scality.com/backbeat-dev/backbeat:<short SHA-1 commit hash>
+docker pull registry.scality.com/backbeat-dev/backbeat:<SHA-1 commit hash>
 docker pull registry.scality.com/backbeat/backbeat:<tag>
 ```
 
@@ -32,9 +32,6 @@ To release a production image:
 
 * Create a PR and merge the `package.json` change.
 
-* Tag the repository using the same tag.
+* Trigger the [Release Workflow] via the workflow dispatch function. Fill the form information, select the desired branch and run it.
 
-* With the below parameters, [force a build](https://eve.devsca.com/github/scality/backbeat/#/builders/bootstrap/force/force):
-  * A given branch that ideally match the tag.
-  * Use the `release` stage.
-  * Extra property with name as `tag` and the value as the actual tag.
+[Release Workflow]: https://github.com/scality/backbeat/actions/workflows/release.yaml
