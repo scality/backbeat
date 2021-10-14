@@ -69,7 +69,10 @@ jobs:
         env:
           ADVERTISED_HOST: "localhost"
           ADVERTISED_PORT: 9092
-
+      mongo:
+        image: scality/ci-mongo:3.6.8
+        ports:
+        - 27017:27017
     steps:
     - name: Checkout
       uses: actions/checkout@v2
