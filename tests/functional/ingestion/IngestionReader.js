@@ -132,16 +132,19 @@ describe('ingestion reader tests with mock', function fD() {
                 });
             },
             next => {
+                console.log('subscribing'); // eslint-disable-line
                 consumer.subscribe([testConfig.extensions.ingestion.topic]);
                 setTimeout(next, 2000);
             },
             next => this.db.createCollection('PENSIEVE', err => {
                 assert.ifError(err);
+                console.log('created collection'); // eslint-disable-line
                 return next();
             }),
             next => {
                 this.m = this.db.collection('PENSIEVE');
                 this.m.insertOne(dummyPensieveCredentials, {});
+                console.log('inserted creds'); // eslint-disable-line
                 return next();
             },
             next => {
@@ -149,10 +152,12 @@ describe('ingestion reader tests with mock', function fD() {
                     _id: 'configuration/overlay-version',
                     value: 6,
                 }, {});
+                console.log('inserted overlay version'); // eslint-disable-line
                 return next();
             },
             next => {
                 this.m.insertOne(dummySSHKey, {});
+                console.log('inserted dummy ssh key'); // eslint-disable-line
                 return next();
             },
             next => {
@@ -161,15 +166,18 @@ describe('ingestion reader tests with mock', function fD() {
                 zkClient.once('error', cbOnce);
                 zkClient.once('ready', () => {
                     zkClient.removeAllListeners('error');
+                    console.log('zk ready'); // eslint-disable-line
                     return cbOnce();
                 });
             },
             next => initManagement(testConfig, next),
             next => {
+                console.log('init management'); // eslint-disable-line
                 const metadataMock = new MetadataMock();
                 httpServer = http.createServer(
                     (req, res) => metadataMock.onRequest(req, res))
                     .listen(testPort);
+                console.log('http created'); // eslint-disable-line
                 next();
             }
         ], done);

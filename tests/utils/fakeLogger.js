@@ -1,8 +1,8 @@
 const fakeLogger = {
     trace: () => {},
-    error: () => {},
-    info: () => {},
-    debug: () => {},
+    error: console.error, // eslint-disable-line no-console
+    info: console.log,    // eslint-disable-line no-console
+    debug: console.debug, // eslint-disable-line no-console
     getSerializedUids: () => {},
     end: () => fakeLogger,
 };

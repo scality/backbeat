@@ -10,17 +10,18 @@ const MockAPI = require('../utils/pauseResumeUtils/mockAPI');
 
 // Configs
 const Config = require('../../../lib/Config');
+const testConfig = require('../../config.json');
 const { zookeeperNamespace } =
     require('../../../extensions/ingestion/constants');
 
 const redisConfig = {
-    host: Config.redis.host,
-    port: Config.redis.port,
+    host: testConfig.redis.host,
+    port: testConfig.redis.port,
 };
-const kafkaConfig = Config.kafka;
-const zkConfig = Config.zookeeper;
-const ingestionConfig = Config.extensions.ingestion;
-const s3Config = Config.s3;
+const kafkaConfig = testConfig.kafka;
+const zkConfig = testConfig.zookeeper;
+const ingestionConfig = testConfig.extensions.ingestion;
+const s3Config = testConfig.s3;
 
 // Constants
 const ZK_TEST_STATE_PATH = `${zookeeperNamespace}/state`;
