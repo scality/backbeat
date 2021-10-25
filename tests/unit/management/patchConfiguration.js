@@ -11,7 +11,8 @@ const fakeLogger = require('../../utils/fakeLogger');
 
 const managementDatabaseName = 'PENSIEVE';
 const tokenConfigurationKey = 'auth/zenko/remote-management-token';
-const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIIEowIBAAKCAQEAj13sSYE40lAX2qpBvfdGfcSVNtBf8i5FH+E8FAhORwwPu+2S\r\n3yBQbgwHq30WWxunGb1NmZL1wkVZ+vf12DtxqFRnMA08LfO4oO6oC4V8XfKeuHyJ\r\n1qlaKRINz6r9yDkTHtwWoBnlAINurlcNKgGD5p7D+G26Chbr/Oo0ZwHula9DxXy6\r\neH8/bJ5/BynyNyyWRPoAO+UkUdY5utkFCUq2dbBIhovMgjjikf5p2oWqnRKXc+JK\r\nBegr6lSHkkhyqNhTmd8+wA+8Cace4sy1ajY1t5V4wfRZea5vwl/HlyyKodvHdxng\r\nJgg6H61JMYPkplY6Gr9OryBKEAgq02zYoYTDfwIDAQABAoIBAAuDYGlavkRteCzw\r\nRU1LIVcSRWVcgIgDXTu9K8T0Ec0008Kkxomyn6LmxmroJbZ1VwsDH8s4eRH73ckA\r\nxrZxt6Pr+0lplq6eBvKtl8MtGhq1VDe+kJczjHEF6SQHOFAu/TEaPZrn2XMcGvRX\r\nO1BnRL9tepFlxm3u/06VRFYNWqqchM+tFyzLu2AuiuKd5+slSX7KZvVgdkY1ErKH\r\ngB75lPyhPb77C/6ptqUisVMSO4JhLhsD0+ekDVY982Sb7KkI+szdWSbtMx9Ek2Wo\r\ntXwJz7I8T7IbODy9aW9G+ydyhMDFmaEYIaDVFKJj5+fluNza3oQ5PtFNVE50GQJA\r\nsisGqfECgYEAwpkwt0KpSamSEH6qknNYPOwxgEuXWoFVzibko7is2tFPvY+YJowb\r\n68MqHIYhf7gHLq2dc5Jg1TTbGqLECjVxp4xLU4c95KBy1J9CPAcuH4xQLDXmeLzP\r\nJ2YgznRocbzAMCDAwafCr3uY9FM7oGDHAi5bE5W11xWx+9MlFExL3JkCgYEAvJp5\r\nf+JGN1W037bQe2QLYUWGszewZsvplnNOeytGQa57w4YdF42lPhMz6Kc/zdzKZpN9\r\njrshiIDhAD5NCno6dwqafBAW9WZl0sn7EnlLhD4Lwm8E9bRHnC9H82yFuqmNrzww\r\nzxBCQogJISwHiVz4EkU48B283ecBn0wT/fAa19cCgYEApKWsnEHgrhy1IxOpCoRh\r\nUhqdv2k1xDPN/8DUjtnAFtwmVcLa/zJopU/Zn4y1ZzSzjwECSTi+iWZRQ/YXXHPf\r\nl92SFjhFW92Niuy8w8FnevXjF6T7PYiy1SkJ9OR1QlZrXc04iiGBDazLu115A7ce\r\nanACS03OLw+CKgl6Q/RR83ECgYBCUngDVoimkMcIHHt3yJiP3ikeAKlRnMdJlsa0\r\nXWVZV4hCG3lDfRXsnEgWuimftNKf+6GdfYSvQdLdiQsCcjT5A4uLsQTByv5nf4uA\r\n1ZKOsFrmRrARzxGXhLDikvj7yP//7USkq+0BBGFhfuAvl7fMhPceyPZPehqB7/jf\r\nxX1LBQKBgAn5GgSXzzS0e06ZlP/VrKxreOHa5Z8wOmqqYQ0QTeczAbNNmuITdwwB\r\nNkbRqpVXRIfuj0BQBegAiix8om1W4it0cwz54IXBwQULxJR1StWxj3jo4QtpMQ+z\r\npVPdB1Ilb9zPV1YvDwRfdS1xsobzznAx56ecsXduZjs9mF61db8Q\r\n-----END RSA PRIVATE KEY-----'; // eslint-disable-line
+const privateKey = '-----BEGIN RSA PRIVATE KEY-----\r\nMIIEowIBAAKCAQEAj13sSYE40lAX2qpBvfdGfcSVNtBf8i5FH+E8FAhORwwPu+2S\r\n3yBQbgwHq30WWxunGb1NmZL1wkVZ+vf12DtxqFRnMA08LfO4oO6oC4V8XfKeuHyJ\r\n1qlaKRINz6r9yDkTHtwWoBnlAINurlcNKgGD5p7D+G26Chbr/Oo0ZwHula9DxXy6\r\neH8/bJ5/BynyNyyWRPoAO+UkUdY5utkFCUq2dbBIhovMgjjikf5p2oWqnRKXc+JK\r\nBegr6lSHkkhyqNhTmd8+wA+8Cace4sy1ajY1t5V4wfRZea5vwl/HlyyKodvHdxng\r\nJgg6H61JMYPkplY6Gr9OryBKEAgq02zYoYTDfwIDAQABAoIBAAuDYGlavkRteCzw\r\nRU1LIVcSRWVcgIgDXTu9K8T0Ec0008Kkxomyn6LmxmroJbZ1VwsDH8s4eRH73ckA\r\nxrZxt6Pr+0lplq6eBvKtl8MtGhq1VDe+kJczjHEF6SQHOFAu/TEaPZrn2XMcGvRX\r\nO1BnRL9tepFlxm3u/06VRFYNWqqchM+tFyzLu2AuiuKd5+slSX7KZvVgdkY1ErKH\r\ngB75lPyhPb77C/6ptqUisVMSO4JhLhsD0+ekDVY982Sb7KkI+szdWSbtMx9Ek2Wo\r\ntXwJz7I8T7IbODy9aW9G+ydyhMDFmaEYIaDVFKJj5+fluNza3oQ5PtFNVE50GQJA\r\nsisGqfECgYEAwpkwt0KpSamSEH6qknNYPOwxgEuXWoFVzibko7is2tFPvY+YJowb\r\n68MqHIYhf7gHLq2dc5Jg1TTbGqLECjVxp4xLU4c95KBy1J9CPAcuH4xQLDXmeLzP\r\nJ2YgznRocbzAMCDAwafCr3uY9FM7oGDHAi5bE5W11xWx+9MlFExL3JkCgYEAvJp5\r\nf+JGN1W037bQe2QLYUWGszewZsvplnNOeytGQa57w4YdF42lPhMz6Kc/zdzKZpN9\r\njrshiIDhAD5NCno6dwqafBAW9WZl0sn7EnlLhD4Lwm8E9bRHnC9H82yFuqmNrzww\r\nzxBCQogJISwHiVz4EkU48B283ecBn0wT/fAa19cCgYEApKWsnEHgrhy1IxOpCoRh\r\nUhqdv2k1xDPN/8DUjtnAFtwmVcLa/zJopU/Zn4y1ZzSzjwECSTi+iWZRQ/YXXHPf\r\nl92SFjhFW92Niuy8w8FnevXjF6T7PYiy1SkJ9OR1QlZrXc04iiGBDazLu115A7ce\r\nanACS03OLw+CKgl6Q/RR83ECgYBCUngDVoimkMcIHHt3yJiP3ikeAKlRnMdJlsa0\r\nXWVZV4hCG3lDfRXsnEgWuimftNKf+6GdfYSvQdLdiQsCcjT5A4uLsQTByv5nf4uA\r\n1ZKOsFrmRrARzxGXhLDikvj7yP//7USkq+0BBGFhfuAvl7fMhPceyPZPehqB7/jf\r\nxX1LBQKBgAn5GgSXzzS0e06ZlP/VrKxreOHa5Z8wOmqqYQ0QTeczAbNNmuITdwwB\r\nNkbRqpVXRIfuj0BQBegAiix8om1W4it0cwz54IXBwQULxJR1StWxj3jo4QtpMQ+z\r\npVPdB1Ilb9zPV1YvDwRfdS1xsobzznAx56ecsXduZjs9mF61db8Q\r\n-----END RSA PRIVATE KEY-----\r\n'; // eslint-disable-line
+const encryptedSecretKey = 'K5FyqZo5uFKfw9QBtn95o6vuPuD0zH/1seIrqPKqGnz8AxALNSx6EeRq7G1I6JJpS1XN13EhnwGn2ipsml3Uf2fQ00YgEmImG8wzGVZm8fWotpVO4ilN4JGyQCah81rNX4wZ9xHqDD7qYR5MyIERxR/osoXfctOwY7GGUjRKJfLOguNUlpaovejg6mZfTvYAiDF+PTO1sKUYqHt1IfKQtsK3dov1EFMBB5pWM7sVfncq/CthKN5M+VHx9Y87qdoP3+7AW+RCBbSDOfQgxvqtS7PIAf10mDl8k2kEURLz+RqChu4O4S0UzbEmtja7wa7WYhYKv/tM/QeW7kyNJMmnPg=='; // eslint-disable-line
 
 const PATCH_VERSION = 2;
 const locationTypeMatch = {
@@ -38,23 +39,62 @@ function createConfig() {
     return {
         version: PATCH_VERSION + 1,
         locations: {
-            'location-1': {
-                details: {
-                    accessKey: 'myaccesskey',
-                },
-                locationType: 'location-scality-ring-s3-v1',
-            },
-            'location-2': {
-                details: {
-                    accessKey: 'anotheraccesskey',
-                },
+            'us-east-1': {
+                name: 'us-east-1',
+                objectId: 'us-east-1',
                 locationType: 'location-file-v1',
+                legacyAwsBehavior: true,
+                details: {},
             },
-            'location-3': {
-                details: {
-                    accessKey: 'anotheraccesskey',
-                },
+            'azurebackendtest': {
+                name: 'azurebackendtest',
+                objectId: 'azurebackendtest',
                 locationType: 'location-azure-v1',
+                details: {
+                    bucketMatch: 'azurebucketmatch',
+                    endpoint: 'azure.end.point',
+                    accessKey: 'azureaccesskey',
+                    secretKey: encryptedSecretKey,
+                    bucketName: 'azurebucketname',
+                },
+            },
+            'awsbackendtest': {
+                name: 'awsbackendtest',
+                objectId: 'awsbackendtest',
+                locationType: 'location-aws-s3-v1',
+                details: {
+                    bucketMatch: 'awsbucketmatch',
+                    endpoint: 'aws.end.point',
+                    accessKey: 'awsaccesskey',
+                    secretKey: encryptedSecretKey,
+                    bucketName: 'awsbucketname',
+                    region: 'us-west-1',
+                },
+            },
+            'gcpbackendtest': {
+                name: 'gcpbackendtest',
+                objectId: 'gcpbackendtest',
+                locationType: 'location-gcp-v1',
+                details: {
+                    bucketMatch: 'gcpbucketmatch',
+                    endpoint: 'gcp.end.point',
+                    accessKey: 'gcpaccesskey',
+                    secretKey: encryptedSecretKey,
+                    bucketName: 'gcpbucketname',
+                },
+            },
+            'ringbackendtest': {
+                name: 'httpsawsbackendtest',
+                objectId: 'httpsawsbackendtest',
+                locationType: 'location-scality-ring-s3-v1',
+                details: {
+                    bucketMatch: 'rings3bucketmatch',
+                    endpoint: 'https://secure.ring.end.point',
+                    accessKey: 'rings3accesskey',
+                    secretKey: encryptedSecretKey,
+                    bucketName: 'rings3bucketname',
+                    region: 'us-west-1',
+                },
             },
         },
         instanceId: 'hello-zenko',
@@ -69,12 +109,12 @@ function createBucketMDObject(bucketName, locationName, ingestion) {
 }
 
 describe('patchConfiguration', () => {
-    const bucket1 = createBucketMDObject('bucket-1', 'location-1',
+    const bucket1 = createBucketMDObject('bucket-1', 'ringbackendtest',
         { status: 'enabled' });
     // no ingestion set on bucket2
-    const bucket2 = createBucketMDObject('bucket-2', 'location-2', null);
+    const bucket2 = createBucketMDObject('bucket-2', 'ringbackendtest', null);
     // ingestion enabled but not a backbeat ingestion location
-    const bucket3 = createBucketMDObject('bucket-3', 'location-2',
+    const bucket3 = createBucketMDObject('bucket-3', 'gcpbackendtest',
         { status: 'enabled' });
 
     before(done => {
@@ -137,10 +177,6 @@ describe('patchConfiguration', () => {
         beforeEach(() => {
             configOverlay = createConfig();
             defaultLocations = configOverlay.locations;
-            expectedLocations = [
-                'location-1',
-                'location-3',
-            ];
             expectedLocations = Object.keys(defaultLocations)
                 .reduce((list, b) => {
                     if (!list.includes(b) &&
@@ -307,7 +343,8 @@ describe('patchConfiguration', () => {
                 const ingestionBuckets = Config.getIngestionBuckets();
 
                 ingestionBuckets.forEach(bucket => {
-                    assert(bucket.accessKey);
+                    assert(bucket.credentials.accessKey);
+                    assert(bucket.credentials.secretKey);
                     assert(bucket.zenkoBucket);
                     assert(bucket.locationConstraint);
                     assert(bucket.locationType);
