@@ -25,33 +25,48 @@ const OLD_BUCKET = 'old-ingestion-bucket';
 const oldLocation = {
     'old-ring': {
         details: {
-            accessKey: 'myAccessKey',
-            secretKey: 'myVerySecretKey',
-            endpoint: 'http://127.0.0.1:80',
+            credentials: {
+                accessKey: 'myAccessKey',
+                secretKey: 'myVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1:80',
+            https: false,
             bucketName: 'old-ring-bucket',
         },
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
+        type: 'aws_s3',
     },
 };
 const existingLocation = {
     'existing-ring': {
         details: {
-            accessKey: 'myAccessKey',
-            secretKey: 'myVerySecretKey',
-            endpoint: 'http://127.0.0.1:8000',
+            credentials: {
+                accessKey: 'myAccessKey',
+                secretKey: 'myVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1:8000',
             bucketName: 'existing-ring-bucket',
+            https: false,
         },
+        type: 'aws_s3',
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
     },
 };
 const newLocation = {
     'new-ring': {
         details: {
-            accessKey: 'yourAccessKey',
-            secretKey: 'yourVerySecretKey',
-            endpoint: 'http://127.0.0.1',
+            credentials: {
+                accessKey: 'yourAccessKey',
+                secretKey: 'yourVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1',
             bucketName: 'new-ring-bucket',
+            https: false,
         },
+        type: 'aws_s3',
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
     },
 };
@@ -93,12 +108,10 @@ class IngestionReaderMock extends IngestionReader {
      * Mock to avoid creating S3 client, avoid decrypting secret key.
      * `IngestionReader.refresh` is called to check and update IngestionReaders.
      * Every time this method is called indicates a valid update was found.
-     * @param {Function} cb - callback()
      * @return {undefined}
      */
-    _setupIngestionProducer(cb) {
+    _setupIngestionProducer() {
         this._updated = true;
-        return cb();
     }
 }
 
@@ -197,11 +210,12 @@ describe('Ingestion Populator', () => {
     () => {
         const buckets = config.getIngestionBuckets();
         buckets.forEach(bucket => {
-            assert(bucket.accessKey);
-            assert(bucket.secretKey);
-            assert(bucket.endpoint);
+            assert(bucket.credentials.accessKey);
+            assert(bucket.credentials.secretKey);
+            assert(bucket.awsEndpoint);
             assert(bucket.locationType);
             assert.strictEqual(bucket.locationType, 'scality_s3');
+            assert.strictEqual(typeof bucket.https, 'boolean');
             assert(bucket.bucketName);
             assert(bucket.zenkoBucket);
             assert(bucket.ingestion);
@@ -269,11 +283,13 @@ describe('Ingestion Populator', () => {
 
             // hack to update a valid editable field
             const locationName = Object.keys(existingLocation)[0];
-            const dupeExistingLoc = Object.assign({}, existingLocation);
-            dupeExistingLoc[locationName].details.accessKey = 'anUpdatedKey';
+            // full deep copy using JSON
+            const dupeExistingLoc = JSON.parse(JSON.stringify(existingLocation));
+            dupeExistingLoc[locationName].details.credentials.accessKey = 'anUpdatedKey';
+
             config.setIngestionBuckets(dupeExistingLoc, [existingBucket]);
 
-            ip.applyUpdates(err => {
+            return ip.applyUpdates(err => {
                 assert.ifError(err);
                 const updated = ip.getUpdated();
 
