@@ -198,13 +198,11 @@ describe('patchConfiguration', () => {
         it('should patch bootstrap list with a new overlay version', done => {
             const overlayVersion = PATCH_VERSION;
             patchConfiguration(overlayVersion, configOverlay, this.md, true,
-            fakeLogger, (err, version) => {
+            fakeLogger, err => {
                 assert.ifError(err);
 
                 const bootstrapList = Config.getBootstrapList();
-                assert.strictEqual(version, configOverlay.version);
-                assert.strictEqual(
-                    bootstrapList.length, expectedLocations.length);
+                assert.strictEqual(bootstrapList.length, expectedLocations.length);
                 expectedLocations.forEach(location => {
                     assert(bootstrapList.find(l => l.site === location));
                 });
@@ -268,14 +266,13 @@ describe('patchConfiguration', () => {
         done => {
             const overlayVersion = PATCH_VERSION;
             patchConfiguration(overlayVersion, configOverlay, this.md, true,
-            fakeLogger, (err, version) => {
+            fakeLogger, err => {
                 assert.ifError(err);
-
                 const ingestionBuckets = Config.getIngestionBuckets();
-                assert.strictEqual(version, configOverlay.version);
                 expectedIngestionBuckets.forEach(bucket => {
-                    assert(ingestionBuckets.find(
-                        b => b.zenkoBucket === bucket.getName()));
+                    assert(
+                        ingestionBuckets.find(b => b.zenkoBucket === bucket.getName())
+                    );
                 });
                 done();
             });
@@ -289,7 +286,7 @@ describe('patchConfiguration', () => {
                 this.md,
                 undefined,
                 fakeLogger,
-                (err, version) => {
+                err => {
                     assert.ifError(err);
 
                     const ingestionBuckets = Config.getIngestionBuckets();
@@ -298,7 +295,6 @@ describe('patchConfiguration', () => {
                     // should update bootstrapList given overlay version has been
                     // updated
                     const bootstrapList = Config.getBootstrapList();
-                    assert.strictEqual(version, configOverlay.version);
                     assert(bootstrapList.length > 0);
 
                     done();

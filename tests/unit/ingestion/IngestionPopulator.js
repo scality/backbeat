@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
-const async = require('async');
-
 const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
@@ -140,35 +138,19 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return updated;
     }
 
-    _setupPriorState(cb) {
+    _setupPriorState() {
         config.setIngestionBuckets(previousLocations, previousBuckets);
-        this.applyUpdates(err => {
-            if (err) {
-                return cb(err);
-            }
-            this._added = [];
-            this._removed = [];
-            return cb();
-        });
+        this.applyUpdates();
+        this._added = [];
+        this._removed = [];
     }
 
-    setupMock(cb) {
+    setupMock() {
         // for testing purposes
         this.reset();
 
-        this._setupPriorState(err => {
-            if (err) {
-                return cb(err);
-            }
-
-            // mocks
-            this._extension = {
-                createZkPath: cb => cb(),
-            };
-            config.setIngestionBuckets(currentLocations, currentBuckets);
-
-            return cb();
-        });
+        this._setupPriorState();
+        config.setIngestionBuckets(currentLocations, currentBuckets);
     }
 
     _setupZkLocationNode(list, cb) {
@@ -194,20 +176,21 @@ class IngestionPopulatorMock extends IngestionPopulator {
 describe('Ingestion Populator', () => {
     let ip;
 
-    before(() => {
-        ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
-            mConfig, rConfig, ingestionConfig, s3Config);
+    beforeEach(() => {
+        ip = new IngestionPopulatorMock(
+            zkConfig,
+            kafkaConfig,
+            qpConfig,
+            mConfig,
+            rConfig,
+            ingestionConfig,
+            s3Config,
+        );
+        ip.setupMock();
+        ip.applyUpdates();
     });
 
-    beforeEach(done => {
-        async.series([
-            next => ip.setupMock(next),
-            next => ip.applyUpdates(next),
-        ], done);
-    });
-
-    it('should fetch correctly formed ingestion bucket object information',
-    () => {
+    it('should fetch correctly formed ingestion bucket object information', () => {
         const buckets = config.getIngestionBuckets();
         buckets.forEach(bucket => {
             assert(bucket.credentials.accessKey);
@@ -242,43 +225,38 @@ describe('Ingestion Populator', () => {
         it('should apply default port 80 for a new ingestion source with ' +
         'no port provided', () => {
             const source = ip.getAdded().find(newSource =>
-                newSource.name === NEW_BUCKET);
-            assert.equal(source.port, 80);
+                newSource.name === NEW_BUCKET
+            );
+            assert.strictEqual(source.port, 80);
         });
 
         it('should keep an existing active ingestion source', () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === EXISTING_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === EXISTING_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === EXISTING_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(EXISTING_BUCKET);
 
-            assert(!wasAdded);
+            assert.strictEqual(addedIndex, -1);
             assert(!wasRemoved);
         });
 
         it('should add a new ingestion source', () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === NEW_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === NEW_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === NEW_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(NEW_BUCKET);
 
-            assert(wasAdded);
+            assert.notStrictEqual(addedIndex, -1);
             assert(!wasRemoved);
         });
 
         it('should remove an ingestion source that is has become inactive',
         () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === OLD_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === OLD_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === OLD_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(OLD_BUCKET);
 
-            assert(!wasAdded);
+            assert.strictEqual(addedIndex, -1);
             assert(wasRemoved);
         });
 
         it('should update an ingestion reader when the ingestion source ' +
-        'information is updated', done => {
+        'information is updated', () => {
             assert.deepStrictEqual(ip.getUpdated(), []);
 
             // hack to update a valid editable field
@@ -289,15 +267,11 @@ describe('Ingestion Populator', () => {
 
             config.setIngestionBuckets(dupeExistingLoc, [existingBucket]);
 
-            return ip.applyUpdates(err => {
-                assert.ifError(err);
-                const updated = ip.getUpdated();
+            ip.applyUpdates();
+            const updated = ip.getUpdated();
 
-                assert.strictEqual(updated.length, 1);
-                assert.strictEqual(updated[0], EXISTING_BUCKET);
-
-                done();
-            });
+            assert.strictEqual(updated.length, 1);
+            assert.strictEqual(updated[0], EXISTING_BUCKET);
         });
     });
 });
