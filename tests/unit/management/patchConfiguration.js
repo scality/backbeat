@@ -140,23 +140,13 @@ describe('patchConfiguration', () => {
 
     describe('bootstrap list', () => {
         let configOverlay;
-        let defaultLocations;
         let expectedLocations;
         beforeEach(() => {
             configOverlay = createConfig();
-            defaultLocations = configOverlay.locations;
             expectedLocations = [
                 'location-1',
                 'location-3',
             ];
-            expectedLocations = Object.keys(defaultLocations)
-                .reduce((list, b) => {
-                    if (!list.includes(b) &&
-                        defaultLocations[b].locationType !== 'location-file-v1') {
-                        list.push(b);
-                    }
-                    return list;
-                }, []);
         });
 
         it('should filter Scality locations from bootstrapList (Orbit ' +
