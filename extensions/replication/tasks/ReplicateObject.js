@@ -21,7 +21,7 @@ const {
     metricsTypeCompleted,
     replicationStages
 } = require('../constants');
-const ObjectQueueEntry = require('../utils/models/ObjectQueueEntry');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const errorAlreadyCompleted = {};
 
