@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
-const async = require('async');
-
 const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
@@ -25,33 +23,48 @@ const OLD_BUCKET = 'old-ingestion-bucket';
 const oldLocation = {
     'old-ring': {
         details: {
-            accessKey: 'myAccessKey',
-            secretKey: 'myVerySecretKey',
-            endpoint: 'http://127.0.0.1:80',
+            credentials: {
+                accessKey: 'myAccessKey',
+                secretKey: 'myVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1:80',
+            https: false,
             bucketName: 'old-ring-bucket',
         },
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
+        type: 'aws_s3',
     },
 };
 const existingLocation = {
     'existing-ring': {
         details: {
-            accessKey: 'myAccessKey',
-            secretKey: 'myVerySecretKey',
-            endpoint: 'http://127.0.0.1:8000',
+            credentials: {
+                accessKey: 'myAccessKey',
+                secretKey: 'myVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1:8000',
             bucketName: 'existing-ring-bucket',
+            https: false,
         },
+        type: 'aws_s3',
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
     },
 };
 const newLocation = {
     'new-ring': {
         details: {
-            accessKey: 'yourAccessKey',
-            secretKey: 'yourVerySecretKey',
-            endpoint: 'http://127.0.0.1',
+            credentials: {
+                accessKey: 'yourAccessKey',
+                secretKey: 'yourVerySecretKey',
+            },
+            awsEndpoint: '127.0.0.1',
             bucketName: 'new-ring-bucket',
+            https: false,
         },
+        type: 'aws_s3',
+        // maybe remove
         locationType: 'location-scality-ring-s3-v1',
     },
 };
@@ -93,12 +106,10 @@ class IngestionReaderMock extends IngestionReader {
      * Mock to avoid creating S3 client, avoid decrypting secret key.
      * `IngestionReader.refresh` is called to check and update IngestionReaders.
      * Every time this method is called indicates a valid update was found.
-     * @param {Function} cb - callback()
      * @return {undefined}
      */
-    _setupIngestionProducer(cb) {
+    _setupIngestionProducer() {
         this._updated = true;
-        return cb();
     }
 }
 
@@ -127,35 +138,19 @@ class IngestionPopulatorMock extends IngestionPopulator {
         return updated;
     }
 
-    _setupPriorState(cb) {
+    _setupPriorState() {
         config.setIngestionBuckets(previousLocations, previousBuckets);
-        this.applyUpdates(err => {
-            if (err) {
-                return cb(err);
-            }
-            this._added = [];
-            this._removed = [];
-            return cb();
-        });
+        this.applyUpdates();
+        this._added = [];
+        this._removed = [];
     }
 
-    setupMock(cb) {
+    setupMock() {
         // for testing purposes
         this.reset();
 
-        this._setupPriorState(err => {
-            if (err) {
-                return cb(err);
-            }
-
-            // mocks
-            this._extension = {
-                createZkPath: cb => cb(),
-            };
-            config.setIngestionBuckets(currentLocations, currentBuckets);
-
-            return cb();
-        });
+        this._setupPriorState();
+        config.setIngestionBuckets(currentLocations, currentBuckets);
     }
 
     _setupZkLocationNode(list, cb) {
@@ -181,27 +176,29 @@ class IngestionPopulatorMock extends IngestionPopulator {
 describe('Ingestion Populator', () => {
     let ip;
 
-    before(() => {
-        ip = new IngestionPopulatorMock(zkConfig, kafkaConfig, qpConfig,
-            mConfig, rConfig, ingestionConfig, s3Config);
+    beforeEach(() => {
+        ip = new IngestionPopulatorMock(
+            zkConfig,
+            kafkaConfig,
+            qpConfig,
+            mConfig,
+            rConfig,
+            ingestionConfig,
+            s3Config,
+        );
+        ip.setupMock();
+        ip.applyUpdates();
     });
 
-    beforeEach(done => {
-        async.series([
-            next => ip.setupMock(next),
-            next => ip.applyUpdates(next),
-        ], done);
-    });
-
-    it('should fetch correctly formed ingestion bucket object information',
-    () => {
+    it('should fetch correctly formed ingestion bucket object information', () => {
         const buckets = config.getIngestionBuckets();
         buckets.forEach(bucket => {
-            assert(bucket.accessKey);
-            assert(bucket.secretKey);
-            assert(bucket.endpoint);
+            assert(bucket.credentials.accessKey);
+            assert(bucket.credentials.secretKey);
+            assert(bucket.awsEndpoint);
             assert(bucket.locationType);
             assert.strictEqual(bucket.locationType, 'scality_s3');
+            assert.strictEqual(typeof bucket.https, 'boolean');
             assert(bucket.bucketName);
             assert(bucket.zenkoBucket);
             assert(bucket.ingestion);
@@ -228,60 +225,53 @@ describe('Ingestion Populator', () => {
         it('should apply default port 80 for a new ingestion source with ' +
         'no port provided', () => {
             const source = ip.getAdded().find(newSource =>
-                newSource.name === NEW_BUCKET);
-            assert.equal(source.port, 80);
+                newSource.name === NEW_BUCKET
+            );
+            assert.strictEqual(source.port, 80);
         });
 
         it('should keep an existing active ingestion source', () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === EXISTING_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === EXISTING_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === EXISTING_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(EXISTING_BUCKET);
 
-            assert(!wasAdded);
+            assert.strictEqual(addedIndex, -1);
             assert(!wasRemoved);
         });
 
         it('should add a new ingestion source', () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === NEW_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === NEW_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === NEW_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(NEW_BUCKET);
 
-            assert(wasAdded);
+            assert.notStrictEqual(addedIndex, -1);
             assert(!wasRemoved);
         });
 
         it('should remove an ingestion source that is has become inactive',
         () => {
-            const wasAdded = ip.getAdded().findIndex(r =>
-                r.name === OLD_BUCKET) >= 0;
-            const wasRemoved = ip.getRemoved().findIndex(r =>
-                r === OLD_BUCKET) >= 0;
+            const addedIndex = ip.getAdded().findIndex(r => r.name === OLD_BUCKET);
+            const wasRemoved = ip.getRemoved().includes(OLD_BUCKET);
 
-            assert(!wasAdded);
+            assert.strictEqual(addedIndex, -1);
             assert(wasRemoved);
         });
 
         it('should update an ingestion reader when the ingestion source ' +
-        'information is updated', done => {
+        'information is updated', () => {
             assert.deepStrictEqual(ip.getUpdated(), []);
 
             // hack to update a valid editable field
             const locationName = Object.keys(existingLocation)[0];
-            const dupeExistingLoc = Object.assign({}, existingLocation);
-            dupeExistingLoc[locationName].details.accessKey = 'anUpdatedKey';
+            // full deep copy using JSON
+            const dupeExistingLoc = JSON.parse(JSON.stringify(existingLocation));
+            dupeExistingLoc[locationName].details.credentials.accessKey = 'anUpdatedKey';
+
             config.setIngestionBuckets(dupeExistingLoc, [existingBucket]);
 
-            ip.applyUpdates(err => {
-                assert.ifError(err);
-                const updated = ip.getUpdated();
+            ip.applyUpdates();
+            const updated = ip.getUpdated();
 
-                assert.strictEqual(updated.length, 1);
-                assert.strictEqual(updated[0], EXISTING_BUCKET);
-
-                done();
-            });
+            assert.strictEqual(updated.length, 1);
+            assert.strictEqual(updated[0], EXISTING_BUCKET);
         });
     });
 });

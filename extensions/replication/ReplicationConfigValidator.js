@@ -63,10 +63,8 @@ const joiSchema = {
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
-        logConsumerMetricsIntervalS: joi.number().greater(0).default(60),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: probeServerJoi.default(),
-        sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),

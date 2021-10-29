@@ -391,14 +391,12 @@ describe('ingestion reader tests with mock', function fD() {
             'with utf-8 key, existing object with tags',
             done => {
                 // update zookeeper status to indicate snapshot phase
-                const path =
-                    `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
+                const path = `${this.ingestionReader.bucketInitPath}/isStatusComplete`;
                 async.waterfall([
-                    next => zkClient.setData(path, Buffer.from('false'), -1,
-                        err => {
-                            assert.ifError(err);
-                            return next();
-                        }),
+                    next => zkClient.setData(path, Buffer.from('false'), -1, err => {
+                        assert.ifError(err);
+                        return next();
+                    }),
                     next => this.ingestionReader.processLogEntries({}, err => {
                         assert.ifError(err);
                         setTimeout(next, CONSUMER_TIMEOUT);
