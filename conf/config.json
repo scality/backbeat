@@ -145,20 +145,6 @@
                     }
                 },
                 "concurrency": 10
-            },
-            "rules": {
-                "expiration": {
-                    "enabled": true
-                },
-                "noncurrentVersionExpiration": {
-                    "enabled": true
-                },
-                "transitions": {
-                    "enabled": false
-                },
-                "abortIncompleteMultipartUpload": {
-                    "enabled": true
-                }
             }
         }
     },

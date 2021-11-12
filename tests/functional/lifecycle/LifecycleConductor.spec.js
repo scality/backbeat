@@ -83,11 +83,6 @@ const baseLCConfig = {
             enabled: false,
         },
     },
-    rules: {
-        expiration: {
-            enabled: true,
-        },
-    },
     auth: {
         type: 'account',
         account: 'lifecycle',
