@@ -3,6 +3,11 @@
 const async = require('async');
 const { errors } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
+const { supportedLifecycleRules } = require('arsenal').constants;
+const {
+    LifecycleDateTime,
+    LifecycleUtils,
+} = require('arsenal').s3middleware.lifecycleHelpers;
 
 const config = require('../../../conf/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -25,8 +30,6 @@ function isLifecycleUser(canonicalID) {
     return serviceName === 'lifecycle';
 }
 
-const oneDay = 24 * 60 * 60 * 1000; // Milliseconds in a day.
-
 class LifecycleTask extends BackbeatTask {
     /**
      * Processes Kafka Bucket entries and determines if specific Lifecycle
@@ -39,6 +42,23 @@ class LifecycleTask extends BackbeatTask {
         const lpState = lp.getStateVars();
         super();
         Object.assign(this, lpState);
+
+        this._lifecycleDateTime = new LifecycleDateTime({
+            transitionOneDayEarlier,
+            expireOneDayEarlier,
+        });
+
+        this._lifecycleUtils = new LifecycleUtils(
+            supportedLifecycleRules,
+            this._lifecycleDateTime
+        );
+    }
+
+    setSupportedRules(supportedRules) {
+        this._lifecycleUtils = new LifecycleUtils(
+            supportedRules,
+            this._lifecycleDateTime
+        );
     }
 
     /**
@@ -417,239 +437,6 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Filter out all rules based on `Status` and `Filter` (Prefix and Tags)
-     * @param {array} bucketLCRules - array of bucket lifecycle rules
-     * @param {object} item - represents a single object, version, or upload
-     * @param {object} objTags - all tags for given `item`
-     * @return {array} list of all filtered rules that apply to `item`
-     */
-    _filterRules(bucketLCRules, item, objTags) {
-        /*
-            Bucket Tags must be included in the list of object tags.
-            So if a bucket tag with "key1/value1" exists, and an object with
-            "key1/value1, key2/value2" exists, this bucket lifecycle rules
-            apply on this object.
-
-            Vice versa, bucket rule is "key1/value1, key2/value2" and object
-            rule is "key1/value1", this buckets rule does not apply to this
-            object.
-        */
-        function deepCompare(rTags, oTags) {
-            // check to make sure object tags length matches or is greater
-            if (rTags.length > oTags.length) {
-                return false;
-            }
-            // all key/value tags of bucket rules must be within object tags
-            for (let i = 0; i < rTags.length; i++) {
-                const oTag = oTags.find(pair => pair.Key === rTags[i].Key);
-                if (!oTag || rTags[i].Value !== oTag.Value) {
-                    return false;
-                }
-            }
-            return true;
-        }
-
-        return bucketLCRules.filter(rule => {
-            if (rule.Status === 'Disabled') {
-                return false;
-            }
-            // check all locations where prefix could possibly be
-            const prefix = rule.Prefix
-                  || (rule.Filter && (rule.Filter.And
-                      ? rule.Filter.And.Prefix
-                      : rule.Filter.Prefix));
-            if (prefix && !item.Key.startsWith(prefix)) {
-                return false;
-            }
-            if (!rule.Filter) {
-                return true;
-            }
-            const tags = rule.Filter.And
-                ? rule.Filter.And.Tags
-                : (rule.Filter.Tag && [rule.Filter.Tag]);
-            if (tags && !deepCompare(tags, objTags.TagSet || [])) {
-                return false;
-            }
-            return true;
-        });
-    }
-
-    /**
-     * For all filtered rules, get rules that apply the earliest
-     * @param {array} rules - list of filtered rules that apply to a specific
-     *   object, version, or upload
-     * @param {object} metadata - metadata about the object to transition
-     * @return {object} all applicable rules with earliest dates of action
-     *  i.e. { Expiration: { Date: <DateObject>, Days: 10 },
-     *         NoncurrentVersionExpiration: { NoncurrentDays: 5 } }
-     */
-    _getApplicableRules(rules, metadata) {
-        // NOTE: Ask Team
-        // Assumes if for example a rule defines expiration and transition
-        // and if backbeat disables expiration and enables transition,
-        // we still consider this rules transition to apply
-        // these are rules enabled in config.json
-        const enabledRules = Object.keys(this.enabledRules).filter(rule => this.enabledRules[rule].enabled);
-
-        // Declare the current date before the reducing function so that all
-        // rule comparisons use the same date.
-        const currentDate = new Date();
-        /* eslint-disable no-param-reassign */
-        const applicableRules = rules.reduce((store, rule) => {
-            // filter and find earliest dates
-            if (rule.Expiration && enabledRules.includes('expiration')) {
-                if (!store.Expiration) {
-                    store.Expiration = {};
-                }
-                if (rule.Expiration.Days) {
-                    if (!store.Expiration.Days || rule.Expiration.Days
-                    < store.Expiration.Days) {
-                        store.Expiration.Days = rule.Expiration.Days;
-                    }
-                }
-                if (rule.Expiration.Date) {
-                    if (!store.Expiration.Date || rule.Expiration.Date
-                    < store.Expiration.Date) {
-                        store.Expiration.Date = rule.Expiration.Date;
-                    }
-                }
-                const eodm = rule.Expiration.ExpiredObjectDeleteMarker;
-                if (eodm !== undefined) {
-                    // preference for later rules in list of rules
-                    store.Expiration.ExpiredObjectDeleteMarker = eodm;
-                }
-            }
-            if (rule.NoncurrentVersionExpiration
-            && enabledRules.includes('noncurrentVersionExpiration')) {
-                // Names are long, so obscuring a bit
-                const ncve = 'NoncurrentVersionExpiration';
-                const ncd = 'NoncurrentDays';
-
-                if (!store[ncve]) {
-                    store[ncve] = {};
-                }
-                if (!store[ncve][ncd] || rule[ncve][ncd] < store[ncve][ncd]) {
-                    store[ncve][ncd] = rule[ncve][ncd];
-                }
-            }
-            if (rule.AbortIncompleteMultipartUpload
-            && enabledRules.includes('abortIncompleteMultipartUpload')) {
-                // Names are long, so obscuring a bit
-                const aimu = 'AbortIncompleteMultipartUpload';
-                const dai = 'DaysAfterInitiation';
-
-                if (!store[aimu]) {
-                    store[aimu] = {};
-                }
-                if (!store[aimu][dai] || rule[aimu][dai] < store[aimu][dai]) {
-                    store[aimu][dai] = rule[aimu][dai];
-                }
-            }
-            const hasTransitions = Array.isArray(rule.Transitions) && rule.Transitions.length > 0;
-            if (hasTransitions && enabledRules.includes('transitions')) {
-                store.Transition = this._getApplicableTransition({
-                    transitions: rule.Transitions,
-                    lastModified: metadata.LastModified,
-                    store,
-                    currentDate,
-                });
-            }
-            // TODO: Add support for NoncurrentVersionTransitions.
-            return store;
-        }, {});
-        // Do not transition to a location where the object is already stored.
-        if (applicableRules.Transition
-            && applicableRules.Transition.StorageClass === metadata.StorageClass) {
-            applicableRules.Transition = undefined;
-        }
-        return applicableRules;
-        /* eslint-enable no-param-reassign */
-    }
-
-    /**
-     * Get the Unix timestamp of the given date.
-     * @param {string} date - The date string to convert to a Unix timestamp
-     * @return {number} - The Unix timestamp
-     */
-    _getTimestamp(date) {
-        return new Date(date).getTime();
-    }
-
-    /**
-     * Find the Unix time at which the transition should occur.
-     * @param {object} transition - A transition from the lifecycle transitions
-     * @param {string} lastModified - The object's last modified date
-     * @return {number|undefined} - The normalized transition timestamp
-     */
-    _getTransitionTimestamp(transition, lastModified) {
-        if (transition.Date !== undefined) {
-            return this._getTimestamp(transition.Date);
-        }
-        if (transition.Days !== undefined) {
-            const lastModifiedTime = this._getTimestamp(lastModified);
-            const timeTravel = transitionOneDayEarlier ? -oneDay : 0;
-
-            return lastModifiedTime + (transition.Days * oneDay) + timeTravel;
-        }
-        return undefined;
-    }
-
-    /**
-     * Find the most relevant trantition rule for the given transitions array
-     * and any previously stored transition from another rule.
-     * @param {object} params - The function parameters
-     * @param {array} params.transitions - Array of lifecycle rule transitions
-     * @param {string} params.lastModified - The object's last modified
-     * date
-     * @return {object} The most applicable transition rule
-     */
-    _getApplicableTransition(params) {
-        const {
-            transitions, store, lastModified, currentDate,
-        } = params;
-        const transition = transitions.reduce((result, transition) => {
-            const isApplicable = // Is the transition time in the past?
-                this._getTimestamp(currentDate)
-                >= this._getTransitionTimestamp(transition, lastModified);
-            if (!isApplicable) {
-                return result;
-            }
-            return this._compareTransitions({
-                transition1: transition,
-                transition2: result,
-                lastModified,
-            });
-        }, undefined);
-        return this._compareTransitions({
-            transition1: transition,
-            transition2: store.Transition,
-            lastModified,
-        });
-    }
-
-    /**
-     * Compare two transition rules and return the one that is most recent.
-     * @param {object} params - The function parameters
-     * @param {object} params.transition1 - A transition from the current rule
-     * @param {object} params.transition2 - A transition from the previous rule
-     * @param {string} params.lastModified - The object's last modified
-     * date
-     * @return {object} The most applicable transition rule
-     */
-    _compareTransitions(params) {
-        const { transition1, transition2, lastModified } = params;
-        if (transition1 === undefined) {
-            return transition2;
-        }
-        if (transition2 === undefined) {
-            return transition1;
-        }
-        return this._getTransitionTimestamp(transition1, lastModified)
-            > this._getTransitionTimestamp(transition2, lastModified)
-            ? transition1 : transition2;
-    }
-
-    /**
      * Handles comparing rules for objects
      * @param {object} bucketData - bucket data
      * @param {object} bucketData.target - target bucket info
@@ -672,8 +459,8 @@ class LifecycleTask extends BackbeatTask {
         if (this._isDeleteMarker(object)) {
             // DeleteMarkers don't have any tags, so avoid calling
             // `getObjectTagging` which will throw an error
-            const filterRules = this._filterRules(bucketLCRules, object, []);
-            return done(null, this._getApplicableRules(filterRules, object));
+            const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, []);
+            return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
         }
 
         const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
@@ -695,10 +482,10 @@ class LifecycleTask extends BackbeatTask {
                 return done(err);
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
-            const filterRules = this._filterRules(bucketLCRules, object, tags);
+            const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, tags);
 
             // reduce filteredRules to only get earliest dates
-            return done(null, this._getApplicableRules(filterRules, object));
+            return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
         });
     }
 
@@ -743,22 +530,6 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Helper method to get total Days passed since given date
-     * @param {Date} date - date object
-     * @return {number} Days passed
-     */
-    _findDaysSince(date) {
-        const now = this._getCurrentDate();
-        const diff = now - date;
-        return Math.floor(diff / (1000 * 60 * 60 * 24));
-    }
-
-    _getCurrentDate() {
-        const timeTravel = expireOneDayEarlier ? oneDay : 0;
-        return Date.now() + timeTravel;
-    }
-
-    /**
      * Helper method to determine if a version is a Delete Marker
      * @param {Object} version - single version object
      * @return {boolean} true/false
@@ -785,10 +556,10 @@ class LifecycleTask extends BackbeatTask {
      *   (i.e. transition) should not apply.
      */
     _checkAndApplyExpirationRule(bucketData, obj, rules, log) {
-        const daysSinceInitiated = this._findDaysSince(
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
             new Date(obj.LastModified)
         );
-        const currentDate = this._getCurrentDate();
+        const currentDate = this._lifecycleDateTime.getCurrentDate();
 
         if (rules.Expiration.Date
             && rules.Expiration.Date < currentDate) {
@@ -993,7 +764,7 @@ class LifecycleTask extends BackbeatTask {
             (versions, next) => {
                 const matchingNoncurrentKeys = versions.filter(v => (
                     v.Key === deleteMarker.Key && !v.IsLatest));
-                const daysSinceInitiated = this._findDaysSince(
+                const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
                     new Date(deleteMarker.LastModified)
                 );
 
@@ -1058,7 +829,7 @@ class LifecycleTask extends BackbeatTask {
      */
     _checkAndApplyNCVExpirationRule(bucketData, version, rules, log) {
         const { staleDate } = version;
-        const daysSinceInitiated = this._findDaysSince(new Date(staleDate));
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncve = 'NoncurrentVersionExpiration';
         const ncd = 'NoncurrentDays';
         const doesNCVExpirationRuleApply = (rules[ncve]
@@ -1293,9 +1064,8 @@ class LifecycleTask extends BackbeatTask {
         uploads.forEach(upload => {
             // Tags do not apply to UploadParts
             const noTags = { TagSet: [] };
-            const filteredRules = this._filterRules(bucketLCRules, upload,
-                noTags);
-            let aRules = this._getApplicableRules(filteredRules, {});
+            const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, upload, noTags);
+            let aRules = this._lifecycleUtils.getApplicableRules(filteredRules, {});
 
             // Hijack for testing
             // Idea is to set any "Days" rule to `Days - 1`
@@ -1304,7 +1074,7 @@ class LifecycleTask extends BackbeatTask {
                 aRules = this._adjustRulesForTesting(aRules);
             }
 
-            const daysSinceInitiated = this._findDaysSince(
+            const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
                 new Date(upload.Initiated)
             );
             const abortRule = aRules.AbortIncompleteMultipartUpload;
