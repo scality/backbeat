@@ -34,20 +34,6 @@ const joiSchema = {
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
-    rules: {
-        expiration: {
-            enabled: joi.boolean().default(true),
-        },
-        noncurrentVersionExpiration: {
-            enabled: joi.boolean().default(true),
-        },
-        transitions: {
-            enabled: joi.boolean().default(true),
-        },
-        abortIncompleteMultipartUpload: {
-            enabled: joi.boolean().default(true),
-        },
-    },
 };
 
 function configValidator(backbeatConfig, extConfig) {
