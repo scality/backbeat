@@ -20,6 +20,7 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
+const MongoProcessorMetrics = require('./MongoProcessorMetrics');
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
@@ -593,17 +594,24 @@ class MongoQueueProcessor {
 
         return this._getBucketInfo(sourceEntry, log, (err, bucketInfo) => {
             if (err) {
+                this._handleMetrics(null, null, true);
                 return done(err);
             }
             const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
                 return this._processDeleteOpQueueEntry(log, sourceEntry,
-                    location, done);
+                    location, err => {
+                        this._handleMetrics(location, sourceEntry, !!err);
+                        return done(err);
+                    });
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
                 return this._processObjectQueueEntry(log, sourceEntry, location,
-                    bucketInfo, done);
+                    bucketInfo, err => {
+                        this._handleMetrics(location, sourceEntry, !!err);
+                        return done(err);
+                    });
             }
             log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),
@@ -613,6 +621,15 @@ class MongoQueueProcessor {
             this._normalizePendingMetric(location);
             return process.nextTick(done);
         });
+    }
+
+    _handleMetrics(location, sourceEntry, isError) {
+        const status = isError ? 'error' : 'success';
+        const bucketName = sourceEntry && sourceEntry.getBucket ? sourceEntry.getBucket() : null;
+        const startProcessing = sourceEntry && sourceEntry.getStartProcessing ? sourceEntry.getStartProcessing() : null;
+        const elapsedMs = startProcessing ? Date.now() - startProcessing : null;
+
+        MongoProcessorMetrics.onIngestionProcessed(location, bucketName, elapsedMs, status);
     }
 
     isReady() {
