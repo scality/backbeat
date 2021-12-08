@@ -20,6 +20,7 @@ const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
     require('../ingestion/constants');
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
+const MongoProcessorMetrics = require('./MongoProcessorMetrics');
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
@@ -583,27 +584,36 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        MongoProcessorMetrics.onProcessKafkaEntry();
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
         if (sourceEntry.error) {
             log.end().error('error processing source entry',
                               { error: sourceEntry.error });
+            this._handleMetrics(null, true);
             return process.nextTick(() => done(errors.InternalError));
         }
 
         return this._getBucketInfo(sourceEntry, log, (err, bucketInfo) => {
             if (err) {
+                this._handleMetrics(sourceEntry, true);
                 return done(err);
             }
             const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
                 return this._processDeleteOpQueueEntry(log, sourceEntry,
-                    location, done);
+                    location, err => {
+                        this._handleMetrics(sourceEntry, !!err);
+                        return done(err);
+                    });
             }
             if (sourceEntry instanceof ObjectQueueEntry) {
                 return this._processObjectQueueEntry(log, sourceEntry, location,
-                    bucketInfo, done);
+                    bucketInfo, err => {
+                        this._handleMetrics(sourceEntry, !!err);
+                        return done(err);
+                    });
             }
             log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),
@@ -613,6 +623,14 @@ class MongoQueueProcessor {
             this._normalizePendingMetric(location);
             return process.nextTick(done);
         });
+    }
+
+    _handleMetrics(sourceEntry, isError) {
+        const status = isError ? 'error' : 'success';
+        const startProcessing = sourceEntry && sourceEntry.getStartProcessing ? sourceEntry.getStartProcessing() : null;
+        const elapsedMs = startProcessing ? Date.now() - startProcessing : null;
+
+        MongoProcessorMetrics.onIngestionProcessed(elapsedMs, status);
     }
 
     isReady() {
