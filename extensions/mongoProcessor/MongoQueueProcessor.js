@@ -61,12 +61,14 @@ class MongoQueueProcessor {
      *  backoff factor
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} mConfig - metrics config
+     * @param {Object} metricsHandler - metrics handler
      */
-    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig) {
+    constructor(kafkaConfig, mongoProcessorConfig, mongoClientConfig, mConfig, metricsHandler) {
         this.kafkaConfig = kafkaConfig;
         this.mongoProcessorConfig = mongoProcessorConfig;
         this.mongoClientConfig = mongoClientConfig;
         this._mConfig = mConfig;
+        this.metricsHandler = metricsHandler;
 
         this._consumer = null;
         this._bootstrapList = null;
@@ -494,6 +496,7 @@ class MongoQueueProcessor {
                         entry: sourceEntry.getLogInfo(),
                         location,
                     });
+                    this.metricsHandler.bytes({}, sourceEntry.getContentLength());
                     return done();
                 });
         });

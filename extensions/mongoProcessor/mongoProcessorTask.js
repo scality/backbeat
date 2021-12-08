@@ -8,7 +8,8 @@ const {
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
-const { ZenkoMetrics } = require('arsenal').metrics;
+const { wrapCounterInc, wrapGaugeSet } = require('../../lib/util/metrics');
+const promClient = require('prom-client');
 
 const MongoQueueProcessor = require('./MongoQueueProcessor');
 const config = require('../../lib/Config');
@@ -26,8 +27,25 @@ const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
-const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
-    mongoClientConfig, mConfig);
+promClient.register.setDefaultLabels({
+    origin: 'ingestion',
+    containerName: process.env.CONTAINER_NAME || '',
+});
+
+const processedBytesMetric = new promClient.Counter({
+    name: 'ingestion_processed_bytes',
+    help: 'Number of bytes ingested',
+    labelNames: ['origin', 'containerName'],
+});
+
+/**
+ * Contains methods to increment different metrics
+ * @typedef {Object} MetricsHandler
+ * @property {CounterInc} bytes - Increments the bytes metric
+ */
+const metricsHandler = {
+    bytes: wrapCounterInc(processedBytesMetric),
+};
 
 /**
  * Handle ProbeServer liveness check
@@ -55,10 +73,13 @@ const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
 function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
-        'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+        'Content-Type': promClient.register.contentType,
     });
-    res.end(ZenkoMetrics.asPrometheus());
+    res.end(promClient.register.metrics());
 }
+
+const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
+    mongoClientConfig, mConfig, metricsHandler);
 
 function loadManagementDatabase() {
     const ingestionServiceAuth = config.extensions.ingestion.auth;
