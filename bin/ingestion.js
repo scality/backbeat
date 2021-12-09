@@ -9,6 +9,7 @@ const {
     DEFAULT_METRICS_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
+const { ZenkoMetrics } = require('arsenal').metrics;
 const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 
@@ -19,8 +20,6 @@ const zookeeperWrapper = require('../lib/clients/zookeeper');
 const { zookeeperNamespace, zkStatePath } =
     require('../extensions/ingestion/constants');
 const { startProbeServer } = require('../lib/util/probe');
-const promClient = require('prom-client');
-const { wrapCounterInc, wrapGaugeSet } = require('../lib/util/metrics');
 
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
@@ -41,26 +40,6 @@ let scheduler;
 let ingestionPopulator;
 // memoize
 const configuredLocations = {};
-
-promClient.register.setDefaultLabels({
-    origin: 'ingestion',
-    containerName: process.env.CONTAINER_NAME || '',
-});
-
-const objectsMetrics = new promClient.Counter({
-    name: 'ingestion_objects_queued_total',
-    help: 'Total number of Kafka messages produced by the ingestion populator',
-    labelNames: ['origin', 'containerName'],
-});
-
-/**
- * Contains methods to incrememt different metrics
- * @typedef {Object} MetricsHandler
- * @property {CounterInc} objects - Increments the objects metric
- */
-const metricsHandler = {
-    objects: wrapCounterInc(objectsMetrics),
-};
 
 function getIngestionZkPath() {
     return `${zookeeperNamespace}${zkStatePath}`;
@@ -276,9 +255,9 @@ function loadProcessors(zkClient) {
 function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
-        'Content-Type': promClient.register.contentType,
+        'Content-Type': ZenkoMetrics.asPrometheusContentType(),
     });
-    res.end(promClient.register.metrics());
+    res.end(ZenkoMetrics.asPrometheus());
 }
 
 function initAndStart(zkClient) {
@@ -296,7 +275,7 @@ function initAndStart(zkClient) {
 
         ingestionPopulator = new IngestionPopulator(zkClient, zkConfig,
             kafkaConfig, qpConfig, mConfig, rConfig, ingestionExtConfigs,
-            s3Config, metricsHandler);
+            s3Config);
 
         loadProcessors(zkClient);
 
