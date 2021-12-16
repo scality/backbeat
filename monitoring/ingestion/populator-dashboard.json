@@ -68,7 +68,7 @@
   "gnetId": null,
   "graphTooltip": 0,
   "id": null,
-  "iteration": 1639611339282,
+  "iteration": 1639611339285,
   "links": [],
   "panels": [
     {
@@ -189,7 +189,7 @@
     },
     {
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "",
+      "description": "Current online or offline status of all ingestion populator pods",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -288,6 +288,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "description": "How many objects are being queued by the ingestion populator.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -332,7 +333,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
+          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Location '{{locationName}}', raft ID '{{raftID}}' in '{{pod}}'",
@@ -343,7 +344,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Messages queued",
+      "title": "Objects queued",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -360,7 +361,7 @@
       "yaxes": [
         {
           "format": "short",
-          "label": "Messages per second",
+          "label": "Objects per second",
           "logBase": 1,
           "max": null,
           "min": "0",
@@ -400,7 +401,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "",
+      "description": "How far the ingestion populator is behind in the raft journal.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -501,6 +502,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "description": "How many raft journal entries have been processed.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -545,7 +547,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
+          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Location '{{locationName}}', raft ID '{{raftID}}' in '{{pod}}'",
@@ -647,12 +649,12 @@
     ]
   },
   "time": {
-    "from": "now-5m",
+    "from": "now-24h",
     "to": "now"
   },
   "timepicker": {},
   "timezone": "",
   "title": "OOB Ingestion Populator",
-  "uid": "fNCu1Ch7k",
-  "version": 37
+  "uid": null,
+  "version": 44
 }
