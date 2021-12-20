@@ -12,14 +12,14 @@
       "name": "VAR_JOB",
       "type": "constant",
       "label": "job",
-      "value": "populator",
+      "value": "artesca-data-backbeat-ingestion-producer-headless",
       "description": ""
     },
     {
       "name": "VAR_NAMESPACE",
       "type": "constant",
       "label": "namespace",
-      "value": "default",
+      "value": "zenko",
       "description": ""
     }
   ],
