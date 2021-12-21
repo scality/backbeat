@@ -9,8 +9,8 @@ const {
     DEFAULT_METRICS_ROUTE,
     DEFAULT_READY_ROUTE,
 } = require('arsenal').network.probe.ProbeServer;
-const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('arsenal').metrics;
+const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
