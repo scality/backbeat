@@ -333,10 +333,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location '{{locationName}}', raft ID '{{raftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
           "refId": "A"
         }
       ],
@@ -451,7 +451,7 @@
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "Location '{{locationName}}', raft ID '{{raftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
           "refId": "A"
         }
       ],
@@ -547,10 +547,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationName, raftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location '{{locationName}}', raft ID '{{raftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
           "refId": "A"
         }
       ],
