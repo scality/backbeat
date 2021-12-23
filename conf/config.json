@@ -246,20 +246,6 @@
                     "bindAddress": "0.0.0.0",
                     "port": 8554
                 }
-            },
-            "rules": {
-                "expiration": {
-                    "enabled": true
-                },
-                "noncurrentVersionExpiration": {
-                    "enabled": true
-                },
-                "transitions": {
-                    "enabled": true
-                },
-                "abortIncompleteMultipartUpload": {
-                    "enabled": true
-                }
             }
         },
         "gc": {
