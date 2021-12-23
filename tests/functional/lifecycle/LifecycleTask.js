@@ -3,12 +3,11 @@ const async = require('async');
 const AWS = require('aws-sdk');
 
 const Logger = require('werelogs').Logger;
+const LifecycleRule = require('arsenal').models.LifecycleRule;
 
 const ReplicationAPI =
       require('../../../extensions/replication/ReplicationAPI');
-const LifecycleTask = require('../../../extensions/lifecycle' +
-                              '/tasks/LifecycleTask');
-const Rule = require('../../utils/Rule');
+const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');
 const { objectMD } = require('../utils/MetadataMock');
 
@@ -477,6 +476,12 @@ describe('lifecycle task functional tests', function dF() {
         lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
+        lcTask.setSupportedRules([
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+            'transitions',
+        ]);
         s3Helper = new S3Helper(s3);
     });
 
@@ -582,7 +587,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 0,
                 hasVersioning: false,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addPrefix('test/')
                         .addTransitions([{
                             Days: 0,
@@ -600,7 +605,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 1,
                 hasVersioning: false,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addPrefix('test/')
                         .addTransitions([{
                             Days: 0,
@@ -622,7 +627,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 1,
                 hasVersioning: false,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addTag('key1', 'value1')
                         .addTransitions([{
                             Days: 0,
@@ -660,7 +665,7 @@ describe('lifecycle task functional tests', function dF() {
             async.waterfall([
                 next => s3Helper.setAndCreateBucket('test-bucket', next),
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addExpiration('Date', FUTURE).build(),
+                    new LifecycleRule().addExpiration('Date', FUTURE).build(),
                 ], next),
                 (data, next) => s3Helper.createObjects(0, next),
                 next => s3.getBucketLifecycleConfiguration({
@@ -678,7 +683,7 @@ describe('lifecycle task functional tests', function dF() {
                     });
                 },
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addExpiration('Date', PAST).build(),
+                    new LifecycleRule().addExpiration('Date', PAST).build(),
                 ], next),
                 (data, next) => {
                     s3.getBucketLifecycleConfiguration({
@@ -715,7 +720,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that EXPIRED objects are sent to ' +
                     'object kafka topic with pagination, with prefix',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Date', PAST)
+                    new LifecycleRule().addID('task-1').addExpiration('Date', PAST)
                         .addPrefix('test/').build(),
                 ],
                 // S3Helper.buildScenario, chooses type of objects to create
@@ -739,7 +744,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify the Expiration rule in Days ' +
                     'are properly handled',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Days', 1)
+                    new LifecycleRule().addID('task-1').addExpiration('Days', 1)
                         .addPrefix('atest/').build(),
                 ],
                 scenario: 1,
@@ -762,7 +767,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that EXPIRED objects are sent to ' +
                     'object kafka topic with pagination, with tags',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Date', PAST)
+                    new LifecycleRule().addID('task-1').addExpiration('Date', PAST)
                         .addTag('key1', 'value1').build(),
                 ],
                 scenario: 1,
@@ -786,15 +791,15 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that multiple EXPIRED rules are ' +
                     'properly being handled',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addExpiration('Date', FUTURE)
+                    new LifecycleRule().addID('task-1').addExpiration('Date', FUTURE)
                         .build(),
-                    new Rule().addID('task-2').addExpiration('Date', FUTURE)
+                    new LifecycleRule().addID('task-2').addExpiration('Date', FUTURE)
                         .addTag('key1', 'value1').build(),
-                    new Rule().addID('task-3').addExpiration('Date', PAST)
+                    new LifecycleRule().addID('task-3').addExpiration('Date', PAST)
                         .addPrefix('test/').addTag('key3', 'value3').build(),
-                    new Rule().addID('task-4').disable()
+                    new LifecycleRule().addID('task-4').disable()
                         .addExpiration('Date', PAST).build(),
-                    new Rule().addID('task-5').addExpiration('Date', PAST)
+                    new LifecycleRule().addID('task-5').addExpiration('Date', PAST)
                         .addTag('key4', 'value4').build(),
                 ],
                 scenario: 1,
@@ -865,7 +870,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 2,
                 hasVersioning: true,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addPrefix('test/')
                         .addTransitions([{
                             Days: 0,
@@ -883,7 +888,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 2,
                 hasVersioning: true,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addPrefix('version-1')
                         .addTransitions([{
                             Days: 0,
@@ -901,7 +906,7 @@ describe('lifecycle task functional tests', function dF() {
                 scenarioNumber: 2,
                 hasVersioning: false,
                 rules: [
-                    new Rule()
+                    new LifecycleRule()
                         .addTag('key1', 'value1')
                         .addTransitions([{
                             Days: 0,
@@ -933,7 +938,7 @@ describe('lifecycle task functional tests', function dF() {
             async.waterfall([
                 next => s3Helper.setAndCreateBucket('test-bucket', next),
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addID('task-1').addNCVExpiration(2).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(2).build(),
                 ], next),
                 (data, next) => s3Helper.createVersions(2, next),
                 next => s3.getBucketLifecycleConfiguration({
@@ -952,7 +957,7 @@ describe('lifecycle task functional tests', function dF() {
                     });
                 },
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addNCVExpiration(1).build(),
+                    new LifecycleRule().addNCVExpiration(1).build(),
                 ], next),
                 (data, next) => s3.getBucketLifecycleConfiguration({
                     Bucket: 'test-bucket',
@@ -1002,7 +1007,7 @@ describe('lifecycle task functional tests', function dF() {
             async.waterfall([
                 next => s3Helper.setAndCreateBucket(bucket, next),
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addID('task-1')
+                    new LifecycleRule().addID('task-1')
                         .addExpiration('Date', PAST)
                         .build(),
                 ], next),
@@ -1049,9 +1054,9 @@ describe('lifecycle task functional tests', function dF() {
             async.waterfall([
                 next => s3Helper.setAndCreateBucket(bucket, next),
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addID('task-1').addExpiration('Date', PAST)
+                    new LifecycleRule().addID('task-1').addExpiration('Date', PAST)
                         .build(),
-                    new Rule().addID('task-2')
+                    new LifecycleRule().addID('task-2')
                         .addExpiration('ExpiredObjectDeleteMarker', true)
                         .build(),
                 ], next),
@@ -1219,7 +1224,7 @@ describe('lifecycle task functional tests', function dF() {
                         item.versionStatus, next),
                     (data, next) => {
                         s3Helper.setBucketLifecycleConfigurations([
-                            new Rule().addID('task-1')
+                            new LifecycleRule().addID('task-1')
                                 .addExpiration('Date', PAST).build(),
                         ], next);
                     },
@@ -1247,7 +1252,7 @@ describe('lifecycle task functional tests', function dF() {
                     'only a delete marker in a versioning enabled bucket ' +
                     'with zero non-current versions',
                 bucketLCRules: [
-                    new Rule().addID('task-1')
+                    new LifecycleRule().addID('task-1')
                         .addExpiration('ExpiredObjectDeleteMarker', true)
                         .build(),
                 ],
@@ -1260,7 +1265,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should not apply ExpiredObjectDeleteMarker rule ' +
                     'when EODM is set to false',
                 bucketLCRules: [
-                    new Rule().addID('task-1')
+                    new LifecycleRule().addID('task-1')
                         .addExpiration('ExpiredObjectDeleteMarker', false)
                         .build(),
                 ],
@@ -1273,10 +1278,10 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should not remove an expired object delete marker ' +
                     'when the ExpiredObjectDeleteMarker rule is set to false',
                 bucketLCRules: [
-                    new Rule().addID('task-1')
+                    new LifecycleRule().addID('task-1')
                         .addExpiration('ExpiredObjectDeleteMarker', false)
                         .build(),
-                    new Rule().addID('task-2')
+                    new LifecycleRule().addID('task-2')
                         .addExpiration('Days', 1).build(),
                 ],
                 owner: OWNER,
@@ -1331,7 +1336,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to each versioned object, no pagination',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addNCVExpiration(1).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(1).build(),
                 ],
                 scenarioFxn: 'createVersions',
                 scenario: 2,
@@ -1354,10 +1359,10 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to correct versions with pagination and prefix',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addNCVExpiration(3).build(),
-                    new Rule().addID('task-2').addPrefix('test/')
+                    new LifecycleRule().addID('task-1').addNCVExpiration(3).build(),
+                    new LifecycleRule().addID('task-2').addPrefix('test/')
                         .addNCVExpiration(1).build(),
-                    new Rule().addID('task-3').addPrefix('src/')
+                    new LifecycleRule().addID('task-3').addPrefix('src/')
                         .addNCVExpiration(2).build(),
                 ],
                 scenarioFxn: 'createVersions',
@@ -1381,9 +1386,9 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to correct versions with tagging and pagination',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addTag('key1', 'value1')
+                    new LifecycleRule().addID('task-1').addTag('key1', 'value1')
                         .addPrefix('src/').addNCVExpiration(1).build(),
-                    new Rule().addID('task-2').addTag('key2', 'value2')
+                    new LifecycleRule().addID('task-2').addTag('key2', 'value2')
                         .addNCVExpiration(2).build(),
                 ],
                 scenarioFxn: 'createVersions',
@@ -1407,7 +1412,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to delete markers as well with pagination',
                 bucketLCRules: [
-                    new Rule().addID('task-1').addNCVExpiration(1).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(1).build(),
                 ],
                 scenarioFxn: 'createDeleteMarkers',
                 scenario: 2,
@@ -1514,7 +1519,7 @@ describe('lifecycle task functional tests', function dF() {
 
             async.waterfall([
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addAbortMPU(2).build(),
+                    new LifecycleRule().addAbortMPU(2).build(),
                 ], next),
                 (data, next) => s3Helper.createMPU(0, next),
                 (data, next) => s3.getBucketLifecycleConfiguration({
@@ -1533,7 +1538,7 @@ describe('lifecycle task functional tests', function dF() {
                     });
                 },
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addAbortMPU(1).build(),
+                    new LifecycleRule().addAbortMPU(1).build(),
                 ], next),
                 (data, next) => s3.getBucketLifecycleConfiguration({
                     Bucket: bucketName,
@@ -1580,9 +1585,9 @@ describe('lifecycle task functional tests', function dF() {
 
             async.waterfall([
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new Rule().addID('rule-1').addPrefix('test/').addAbortMPU(1)
+                    new LifecycleRule().addID('rule-1').addPrefix('test/').addAbortMPU(1)
                         .build(),
-                    new Rule().addID('rule-2').addPrefix('obj-').addAbortMPU(2)
+                    new LifecycleRule().addID('rule-2').addPrefix('obj-').addAbortMPU(2)
                         .build(),
                 ], next),
                 (data, next) => s3Helper.createMPU(1, next),
