@@ -130,9 +130,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}",
+          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -207,9 +207,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}",
+          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -297,9 +297,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -388,9 +388,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -486,9 +486,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}) or (sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) - sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" })) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+          "expr": "sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -553,9 +553,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}) or (sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) - sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" })) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
+          "expr": "sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -647,9 +647,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval])) / sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval])) / sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
@@ -737,9 +737,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_kafka_message_pulled_total{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion processor",
           "refId": "A"
         }
       ],
