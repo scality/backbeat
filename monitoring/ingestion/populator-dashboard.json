@@ -11,7 +11,7 @@
     {
       "name": "VAR_JOB",
       "type": "constant",
-      "label": "job",
+      "label": "job_ingestion_producer",
       "value": "artesca-data-backbeat-ingestion-producer-headless",
       "description": ""
     },
@@ -138,7 +138,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job}\", namespace=~\"${namespace}\"}",
+          "expr": "up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"}",
           "interval": "",
           "legendFormat": "{{pod}}",
           "refId": "A"
@@ -189,7 +189,7 @@
     },
     {
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "Current online or offline status of all ingestion populator pods",
+      "description": "Current online or offline status of all ingestion producer pods",
       "fieldConfig": {
         "defaults": {
           "mappings": [
@@ -254,7 +254,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job}\", namespace=~\"${namespace}\"}",
+          "expr": "up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"}",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -288,7 +288,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "How many objects are being queued by the ingestion populator.",
+      "description": "How many objects are being queued by the ingestion producer.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -401,7 +401,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "How far the ingestion populator is behind in the raft journal.",
+      "description": "How far the ingestion producer is behind in the raft journal.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -459,7 +459,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Ingestion populator metadata journal lag",
+      "title": "Ingestion producer metadata journal lag",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -603,11 +603,11 @@
   "templating": {
     "list": [
       {
-        "description": "Name of the backbeat ingestion populator job",
+        "description": "Name of the backbeat ingestion producer job",
         "error": null,
         "hide": 2,
-        "label": "job",
-        "name": "job",
+        "label": "job_ingestion_producer",
+        "name": "job_ingestion_producer",
         "query": "${VAR_JOB}",
         "skipUrlSync": false,
         "type": "constant",
@@ -654,7 +654,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "OOB Ingestion Populator",
+  "title": "OOB Ingestion Producer",
   "uid": null,
   "version": 44
 }
