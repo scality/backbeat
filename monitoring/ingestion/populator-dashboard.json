@@ -21,6 +21,13 @@
       "label": "namespace",
       "value": "zenko",
       "description": ""
+    },
+    {
+      "name": "VAR_REPLICAS",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
+      "description": ""
     }
   ],
   "__requires": [
@@ -192,26 +199,7 @@
       "description": "Current online or offline status of all ingestion producer pods",
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "from": "",
-              "id": 0,
-              "operator": "",
-              "text": "Online",
-              "to": "",
-              "type": 1,
-              "value": "1"
-            },
-            {
-              "from": "",
-              "id": 1,
-              "operator": "",
-              "text": "Offline",
-              "to": "",
-              "type": 1,
-              "value": "0"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -224,7 +212,8 @@
                 "value": 1
               }
             ]
-          }
+          },
+          "unit": "/${replicas}"
         },
         "overrides": []
       },
@@ -447,7 +436,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "metadata_journal_size-ingestion_read_offset+1",
+          "expr": "sum by (locationNameRaftID) (metadata_journal_size-ingestion_read_offset+1)",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -642,6 +631,27 @@
           {
             "value": "${VAR_NAMESPACE}",
             "text": "${VAR_NAMESPACE}",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "description": "Number of backbeat processes replicas.",
+        "hide": 2,
+        "label": "replicas",
+        "name": "replicas",
+        "query": "${VAR_REPLICAS}",
+        "skipUrlSync": false,
+        "type": "constant",
+        "current": {
+          "value": "${VAR_REPLICAS}",
+          "text": "${VAR_REPLICAS}",
+          "selected": false
+        },
+        "options": [
+          {
+            "value": "${VAR_REPLICAS}",
+            "text": "${VAR_REPLICAS}",
             "selected": false
           }
         ]
