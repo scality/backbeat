@@ -21,6 +21,13 @@
       "label": "job_ingestion_processor",
       "value": "artesca-data-backbeat-ingestion-processor-headless",
       "description": ""
+    },
+    {
+      "name": "VAR_REPLICAS",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
+      "description": ""
     }
   ],
   "__elements": [],
@@ -61,6 +68,7 @@
           "custom": {
             "axisLabel": "Active pods",
             "axisPlacement": "auto",
+            "axisSoftMax": "${replicas}",
             "barAlignment": 0,
             "drawStyle": "lines",
             "fillOpacity": 0,
@@ -86,21 +94,19 @@
               "mode": "off"
             }
           },
+          "decimals": 0,
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
-          "unit": "bool_on_off"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -146,21 +152,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "1": {
-                  "index": 1,
-                  "text": "Online"
-                },
-                "0": {
-                  "index": 0,
-                  "text": "Offline"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -173,7 +165,8 @@
                 "value": 1
               }
             ]
-          }
+          },
+          "unit": "/${replicas}"
         },
         "overrides": []
       },
@@ -809,6 +802,27 @@
           {
             "value": "${VAR_JOB}",
             "text": "${VAR_JOB}",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "description": "Number of backbeat processes replicas.",
+        "hide": 2,
+        "label": "replicas",
+        "name": "replicas",
+        "query": "${VAR_REPLICAS}",
+        "skipUrlSync": false,
+        "type": "constant",
+        "current": {
+          "value": "${VAR_REPLICAS}",
+          "text": "${VAR_REPLICAS}",
+          "selected": false
+        },
+        "options": [
+          {
+            "value": "${VAR_REPLICAS}",
+            "text": "${VAR_REPLICAS}",
             "selected": false
           }
         ]
