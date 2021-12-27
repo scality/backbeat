@@ -138,9 +138,9 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"}",
+          "expr": "sum(up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion producer(s)",
           "refId": "A"
         }
       ],
@@ -254,11 +254,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"}",
+          "expr": "sum(up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion producer(s)",
           "refId": "A"
         }
       ],
@@ -333,10 +333,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(ingestion_objects_queued_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
@@ -451,7 +451,7 @@
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
@@ -547,10 +547,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
