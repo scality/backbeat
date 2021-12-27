@@ -145,7 +145,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"})",
+          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "interval": "",
           "legendFormat": "ingestion producer(s)",
           "refId": "A"
@@ -243,7 +243,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(up{job=~\"${job_ingestion_producer}\", namespace=~\"${namespace}\"})",
+          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
