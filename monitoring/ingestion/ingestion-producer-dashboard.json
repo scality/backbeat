@@ -99,7 +99,7 @@
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
       "decimals": 0,
-      "description": "Recent status for ingestion populators.",
+      "description": "Recent status for ingestion producers.",
       "fieldConfig": {
         "defaults": {
           "links": []
