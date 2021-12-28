@@ -18,8 +18,15 @@
     {
       "name": "VAR_JOB",
       "type": "constant",
-      "label": "job",
+      "label": "job_ingestion_processor",
       "value": "artesca-data-backbeat-ingestion-processor-headless",
+      "description": ""
+    },
+    {
+      "name": "VAR_REPLICAS",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
       "description": ""
     }
   ],
@@ -61,6 +68,7 @@
           "custom": {
             "axisLabel": "Active pods",
             "axisPlacement": "auto",
+            "axisSoftMax": "${replicas}",
             "barAlignment": 0,
             "drawStyle": "lines",
             "fillOpacity": 0,
@@ -86,21 +94,19 @@
               "mode": "off"
             }
           },
+          "decimals": 0,
           "mappings": [],
+          "min": 0,
           "thresholds": {
             "mode": "absolute",
             "steps": [
               {
                 "color": "green",
                 "value": null
-              },
-              {
-                "color": "red",
-                "value": 80
               }
             ]
           },
-          "unit": "bool_on_off"
+          "unit": "short"
         },
         "overrides": []
       },
@@ -130,9 +136,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "up{namespace=\"${namespace}\", job=\"${job}\"}",
+          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -146,21 +152,7 @@
           "color": {
             "mode": "thresholds"
           },
-          "mappings": [
-            {
-              "options": {
-                "1": {
-                  "index": 1,
-                  "text": "Online"
-                },
-                "0": {
-                  "index": 0,
-                  "text": "Offline"
-                }
-              },
-              "type": "value"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -173,7 +165,8 @@
                 "value": 1
               }
             ]
-          }
+          },
+          "unit": "/${replicas}"
         },
         "overrides": []
       },
@@ -207,9 +200,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "up{namespace=\"${namespace}\", job=\"${job}\"}",
+          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -297,9 +290,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -388,9 +381,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -486,13 +479,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job}\" }) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\"}) or (sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\" }) - sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job}\" })) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\"})",
+          "expr": "sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
-      "title": "Recent success rate",
+      "title": "Recent percentage of successful jobs",
       "type": "timeseries"
     },
     {
@@ -553,13 +546,13 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job}\" }) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\"}) or (sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\" }) - sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"error\", namespace=\"${namespace}\", job=\"${job}\" })) * 100 / sum by (pod) (zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job}\"})",
+          "expr": "sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\" }) * 100 / sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
-      "title": "Current success rate",
+      "title": "Current percentage of successful jobs",
       "type": "gauge"
     },
     {
@@ -647,9 +640,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job}\"}[$__rate_interval])) / sum by (pod) (rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_sum{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval])) / sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_count{status=\"success\", namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -737,9 +730,9 @@
             "uid": "${DS_PROMETHEUS}"
           },
           "exemplar": true,
-          "expr": "sum by (pod) (rate(zenko_ingestion_kafka_message_pulled_total{namespace=\"${namespace}\", job=\"${job}\"}[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "Ingestion processor(s)",
           "refId": "A"
         }
       ],
@@ -795,8 +788,8 @@
       {
         "description": "Name of the Backbeat ingestion processor Kubernetes service",
         "hide": 2,
-        "label": "job",
-        "name": "job",
+        "label": "job_ingestion_processor",
+        "name": "job_ingestion_processor",
         "query": "${VAR_JOB}",
         "skipUrlSync": false,
         "type": "constant",
@@ -809,6 +802,27 @@
           {
             "value": "${VAR_JOB}",
             "text": "${VAR_JOB}",
+            "selected": false
+          }
+        ]
+      },
+      {
+        "description": "Number of backbeat processes replicas.",
+        "hide": 2,
+        "label": "replicas",
+        "name": "replicas",
+        "query": "${VAR_REPLICAS}",
+        "skipUrlSync": false,
+        "type": "constant",
+        "current": {
+          "value": "${VAR_REPLICAS}",
+          "text": "${VAR_REPLICAS}",
+          "selected": false
+        },
+        "options": [
+          {
+            "value": "${VAR_REPLICAS}",
+            "text": "${VAR_REPLICAS}",
             "selected": false
           }
         ]
