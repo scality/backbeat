@@ -11,7 +11,7 @@
     {
       "name": "VAR_JOB",
       "type": "constant",
-      "label": "job",
+      "label": "job_ingestion_producer",
       "value": "artesca-data-backbeat-ingestion-producer-headless",
       "description": ""
     },
@@ -20,6 +20,13 @@
       "type": "constant",
       "label": "namespace",
       "value": "zenko",
+      "description": ""
+    },
+    {
+      "name": "VAR_REPLICAS",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
       "description": ""
     }
   ],
@@ -92,7 +99,7 @@
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
       "decimals": 0,
-      "description": "Recent status for ingestion populators.",
+      "description": "Recent status for ingestion producers.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -138,9 +145,9 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job}\", namespace=~\"${namespace}\"}",
+          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion producer(s)",
           "refId": "A"
         }
       ],
@@ -189,29 +196,10 @@
     },
     {
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "Current online or offline status of all ingestion populator pods",
+      "description": "Current online or offline status of all ingestion producer pods",
       "fieldConfig": {
         "defaults": {
-          "mappings": [
-            {
-              "from": "",
-              "id": 0,
-              "operator": "",
-              "text": "Online",
-              "to": "",
-              "type": 1,
-              "value": "1"
-            },
-            {
-              "from": "",
-              "id": 1,
-              "operator": "",
-              "text": "Offline",
-              "to": "",
-              "type": 1,
-              "value": "0"
-            }
-          ],
+          "mappings": [],
           "thresholds": {
             "mode": "absolute",
             "steps": [
@@ -224,7 +212,8 @@
                 "value": 1
               }
             ]
-          }
+          },
+          "unit": "/${replicas}"
         },
         "overrides": []
       },
@@ -254,11 +243,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "up{job=~\"${job}\", namespace=~\"${namespace}\"}",
+          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "{{pod}}",
+          "legendFormat": "ingestion producer(s)",
           "refId": "A"
         }
       ],
@@ -288,7 +277,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "How many objects are being queued by the ingestion populator.",
+      "description": "How many objects are being queued by the ingestion producer.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -333,10 +322,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_objects_queued_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(ingestion_objects_queued_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
@@ -401,7 +390,7 @@
       "dashLength": 10,
       "dashes": false,
       "datasource": "${DS_PROMETHEUS_SCALITY}",
-      "description": "How far the ingestion populator is behind in the raft journal.",
+      "description": "How far the ingestion producer is behind in the raft journal.",
       "fieldConfig": {
         "defaults": {
           "links": []
@@ -447,11 +436,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "metadata_journal_size-ingestion_read_offset+1",
+          "expr": "sum by (locationNameRaftID) (metadata_journal_size-ingestion_read_offset+1)",
           "format": "time_series",
           "instant": false,
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
@@ -459,7 +448,7 @@
       "timeFrom": null,
       "timeRegions": [],
       "timeShift": null,
-      "title": "Ingestion populator metadata journal lag",
+      "title": "Ingestion producer metadata journal lag",
       "tooltip": {
         "shared": true,
         "sort": 0,
@@ -547,10 +536,10 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID, pod) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(ingestion_journal_entries_processed_total[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
-          "legendFormat": "Location and raft ID '{{locationNameRaftID}}' in '{{pod}}'",
+          "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
           "refId": "A"
         }
       ],
@@ -603,11 +592,11 @@
   "templating": {
     "list": [
       {
-        "description": "Name of the backbeat ingestion populator job",
+        "description": "Name of the backbeat ingestion producer job",
         "error": null,
         "hide": 2,
-        "label": "job",
-        "name": "job",
+        "label": "job_ingestion_producer",
+        "name": "job_ingestion_producer",
         "query": "${VAR_JOB}",
         "skipUrlSync": false,
         "type": "constant",
@@ -645,6 +634,27 @@
             "selected": false
           }
         ]
+      },
+      {
+        "description": "Number of backbeat processes replicas.",
+        "hide": 2,
+        "label": "replicas",
+        "name": "replicas",
+        "query": "${VAR_REPLICAS}",
+        "skipUrlSync": false,
+        "type": "constant",
+        "current": {
+          "value": "${VAR_REPLICAS}",
+          "text": "${VAR_REPLICAS}",
+          "selected": false
+        },
+        "options": [
+          {
+            "value": "${VAR_REPLICAS}",
+            "text": "${VAR_REPLICAS}",
+            "selected": false
+          }
+        ]
       }
     ]
   },
@@ -654,7 +664,7 @@
   },
   "timepicker": {},
   "timezone": "",
-  "title": "OOB Ingestion Populator",
+  "title": "OOB Ingestion Producer",
   "uid": null,
   "version": 44
 }

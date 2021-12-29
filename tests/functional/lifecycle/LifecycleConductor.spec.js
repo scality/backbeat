@@ -92,11 +92,6 @@ const baseLCConfig = {
             port: 8552,
         },
     },
-    rules: {
-        expiration: {
-            enabled: true,
-        },
-    },
     auth: {
         type: 'account',
         account: 'lifecycle',

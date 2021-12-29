@@ -18,7 +18,7 @@ environment variable. It is disabled by default.
 export ENABLE_METRICS_PROBE=true
 ```
 
-After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/_/metrics`.
+After you start the process you can view prometheus metrics at `http://{bindAddress}:{port}/metrics`.
 
 ## Connecting to Prometheus
 
@@ -36,7 +36,7 @@ global:
 
 scrape_configs:
   - job_name: queue_populator
-    metrics_path: /_/metrics
+    metrics_path: /metrics
     static_configs:
       - targets: ['localhost:4042']
 ```
