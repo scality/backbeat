@@ -1,0 +1,31 @@
+x-inputs:
+  - name: namespace
+    type: constant
+  - name: job_ingestion_processor
+    type: constant
+  - name: replicas
+    type: constant
+
+groups:
+- name: IngestionProcessor
+  rules:
+
+  - alert: IngestionProcessorDown
+    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) == 0
+    For:   "30s"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-ingestion-processor
+      description: "All Ingestion Processor pod(s) has been down for 30 seconds"
+      summary: "Ingestion Processor service is down"
+
+  - alert: IngestionProcessorDegraded
+    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_processor}"}) < ${replicas}
+    For:   "30s"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-ingestion-processor
+      description: "At least one Ingestion Processor pod has been down for 30 seconds"
+      summary: "Ingestion Processor service is degraded"
