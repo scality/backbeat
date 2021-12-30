@@ -1,25 +1,39 @@
 {
   "__inputs": [
     {
-      "name": "DS_PROMETHEUS_SCALITY",
-      "label": "prometheus_scality",
+      "name": "DS_PROMETHEUS",
+      "label": "prometheus",
       "description": "",
       "type": "datasource",
       "pluginId": "prometheus",
       "pluginName": "Prometheus"
     },
     {
-      "name": "POPULATOR_JOB",
+      "name": "namespace",
       "type": "constant",
-      "label": "populatorJob",
-      "value": "populator",
+      "label": "namespace",
+      "value": "zenko",
       "description": ""
     },
     {
-      "name": "PROCESSOR_JOB",
+      "name": "job_ingestion_producer",
       "type": "constant",
-      "label": "processorJob",
-      "value": "processor",
+      "label": "job_ingestion_producer",
+      "value": "artesca-data-backbeat-ingestion-producer-headless",
+      "description": ""
+    },
+    {
+      "name": "job_ingestion_processor",
+      "type": "constant",
+      "label": "job_ingestion_processor",
+      "value": "artesca-data-backbeat-ingestion-producer-headless",
+      "description": ""
+    },
+    {
+      "name": "replicas",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
       "description": ""
     }
   ],
@@ -70,11 +84,11 @@
   "links": [],
   "panels": [
     {
-      "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "datasource": "${DS_PROMETHEUS}",
       "description": "How many instances are currently online and offline",
       "fieldConfig": {
         "defaults": {
-          "displayName": "Online",
+          "displayName": "",
           "mappings": [],
           "noValue": "0",
           "thresholds": {
@@ -85,30 +99,10 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "/1"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Offline"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 4,
@@ -136,19 +130,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(up{job=\"${populatorJob}\"})",
+          "expr": "sum(up{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Online",
           "refId": "A"
-        },
-        {
-          "exemplar": true,
-          "expr": "count(up{job=~\"${populatorJob}\"})-sum(up{job=~\"${populatorJob}\"})",
-          "format": "time_series",
-          "interval": "",
-          "legendFormat": "Offline",
-          "refId": "B"
         }
       ],
       "timeFrom": null,
@@ -158,11 +144,11 @@
       "type": "stat"
     },
     {
-      "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "datasource": "${DS_PROMETHEUS}",
       "description": "How many instances are currently online and offline",
       "fieldConfig": {
         "defaults": {
-          "displayName": "Online",
+          "displayName": "",
           "mappings": [],
           "noValue": "0",
           "thresholds": {
@@ -173,30 +159,10 @@
                 "value": null
               }
             ]
-          }
+          },
+          "unit": "/${replicas}"
         },
-        "overrides": [
-          {
-            "matcher": {
-              "id": "byName",
-              "options": "Offline"
-            },
-            "properties": [
-              {
-                "id": "thresholds",
-                "value": {
-                  "mode": "absolute",
-                  "steps": [
-                    {
-                      "color": "red",
-                      "value": null
-                    }
-                  ]
-                }
-              }
-            ]
-          }
-        ]
+        "overrides": []
       },
       "gridPos": {
         "h": 4,
@@ -224,19 +190,11 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(up{job=\"${processorJob}\"})",
+          "expr": "sum(up{job=\"${job_ingestion_processor}\"})",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Online",
           "refId": "A"
-        },
-        {
-          "exemplar": true,
-          "expr": "count(up{job=~\"${processorJob}\"})-sum(up{job=~\"${processorJob}\"})",
-          "format": "time_series",
-          "interval": "",
-          "legendFormat": "Offline",
-          "refId": "B"
         }
       ],
       "timeFrom": null,
@@ -250,7 +208,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "datasource": "${DS_PROMETHEUS}",
       "description": "How many objects we are ingesting per second.",
       "fieldConfig": {
         "defaults": {
@@ -354,7 +312,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "datasource": "${DS_PROMETHEUS}",
       "description": "What ratio of ingestion for success and failures",
       "fieldConfig": {
         "defaults": {},
@@ -456,7 +414,7 @@
       "bars": false,
       "dashLength": 10,
       "dashes": false,
-      "datasource": "${DS_PROMETHEUS_SCALITY}",
+      "datasource": "${DS_PROMETHEUS}",
       "description": "How many objects we are waiting to ingest",
       "fieldConfig": {
         "defaults": {
@@ -566,20 +524,20 @@
         "description": null,
         "error": null,
         "hide": 2,
-        "label": "populatorJob",
-        "name": "populatorJob",
-        "query": "${POPULATOR_JOB}",
+        "label": "job_ingestion_producer",
+        "name": "job_ingestion_producer",
+        "query": "${job_ingestion_producer}",
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${POPULATOR_JOB}",
-          "text": "${POPULATOR_JOB}",
+          "value": "${job_ingestion_producer}",
+          "text": "${job_ingestion_producer}",
           "selected": false
         },
         "options": [
           {
-            "value": "${POPULATOR_JOB}",
-            "text": "${POPULATOR_JOB}",
+            "value": "${job_ingestion_producer}",
+            "text": "${job_ingestion_producer}",
             "selected": false
           }
         ]
@@ -588,20 +546,20 @@
         "description": null,
         "error": null,
         "hide": 2,
-        "label": "processorJob",
-        "name": "processorJob",
-        "query": "${PROCESSOR_JOB}",
+        "label": "job_ingestion_processor",
+        "name": "job_ingestion_processor",
+        "query": "${job_ingestion_processor}",
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${PROCESSOR_JOB}",
-          "text": "${PROCESSOR_JOB}",
+          "value": "${job_ingestion_processor}",
+          "text": "${job_ingestion_processor}",
           "selected": false
         },
         "options": [
           {
-            "value": "${PROCESSOR_JOB}",
-            "text": "${PROCESSOR_JOB}",
+            "value": "${job_ingestion_processor}",
+            "text": "${job_ingestion_processor}",
             "selected": false
           }
         ]
@@ -627,6 +585,6 @@
   },
   "timezone": "",
   "title": "OOB Ingestion Global",
-  "uid": "mqInlBT7k",
+  "uid": null,
   "version": 16
 }
