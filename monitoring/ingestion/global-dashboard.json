@@ -26,7 +26,7 @@
       "name": "job_ingestion_processor",
       "type": "constant",
       "label": "job_ingestion_processor",
-      "value": "artesca-data-backbeat-ingestion-producer-headless",
+      "value": "artesca-data-backbeat-ingestion-processor-headless",
       "description": ""
     },
     {
