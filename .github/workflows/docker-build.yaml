@@ -40,5 +40,6 @@ jobs:
         run: |
           oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}-dev/${{ env.PROJECT_NAME }}-dashboards:${{ github.sha }} \
           ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
-          ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json
+          ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
+          ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json
         working-directory: monitoring
