@@ -9,21 +9,21 @@
       "pluginName": "Prometheus"
     },
     {
-      "name": "VAR_NAMESPACE",
+      "name": "namespace",
       "type": "constant",
       "label": "namespace",
       "value": "zenko",
       "description": ""
     },
     {
-      "name": "VAR_JOB",
+      "name": "job_ingestion_processor",
       "type": "constant",
       "label": "job_ingestion_processor",
       "value": "artesca-data-backbeat-ingestion-processor-headless",
       "description": ""
     },
     {
-      "name": "VAR_REPLICAS",
+      "name": "replicas",
       "type": "constant",
       "label": "replicas",
       "value": "1",
@@ -769,18 +769,18 @@
         "hide": 2,
         "label": "namespace",
         "name": "namespace",
-        "query": "${VAR_NAMESPACE}",
+        "query": "${namespace}",
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${VAR_NAMESPACE}",
-          "text": "${VAR_NAMESPACE}",
+          "value": "${namespace}",
+          "text": "${namespace}",
           "selected": false
         },
         "options": [
           {
-            "value": "${VAR_NAMESPACE}",
-            "text": "${VAR_NAMESPACE}",
+            "value": "${namespace}",
+            "text": "${namespace}",
             "selected": false
           }
         ]
@@ -790,18 +790,18 @@
         "hide": 2,
         "label": "job_ingestion_processor",
         "name": "job_ingestion_processor",
-        "query": "${VAR_JOB}",
+        "query": "${job_ingestion_processor}",
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${VAR_JOB}",
-          "text": "${VAR_JOB}",
+          "value": "${job_ingestion_processor}",
+          "text": "${job_ingestion_processor}",
           "selected": false
         },
         "options": [
           {
-            "value": "${VAR_JOB}",
-            "text": "${VAR_JOB}",
+            "value": "${job_ingestion_processor}",
+            "text": "${job_ingestion_processor}",
             "selected": false
           }
         ]
@@ -811,18 +811,18 @@
         "hide": 2,
         "label": "replicas",
         "name": "replicas",
-        "query": "${VAR_REPLICAS}",
+        "query": "${replicas}",
         "skipUrlSync": false,
         "type": "constant",
         "current": {
-          "value": "${VAR_REPLICAS}",
-          "text": "${VAR_REPLICAS}",
+          "value": "${replicas}",
+          "text": "${replicas}",
           "selected": false
         },
         "options": [
           {
-            "value": "${VAR_REPLICAS}",
-            "text": "${VAR_REPLICAS}",
+            "value": "${replicas}",
+            "text": "${replicas}",
             "selected": false
           }
         ]
