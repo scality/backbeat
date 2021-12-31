@@ -21,13 +21,6 @@
       "label": "namespace",
       "value": "zenko",
       "description": ""
-    },
-    {
-      "name": "replicas",
-      "type": "constant",
-      "label": "replicas",
-      "value": "1",
-      "description": ""
     }
   ],
   "__requires": [
@@ -213,7 +206,7 @@
               }
             ]
           },
-          "unit": "/${replicas}"
+          "unit": "/1"
         },
         "overrides": []
       },
@@ -631,27 +624,6 @@
           {
             "value": "${namespace}",
             "text": "${namespace}",
-            "selected": false
-          }
-        ]
-      },
-      {
-        "description": "Number of backbeat processes replicas.",
-        "hide": 2,
-        "label": "replicas",
-        "name": "replicas",
-        "query": "${replicas}",
-        "skipUrlSync": false,
-        "type": "constant",
-        "current": {
-          "value": "${replicas}",
-          "text": "${replicas}",
-          "selected": false
-        },
-        "options": [
-          {
-            "value": "${replicas}",
-            "text": "${replicas}",
             "selected": false
           }
         ]
