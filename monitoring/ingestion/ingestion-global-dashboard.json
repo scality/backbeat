@@ -388,7 +388,7 @@
           "$$hashKey": "object:169",
           "decimals": 1,
           "format": "percentunit",
-          "label": "bytes/s",
+          "label": "Success rate",
           "logBase": 1,
           "max": "1",
           "min": "0",
