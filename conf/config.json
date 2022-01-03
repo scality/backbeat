@@ -112,7 +112,7 @@
                 "bootstrapList": [
                     { "site": "zenko", "servers": ["localhost:8001"],
                       "echo": false },
-                    { "site": "us-east-1", "type": "aws_s3" }
+                    { "site": "wontwork-location", "type": "aws_s3" }
                 ],
                 "auth": {
                     "type": "service",
