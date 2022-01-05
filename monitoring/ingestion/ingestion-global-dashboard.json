@@ -20,21 +20,42 @@
       "type": "constant",
       "label": "job_ingestion_producer",
       "value": "artesca-data-backbeat-ingestion-producer-headless",
-      "description": ""
+      "description": "Name of the ingestion producer job, used to filter only the ingestion producer instances"
     },
     {
       "name": "job_ingestion_processor",
       "type": "constant",
       "label": "job_ingestion_processor",
       "value": "artesca-data-backbeat-ingestion-processor-headless",
-      "description": ""
+      "description": "Name of the ingestion processor job, used to filter only the ingestion processor instances"
+    },
+    {
+      "name": "job_zookeeper",
+      "type": "constant",
+      "label": "job_zookeeper",
+      "value": "artesca-data-base-quorum-headless",
+      "description": "Name of the zookeeper job, used to filter only the zookeeper instances"
+    },
+    {
+      "name": "job_kafka",
+      "type": "constant",
+      "label": "job_kafka",
+      "value": "artesca-data-base-queue",
+      "description": "Name of the kafka job, used to filter only the kafka instances"
     },
     {
       "name": "replicas",
       "type": "constant",
       "label": "replicas",
       "value": "1",
-      "description": ""
+      "description": "Number of replicas for backbeat processes"
+    },
+    {
+      "name": "stateful_replicas",
+      "type": "constant",
+      "label": "replicas",
+      "value": "1",
+      "description": "Number of replicas for stateful processes"
     }
   ],
   "__requires": [
@@ -106,7 +127,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
+        "w": 6,
         "x": 0,
         "y": 0
       },
@@ -166,8 +187,8 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 12,
-        "x": 12,
+        "w": 6,
+        "x": 6,
         "y": 0
       },
       "id": 26,
@@ -200,6 +221,126 @@
       "timeFrom": null,
       "timeShift": null,
       "title": "Ingestion Processor",
+      "transformations": [],
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "How many instances are currently online and offline",
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "",
+          "mappings": [],
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "/${stateful_replicas}"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 12,
+        "y": 0
+      },
+      "id": 27,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.7",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum(up{job=\"${job_zookeeper}\",namespace=\"${namespace}\"})",
+          "format": "time_series",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Zookeeper Quorum",
+      "transformations": [],
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "description": "How many instances are currently online and offline",
+      "fieldConfig": {
+        "defaults": {
+          "displayName": "",
+          "mappings": [],
+          "noValue": "0",
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "value": null
+              }
+            ]
+          },
+          "unit": "/${stateful_replicas}"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 6,
+        "x": 18,
+        "y": 0
+      },
+      "id": 28,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "none",
+        "justifyMode": "center",
+        "orientation": "vertical",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "text": {},
+        "textMode": "auto"
+      },
+      "pluginVersion": "7.5.7",
+      "targets": [
+        {
+          "exemplar": true,
+          "expr": "sum(up{namespace=\"${namespace}\", job=\"${job_kafka}\"})",
+          "format": "time_series",
+          "interval": "",
+          "legendFormat": "",
+          "refId": "A"
+        }
+      ],
+      "timeFrom": null,
+      "timeShift": null,
+      "title": "Kafka Brokers",
       "transformations": [],
       "type": "stat"
     },
