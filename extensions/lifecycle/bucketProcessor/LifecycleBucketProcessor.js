@@ -5,6 +5,7 @@ const http = require('http');
 const https = require('https');
 const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
+const { supportedLifecycleRules } = require('arsenal').constants;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -76,6 +77,17 @@ class LifecycleBucketProcessor {
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
+        this._supportedRulesObject = {};
+        supportedLifecycleRules.forEach(rule => {
+            this._supportedRulesObject[rule] = { enabled: true };
+        });
+        this._hasSupportedRules = Array.isArray(supportedLifecycleRules) &&
+            supportedLifecycleRules.length > 0;
+
+        if (!this._hasSupportedRules) {
+            this._log.debug('no lifecycle rules enabled in backbeat config');
+        }
+
         this._producerReady = false;
         this._consumerReady = false;
 
@@ -124,7 +136,7 @@ class LifecycleBucketProcessor {
         return {
             producer: this._producer,
             bootstrapList: this._repConfig.destination.bootstrapList,
-            enabledRules: this._lcConfig.rules,
+            enabledRules: this._supportedRulesObject,
             s3Endpoint: this._s3Endpoint,
             s3Auth: this._lcConfig.auth,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
@@ -219,13 +231,8 @@ class LifecycleBucketProcessor {
             });
             return false;
         }
-        const { rules } = this._lcConfig;
-        // Check if backbeat config has a lifecycle rule enabled for processing.
-        const enabled = Object.keys(rules).some(rule => rules[rule].enabled);
-        if (!enabled) {
-            this._log.debug('no lifecycle rules enabled in backbeat config');
-        }
-        return enabled;
+
+        return this._hasSupportedRules;
     }
 
     /**
