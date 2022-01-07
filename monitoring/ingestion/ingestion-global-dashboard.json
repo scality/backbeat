@@ -190,7 +190,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(up{job=\"${job_ingestion_processor}\"})",
+          "expr": "sum(up{job=\"${job_ingestion_processor}\", namespace=\"${namespace}\"})",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Online",
@@ -257,7 +257,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{job=\"${job_ingestion_processor}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -359,7 +359,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{status=\"success\"}[$__rate_interval]))/sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket[$__rate_interval]))",
+          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\", status=\"success\"}[$__rate_interval]))/sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -463,7 +463,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(metadata_journal_size)-sum(ingestion_read_offset)+count(ingestion_read_offset)",
+          "expr": "sum(metadata_journal_size{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})-sum(ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})+count(ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"})",
           "interval": "",
           "legendFormat": "ingestion",
           "refId": "A"
