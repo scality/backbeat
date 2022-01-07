@@ -1,0 +1,71 @@
+x-inputs:
+  - name: namespace
+    type: constant
+  - name: job_ingestion_producer
+    type: constant
+  - name: replicas
+    type: constant
+
+groups:
+- name: IngestionProducer
+  rules:
+
+  - alert: IngestionProducerDown
+    Expr: sum(up{namespace="${namespace}", job="${job_ingestion_producer}"}) == 0
+    For:   "30s"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Ingestion Producer pod has been down for 30 seconds"
+      summary: "Ingestion Producer service is down"
+
+  - alert: IngestionProducerLagIncreasedBy3Percent
+    Expr: |
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1) -
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+        /
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      > 0.03
+    For:   "5m"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Ingestion lag across all locations has increased to 3% in the last 5 minutes"
+      summary: "Overall ingestion lag has increased"
+
+  - alert: IngestionProducerLagIncreasedBy5Percent
+    Expr: |
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1) -
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+        /
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      > 0.05
+    For:   "5m"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Ingestion lag across all locations has increased to 5% in the last 5 minutes"
+      summary: "Overall ingestion lag has increased"
+
+  - alert: NoMessagesQueued
+    Expr: |
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1)) > 1)
+      and
+      ((sum(rate(ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))) == 0)
+    For:   "5m"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Ingestion producer has not queued any messages in the last 5 minutes"
+      summary: "Ingestion producer has not queued messages"
