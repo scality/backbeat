@@ -35,7 +35,8 @@ jobs:
           ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
           ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
           ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
-          ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml
+          ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
+          ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml
         working-directory: monitoring
 
       - name: Build and push
