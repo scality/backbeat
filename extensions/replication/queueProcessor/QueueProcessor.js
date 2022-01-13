@@ -408,7 +408,10 @@ class QueueProcessor extends EventEmitter {
             const groupId =
                 `${this.repConfig.queueProcessor.groupId}-${this.site}`;
             this._consumer = new BackbeatConsumer({
-                kafka: { hosts: this.kafkaConfig.hosts },
+                kafka: {
+                    hosts: this.kafkaConfig.hosts,
+                    site: this.kafkaConfig.site,
+                },
                 topic: this.repConfig.topic,
                 groupId,
                 concurrency: this.repConfig.queueProcessor.concurrency,

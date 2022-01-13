@@ -164,7 +164,10 @@ class ReplicationStatusProcessor {
     start(options, cb) {
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
         this._consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
+            kafka: {
+                hosts: this.kafkaConfig.hosts,
+                site: this.kafkaConfig.site,
+            },
             topic: this.repConfig.replicationStatusTopic,
             groupId: this.repConfig.replicationStatusProcessor.groupId,
             concurrency:
