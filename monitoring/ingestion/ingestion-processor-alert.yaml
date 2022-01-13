@@ -57,3 +57,33 @@ groups:
       zenko_service: backbeat-ingestion-processor
       description: "Ingestion processor error rate has increased to 5% in the last 5 minutes"
       summary: "Ingestion Processor error rate has increased"
+
+  - alert: IngestionProcessorTopicConsumeErrorIncreasedBy3Percent
+    Expr: |
+      sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+        /
+      sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+        rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      > 0.03
+    For:   "5m"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Errors in consuming messages from ingestion topic has increased to 3% in the last 5 minutes"
+      summary: "Ingestion processor error consuming messages"
+
+  - alert: IngestionProcessorTopicConsumeErrorIncreasedBy5Percent
+    Expr: |
+      sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+        /
+      sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+        rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      > 0.05
+    For:   "5m"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-ingestion-producer
+      description: "Errors in consuming messages from ingestion topic has increased to 5% in the last 5 minutes"
+      summary: "Ingestion processor error consuming messages"
