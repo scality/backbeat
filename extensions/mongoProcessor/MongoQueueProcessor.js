@@ -136,6 +136,7 @@ class MongoQueueProcessor {
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
             this._consumer.on('error', () => {
+                MongoProcessorMetrics.onIngestionKafkaConsume('error');
                 if (!consumerReady) {
                     this.logger.fatal('error starting mongo queue processor');
                     process.exit(1);

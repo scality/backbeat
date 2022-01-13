@@ -14,6 +14,12 @@ const ingestionKafkaPulledTotal = ZenkoMetrics.createCounter({
     help: 'Number of kafka entries pulled for ingestion',
 });
 
+const ingestionKafkaConsume = ZenkoMetrics.createCounter({
+    name: promMetricNames.ingestionKafkaConsume,
+    help: 'Total number of operations by the ingestion processor kafka consumer',
+    labelNames: ['origin', 'status'],
+});
+
 class MongoProcessorMetrics {
     static onProcessKafkaEntry() {
         ingestionKafkaPulledTotal.inc();
@@ -23,6 +29,13 @@ class MongoProcessorMetrics {
         ingestionProcessedElapsedSeconds.observe({
             status,
         }, elapsedMs / 1000);
+    }
+
+    static onIngestionKafkaConsume(status) {
+        ingestionKafkaConsume.inc({
+            origin: 'ingestion',
+            status,
+        });
     }
 }
 
