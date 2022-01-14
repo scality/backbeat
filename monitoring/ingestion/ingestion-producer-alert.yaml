@@ -22,13 +22,13 @@ groups:
 
   - alert: IngestionProducerLagIncreasedBy3Percent
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1) -
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
         /
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
       > 0.03
     For:   "5m"
     Labels:
@@ -40,13 +40,13 @@ groups:
 
   - alert: IngestionProducerLagIncreasedBy5Percent
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1) -
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
         /
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"} offset 5m)+1))
+      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
       > 0.05
     For:   "5m"
     Labels:
@@ -58,10 +58,10 @@ groups:
 
   - alert: NoMessagesQueued
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_processor}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_processor}"}+1)) > 1)
+      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1)) > 1)
       and
-      ((sum(rate(ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))) == 0)
+      ((sum(rate(ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))) == 0)
     For:   "5m"
     Labels:
       severity: warning
