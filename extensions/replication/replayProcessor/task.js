@@ -3,7 +3,7 @@ const async = require('async');
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const QueueProcessor = require('./QueueProcessor');
+const QueueProcessor = require('../queueProcessor/QueueProcessor');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const config = require('../../../conf/Config');
@@ -36,7 +36,7 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
-const { topic } = repConfig;
+const topic = repConfig.replicationReplayTopic;
 const queueProcessor = new QueueProcessor(
     topic, kafkaConfig, sourceConfig, destConfig, repConfig,
     httpsConfig, internalHttpsConfig, site, metricsProducer

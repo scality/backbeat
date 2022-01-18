@@ -6,6 +6,7 @@
   "scripts": {
     "queue_populator": "node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "replay_processor": "node extensions/replication/replayProcessor/task.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",

@@ -730,8 +730,11 @@ class ReplicateObject extends BackbeatTask {
             err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 
-    _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry,
+    _handleReplicationOutcome(error, sourceEntry, destEntry, kafkaEntry,
         log, done) {
+        // TO BE REMOVED: SIMULATE FLACKY ERROR
+        const err = Math.random() < 1 ? new Error('OH no!!!') : error;
+        console.log('END!!!!', err);
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                 'replication status as COMPLETED',

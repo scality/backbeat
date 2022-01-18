@@ -44,6 +44,7 @@ const joiSchema = {
     replicationStatusTopic: joi.string().required(),
     monitorReplicationFailures: joi.boolean().default(true),
     replicationFailedTopic: joi.string().required(),
+    replicationReplayTopic: joi.string().required(),
     monitorReplicationFailureExpiryTimeS:
         joi.number().default(CRR_FAILURE_EXPIRY),
     queueProcessor: joi.object({

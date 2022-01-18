@@ -14,6 +14,7 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const ReplayProducer = require('../replay/ReplayProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
@@ -148,6 +149,7 @@ class ReplicationStatusProcessor {
             vaultclientCache: this.vaultclientCache,
             statsClient: this._statsClient,
             failedCRRProducer: this._FailedCRRProducer,
+            replayProducer: this._ReplayProducer,
             logger: this.logger,
         };
     }
@@ -163,6 +165,7 @@ class ReplicationStatusProcessor {
      */
     start(options, cb) {
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
+        this._ReplayProducer = new ReplayProducer(this.kafkaConfig);
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
@@ -178,7 +181,12 @@ class ReplicationStatusProcessor {
             this.logger.info('replication status processor is ready to ' +
                 'consume replication status entries');
             this._consumer.subscribe();
-            this._FailedCRRProducer.setupProducer(cb);
+            this._FailedCRRProducer.setupProducer(err => {
+                if (err) {
+                    return cb(err);
+                }
+                return this._ReplayProducer.setupProducer(cb);
+            });
         });
     }
 
@@ -253,7 +261,7 @@ class ReplicationStatusProcessor {
         } else {
             verboseLiveness.consumer = constants.statusReady;
         }
-
+        // TODO add _FailedCRRProducer
         if (this._FailedCRRProducer === undefined || this._FailedCRRProducer === null ||
             this._FailedCRRProducer._producer === undefined ||
             this._FailedCRRProducer._producer === null) {

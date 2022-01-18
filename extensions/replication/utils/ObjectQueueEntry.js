@@ -42,6 +42,22 @@ class ObjectQueueEntry extends ObjectMD {
         this.objectVersionedKey = objectVersionedKey;
         this.objectKey = _extractVersionedBaseKey(objectVersionedKey);
         this.site = null;
+        // used to keep a reference of replayCount when cloning.
+        this.replayCount = objMd.replayCount;
+    }
+
+    setReplayCount(count) {
+        this.replayCount = count;
+        return this;
+    }
+
+    decReplayCount() {
+        this.replayCount--;
+        return this;
+    }
+
+    getReplayCount() {
+        return this.replayCount;
     }
 
     setSite(site) {
@@ -160,6 +176,7 @@ class ObjectQueueEntry extends ObjectMD {
                      key: this.getObjectVersionedKey(),
                      value: JSON.stringify(this.getValue()),
                      site,
+                     replayCount: this.getReplayCount(),
                  }),
                };
     }

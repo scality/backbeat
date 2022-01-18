@@ -133,6 +133,7 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
+     * @param {String} topic - topic name to consume
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -142,7 +143,6 @@ class QueueProcessor extends EventEmitter {
      * @param {Object} destConfig - target S3 configuration
      * @param {Object} destConfig.auth - authentication info on target
      * @param {Object} repConfig - replication configuration object
-     * @param {String} repConfig.topic - replication topic name
      * @param {String} repConfig.queueProcessor - config object
      *   specific to queue processor
      * @param {Object} [httpsConfig] - destination SSL termination
@@ -166,9 +166,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(kafkaConfig, sourceConfig, destConfig, repConfig,
+    constructor(topic, kafkaConfig, sourceConfig, destConfig, repConfig,
         httpsConfig, internalHttpsConfig, site, mProducer) {
         super();
+        this.topic = topic;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -409,7 +410,7 @@ class QueueProcessor extends EventEmitter {
                 `${this.repConfig.queueProcessor.groupId}-${this.site}`;
             this._consumer = new BackbeatConsumer({
                 kafka: { hosts: this.kafkaConfig.hosts },
-                topic: this.repConfig.topic,
+                topic: this.topic,
                 groupId,
                 concurrency: this.repConfig.queueProcessor.concurrency,
                 queueProcessor: this.processKafkaEntry.bind(this),
@@ -419,7 +420,7 @@ class QueueProcessor extends EventEmitter {
             this._consumer.on('ready', () => {
                 this._consumer.subscribe();
                 this.logger.info('queue processor is ready to consume ' +
-                    'replication entries');
+                    `${this.topic} entries`);
                 this.emit('ready');
             });
             return undefined;
@@ -457,7 +458,9 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
+        console.log('KAFKA ENTRY!!!', kafkaEntry);
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+        console.log('sourceEntry!!!', sourceEntry);
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
                 { error: sourceEntry.error });

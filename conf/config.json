@@ -34,7 +34,7 @@
                 },
                 "auth": {
                     "type": "account",
-                    "account": "bart",
+                    "account": "backbeatuser",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -47,7 +47,7 @@
                 "bootstrapList": [
                     { "site": "sf", "servers": ["127.0.0.1:9443"],
                       "echo": false },
-                    { "site": "us-east-1", "type": "aws_s3" }
+                    { "site": "wontwork-location", "type": "aws_s3" }
                 ],
                 "auth": {
                     "type": "account",
@@ -56,6 +56,7 @@
             },
             "topic": "backbeat-replication",
             "replicationStatusTopic": "backbeat-replication-status",
+            "replicationReplayTopic": "backbeat-replication-replay",
             "replicationFailedTopic": "backbeat-replication-failed",
             "monitorReplicationFailures": true,
             "monitorReplicationFailureExpiryTimeS": 86400,
