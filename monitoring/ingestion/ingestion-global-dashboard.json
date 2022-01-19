@@ -398,7 +398,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{job=\"${job_ingestion_processor}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum(rate(ingestion_mongo_processed_elapsed_seconds_bucket{job=\"${job_ingestion_processor}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"
@@ -500,7 +500,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\", status=\"success\"}[$__rate_interval]))/sum(rate(zenko_ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\", status=\"success\"}[$__rate_interval]))/sum(rate(ingestion_mongo_processed_elapsed_seconds_bucket{namespace=\"${namespace}\", job=\"${job_ingestion_processor}\"}[$__rate_interval]))",
           "interval": "",
           "legendFormat": "",
           "refId": "A"

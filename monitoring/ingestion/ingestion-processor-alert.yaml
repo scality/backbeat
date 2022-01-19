@@ -32,9 +32,9 @@ groups:
 
   - alert: IngestionProcessorErrorRate3Percent
     Expr: |
-      (sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+      (sum(ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
         /
-      sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+      sum(ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
       > 0.03
     For:   "5m"
     Labels:
@@ -46,9 +46,9 @@ groups:
 
   - alert: IngestionProcessorErrorRate5Percent
     Expr: |
-      (sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+      (sum(ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
         /
-      sum(zenko_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+      sum(ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
       > 0.05
     For:   "5m"
     Labels:
@@ -62,7 +62,7 @@ groups:
     Expr: |
       sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
         /
-      sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+      sum(rate(ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
         rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
       > 0.03
     For:   "5m"
@@ -77,7 +77,7 @@ groups:
     Expr: |
       sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
         /
-      sum(rate(zenko_ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+      sum(rate(ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
         rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
       > 0.05
     For:   "5m"

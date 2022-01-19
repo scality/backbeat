@@ -14,10 +14,10 @@ const constants = {
     metricsTypeCompleted: 'completed',
     metricsTypeFailed: 'failed',
     promMetricNames: {
-        replicationQueuedTotal: 'zenko_replication_queued_total',
-        replicationQueuedBytes: 'zenko_replication_queued_bytes',
-        replicationProcessedBytes: 'zenko_replication_processed_bytes',
-        replicationElapsedSeconds: 'zenko_replication_elapsed_seconds',
+        replicationQueuedTotal: 'replication_queued_total',
+        replicationQueuedBytes: 'replication_queued_bytes',
+        replicationProcessedBytes: 'replication_processed_bytes',
+        replicationElapsedSeconds: 'replication_elapsed_seconds',
     },
     redisKeys: {
         opsPending: testIsOn ? 'test:bb:opspending' : 'bb:crr:opspending',
