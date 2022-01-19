@@ -107,8 +107,6 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (err) {
                 return done(err);
             }
-            console.log('sourceEntry!!!', sourceEntry);
-            console.log('backends!!!', sourceEntry.getValue().replicationInfo.backends);
             const site = sourceEntry.getSite();
             const status = sourceEntry.getReplicationSiteStatus(site);
             let updatedSourceEntry;
@@ -116,7 +114,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
             } else if (status === 'FAILED') {
                 const count = sourceEntry.getReplayCount();
-                console.log('count!!!', count);
+                console.log('COUNT!!!!', count);
                 if (count === 0) {
                     if (this.repConfig.monitorReplicationFailures) {
                         this._pushFailedEntry(sourceEntry);
@@ -125,13 +123,13 @@ class UpdateReplicationStatus extends BackbeatTask {
                 } else if (count > 0) {
                     sourceEntry.decReplayCount();
                     this.replayProducer.publishReplayEntry(sourceEntry.toRetryEntry(site).toKafkaEntry());
-                    // Source object metadata replication status should stay "PENDING".
+                    // Source object metadata site replication status should stay "PENDING".
                     return done();
                 } else if (!count) {
                     // If no replay count has been defined yet:
-                    sourceEntry.setReplayCount(5);
+                    sourceEntry.setReplayCount(2);
                     this.replayProducer.publishReplayEntry(sourceEntry.toRetryEntry(site).toKafkaEntry());
-                    // Source object metadata replication status should stay "PENDING".
+                    // Source object metadata site replication status should stay "PENDING".
                     return done();
                 }
             } else if (status === 'PENDING') {

@@ -18,9 +18,14 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 
 const site = process.argv[2];
-assert(site, 'QueueProcessor task must be started with a site as argument');
+const topic = process.argv[3];
+const replayDelayInSec = process.argv[4];
 
-console.log('site !!!', site);
+assert(site, 'QueueProcessor task must be started with a site as argument');
+assert(topic, 'QueueProcessor task must have topic as a second argument');
+assert(replayDelayInSec, 'QueueProcessor task must have replay delay in second as a second argument');
+
+// TODO more validation on topic and replay
 
 const bootstrapList = repConfig.destination.bootstrapList
     .filter(item => item.site === site);
@@ -36,10 +41,10 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
-const topic = repConfig.replicationReplayTopic;
+// const topic = repConfig.replicationReplayTopic;
 const queueProcessor = new QueueProcessor(
     topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-    httpsConfig, internalHttpsConfig, site, metricsProducer
+    httpsConfig, internalHttpsConfig, site, metricsProducer, { replayDelayInSec }
 );
 
 /**

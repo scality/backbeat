@@ -39,7 +39,7 @@ const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
 const { topic } = repConfig;
 const queueProcessor = new QueueProcessor(
     topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-    httpsConfig, internalHttpsConfig, site, metricsProducer
+    httpsConfig, internalHttpsConfig, site, metricsProducer, null
 );
 
 /**

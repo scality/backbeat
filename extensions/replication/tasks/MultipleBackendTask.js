@@ -411,7 +411,6 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
-            console.log('BACKEND OBJECT VERSION ID!!!', data.versionId);
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
             return doneOnce(null, data);
@@ -524,7 +523,6 @@ class MultipleBackendTask extends ReplicateObject {
             return cb(errors.InvalidObjectState);
         }
         const locations = sourceEntry.getReducedLocations();
-        console.log('_getAndPutData => sourceEntry.getReducedLocations()!!!', sourceEntry.getReducedLocations());
         // Metadata-only operations have no part locations.
         if (locations.length === 0) {
             return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);

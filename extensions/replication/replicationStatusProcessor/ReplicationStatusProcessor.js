@@ -165,7 +165,8 @@ class ReplicationStatusProcessor {
      */
     start(options, cb) {
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
-        this._ReplayProducer = new ReplayProducer(this.kafkaConfig);
+        // TODO: PRODUCER TOPIC SHOULD NOT BE HARDCODED.
+        this._ReplayProducer = new ReplayProducer(this.kafkaConfig, 'backbeat-replication-replay');
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,

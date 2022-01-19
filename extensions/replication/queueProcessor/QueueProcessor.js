@@ -167,9 +167,10 @@ class QueueProcessor extends EventEmitter {
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
     constructor(topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-        httpsConfig, internalHttpsConfig, site, mProducer) {
+        httpsConfig, internalHttpsConfig, site, mProducer, replay) {
         super();
         this.topic = topic;
+        this.replayDelayInSec = replay ? replay.replayDelayInSec : null;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -415,6 +416,7 @@ class QueueProcessor extends EventEmitter {
                 concurrency: this.repConfig.queueProcessor.concurrency,
                 queueProcessor: this.processKafkaEntry.bind(this),
                 logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
+                replayDelayInSec: this.replayDelayInSec,
             });
             this._consumer.on('error', () => { });
             this._consumer.on('ready', () => {
@@ -458,9 +460,7 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
-        console.log('KAFKA ENTRY!!!', kafkaEntry);
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
-        console.log('sourceEntry!!!', sourceEntry);
         if (sourceEntry.error) {
             this.logger.error('error processing source entry',
                 { error: sourceEntry.error });

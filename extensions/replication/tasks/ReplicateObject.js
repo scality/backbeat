@@ -734,7 +734,7 @@ class ReplicateObject extends BackbeatTask {
         log, done) {
         // TO BE REMOVED: SIMULATE FLACKY ERROR
         const err = Math.random() < 1 ? new Error('OH no!!!') : error;
-        console.log('END!!!!', err);
+        console.log('ERROR OCCURED!!!');
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                 'replication status as COMPLETED',

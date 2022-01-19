@@ -3,7 +3,6 @@
 const { Logger } = require('werelogs');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
-const config = require('../../../conf/Config');
 
 class ReplayProducer {
     /**
@@ -11,9 +10,9 @@ class ReplayProducer {
      *
      * @param {object} kafkaConfig - kafka config param
      */
-    constructor(kafkaConfig) {
+    constructor(kafkaConfig, topic) {
         this._kafkaConfig = kafkaConfig;
-        this._topic = config.extensions.replication.replicationReplayTopic;
+        this._topic = topic;
         this._producer = null;
         this._log = new Logger('Backbeat:ReplayProducer');
     }
@@ -51,7 +50,6 @@ class ReplayProducer {
      */
     publishReplayEntry(message, deliveryReportCb) {
         this._producer.send([message], err => {
-            console.log('REPLAY PUBISHED!!!');
             if (err) {
                 this._log.trace('error publishing retry entry');
             }
