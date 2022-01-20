@@ -5,6 +5,7 @@ const werelogs = require('werelogs');
 
 const QueueProcessor = require('../queueProcessor/QueueProcessor');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+const BackbeatReplayConsumer = require('../../../lib/BackbeatReplayConsumer');
 
 const config = require('../../../conf/Config');
 const kafkaConfig = config.kafka;
@@ -41,10 +42,22 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
-// const topic = repConfig.replicationReplayTopic;
+
+const groupId =
+    `${repConfig.queueProcessor.groupId}-${site}`;
+const consumer = new BackbeatReplayConsumer({
+    kafka: { hosts: kafkaConfig.hosts },
+    topic,
+    groupId,
+    concurrency: repConfig.queueProcessor.concurrency,
+    // queueProcessor: processKafkaEntry.bind(this),
+    logConsumerMetricsIntervalS: repConfig.queueProcessor.logConsumerMetricsIntervalS,
+    replayDelayInSec,
+});
+
 const queueProcessor = new QueueProcessor(
-    topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-    httpsConfig, internalHttpsConfig, site, metricsProducer, { replayDelayInSec }
+    consumer, kafkaConfig, sourceConfig, destConfig, repConfig,
+    httpsConfig, internalHttpsConfig, site, metricsProducer
 );
 
 /**

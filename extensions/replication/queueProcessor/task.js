@@ -5,6 +5,7 @@ const werelogs = require('werelogs');
 
 const QueueProcessor = require('./QueueProcessor');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 
 const config = require('../../../conf/Config');
 const kafkaConfig = config.kafka;
@@ -19,8 +20,6 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
 
 const site = process.argv[2];
 assert(site, 'QueueProcessor task must be started with a site as argument');
-
-console.log('site !!!', site);
 
 const bootstrapList = repConfig.destination.bootstrapList
     .filter(item => item.site === site);
@@ -37,9 +36,21 @@ werelogs.configure({ level: config.log.logLevel,
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
 const { topic } = repConfig;
+
+const groupId =
+    `${repConfig.queueProcessor.groupId}-${site}`;
+const consumer = new BackbeatConsumer({
+    kafka: { hosts: kafkaConfig.hosts },
+    topic,
+    groupId,
+    concurrency: repConfig.queueProcessor.concurrency,
+    // queueProcessor: processKafkaEntry.bind(this),
+    logConsumerMetricsIntervalS: repConfig.queueProcessor.logConsumerMetricsIntervalS,
+});
+
 const queueProcessor = new QueueProcessor(
-    topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-    httpsConfig, internalHttpsConfig, site, metricsProducer, null
+    consumer, kafkaConfig, sourceConfig, destConfig, repConfig,
+    httpsConfig, internalHttpsConfig, site, metricsProducer
 );
 
 /**

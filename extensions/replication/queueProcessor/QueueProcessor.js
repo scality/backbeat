@@ -133,7 +133,7 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
-     * @param {String} topic - topic name to consume
+     * @param {String} consumer - TODO: desc
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -166,11 +166,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-        httpsConfig, internalHttpsConfig, site, mProducer, replay) {
+    constructor(consumer, kafkaConfig, sourceConfig, destConfig, repConfig,
+        httpsConfig, internalHttpsConfig, site, mProducer) {
         super();
-        this.topic = topic;
-        this.replayDelayInSec = replay ? replay.replayDelayInSec : null;
+        this._consumer = consumer;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -181,7 +180,6 @@ class QueueProcessor extends EventEmitter {
         this.sourceAdminVaultConfigured = false;
         this.destAdminVaultConfigured = false;
         this.replicationStatusProducer = null;
-        this._consumer = null;
         this.site = site;
         this._mProducer = mProducer;
         this.serviceName = constants.services.replicationQueueProcessor;
@@ -407,24 +405,14 @@ class QueueProcessor extends EventEmitter {
                 this.emit('ready');
                 return undefined;
             }
-            const groupId =
-                `${this.repConfig.queueProcessor.groupId}-${this.site}`;
-            this._consumer = new BackbeatConsumer({
-                kafka: { hosts: this.kafkaConfig.hosts },
-                topic: this.topic,
-                groupId,
-                concurrency: this.repConfig.queueProcessor.concurrency,
-                queueProcessor: this.processKafkaEntry.bind(this),
-                logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
-                replayDelayInSec: this.replayDelayInSec,
-            });
             this._consumer.on('error', () => { });
             this._consumer.on('ready', () => {
                 this._consumer.subscribe();
                 this.logger.info('queue processor is ready to consume ' +
-                    `${this.topic} entries`);
+                    `${this._consumer.getTopic()} entries`);
                 this.emit('ready');
             });
+            this._consumer.setQueueProcessor(this.processKafkaEntry.bind(this));
             return undefined;
         });
     }
