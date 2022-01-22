@@ -11,7 +11,6 @@ const errors = require('arsenal').errors;
 const RoundRobin = require('arsenal').network.RoundRobin;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
-const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicationTaskScheduler = require('../utils/ReplicationTaskScheduler');

@@ -24,6 +24,7 @@ class ReplayProducer {
      * @return {undefined}
      */
     setupProducer(cb) {
+        console.log('SETUP_PRODUCER this._topic!!!', this._topic);
         this._producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._topic,

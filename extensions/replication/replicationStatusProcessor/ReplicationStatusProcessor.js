@@ -2,6 +2,7 @@
 
 const http = require('http');
 const https = require('https');
+const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -120,6 +121,31 @@ class ReplicationStatusProcessor {
         this._statsClient = new StatsModel(undefined);
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
+
+        this._ReplayProducers = [];
+
+        this._replayTopics = this._reshapeReplayTopics(repConfig.replayTopics);
+        this._replayTopicNames = this._makeTopicNames(repConfig.replayTopics);
+        console.log('this._replayTopics!!!', this._replayTopics);
+        console.log('this._replayTopicNames!!!', this._replayTopicNames);
+    }
+
+    _reshapeReplayTopics(replayTopics) {
+        if (!replayTopics || replayTopics.length === 0) {
+            return undefined;
+        }
+        return replayTopics.reduce((prev, curr) => {
+            for (let i = 0; i < curr.retries; i++) {
+                prev.push(curr.topicName);
+            }
+            return prev;
+        }, []);
+    }
+
+    _makeTopicNames(replayTopics) {
+        return replayTopics
+            .map(t => t.topicName)
+            .filter((item, pos, self) => self.indexOf(item) === pos) || [];
     }
 
     _setupVaultclientCache() {
@@ -149,8 +175,10 @@ class ReplicationStatusProcessor {
             vaultclientCache: this.vaultclientCache,
             statsClient: this._statsClient,
             failedCRRProducer: this._FailedCRRProducer,
-            replayProducer: this._ReplayProducer,
+            replayProducers: this._ReplayProducers,
             logger: this.logger,
+            replayTopics: this._replayTopics,
+            replayTopicNames: this._replayTopicNames,
         };
     }
 
@@ -165,8 +193,9 @@ class ReplicationStatusProcessor {
      */
     start(options, cb) {
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
-        // TODO: PRODUCER TOPIC SHOULD NOT BE HARDCODED.
-        this._ReplayProducer = new ReplayProducer(this.kafkaConfig, 'backbeat-replication-replay');
+        this._replayTopicNames.forEach(t => {
+            this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
+        });
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
@@ -186,7 +215,9 @@ class ReplicationStatusProcessor {
                 if (err) {
                     return cb(err);
                 }
-                return this._ReplayProducer.setupProducer(cb);
+                return async.each(this._replayTopicNames, (t, next) => {
+                    return this._ReplayProducers[t].setupProducer(next);
+                }, cb);
             });
         });
     }

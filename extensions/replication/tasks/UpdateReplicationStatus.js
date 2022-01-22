@@ -97,10 +97,6 @@ class UpdateReplicationStatus extends BackbeatTask {
         this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
     }
 
-    _pushReplayEntry(queueEntry) {
-        this.replayProducer.publishReplayEntry(queueEntry.toKafkaEntry());
-    }
-
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -113,24 +109,42 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (status === 'COMPLETED') {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
             } else if (status === 'FAILED') {
-                const count = sourceEntry.getReplayCount();
-                console.log('COUNT!!!!', count);
-                if (count === 0) {
+                if (!this.replayTopics) {
+                    updatedSourceEntry = refreshedEntry.toFailedEntry(site);
                     if (this.repConfig.monitorReplicationFailures) {
                         this._pushFailedEntry(sourceEntry);
                     }
-                    updatedSourceEntry = refreshedEntry.toFailedEntry(site);
-                } else if (count > 0) {
-                    sourceEntry.decReplayCount();
-                    this.replayProducer.publishReplayEntry(sourceEntry.toRetryEntry(site).toKafkaEntry());
-                    // Source object metadata site replication status should stay "PENDING".
-                    return done();
-                } else if (!count) {
-                    // If no replay count has been defined yet:
-                    sourceEntry.setReplayCount(2);
-                    this.replayProducer.publishReplayEntry(sourceEntry.toRetryEntry(site).toKafkaEntry());
-                    // Source object metadata site replication status should stay "PENDING".
-                    return done();
+                } else {
+                    const count = sourceEntry.getReplayCount();
+                    console.log('Count!!!!', count);
+                    console.log('sourceEntry!!!', sourceEntry.getObjectKey());
+                    if (count === 0) {
+                        if (this.repConfig.monitorReplicationFailures) {
+                            this._pushFailedEntry(sourceEntry);
+                        }
+                        updatedSourceEntry = refreshedEntry.toFailedEntry(site);
+                    } else if (count > 0) {
+                        sourceEntry.decReplayCount();
+                
+                        const retryEntry = sourceEntry.toRetryEntry(site).toKafkaEntry();
+                        console.log('retryEntry!!!', retryEntry);
+                        const topicName = this.replayTopics[count - 1];
+                        this.replayProducers[topicName].publishReplayEntry(retryEntry);
+                        // Source object metadata site replication status should stay "PENDING".
+                        return done();
+                    } else if (!count) {
+                        // If no replay count has been defined yet:
+                        const totalAttemps = this.replayTopics.length;
+                        sourceEntry.setReplayCount(totalAttemps);
+                        const retryEntry = sourceEntry.toRetryEntry(site).toKafkaEntry();
+                        console.log('retryEntry!!!', retryEntry);
+                        const topicName = this.replayTopics[totalAttemps - 1];
+                        this.replayProducers[topicName].publishReplayEntry(retryEntry);
+                        // Source object metadata site replication status should stay "PENDING".
+                        return done();
+                    }
+                    console.log('/n');
+                    console.log('/n');
                 }
             } else if (status === 'PENDING') {
                 updatedSourceEntry = refreshedEntry.toPendingEntry(site);

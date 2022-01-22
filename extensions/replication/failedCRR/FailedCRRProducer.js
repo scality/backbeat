@@ -29,6 +29,7 @@ class FailedCRRProducer {
             kafka: { hosts: this._kafkaConfig.hosts },
             topic: this._topic,
         });
+        // TODO: add error cb if needed.
         this._producer.once('error', () => {});
         this._producer.once('ready', () => {
             this._producer.removeAllListeners('error');

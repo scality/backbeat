@@ -20,19 +20,20 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
 
 const site = process.argv[2];
 const topic = process.argv[3];
-const replayDelayInSec = process.argv[4];
+const replayDelayInSec = Number.parseInt(process.argv[4], 10);
 
 assert(site, 'QueueProcessor task must be started with a site as argument');
 assert(topic, 'QueueProcessor task must have topic as a second argument');
-assert(replayDelayInSec, 'QueueProcessor task must have replay delay in second as a second argument');
-
-// TODO more validation on topic and replay
+assert(!isNaN(replayDelayInSec), 'QueueProcessor task must have replay delay in second as a second argument');
 
 const bootstrapList = repConfig.destination.bootstrapList
     .filter(item => item.site === site);
 assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
     'one of the replication endpoints defined');
 
+const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
+assert(isTopicUsed, 'Invalid topic argument. Topic must match ' +
+    'one of the replay topic defined');
 
 const destConfig = Object.assign({}, repConfig.destination);
 destConfig.bootstrapList = bootstrapList;
