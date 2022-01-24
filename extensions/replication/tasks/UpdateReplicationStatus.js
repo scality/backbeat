@@ -116,8 +116,8 @@ class UpdateReplicationStatus extends BackbeatTask {
                     }
                 } else {
                     const count = sourceEntry.getReplayCount();
-                    console.log('Count!!!!', count);
-                    console.log('sourceEntry!!!', sourceEntry.getObjectKey());
+                    console.log('HERE -> Count!!!!', count);
+                    console.log('HERE -> sourceEntry!!!', sourceEntry.getObjectKey());
                     if (count === 0) {
                         if (this.repConfig.monitorReplicationFailures) {
                             this._pushFailedEntry(sourceEntry);
@@ -127,7 +127,6 @@ class UpdateReplicationStatus extends BackbeatTask {
                         sourceEntry.decReplayCount();
                 
                         const retryEntry = sourceEntry.toRetryEntry(site).toKafkaEntry();
-                        console.log('retryEntry!!!', retryEntry);
                         const topicName = this.replayTopics[count - 1];
                         this.replayProducers[topicName].publishReplayEntry(retryEntry);
                         // Source object metadata site replication status should stay "PENDING".
@@ -137,14 +136,11 @@ class UpdateReplicationStatus extends BackbeatTask {
                         const totalAttemps = this.replayTopics.length;
                         sourceEntry.setReplayCount(totalAttemps);
                         const retryEntry = sourceEntry.toRetryEntry(site).toKafkaEntry();
-                        console.log('retryEntry!!!', retryEntry);
                         const topicName = this.replayTopics[totalAttemps - 1];
                         this.replayProducers[topicName].publishReplayEntry(retryEntry);
                         // Source object metadata site replication status should stay "PENDING".
                         return done();
                     }
-                    console.log('/n');
-                    console.log('/n');
                 }
             } else if (status === 'PENDING') {
                 updatedSourceEntry = refreshedEntry.toPendingEntry(site);
