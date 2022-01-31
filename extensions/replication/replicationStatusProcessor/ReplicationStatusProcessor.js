@@ -2,6 +2,7 @@
 
 const http = require('http');
 const https = require('https');
+const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -14,6 +15,7 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const ReplayProducer = require('../replay/ReplayProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
@@ -119,6 +121,29 @@ class ReplicationStatusProcessor {
         this._statsClient = new StatsModel(undefined);
         this.taskScheduler = new ReplicationTaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done));
+
+        this._ReplayProducers = [];
+
+        this._replayTopics = this._reshapeReplayTopics(repConfig.replayTopics);
+        this._replayTopicNames = this._makeTopicNames(repConfig.replayTopics);
+    }
+
+    _reshapeReplayTopics(replayTopics) {
+        if (!replayTopics || replayTopics.length === 0) {
+            return undefined;
+        }
+        return replayTopics.reverse().reduce((prev, curr) => {
+            for (let i = 0; i < curr.retries; i++) {
+                prev.push(curr.topicName);
+            }
+            return prev;
+        }, []);
+    }
+
+    _makeTopicNames(replayTopics) {
+        return replayTopics
+            .map(t => t.topicName)
+            .filter((item, pos, self) => self.indexOf(item) === pos) || [];
     }
 
     _setupVaultclientCache() {
@@ -139,6 +164,26 @@ class ReplicationStatusProcessor {
         }
     }
 
+    _producerLiveness(p, componentName, responses) {
+        if (p === undefined || p === null ||
+            p._producer === undefined ||
+            p._producer === null) {
+            responses.push({
+                component: componentName,
+                status: constants.statusUndefined,
+            });
+            return constants.statusUndefined;
+        }
+        if (!p._producer.isReady()) {
+            responses.push({
+                component: componentName,
+                status: constants.statusNotReady,
+            });
+            return constants.statusNotReady;
+        }
+        return constants.statusReady;
+    }
+
     getStateVars() {
         return {
             sourceConfig: this.sourceConfig,
@@ -148,7 +193,10 @@ class ReplicationStatusProcessor {
             vaultclientCache: this.vaultclientCache,
             statsClient: this._statsClient,
             failedCRRProducer: this._FailedCRRProducer,
+            replayProducers: this._ReplayProducers,
             logger: this.logger,
+            replayTopics: this._replayTopics,
+            replayTopicNames: this._replayTopicNames,
         };
     }
 
@@ -163,6 +211,9 @@ class ReplicationStatusProcessor {
      */
     start(options, cb) {
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
+        this._replayTopicNames.forEach(t => {
+            this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
+        });
         this._consumer = new BackbeatConsumer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic: this.repConfig.replicationStatusTopic,
@@ -178,7 +229,13 @@ class ReplicationStatusProcessor {
             this.logger.info('replication status processor is ready to ' +
                 'consume replication status entries');
             this._consumer.subscribe();
-            this._FailedCRRProducer.setupProducer(cb);
+            this._FailedCRRProducer.setupProducer(err => {
+                if (err) {
+                    return cb(err);
+                }
+                return async.each(this._replayTopicNames, (topicName, next) =>
+                    this._ReplayProducers[topicName].setupProducer(next), cb);
+            });
         });
     }
 
@@ -254,23 +311,14 @@ class ReplicationStatusProcessor {
             verboseLiveness.consumer = constants.statusReady;
         }
 
-        if (this._FailedCRRProducer === undefined || this._FailedCRRProducer === null ||
-            this._FailedCRRProducer._producer === undefined ||
-            this._FailedCRRProducer._producer === null) {
-            verboseLiveness.failedCRRProducer = constants.statusUndefined;
-            responses.push({
-                component: 'Failed CRR Producer',
-                status: constants.statusUndefined,
-            });
-        } else if (!this._FailedCRRProducer._producer.isReady()) {
-            verboseLiveness.failedCRRProducer = constants.statusNotReady;
-            responses.push({
-                component: 'Failed CRR Producer',
-                status: constants.statusNotReady,
-            });
-        } else {
-            verboseLiveness.failedCRRProducer = constants.statusReady;
-        }
+        verboseLiveness.failedCRRProducer =
+            this._producerLiveness(this._FailedCRRProducer, 'Failed CRR Producer', responses);
+
+        this._replayTopicNames.forEach(topicName => {
+            const componentName = `Replay CRR Producer to ${topicName}`;
+            verboseLiveness[`replayCRRProducer-${topicName}`] =
+                this._producerLiveness(this._ReplayProducers[topicName], componentName, responses);
+        });
 
         log.debug('verbose liveness', verboseLiveness);
 

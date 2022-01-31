@@ -166,9 +166,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
      */
-    constructor(kafkaConfig, sourceConfig, destConfig, repConfig,
+    constructor(topic, kafkaConfig, sourceConfig, destConfig, repConfig,
         httpsConfig, internalHttpsConfig, site, mProducer) {
         super();
+        this.topic = topic;
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.destConfig = destConfig;
@@ -409,7 +410,7 @@ class QueueProcessor extends EventEmitter {
                 `${this.repConfig.queueProcessor.groupId}-${this.site}`;
             this._consumer = new BackbeatConsumer({
                 kafka: { hosts: this.kafkaConfig.hosts },
-                topic: this.repConfig.topic,
+                topic: this.topic,
                 groupId,
                 concurrency: this.repConfig.queueProcessor.concurrency,
                 queueProcessor: this.processKafkaEntry.bind(this),
@@ -419,7 +420,7 @@ class QueueProcessor extends EventEmitter {
             this._consumer.on('ready', () => {
                 this._consumer.subscribe();
                 this.logger.info('queue processor is ready to consume ' +
-                    'replication entries');
+                    `replication entries from ${this.topic}`);
                 this.emit('ready');
             });
             return undefined;

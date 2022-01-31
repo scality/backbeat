@@ -97,6 +97,37 @@ class UpdateReplicationStatus extends BackbeatTask {
         this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
     }
 
+    /**
+     * Push any failed entry to the "failed" topic.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @param {string} site - site name.
+     * @param {Logger} log - Logger
+     * @return {undefined}
+     */
+    _pushReplayEntry(queueEntry, site, log) {
+        queueEntry.decReplayCount();
+        const count = queueEntry.getReplayCount();
+        const retryEntry = queueEntry.toRetryEntry(site).toKafkaEntry();
+        const topicName = this.replayTopics[count];
+        if (topicName && this.replayProducers[topicName]) {
+            this.replayProducers[topicName].publishReplayEntry(retryEntry);
+            log.info('replay entry pushed', {
+                entry: queueEntry.getLogInfo(),
+                topicName,
+                count,
+                site,
+            });
+        } else {
+            log.info('replay entry not pushed',
+                {
+                    entry: queueEntry.getLogInfo(),
+                    topicName,
+                    count,
+                    site,
+                });
+        }
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         return this._refreshSourceEntry(sourceEntry, log,
         (err, refreshedEntry) => {
@@ -109,9 +140,37 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (status === 'COMPLETED') {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
             } else if (status === 'FAILED') {
-                updatedSourceEntry = refreshedEntry.toFailedEntry(site);
-                if (this.repConfig.monitorReplicationFailures) {
-                    this._pushFailedEntry(sourceEntry);
+                if (!this.replayTopics) {
+                    // if replay topics are not defined in the configuration,
+                    // we push the failing entry directly to the "failed" topic.
+                    updatedSourceEntry = refreshedEntry.toFailedEntry(site);
+                    if (this.repConfig.monitorReplicationFailures) {
+                        this._pushFailedEntry(sourceEntry);
+                    }
+                } else {
+                    const count = sourceEntry.getReplayCount();
+                    const totalAttemps = this.replayTopics.length;
+                    if (count === 0) {
+                        if (this.repConfig.monitorReplicationFailures) {
+                            this._pushFailedEntry(sourceEntry);
+                        }
+                        updatedSourceEntry = refreshedEntry.toFailedEntry(site);
+                    } else if (count > 0) {
+                        if (count > totalAttemps) { // might happen if replay config has changed
+                            sourceEntry.setReplayCount(totalAttemps);
+                        }
+                        this._pushReplayEntry(sourceEntry, site, log);
+                        // return here because no need to update source object md,
+                        // since site replication status should stay "PENDING".
+                        return process.nextTick(done);
+                    } else if (!count) {
+                        // If no replay count has been defined yet:
+                        sourceEntry.setReplayCount(totalAttemps);
+                        this._pushReplayEntry(sourceEntry, site, log);
+                        // return here because no need to update source object md,
+                        // since site replication status should stay "PENDING".
+                        return process.nextTick(done);
+                    }
                 }
             } else if (status === 'PENDING') {
                 updatedSourceEntry = refreshedEntry.toPendingEntry(site);
