@@ -16,7 +16,6 @@ class ReplayProducer {
         this._topic = topic;
         this._producer = null;
         this._log = new Logger('Backbeat:ReplayProducer');
-        this._log.addDefaultFields({ topic });
     }
 
     /**
