@@ -523,16 +523,16 @@ class MultipleBackendTask extends ReplicateObject {
             return cb(errors.InvalidObjectState);
         }
         // TODO: TO BE DELETED!!!! FOR TESTTING ONLY
-        console.log('--------> PROCESSING FAILED:', sourceEntry.getKey());
+        // console.log('--------> PROCESSING FAILED:', sourceEntry.getKey());
         return process.nextTick(() => cb(new Error('ARF ERROR!!!')));
-        const locations = sourceEntry.getReducedLocations();
-        // Metadata-only operations have no part locations.
-        if (locations.length === 0) {
-            return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);
-        }
-        const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
-        return async.mapLimit(locations, mpuConcLimit, (part, done) =>
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
+        // const locations = sourceEntry.getReducedLocations();
+        // // Metadata-only operations have no part locations.
+        // if (locations.length === 0) {
+        //     return this._getAndPutPart(sourceEntry, destEntry, null, log, cb);
+        // }
+        // const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
+        // return async.mapLimit(locations, mpuConcLimit, (part, done) =>
+        //     this._getAndPutPart(sourceEntry, destEntry, part, log, done), cb);
     }
 
     _putDeleteMarker(sourceEntry, destEntry, log, cb) {

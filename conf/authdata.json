@@ -1,12 +1,12 @@
 {
     "accounts": [{
-        "name": "backbeatuser",
-        "arn": "arn:aws:iam::953983202225:/backbeatuser/",
+        "name": "bart",
+        "arn": "arn:aws:iam::953983202225:/bart/",
         "canonicalID": "73bfbb2679db1242f5b22a4e8c3870bd981491199b647352f3fbeb7b9c3ecdd9",
-        "displayName": "backbeatuser",
+        "displayName": "bart",
         "keys": {
-            "access": "CUWSRQQOL5SQWVMB8A21",
-            "secret": "CwKACtslsxHBAPtIS21+YDQDSWBasp6JLdHrozVM"
+            "access": "accessKey1",
+            "secret": "verySecretKey1"
         }
     }, {
         "name": "lisa",

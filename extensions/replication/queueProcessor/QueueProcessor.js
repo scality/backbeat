@@ -133,6 +133,7 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
+     * @param {string} topic - topic name
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"

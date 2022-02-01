@@ -681,6 +681,7 @@ describe('queue processor functional tests with mocking', () => {
 
         metricsMock = new MetricsMock();
         queueProcessor = new QueueProcessor(
+            'backbeat-func-test-dummy-topic',
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,

@@ -34,7 +34,7 @@
                 },
                 "auth": {
                     "type": "account",
-                    "account": "backbeatuser",
+                    "account": "bart",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,

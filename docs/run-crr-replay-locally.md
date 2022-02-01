@@ -12,7 +12,9 @@ tar xvz && \
 sed 's/zookeeper.connect=.*/zookeeper.connect=localhost:2181\/backbeat/' \
 kafka_2.11-0.11.0.0/config/server.properties > \
 kafka_2.11-0.11.0.0/config/server.properties.backbeat
+
 zookeeper-server-start kafka_2.11-0.11.0.0/config/zookeeper.properties
+
 kafka-server-start kafka_2.11-0.11.0.0/config/server.properties.backbeat
 ```
 
@@ -30,13 +32,14 @@ Create AWS destination versioning-enabled bucket.
 
 ```sh
 aws s3api create-bucket --bucket <DESTINATION_BUCKET_NAME> --profile aws-account
+
 aws s3api put-bucket-versioning \
 --bucket <DESTINATION_BUCKET_NAME> \
 --versioning-configuration Status=Enabled \
 --profile aws-account
 ```
 
-Update `./locationConfig.json`
+Replace existing `./locationConfig.json` with:
 
 ```json
 {
@@ -49,7 +52,7 @@ Update `./locationConfig.json`
       "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
       "type": "file"
     },
-    "wontwork-location": {
+    "aws-location": {
         "type": "aws_s3",
         "legacyAwsBehavior": true,
         "details": {
@@ -66,7 +69,7 @@ Update `./locationConfig.json`
 Update `./config.json` with
 
 ```json
-"replicationEndpoints": [{ "site": "wontwork-location", "type": "aws_s3" }],
+"replicationEndpoints": [{ "site": "aws-location", "type": "aws_s3" }],
 ```
 
 Run Cloudserver
@@ -99,20 +102,20 @@ git checkout development/7.4
 Create a "Zenko" account and generate keys
 
 ```
-bin/vaultclient create-account --name backbeatuser --email dev@backbeat --port 8600
-bin/vaultclient generate-account-access-key --name backbeatuser --port 8600
-aws configure --profile backbeatuser
+bin/vaultclient create-account --name bart --email dev@backbeat --port 8600
+bin/vaultclient generate-account-access-key --name bart --port 8600
+aws configure --profile bart
 ```
 
-Update `conf/authdata.json` with backbeatuser informations and keys.
+Update `conf/authdata.json` with bart informations and keys.
 
 ```json
 {
     "accounts": [{
-        "name": "backbeatuser",
-        "arn": "arn:aws:iam::331457510670:/backbeatuser/",
+        "name": "bart",
+        "arn": "arn:aws:iam::331457510670:/bart/",
         "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
-        "displayName": "backbeatuser",
+        "displayName": "bart",
         "keys": {
             "access": "20TNCD06HOCSLQSABFZP",
             "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
@@ -127,7 +130,7 @@ Update `conf/config.json` section `extensions.replication.source.auth`
 ```
 "auth": {
     "type": "account",
-    "account": "backbeatuser",
+    "account": "bart",
     "vault": {
         "host": "127.0.0.1",
         "port": 8500,
@@ -162,26 +165,26 @@ S3_REPLICATION_METRICS_PROBE=true yarn run replication_status_processor
 
 ### Replication replay processor
 
-For location: `wontwork-location` and topic: `backbeat-replication-replay-0`
+For location: `aws-location` and topic: `backbeat-replication-replay-0`
 
 ```
-yarn run replay_processor wontwork-location
+yarn run replay_processor aws-location
 ```
 
 ### Replication replay processor (topic: backbeat-replication-replay-1)
 
-For location: `wontwork-location` and topic: `backbeat-replication-replay-1`
+For location: `aws-location` and topic: `backbeat-replication-replay-1`
 
 ```
-yarn run replay_processor wontwork-location backbeat-replication-replay-1
+yarn run replay_processor aws-location backbeat-replication-replay-1
 ```
 
 ### Replication replay processor (topic: backbeat-replication-replay-2)
 
-For location: `wontwork-location` and topic: `backbeat-replication-replay-2`
+For location: `aws-location` and topic: `backbeat-replication-replay-2`
 
 ```
-yarn run replay_processor wontwork-location backbeat-replication-replay-2
+yarn run replay_processor aws-location backbeat-replication-replay-2
 ```
 
 ## AWS S3 CLI
@@ -192,7 +195,7 @@ Create a source bucket with versioning enabled:
 aws s3api create-bucket \
 --bucket sourcebucket \
 --endpoint-url http://127.0.0.1:8000 \
---profile backbeatuser
+--profile bart
 ```
 
 ```
@@ -200,7 +203,7 @@ aws s3api put-bucket-versioning \
 --bucket sourcebucket \
 --versioning-configuration Status=Enabled \
 --endpoint-url=http://127.0.0.1:8000 \
---profile backbeatuser
+--profile bart
 ```
 
 ### Set up replication
@@ -216,7 +219,7 @@ Create `replication.json`
             "Prefix": "",
             "Destination": {
                 "Bucket": "arn:aws:s3:::sourcebucket",
-                "StorageClass": "wontwork-location"
+                "StorageClass": "aws-location"
             }
         }
     ]
@@ -228,7 +231,7 @@ aws s3api put-bucket-replication \
 --bucket sourcebucket \
 --replication-configuration file://replication.json \
 --endpoint-url=http://127.0.0.1:8000 \
---profile backbeatuser
+--profile bart
 ```
 
 ### Put object to be replicated
@@ -239,7 +242,7 @@ aws s3api put-object \
 --body file \
 --bucket sourcebucket \
 --endpoint-url=http://127.0.0.1:8000 \
---profile backbeatuser
+--profile bart
 ```
 
 ### Check that object has been replicated
