@@ -344,6 +344,7 @@ class ReplicateObject extends BackbeatTask {
         };
         return this.backbeatSource.getMetadata(params, (err, blob) => {
             if (err) {
+                // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('error getting metadata blob from S3', {
                     method: 'ReplicateObject._refreshSourceEntry',

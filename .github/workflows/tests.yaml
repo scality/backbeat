@@ -87,7 +87,7 @@ jobs:
         go-version: '1.16.2'
     - uses: actions/setup-node@v2
       with:
-        node-version: '10'
+        node-version: '16'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile

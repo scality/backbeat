@@ -83,9 +83,11 @@ describe('lifecycle task helper methods', () => {
             // Can only do this since I set VersionId in the expected order
             // Normally, when dealing with multiple objects, we wouldn't be able
             // to sort by just VersionId, since they could be intertwined.
-            const expected = [...versions, ...dms].sort((a, b) => (
-                a.VersionId > b.VersionId
-            ));
+            const expected = [...versions, ...dms].sort((a, b) => {
+                if (a.VersionId < b.VersionId) return -1;
+                if (a.VersionId > b.VersionId) return 1;
+                return 0;
+            });
             const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
 
             assert.deepStrictEqual(expected, res);
