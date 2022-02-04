@@ -36,30 +36,33 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "@hapi/joi": "^15.1.0",
-    "arsenal": "github:scality/arsenal#7.10.5",
+    "arsenal": "github:scality/arsenal#w/7.10/feature/ARSN-21/UpgradeToNode16",
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#6d2d5a4",
+    "bucketclient": "scality/bucketclient#w/7.10/improvement/BKTCLT-3-upgrade-to-node-16",
     "commander": "^2.11.0",
-    "fcntl": "github:scality/node-fcntl#9108603d8881d7762dcadfde1db927a1653dfda5",
-    "node-rdkafka": "2.10.1",
+    "fcntl": "github:scality/node-fcntl#0.2.1",
+    "node-rdkafka": "^2.12.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^12.0.0",
     "uuid": "^3.1.0",
-    "vaultclient": "scality/vaultclient#75beb2a",
+    "vaultclient": "scality/vaultclient#w/7.10/feature/VLTCLT-7/UpgradeToNode16",
     "werelogs": "scality/werelogs#8.1.0"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/cloudserver#bac9a10",
+    "@zenko/cloudserver": "scality/cloudserver#w/8.2/feature/CLDSRV-49/UpgradeToNode16",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#20dfffc",
+    "eslint-config-scality": "scality/Guidelines#w/7.10/improvement/GDL-5-node-16-upgrade",
     "eslint-plugin-react": "^4.2.3",
     "mocha": "^3.3.0",
     "sinon": "^10.0.0",
     "url-search-params-polyfill": "^8.1.1",
     "zookeeper-mock": "^1.2.0"
+  },
+  "engines": {
+    "node": ">=16"
   }
 }
