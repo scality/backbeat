@@ -38,7 +38,7 @@ describe('ActionQueueEntry', () => {
         entry.setAttribute('details.roundTrip', true);
         assert.strictEqual(entry.getAttribute('details.roundTrip'), true);
         assert.strictEqual(
-            entry.getAttribute('details.roundTrip.foo', undefined));
+            entry.getAttribute('details.roundTrip.foo'), undefined);
         assert.deepStrictEqual(
             entry.getAttribute('details'), { roundTrip: true });
     });
