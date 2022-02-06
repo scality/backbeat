@@ -37,6 +37,15 @@ oobEntries.forEach(bucketEntry => {
 const zkClient = zookeeper.createClient('localhost:2181', {
     autoCreateNamespace: true,
 });
+
+const Kafka = require('node-rdkafka');
+
+const kafkaAdminClient = Kafka.AdminClient.create({
+  'client.id': 'kafka-admin',
+  'metadata.broker.list': [testConfig.kafka.hosts]
+});
+
+
 const ingestionQP = new IngestionQueuePopulator({
     config: testConfig.extensions.ingestion,
     logger: dummyLogger,
@@ -102,6 +111,7 @@ describe('ingestion reader tests with mock', function fD() {
         const mongoUrl =
             `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
             '/db?replicaSet=rs0';
+        const topic = testConfig.extensions.ingestion.topic;
         async.waterfall([
             next => {
                 MongoClient.connect(mongoUrl, {}, (err, client) => {
@@ -116,7 +126,19 @@ describe('ingestion reader tests with mock', function fD() {
                 });
             },
             next => {
-                const topic = testConfig.extensions.ingestion.topic;
+                return kafkaAdminClient.createTopic({
+                    topic,
+                    num_partitions: 1, // eslint-disable-line camelcase
+                    replication_factor: 1, // eslint-disable-line camelcase
+                }, err => {
+                    if (err && err.code === 36) {
+                        // if topic already exits.
+                        return next();
+                    }
+                    return next(err);
+                });
+            },
+            next => {
                 producer = new BackbeatProducer({
                     kafka: testConfig.kafka,
                     topic,
@@ -332,12 +354,13 @@ describe('ingestion reader tests with mock', function fD() {
                 `with processLogEntries params ${JSON.stringify(params)}`,
                 done => {
                     async.waterfall([
-                        next => this.ingestionReader.processLogEntries({}, err => {
+                        next => this.ingestionReader.processLogEntries(params, err => {
                             assert.ifError(err);
                             setTimeout(next, CONSUMER_TIMEOUT);
                         }),
                         next => {
                             consumer.consume(10, (err, entries) => {
+                                assert.ifError(err);
                                 // the mockLogs have 9 entries, but only 3 entries
                                 // pertain to the test so the expected length is 3
                                 assert.strictEqual(entries.length, 3);
@@ -405,6 +428,7 @@ describe('ingestion reader tests with mock', function fD() {
                     }),
                     next => {
                         consumer.consume(10, (err, entries) => {
+                            assert.ifError(err);
                             checkEntryInQueue(entries, [
                                 expectedZeroByteObj,
                                 expectedUTF8Obj,
