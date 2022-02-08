@@ -32,6 +32,7 @@ class MetadataMock {
                     res.writeHead(200, {
                         'Content-Type': resObj['content-type'],
                     });
+                    return;
                 }
                 const resContent = resType[resObj.name];
                 if (resObj.resType === 'objectList') {
@@ -73,6 +74,7 @@ class MetadataMock {
                     res.end(JSON.stringify({
                         Body: JSON.stringify(objMd)
                     }));
+                    return;
                 }
                 res.end(JSON.stringify(resContent));
             }
@@ -91,11 +93,10 @@ class MetadataMock {
                     const data = JSON.parse(body);
                     const usersBucketInfo = {};
                     usersBucketInfo.key = data.
-                    res.end('ok');
+                        res.end('ok');
                 });
             }
         }
-        res.end(JSON.stringify({}));
     }
 }
 

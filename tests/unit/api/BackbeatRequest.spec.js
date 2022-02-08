@@ -90,8 +90,7 @@ describe('BackbeatRequest helper class', () => {
 
             assert.strictEqual(details.category, 'monitoring');
             assert.strictEqual(details.type, 'metrics');
-            // expect promclient data to be returned as 'text/plain'
-            assert.notStrictEqual(contentType !== 'application/json');
+            assert.strictEqual(contentType, 'application/json');
         });
 
         it('should parse crr pause/resume routes and store internally as ' +
