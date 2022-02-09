@@ -246,16 +246,16 @@
   resolved "https://registry.yarnpkg.com/@types/json5/-/json5-0.0.29.tgz#ee28707ae94e11d2b827bcbe5270bcea7f3e71ee"
   integrity sha1-7ihweulOEdK4J7y+UnC86n8+ce4=
 
-"@zenko/cloudserver@scality/cloudserver#w/8.2/feature/CLDSRV-49/UpgradeToNode16":
-  version "8.2.19"
-  resolved "https://codeload.github.com/scality/cloudserver/tar.gz/33ea79f4f8ae50faa5d784d80814cecdc3b14d1d"
+"@zenko/cloudserver@scality/cloudserver#8.2.20":
+  version "8.2.20"
+  resolved "https://codeload.github.com/scality/cloudserver/tar.gz/b0e0d3b43e4131c3590a3b8127af756694c240b1"
   dependencies:
     "@hapi/joi" "^17.1.0"
-    arsenal "github:scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16"
+    arsenal "github:scality/Arsenal#8.1.27"
     async "~2.5.0"
     aws-sdk "2.905.0"
     azure-storage "^2.1.0"
-    bucketclient scality/bucketclient#w/8.1/improvement/BKTCLT-3-upgrade-to-node-16
+    bucketclient scality/bucketclient#8.1.1
     bufferutil "^4.0.6"
     commander "^2.9.0"
     cron-parser "^2.11.0"
@@ -273,11 +273,11 @@
     prom-client "^10.2.3"
     request "^2.81.0"
     sql-where-parser "~2.2.1"
-    utapi "github:scality/utapi#w/8.1/feature/UTAPI-59/UpgradeToNode16"
+    utapi "github:scality/utapi#8.1.5"
     utf-8-validate "^5.0.8"
     utf8 "~2.1.1"
     uuid "^8.3.2"
-    vaultclient scality/vaultclient#w/8.2/feature/VLTCLT-7/UpgradeToNode16
+    vaultclient scality/vaultclient#8.2.2
     werelogs scality/werelogs#8.1.0
     ws "^5.1.0"
     xml2js "~0.4.16"
@@ -544,10 +544,9 @@ arraybuffer.slice@~0.0.7:
   resolved "https://registry.yarnpkg.com/arraybuffer.slice/-/arraybuffer.slice-0.0.7.tgz#3bbc4275dd584cc1b10809b89d4e8b63a69e7675"
   integrity sha512-wGUIVQXuehL5TCqQun8OW81jGzAWycqzFF8lFp+GOM5BXLYj3bKNsYC4daB7n6XjCqxQA/qgTJ+8ANR3acjrog==
 
-"arsenal@github:scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16", arsenal@scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16:
-  version "8.1.22"
-  uid "1e334924f92cdc6b15d2a8a59a1da3b2287b98f9"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/1e334924f92cdc6b15d2a8a59a1da3b2287b98f9"
+"arsenal@github:scality/Arsenal#8.1.27", arsenal@scality/Arsenal#8.1.27:
+  version "8.1.27"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/3c9ab1bb99c2b3134882e7d8ad12573a073188f4"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
@@ -563,7 +562,7 @@ arraybuffer.slice@~0.0.7:
     debug "~4.1.0"
     diskusage "^1.1.1"
     fcntl "github:scality/node-fcntl#0.2.0"
-    hdclient scality/hdclient#489db2106570b9ea41bdacdf56131324d0db6a58
+    hdclient scality/hdclient#1.1.0
     https-proxy-agent "^2.2.0"
     ioredis "4.9.5"
     ipaddr.js "1.9.1"
@@ -575,7 +574,7 @@ arraybuffer.slice@~0.0.7:
     simple-glob "^0.2.0"
     socket.io "~2.3.0"
     socket.io-client "~2.3.0"
-    sproxydclient "github:scality/sproxydclient#8.0.2"
+    sproxydclient "github:scality/sproxydclient#8.0.3"
     utf8 "3.0.0"
     uuid "^3.0.1"
     werelogs scality/werelogs#8.1.0
@@ -583,9 +582,9 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@github:scality/arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16":
-  version "8.1.22"
-  resolved "https://codeload.github.com/scality/arsenal/tar.gz/1e334924f92cdc6b15d2a8a59a1da3b2287b98f9"
+"arsenal@github:scality/arsenal#8.1.27":
+  version "8.1.27"
+  resolved "https://codeload.github.com/scality/arsenal/tar.gz/3c9ab1bb99c2b3134882e7d8ad12573a073188f4"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
@@ -601,7 +600,7 @@ arraybuffer.slice@~0.0.7:
     debug "~4.1.0"
     diskusage "^1.1.1"
     fcntl "github:scality/node-fcntl#0.2.0"
-    hdclient scality/hdclient#489db2106570b9ea41bdacdf56131324d0db6a58
+    hdclient scality/hdclient#1.1.0
     https-proxy-agent "^2.2.0"
     ioredis "4.9.5"
     ipaddr.js "1.9.1"
@@ -613,7 +612,7 @@ arraybuffer.slice@~0.0.7:
     simple-glob "^0.2.0"
     socket.io "~2.3.0"
     socket.io-client "~2.3.0"
-    sproxydclient "github:scality/sproxydclient#8.0.2"
+    sproxydclient "github:scality/sproxydclient#8.0.3"
     utf8 "3.0.0"
     uuid "^3.0.1"
     werelogs scality/werelogs#8.1.0
@@ -654,11 +653,6 @@ async@^2.3.0, async@^2.6.1, async@~2.6.1:
   integrity sha512-zflvls11DCy+dQWzTW2dzuilv8Z5X/pjfmZOWba6TNIVDm+2UDaJmXSOXlasHKfNBs8oo3M0aT50fDEWfKZjXg==
   dependencies:
     lodash "^4.17.14"
-
-async@^3.1.0:
-  version "3.2.0"
-  resolved "https://registry.yarnpkg.com/async/-/async-3.2.0.tgz#b3a2685c5ebb641d3de02d161002c60fc9f85720"
-  integrity sha512-TR2mEZFVOj2pLStYxLht7TyfuRzaydfpxr3k9RpHIzMgw7A64dzsdqCxH1WJyQdoe8T10nDXd9wnEigmiuHIZw==
 
 async@^3.2.0, async@^3.2.3:
   version "3.2.3"
@@ -946,12 +940,12 @@ bson@~1.0.4:
   resolved "https://registry.yarnpkg.com/bson/-/bson-1.0.9.tgz#12319f8323b1254739b7c6bef8d3e89ae05a2f57"
   integrity sha512-IQX9/h7WdMBIW/q/++tGd+emQr0XMdeZ6icnT/74Xk9fnabWn+gZgpE+9V+gujL3hhJOoNrnDVY7tWdzc7NUTg==
 
-bucketclient@scality/bucketclient#w/8.1/improvement/BKTCLT-3-upgrade-to-node-16:
-  version "8.1.0"
-  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/3d3cbd68462ed0129c58a3c50729a4d8a5621c26"
+bucketclient@scality/bucketclient#8.1.1:
+  version "8.1.1"
+  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/6082eeae3ebc220dc0edace1216d2e6ebec88015"
   dependencies:
     agentkeepalive "^4.1.4"
-    arsenal scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16
+    arsenal scality/Arsenal#8.1.27
     werelogs scality/werelogs#8.1.0
 
 buffer-equal-constant-time@1.0.1:
@@ -1761,9 +1755,9 @@ eslint-config-airbnb-base@^13.1.0:
     object.assign "^4.1.0"
     object.entries "^1.1.0"
 
-eslint-config-scality@scality/Guidelines#w/8.2/improvement/GDL-5-node-16-upgrade:
+eslint-config-scality@scality/Guidelines#8.2.0:
   version "8.2.0"
-  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/909b8b761a8f1bf0b5f67799375bed917df81fcc"
+  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/8147a6bedad7ba8c09e4bed06e6526dfb170c9a6"
   dependencies:
     commander "5.0.0"
     markdownlint "^0.19.0"
@@ -2466,9 +2460,9 @@ hash-base@^3.0.0:
     readable-stream "^3.6.0"
     safe-buffer "^5.2.0"
 
-hdclient@scality/hdclient#489db2106570b9ea41bdacdf56131324d0db6a58:
-  version "0.1.0"
-  resolved "https://codeload.github.com/scality/hdclient/tar.gz/489db2106570b9ea41bdacdf56131324d0db6a58"
+hdclient@scality/hdclient#1.1.0:
+  version "1.1.0"
+  resolved "https://codeload.github.com/scality/hdclient/tar.gz/dd6d952e39ca89133019bafbb33eef6c418689f8"
   dependencies:
     werelogs scality/werelogs#GA7.2.0.5
 
@@ -5068,11 +5062,11 @@ sprintf-js@~1.0.2:
   resolved "https://registry.yarnpkg.com/sprintf-js/-/sprintf-js-1.0.3.tgz#04e6926f662895354f3dd015203633b857297e2c"
   integrity sha1-BOaSb2YolTVPPdAVIDYzuFcpfiw=
 
-"sproxydclient@github:scality/sproxydclient#8.0.2":
-  version "8.0.2"
-  resolved "https://codeload.github.com/scality/sproxydclient/tar.gz/e45c547833f03b1fa0409e0499433dcb386442f5"
+"sproxydclient@github:scality/sproxydclient#8.0.3":
+  version "8.0.3"
+  resolved "https://codeload.github.com/scality/sproxydclient/tar.gz/1377ae00e2fd6fff322bc604648abe8971f8a800"
   dependencies:
-    async "^3.1.0"
+    async "^3.2.0"
     werelogs scality/werelogs#8.1.0
 
 sql-where-parser@~2.2.1:
@@ -5541,19 +5535,19 @@ url@0.10.3:
     punycode "1.3.2"
     querystring "0.2.0"
 
-"utapi@github:scality/utapi#w/8.1/feature/UTAPI-59/UpgradeToNode16":
-  version "8.1.4"
-  resolved "https://codeload.github.com/scality/utapi/tar.gz/20479f0dfa64f57fa54791b0f673e795250f278b"
+"utapi@github:scality/utapi#8.1.5":
+  version "8.1.5"
+  resolved "https://codeload.github.com/scality/utapi/tar.gz/7d7b46bc5e4f181d4547cbec3bc59a7f8104f646"
   dependencies:
     "@hapi/joi" "^17.1.1"
     "@senx/warp10" "^1.0.14"
-    arsenal scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16
+    arsenal scality/Arsenal#8.1.27
     async "^3.2.0"
     aws-sdk "^2.1005.0"
     aws4 "^1.8.0"
     backo "^1.1.0"
     body-parser "^1.19.0"
-    bucketclient scality/bucketclient#w/8.1/improvement/BKTCLT-3-upgrade-to-node-16
+    bucketclient scality/bucketclient#8.1.1
     byte-size "^7.0.0"
     commander "^5.1.0"
     cron-parser "^2.15.0"
@@ -5568,7 +5562,7 @@ url@0.10.3:
     oas-tools "^2.1.8"
     prom-client "^13.1.0"
     uuid "^3.3.2"
-    vaultclient scality/vaultclient#w/8.3/feature/VLTCLT-7/UpgradeToNode16
+    vaultclient scality/vaultclient#8.2.2
     werelogs scality/werelogs#8.1.0
 
 utf-8-validate@^5.0.8:
@@ -5653,22 +5647,12 @@ vary@~1.1.2:
   resolved "https://registry.yarnpkg.com/vary/-/vary-1.1.2.tgz#2299f02c6ded30d4a5961b0b9f74524a18f634fc"
   integrity sha1-IpnwLG3tMNSllhsLn3RSShj2NPw=
 
-vaultclient@scality/vaultclient#w/8.2/feature/VLTCLT-7/UpgradeToNode16:
-  version "8.2.1"
-  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/c217cbc3448cee52131aedf5deb73d5f01f57afe"
+vaultclient@scality/vaultclient#8.2.2:
+  version "8.2.2"
+  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/b68894a768e46a99452111592ac476af914ab4d2"
   dependencies:
     agentkeepalive "^4.1.3"
-    arsenal scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16
-    commander "2.20.0"
-    werelogs scality/werelogs#8.1.0
-    xml2js "0.4.19"
-
-vaultclient@scality/vaultclient#w/8.3/feature/VLTCLT-7/UpgradeToNode16:
-  version "8.2.1"
-  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/b8c20ceddfebcb66ec00d5a394261018ee30ff2b"
-  dependencies:
-    agentkeepalive "^4.1.3"
-    arsenal scality/Arsenal#w/8.1/feature/ARSN-21/UpgradeToNode16
+    arsenal scality/Arsenal#8.1.27
     commander "2.20.0"
     werelogs scality/werelogs#8.1.0
     xml2js "0.4.19"
