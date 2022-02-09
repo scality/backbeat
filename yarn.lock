@@ -198,9 +198,9 @@ arraybuffer.slice@~0.0.7:
   resolved "https://registry.yarnpkg.com/arraybuffer.slice/-/arraybuffer.slice-0.0.7.tgz#3bbc4275dd584cc1b10809b89d4e8b63a69e7675"
   integrity sha512-wGUIVQXuehL5TCqQun8OW81jGzAWycqzFF8lFp+GOM5BXLYj3bKNsYC4daB7n6XjCqxQA/qgTJ+8ANR3acjrog==
 
-arsenal@scality/Arsenal#feature/ARSN-21/UpgradeToNode16:
-  version "7.4.13"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/8c3f304d9be7bf07e57a790b9ded70705300e93d"
+arsenal@scality/Arsenal#7.4.16:
+  version "7.4.16"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/90d6556229e63bf4484f4017a011602ad94947b4"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
@@ -344,12 +344,12 @@ browser-stdout@1.3.0:
   resolved "https://registry.yarnpkg.com/browser-stdout/-/browser-stdout-1.3.0.tgz#f351d32969d32fa5d7a5567154263d928ae3bd1f"
   integrity sha1-81HTKWnTL6XXpVZxVCY9korjvR8=
 
-bucketclient@scality/bucketclient#improvement/BKTCLT-3-upgrade-to-node-16:
-  version "7.4.5"
-  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/b42014267930c6779671c90b391dff3c1549c257"
+bucketclient@scality/bucketclient#7.4.11:
+  version "7.4.11"
+  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/b98428973d99dbc3762167df218781b9403d7b46"
   dependencies:
     agentkeepalive "^4.1.4"
-    arsenal scality/Arsenal#feature/ARSN-21/UpgradeToNode16
+    arsenal scality/Arsenal#7.4.16
     werelogs scality/werelogs#8.1.0
 
 buffer-from@^1.0.0:
@@ -777,9 +777,9 @@ eslint-config-airbnb@^6.0.0:
   resolved "https://registry.yarnpkg.com/eslint-config-airbnb/-/eslint-config-airbnb-6.2.0.tgz#4a28196aa4617de01b8c914e992a82e5d0886a6e"
   integrity sha1-SigZaqRhfeAbjJFOmSqC5dCIam4=
 
-eslint-config-scality@scality/Guidelines#improvement/GDL-5-node-16-upgrade:
-  version "1.1.0"
-  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/38fd7471de623a37d78d75f7a3954dfa9e11c185"
+eslint-config-scality@scality/Guidelines#7.4.11:
+  version "7.4.11"
+  resolved "https://codeload.github.com/scality/Guidelines/tar.gz/07b143554c82574d0e5b40c3c7d3525ac7a5d7f5"
   dependencies:
     commander "1.3.2"
     markdownlint "^0.25.1"
@@ -2305,12 +2305,12 @@ uuid@^3.0.1, uuid@^3.1.0:
   resolved "https://registry.yarnpkg.com/uuid/-/uuid-3.3.2.tgz#1b4af4955eb3077c501c23872fc6513811587131"
   integrity sha512-yXJmeNaw3DnnKAOKJE51sL/ZaYfWJRl1pK9dr19YFCu0ObS231AB1/LbqTKRAQ5kw8A90rA6fr4riOUpTZvQZA==
 
-vaultclient@scality/vaultclient#feature/VLTCLT-7/UpgradeToNode16:
-  version "7.4.0"
-  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/99c70671e06506cde38415dcc5a7d9b9ee5f5d09"
+vaultclient@scality/vaultclient#7.4.11:
+  version "7.4.11"
+  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/3b5e39e16540e5a8d50273244215cecf8694b9bf"
   dependencies:
     agentkeepalive "^4.1.3"
-    arsenal scality/Arsenal#feature/ARSN-21/UpgradeToNode16
+    arsenal scality/Arsenal#7.4.16
     commander "2.20.0"
     werelogs scality/werelogs#8.1.0
     xml2js "0.4.19"

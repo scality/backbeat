@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "7.4.10",
+  "version": "7.4.11",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -29,25 +29,25 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "@hapi/joi": "^15.1.0",
-    "arsenal": "scality/Arsenal#feature/ARSN-21/UpgradeToNode16",
+    "arsenal": "scality/Arsenal#7.4.16",
     "async": "^2.3.0",
     "aws-sdk": "2.147.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#improvement/BKTCLT-3-upgrade-to-node-16",
+    "bucketclient": "scality/bucketclient#7.4.11",
     "commander": "^2.11.0",
     "node-rdkafka": "^2.12.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^0.2.2",
     "prom-client": "^12.0.0",
     "uuid": "^3.1.0",
-    "vaultclient": "scality/vaultclient#feature/VLTCLT-7/UpgradeToNode16",
+    "vaultclient": "scality/vaultclient#7.4.11",
     "werelogs": "scality/werelogs#8.1.0",
     "yarn": "^1.17.3"
   },
   "devDependencies": {
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
-    "eslint-config-scality": "scality/Guidelines#improvement/GDL-5-node-16-upgrade",
+    "eslint-config-scality": "scality/Guidelines#7.4.11",
     "eslint-plugin-react": "^4.2.3",
     "mocha": "^3.3.0",
     "sinon": "^10.0.0",
