@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.3.4",
+  "version": "8.3.5",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -63,7 +63,7 @@
     "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/cloudserver#8.4.1",
+    "@zenko/cloudserver": "scality/cloudserver#8.3.10",
     "eslint": "^5.3.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#8.2.0",

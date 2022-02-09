@@ -246,9 +246,9 @@
   resolved "https://registry.yarnpkg.com/@types/json5/-/json5-0.0.29.tgz#ee28707ae94e11d2b827bcbe5270bcea7f3e71ee"
   integrity sha1-7ihweulOEdK4J7y+UnC86n8+ce4=
 
-"@zenko/cloudserver@scality/cloudserver#8.4.1":
-  version "8.4.0"
-  resolved "https://codeload.github.com/scality/cloudserver/tar.gz/a622dc9a07a548a5d381bd4bd1507744fa24d9f3"
+"@zenko/cloudserver@scality/cloudserver#8.3.10":
+  version "8.3.10"
+  resolved "https://codeload.github.com/scality/cloudserver/tar.gz/8948de19458d581d956f3189f95ff061439a5d90"
   dependencies:
     "@hapi/joi" "^17.1.0"
     arsenal "github:scality/Arsenal#8.1.27"
@@ -546,7 +546,6 @@ arraybuffer.slice@~0.0.7:
 
 "arsenal@github:scality/Arsenal#8.1.27", arsenal@scality/Arsenal#8.1.27:
   version "8.1.27"
-  uid "3c9ab1bb99c2b3134882e7d8ad12573a073188f4"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/3c9ab1bb99c2b3134882e7d8ad12573a073188f4"
   dependencies:
     "@hapi/joi" "^15.1.0"
