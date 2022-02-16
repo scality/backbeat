@@ -95,11 +95,15 @@ class LifecycleConductor {
     _getAccountIds(canonicalIds, cb) {
         // if auth is not of type `assumeRole`, then
         // the accountId can be omitted from work queue messages
+        // because workers won't need to call AssumeRole using
+        // these account IDs to build ARNs.
         if (this.lcConfig.auth.type !== authTypeAssumeRole) {
             return process.nextTick(cb, null, {});
         }
 
-        const client = this._vaultClientCache.getClient(LIFEYCLE_CONDUCTOR_CLIENT_ID);
+        const client = this._vaultClientCache
+            .getClient(LIFEYCLE_CONDUCTOR_CLIENT_ID)
+            .enableIAMOnAdminRoutes();
         const opts = {};
         return client.getAccountIds(canonicalIds, opts, (err, res) => {
             if (err) {
