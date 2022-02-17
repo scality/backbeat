@@ -499,9 +499,37 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
+arsenal@scality/Arsenal#7.10.11:
+  version "7.10.11"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/4303cd8f5b3dc9f1f47d382e5355c7e357e4c5f2"
+  dependencies:
+    "@hapi/joi" "^15.1.0"
+    JSONStream "^1.0.0"
+    agentkeepalive "^4.1.3"
+    ajv "6.12.2"
+    async "~2.1.5"
+    base-x "3.0.8"
+    base62 "2.0.1"
+    debug "~2.6.9"
+    diskusage "^1.1.1"
+    ioredis "4.9.5"
+    ipaddr.js "1.9.1"
+    level "~5.0.1"
+    level-sublevel "~6.6.5"
+    node-forge "^0.7.1"
+    prom-client "10.2.3"
+    simple-glob "^0.2"
+    socket.io "~2.3.0"
+    socket.io-client "~2.3.0"
+    utf8 "2.1.2"
+    uuid "^3.0.1"
+    werelogs scality/werelogs#8.1.0
+    xml2js "~0.4.23"
+  optionalDependencies:
+    ioctl "^2.0.2"
+
 arsenal@scality/Arsenal#7.10.9:
   version "7.10.9"
-  uid "2f40ff388327b17728926bf99fe82b0e6a14a01d"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/2f40ff388327b17728926bf99fe82b0e6a14a01d"
   dependencies:
     "@hapi/joi" "^15.1.0"
@@ -5212,12 +5240,12 @@ vary@~1.1.2:
   resolved "https://registry.yarnpkg.com/vary/-/vary-1.1.2.tgz#2299f02c6ded30d4a5961b0b9f74524a18f634fc"
   integrity sha1-IpnwLG3tMNSllhsLn3RSShj2NPw=
 
-vaultclient@scality/vaultclient#7.10.2:
-  version "7.10.2"
-  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/7012fbb99c8f69fded2b585b118a49867bf549ac"
+vaultclient@scality/vaultclient#7.10.4:
+  version "7.10.4"
+  resolved "https://codeload.github.com/scality/vaultclient/tar.gz/ba151edb38acfbad971708f7418395f1839f910f"
   dependencies:
     agentkeepalive "^4.1.3"
-    arsenal scality/Arsenal#7.10.9
+    arsenal scality/Arsenal#7.10.11
     commander "2.20.0"
     werelogs scality/werelogs#8.1.0
     xml2js "0.4.19"
