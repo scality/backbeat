@@ -1,5 +1,5 @@
 const fs = require('fs');
-const joi = require('@hapi/joi');
+const joi = require('joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi, probeServerJoi } =
     require('../../lib/config/configItems.joi.js');
@@ -13,7 +13,7 @@ const qpRetryJoi = joi.object({
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 
-const joiSchema = {
+const joiSchema = joi.object({
     source: {
         transport: transportJoi,
         s3: hostPortJoi.required(),
@@ -72,7 +72,7 @@ const joiSchema = {
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
-};
+});
 
 function _loadAdminCredentialsFromFile(filePath) {
     const adminCredsJSON = fs.readFileSync(filePath);

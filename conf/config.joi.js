@@ -1,6 +1,6 @@
 'use strict'; // eslint-disable-line
 
-const joi = require('@hapi/joi');
+const joi = require('joi');
 const {
     hostPortJoi,
     transportJoi,

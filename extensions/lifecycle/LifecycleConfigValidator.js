@@ -1,13 +1,19 @@
-const joi = require('@hapi/joi');
-const { retryParamsJoi, authJoi, probeServerJoi, hostPortJoi } =
-    require('../../lib/config/configItems.joi.js');
+const joi = require('joi');
+const {
+    authJoi,
+    hostPortJoi,
+    inheritedAuthJoi,
+    probeServerJoi,
+    retryParamsJoi,
+} = require('../../lib/config/configItems.joi.js');
 
-const joiSchema = {
+const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
     objectTasksTopic: joi.string().required(),
-    auth: authJoi.required(),
+    auth: authJoi.optional(),
     conductor: {
+        auth: inheritedAuthJoi,
         bucketSource: joi.string().
             valid('bucketd', 'zookeeper').default('zookeeper'),
         bucketd: hostPortJoi.
@@ -20,6 +26,7 @@ const joiSchema = {
         probeServer: probeServerJoi.default(),
     },
     bucketProcessor: {
+        auth: inheritedAuthJoi,
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         // a single producer task is already involving concurrency in
@@ -29,12 +36,13 @@ const joiSchema = {
         probeServer: probeServerJoi.default(),
     },
     objectProcessor: {
+        auth: inheritedAuthJoi,
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
-};
+});
 
 function configValidator(backbeatConfig, extConfig) {
     return joi.attempt(extConfig, joiSchema);

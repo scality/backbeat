@@ -1,4 +1,4 @@
-const joi = require('@hapi/joi');
+const joi = require('joi');
 const { authJoi, retryParamsJoi, probeServerJoi } = require('../../lib/config/configItems.joi.js');
 
 const joiSchema = joi.object({

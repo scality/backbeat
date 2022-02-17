@@ -1,7 +1,7 @@
-const joi = require('@hapi/joi');
+const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi.js');
 
-const joiSchema = {
+const joiSchema = joi.object({
     auth: joi.object({
         type: joi.string().valid('service').required(),
         account: joi.string().required(),
@@ -12,7 +12,7 @@ const joiSchema = {
     maxParallelReaders: joi.number().greater(0).default(5),
     sources: joi.array().required(),
     probeServer: probeServerJoi.default(),
-};
+});
 
 function configValidator(backbeatConfig, extConfig) {
     const validatedConfig = joi.attempt(extConfig, joiSchema);

@@ -64,6 +64,7 @@ class LifecycleConductor {
         this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
+        this._authConfig = lcConfig.conductor.auth || lcConfig.auth;
         this.repConfig = repConfig;
         this._cronRule =
             this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
@@ -95,7 +96,7 @@ class LifecycleConductor {
     _getAccountIds(canonicalIds, cb) {
         // if auth is not of type `assumeRole`, then
         // the accountId can be omitted from work queue messages
-        if (this.lcConfig.auth.type !== authTypeAssumeRole) {
+        if (this._authConfig.type !== authTypeAssumeRole) {
             return process.nextTick(cb, null, {});
         }
 
@@ -374,12 +375,12 @@ class LifecycleConductor {
     }
 
     _setupVaultClientCache() {
-        if (this.lcConfig.auth.type !== authTypeAssumeRole) {
+        if (this._authConfig.type !== authTypeAssumeRole) {
             return;
         }
 
         this._vaultClientCache = new VaultClientCache();
-        const { host, port } = this.lcConfig.auth.vault;
+        const { host, port } = this._authConfig.vault;
         this._vaultClientCache
             .setHost(LIFEYCLE_CONDUCTOR_CLIENT_ID, host)
             .setPort(LIFEYCLE_CONDUCTOR_CLIENT_ID, port);
