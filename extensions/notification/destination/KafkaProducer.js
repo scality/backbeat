@@ -1,6 +1,6 @@
 const { EventEmitter } = require('events');
 const { Producer } = require('node-rdkafka');
-const joi = require('@hapi/joi');
+const joi = require('joi');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
@@ -32,7 +32,7 @@ class KafkaProducer extends EventEmitter {
     constructor(config) {
         super();
 
-        const configJoi = {
+        const configJoi = joi.object({
             kafka: joi.object({
                 hosts: joi.string().required(),
             }).required(),
@@ -40,7 +40,7 @@ class KafkaProducer extends EventEmitter {
             pollIntervalMs: joi.number().default(2000),
             messageMaxBytes: joi.number().default(PRODUCER_MESSAGE_MAX_BYTES),
             auth: joi.object().optional(),
-        };
+        });
         const validConfig = joi.attempt(config, configJoi,
             'invalid config params');
         const {

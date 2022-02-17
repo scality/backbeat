@@ -1,7 +1,7 @@
 const async = require('async');
 const { EventEmitter } = require('events');
 const zookeeper = require('node-zookeeper-client');
-const joi = require('@hapi/joi');
+const joi = require('joi');
 
 const safeJsonParse = require('./utils/safeJsonParse');
 const constants = require('./constants');

@@ -1,5 +1,5 @@
 // eslint-disable-next-line
-const joi = require('@hapi/joi');
+const joi = require('joi');
 
 const { hostPortJoi } = require('../../lib/config/configItems.joi.js');
 
