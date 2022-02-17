@@ -65,7 +65,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
-        this._authConfig = lcConfig.auth;
+        this._authConfig = lcConfig.objectProcessor.auth || lcConfig.auth;
         this._s3Config = s3Config;
         this._transport = transport;
         this._consumer = null;
@@ -140,8 +140,8 @@ class LifecycleObjectProcessor extends EventEmitter {
     }
 
     _initSTSConfig() {
-        if (this._lcConfig.auth.type === authTypeAssumeRole) {
-            const { sts } = this._lcConfig.auth;
+        if (this._authConfig.type === authTypeAssumeRole) {
+            const { sts } = this._authConfig;
             this._stsConfig = {
                 endpoint: `${this._transport}://${sts.host}:${sts.port}`,
                 credentials: {

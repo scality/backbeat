@@ -70,6 +70,7 @@ class LifecycleBucketProcessor {
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
+        this._authConfig = lcConfig.bucketProcessor.auth || lcConfig.auth;
         this._repConfig = repConfig;
         this._s3Endpoint = `${transport}://${s3Config.host}:${s3Config.port}`;
         this._s3Config = s3Config;
@@ -139,7 +140,7 @@ class LifecycleBucketProcessor {
             bootstrapList: this._repConfig.destination.bootstrapList,
             enabledRules: this._supportedRulesObject,
             s3Endpoint: this._s3Endpoint,
-            s3Auth: this._lcConfig.auth,
+            s3Auth: this._authConfig,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
@@ -158,7 +159,7 @@ class LifecycleBucketProcessor {
             id: canonicalId,
             accountId,
             stsConfig: this._stsConfig,
-            authConfig: this._lcConfig.auth,
+            authConfig: this._authConfig,
         });
 
         if (credentials === null) {
@@ -194,7 +195,7 @@ class LifecycleBucketProcessor {
             id: canonicalId,
             accountId,
             stsConfig: this._stsConfig,
-            authConfig: this._lcConfig.auth,
+            authConfig: this._authConfig,
         });
 
         if (credentials === null) {
@@ -206,7 +207,7 @@ class LifecycleBucketProcessor {
 
         if (client) {
             return new BackbeatMetadataProxy(
-                `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._lcConfig.auth)
+                `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
                 .setBackbeatClient(client);
         }
 
@@ -219,7 +220,7 @@ class LifecycleBucketProcessor {
         });
 
         return new BackbeatMetadataProxy(
-            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._lcConfig.auth)
+            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
             .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
@@ -268,7 +269,7 @@ class LifecycleBucketProcessor {
             return process.nextTick(() => cb(errors.InternalError));
         }
         const { bucket, owner, accountId } = result.target;
-        if (!bucket || !owner || (!accountId && this._lcConfig.auth.type === authTypeAssumeRole)) {
+        if (!bucket || !owner || (!accountId && this._authConfig.type === authTypeAssumeRole)) {
             this._log.error('kafka bucket entry missing required fields', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
@@ -448,8 +449,8 @@ class LifecycleBucketProcessor {
     }
 
     _initSTSConfig() {
-        if (this._lcConfig.auth.type === authTypeAssumeRole) {
-            const { sts } = this._lcConfig.auth;
+        if (this._authConfig.type === authTypeAssumeRole) {
+            const { sts } = this._authConfig;
             this._stsConfig = {
                 endpoint: `${this._transport}://${sts.host}:${sts.port}`,
                 credentials: {
