@@ -18,6 +18,35 @@ zookeeper-server-start kafka_2.11-0.11.0.0/config/zookeeper.properties
 kafka-server-start kafka_2.11-0.11.0.0/config/server.properties.backbeat
 ```
 
+## Vault
+
+```
+git checkout development/7.4
+```
+
+Run vault with "in-memory backend"
+
+```
+VAULT_DB_BACKEND="MEMORY" yarn start
+```
+
+> :warning: **with "in-memory backend"**, all data is lost after you stop the process.
+
+If you face the following issue:
+
+```
+error Command failed.
+Exit code: 128
+Command: git
+Arguments: ls-remote --tags --heads ssh://git@github.com/scality/MetaData.git
+Directory: /Users/nicolashumbert/Desktop/crr/vault
+Output:
+Host key verification failed.
+fatal: Could not read from remote repository.
+```
+
+Please comment the Metadata dependency, (e.g https://github.com/scality/Vault/compare/without-metadata/7.4)
+
 ## CloudServer
 
 ```
@@ -78,20 +107,6 @@ Run Cloudserver
 S3DATA=multiple S3METADATA=file REMOTE_MANAGEMENT_DISABLE=true \
 S3VAULT=scality yarn start
 ```
-
-## Vault
-
-```
-git checkout development/7.4
-```
-
-Run vault with "in-memory backend"
-
-```
-VAULT_DB_BACKEND="MEMORY" yarn start
-```
-
-Warning: with "in-memory backend", all data is lost after you stop the process.
 
 ## Backbeat
 
