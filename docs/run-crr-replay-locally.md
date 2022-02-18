@@ -27,6 +27,8 @@ git checkout development/7.4
 Run vault with "in-memory backend"
 
 ```
+chmod 400 ./tests/utils/keyfile
+
 VAULT_DB_BACKEND="MEMORY" yarn start
 ```
 
