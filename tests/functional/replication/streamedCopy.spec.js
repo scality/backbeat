@@ -20,6 +20,7 @@ const constants = {
 };
 
 const qpParams = [
+    'backbeat-func-test-dummy-topic',
     { hosts: 'localhost:9092' },
     { auth: { type: 'account', account: 'bart' },
       s3: { host: '127.0.0.1',
