@@ -10,6 +10,8 @@ const { ChainableTemporaryCredentials } = require('aws-sdk');
 const { constants, errors, errorUtils } = require('arsenal');
 const Logger = require('werelogs').Logger;
 const BucketClient = require('bucketclient').RESTClient;
+const MongoClient = require('arsenal').storage
+    .metadata.mongoclient.MongoClientInterface;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
@@ -72,15 +74,16 @@ class LifecycleConductor {
         this._authConfig = lcConfig.conductor.auth || lcConfig.auth;
         this._transport = transport;
         this.repConfig = repConfig;
-        this._cronRule =
-            this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
+        this._cronRule = this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
         this._concurrency =
             this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
         this._bucketSource = this.lcConfig.conductor.bucketSource;
         this._bucketdConfig = this.lcConfig.conductor.bucketd;
+
         this._producer = null;
         this._zkClient = null;
         this._bucketClient = null;
+        this._mongodbClient = null;
         this._kafkaBacklogMetrics = null;
         this._started = false;
         this._cronJob = null;
@@ -121,9 +124,12 @@ class LifecycleConductor {
 
         return this._tempCredsPromise
             .then(creds =>
-                this._vaultClientCache
+                 this._vaultClientCache
                     .getClientWithAWSCreds(LIFEYCLE_CONDUCTOR_CLIENT_ID, creds)
-                    .enableIAMOnAdminRoutes()
+
+            )
+            .then(client =>
+                client.enableIAMOnAdminRoutes()
             )
             .then(client => {
                 const opts = {};
@@ -275,6 +281,10 @@ class LifecycleConductor {
             return this.listZookeeperBuckets(queue, log, cb);
         }
 
+        if (this._bucketSource === 'mongodb') {
+            return this.listMongodbBuckets(queue, log, cb);
+        }
+
         return this.listBucketdBuckets(queue, log, cb);
     }
 
@@ -344,6 +354,27 @@ class LifecycleConductor {
             ),
             () => isTruncated,
             err => cb(err, nEnqueued));
+    }
+
+    listMongodbBuckets(queue, log, cb) {
+        let nEnqueued = 0;
+
+        this._mongodbClient
+            .getCollection('__metastore')
+            .find()
+            .project({ '_id': 1, 'value.owner': 1 })
+            .forEach(doc => {
+                // reverse-lookup the name in case it is special and has been
+                // rewritten by the client
+                const name = this._mongodbClient.getCollection(doc._id).collectionName;
+                if (!this._mongodbClient._isSpecialCollection(name)) {
+                    queue.push({
+                        bucketName: name,
+                        canonicalId: doc.value.owner,
+                    });
+                    nEnqueued += 1;
+                }
+            }, err => cb(err, nEnqueued));
     }
 
     _controlBacklog(done) {
@@ -420,6 +451,17 @@ class LifecycleConductor {
         });
     }
 
+    _setupMongodbClient(cb) {
+        if (this._bucketSource === 'mongodb') {
+            const conf = this.lcConfig.conductor.mongodb;
+            conf.logger = this.logger;
+            this._mongodbClient = new MongoClient(conf);
+            return this._mongodbClient.setup(cb);
+        }
+
+        return process.nextTick(cb);
+    }
+
     _setupBucketdClient(cb) {
         if (this._bucketSource === 'bucketd') {
             const { host, port } = this._bucketdConfig;
@@ -431,7 +473,7 @@ class LifecycleConductor {
     }
 
     _setupZookeeperClient(cb) {
-        if (this._bucketSource !== 'zookeeper') {
+        if (!this.needsZookeeper()) {
             process.nextTick(cb);
             return;
         }
@@ -452,6 +494,10 @@ class LifecycleConductor {
         });
     }
 
+    needsZookeeper() {
+        return this._bucketSource === 'zookeeper';
+    }
+
     /**
      * Initialize kafka producer and clients
      *
@@ -469,6 +515,7 @@ class LifecycleConductor {
             next => this._setupProducer(next),
             next => this._setupZookeeperClient(next),
             next => this._setupBucketdClient(next),
+            next => this._setupMongodbClient(next),
             next => this._initKafkaBacklogMetrics(next),
         ], done);
     }
@@ -479,7 +526,7 @@ class LifecycleConductor {
         }
 
         this._vaultClientCache = new VaultClientCache();
-        const { host, port } = this._authConfig.vault;
+        const { host, port } = this.lcConfig.conductor.vaultAdmin;
         this._vaultClientCache
             .setHost(LIFEYCLE_CONDUCTOR_CLIENT_ID, host)
             .setPort(LIFEYCLE_CONDUCTOR_CLIENT_ID, port);
@@ -570,11 +617,27 @@ class LifecycleConductor {
     }
 
     isReady() {
-        const state = this._zkClient && this._zkClient.getState();
-        return this._producer && this._producer.isReady() && state &&
-            state.code === zookeeper.State.SYNC_CONNECTED.code &&
-            (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady()) &&
-            this._tempCredentialsReady();
+        const zkState = !this.needsZookeeper() ||
+            !!(this._zkClient && this._zkClient.getState());
+
+        const zkConnectState = !this.needsZookeeper() ||
+            (zkState && zkState.code === zookeeper.State.SYNC_CONNECTED.code);
+
+        const components = {
+            zkState,
+            zkConnectState,
+            producer: !!(this._producer && this._producer.isReady()),
+            kafkaBacklogMetrics: (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady()),
+            tempCreds: this._tempCredentialsReady(),
+        };
+
+        const allReady = Object.values(components).every(v => v);
+
+        if (!allReady) {
+            this.logger.error('ready state', components);
+        }
+
+        return allReady;
     }
 }
 

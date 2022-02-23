@@ -3,6 +3,7 @@ const {
     authJoi,
     hostPortJoi,
     inheritedAuthJoi,
+    mongoJoi,
     probeServerJoi,
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi.js');
@@ -15,15 +16,18 @@ const joiSchema = joi.object({
     conductor: {
         auth: inheritedAuthJoi,
         bucketSource: joi.string().
-            valid('bucketd', 'zookeeper').default('zookeeper'),
+            valid('bucketd', 'zookeeper', 'mongodb').default('zookeeper'),
         bucketd: hostPortJoi.
             when('bucketSource', { is: 'bucketd', then: joi.required() }),
+        mongodb: mongoJoi.
+            when('bucketSource', { is: 'mongodb', then: joi.required() }),
         cronRule: joi.string().required(),
         concurrency: joi.number().greater(0).default(10),
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
         probeServer: probeServerJoi.default(),
+        vaultAdmin: hostPortJoi,
     },
     bucketProcessor: {
         auth: inheritedAuthJoi,

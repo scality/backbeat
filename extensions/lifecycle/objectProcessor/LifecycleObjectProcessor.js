@@ -143,11 +143,12 @@ class LifecycleObjectProcessor extends EventEmitter {
     _initSTSConfig() {
         if (this._authConfig.type === authTypeAssumeRole) {
             const { sts } = this._authConfig;
+            const stsWithCreds = this.credentialsManager.resolveExternalFileSync(sts);
             this._stsConfig = {
                 endpoint: `${this._transport}://${sts.host}:${sts.port}`,
                 credentials: {
-                    accessKeyId: sts.accessKey,
-                    secretAccessKey: sts.secretKey,
+                    accessKeyId: stsWithCreds.accessKey,
+                    secretAccessKey: stsWithCreds.secretKey,
                 },
                 region: 'us-east-1',
                 signatureVersion: 'v4',
