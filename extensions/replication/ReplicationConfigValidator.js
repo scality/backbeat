@@ -46,6 +46,12 @@ const joiSchema = {
     replicationFailedTopic: joi.string().required(),
     monitorReplicationFailureExpiryTimeS:
         joi.number().default(CRR_FAILURE_EXPIRY),
+    replayTopics: joi.array().items(
+        joi.object({
+            topicName: joi.string().required(),
+            retries: joi.number().required(),
+        })
+    ),
     queueProcessor: joi.object({
         groupId: joi.string().required(),
         retryTimeoutS: joi.number().default(300),

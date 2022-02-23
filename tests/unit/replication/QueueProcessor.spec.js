@@ -9,6 +9,7 @@ describe('Queue Processor', () => {
     let qp;
     beforeEach(() => {
         qp = new QueueProcessor(
+            'backbeat-func-test-dummy-topic',
             { hosts: 'localhost:9092' },
             {
                 auth: {

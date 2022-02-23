@@ -10,6 +10,7 @@
     "lifecycle_conductor": "node extensions/lifecycle/conductor/service.js",
     "lifecycle_bucket_processor": "node extensions/lifecycle/bucketProcessor/task.js",
     "lifecycle_object_processor": "node extensions/lifecycle/objectProcessor/task.js",
+    "replay_processor": "node extensions/replication/replayProcessor/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",

@@ -3,7 +3,7 @@ const async = require('async');
 const assert = require('assert');
 const werelogs = require('werelogs');
 
-const QueueProcessor = require('./QueueProcessor');
+const QueueProcessor = require('../queueProcessor/QueueProcessor');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 const config = require('../../../conf/Config');
@@ -18,13 +18,19 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 
 const site = process.argv[2];
-assert(site, 'QueueProcessor task must be started with a site as argument');
+const topic = process.argv[3];
+
+assert(site, 'QueueProcessor task must have site as a first argument');
+assert(topic, 'QueueProcessor task must have topic as a second argument');
 
 const bootstrapList = repConfig.destination.bootstrapList
     .filter(item => item.site === site);
 assert(bootstrapList.length === 1, 'Invalid site argument. Site must match ' +
     'one of the replication endpoints defined');
 
+const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
+assert(isTopicUsed, 'Invalid topic argument. Topic must match ' +
+    'one of the replay topic defined');
 
 const destConfig = Object.assign({}, repConfig.destination);
 destConfig.bootstrapList = bootstrapList;
@@ -34,8 +40,9 @@ werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
+
 const queueProcessor = new QueueProcessor(
-    repConfig.topic, kafkaConfig, sourceConfig, destConfig, repConfig,
+    topic, kafkaConfig, sourceConfig, destConfig, repConfig,
     httpsConfig, internalHttpsConfig, site, metricsProducer
 );
 
