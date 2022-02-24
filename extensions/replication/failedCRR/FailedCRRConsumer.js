@@ -37,7 +37,10 @@ class FailedCRRConsumer {
     start(cb) {
         let consumerReady = false;
         const consumer = new BackbeatConsumer({
-            kafka: { hosts: this._kafkaConfig.hosts },
+            kafka: {
+                hosts: this._kafkaConfig.hosts,
+                site: this._kafkaConfig.site,
+            },
             topic: this._topic,
             groupId: 'backbeat-retry-group',
             concurrency: CONCURRENCY,

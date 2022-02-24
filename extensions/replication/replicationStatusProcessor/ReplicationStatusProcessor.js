@@ -209,7 +209,10 @@ class ReplicationStatusProcessor {
             done => {
                 let consumerReady = false;
                 this._consumer = new BackbeatConsumer({
-                    kafka: { hosts: this.kafkaConfig.hosts },
+                    kafka: {
+                        hosts: this.kafkaConfig.hosts,
+                        site: this.kafkaConfig.site,
+                    },
                     topic: this.repConfig.replicationStatusTopic,
                     groupId: this.repConfig.replicationStatusProcessor.groupId,
                     concurrency:

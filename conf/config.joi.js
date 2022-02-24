@@ -15,6 +15,7 @@ const joiSchema = {
     },
     kafka: {
         hosts: joi.string().required(),
+        site: joi.string(),
     },
     queuePopulator: {
         cronRule: joi.string().required(),

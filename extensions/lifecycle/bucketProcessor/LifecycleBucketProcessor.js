@@ -393,6 +393,7 @@ class LifecycleBucketProcessor {
             },
             kafka: {
                 hosts: this._kafkaConfig.hosts,
+                site: this._kafkaConfig.site,
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
             topic: this._lcConfig.bucketTasksTopic,
