@@ -522,9 +522,8 @@ class MultipleBackendTask extends ReplicateObject {
                 });
             return cb(errors.InvalidObjectState);
         }
-        // TODO: TO BE DELETED!!!! FOR TESTTING ONLY
-        // console.log('--------> PROCESSING FAILED:', sourceEntry.getKey());
-        // return process.nextTick(() => cb(new Error('ARF ERROR!!!')));
+        // For Replication Replay "manual testing" only, uncomment the following line.
+        // return process.nextTick(() => cb(new Error('Replication error')));
         const locations = sourceEntry.getReducedLocations();
         // Metadata-only operations have no part locations.
         if (locations.length === 0) {
