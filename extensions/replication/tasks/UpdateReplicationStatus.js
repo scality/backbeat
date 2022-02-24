@@ -329,7 +329,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             return refreshedEntry.toFailedEntry(site);
         }
         const count = queueEntry.getReplayCount();
-        const totalAttemps = this.replayTopics.length;
+        const totalAttempts = this.replayTopics.length;
         if (count === 0) {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry);
@@ -337,15 +337,15 @@ class UpdateReplicationStatus extends BackbeatTask {
             return refreshedEntry.toFailedEntry(site);
         }
         if (count > 0) {
-            if (count > totalAttemps) { // might happen if replay config has changed
-                queueEntry.setReplayCount(totalAttemps);
+            if (count > totalAttempts) { // might happen if replay config has changed
+                queueEntry.setReplayCount(totalAttempts);
             }
             this._pushReplayEntry(queueEntry, site, log);
             return null;
         }
         if (!count) {
             // If no replay count has been defined yet:
-            queueEntry.setReplayCount(totalAttemps);
+            queueEntry.setReplayCount(totalAttempts);
             this._pushReplayEntry(queueEntry, site, log);
             return null;
         }
