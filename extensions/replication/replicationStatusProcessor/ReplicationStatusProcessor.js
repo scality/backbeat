@@ -239,7 +239,10 @@ class ReplicationStatusProcessor {
             this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
         });
         this._consumer = new BackbeatConsumer({
-            kafka: { hosts: this.kafkaConfig.hosts },
+            kafka: {
+                hosts: this.kafkaConfig.hosts,
+                site: this.kafkaConfig.site,
+            },
             topic: this.repConfig.replicationStatusTopic,
             groupId: this.repConfig.replicationStatusProcessor.groupId,
             concurrency:

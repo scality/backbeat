@@ -19,6 +19,7 @@ const joiSchema = {
             zkPath: joi.string().default('/backbeat/run/kafka-backlog-metrics'),
             intervalS: joi.number().default(60),
         },
+        site: joi.string(),
     },
     s3: hostPortJoi.optional(),
     queuePopulator: {
