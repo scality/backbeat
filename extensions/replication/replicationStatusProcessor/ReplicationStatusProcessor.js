@@ -131,7 +131,8 @@ class ReplicationStatusProcessor {
     }
 
     /**
-     * Return an array of replay topic's names
+     * Return an array of replay topic's names. Array is reverse sorted
+     * because the counter is decremented.
      *
      * @param {Array.<{topicName: String, retries: Number}>} [replayTopics] -
      * array of replay topics
