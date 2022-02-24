@@ -389,6 +389,7 @@ class QueueProcessor extends EventEmitter {
             },
             kafka: {
                 hosts: this.kafkaConfig.hosts,
+                site: this.kafkaConfig.site,
                 backlogMetrics: options && options.enableBacklogMetrics ?
                     this.kafkaConfig.backlogMetrics : undefined,
             },
