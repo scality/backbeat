@@ -132,7 +132,10 @@ class MongoQueueProcessor {
             this._consumer = new BackbeatConsumer({
                 topic: this.mongoProcessorConfig.topic,
                 groupId: `${this.mongoProcessorConfig.groupId}`,
-                kafka: { hosts: this.kafkaConfig.hosts },
+                kafka: {
+                    hosts: this.kafkaConfig.hosts,
+                    site: this.kafkaConfig.site,
+                },
                 queueProcessor: this.processKafkaEntry.bind(this),
             });
             this._consumer.on('error', () => {
