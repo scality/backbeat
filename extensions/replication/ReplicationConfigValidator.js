@@ -77,6 +77,16 @@ const joiSchema = {
             port: joi.number().required(),
         }),
     },
+    replayProcessor: joi.object({
+        probeServer: joi.array().items(
+            joi.object({
+                site: joi.string().required(),
+                topicName: joi.string().required(),
+                bindAddress: joi.string().default('localhost'),
+                port: joi.number().required(),
+            })
+        ),
+    }),
 };
 
 function _loadAdminCredentialsFromFile(filePath) {

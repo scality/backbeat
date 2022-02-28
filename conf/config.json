@@ -80,7 +80,7 @@
                 "mpuPartsConcurrency": 10,
                 "probeServer": [
                     {
-                        "site": "sf",
+                        "site": "aws-location",
                         "bindAddress": "localhost",
                         "port": "4043"
                     }, {
@@ -99,6 +99,21 @@
                     "bindAddress": "localhost",
                     "port": 4045
                 }
+            },
+            "replayProcessor": {
+                "probeServer": [
+                    {
+                        "site": "aws-location",
+                        "topicName": "backbeat-replication-replay-0",
+                        "bindAddress": "localhost",
+                        "port": "4046"
+                    }, {
+                        "site" : "us-east-1",
+                        "topicName": "backbeat-replication-replay-0",
+                        "bindAddress": "localhost",
+                        "port": "4047"
+                    }
+                ]
             }
         },
         "lifecycle": {
