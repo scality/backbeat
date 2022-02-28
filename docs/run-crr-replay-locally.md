@@ -31,6 +31,48 @@ zkCli -server localhost:2181/backbeat
 create /queue-populator
 ```
 
+### Create the kafka topics
+
+#### backbeat-replication
+
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication
+```
+
+#### backbeat-replication-status
+
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication-status
+```
+
+#### backbeat-replication-failed
+
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication-failed
+```
+
+#### backbeat-replication-replay-0
+
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication-replay-0
+```
+
 ## Vault
 
 ```
@@ -205,13 +247,13 @@ replay topic.
 ### Queue populator
 
 ```
-yarn run queue_populator
+S3_REPLICATION_METRICS_PROBE=true yarn run queue_populator
 ```
 
 ### Queue processor
 
 ```
-yarn run queue_processor aws-location
+S3_REPLICATION_METRICS_PROBE=true yarn run queue_processor aws-location
 ```
 
 ### Replication status processor
@@ -225,7 +267,7 @@ S3_REPLICATION_METRICS_PROBE=true yarn run replication_status_processor
 For location: `aws-location` and topic: `backbeat-replication-replay-0`
 
 ```
-yarn run replay_processor aws-location backbeat-replication-replay-0
+S3_REPLICATION_METRICS_PROBE=true yarn run replay_processor aws-location backbeat-replication-replay-0
 ```
 
 ## AWS S3 CLI

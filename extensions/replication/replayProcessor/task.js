@@ -48,22 +48,23 @@ const queueProcessor = new QueueProcessor(
 
 /**
  * Get probe config will pull the configuration for the probe server based on
- * the provided site key.
+ * the provided site key and topic name.
  *
- * @param {Object} queueProcessorConfig - Configuration of the queue processor that
- *      holds the probe server configs for all sites
+ * @param {Object} replayProcessorConfig - Configuration of the replay processor that
+ *      holds the probe server configs for all sites and topics
  * @param {string} site - Name of the site we are processing
+ * @param {string} topicName - Name of the replay topic
  * @returns {ProbeServerConfig|undefined} Config for site or undefined if not found
  */
-function getProbeConfig(queueProcessorConfig, site) {
-    return queueProcessorConfig &&
-        queueProcessorConfig.probeServer &&
-        queueProcessorConfig.probeServer.filter(c => c.site === site)[0];
+function getProbeConfig(replayProcessorConfig, site, topicName) {
+    return replayProcessorConfig &&
+        replayProcessorConfig.probeServer &&
+        replayProcessorConfig.probeServer.find(c => c.site === site && c.topicName === topicName);
 }
 
 async.waterfall([
     done => startProbeServer(
-        getProbeConfig(repConfig.queueProcessor, site),
+        getProbeConfig(repConfig.replayProcessor, site, topic),
         (err, probeServer) => {
             if (err) {
                 log.error('error starting probe server', {
