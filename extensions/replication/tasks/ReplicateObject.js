@@ -442,6 +442,10 @@ class ReplicateObject extends BackbeatTask {
             });
             return cb(errors.InternalError.customizeDescription(errMessage));
         }
+        // For Replication Replay "manual testing" only, uncomment the following lines.
+        // if (Math.random() < 0.5) {
+        // return process.nextTick(() => cb(new Error('Replication error')));
+        // }
         const locations = sourceEntry.getReducedLocations();
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
         return mapLimitWaitPendingIfError(locations, mpuConcLimit, (part, done) => {

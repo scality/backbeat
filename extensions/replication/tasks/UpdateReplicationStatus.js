@@ -202,6 +202,9 @@ class UpdateReplicationStatus extends BackbeatTask {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
         } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
+            if (sourceEntry.getReplayCount() >= 0) {
+                this.metricsHandler.replaySuccess();
+            }
         } else if (newStatus === 'FAILED') {
             entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
             if (!entry) {
@@ -287,6 +290,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 count,
                 site,
             });
+            this.metricsHandler.replayAttempts();
         } else {
             log.error('error pushing failed entry to the replay topic',
                 {
