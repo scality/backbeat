@@ -15,7 +15,7 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @constructor
      * @param {ReplicationStatusProcessor} rsp - replication status
      *   processor instance
-     * @param {MetricsHandler} metricsHandler - instance of metric handler
+     * @param {ReplicationStatusMetricsHandler} metricsHandler - instance of metric handler
      */
     constructor(rsp, metricsHandler) {
         const rspState = rsp.getStateVars();
@@ -117,6 +117,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                 count,
                 site,
             });
+            this.metricsHandler.replayAttempts();
         } else {
             log.error('error pushing failed entry to the replay topic',
                 {
@@ -199,6 +200,9 @@ class UpdateReplicationStatus extends BackbeatTask {
             let updatedSourceEntry;
             if (status === 'COMPLETED') {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
+                if (sourceEntry.getReplayCount() >= 0) {
+                    this.metricsHandler.replaySuccess();
+                }
             } else if (status === 'FAILED') {
                 updatedSourceEntry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
                 if (!updatedSourceEntry) {
