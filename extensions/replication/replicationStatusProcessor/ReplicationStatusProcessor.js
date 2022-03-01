@@ -47,15 +47,31 @@ const kafkaLagMetric = new promClient.Gauge({
     labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
 });
 
+const replayAttempts = new promClient.Counter({
+    name: 'replication_replay_attempts_total',
+    help: 'Number of total attempts made to replay replication',
+    labelNames: ['origin', 'containerName'],
+});
+
+const replaySuccess = new promClient.Counter({
+    name: 'replication_replay_success_total',
+    help: 'Number of times an object was replicated during a replay',
+    labelNames: ['origin', 'containerName'],
+});
+
 /**
  * Contains methods to incrememt different metrics
- * @typedef {Object} MetricsHandler
+ * @typedef {Object} ReplicationStatusMetricsHandler
  * @property {CounterInc} status - Increments the replication status metric
  * @property {GaugeSet} lag - Set the kafka lag metric
+ * @property {CounterInc} replayAttempts - Increments the replay attempts metric
+ * @property {CounterInc} replaySuccess - Increments the replay success metric
  */
 const metricsHandler = {
     status: wrapCounterInc(replicationStatusMetric),
     lag: wrapGaugeSet(kafkaLagMetric),
+    replayAttempts: wrapCounterInc(replayAttempts),
+    replaySuccess: wrapCounterInc(replaySuccess),
 };
 
 /**
