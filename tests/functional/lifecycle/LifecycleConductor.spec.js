@@ -128,7 +128,14 @@ describe('lifecycle conductor', function lifecycleConductor() {
             mockBucketd,
             mockVault,
             setupZookeeper,
+            skip,
         } = opts;
+
+        if (skip) {
+            return describe.skip(`skipped: ${description} ${skip}`, () => {
+            });
+        }
+
         const bucketdPort = 14345;
         const vaultPort = 14346;
         const maxKeys = 2;
@@ -381,5 +388,6 @@ describe('lifecycle conductor', function lifecycleConductor() {
         mockBucketd: true,
         mockVault: true,
         transformExpectedMessages: withAccountIds,
+        skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
     });
 });
