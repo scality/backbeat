@@ -54,7 +54,7 @@ const kafkaLagMetric = new promClient.Gauge({
 
 /**
  * Contains methods to incrememt different metrics
- * @typedef {Object} MetricsHandler
+ * @typedef {Object} ReplicationStatusMetricsHandler
  * @property {CounterInc} status - Increments the replication status metric
  * @property {GaugeSet} lag - Set the kafka lag metric
  */
