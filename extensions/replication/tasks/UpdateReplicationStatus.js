@@ -25,7 +25,7 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @constructor
      * @param {ReplicationStatusProcessor} rsp - replication status
      *   processor instance
-     * @param {MetricsHandler} metricsHandler - instance of metric handler
+     * @param {ReplicationStatusMetricsHandler} metricsHandler - instance of metric handler
      */
     constructor(rsp, metricsHandler) {
         const rspState = rsp.getStateVars();
