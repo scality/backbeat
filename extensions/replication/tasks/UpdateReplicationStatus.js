@@ -132,19 +132,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     });
                 }
             });
-<<<<<<< HEAD
             // TODO: update ZenkoMetrics
-=======
-            this.metricsHandler.replayAttempts();
-        } else {
-            log.error('error pushing failed entry to the replay topic',
-                {
-                    entry: queueEntry.getLogInfo(),
-                    topicName,
-                    count,
-                    site,
-                });
->>>>>>> origin/w/7.10/feature/BB-128/monitor-crr-replay
         }
         return undefined;
     }
@@ -214,9 +202,6 @@ class UpdateReplicationStatus extends BackbeatTask {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
         } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
-            if (sourceEntry.getReplayCount() >= 0) {
-                this.metricsHandler.replaySuccess();
-            }
         } else if (newStatus === 'FAILED') {
             entry = refreshedEntry.toFailedEntry(site);
             if (this.repConfig.monitorReplicationFailures) {
