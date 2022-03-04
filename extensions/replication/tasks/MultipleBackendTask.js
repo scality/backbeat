@@ -522,8 +522,11 @@ class MultipleBackendTask extends ReplicateObject {
                 });
             return cb(errors.InvalidObjectState);
         }
-        // For Replication Replay "manual testing" only, uncomment the following line.
+
+        // For Replication Replay "manual testing" only, uncomment the following lines.
+        // if (Math.random() < 0.5) {
         // return process.nextTick(() => cb(new Error('Replication error')));
+        // }
         const locations = sourceEntry.getReducedLocations();
         // Metadata-only operations have no part locations.
         if (locations.length === 0) {
