@@ -81,7 +81,7 @@ class GarbageCollector extends EventEmitter {
         this._consumer = new BackbeatConsumer({
             kafka: {
                 hosts: this._kafkaConfig.hosts,
-                site: this.kafkaConfig.site,
+                site: this._kafkaConfig.site,
             },
             topic: this._gcConfig.topic,
             groupId: this._gcConfig.consumer.groupId,

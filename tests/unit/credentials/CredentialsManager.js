@@ -117,7 +117,6 @@ describe('CredentialsManager', () => {
         }));
     });
 
-
     describe('::removeInactiveCredentials', () => {
         const stsResponses = sinon.stub();
         let stsServer = null;
@@ -195,6 +194,53 @@ describe('CredentialsManager', () => {
                 assert(!mgr._accountCredsCache.id2);
                 done();
             });
+        });
+    });
+
+    describe('::resolveExternalFileSync', () => {
+        const mgr = new CredentialsManager(extension, log);
+
+        it('should return accessKey/secretKey if present', () => {
+            const params = {
+                accessKey: 'ak',
+                secretKey: 'sk',
+                otherParam: 'otherValue',
+            };
+
+            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
+        });
+
+        it('should read external file if referenced', () => {
+            const params = {
+                externalFile: `${__dirname}/external-creds.json`,
+                otherParam: 'otherValue',
+            };
+
+            const resolvedParams = {
+                accessKey: 'ak',
+                secretKey: 'sk',
+                otherParam: 'otherValue',
+            };
+
+            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), resolvedParams);
+        });
+
+        it('should return params untouched if error parsing', () => {
+            const params = {
+                externalFile: 'yarn.lock',
+                otherParam: 'otherValue',
+            };
+
+            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
+        });
+
+        it('should return params untouched if not found', () => {
+            const params = {
+                externalFile: '__nonexistent',
+                otherParam: 'otherValue',
+            };
+
+            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
         });
     });
 });
