@@ -3,6 +3,7 @@ const { errors } = require('arsenal');
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 
 
 class LifecycleDeleteObjectTask extends BackbeatTask {
@@ -39,8 +40,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             };
             const req = s3Client.headObject(reqParams);
             attachReqUids(req, log);
-            return req.send(done);
+            return req.send((err, res) => {
+                LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', err);
+                return done(err, res);
+            });
         }
+
         return done();
     }
 
@@ -73,6 +78,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const req = s3Client[reqMethod](reqParams);
         attachReqUids(req, log);
         return req.send(err => {
+            LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
+
             if (err) {
                 log.error(
                     `an error occurred on ${reqMethod} to S3`, Object.assign({

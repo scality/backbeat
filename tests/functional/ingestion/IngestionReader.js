@@ -125,8 +125,7 @@ describe('ingestion reader tests with mock', function fD() {
                     next();
                 });
             },
-            next => {
-                return kafkaAdminClient.createTopic({
+            next => kafkaAdminClient.createTopic({
                     topic,
                     num_partitions: 1, // eslint-disable-line camelcase
                     replication_factor: 1, // eslint-disable-line camelcase
@@ -136,8 +135,7 @@ describe('ingestion reader tests with mock', function fD() {
                         return next();
                     }
                     return next(err);
-                });
-            },
+                }),
             next => {
                 producer = new BackbeatProducer({
                     kafka: testConfig.kafka,

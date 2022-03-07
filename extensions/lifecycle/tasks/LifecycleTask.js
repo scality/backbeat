@@ -14,6 +14,7 @@ const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -69,7 +70,10 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendBucketEntry(entry, cb) {
         const entries = [{ message: JSON.stringify(entry) }];
-        this.producer.sendToTopic(this.bucketTasksTopic, entries, cb);
+        this.producer.sendToTopic(this.bucketTasksTopic, entries, err => {
+            LifecycleMetrics.onKafkaPublish(null, 'sendBucketEntry', 'bucket', err);
+            return cb(err);
+        });
     }
 
     /**
@@ -109,7 +113,10 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
-        this.producer.sendToTopic(this.objectTasksTopic, entries, cb);
+        this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
+            LifecycleMetrics.onKafkaPublish(null, 'sendObjectAction', 'bucket', err);
+            return cb(err);
+        });
     }
 
     /**
@@ -133,6 +140,8 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
+                LifecycleMetrics.onS3Request(log, 'ListObjects', 'bucket', err);
+
                 if (err) {
                     log.error('error listing bucket objects', {
                         method: 'LifecycleTask._getObjectList',
@@ -141,6 +150,7 @@ class LifecycleTask extends BackbeatTask {
                     });
                     return next(err);
                 }
+
                 return next(null, data);
             }),
             (data, next) => {
@@ -251,6 +261,8 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
+                LifecycleMetrics.onS3Request(log, 'ListMultipartUploads', 'bucket', err);
+
                 if (err) {
                     log.error('error checking buckets MPUs', {
                         method: 'LifecycleTask._getMPUs',
@@ -259,6 +271,7 @@ class LifecycleTask extends BackbeatTask {
                     });
                     return next(err);
                 }
+
                 return next(null, data);
             }),
             (data, next) => {
@@ -420,6 +433,8 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.listObjectVersions(params);
         attachReqUids(req, log);
         req.send((err, data) => {
+            LifecycleMetrics.onS3Request(log, 'ListObjectVersions', 'bucket', err);
+
             if (err) {
                 log.error('error listing versioned bucket objects', {
                     method: 'LifecycleTask._listVersions',
@@ -468,6 +483,8 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.getObjectTagging(tagParams);
         attachReqUids(req, log);
         return req.send((err, tags) => {
+            LifecycleMetrics.onS3Request(log, 'GetObjectTagging', 'bucket', err);
+
             if (err) {
                 log.error('failed to get tags', {
                     method: 'LifecycleTask._getRules',
@@ -480,7 +497,6 @@ class LifecycleTask extends BackbeatTask {
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, tags);
-
             // reduce filteredRules to only get earliest dates
             return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
         });
@@ -897,6 +913,8 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.headObject(params);
         attachReqUids(req, log);
         return req.send((err, data) => {
+            LifecycleMetrics.onS3Request(log, 'HeadObject', 'bucket', err);
+
             if (err) {
                 log.error('failed to get object', {
                     method: 'LifecycleTask._compareObject',
@@ -1198,6 +1216,13 @@ class LifecycleTask extends BackbeatTask {
                         });
                         attachReqUids(req, log);
                         req.send((err, data) => {
+                            LifecycleMetrics.onS3Request(
+                                log,
+                                'GetBucketVersioning',
+                                'bucket',
+                                err
+                            );
+
                             if (err) {
                                 log.error('error checking bucket versioning', {
                                     method: 'LifecycleTask.processBucketEntry',
@@ -1205,6 +1230,7 @@ class LifecycleTask extends BackbeatTask {
                                 });
                                 return next(err);
                             }
+
                             return next(null, data.Status);
                         });
                     },

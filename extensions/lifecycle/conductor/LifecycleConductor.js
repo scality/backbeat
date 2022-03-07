@@ -21,6 +21,8 @@ const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const safeJsonParse = require('../util/safeJsonParse');
 
+const { LifecycleMetrics } = require('../LifecycleMetrics');
+
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
 
@@ -134,6 +136,12 @@ class LifecycleConductor {
             .then(client => {
                 const opts = {};
                 return client.getAccountIds(canonicalIds, opts, (err, res) => {
+                    LifecycleMetrics.onVaultRequest(
+                        this.logger,
+                        'getAccountIds',
+                        err
+                    );
+
                     if (err) {
                         return cb(err);
                     }
@@ -253,7 +261,10 @@ class LifecycleConductor {
             next => this._controlBacklog(next),
             next => {
                 log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
-                this.listBuckets(messageSendQueue, log, next);
+                this.listBuckets(messageSendQueue, log, (err, nBucketsListed) => {
+                    LifecycleMetrics.onBucketListing(log, err);
+                    return next(err, nBucketsListed);
+                });
             },
             (nBucketsListed, next) => {
                 async.until(
@@ -273,6 +284,7 @@ class LifecycleConductor {
             }
 
             log.info('finished pushing lifecycle batch', { nBucketsQueued });
+            LifecycleMetrics.onProcessBuckets(log);
         });
     }
 
@@ -374,7 +386,9 @@ class LifecycleConductor {
                     });
                     nEnqueued += 1;
                 }
-            }, err => cb(err, nEnqueued));
+            }, err => {
+                cb(err, nEnqueued);
+            });
     }
 
     _controlBacklog(done) {
