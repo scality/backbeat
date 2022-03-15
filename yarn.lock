@@ -657,9 +657,9 @@ arsenal@scality/Arsenal#8.1.29:
   optionalDependencies:
     ioctl "^2.0.2"
 
-arsenal@scality/Arsenal#8.1.32:
-  version "8.1.32"
-  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/5da4cd88ff1beeb08fb5bbbaa33062d5112faf03"
+arsenal@scality/Arsenal#8.1.33:
+  version "8.1.33"
+  resolved "https://codeload.github.com/scality/Arsenal/tar.gz/8ecf1d98082283fc5f2a1a3e7d3b2b990b3e4bb2"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
