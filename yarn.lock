@@ -470,9 +470,9 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@github:scality/arsenal#7.10.9":
-  version "7.10.9"
-  resolved "https://codeload.github.com/scality/arsenal/tar.gz/2f40ff388327b17728926bf99fe82b0e6a14a01d"
+"arsenal@github:scality/arsenal#7.10.14":
+  version "7.10.13"
+  resolved "https://codeload.github.com/scality/arsenal/tar.gz/27e06c51ccdfd3dfdfd6194d4ffc155184718012"
   dependencies:
     "@hapi/joi" "^15.1.0"
     JSONStream "^1.0.0"
@@ -501,7 +501,6 @@ arraybuffer.slice@~0.0.7:
 
 arsenal@scality/Arsenal#7.10.9:
   version "7.10.9"
-  uid "2f40ff388327b17728926bf99fe82b0e6a14a01d"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/2f40ff388327b17728926bf99fe82b0e6a14a01d"
   dependencies:
     "@hapi/joi" "^15.1.0"
