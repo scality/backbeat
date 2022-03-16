@@ -69,6 +69,30 @@ const replaySuccess = new promClient.Counter({
     labelNames: ['origin'],
 });
 
+const replayQueuedObjects = new promClient.Counter({
+    name: 'replication_replay_objects_queued_total',
+    help: 'Number of objects added to replay queues',
+    labelNames: ['origin', 'containerName'],
+});
+
+const replayQueuedBytes = new promClient.Counter({
+    name: 'replication_replay_bytes_queued_total',
+    help: 'Number of bytes added to replay queues',
+    labelNames: ['origin', 'containerName'],
+});
+
+const replayCompletedObjects = new promClient.Counter({
+    name: 'replication_replay_objects_completed_total',
+    help: 'Number of objects completed from replay queues',
+    labelNames: ['origin', 'containerName'],
+});
+
+const replayCompletedBytes = new promClient.Counter({
+    name: 'replication_replay_bytes_completed_total',
+    help: 'Number of bytes completed from replay queues',
+    labelNames: ['origin', 'containerName'],
+});
+
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} ReplicationStatusMetricsHandler
@@ -82,6 +106,10 @@ const metricsHandler = {
     lag: wrapGaugeSet(kafkaLagMetric),
     replayAttempts: wrapCounterInc(replayAttempts),
     replaySuccess: wrapCounterInc(replaySuccess),
+    replayQueuedObjects: wrapCounterInc(replayQueuedObjects),
+    replayQueuedBytes: wrapCounterInc(replayQueuedBytes),
+    replayCompletedObjects: wrapCounterInc(replayCompletedObjects),
+    replayCompletedBytes: wrapCounterInc(replayCompletedBytes),
 };
 
 /**
