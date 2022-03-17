@@ -162,6 +162,8 @@ class ReplicationStatusProcessor {
      * @param {String} repConfig.replicationStatusProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry status
      *   update
+     * @param {Array<Number>} repConfig.objectSizeMetrics - Array of numbers
+     *   specifying the breakpoints in object size values for metrics
      * @param {Array.<{topicName: String, retries: Number}>}
      * repConfig.replayTopics - array of replay topics
      * @param {Object} [internalHttpsConfig] - internal HTTPS
@@ -447,10 +449,12 @@ class ReplicationStatusProcessor {
 
         // consumer stats lag is on a different update cycle so we need to
         // update the metrics when requested
-        const lagStats = this._consumer.consumerStats.lag;
-        Object.keys(lagStats).forEach(partition => {
-            this.metricsHandlers.lag({ partition, serviceName }, lagStats[partition]);
-        });
+        if (this._consumer) {
+            const lagStats = this._consumer.consumerStats.lag;
+            Object.keys(lagStats).forEach(partition => {
+                this.metricsHandlers.lag({ partition, serviceName }, lagStats[partition]);
+            });
+        }
 
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
