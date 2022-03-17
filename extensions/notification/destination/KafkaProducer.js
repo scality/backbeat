@@ -7,6 +7,7 @@ const jsutil = require('arsenal').jsutil;
 const Logger = require('werelogs').Logger;
 
 const authUtil = require('../utils/auth');
+const Constants = require('../../../lib/constants.js');
 
 // waits for an ack for messages
 const REQUIRE_ACKS = 1;
@@ -59,6 +60,7 @@ class KafkaProducer extends EventEmitter {
             'metadata.broker.list': this._kafkaHosts,
             'message.max.bytes': messageMaxBytes,
             'dr_cb': true,
+            'compression.type': Constants.compressionType,
         };
         Object.assign(producerOptions, authObject);
         // create a new producer instance
