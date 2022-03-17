@@ -78,6 +78,7 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
+    objectSizeMetrics: joi.array().items(joi.number()),
 });
 
 function _loadAdminCredentialsFromFile(filePath) {

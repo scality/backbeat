@@ -218,6 +218,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                 this.metricsHandler.replaySuccess();
                 this.metricsHandler.replayCompletedObjects();
                 this.metricsHandler.replayCompletedBytes(sourceEntry.getContentLength());
+                this.metricsHandler.replayCompletedFileSizes(
+                    { replicationStatus: 'COMPLETED' },
+                    sourceEntry.getContentLength(),
+                );
             }
         } else if (newStatus === 'FAILED') {
             entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
@@ -351,6 +355,10 @@ class UpdateReplicationStatus extends BackbeatTask {
             }
             this.metricsHandler.replayCompletedObjects();
             this.metricsHandler.replayCompletedBytes(queueEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(
+                { replicationStatus: 'FAILED' },
+                queueEntry.getContentLength(),
+            );
             return refreshedEntry.toFailedEntry(site);
         }
         const totalAttempts = this.replayTopics.length;
@@ -367,6 +375,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             this._pushReplayEntry(queueEntry, site, log);
             this.metricsHandler.replayQueuedObjects();
             this.metricsHandler.replayQueuedBytes(queueEntry.getContentLength());
+            this.metricsHandler.replayQueuedFileSizes(queueEntry.getContentLength());
             return null;
         }
         log.error('count value is invalid',

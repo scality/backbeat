@@ -842,6 +842,7 @@ describe('queue processor functional tests with mocking', () => {
                               groupId: 'backbeat-func-test-group-id',
                           },
                           monitorReplicationFailures: true,
+                          objectSizeMetrics: [100, 1000],
                         },
                         {},
                         { topic: 'metrics-test-topic' });
