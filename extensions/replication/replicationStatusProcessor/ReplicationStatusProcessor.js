@@ -18,7 +18,11 @@ const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
-const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
+const {
+    wrapCounterInc,
+    wrapGaugeSet,
+    wrapHistogramObserve,
+} = require('../../../lib/util/metrics');
 
 promClient.register.setDefaultLabels({
     origin: 'replication',
@@ -35,54 +39,6 @@ promClient.register.setDefaultLabels({
  * @property {string} [serviceName] - Name of our service to match generic metrics
  */
 
-const replicationStatusMetric = new promClient.Counter({
-    name: 'replication_status_changed_total',
-    help: 'Number of objects updated',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
-});
-
-const kafkaLagMetric = new promClient.Gauge({
-    name: 'kafka_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
-});
-
-const replayAttempts = new promClient.Counter({
-    name: 'replication_replay_attempts_total',
-    help: 'Number of total attempts made to replay replication',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replaySuccess = new promClient.Counter({
-    name: 'replication_replay_success_total',
-    help: 'Number of times an object was replicated during a replay',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replayQueuedObjects = new promClient.Counter({
-    name: 'replication_replay_objects_queued_total',
-    help: 'Number of objects added to replay queues',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replayQueuedBytes = new promClient.Counter({
-    name: 'replication_replay_bytes_queued_total',
-    help: 'Number of bytes added to replay queues',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replayCompletedObjects = new promClient.Counter({
-    name: 'replication_replay_objects_completed_total',
-    help: 'Number of objects completed from replay queues',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replayCompletedBytes = new promClient.Counter({
-    name: 'replication_replay_bytes_completed_total',
-    help: 'Number of bytes completed from replay queues',
-    labelNames: ['origin', 'containerName'],
-});
-
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} ReplicationStatusMetricsHandler
@@ -90,17 +46,94 @@ const replayCompletedBytes = new promClient.Counter({
  * @property {GaugeSet} lag - Set the kafka lag metric
  * @property {CounterInc} replayAttempts - Increments the replay attempts metric
  * @property {CounterInc} replaySuccess - Increments the replay success metric
+ * @property {CounterInc} replayQueuedObjects - Increments the replay queued objects metric
+ * @property {CounterInc} replayQueuedBytes - Increments the replay queued bytes metric
+ * @property {CounterInc} replayQueuedFileSizes - Increments the replay queued file sizes metric
+ * @property {CounterInc} replayCompletedObjects - Increments the replay completed objects metric
+ * @property {CounterInc} replayCompletedBytes - Increments the replay completed bytes metric
+ * @property {CounterInc} replayCompletedFileSizes - Increments the replay completed file sizes metric
  */
-const metricsHandler = {
-    status: wrapCounterInc(replicationStatusMetric),
-    lag: wrapGaugeSet(kafkaLagMetric),
-    replayAttempts: wrapCounterInc(replayAttempts),
-    replaySuccess: wrapCounterInc(replaySuccess),
-    replayQueuedObjects: wrapCounterInc(replayQueuedObjects),
-    replayQueuedBytes: wrapCounterInc(replayQueuedBytes),
-    replayCompletedObjects: wrapCounterInc(replayCompletedObjects),
-    replayCompletedBytes: wrapCounterInc(replayCompletedBytes),
-};
+
+/**
+ * @param {Object} repConfig - Replication configuration
+ * @returns {ReplicationStatusMetricsHandler} Metric handlers
+ */
+function loadMetricHandlers(repConfig) {
+    const replicationStatusMetric = new promClient.Counter({
+        name: 'replication_status_changed_total',
+        help: 'Number of objects updated',
+        labelNames: ['origin', 'containerName', 'replicationStatus'],
+    });
+
+    const kafkaLagMetric = new promClient.Gauge({
+        name: 'kafka_lag',
+        help: 'Number of update entries waiting to be consumed from the Kafka topic',
+        labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
+    });
+
+    const replayAttempts = new promClient.Counter({
+        name: 'replication_replay_attempts_total',
+        help: 'Number of total attempts made to replay replication',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replaySuccess = new promClient.Counter({
+        name: 'replication_replay_success_total',
+        help: 'Number of times an object was replicated during a replay',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replayQueuedObjects = new promClient.Counter({
+        name: 'replication_replay_objects_queued_total',
+        help: 'Number of objects added to replay queues',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replayQueuedBytes = new promClient.Counter({
+        name: 'replication_replay_bytes_queued_total',
+        help: 'Number of bytes added to replay queues',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replayQueuedFileSizes = new promClient.Histogram({
+        name: 'replication_replay_file_sizes_queued',
+        help: 'Number of objects queued for replay by file size',
+        labelNames: ['origin', 'containerName'],
+        buckets: repConfig.objectSizeMetrics,
+    });
+
+    const replayCompletedObjects = new promClient.Counter({
+        name: 'replication_replay_objects_completed_total',
+        help: 'Number of objects completed from replay queues',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replayCompletedBytes = new promClient.Counter({
+        name: 'replication_replay_bytes_completed_total',
+        help: 'Number of bytes completed from replay queues',
+        labelNames: ['origin', 'containerName'],
+    });
+
+    const replayCompletedFileSizes = new promClient.Histogram({
+        name: 'replication_replay_file_sizes_completed',
+        help: 'Number of objects completed from replay by file size',
+        labelNames: ['origin', 'containerName', 'replicationStatus'],
+        buckets: repConfig.objectSizeMetrics,
+    });
+
+    return {
+        status: wrapCounterInc(replicationStatusMetric),
+        lag: wrapGaugeSet(kafkaLagMetric),
+        replayAttempts: wrapCounterInc(replayAttempts),
+        replaySuccess: wrapCounterInc(replaySuccess),
+        replayQueuedObjects: wrapCounterInc(replayQueuedObjects),
+        replayQueuedBytes: wrapCounterInc(replayQueuedBytes),
+        replayQueuedFileSizes: wrapHistogramObserve(replayQueuedFileSizes),
+        replayCompletedObjects: wrapCounterInc(replayCompletedObjects),
+        replayCompletedBytes: wrapCounterInc(replayCompletedBytes),
+        replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes),
+    };
+}
 
 /**
  * @class ReplicationStatusProcessor
@@ -163,6 +196,7 @@ class ReplicationStatusProcessor {
         }
 
         this._setupVaultclientCache();
+        this.metricsHandlers = loadMetricHandlers(repConfig);
 
         this._statsClient = new StatsModel(undefined);
         this.taskScheduler = new ReplicationTaskScheduler(
@@ -340,7 +374,7 @@ class ReplicationStatusProcessor {
         }
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
-            task = new UpdateReplicationStatus(this, metricsHandler);
+            task = new UpdateReplicationStatus(this, this.metricsHandlers);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
@@ -415,7 +449,7 @@ class ReplicationStatusProcessor {
         // update the metrics when requested
         const lagStats = this._consumer.consumerStats.lag;
         Object.keys(lagStats).forEach(partition => {
-            metricsHandler.lag({ partition, serviceName }, lagStats[partition]);
+            this.metricsHandlers.lag({ partition, serviceName }, lagStats[partition]);
         });
 
         res.writeHead(200, {

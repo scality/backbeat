@@ -45,8 +45,7 @@
             "destination": {
                 "transport": "http",
                 "bootstrapList": [
-                    { "site": "sf", "servers": ["127.0.0.1:9443"],
-                      "echo": false },
+                    { "site": "sf", "servers": ["127.0.0.1:9443"], "echo": false },
                     { "site": "aws-location", "type": "aws_s3" }
                 ],
                 "auth": {
@@ -106,7 +105,12 @@
                         "port": "4047"
                     }
                 ]
-            }
+            },
+            "objectSizeMetrics": [
+                66560,
+                8388608,
+                68157440
+            ]
         }
     },
     "log": {
