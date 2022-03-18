@@ -23,7 +23,10 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 const INTERVAL = 300; // 5 minutes;
 const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
-const { wrapCounterInc, wrapGaugeSet } = require('../../../lib/util/metrics');
+const {
+    wrapCounterInc,
+    wrapGaugeSet,
+} = require('../../../lib/util/metrics');
 
 promClient.register.setDefaultLabels({
     origin: 'replication',
