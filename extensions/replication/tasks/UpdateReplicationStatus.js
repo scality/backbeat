@@ -169,7 +169,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             this.metricsHandler.replayCompletedBytes(queueEntry.getContentLength());
             this.metricsHandler.replayCompletedFileSizes(
                 { replicationStatus: 'FAILED' },
-                queueEntry.getContentLength(),
+                queueEntry.getContentLength()
             );
             return refreshedEntry.toFailedEntry(site);
         }
@@ -215,7 +215,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     this.metricsHandler.replayCompletedBytes(sourceEntry.getContentLength());
                     this.metricsHandler.replayCompletedFileSizes(
                         { replicationStatus: 'COMPLETED' },
-                        sourceEntry.getContentLength(),
+                        sourceEntry.getContentLength()
                     );
                 }
             } else if (status === 'FAILED') {
