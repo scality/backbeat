@@ -87,6 +87,7 @@ const joiSchema = {
             })
         ),
     }),
+    objectSizeMetrics: joi.array().items(joi.number()),
 };
 
 function _loadAdminCredentialsFromFile(filePath) {

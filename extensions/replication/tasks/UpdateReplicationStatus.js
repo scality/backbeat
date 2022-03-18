@@ -165,6 +165,12 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry);
             }
+            this.metricsHandler.replayCompletedObjects();
+            this.metricsHandler.replayCompletedBytes(queueEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(
+                { replicationStatus: 'FAILED' },
+                queueEntry.getContentLength(),
+            );
             return refreshedEntry.toFailedEntry(site);
         }
         if (count > 0) {
@@ -178,6 +184,9 @@ class UpdateReplicationStatus extends BackbeatTask {
             // If no replay count has been defined yet:
             queueEntry.setReplayCount(totalAttempts);
             this._pushReplayEntry(queueEntry, site, log);
+            this.metricsHandler.replayQueuedObjects();
+            this.metricsHandler.replayQueuedBytes(queueEntry.getContentLength());
+            this.metricsHandler.replayQueuedFileSizes(queueEntry.getContentLength());
             return null;
         }
         log.error('count value is invalid',
@@ -202,6 +211,12 @@ class UpdateReplicationStatus extends BackbeatTask {
                 updatedSourceEntry = refreshedEntry.toCompletedEntry(site);
                 if (sourceEntry.getReplayCount() >= 0) {
                     this.metricsHandler.replaySuccess();
+                    this.metricsHandler.replayCompletedObjects();
+                    this.metricsHandler.replayCompletedBytes(sourceEntry.getContentLength());
+                    this.metricsHandler.replayCompletedFileSizes(
+                        { replicationStatus: 'COMPLETED' },
+                        sourceEntry.getContentLength(),
+                    );
                 }
             } else if (status === 'FAILED') {
                 updatedSourceEntry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
