@@ -81,7 +81,7 @@ jobs:
     - name: Install build dependencies
       run: |
         sudo apt-get update
-        sudo apt-get install -y build-essential
+        sudo apt-get install -y build-essential libzstd-dev
     - uses: actions/setup-go@v2
       with:
         go-version: '1.16.2'
