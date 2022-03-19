@@ -69,6 +69,7 @@ class LifecycleConductor {
             this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
         this._concurrency =
             this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
+        this._maxInFlightBatchSize = this._concurrency * 2;
         this._bucketSource = this.lcConfig.conductor.bucketSource;
         this._bucketdConfig = this.lcConfig.conductor.bucketd;
         this._producer = null;
@@ -109,7 +110,7 @@ class LifecycleConductor {
         });
     }
 
-    processBuckets() {
+    processBuckets(cb) {
         const log = this.logger.newRequestLogger();
         let nBucketsQueued = 0;
 
@@ -158,15 +159,24 @@ class LifecycleConductor {
         ], err => {
             if (err && err.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
+                if (cb) {
+                    cb(err);
+                }
                 return;
             }
 
             if (err) {
                 log.error('lifecycle batch failed', { error: err });
+                if (cb) {
+                    cb(err);
+                }
                 return;
             }
 
             log.info('finished pushing lifecycle batch', { nBucketsQueued });
+            if (cb) {
+                cb();
+            }
         });
     }
 
@@ -213,35 +223,48 @@ class LifecycleConductor {
         let isTruncated = false;
         let marker = null;
         let nEnqueued = 0;
+        const start = new Date();
 
         async.doWhilst(
-            next => this._bucketClient.listObject(
-                constants.usersBucket,
-                log.getSerializedUids(),
-                { marker, prefix: '', maxKeys: this._concurrency },
-                (err, resp) => {
-                    if (err) {
-                        return next(err);
-                    }
-
-                    const { error, result } = safeJsonParse(resp);
-                    if (error) {
-                        return next(error);
-                    }
-
-                    isTruncated = result.IsTruncated;
-                    nEnqueued += result.Contents.length;
-
-                    result.Contents.forEach(o => {
-                        marker = o.key;
-                        const [canonicalId, bucketName] = marker.split(constants.splitter);
-                        queue.push({ canonicalId, bucketName });
+            next => {
+                if (queue.length() > this._maxInFlightBatchSize) {
+                    log.info('delaying bucket pull', {
+                        nEnqueuedToDownstream: nEnqueued,
+                        inFlight: queue.length(),
+                        maxInFlight: this._maxInFlightBatchSize,
+                        enqueueRateHz: (nEnqueued * 1000 / (new Date() - start)).toPrecision(1),
                     });
 
-                    const delay = queue.length() > this._concurrency ? 0 : 500;
-                    return setTimeout(next, delay);
+                    return setTimeout(next, 60000);
                 }
-            ),
+
+                return this._bucketClient.listObject(
+                    constants.usersBucket,
+                    log.getSerializedUids(),
+                    { marker, prefix: '', maxKeys: this._concurrency },
+                    (err, resp) => {
+                        if (err) {
+                            return next(err);
+                        }
+
+                        const { error, result } = safeJsonParse(resp);
+                        if (error) {
+                            return next(error);
+                        }
+
+                        isTruncated = result.IsTruncated;
+                        nEnqueued += result.Contents.length;
+
+                        result.Contents.forEach(o => {
+                            marker = o.key;
+                            const [canonicalId, bucketName] = marker.split(constants.splitter);
+                            queue.push({ canonicalId, bucketName });
+                        });
+
+                        return next();
+                    }
+                );
+            },
             () => isTruncated,
             err => cb(err, nEnqueued));
     }
