@@ -88,6 +88,12 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v2
 
+    - uses: actions/setup-node@v2
+      with:
+        node-version: '10'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --frozen-lockfile
     - name: Push buckets from LC conductor to kafka
       run: yarn mocha tests/performance/lifecycle/conductor-with-bucketd-check-memory-balloon.js
       env:
