@@ -235,7 +235,7 @@ class LifecycleConductor {
                         enqueueRateHz: (nEnqueued * 1000 / (new Date() - start)).toPrecision(1),
                     });
 
-                    return setTimeout(next, 60000);
+                    // return setTimeout(next, 60000);
                 }
 
                 return this._bucketClient.listObject(
