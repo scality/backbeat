@@ -1,4 +1,4 @@
-const baseConfig = require('../../../conf/Config');
+const baseConfig = require('../../../lib/Config');
 const LifecycleConductor = require('../../../extensions/lifecycle/conductor/LifecycleConductor');
 
 const lcConfig = {
