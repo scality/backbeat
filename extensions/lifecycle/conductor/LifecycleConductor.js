@@ -394,25 +394,53 @@ class LifecycleConductor {
 
     listMongodbBuckets(queue, log, cb) {
         let nEnqueued = 0;
+        const start = new Date();
 
-        this._mongodbClient
+        const cursor = this._mongodbClient
             .getCollection('__metastore')
             .find()
-            .project({ '_id': 1, 'value.owner': 1 })
-            .forEach(doc => {
-                // reverse-lookup the name in case it is special and has been
-                // rewritten by the client
-                const name = this._mongodbClient.getCollection(doc._id).collectionName;
-                if (!this._mongodbClient._isSpecialCollection(name)) {
-                    queue.push({
-                        bucketName: name,
-                        canonicalId: doc.value.owner,
-                    });
-                    nEnqueued += 1;
+            .project({ '_id': 1, 'value.owner': 1 });
+
+        async.during(
+            test => cursor.hasNext(b => test(null, b)),
+            next => {
+                const queueInfo = {
+                    nEnqueuedToDownstream: nEnqueued,
+                    inFlight: queue.length(),
+                    maxInFlight: this._maxInFlightBatchSize,
+                    enqueueRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                };
+
+                if (queue.length() > this._maxInFlightBatchSize) {
+                    log.info('delaying bucket pull', queueInfo);
+                    return setTimeout(next, 10000);
                 }
-            }, err => {
-                cb(err, nEnqueued);
-            });
+
+                return cursor.next((err, doc) => {
+                    if (err) {
+                        log.info('error listing next bucket', {
+                            ...queueInfo,
+                            error: err,
+                        });
+
+                        return setTimeout(next, 500);
+                    }
+
+                    // reverse-lookup the name in case it is special and has been
+                    // rewritten by the client
+                    const name = this._mongodbClient.getCollection(doc._id).collectionName;
+                    if (!this._mongodbClient._isSpecialCollection(name)) {
+                        queue.push({
+                            bucketName: name,
+                            canonicalId: doc.value.owner,
+                        });
+                        nEnqueued += 1;
+                    }
+                    return next();
+                });
+            },
+            err => cb(err, nEnqueued)
+        );
     }
 
     _controlBacklog(done) {
