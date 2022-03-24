@@ -1,4 +1,5 @@
 const assert = require('assert');
+const sinon = require('sinon');
 
 const ZookeeperMock = require('zookeeper-mock');
 
@@ -7,6 +8,7 @@ const { errors } = require('arsenal');
 const { Logger } = require('werelogs');
 
 const LogReader = require('../../../../lib/queuePopulator/LogReader');
+
 
 class MockLogConsumer {
     constructor(params) {
@@ -68,5 +70,82 @@ describe('LogReader', () => {
             assert.strictEqual(errorLogReader.logOffset, 1);
             done();
         });
+    });
+
+    it('Should strip metadata v1 prefixes from object entries', done => {
+        const mockExtension = {
+            filter: sinon.spy(),
+        };
+        const logReaderWithExtension = new LogReader({
+            logId: 'test-log-reader',
+            zkClient: zkMock.createClient('localhost:2181'),
+            logConsumer: new MockLogConsumer(),
+            logger: new Logger('test:logReaderWithExtension'),
+            extensions: [mockExtension]
+        });
+        const record = {
+            db: 'example-bucket',
+        };
+        const masterEntry = {
+            type: 'example-type',
+            key: '\x7fMexample-key',
+            value: 'example-value'
+        };
+        const versionEntry = {
+            type: 'example-type',
+            key: '\x7fVexample-key',
+            value: 'example-value'
+        };
+        logReaderWithExtension._processLogEntry({}, record, masterEntry);
+        logReaderWithExtension._processLogEntry({}, record, versionEntry);
+        const expectedArgs = {
+            type: 'example-type',
+            bucket: 'example-bucket',
+            key: 'example-key',
+            value: 'example-value',
+            logReader: logReaderWithExtension,
+        };
+        assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
+        assert(mockExtension.filter.secondCall.calledWith(expectedArgs));
+        done();
+    });
+
+    it('Should not change keys of objects in v0 format', done => {
+        const mockExtension = {
+            filter: sinon.spy(),
+        };
+        const logReaderWithExtension = new LogReader({
+            logId: 'test-log-reader',
+            zkClient: zkMock.createClient('localhost:2181'),
+            logConsumer: new MockLogConsumer(),
+            logger: new Logger('test:logReaderWithExtension'),
+            extensions: [mockExtension]
+        });
+        const record = {
+            db: 'example-bucket',
+        };
+        const masterEntry = {
+            type: 'example-type',
+            key: 'fMexample-key',
+            value: 'example-value'
+        };
+        const versionEntry = {
+            type: 'example-type',
+            key: 'fVexample-key',
+            value: 'example-value'
+        };
+        logReaderWithExtension._processLogEntry({}, record, masterEntry);
+        logReaderWithExtension._processLogEntry({}, record, versionEntry);
+        const expectedArgs = {
+            type: 'example-type',
+            bucket: 'example-bucket',
+            key: 'fMexample-key',
+            value: 'example-value',
+            logReader: logReaderWithExtension,
+        };
+        assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
+        expectedArgs.key = 'fVexample-key';
+        assert(mockExtension.filter.secondCall.calledWith(expectedArgs));
+        done();
     });
 });
