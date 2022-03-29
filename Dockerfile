@@ -17,7 +17,8 @@ RUN apt-get update \
     libnss3-dev \
     libssl-dev \
     libreadline-dev \
-    libffi-dev
+    libffi-dev \
+    libzstd-dev
 
 ENV DOCKERIZE_VERSION v0.6.1
 ENV PYTHON=python3.9
