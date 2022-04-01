@@ -383,4 +383,84 @@ describe('lifecycle task helper methods', () => {
             });
         });
     });
+
+    describe('_rulesHaveNoTag', () => {
+        it('should return true if rule has a prefix and tag', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Prefix: 'prefix',
+                            Tags: [
+                                { Key: 'key', Value: 'val' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveNoTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has a prefix and multiple tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Prefix: 'prefix',
+                            Tags: [
+                                { Key: 'key', Value: 'val' },
+                                { Key: 'key2', Value: 'val2' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveNoTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has a tag', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        Tag: [
+                            { Key: 'key', Value: 'val' },
+                        ],
+
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveNoTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has multiple tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        Tag: [
+                            { Key: 'key', Value: 'val' },
+                            { Key: 'key2', Value: 'val2' },
+                        ],
+
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveNoTag(rules);
+            assert.equal(result, true);
+        });
+    });
 });

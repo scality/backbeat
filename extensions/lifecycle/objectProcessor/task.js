@@ -35,21 +35,22 @@ function livenessCheck(res, log) {
 }
 
 function probeServerSetup(config, done) {
-    startProbeServer(config, (err, probeServer) => {
-        if (err) {
-            return done(err);
-        }
+    return done();
+    // startProbeServer(config, (err, probeServer) => {
+    //     if (err) {
+    //         return done(err);
+    //     }
 
-        if (!probeServer) {
-            logger.info('Skipping lifecycle object processor server setup');
-            return done();
-        }
+    //     if (!probeServer) {
+    //         logger.info('Skipping lifecycle object processor server setup');
+    //         return done();
+    //     }
 
-        probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
-        probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
-        logger.info('Starting lifecycle object processor server');
-        return done();
-    });
+    //     probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
+    //     probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
+    //     logger.info('Starting lifecycle object processor server');
+    //     return done();
+    // });
 }
 
 async.waterfall([

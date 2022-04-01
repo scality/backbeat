@@ -122,14 +122,8 @@
         },
         "lifecycle": {
             "auth": {
-                "type": "assumeRole",
-                "roleName": "lifecycle-role",
-                "sts": {
-                    "host": "127.0.0.1",
-                    "port": 8800,
-                    "accessKey": "lifecycleKey",
-                    "secretKey": "lifecycleSecret"
-                },
+                "type": "account",
+                "account": "bart",
                 "vault": {
                     "host": "127.0.0.1",
                     "port": 8500
@@ -139,8 +133,13 @@
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
+                "bucketSource": "bucketd",
+                "bucketd": {
+                    "host": "toto",
+                    "port": 1212
+                },
                 "backlogControl": { "enabled": true },
-                "cronRule": "0 */5 * * * *",
+                "cronRule": "*/10 * * * * *",
                 "concurrency": 10
             },
             "bucketProcessor": {

@@ -437,6 +437,57 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Check that bucket rule does not have any tags constraints
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @return {boolean} true if bucket rule does not have any tags constraints. false otherwise
+     */
+    _rulesHaveNoTag(bucketLCRules) {
+        return bucketLCRules.every(rule => {
+            if (!rule.Filter) {
+                return true;
+            }
+
+            const tags = rule.Filter.And
+                ? rule.Filter.And.Tags
+                : (rule.Filter.Tag && [rule.Filter.Tag]);
+            return tags.length === 0;
+        });
+    }
+
+    /**
+     * Get object tagging if bucket has at least one tags constraint.
+     * @param {object} tagParams - s3.getObjectTagging parameters
+     * @param {string} tagParams.Bucket - bucket name
+     * @param {string} tagParams.Key - object key name
+     * @param {string} tagParams.VersionId - object version id
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - callback(error, tags)
+     * @return {undefined}
+     */
+    _getObjectTagging(tagParams, bucketLCRules, log, cb) {
+        if (this._rulesHaveNoTag(bucketLCRules)) {
+            return process.nextTick(() => cb(null, { TagSet: [] }));
+        }
+
+        const req = this.s3target.getObjectTagging(tagParams);
+        attachReqUids(req, log);
+        return req.send((err, tags) => {
+            if (err) {
+                log.error('failed to get tags', {
+                    method: 'LifecycleTask._getRules',
+                    error: err,
+                    bucket: tagParams.Bucket,
+                    objectKey: tagParams.Key,
+                    objectVersion: tagParams.VersionId,
+                });
+                return cb(err);
+            }
+            return cb(null, tags);
+        });
+    }
+
+    /**
      * Handles comparing rules for objects
      * @param {object} bucketData - bucket data
      * @param {object} bucketData.target - target bucket info
@@ -468,17 +519,8 @@ class LifecycleTask extends BackbeatTask {
             tagParams.VersionId = object.VersionId;
         }
 
-        const req = this.s3target.getObjectTagging(tagParams);
-        attachReqUids(req, log);
-        return req.send((err, tags) => {
+        return this._getObjectTagging(tagParams, bucketLCRules, log, (err, tags) => {
             if (err) {
-                log.error('failed to get tags', {
-                    method: 'LifecycleTask._getRules',
-                    error: err,
-                    bucket: bucketData.target.bucket,
-                    objectKey: object.Key,
-                    objectVersion: object.VersionId,
-                });
                 return done(err);
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
@@ -506,9 +548,17 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
+            console.log('obj!!!', obj);
+            console.log('lcRules!!!', lcRules);
+
+
+            
+
+
             async.waterfall([
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
+                    console.log('applicableRules!!!', applicableRules);
                     let rules = applicableRules;
                     // Hijack for testing
                     // Idea is to set any "Days" rule to `Days - 1`

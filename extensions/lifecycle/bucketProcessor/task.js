@@ -36,21 +36,22 @@ function livenessCheck(res, log) {
 }
 
 function probeServerSetup(config, done) {
-    startProbeServer(config, (err, probeServer) => {
-        if (err) {
-            return done(err);
-        }
+    return done();
+    // startProbeServer(config, (err, probeServer) => {
+    //     if (err) {
+    //         return done(err);
+    //     }
 
-        if (!probeServer) {
-            logger.info('Skipping lifecycle bucket processor server setup');
-            return done();
-        }
+    //     if (!probeServer) {
+    //         logger.info('Skipping lifecycle bucket processor server setup');
+    //         return done();
+    //     }
 
-        probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
-        probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
-        logger.info('Starting lifecycle bucket processor server');
-        return done();
-    });
+    //     probeServer.addHandler(DEFAULT_LIVE_ROUTE, livenessCheck);
+    //     probeServer.addHandler(DEFAULT_READY_ROUTE, livenessCheck);
+    //     logger.info('Starting lifecycle bucket processor server');
+    //     return done();
+    // });
 }
 
 async.waterfall([
