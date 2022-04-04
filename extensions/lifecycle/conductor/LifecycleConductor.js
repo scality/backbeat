@@ -623,7 +623,7 @@ class LifecycleConductor {
                              { cronRule: this._cronRule });
             this._cronJob = schedule.scheduleJob(
                 this._cronRule,
-                this.processBuckets.bind(this));
+                () => this.processBuckets(null));
         }
     }
 
