@@ -71,7 +71,7 @@ class LifecycleTask extends BackbeatTask {
     _sendBucketEntry(entry, cb) {
         const entries = [{ message: JSON.stringify(entry) }];
         this.producer.sendToTopic(this.bucketTasksTopic, entries, err => {
-            LifecycleMetrics.onKafkaPublish(null, 'sendBucketEntry', 'bucket', err);
+            LifecycleMetrics.onKafkaPublish(null, 'BucketTopic', 'bucket', err, 1);
             return cb(err);
         });
     }
@@ -114,7 +114,7 @@ class LifecycleTask extends BackbeatTask {
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
         this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
-            LifecycleMetrics.onKafkaPublish(null, 'sendObjectAction', 'bucket', err);
+            LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
             return cb(err);
         });
     }

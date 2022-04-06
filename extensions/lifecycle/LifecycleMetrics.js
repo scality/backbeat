@@ -123,12 +123,12 @@ class LifecycleMetrics {
         }
     }
 
-    static onKafkaPublish(log, op, process, err) {
+    static onKafkaPublish(log, op, process, err, count) {
         try {
             lifecycleKafkaPublish[err ? 'error' : 'success'].inc({
                 [LIFECYCLE_LABEL_ORIGIN]: process,
                 [LIFECYCLE_LABEL_OP]: op,
-            });
+            }, count);
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onKafkaPublish');
         }

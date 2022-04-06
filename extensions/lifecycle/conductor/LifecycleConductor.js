@@ -254,7 +254,10 @@ class LifecycleConductor {
                 }));
 
                 log.info('bucket push progress', { bucketsInBatch: tasks.length, nBucketsQueued });
-                return this._producer.send(messages, done);
+                return this._producer.send(messages, err => {
+                    LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, tasks.length);
+                    return done(err);
+                });
             });
         }, this._concurrency);
 

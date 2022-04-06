@@ -1,0 +1,178 @@
+x-inputs:
+- name: namesapce
+  type: constant
+- name: job_lifecycle_producer
+  type: constant
+- name: job_lifecycle_object_processor
+  type: constant
+- name: job_lifecycle_bucket_processor
+  type: constant
+- name: lifecycle_conductor_replicas
+  type: constant
+- name: lifecycle_bucket_replicas
+  type: constant
+- name: lifecycle_object_replicas
+  type: constant
+
+groups:
+- name: LifecycleProducer
+  rules:
+
+  - alert: LifecycleProducerDown
+    Expr: sum(up{namespace="${namespace}",job="${job_lifecycle_producer}"}) < ${lifecycle_conductor_replicas}
+    For: "30s"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: "Lifecycle producer pod has been down for 30 seconds"
+      summary: "Lifecycle producer service is down"
+
+- name: LifecycleBucketProcessor
+  rules:
+
+  - alert: LifecycleBucketProcessorDegraded
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) < ${lifecycle_bucket_replicas}
+    For: "30s"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-bucket-processor
+      description: "Less than 100% of lifecycle bucket processors are up and healthy"
+      summary: "Degraded lifecycle bucket processor"
+
+  - alert: LifecycleBucketProcessorCritical
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) * 2 < ${lifecycle_bucket_replicas}
+    For: "30s"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-bucket-processor
+      description: "Less than 50% of lifecycle bucket processors are up and healthy"
+      summary: "Degraded lifecycle bucket processor"
+
+  - alert: LifecycleBucketProcessorRequestWarning
+    Expr: |
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}}[5m]))
+        >= 0.03
+    For: "5m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-bucket-processor
+      description: "More than 3% of S3 requests by bucket processors resulting in errors"
+      summary: "High rate of S3 request errors"
+
+  - alert: LifecycleBucketProcessorRequestCritical
+    Expr: |
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}}[5m]))
+        >= 0.05
+    For: "5m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-bucket-processor
+      description: "More than 5% of S3 requests by bucket processors resulting in errors"
+      summary: "Very high rate of S3 request errors"
+
+- name: LifecycleObjectProcessor
+  rules:
+
+  - alert: LifecycleObjectProcessorDegraded
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) < ${lifecycle_object_replicas}
+    For: "30s"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-object-processor
+      description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
+      summary: "Degraded lifecycle object processor"
+  
+  - alert: LifecycleObjectProcessorCritical
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
+    For: "30s"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-object-processor
+      description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
+      summary: "Degraded lifecycle object processor"
+  
+  - alert: LifecycleObjectProcessorRequestWarning
+    Expr: |
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}}[5m]))
+        >= 0.03
+    For: "5m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-object-processor
+      description: "More than 3% of S3 requests by object processors resulting in errors"
+      summary: "High rate of S3 request errors"
+
+  - alert: LifecycleObjectProcessorRequestCritical
+    Expr: |
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}}[5m]))
+        >= 0.05
+    For: "5m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-object-processor
+      description: "More than 5% of S3 requests by object processors resulting in errors"
+      summary: "Very high rate of S3 request errors"
+
+- name: Kafka Messages
+
+  - alert: LifecycleKafkaBucketMessagesWarning
+    Expr: |
+      sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}}[5m]) > 0)
+        + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
+        >= 0.03
+    Labels:
+     severity: warning
+    Annotations:
+      description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
+      summary: "High rate of failed messages to the bucket topic"
+
+  - alert: LifecycleKafkaBucketMessagesCritical
+    Expr: |
+      sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
+        + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
+        >= 0.05
+    Labels:
+     severity: critical
+    Annotations:
+      description: "More than 5% of Kafka messages failed to publish to the lifecycle bucket topic"
+      summary: "High rate of failed messages to the bucket topic"
+
+  - alert: LifecycleKafkaObjectMessagesWarning
+    Expr: |
+      sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}}[5m]) > 0)
+        + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
+        >= 0.03
+    Labels:
+     severity: warning
+    Annotations:
+      description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
+      summary: "High rate of failed messages to the object topic"
+
+  - alert: LifecycleKafkaObjectMessagesCritical
+    Expr: |
+      sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
+        + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
+        >= 0.05
+    Labels:
+     severity: critical
+    Annotations:
+      description: "More than 5% of Kafka messages failed to publish to the lifecycle object topic"
+      summary: "High rate of failed messages to the object topic"
+
