@@ -34,6 +34,9 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
+const zookeeper = require('../../../lib/clients/zookeeper');
+const NotificationConfigManager = require('../../notification/NotificationConfigManager');
+
 const {
     zookeeperNamespace,
     zkStatePath,
@@ -198,10 +201,13 @@ class QueueProcessor extends EventEmitter {
      * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
      *   in PEM format
      * @param {String} site - site name
+     * @param {Object} notificationConfig - notification configuration object
+     * @param {Object} notificationConfig.topic - notification topic name
      */
     constructor(zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, httpsConfig, internalHttpsConfig, site) {
+                redisConfig, mConfig, httpsConfig, internalHttpsConfig,
+                site, notificationConfig) {
         super();
         this.zkConfig = zkConfig;
         this.zkClient = zkClient;
@@ -223,6 +229,11 @@ class QueueProcessor extends EventEmitter {
         this.serviceName = libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
+        // bucket notification related
+        this.notificationConfig = notificationConfig;
+        this.zkClientNotification = null;
+        this.notificationConfigManager = null;
+        this.notificationProducer = null;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -377,6 +388,70 @@ class QueueProcessor extends EventEmitter {
             this.replicationStatusProducer = producer;
             done();
         });
+    }
+
+    _setupZookeeperForNotification(done) {
+        const populatorZkPath = this.notificationConfig.zookeeperPath;
+        const zookeeperUrl =
+            `${this.zkConfig.connectionString}${populatorZkPath}`;
+        this.logger.info('opening zookeeper connection for reading ' +
+            'bucket notification configuration', { zookeeperUrl });
+        this.zkClientNotification = zookeeper.createClient(zookeeperUrl, {
+            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
+        });
+        this.zkClientNotification.connect();
+        this.zkClientNotification.once('error', done);
+        this.zkClientNotification.once('ready', () => {
+            // just in case there would be more 'error' events emitted
+            this.zkClientNotification.removeAllListeners('error');
+            done();
+        });
+    }
+
+    _setupNotificationConfigManager(done) {
+        // setup notification configuration manager only if notification
+        // extension is available
+        if (this.notificationConfig) {
+           async.series([
+               next => this._setupZookeeperForNotification(next),
+               next => {
+                    try {
+                        this.notificationConfigManager = new NotificationConfigManager({
+                            zkClient: this.zkClientNotification,
+                            logger: this.log,
+                        });
+                        return this.notificationConfigManager.init(next);
+                    } catch (err) {
+                        return next(err);
+                    }
+               }
+           ], done);
+        }
+        return done();
+    }
+
+    _setupNotificationProducer(done) {
+        // setup notification producer only when
+        // extension is available
+        if (this.notificationConfig) {
+            const producer = new BackbeatProducer({
+                kafka: { hosts: this.kafkaConfig.hosts },
+                topic: this.notificationConfig.topic,
+            });
+            producer.once('error', done);
+            return producer.once('ready', () => {
+                producer.removeAllListeners('error');
+                producer.on('error', err => {
+                    this.logger.error('error from backbeat notification producer', {
+                        topic: this.notificationConfig.topic,
+                        error: err,
+                    });
+                });
+                this.notificationProducer = producer;
+                done();
+            });
+        }
+        return done();
     }
 
     _createConsumer(topic, queueProcessorFunc, options) {
@@ -683,6 +758,9 @@ class QueueProcessor extends EventEmitter {
             backbeatMetadataProxy: this.backbeatMetadataProxy,
             serviceName: this.serviceName,
             metricsHandler,
+            notificationConfig: this.notificationConfig,
+            notificationConfigManager: this.notificationConfigManager,
+            notificationProducer: this.notificationProducer,
         };
     }
 
@@ -714,6 +792,22 @@ class QueueProcessor extends EventEmitter {
             done => this._setupProducer(err => {
                 if (err) {
                     this.logger.info('error setting up kafka producer',
+                                     { error: err.message });
+                    process.exit(1);
+                }
+                return done();
+            }),
+            done => this._setupNotificationConfigManager(err => {
+                if (err) {
+                    this.logger.info('error setting up notification config manager',
+                                     { error: err.message });
+                    process.exit(1);
+                }
+                return done();
+            }),
+            done => this._setupNotificationProducer(err => {
+                if (err) {
+                    this.logger.info('error setting up kafka notification producer',
                                      { error: err.message });
                     process.exit(1);
                 }
