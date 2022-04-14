@@ -45,27 +45,15 @@ This guide assumes the following:
 * `yarn` is installed (version 3.10.10)
 * `aws` is installed (version 1.11.1)
 
-### Run kafka and zookeeper
+### Kafka and Zookeeper
 
-#### Install kafka and zookeeper
-
-```
-brew install kafka && brew install zookeeper
-```
-
-Make sure you have `/usr/local/bin` in your `PATH` env variable (or wherever
-your homebrew programs are installed):
-
-```
-echo 'export PATH="$PATH:/usr/local/bin"' >> ~/.bash_profile
-```
-
-#### Start kafka and zookeeper servers
+#### Install and start kafka and zookeeper servers
 
 ```
 mkdir ~/kafka && \
 cd ~/kafka && \
-curl http://apache.claz.org/kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz | tar xvz && \
+curl https://archive.apache.org/dist/kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz | \
+tar xvz && \
 sed 's/zookeeper.connect=.*/zookeeper.connect=localhost:2181\/backbeat/' \
 kafka_2.11-0.11.0.0/config/server.properties > \
 kafka_2.11-0.11.0.0/config/server.properties.backbeat
@@ -74,37 +62,31 @@ kafka_2.11-0.11.0.0/config/server.properties.backbeat
 Start the zookeeper server:
 
 ```
-zookeeper-server-start ~/kafka/kafka_2.11-0.11.0.0/config/zookeeper.properties
+zookeeper-server-start kafka_2.11-0.11.0.0/config/zookeeper.properties
 ```
 
-In a new shell, start the kafka server:
+In a different Shell start the kafka server:
 
 ```
-kafka-server-start ~/kafka/kafka_2.11-0.11.0.0/config/server.properties.backbeat
+kafka-server-start kafka_2.11-0.11.0.0/config/server.properties.backbeat
 ```
 
-#### Create a zookeeper node and kafka topic
+#### Install and run Redis on port 6379 (default port)
 
-In a new shell, connect to the zookeeper server with the ZooKeeper chroot
-`/backbeat` path:
+The "Failed Entry Processor" (started by Queue Populator) stores
+the "failed replication entries" to the Redis sorted set.
+
+#### Create log offset Zookeeper node
 
 ```
 zkCli -server localhost:2181/backbeat
+
+create /queue-populator
 ```
 
-Create the `replication-populator` node:
+#### Create the kafka topics
 
-```
-create /replication-populator my_data
-```
-
-We may leave the zookeeper server now:
-
-```
-quit
-```
-
-Create the `backbeat-replication` kafka topic:
+##### backbeat-replication
 
 ```
 kafka-topics --create \
@@ -114,32 +96,137 @@ kafka-topics --create \
 --topic backbeat-replication
 ```
 
-### Run Scality Components
+##### backbeat-replication-status
 
-#### Start Vault and Scality S3 servers
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication-status
+```
 
-Start the Vault server (this requires access to the private Vault repository):
+##### backbeat-replication-failed
+
+```
+kafka-topics --create \
+--zookeeper localhost:2181/backbeat \
+--replication-factor 1 \
+--partitions 1 \
+--topic backbeat-replication-failed
+```
+
+### Vault
 
 ```
 git clone https://github.com/scality/Vault ~/replication/vault && \
 cd ~/replication/vault && \
-yarn i && \
-chmod 400 ./tests/utils/keyfile && \
-VAULT_DB_BACKEND=MEMORY node vaultd.js
+yarn i
 ```
 
-In a new shell, start the Scality S3 server:
+Run vault with "in-memory backend"
 
 ```
-git clone https://github.com/scality/s3 ~/replication/s3 && \
-cd ~/replication/s3 && \
-yarn i && \
-S3BACKEND=file S3VAULT=scality yarn start
+chmod 400 ./tests/utils/keyfile
+
+VAULT_DB_BACKEND="MEMORY" yarn start
 ```
 
-#### Setup replication with backbeat
+> :warning: **with "in-memory backend"**, all data is lost after you stop the process.
 
-In a new shell, clone backbeat:
+or with a "mongodb backend"
+
+```
+chmod 400 ./tests/utils/keyfile
+
+VAULT_DB_BACKEND="MONGODB" yarn start
+```
+
+> mongodb can be installed follwing these [steps](https://github.com/scality/backbeat/blob/development/8.3/docs/run-oob-locally.md#mongo-db-deploy-replica-set)
+
+### CloudServer
+
+```
+git clone https://github.com/scality/cloudserver ~/replication/cloudserver && \
+cd ~/replication/cloudserver && \
+yarn i
+```
+
+Generate AWS access/secret key with full IAM and S3 access.
+
+Add your keys `aws configure --profile aws-account`
+
+Create AWS destination versioning-enabled bucket.
+
+```sh
+aws s3api create-bucket --bucket <DESTINATION_BUCKET_NAME> --profile aws-account
+
+aws s3api put-bucket-versioning \
+--bucket <DESTINATION_BUCKET_NAME> \
+--versioning-configuration Status=Enabled \
+--profile aws-account
+```
+
+Replace existing `./locationConfig.json` with:
+
+```json
+{
+    "us-east-1": {
+      "details": {
+        "supportsVersioning": true
+      },
+      "isTransient": false,
+      "legacyAwsBehavior": false,
+      "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+      "type": "file"
+    },
+    "aws-location": {
+        "type": "aws_s3",
+        "legacyAwsBehavior": true,
+        "details": {
+            "awsEndpoint": "s3.amazonaws.com",
+            "bucketName": "<DESTINATION_BUCKET_NAME>",
+            "bucketMatch": false,
+            "credentialsProfile": "aws-account",
+            "serverSideEncryption": true
+        }
+    }
+}
+```
+
+Update `./config.json` with
+
+```json
+"replicationEndpoints": [{ "site": "aws-location", "type": "aws_s3" }],
+```
+
+In `./config.json`, make sure `recordLog.enabled` is set to `true`
+
+```
+"recordLog": {
+        "enabled": true,
+        ...
+}
+```
+
+Run Cloudserver
+
+```
+S3DATA=multiple S3METADATA=mongodb REMOTE_MANAGEMENT_DISABLE=true \
+S3VAULT=scality yarn start
+```
+
+### Vaultclient
+
+Create a "Zenko" account and generate keys
+
+```
+bin/vaultclient create-account --name bart --email dev@backbeat --port 8600
+bin/vaultclient generate-account-access-key --name bart --port 8600
+aws configure --profile bart
+```
+
+### Backbeat
 
 ```
 git clone https://github.com/scality/backbeat ~/replication/backbeat && \
@@ -147,114 +234,134 @@ cd ~/replication/backbeat && \
 yarn i
 ```
 
-Now, create an account and keys:
+Update `conf/authdata.json` with bart informations and keys.
 
-```
-VAULTCLIENT=~/replication/backbeat/node_modules/vaultclient/bin/vaultclient && \
-$VAULTCLIENT create-account \
---name backbeatuser \
---email dev@null \
---port 8600 >> backbeat_user_credentials && \
-$VAULTCLIENT generate-account-access-key \
---name backbeatuser \
---port 8600 >> backbeat_user_credentials && \
-cat backbeat_user_credentials
-```
-
-Output will look something like (this output is stored for reference in the file
-`backbeat_user_credentials`):
-
-```
-...
+```json
 {
-    "id": "8CFJQ2Z3R6LR0WTP5VDS",
-    "value": "gB53GM7/LpKrm6DktUUarcAOcqHS2tvKI/=CxFxR",
-    "createDate": "2017-08-03T00:17:57Z",
-    "lastUsedDate": "2017-08-03T00:17:57Z",
-    "status": "Active",
-    "userId": "038628340774"
+    "accounts": [{
+        "name": "bart",
+        "arn": "aws:iam::331457510670:/bart",
+        "canonicalID": "2083781e15384e30f48c651a948ec2dc1e1801c4af24c2750a166823e28ca570",
+        "displayName": "bart",
+        "keys": {
+            "access": "20TNCD06HOCSLQSABFZP",
+            "secret": "1P43SL0ekJjXnQvliV0KgMibZ=N2lKZO4dpnWzbF"
+        }
+    }
+    ]
 }
 ```
 
-Store the account's credentials using the "id" and "value" fields:
+Update `conf/config.json` section `extensions.replication.source.auth`
 
-```
-aws configure --profile backbeatuser
-```
-
-The completed prompt should look like:
-
-```
-AWS Access Key ID [None]: 8CFJQ2Z3R6LR0WTP5VDS
-AWS Secret Access Key [None]: gB53GM7/LpKrm6DktUUarcAOcqHS2tvKI/=CxFxR
-Default region name [None]:
-Default output format [None]:
-```
-
-Set up replication on your buckets:
-
-```
-node ~/replication/backbeat/bin/setupReplication.js setup \
---source-bucket source-bucket \
---source-profile backbeatuser \
---target-bucket target-bucket \
---target-profile backbeatuser
+```json
+"auth": {
+    "type": "account",
+    "account": "bart",
+    "vault": {
+        "host": "127.0.0.1",
+        "port": 8500,
+        "adminPort": 8600
+    }
+}
 ```
 
-Run the backbeat queue populator:
+Make sure `conf/config.json` section
+`extensions.replication.destination.bootstrapList` includes:
 
-```
-yarn --prefix ~/replication/backbeat run queue_populator
-```
-
-In a new shell, run the backbeat queue processor:
-
-```
-yarn --prefix ~/replication/backbeat run queue_processor
+```json
+{ "site": "aws-location", "type": "aws_s3" }
 ```
 
-You are now ready to put data on `source-bucket` and watch it replicate to
-`target-bucket`!
-
-Put an object on the `source-bucket`:
+#### Queue populator
 
 ```
-echo 'content to be replicated' > replication_contents && \
+S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+yarn run queue_populator
+```
+
+#### Queue processor
+
+```
+S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+yarn run queue_processor aws-location
+```
+
+#### Replication status processor
+
+```
+S3_REPLICATION_METRICS_PROBE=true REMOTE_MANAGEMENT_DISABLE=true \
+yarn run replication_status_processor
+```
+
+### AWS S3 CLI
+
+Create a source bucket with versioning enabled:
+
+```
+aws s3api create-bucket \
+--bucket sourcebucket \
+--endpoint-url http://127.0.0.1:8000 \
+--profile bart
+```
+
+```
+aws s3api put-bucket-versioning \
+--bucket sourcebucket \
+--versioning-configuration Status=Enabled \
+--endpoint-url=http://127.0.0.1:8000 \
+--profile bart
+```
+
+#### Set up replication
+
+Create `replication.json`
+
+```json
+{
+    "Role": "arn:aws:iam::root:role/s3-replication-role",
+    "Rules": [
+        {
+            "Status": "Enabled",
+            "Prefix": "",
+            "Destination": {
+                "Bucket": "arn:aws:s3:::sourcebucket",
+                "StorageClass": "aws-location"
+            }
+        }
+    ]
+}
+```
+
+```
+aws s3api put-bucket-replication \
+--bucket sourcebucket \
+--replication-configuration file://replication.json \
+--endpoint-url=http://127.0.0.1:8000 \
+--profile bart
+```
+
+#### Put object to be replicated
+
+```
 aws s3api put-object \
---bucket source-bucket \
---key object-to-replicate \
---body replication_contents \
---endpoint http://localhost:8000 \
---profile backbeatuser
+--key key0 \
+--body file \
+--bucket sourcebucket \
+--endpoint-url=http://127.0.0.1:8000 \
+--profile bart
 ```
 
-Check the replication status of the object we have just put:
-
-```
-aws s3api head-object \
---bucket source-bucket \
---key object-to-replicate \
---endpoint http://localhost:8000 \
---profile backbeatuser
-```
-
-The object's "ReplicationStatus" should either be "PENDING", or if some time has
-passed, then it should be "COMPLETED".
-
-Check if the object has been replicated to the target bucket:
+#### Check that object has been replicated
 
 ```
 aws s3api head-object \
---bucket target-bucket \
---key object-to-replicate \
---endpoint http://localhost:8000 \
---profile backbeatuser
+--key bucketsource/key0 \
+--bucket <DESTINATION_BUCKET_NAME> \
+--profile aws-account
 ```
 
-After some time, the object's "ReplicationStatus" should be "REPLICA".
-:smiley_cat:
-
-### Structure
+#### Structure
 
 In our `$HOME` directory, we now have the following directories:
 
@@ -264,7 +371,7 @@ $HOME
 │   └── kafka_2.11-0.11.0.0
 ├── replication
     ├── backbeat
-    ├── s3
+    ├── cloudserver
     └── vault
 ```
 
