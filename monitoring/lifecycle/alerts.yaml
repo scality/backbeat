@@ -1,5 +1,5 @@
 x-inputs:
-- name: namesapce
+- name: namespace
   type: constant
 - name: job_lifecycle_producer
   type: constant
@@ -53,8 +53,8 @@ groups:
 
   - alert: LifecycleBucketProcessorRequestWarning
     Expr: |
-      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}}[5m]))
-        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}}[5m]))
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.03
     For: "5m"
     Labels:
@@ -66,8 +66,8 @@ groups:
 
   - alert: LifecycleBucketProcessorRequestCritical
     Expr: |
-      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}}[5m]))
-        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}}[5m]))
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.05
     For: "5m"
     Labels:
@@ -94,7 +94,7 @@ groups:
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
     For: "30s"
     Labels:
-     severity: warning
+     severity: critical 
     Annotations:
       zenko_service: backbeat-lifecycle-object-processor
       description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
@@ -102,8 +102,8 @@ groups:
   
   - alert: LifecycleObjectProcessorRequestWarning
     Expr: |
-      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}}[5m]))
-        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}}[5m]))
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.03
     For: "5m"
     Labels:
@@ -115,8 +115,8 @@ groups:
 
   - alert: LifecycleObjectProcessorRequestCritical
     Expr: |
-      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}}[5m]))
-        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}}[5m]))
+      sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+        / sum(rate(lifecycle_s3_operations{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.05
     For: "5m"
     Labels:
@@ -127,13 +127,15 @@ groups:
       summary: "Very high rate of S3 request errors"
 
 - name: Kafka Messages
+  rules:
 
   - alert: LifecycleKafkaBucketMessagesWarning
     Expr: |
       sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
-        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
         >= 0.03
+    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -146,6 +148,7 @@ groups:
         / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="BucketTopic"}[5m]) > 0))
         >= 0.05
+    For: "5m"
     Labels:
      severity: critical
     Annotations:
@@ -155,9 +158,10 @@ groups:
   - alert: LifecycleKafkaObjectMessagesWarning
     Expr: |
       sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
-        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}}[5m]) > 0)
+        / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
         >= 0.03
+    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -170,6 +174,7 @@ groups:
         / (sum(rate(lifecycle_kafka_publish_error{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         + sum(rate(lifecycle_kafka_publish_success{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0))
         >= 0.05
+    For: "5m"
     Labels:
      severity: critical
     Annotations:
