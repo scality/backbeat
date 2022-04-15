@@ -121,10 +121,11 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectList(bucketData, bucketLCRules, log, done) {
+    _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
         const params = {
             Bucket: bucketData.target.bucket,
-            MaxKeys: MAX_KEYS,
+            // MaxKeys: MAX_KEYS,
+            MaxKeys: 1,
         };
         if (bucketData.details.marker) {
             params.Marker = bucketData.details.marker;
@@ -145,7 +146,7 @@ class LifecycleTask extends BackbeatTask {
                 return next(null, data);
             }),
             (data, next) => {
-                if (data.IsTruncated) {
+                if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to Kafka topic bucketTasksTopic
                     // with bucket name and `data.marker`
                     let marker = data.NextMarker;
@@ -157,6 +158,7 @@ class LifecycleTask extends BackbeatTask {
                         details: { marker },
                     });
                     this._sendBucketEntry(entry, err => {
+                        console.log('_sendBucketEntry!!! => entry', entry);
                         if (!err) {
                             log.debug(
                                 'sent kafka entry for bucket consumption', {
@@ -182,9 +184,9 @@ class LifecycleTask extends BackbeatTask {
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, log, done) {
+    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const paramDetails = {};
-
+        console.log('bucketData!!!', bucketData);
         if (bucketData.details.versionIdMarker
         && bucketData.details.keyMarker) {
             paramDetails.KeyMarker = bucketData.details.keyMarker;
@@ -206,7 +208,7 @@ class LifecycleTask extends BackbeatTask {
             );
 
             // sending bucket entry for checking next listing
-            if (data.IsTruncated && allVersions.length > 0) {
+            if (data.IsTruncated && allVersions.length > 0 && nbRetries === 0) {
                 // Uses last version whether Version or DeleteMarker
                 const last = allVersions[allVersions.length - 1];
                 const entry = Object.assign({}, bucketData, {
@@ -223,6 +225,7 @@ class LifecycleTask extends BackbeatTask {
                             method: 'LifecycleTask._getObjectVersions',
                         });
                     }
+                    console.log('_sendBucketEntry!!! => entry', entry);
                 });
             }
 
@@ -410,7 +413,8 @@ class LifecycleTask extends BackbeatTask {
     _listVersions(bucketData, paramDetails, log, cb) {
         const params = {
             Bucket: bucketData.target.bucket,
-            MaxKeys: MAX_KEYS,
+            // MaxKeys: MAX_KEYS,
+            MaxKeys: 1,
         };
         if (paramDetails.VersionIdMarker && paramDetails.KeyMarker) {
             params.KeyMarker = paramDetails.KeyMarker;
@@ -466,9 +470,9 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getObjectTagging(tagParams, bucketLCRules, log, cb) {
-        if (this._rulesHaveNoTag(bucketLCRules)) {
-            return process.nextTick(() => cb(null, { TagSet: [] }));
-        }
+        // if (this._rulesHaveNoTag(bucketLCRules)) {
+        //     return process.nextTick(() => cb(null, { TagSet: [] }));
+        // }
 
         const req = this.s3target.getObjectTagging(tagParams);
         attachReqUids(req, log);
@@ -514,13 +518,17 @@ class LifecycleTask extends BackbeatTask {
             return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
         }
 
-        const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
+        // const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
+        const tagParams = { Bucket: bucketData.target.bucket, Key: 'object.Key' };
         if (object.VersionId) {
             tagParams.VersionId = object.VersionId;
         }
 
         return this._getObjectTagging(tagParams, bucketLCRules, log, (err, tags) => {
             if (err) {
+                console.log('ERROR!!!!');
+                const error = err;
+                error.retryable = true;
                 return done(err);
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
@@ -548,17 +556,9 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            console.log('obj!!!', obj);
-            console.log('lcRules!!!', lcRules);
-
-
-            
-
-
             async.waterfall([
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
-                    console.log('applicableRules!!!', applicableRules);
                     let rules = applicableRules;
                     // Hijack for testing
                     // Idea is to set any "Days" rule to `Days - 1`
@@ -1188,7 +1188,8 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     processBucketEntry(bucketLCRules, bucketData, s3target,
-        backbeatMetadataProxy, done) {
+        backbeatMetadataProxy, nbRetries, done) {
+        console.log('NEW processBucketEntry!!!', bucketData);
         const log = this.log.newRequestLogger();
         this.s3target = s3target;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
@@ -1260,10 +1261,10 @@ class LifecycleTask extends BackbeatTask {
                         if (versioningStatus === 'Enabled'
                         || versioningStatus === 'Suspended') {
                             return this._getObjectVersions(bucketData,
-                                bucketLCRules, versioningStatus, log, next);
+                                bucketLCRules, versioningStatus, nbRetries, log, next);
                         }
 
-                        return this._getObjectList(bucketData, bucketLCRules,
+                        return this._getObjectList(bucketData, bucketLCRules, nbRetries,
                             log, next);
                     },
                 ], cb);

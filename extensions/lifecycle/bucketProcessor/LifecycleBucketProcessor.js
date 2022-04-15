@@ -112,8 +112,10 @@ class LifecycleBucketProcessor {
             return this.retryWrapper.retry({
                 actionDesc: 'process bucket lifecycle entry',
                 logFields: { value },
-                actionFunc: done => task.processBucketEntry(
-                    rules, value, s3target, backbeatMetadataProxy, done),
+                actionFunc: (done, nbRetries) => {
+                    task.processBucketEntry(
+                    rules, value, s3target, backbeatMetadataProxy, nbRetries, done);
+                },
                 shouldRetryFunc: err => err.retryable,
                 log: this._log,
             }, cb);
@@ -154,16 +156,12 @@ class LifecycleBucketProcessor {
      * @return {AWS.S3} The S3 client instance to make requests with
      */
     _getS3Client(canonicalId, accountId) {
-        // const credentials = this.credentialsManager.getCredentials({
-        //     id: canonicalId,
-        //     accountId,
-        //     stsConfig: this._stsConfig,
-        //     authConfig: this._lcConfig.auth,
-        // });
-        const credentials = {
-            accessKeyId: 'accessKey1',
-            secretAccessKey: 'verySecretKey1',
-        };
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._lcConfig.auth,
+        });
 
         if (credentials === null) {
             return null;
@@ -194,16 +192,12 @@ class LifecycleBucketProcessor {
      * @return {BackbeatClient} The S3 client instance to make requests with
      */
     _getBackbeatClient(canonicalId, accountId) {
-        // const credentials = this.credentialsManager.getCredentials({
-        //     id: canonicalId,
-        //     accountId,
-        //     stsConfig: this._stsConfig,
-        //     authConfig: this._lcConfig.auth,
-        // });
-        const credentials = {
-            accessKeyId: 'accessKey1',
-            secretAccessKey: 'verySecretKey',
-        };
+        const credentials = this.credentialsManager.getCredentials({
+            id: canonicalId,
+            accountId,
+            stsConfig: this._stsConfig,
+            authConfig: this._lcConfig.auth,
+        });
 
         if (credentials === null) {
             return null;
@@ -257,7 +251,6 @@ class LifecycleBucketProcessor {
      */
     _processBucketEntry(entry, cb) {
         const { error, result } = safeJsonParse(entry.value);
-        console.log('result!!!', result);
         if (error) {
             this._log.error('could not parse bucket entry',
                             { value: entry.value, error });
@@ -304,8 +297,6 @@ class LifecycleBucketProcessor {
 
         const params = { Bucket: bucket };
         return this._getBucketLifecycleConfiguration(s3, params, (err, config) => {
-            console.log('err!!!', err);
-            console.log('config!!!', config);
             if (err) {
                 if (err.code === 'NoSuchLifecycleConfiguration') {
                     this._log.debug('skipping non-lifecycled bucket', { bucket });
