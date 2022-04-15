@@ -121,28 +121,27 @@ class LifecycleConductor {
 
             nBucketsQueued += tasks.length;
 
-            // const canonicalIds = new Set(tasks.map(t => t.canonicalId));
-            return setTimeout(() => {
-                // if (err) {
-                //     log.error('could not get account ids, skipping batch', { error: err });
-                //     return done();
-                // }
+            const canonicalIds = new Set(tasks.map(t => t.canonicalId));
+            return this._getAccountIds([...canonicalIds], (err, accountIds) => {
+                if (err) {
+                    log.error('could not get account ids, skipping batch', { error: err });
+                    return done();
+                }
                 const messages = tasks.map(t => ({
                     message: JSON.stringify({
                         action: 'processObjects',
                         target: {
                             bucket: t.bucketName,
-                            owner: 'bart',
-                            accountId: '123',
+                            owner: t.canonicalId,
+                            accountId: accountIds[t.canonicalId],
                         },
                         details: {},
                     }),
                 }));
 
                 log.info('bucket push progress', { bucketsInBatch: tasks.length, nBucketsQueued });
-                console.log('SENT KAFKA messages!!!', messages);
                 return this._producer.send(messages, done);
-            }, 1000);
+            });
         }, this._concurrency);
 
         async.waterfall([
@@ -160,24 +159,24 @@ class LifecycleConductor {
         ], err => {
             if (err && err.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
-                // if (cb) {
-                //     cb(err);
-                // }
+                if (cb) {
+                    cb(err);
+                }
                 return;
             }
 
             if (err) {
                 log.error('lifecycle batch failed', { error: err });
-                // if (cb) {
-                //     cb(err);
-                // }
+                if (cb) {
+                    cb(err);
+                }
                 return;
             }
 
             log.info('finished pushing lifecycle batch', { nBucketsQueued });
-            // if (cb) {
-            //     cb();
-            // }
+            if (cb) {
+                cb();
+            }
         });
     }
 
@@ -185,11 +184,8 @@ class LifecycleConductor {
         if (this._bucketSource === 'zookeeper') {
             return this.listZookeeperBuckets(queue, log, cb);
         }
-        const batch = { bucketName: 'sourcebucket' };
-        queue.push(batch);
-        return process.nextTick(cb, null, batch.length);
 
-        // return this.listBucketdBuckets(queue, log, cb);
+        return this.listBucketdBuckets(queue, log, cb);
     }
 
     listZookeeperBuckets(queue, log, cb) {
