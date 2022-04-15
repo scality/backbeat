@@ -117,11 +117,12 @@ class LifecycleTask extends BackbeatTask {
      * Handles non-versioned objects
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {number} nbRetries - Number of time the process has been retried
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectList(bucketData, bucketLCRules, log, done) {
+    _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
         const params = {
             Bucket: bucketData.target.bucket,
             MaxKeys: MAX_KEYS,
@@ -145,9 +146,9 @@ class LifecycleTask extends BackbeatTask {
                 return next(null, data);
             }),
             (data, next) => {
-                if (data.IsTruncated) {
+                if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to Kafka topic bucketTasksTopic
-                    // with bucket name and `data.marker`
+                    // with bucket name and `data.marker` only once.
                     let marker = data.NextMarker;
                     if (!marker && data.Contents.length > 0) {
                         marker = data.Contents[data.Contents.length - 1].Key;
@@ -178,11 +179,12 @@ class LifecycleTask extends BackbeatTask {
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
      * @param {string} versioningStatus - 'Enabled' or 'Suspended'
+     * @param {number} nbRetries - Number of time the process has been retried
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, log, done) {
+    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const paramDetails = {};
 
         if (bucketData.details.versionIdMarker
@@ -205,8 +207,8 @@ class LifecycleTask extends BackbeatTask {
                 bucketData.details, allVersions
             );
 
-            // sending bucket entry for checking next listing
-            if (data.IsTruncated && allVersions.length > 0) {
+            // sending bucket entry - only once - for checking next listing
+            if (data.IsTruncated && allVersions.length > 0 && nbRetries === 0) {
                 // Uses last version whether Version or DeleteMarker
                 const last = allVersions[allVersions.length - 1];
                 const entry = Object.assign({}, bucketData, {
@@ -246,11 +248,12 @@ class LifecycleTask extends BackbeatTask {
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
      * @param {object} params - params for AWS S3 `listObjectVersions`
+     * @param {number} nbRetries - Number of time the process has been retried
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getMPUs(bucketData, bucketLCRules, params, log, done) {
+    _getMPUs(bucketData, bucketLCRules, params, nbRetries, log, done) {
         const req = this.s3target.listMultipartUploads(params);
         attachReqUids(req, log);
         async.waterfall([
@@ -266,9 +269,9 @@ class LifecycleTask extends BackbeatTask {
                 return next(null, data);
             }),
             (data, next) => {
-                if (data.IsTruncated) {
+                if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to kafka with `NextUploadIdMarker` &
-                    // `NextKeyMarker`
+                    // `NextKeyMarker` only once.
                     const entry = Object.assign({}, bucketData, {
                         details: {
                             keyMarker: data.NextKeyMarker,
@@ -1134,11 +1137,12 @@ class LifecycleTask extends BackbeatTask {
      *   handling versioned buckets
      * @param {AWS.S3} s3target - s3 instance
      * @param {BackbeatMetadataProxy} backbeatMetadataProxy - The metadata proxy
+     * @param {number} nbRetries - Number of time the process has been retried
      * @param {function} done - callback(error)
      * @return {undefined}
      */
     processBucketEntry(bucketLCRules, bucketData, s3target,
-        backbeatMetadataProxy, done) {
+        backbeatMetadataProxy, nbRetries, done) {
         const log = this.log.newRequestLogger();
         this.s3target = s3target;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
@@ -1180,7 +1184,7 @@ class LifecycleTask extends BackbeatTask {
                         && bucketData.details.uploadIdMarker,
                 };
                 return this._getMPUs(bucketData, bucketLCRules,
-                    mpuParams, log, cb);
+                    mpuParams, nbRetries, log, cb);
             },
             cb => {
                 // if this marker exists on the Bucket entry, the entry is
@@ -1210,10 +1214,10 @@ class LifecycleTask extends BackbeatTask {
                         if (versioningStatus === 'Enabled'
                         || versioningStatus === 'Suspended') {
                             return this._getObjectVersions(bucketData,
-                                bucketLCRules, versioningStatus, log, next);
+                                bucketLCRules, versioningStatus, nbRetries, log, next);
                         }
 
-                        return this._getObjectList(bucketData, bucketLCRules,
+                        return this._getObjectList(bucketData, bucketLCRules, nbRetries,
                             log, next);
                     },
                 ], cb);

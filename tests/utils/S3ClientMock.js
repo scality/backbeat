@@ -36,6 +36,14 @@ class S3ClientMock {
                 },
             ],
         });
+        this.stubMethod('getObjectTagging', {
+            TagSet: [],
+        });
+        this.stubMethod('listObjectVersions', {
+            IsTruncated: true,
+            DeleteMarkers: [],
+            Versions: [],
+        });
     }
 
     makeRetryableError() {
@@ -76,6 +84,52 @@ class S3ClientMock {
             assert.strictEqual(this.calls[f], this.failures[f] + 1,
                 `did not retry ${this.failures[f]} times`);
         });
+    }
+
+    stubListObjectsTruncated() {
+        this.stubMethod('listObjects', {
+            IsTruncated: true,
+            Contents: [
+                {
+                    Key: 'obj1',
+                    ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                    Size: 1,
+                    StorageClass: 'site1',
+                },
+            ],
+        });
+        return this;
+    }
+
+    stubListVersionsTruncated() {
+        this.stubMethod('listObjectVersions', {
+            IsTruncated: true,
+            DeleteMarkers: [],
+            Versions: [
+                {
+                    Key: 'v1',
+                    ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                    Size: 1,
+                    StorageClass: 'site1',
+                    IsLatest: true,
+                    LastModified: '2021-04-18T21:46:49.157Z',
+                },
+            ],
+        });
+        return this;
+    }
+
+    stubListMpuTruncated() {
+        this.stubMethod('listMultipartUploads', {
+            IsTruncated: true,
+            Uploads: [{
+                Initiated: '2021-04-18T21:46:49.157Z',
+                Key: 'mpu1',
+            }],
+            UploadIdMarker: 'id',
+            NextKeyMarker: 'mpu2',
+        });
+        return this;
     }
 }
 

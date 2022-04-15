@@ -42,68 +42,47 @@ werelogs.configure({ level: 'warn', dump: 'error' });
 describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     this.timeout(testTimeout);
 
-    function generateRetryTest(failures) {
-        return function testRetries() {
-            const lbp = new LifecycleBucketProcessor(
-                zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
+    function generateRetryTest(s3Client) {
+        const lbp = new LifecycleBucketProcessor(
+            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
 
-            const s3Client = new S3ClientMock(failures);
-            lbp._getS3Client = () => s3Client;
-            lbp._getBackbeatClient = () => ({});
+        lbp._getS3Client = () => s3Client;
+        lbp._getBackbeatClient = () => ({});
 
-            const start = new Promise((resolve, reject) => {
-                lbp.start(err => {
-                    if (err) {
-                        reject(err);
-                    } else {
-                        let messagesToConsume = [bucketEntryMessage];
-                        lbp._consumer._consumer.consume = (_, cb) => {
-                            process.nextTick(cb, null, messagesToConsume);
-                            messagesToConsume = [];
-                        };
+        const start = new Promise((resolve, reject) => {
+            lbp.start(err => {
+                if (err) {
+                    reject(err);
+                } else {
+                    let messagesToConsume = [bucketEntryMessage];
+                    lbp._consumer._consumer.consume = (_, cb) => {
+                        process.nextTick(cb, null, messagesToConsume);
+                        messagesToConsume = [];
+                    };
 
-                        resolve();
+                    resolve();
+                }
+            });
+        });
+
+        return new Promise((resolve, reject) => {
+            const messages = [];
+            start.then(() => {
+                lbp._producer.sendToTopic = (topic, [{ message }], cb) => {
+                    const entry = JSON.parse(message);
+                    messages.push({ topic, entry });
+                    if (cb) {
+                        process.nextTick(cb);
                     }
-                });
-            });
-
-            const destTopicSendAssert = new Promise((resolve, reject) => {
-                start
-                .then(() => {
-                    lbp._producer.sendToTopic = (topic, [{ message }]) => {
-                        const obj = JSON.parse(message);
-
-                        assert.strictEqual(topic, objectTasksTopic);
-                        assert.strictEqual(obj.action, 'deleteObject');
-                        assert.deepStrictEqual(obj.target, {
-                            owner: 'owner1',
-                            bucket: 'bucket1',
-                            accountId: 'acct1',
-                            key: 'obj1',
-                        });
-
-                        resolve();
-                    };
-                })
-                .catch(reject);
-            });
-
-            const sourceTopicCommitAssert = new Promise((resolve, reject) => {
-                start
-                .then(() => {
-                    lbp._consumer.onEntryCommittable = () => {
-                        s3Client.verifyRetries();
-                        resolve();
-                    };
-                })
-                .catch(reject);
-            });
-
-            return Promise.all([
-                sourceTopicCommitAssert,
-                destTopicSendAssert,
-            ]);
-        };
+                    return;
+                };
+                lbp._consumer.onEntryCommittable = () => {
+                    s3Client.verifyRetries();
+                    resolve(messages);
+                };
+            })
+            .catch(reject);
+        });
     }
 
     [
@@ -131,7 +110,78 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
             },
         },
     ].forEach(testCase => {
-        it(`should retry bucket entries when ${testCase.name} fails`,
-            generateRetryTest(testCase.failures));
+        it(`should retry bucket entries when ${testCase.name} fails`, () => {
+            const s3Client = new S3ClientMock(testCase.failures);
+            return generateRetryTest(s3Client).then(messages => {
+                assert.strictEqual(messages.length, 1);
+
+                const message = messages[0];
+                assert.strictEqual(message.topic, objectTasksTopic);
+                assert.strictEqual(message.entry.action, 'deleteObject');
+                assert.deepStrictEqual(message.entry.target, {
+                    owner: 'owner1',
+                    bucket: 'bucket1',
+                    accountId: 'acct1',
+                    key: 'obj1',
+                });
+            });
+        });
+    });
+
+    // If the listing is not complete, the lifecycleBucketProcessor publishes a new entry
+    // to the backbeat-lifecycle-bucket-tasks topic with the action name: processObjects.
+    // It should happen only once even if process is retrying because of failures.
+    it('should only requeue batch of objects once if retryable failures occurred', () => {
+        const failures = { getObjectTagging: 2 };
+        const s3Client = new S3ClientMock(failures);
+        s3Client.stubListObjectsTruncated();
+
+        return generateRetryTest(s3Client).then(messages => {
+            const actions = messages.map(m => m.entry.action);
+            // "processObjects" (requeue) action entry should only be sent once before
+            // the process succeeds.
+            const expectedActions = ['processObjects', 'deleteObject'];
+
+            assert.deepStrictEqual(actions, expectedActions);
+        });
+    });
+
+    it('should only requeue batch of versions once if retryable failures occurred', () => {
+        const failures = { getObjectTagging: 2 };
+        const s3Client = new S3ClientMock(failures);
+        s3Client.stubMethod('getBucketVersioning', { Status: 'Enabled' });
+        s3Client.stubListVersionsTruncated();
+
+        return generateRetryTest(s3Client).then(messages => {
+            const actions = messages.map(m => m.entry.action);
+            // "processObjects" (requeue) action entry should only be sent once before
+            // the process succeeds.
+            const expectedActions = ['processObjects', 'deleteObject'];
+
+            assert.deepStrictEqual(actions, expectedActions);
+        });
+    });
+
+    it('should only requeue batch of MPUs once if retryable failures occurred', () => {
+        const failures = { getObjectTagging: 2 };
+        const s3Client = new S3ClientMock(failures);
+        s3Client.stubListObjectsTruncated().stubListMpuTruncated();
+
+        return generateRetryTest(s3Client).then(messages => {
+            const actions = messages.map(m => m.entry.action);
+            // "processObjects" (requeue) action entry sent twice, one for MPUs batch
+            // and one for objects batch.
+            const expectedActions = ['processObjects', 'processObjects', 'deleteObject'];
+
+            assert.deepStrictEqual(actions, expectedActions);
+
+            // check that "MPU batch" action entry is only sent once before
+            // the process succeeds.
+            const reprocessMPUActions = messages
+                .filter(m =>
+                m.entry.action === 'processObjects' && m.entry.details.keyMarker === 'mpu2');
+
+            assert.strictEqual(reprocessMPUActions.length, 1);
+        });
     });
 });
