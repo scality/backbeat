@@ -1,0 +1,24 @@
+name: Test alerts
+
+on:
+  push:
+    branches-ignore:
+      - development/**
+      - q/*/**
+
+jobs:
+  run-alert-tests:
+    runs-on: ubuntu-latest
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v2
+
+      - name: Render and test lifecycle 
+        uses: scality/action-prom-render-test@1.0.1
+        with:
+          alert_file_path: monitoring/lifecycle/alerts.yaml
+          test_file_path: monitoring/lifecycle/alerts.test.yaml
+          alert_inputs: >-
+            namespace=zenko,job_lifecycle_producer=artesca-data-backbeat-lifecycle-producer-headless,job_lifecycle_bucket_processor=artesca-data-backbeat-lifecycle-bucket-processor-headless,job_lifecycle_object_processor=artesca-data-backbeat-lifecycle-object-processor-headless,lifecycle_conductor_replicas=1,lifecycle_bucket_replicas=3,lifecycle_object_replicas=3
+          github_token: ${{ secrets.GIT_ACCESS_TOKEN }}

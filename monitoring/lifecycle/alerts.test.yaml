@@ -1,0 +1,119 @@
+evaluation_interval: 1m
+rule_files:
+  - alerts.rendered.yaml
+
+tests:
+
+  - name: LifecycleProducer Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless"}
+        values: 1 0
+    alert_rule_test:
+      - alertname: LifecycleProducerDown
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleProducerDown
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Lifecycle producer pod has been down for 30 seconds"
+              summary: "Lifecycle producer service is down"
+
+  - name: LifecycleBucketProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: LifecycleBucketProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "Less than 100% of lifecycle bucket processors are up and healthy"
+              summary: "Degraded lifecycle bucket processor"
+      - alertname: LifecycleBucketProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "Less than 100% of lifecycle bucket processors are up and healthy"
+              summary: "Degraded lifecycle bucket processor"
+      - alertname: LifecycleBucketProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "Less than 50% of lifecycle bucket processors are up and healthy"
+              summary: "Degraded lifecycle bucket processor"
+
+  - name: LifecycleObjectProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: LifecycleObjectProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
+              summary: "Degraded lifecycle object processor"
+      - alertname: LifecycleObjectProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
+              summary: "Degraded lifecycle object processor"
+      - alertname: LifecycleObjectProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
+              summary: "Degraded lifecycle object processor"
+
