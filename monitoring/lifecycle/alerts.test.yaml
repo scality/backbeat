@@ -70,6 +70,55 @@ tests:
               description: "Less than 50% of lifecycle bucket processors are up and healthy"
               summary: "Degraded lifecycle bucket processor"
 
+  - name: LifecycleBucketProcessor Request 
+    interval: 1m
+    input_series:
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-bucket-processor-headless", status="2xx", process="bucket"}
+        values: 6000x5 5970-30x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-bucket-processor-headless", status="3xx", process="bucket"}
+        values: 0x5 10+10x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-bucket-processor-headless", status="4xx", process="bucket"}
+        values: 0x5 10+10x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-bucket-processor-headless", status="5xx", process="bucket"}
+        values: 0x5 10+10x12
+    alert_rule_test:
+      - alertname: LifecycleBucketProcessorRequestWarning
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorRequestCritical
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorRequestWarning
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "More than 3% of S3 requests by bucket processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleBucketProcessorRequestCritical
+        eval_time: 11m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorRequestWarning
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "More than 3% of S3 requests by bucket processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleBucketProcessorRequestCritical
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "More than 5% of S3 requests by bucket processors resulting in errors"
+              summary: "Very high rate of S3 request errors"
+
   - name: LifecycleObjectProcessor Replicas
     interval: 1m
     input_series:
@@ -117,3 +166,135 @@ tests:
               description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
               summary: "Degraded lifecycle object processor"
 
+  - name: LifecycleObjectProcessor Request
+    interval: 1m
+    input_series:
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-object-processor-headless", status="2xx", process="expiration"}
+        values: 6000x5 5970-30x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-object-processor-headless", status="3xx", process="expiration"}
+        values: 0x5 10+10x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-object-processor-headless", status="4xx", process="expiration"}
+        values: 0x5 10+10x12
+      - series: lifecycle_s3_operations{namespace="zenko", job="artesca-data-backbeat-lifecycle-object-processor-headless", status="5xx", process="expiration"}
+        values: 0x5 10+10x12
+    alert_rule_test:
+      - alertname: LifecycleObjectProcessorRequestWarning
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorRequestCritical
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorRequestWarning
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "More than 3% of S3 requests by object processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleObjectProcessorRequestCritical
+        eval_time: 11m
+        exp_alerts: []
+      - alertname: LifecycleObjectProcessorRequestWarning
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "More than 3% of S3 requests by object processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleObjectProcessorRequestCritical
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-object-processor
+              description: "More than 5% of S3 requests by object processors resulting in errors"
+              summary: "Very high rate of S3 request errors"
+
+  - name: Kafka Bucket Task Messages
+    interval: 1m
+    input_series:
+      - series: lifecycle_kafka_publish_success{namespace="zenko",op="BucketTopic"}
+        values: 6000x5 5970-30x12
+      - series: lifecycle_kafka_publish_error{namespace="zenko",op="BucketTopic"}
+        values: 0x5 30+30x12
+    alert_rule_test:
+      - alertname: LifecycleKafkaBucketMessagesWarning 
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleKafkaBucketMessagesCritical
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleKafkaBucketMessagesWarning 
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels:
+              severity: warning 
+            exp_annotations:
+              description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
+              summary: "High rate of failed messages to the bucket topic"
+      - alertname: LifecycleKafkaBucketMessagesCritical
+        eval_time: 11m
+        exp_alerts: []
+      - alertname: LifecycleKafkaBucketMessagesWarning 
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: warning 
+            exp_annotations:
+              description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
+              summary: "High rate of failed messages to the bucket topic"
+      - alertname: LifecycleKafkaBucketMessagesCritical
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "More than 5% of Kafka messages failed to publish to the lifecycle bucket topic"
+              summary: "High rate of failed messages to the bucket topic"
+
+  - name: Kafka Object Task Messages
+    interval: 1m
+    input_series:
+      - series: lifecycle_kafka_publish_success{namespace="zenko",op="ObjectTopic"}
+        values: 6000x5 5970-30x12
+      - series: lifecycle_kafka_publish_error{namespace="zenko",op="ObjectTopic"}
+        values: 0x5 30+30x12
+    alert_rule_test:
+      - alertname: LifecycleKafkaObjectMessagesWarning
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleKafkaObjectMessagesCritical
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleKafkaObjectMessagesWarning
+        eval_time: 11m
+        exp_alerts:
+          - exp_labels:
+              severity: warning 
+            exp_annotations:
+              description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
+              summary: "High rate of failed messages to the object topic"
+      - alertname: LifecycleKafkaObjectMessagesCritical
+        eval_time: 11m
+        exp_alerts: []
+      - alertname: LifecycleKafkaObjectMessagesWarning
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: warning 
+            exp_annotations:
+              description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
+              summary: "High rate of failed messages to the object topic"
+      - alertname: LifecycleKafkaObjectMessagesCritical
+        eval_time: 18m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "More than 5% of Kafka messages failed to publish to the lifecycle object topic"
+              summary: "High rate of failed messages to the object topic"
