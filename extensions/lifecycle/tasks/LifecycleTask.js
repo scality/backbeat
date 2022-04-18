@@ -440,6 +440,57 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Check that at least one rule has a tag or more.
+     * @param {array} rules - array of rules
+     * @return {boolean} true if at least one rule has a tag, false otherwise
+     */
+    _rulesHaveTag(rules) {
+        return rules.some(rule => {
+            if (!rule.Filter) {
+                return false;
+            }
+
+            const tags = rule.Filter.And
+                ? rule.Filter.And.Tags
+                : (rule.Filter.Tag && [rule.Filter.Tag]);
+            return tags && tags.length > 0;
+        });
+    }
+
+    /**
+     * Get object tagging if at least one lifecycle rule has a tag or more.
+     * @param {object} tagParams - s3.getObjectTagging parameters
+     * @param {string} tagParams.Bucket - bucket name
+     * @param {string} tagParams.Key - object key name
+     * @param {string} tagParams.VersionId - object version id
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - callback(error, tags)
+     * @return {undefined}
+     */
+    _getObjectTagging(tagParams, bucketLCRules, log, cb) {
+        if (!this._rulesHaveTag(bucketLCRules)) {
+            return process.nextTick(() => cb(null, { TagSet: [] }));
+        }
+
+        const req = this.s3target.getObjectTagging(tagParams);
+        attachReqUids(req, log);
+        return req.send((err, tags) => {
+            if (err) {
+                log.error('failed to get tags', {
+                    method: 'LifecycleTask._getObjectTagging',
+                    error: err,
+                    bucket: tagParams.Bucket,
+                    objectKey: tagParams.Key,
+                    objectVersion: tagParams.VersionId,
+                });
+                return cb(err);
+            }
+            return cb(null, tags);
+        });
+    }
+
+    /**
      * Handles comparing rules for objects
      * @param {object} bucketData - bucket data
      * @param {object} bucketData.target - target bucket info
@@ -471,17 +522,8 @@ class LifecycleTask extends BackbeatTask {
             tagParams.VersionId = object.VersionId;
         }
 
-        const req = this.s3target.getObjectTagging(tagParams);
-        attachReqUids(req, log);
-        return req.send((err, tags) => {
+        return this._getObjectTagging(tagParams, bucketLCRules, log, (err, tags) => {
             if (err) {
-                log.error('failed to get tags', {
-                    method: 'LifecycleTask._getRules',
-                    error: err,
-                    bucket: bucketData.target.bucket,
-                    objectKey: object.Key,
-                    objectVersion: object.VersionId,
-                });
                 return done(err);
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
