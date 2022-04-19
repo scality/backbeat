@@ -130,6 +130,8 @@ jobs:
     - name: run feature lifecycle tests
       run: .github/scripts/run_ft_tests.bash ft_test:lifecycle
       env:
+        EXPIRE_ONE_DAY_EARLIER: "true"
+        TRANSITION_ONE_DAY_EARLIER: "true"
         BACKBEAT_CONFIG_FILE: "tests/config.json"
     - name: run backbeat notification feature tests
       run: yarn run ft_test:notification
