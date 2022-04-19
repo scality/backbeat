@@ -439,7 +439,7 @@ class LifecycleBucketProcessorMock {
 function wrapProcessBucketEntry(bucketLCRules, bucketEntry,
 s3mock, params, cb) {
     params.lcTask.processBucketEntry(bucketLCRules, bucketEntry,
-    s3mock, backbeatMetadataProxyMock, err => {
+    s3mock, backbeatMetadataProxyMock, 0, err => {
         assert.ifError(err);
         const entries = params.lcp.getEntries();
 
