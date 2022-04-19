@@ -113,8 +113,8 @@ class LifecycleBucketProcessor {
             return this.retryWrapper.retry({
                 actionDesc: 'process bucket lifecycle entry',
                 logFields: { value },
-                actionFunc: done => task.processBucketEntry(
-                    rules, value, s3target, backbeatMetadataProxy, done),
+                actionFunc: (done, nbRetries) => task.processBucketEntry(
+                    rules, value, s3target, backbeatMetadataProxy, nbRetries, done),
                 shouldRetryFunc: err => err.retryable,
                 log: this._log,
             }, cb);
