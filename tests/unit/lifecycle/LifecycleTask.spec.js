@@ -6,6 +6,73 @@ const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
 const fakeLogger = require('../../utils/fakeLogger');
 
+const HOUR = 1000 * 60 * 60;
+const DAY = 24 * HOUR;
+
+const OBJECT = {
+    Key: 'key1',
+    LastModified: '2018-03-30T22:22:34.384Z',
+    ETag: '"d41d8cd98f00b204e9800998ecf8427e"',
+    Size: 10,
+    StorageClass: 'STANDARD',
+    Owner: {
+        DisplayName: 'bart',
+        ID: '02055fe9b403138416f06fb1331e9aea9b4adb55f9b59157a5d2d881086afd5c',
+    },
+};
+
+const LATEST_VERSION = {
+    ETag: '"d41d8cd98f00b204e9800998ecf8427e"',
+    Size: 0,
+    StorageClass: 'STANDARD',
+    Key: 'key2',
+    VersionId: '39383334393935303033383637313939393939395247303031202031',
+    IsLatest: true,
+    LastModified: '2018-03-30T22:22:34.384Z',
+    Owner: {
+        DisplayName: 'bart',
+        ID: '02055fe9b403138416f06fb1331e9aea9b4adb55f9b59157a5d2d881086afd5c',
+    },
+};
+
+const NON_CURRENT_VERSION = {
+    ETag: '"d41d8cd98f00b204e9800998ecf8427e"',
+    Size: 0,
+    StorageClass: 'STANDARD',
+    Key: 'key2',
+    VersionId: '39383334393935303033383637313939393939395247303031202031',
+    IsLatest: false,
+    LastModified: '2018-03-30T22:22:34.384Z',
+    Owner: {
+        DisplayName: 'bart',
+        ID: '02055fe9b403138416f06fb1331e9aea9b4adb55f9b59157a5d2d881086afd5c',
+    },
+    staleDate: '2019-03-30T22:22:34.384Z',
+};
+
+const LATEST_DELETE_MARKER = {
+    Owner: {
+        DisplayName: 'bart',
+        ID: '02055fe9b403138416f06fb1331e9aea9b4adb55f9b59157a5d2d881086afd5c',
+    },
+    Key: 'key1',
+    VersionId: '39383334383931323137363631303939393939395247303031202033',
+    IsLatest: true,
+    LastModified: '2018-03-30T22:22:34.384Z',
+};
+
+const NON_CURRENT_DELETE_MARKER = {
+    Owner: {
+        DisplayName: 'bart',
+        ID: '02055fe9b403138416f06fb1331e9aea9b4adb55f9b59157a5d2d881086afd5c',
+    },
+    Key: 'key1',
+    VersionId: '39383334383931323137363631303939393939395247303031202033',
+    IsLatest: false,
+    LastModified: '2018-03-30T22:22:34.384Z',
+    staleDate: '2019-03-30T22:22:34.384Z',
+};
+
 // LifecycleBucketProcessor mini Mock
 const lp = {
     getStateVars: () => (
@@ -25,6 +92,12 @@ describe('lifecycle task helper methods', () => {
 
     before(() => {
         lct = new LifecycleTask(lp);
+        lct.setSupportedRules([
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+            'transitions',
+        ]);
     });
 
     describe('_mergeSortedVersionsAndDeleteMarkers', () => {
@@ -558,6 +631,662 @@ describe('lifecycle task helper methods', () => {
             ];
             const result = lct._rulesHaveTag(rules);
             assert.equal(result, false);
+        });
+    });
+
+    describe('isEntityEligible', () => {
+        let object = null;
+        let latestVersion = null;
+        let nonCurrentVersion = null;
+        let latestDeleteMarker = null;
+        let nonCurrentDeleteMarker = null;
+
+        beforeEach(() => {
+            // shallow copy entities to start "clean".
+            object = { ...OBJECT };
+            latestVersion = { ...LATEST_VERSION };
+            nonCurrentVersion = { ...NON_CURRENT_VERSION };
+            latestDeleteMarker = { ...LATEST_DELETE_MARKER };
+            nonCurrentDeleteMarker = { ...NON_CURRENT_DELETE_MARKER };
+        });
+
+        // Test non-versioned object
+        it('should return true if 1 day expiration rule on 1 day old non-versioned object', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if 1 day expiration rule on 0 day old non-versioned object', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if expiration date has passed for non-versioned object', () => {
+            const rules = [
+                {
+                    Expiration: { Date: new Date(Date.now() - HOUR) },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if expiration date has not passed for non-versioned object', () => {
+            const rules = [
+                {
+                    Expiration: { Date: new Date(Date.now() + HOUR) },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if at least one rule is eligible', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+                {
+                    Expiration: { Days: 2 },
+                    ID: 'id2',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if no rule is eligible', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id2',
+                    Filter: {
+                        Tag: { Key: 'key', Value: 'val' },
+                    },
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if potential eligible rules are disabled', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Disabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id2',
+                    Filter: {
+                        Tag: { Key: 'key', Value: 'val' },
+                    },
+                    Status: 'Disabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if 1 day transition rule on 1 day old non-versioned object', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if 1 day transition rule on 0 day old non-versioned object', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if transition date has passed for non-versioned object', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Date: new Date(Date.now() - HOUR),
+                        StorageClass: 'us-east-2',
+                    }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if transition date has not passed for non-versioned object', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Date: new Date(Date.now() + HOUR),
+                        StorageClass: 'us-east-2',
+                    }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if non-current version expiration rule on a non-versioned object', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            object.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Disabled';
+
+            const result = lct._isEntityEligible(rules, object, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        // Test latest version
+        it('should return true if 1 day expiration rule on 1 day old latest version', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestVersion.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if 1 day expiration rule on 0 day old latest version', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestVersion.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if expiration date has passed for latest version', () => {
+            const rules = [
+                {
+                    Expiration: { Date: new Date(Date.now() - HOUR) },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if expiration date has not passed for latest version', () => {
+            const rules = [
+                {
+                    Expiration: { Date: new Date(Date.now() + HOUR) },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if 1 day transition rule on 1 day old latest version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestVersion.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if 1 day transition rule on 0 day old latest version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestVersion.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if transition date has passed for latest version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Date: new Date(Date.now() - HOUR),
+                        StorageClass: 'us-east-2',
+                    }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if transition date has not passed for latest version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Date: new Date(Date.now() + HOUR),
+                        StorageClass: 'us-east-2',
+                    }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if non-current version expiration rule on a latest version', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestVersion.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        // Test non current version
+        it('should return false if expiration rule with days is set for a non-current version', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentVersion.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+
+        it('should return false if expiration rule with date is set for a non-current version', () => {
+            const rules = [
+                {
+                    Expiration: { Date: new Date(Date.now()) },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if transition rule with days is set for a non-current version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentVersion.LastModified = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if transition rule with date is set for a non-current version', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Date: new Date(Date.now()),
+                        StorageClass: 'us-east-2',
+                    }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true if 1 day non-current version expiration rule on 1 day old non-current version', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentVersion.staleDate = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return false if 1 day non-current version expiration rule on 0 day old non-current version', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentVersion.staleDate = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentVersion, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        // Test latest delete marker
+        it('should return true even if misapplied expiration rule on a latest delete marker', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestDeleteMarker.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestDeleteMarker, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return true even if misapplied transition rule on a latest delete marker', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestDeleteMarker.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestDeleteMarker, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        it('should return true even if misapplied non-current version expiration rule on latest delete marker', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            latestDeleteMarker.LastModified = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, latestDeleteMarker, versioningStatus);
+            assert.strictEqual(result, true);
+        });
+
+        // Test non-current delete marker
+        it('should return false if expiration rule on a non-current delete marker', () => {
+            const rules = [
+                {
+                    Expiration: { Days: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentDeleteMarker.staleDate = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentDeleteMarker, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if transition rule on a non-current delete marker', () => {
+            const rules = [
+                {
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 1, StorageClass: 'us-east-2' }],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentDeleteMarker.staleDate = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentDeleteMarker, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return false if misapplied non-current version expiration rule on non-current delete marker', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentDeleteMarker.staleDate = new Date(Date.now()).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentDeleteMarker, versioningStatus);
+            assert.strictEqual(result, false);
+        });
+
+        it('should return true even if legit non-current version expiration rule on non-current delete marker', () => {
+            const rules = [
+                {
+                    NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                    ID: 'id1',
+                    Prefix: '',
+                    Status: 'Enabled',
+                    Transitions: [],
+                    NoncurrentVersionTransitions: [],
+                },
+            ];
+            nonCurrentDeleteMarker.staleDate = new Date(Date.now() - DAY).toISOString();
+            const versioningStatus = 'Enabled';
+
+            const result = lct._isEntityEligible(rules, nonCurrentDeleteMarker, versioningStatus);
+            assert.strictEqual(result, true);
         });
     });
 });
