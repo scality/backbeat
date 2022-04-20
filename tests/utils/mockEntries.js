@@ -12,6 +12,9 @@ const sourceEntry = {
     getContentEncoding: () => {},
     getReplicationIsNFS: () => {},
     getTags: () => {},
+    getObjectVersionedKey: () => {},
+    getValue: () => {},
+    getVersionId: () => {},
 };
 
 module.exports = { sourceEntry };

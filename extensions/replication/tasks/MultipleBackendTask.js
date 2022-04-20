@@ -1191,6 +1191,9 @@ class MultipleBackendTask extends ReplicateObject {
                 reason: err.description,
                 kafkaEntry,
             });
+        if (this.notificationConfig) {
+            this._publishFailedReplicationStatusNotification(sourceEntry, log);
+        }
         return done(null, { committable: false });
     }
 }

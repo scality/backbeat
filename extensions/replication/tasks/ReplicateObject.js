@@ -16,6 +16,10 @@ const { getAccountCredentials } = require('../../../lib/credentials/AccountCrede
 const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted, replicationStages } = require('../constants');
 
+const notifConstants = require('../../notification/constants');
+const messageUtil = require('../../notification/utils/message');
+const configUtil = require('../../notification/utils/config');
+
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
@@ -152,6 +156,64 @@ class ReplicateObject extends BackbeatTask {
               sourceEntry.getReplicationSiteDataStoreVersionId(this.site);
         return entry.setReplicationSiteDataStoreVersionId(this.site,
             versionId);
+    }
+
+    /**
+     * Publishes the failed notification status
+     * into the notification topic
+     * @param {*} sourceEntry the object entry
+     * @param {*} log the logger instance
+     * @return {undefined}
+     */
+    _publishFailedReplicationStatusNotification(sourceEntry, log) {
+        const bucket = sourceEntry.getBucket();
+        const key = sourceEntry.getObjectVersionedKey();
+        const value = sourceEntry.getValue();
+        const versionId = sourceEntry.getVersionId();
+        const config = this.notificationConfigManager.getConfig(bucket);
+        // we skip if key is a master or if no config is available for
+        // the bucket
+        if (versionId && config && Object.keys(config).length > 0) {
+            const eventType = notifConstants.replicationFailedEvent;
+            const ent = {
+                bucket,
+                key,
+                eventType,
+                versionId,
+            };
+            log.debug('validating entry', {
+                method: 'ReplicateObject._publishFailedReplicationStatusNotification',
+                bucket,
+                key,
+                eventType,
+            });
+            if (configUtil.validateEntry(config, ent)) {
+                const message
+                    = messageUtil.addLogAttributes(value, ent);
+                log.debug('publishing message', {
+                    method: 'ReplicateObject._publishFailedReplicationStatusNotification',
+                    bucket,
+                    key: message.key,
+                    eventType,
+                    eventTime: message.dateTime,
+                });
+                const entry = {
+                    key: encodeURIComponent(bucket),
+                    message: JSON.stringify(message)
+                };
+                this.notificationProducer.send([entry], err => {
+                    if (err) {
+                        log.error('error in entry delivery to notification topic', {
+                            method: 'ReplicateObject._publishFailedReplicationStatusNotification',
+                            topic: this.notifConfig.topic,
+                            entry: sourceEntry.getLogInfo(),
+                            error: err,
+                        });
+                    }
+                });
+            }
+        }
+        return undefined;
     }
 
     _publishReplicationStatus(sourceEntry, replicationStatus, params) {
@@ -764,6 +826,9 @@ class ReplicateObject extends BackbeatTask {
             reason: err.description,
             kafkaEntry,
         });
+        if (this.notificationConfig) {
+            this._publishFailedReplicationStatusNotification(sourceEntry, log);
+        }
         return done(null, { committable: false });
     }
 }
