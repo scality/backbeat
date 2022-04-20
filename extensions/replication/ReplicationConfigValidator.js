@@ -4,6 +4,7 @@ const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi } =
     require('../../lib/config/configItems.joi.js');
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
+const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
 
 const joiSchema = {
     source: {
@@ -87,7 +88,7 @@ const joiSchema = {
             })
         ),
     }),
-    objectSizeMetrics: joi.array().items(joi.number()),
+    objectSizeMetrics: joi.array().items(joi.number()).default(OBJECT_SIZE_METRICS),
 };
 
 function _loadAdminCredentialsFromFile(filePath) {
