@@ -37,7 +37,7 @@ class S3ClientMock {
             ],
         });
         this.stubMethod('getObjectTagging', {
-            TagSet: [],
+            TagSet: [{ Key: 'key', Value: 'val' }],
         });
         this.stubMethod('listObjectVersions', {
             IsTruncated: true,
@@ -128,6 +128,25 @@ class S3ClientMock {
             }],
             UploadIdMarker: 'id',
             NextKeyMarker: 'mpu2',
+        });
+        return this;
+    }
+
+    stubGetBucketLcWithTag() {
+        this.stubMethod('getBucketLifecycleConfiguration', {
+            Rules: [
+                {
+                    Expiration: {
+                        Days: 1,
+                    },
+                    Filter: {
+                        Tag: { Key: 'key', Value: 'val' },
+                    },
+                    ID: 'id',
+                    Prefix: '',
+                    Status: 'Enabled',
+                },
+            ],
         });
         return this;
     }
