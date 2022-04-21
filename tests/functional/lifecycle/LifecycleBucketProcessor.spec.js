@@ -134,7 +134,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     it('should only requeue batch of objects once if retryable failures occurred', () => {
         const failures = { getObjectTagging: 2 };
         const s3Client = new S3ClientMock(failures);
-        s3Client.stubListObjectsTruncated();
+        s3Client.stubGetBucketLcWithTag().stubListObjectsTruncated();
 
         return generateRetryTest(s3Client).then(messages => {
             const actions = messages.map(m => m.entry.action);
@@ -150,7 +150,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
         const failures = { getObjectTagging: 2 };
         const s3Client = new S3ClientMock(failures);
         s3Client.stubMethod('getBucketVersioning', { Status: 'Enabled' });
-        s3Client.stubListVersionsTruncated();
+        s3Client.stubGetBucketLcWithTag().stubListVersionsTruncated();
 
         return generateRetryTest(s3Client).then(messages => {
             const actions = messages.map(m => m.entry.action);
@@ -165,7 +165,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     it('should only requeue batch of MPUs once if retryable failures occurred', () => {
         const failures = { getObjectTagging: 2 };
         const s3Client = new S3ClientMock(failures);
-        s3Client.stubListObjectsTruncated().stubListMpuTruncated();
+        s3Client.stubGetBucketLcWithTag().stubListObjectsTruncated().stubListMpuTruncated();
 
         return generateRetryTest(s3Client).then(messages => {
             const actions = messages.map(m => m.entry.action);
