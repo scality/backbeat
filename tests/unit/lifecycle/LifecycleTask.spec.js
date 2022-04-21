@@ -383,4 +383,181 @@ describe('lifecycle task helper methods', () => {
             });
         });
     });
+
+    describe('_rulesHaveTag', () => {
+        it('should return true if rule has a prefix and tag', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Prefix: 'prefix',
+                            Tags: [
+                                { Key: 'key', Value: 'val' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has a prefix and multiple tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Prefix: 'prefix',
+                            Tags: [
+                                { Key: 'key', Value: 'val' },
+                                { Key: 'key2', Value: 'val2' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has a tag', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        Tag: { Key: 'key', Value: 'val' },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if rule has multiple tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Tags: [
+                                { Key: 'key1', Value: 'val' },
+                                { Key: 'key2', Value: 'val' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if one of the rules has tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Prefix: '',
+                    Expiration: { Days: 1 },
+                },
+                {
+                    ID: 'test-id2',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Tags: [
+                                { Key: 'key1', Value: 'val' },
+                                { Key: 'key2', Value: 'val' },
+                            ],
+                        },
+                    },
+                    Transitions: [{ Days: 0, StorageClass: 'us-east-2' }],
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return true if both of the rules has tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Filter: {
+                        And: {
+                            Tags: [
+                                { Key: 'key1', Value: 'val' },
+                                { Key: 'key2', Value: 'val' },
+                            ],
+                        },
+                    },
+                    Expiration: { Days: 1 },
+                },
+                {
+                    ID: 'test-id2',
+                    Status: 'Enabled',
+                    Filter: {
+                        Tag: { Key: 'key', Value: 'val' },
+                    },
+                    Transitions: [{ Days: 0, StorageClass: 'us-east-2' }],
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, true);
+        });
+
+        it('should return false if none of the rules has tags', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Prefix: '',
+                    Expiration: { Days: 1 },
+                },
+                {
+                    ID: 'test-id2',
+                    Status: 'Enabled',
+                    Prefix: '',
+                    Transitions: [{ Days: 0, StorageClass: 'us-east-2' }],
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, false);
+        });
+
+        it('should return false if rule has no tag', () => {
+            const rules = [
+                {
+                    ID: 'test-id',
+                    Status: 'Enabled',
+                    Prefix: '',
+                    Expiration: { Days: 1 },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, false);
+        });
+
+        it('should return false if rule has prefix but no tag', () => {
+            const rules = [
+                {
+                    ID: 'b6138dd9-8557-416f-b860-66d7156f57a3',
+                    Status: 'Enabled',
+                    Transitions: [{ Days: 0, StorageClass: 'us-east-2' }],
+                    Filter: { Prefix: 'test/' },
+                },
+            ];
+            const result = lct._rulesHaveTag(rules);
+            assert.equal(result, false);
+        });
+    });
 });
