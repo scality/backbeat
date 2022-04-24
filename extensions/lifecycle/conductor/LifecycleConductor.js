@@ -157,8 +157,9 @@ class LifecycleConductor {
                     next);
             },
         ], err => {
-            if (err && err.Throttling) {
-                log.info('not starting new lifecycle batch', { reason: err });
+            // check for err.is until errors from bucketClient have the new Arsenal format.
+            if (err && err.is && err.is.Throttling) {
+                log.info('not starting new lifecycle batch', { reason: err.toString() });
                 if (cb) {
                     cb(err);
                 }
