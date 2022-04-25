@@ -304,7 +304,7 @@ class SetupReplication extends BackbeatTask {
         const bucket = where === 'source' ?
                   this._sourceBucket : this._targetBucket;
         this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
-            if (err && err.code !== 'BucketAlreadyOwnedByYou') {
+            if (err && !err.is.BucketAlreadyOwnedByYou) {
                 this._log.error('error creating a bucket', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
@@ -315,7 +315,7 @@ class SetupReplication extends BackbeatTask {
                 });
                 return cb(err);
             }
-            if (err && err.code === 'BucketAlreadyOwnedByYou') {
+            if (err && err.is.BucketAlreadyOwnedByYou) {
                 this._log.debug('Bucket already exists. Continuing setup.', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :

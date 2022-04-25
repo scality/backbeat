@@ -157,7 +157,7 @@ class LifecycleConductor {
                     next);
             },
         ], err => {
-            if (err && err.Throttling) {
+            if (err && err.is.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
                 if (cb) {
                     cb(err);
