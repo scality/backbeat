@@ -130,7 +130,7 @@ describe('CRR Retry routes', () => {
                 return getResponseBody(res, (err, resBody) => {
                     assert.ifError(err);
                     const body = JSON.parse(resBody);
-                    assert(body.MalformedPOSTRequest);
+                    assert.equal(body.errorType, 'MalformedPOSTRequest');
                     return done();
                 });
             });
