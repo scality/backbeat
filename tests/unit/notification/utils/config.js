@@ -292,7 +292,7 @@ describe('Notification configuration util', () => {
                 const bnConfig
                     = getBucketNotifConfig(test.entry.bucket, configMap);
                 const result
-                    = notifConfUtil.validateEntry(bnConfig, test.entry);
+                    = notifConfUtil.validateEntry(bnConfig.notificationConfiguration, test.entry);
                 assert.strictEqual(test.pass, result);
             });
         });

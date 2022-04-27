@@ -46,17 +46,22 @@ function validateEntryWithFilter(filterRules, entry) {
 
 /**
  * Validate event against bucket queue configuration event type
- * @param  {Object[]} bnConfigs - Array of bucket specific queue
+ * @param  {Object[]} queueConfig - Array of bucket specific queue
  * configurations
- * @param  {string} event - Type of event
+ * @param  {string} eventType - Type of event
  * @return {undefined|Object[]} Bucket queue configurations if found
  */
-function filterConfigsByEvent(bnConfigs, event) {
-    return bnConfigs.filter(config => config.events.some(evt => {
-        // support wildcard events
-        const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
-        return event.toLowerCase().startsWith(starts.toLowerCase());
-    }));
+function filterConfigsByEvent(queueConfig, eventType) {
+    // only return queue configs valid for the event type
+    return queueConfig.filter(config =>
+        // a queue config can have multiple valid event types
+        // this returns true when at least one event is the same as eventType
+        config.events.some(evt => {
+            // support wildcard events
+            const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
+            return eventType.toLowerCase().startsWith(starts.toLowerCase());
+        })
+    );
 }
 
 /**
@@ -68,7 +73,7 @@ function filterConfigsByEvent(bnConfigs, event) {
  * @return {boolean} true if event qualifies for notification
  */
 function validateEntry(bnConfig, entry) {
-    const { bucket, eventType } = entry;
+    const eventType = entry.eventType;
     /**
      * if the event type is unavailable, it is an entry that is a
      * placeholder for deletion or cleanup, these entries should be ignored and
@@ -77,14 +82,11 @@ function validateEntry(bnConfig, entry) {
     if (!eventType) {
         return false;
     }
-    const notifConf = bnConfig.notificationConfiguration;
-    // check if the entry belongs to the bucket in the configuration
-    if (bucket !== bnConfig.bucket) {
-        return false;
-    }
-    // check if the event type matches
-    const qConfigs = filterConfigsByEvent(notifConf.queueConfig, eventType);
+    // check if the event type matches at least one supported event from
+    // one of the queue configurations
+    const qConfigs = filterConfigsByEvent(bnConfig.queueConfig, eventType);
     if (qConfigs.length > 0) {
+        // get queue configurations that have filters
         const qConfigWithFilters
             = qConfigs.filter(c => c.filterRules && c.filterRules.length > 0);
         // if there are configs without filters, make the entry valid
