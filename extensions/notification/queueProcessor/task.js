@@ -6,7 +6,7 @@ const QueueProcessor = require('./QueueProcessor');
 const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const notifConfig = config.extensions.notification;
-const zkConfig = config.zookeeper;
+const mongoConfig = config.queuePopulator.mongo;
 const notificationDestinations = config.bucketNotificationDestinations;
 
 const log = new werelogs.Logger('Backbeat:NotificationProcessor:task');
@@ -23,7 +23,7 @@ try {
     assert(destinationConfig, 'Invalid destination argument. Destination ' +
         'could not be found in destinations defined');
     const queueProcessor = new QueueProcessor(
-        zkConfig, kafkaConfig, notifConfig, destinationConfig, destination);
+        mongoConfig, kafkaConfig, notifConfig, destinationConfig, destination);
     queueProcessor.start();
 } catch (err) {
     log.error('error starting notification queue processor task', {

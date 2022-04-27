@@ -22,10 +22,9 @@
         "notification": {
             "topic": "backbeat-bucket-notification",
             "monitorNotificationFailures": true,
-            "zookeeperPath": "/bucket-notification",
             "queueProcessor": {
                 "groupId": "backbeat-bucket-notification-group",
-                "logConsumerMetricsIntervalS": 60
+                "concurrency": 10
             }
         }
     },

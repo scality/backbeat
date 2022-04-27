@@ -5,7 +5,6 @@ const constants = {
         suffix: 'Suffix',
     },
     bucketNotifConfigPropName: 'notificationConfiguration',
-    zkConfigParentNode: 'config',
     arn: {
         partition: 'scality',
         service: 'bucketnotif',
@@ -25,11 +24,7 @@ const constants = {
     eventVersion: '1.0',
     eventSource: 'scality:s3',
     eventS3SchemaVersion: '1.0',
-    configManager: {
-        concurrency: 50,
-        maxListeners: 0,
-    },
-    bucketMetastore: 'metastore',
+    bucketMetastore: '__metastore',
 };
 
 module.exports = constants;

@@ -27,15 +27,11 @@ function queueBatch(queuePopulator, taskState) {
         log.debug('skipping notification batch: previous one still in progress');
         return undefined;
     }
-    const onTimeout = () => {
-        // reset the flag to allow a new batch to start in case the
-        // previous batch timed out
-        taskState.batchInProgress = false;
-    };
     log.debug('start queueing notification batch');
     taskState.batchInProgress = true;
     const maxRead = qpConfig.batchMaxRead;
-    queuePopulator.processAllLogEntries({ maxRead, onTimeout }, err => {
+    const timeoutMs = 1000;
+    queuePopulator.processLogEntries({ maxRead, timeoutMs }, err => {
         taskState.batchInProgress = false;
         if (err) {
             log.error('an error occurred during notification', {
