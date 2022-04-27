@@ -1,218 +1,384 @@
 const assert = require('assert');
-const async = require('async');
 const werelogs = require('werelogs');
-const ZookeeperMock = require('zookeeper-mock');
 const sinon = require('sinon');
+const events = require('events');
+const MongoClient = require('mongodb').MongoClient;
 
 const NotificationConfigManager
     = require('../../../extensions/notification/NotificationConfigManager');
-const constants
-    = require('../../../extensions/notification/constants');
+const { errors } = require('arsenal');
+const mongoConfig
+    = require('../../config.json').queuePopulator.mongo;
 
 const logger = new werelogs.Logger('NotificationConfigManager:test');
-const { zkConfigParentNode } = constants;
-const concurrency = 10;
-const bucketPrefix = 'bucket';
-const timeoutMs = 100;
 
-function getTestConfigValue(bucket) {
-    const data = {
-        bucket,
-        notificationConfiguration: {
-            queueConfig: [
-                {
-                    events: ['s3:ObjectCreated:Put'],
-                    queueArn: 'arn:scality:bucketnotif:::destination1',
-                    filterRules: [],
-                    id: `${zkConfigParentNode}-${bucket}`,
-                },
-            ],
+const notificationConfiguration = {
+    queueConfig: [
+        {
+            events: ['s3:ObjectCreated:Put'],
+            queueArn: 'arn:scality:bucketnotif:::destination1',
+            filterRules: [],
         },
-    };
-    return data;
-}
+    ],
+};
 
-function populateTestConfigs(zkClient, numberOfConfigs, cb) {
-    async.timesLimit(numberOfConfigs, concurrency, (n, done) => {
-        const bucket = `${bucketPrefix}${n + 1}`;
-        const val = getTestConfigValue(bucket);
-        const strVal = JSON.stringify(val);
-        const node = `/${zkConfigParentNode}/${bucket}`;
-        async.series([
-            next => zkClient.mkdirp(node, next),
-            next => zkClient.setData(node, strVal, next),
-        ], done);
-    }, cb);
-}
+const notificationConfigurationVariant = {
+    queueConfig: [
+        {
+            events: ['s3:ObjectCreated:*'],
+            queueArn: 'arn:scality:bucketnotif:::destination2',
+            filterRules: [],
+        },
+    ],
+};
 
-function listBuckets(zkClient, cb) {
-    const node = `/${zkConfigParentNode}`;
-    zkClient.getChildren(node, cb);
-}
-
-function deleteTestConfigs(zkClient, cb) {
-    const node = `/${zkConfigParentNode}`;
-    listBuckets(zkClient, (error, children) => {
-        if (error) {
-            assert.ifError(error);
-            cb(error);
-        } else {
-            async.eachLimit(children, concurrency, (child, next) => {
-                const childNode = `${node}/${child}`;
-                zkClient.remove(childNode, next);
-            }, cb);
-        }
-    });
-}
-
-function checkCount(zkClient, manager, cb) {
-    listBuckets(zkClient, (err, buckets) => {
-        assert.ifError(err);
-        const zkConfigCount = buckets.length;
-        const managerConfigs = manager.getBucketsWithConfigs();
-        assert.strictEqual(zkConfigCount, managerConfigs.length);
-        cb();
-    });
-}
-
-function managerInit(manager, cb) {
-    manager.init(err => {
-        assert.ifError(err);
-        cb();
-    });
-}
-
-function checkParentConfigZkNode(manager, cb) {
-    const zkPath = `/${zkConfigParentNode}`;
-    manager._checkNodeExists(zkPath, (err, exists) => {
-        assert.ifError(err);
-        assert(exists);
-        cb();
-    });
-}
-
-describe('NotificationConfigManager', () => {
-    const zk = new ZookeeperMock({ doLog: false });
-    const zkClient = zk.createClient();
+describe('NotificationConfigManager ::', () => {
     const params = {
-        zkClient,
-        parentNode: zkConfigParentNode,
+        mongoConfig,
         logger,
     };
 
-    describe('Constructor', () => {
-        function checkConfigParentNodeStub(cb) {
-            return cb(new Error('error checking config parent node'));
-        }
+    afterEach(() => {
+        sinon.restore();
+    });
 
-        after(() => {
-            sinon.restore();
-            zk._resetState();
-        });
-
-        it('constructor and init checks', done => {
+    describe('Constructor & setup ::', () => {
+        it('Constructor should validate params', done => {
             assert.throws(() => new NotificationConfigManager());
             assert.throws(() => new NotificationConfigManager({}));
             assert.throws(() => new NotificationConfigManager({
-                zkClient: null,
+                mongoConfig: null,
                 logger: null,
             }));
             const manager = new NotificationConfigManager(params);
             assert(manager instanceof NotificationConfigManager);
-            async.series([
-                next => managerInit(manager, next),
-                next => checkParentConfigZkNode(manager, next),
-            ], done);
+            return done();
         });
 
-        it('should return error if checkConfigParentNode fails', done => {
-            sinon.stub(NotificationConfigManager.prototype,
-                '_checkConfigurationParentNode')
-                .callsFake(checkConfigParentNodeStub);
+        it('Setup should initialize the mongoClient and the change stream', done => {
             const manager = new NotificationConfigManager(params);
-            manager.init(err => {
-                assert(err);
+            const setMongoStub = sinon.stub(manager, '_setupMongoClient').callsArg(0);
+            const setChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream').returns();
+            manager.setup(err => {
+                assert.ifError(err);
+                assert(setMongoStub.calledOnce);
+                assert(setChangeStreamStub.calledOnce);
+                // cache should initially be empty
+                assert.strictEqual(manager._cachedConfigs.count(), 0);
+                return done();
+            });
+        });
+
+        it('Setup should fail when mongo setup fails', done => {
+            const manager = new NotificationConfigManager(params);
+            const setMongoStub = sinon.stub(manager, '_setupMongoClient').callsArgWith(0,
+                errors.InternalError);
+            const setChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
+            manager.setup(err => {
+                assert.deepEqual(err, errors.InternalError);
+                assert(setMongoStub.calledOnce);
+                assert(setChangeStreamStub.notCalled);
+                return done();
+            });
+        });
+
+        it('Setup should fail when changeStream setup fails', done => {
+            const manager = new NotificationConfigManager(params);
+            const setMongoStub = sinon.stub(manager, '_setupMongoClient').callsArg(0);
+            const setChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream').throws(
+                errors.InternalError);
+            manager.setup(err => {
+                assert.deepEqual(err, errors.InternalError);
+                assert(setMongoStub.calledOnce);
+                assert(setChangeStreamStub.calledOnce);
                 return done();
             });
         });
     });
 
-    describe('Operations', () => {
-        beforeEach(done => populateTestConfigs(zkClient, 5, done));
-
-        afterEach(() => {
-            zk._resetState();
-        });
-
-        it('should get bucket notification configuration', () => {
+    describe('_setupMongoClient ::', () => {
+        it('Should setup the mongo client and get metastore collection', () => {
             const manager = new NotificationConfigManager(params);
-            managerInit(manager, () => {
-                const bucket = 'bucket1';
-                const result = manager.getConfig(bucket);
-                assert.strictEqual(result.bucket, bucket);
+            const getCollectionStub = sinon.stub();
+            const getDbStub = sinon.stub().returns({
+                collection: getCollectionStub,
+                });
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+                db: getDbStub,
+            });
+            manager._setupMongoClient(err => {
+                assert.ifError(err);
+                assert(mongoConnectStub.calledOnce);
+                assert(getDbStub.calledOnce);
+                assert(getCollectionStub.calledOnce);
             });
         });
 
-        it('should return undefined for a non-existing bucket', () => {
+        it('Should fail when mongo client setup fails', () => {
             const manager = new NotificationConfigManager(params);
-            managerInit(manager, () => {
-                const bucket = 'bucket100';
-                const result = manager.getConfig(bucket);
-                assert.strictEqual(result, undefined);
+            sinon.stub(MongoClient, 'connect').callsArgWith(2,
+                errors.InternalError, null);
+            manager._setupMongoClient(err => {
+                assert.deepEqual(err, errors.InternalError);
             });
         });
 
-        it('should add bucket notification configuration', done => {
+        it('Should fail when when getting the metadata db', () => {
             const manager = new NotificationConfigManager(params);
-            managerInit(manager, () => {
-                const bucket = 'bucket100';
-                const config = getTestConfigValue(bucket);
-                const result = manager.setConfig(bucket, config);
-                assert(result);
-                setTimeout(() => {
-                    checkCount(zkClient, manager, done);
-                }, timeoutMs);
+            const getDbStub = sinon.stub().throws(errors.InternalError);
+            sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+                db: getDbStub,
+            });
+            manager._setupMongoClient(err => {
+                assert.deepEqual(err, errors.InternalError);
             });
         });
 
-        it('should update bucket notification configuration', done => {
+        it('Should fail when mongo client fails to get metastore', () => {
             const manager = new NotificationConfigManager(params);
-            managerInit(manager, () => {
-                const bucket = 'bucket1';
-                const config = getTestConfigValue(`${bucket}-updated`);
-                const result = manager.setConfig(bucket, config);
-                assert(result);
-                setTimeout(() => {
-                    const updatedConfig = manager.getConfig(bucket);
-                    assert.strictEqual(updatedConfig.bucket,
-                        `${bucket}-updated`);
-                    checkCount(zkClient, manager, done);
-                }, timeoutMs);
+            const getCollectionStub = sinon.stub().throws(errors.InternalError);
+            const getDbStub = sinon.stub().returns({
+                collection: getCollectionStub,
+                });
+            sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+                db: getDbStub,
+            });
+            manager._setupMongoClient(err => {
+                assert.deepEqual(err, errors.InternalError);
+            });
+        });
+    });
+
+    describe('_handleChangeStreamChangeEvent ::', () => {
+        it('Should remove entry from cache', async () => {
+            const changeStreamEvent = {
+                _id: 'resumeToken',
+                operationType: 'delete',
+                fullDocument: {
+                    _id: 'example-bucket-1',
+                    value: {
+                        notificationConfiguration,
+                    }
+                }
+            };
+            const manager = new NotificationConfigManager(params);
+            // populating cache
+            manager._cachedConfigs.add('example-bucket-1', notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            // handling change stream event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // should delete bucket config from cache
+            assert.strictEqual(manager._cachedConfigs.get('example-bucket-1'),
+                undefined);
+            assert.strictEqual(manager._cachedConfigs.count(), 0);
+        });
+
+        it('Should replace entry from cache', async () => {
+            const changeStreamEvent = {
+                _id: 'resumeToken',
+                operationType: 'replace',
+                fullDocument: {
+                    _id: 'example-bucket-1',
+                    value: {
+                        notificationConfiguration:
+                            notificationConfigurationVariant,
+                    }
+                }
+            };
+            const manager = new NotificationConfigManager(params);
+            // populating cache
+            manager._cachedConfigs.add('example-bucket-1', notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            // handling change stream event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // should update bucket config in cache
+            assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+                notificationConfigurationVariant);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            // same thing should happen with "update" event
+            changeStreamEvent.operationType = 'update';
+            // reseting config to default one
+            changeStreamEvent.fullDocument.value.notificationConfiguration =
+                notificationConfiguration;
+            // emiting the new "update" event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // cached config must be updated
+            assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+                notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+        });
+
+        it('Should do nothing when config not in cache', async () => {
+            const changeStreamEvent = {
+                _id: 'resumeToken',
+                operationType: 'delete',
+                fullDocument: {
+                    _id: 'example-bucket-2',
+                    value: {
+                        notificationConfiguration:
+                            notificationConfigurationVariant,
+                    }
+                }
+            };
+            const manager = new NotificationConfigManager(params);
+            // populating cache
+            manager._cachedConfigs.add('example-bucket-1', notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            // handling change stream event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // cache should not change
+            assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+                notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+        });
+
+        it('Should do nothing when operation is not supported', async () => {
+            const changeStreamEvent = {
+                _id: 'resumeToken',
+                operationType: 'insert',
+                fullDocument: {
+                    _id: 'example-bucket-2',
+                    value: {
+                        notificationConfiguration:
+                            notificationConfigurationVariant,
+                    }
+                }
+            };
+            const manager = new NotificationConfigManager(params);
+            // populating cache
+            manager._cachedConfigs.add('example-bucket-1', notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            assert(manager._cachedConfigs.get('example-bucket-1'));
+            // handling change stream event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // cache should not change
+            assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+                notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+        });
+    });
+
+    describe('_setMetastoreChangeStream ::', () =>  {
+        it('Should create and listen to the metastore change stream', done => {
+            const manager = new NotificationConfigManager(params);
+            manager._metastore = {
+                watch: () => new events.EventEmitter(),
+                findOne: () => (
+                    {
+                        value: {
+                            notificationConfiguration,
+                        }
+                    }),
+            };
+            try {
+                manager._setMetastoreChangeStream();
+                assert(manager._metastoreChangeStream instanceof events.EventEmitter);
+                const changeHandlers = events.getEventListeners(manager._metastoreChangeStream, 'change');
+                const errorHandlers = events.getEventListeners(manager._metastoreChangeStream, 'error');
+                assert.strictEqual(changeHandlers.length, 1);
+                assert.strictEqual(errorHandlers.length, 1);
+            } catch (error) {
+                assert.ifError(error);
+            }
+            return done();
+        });
+
+        it('Should fail if it fails to create change stream', done => {
+            const manager = new NotificationConfigManager(params);
+            manager._metastore = {
+                watch: sinon.stub().throws(errors.InternalError),
+                findOne: () => (
+                    {
+                        value: {
+                            notificationConfiguration,
+                        }
+                    }),
+            };
+            assert.throws(() => manager._setMetastoreChangeStream());
+            return done();
+        });
+    });
+
+    describe('_handleChangeStreamErrorEvent ::', () =>  {
+        it('Should reset change steam on error without closing it (already closed)', async () => {
+            const manager = new NotificationConfigManager(params);
+            const removeEventListenerStub = sinon.stub();
+            const closeStub = sinon.stub();
+            const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
+            manager._metastoreChangeStream = {
+                removeEventListener: removeEventListenerStub,
+                isClosed: () => true,
+                close: closeStub,
+            };
+            manager._handleChangeStreamErrorEvent(err => {
+                assert.ifError(err);
+                assert(setMetastoreChangeStreamStub.calledOnce);
+                assert(closeStub.notCalled);
+                assert(removeEventListenerStub.calledWith('change',
+                    manager._handleChangeStreamChangeEvent.bind(manager)));
+                assert(removeEventListenerStub.calledWith('error',
+                    manager._handleChangeStreamErrorEvent.bind(manager)));
             });
         });
 
-        it('should remove bucket notification configuration', done => {
+        it('Should close then reset the change steam on error', async () => {
             const manager = new NotificationConfigManager(params);
-            managerInit(manager, () => {
-                const bucket = 'bucket1';
-                let result = manager.removeConfig(bucket);
-                assert(result);
-                setTimeout(() => {
-                    result = manager.getConfig(bucket);
-                    assert.strictEqual(result, undefined);
-                    checkCount(zkClient, manager, done);
-                }, timeoutMs);
+            const removeEventListenerStub = sinon.stub();
+            const closeStub = sinon.stub();
+            const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
+            manager._metastoreChangeStream = {
+                removeEventListener: removeEventListenerStub,
+                isClosed: () => false,
+                close: closeStub,
+            };
+            manager._handleChangeStreamErrorEvent(err => {
+                assert.ifError(err);
+                assert(setMetastoreChangeStreamStub.calledOnce);
+                assert(closeStub.called);
+                assert(removeEventListenerStub.calledWith('change',
+                    manager._handleChangeStreamChangeEvent.bind(manager)));
+                assert(removeEventListenerStub.calledWith('error',
+                    manager._handleChangeStreamErrorEvent.bind(manager)));
             });
         });
+    });
 
-        it('config count should be zero when all configs are removed', done => {
+    describe('getConfig ::', () =>  {
+        it('Should return notification configuration of bucket', async () => {
             const manager = new NotificationConfigManager(params);
-            async.series([
-                next => managerInit(manager, next),
-                next => deleteTestConfigs(zkClient, next),
-                next => setTimeout(next, timeoutMs),
-                next => checkCount(zkClient, manager, next),
-            ], done);
+            manager._metastore = {
+                findOne: () => (
+                    {
+                        value: {
+                            notificationConfiguration,
+                        }
+                    }),
+            };
+            assert.strictEqual(manager._cachedConfigs.count(), 0);
+            const config = await manager.getConfig('example-bucket-1');
+            assert.deepEqual(config, notificationConfiguration);
+            // should also cache config
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+                notificationConfiguration);
+        });
+
+        it('Should return undefined when bucket doesn\'t have notification configuration', async () => {
+            const manager = new NotificationConfigManager(params);
+            manager._metastore = {
+                findOne: () => ({ value: {} }),
+            };
+            const config = await manager.getConfig('example-bucket-1');
+            assert.strictEqual(config, undefined);
+        });
+
+        it('Should return undefined when mongo findOne fails', async () => {
+            const manager = new NotificationConfigManager(params);
+            manager._metastore = {
+                findOne: sinon.stub().throws(errors.InternalError),
+            };
+            const config = await manager.getConfig('example-bucket-1');
+            assert.strictEqual(config, undefined);
         });
     });
 });
