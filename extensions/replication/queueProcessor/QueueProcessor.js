@@ -34,7 +34,6 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
-const zookeeper = require('../../../lib/clients/zookeeper');
 const NotificationConfigManager = require('../../notification/NotificationConfigManager');
 
 const {
@@ -203,11 +202,12 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {Object} notificationConfig - notification configuration object
      * @param {Object} notificationConfig.topic - notification topic name
+     * @param {Object} mongoConfig - mongodb connection config
      */
     constructor(zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig) {
+                site, notificationConfig, mongoConfig) {
         super();
         this.zkConfig = zkConfig;
         this.zkClient = zkClient;
@@ -231,9 +231,9 @@ class QueueProcessor extends EventEmitter {
         this.scheduledResume = null;
         // bucket notification related
         this.notificationConfig = notificationConfig;
-        this.zkClientNotification = null;
         this.notificationConfigManager = null;
         this.notificationProducer = null;
+        this.mongoConfig = mongoConfig;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -390,42 +390,19 @@ class QueueProcessor extends EventEmitter {
         });
     }
 
-    _setupZookeeperForNotification(done) {
-        const populatorZkPath = this.notificationConfig.zookeeperPath;
-        const zookeeperUrl =
-            `${this.zkConfig.connectionString}${populatorZkPath}`;
-        this.logger.info('opening zookeeper connection for reading ' +
-            'bucket notification configuration', { zookeeperUrl });
-        this.zkClientNotification = zookeeper.createClient(zookeeperUrl, {
-            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
-        });
-        this.zkClientNotification.connect();
-        this.zkClientNotification.once('error', done);
-        this.zkClientNotification.once('ready', () => {
-            // just in case there would be more 'error' events emitted
-            this.zkClientNotification.removeAllListeners('error');
-            done();
-        });
-    }
-
     _setupNotificationConfigManager(done) {
         // setup notification configuration manager only if notification
         // extension is available
         if (this.notificationConfig) {
-           async.series([
-               next => this._setupZookeeperForNotification(next),
-               next => {
-                    try {
-                        this.notificationConfigManager = new NotificationConfigManager({
-                            zkClient: this.zkClientNotification,
-                            logger: this.log,
-                        });
-                        return this.notificationConfigManager.init(next);
-                    } catch (err) {
-                        return next(err);
-                    }
-               }
-           ], done);
+            try {
+                this.notificationConfigManager = new NotificationConfigManager({
+                    mongoConfig: this.mongoConfig,
+                    logger: this.logger,
+                });
+                return this.notificationConfigManager.setup(done);
+            } catch (err) {
+                return done(err);
+            }
         }
         return done();
     }

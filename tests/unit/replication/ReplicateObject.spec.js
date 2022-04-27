@@ -82,7 +82,7 @@ describe('MultipleBackendTask', function test() {
     });
 
     describe('::_publishFailedReplicationStatusNotification', () => {
-        it('should publish entry to notification topic in correct format', done => {
+        it('should publish entry to notification topic in correct format', async () => {
             sinon.stub(configUtil, 'validateEntry').returns(true);
             const notificationProducerSend = sinon.stub().callsFake((entries, cb) => cb());
             const task = new ReplicateObject({
@@ -106,7 +106,7 @@ describe('MultipleBackendTask', function test() {
                     }
                 }),
             });
-            sinon.stub(sourceEntry, 'getObjectVersionedKey').returns('example-key\u0000123456');
+            sinon.stub(sourceEntry, 'getObjectKey').returns('example-key');
             sinon.stub(sourceEntry, 'getVersionId').returns('123456');
             sinon.stub(sourceEntry, 'getBucket').returns('example-bucket');
             sinon.stub(sourceEntry, 'getValue').returns({
@@ -117,7 +117,7 @@ describe('MultipleBackendTask', function test() {
                 'content-length': '6',
                 'versionId': '1234',
             });
-            task._publishFailedReplicationStatusNotification(sourceEntry, fakeLogger);
+            await task._publishFailedReplicationStatusNotification(sourceEntry, fakeLogger);
             const message = {
                 dateTime: '0000',
                 eventType: 's3:Replication:OperationFailedReplication',
@@ -126,14 +126,13 @@ describe('MultipleBackendTask', function test() {
                 size: '6',
                 versionId: '123456',
                 bucket: 'example-bucket',
-                key: 'example-key\u0000123456',
+                key: 'example-key',
             };
             const entryPublished = {
                 key: 'example-bucket',
                 message: JSON.stringify(message),
             };
             assert(notificationProducerSend.calledOnceWith([entryPublished]));
-            return done();
         });
     });
 });

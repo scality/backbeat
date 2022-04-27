@@ -16,6 +16,7 @@ const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const notificationConfig = config.extensions.notification;
+const mongoConfig = config.queuePopulator.mongo;
 const redisConfig = config.redis;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
@@ -166,7 +167,7 @@ function initAndStart(zkClient) {
                             sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
-                            site, notificationConfig);
+                            site, notificationConfig, mongoConfig);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -200,7 +201,7 @@ function initAndStart(zkClient) {
             const qp = new QueueProcessor(zkConfig, zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig);
+                site, notificationConfig, mongoConfig);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {

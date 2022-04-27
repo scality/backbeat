@@ -165,12 +165,12 @@ class ReplicateObject extends BackbeatTask {
      * @param {*} log the logger instance
      * @return {undefined}
      */
-    _publishFailedReplicationStatusNotification(sourceEntry, log) {
+    async _publishFailedReplicationStatusNotification(sourceEntry, log) {
         const bucket = sourceEntry.getBucket();
-        const key = sourceEntry.getObjectVersionedKey();
+        const key = sourceEntry.getObjectKey();
         const value = sourceEntry.getValue();
         const versionId = sourceEntry.getVersionId();
-        const config = this.notificationConfigManager.getConfig(bucket);
+        const config = await this.notificationConfigManager.getConfig(bucket);
         // we skip if key is a master or if no config is available for
         // the bucket
         if (versionId && config && Object.keys(config).length > 0) {
@@ -178,13 +178,14 @@ class ReplicateObject extends BackbeatTask {
             const ent = {
                 bucket,
                 key,
-                eventType,
                 versionId,
+                eventType,
             };
             log.debug('validating entry', {
                 method: 'ReplicateObject._publishFailedReplicationStatusNotification',
                 bucket,
                 key,
+                versionId,
                 eventType,
             });
             if (configUtil.validateEntry(config, ent)) {
@@ -194,6 +195,7 @@ class ReplicateObject extends BackbeatTask {
                     method: 'ReplicateObject._publishFailedReplicationStatusNotification',
                     bucket,
                     key: message.key,
+                    versionId,
                     eventType,
                     eventTime: message.dateTime,
                 });
