@@ -53,6 +53,7 @@ class LifecycleTask extends BackbeatTask {
             supportedLifecycleRules,
             this._lifecycleDateTime
         );
+        this._supportedRules = supportedLifecycleRules;
     }
 
     setSupportedRules(supportedRules) {
@@ -60,6 +61,7 @@ class LifecycleTask extends BackbeatTask {
             supportedRules,
             this._lifecycleDateTime
         );
+        this._supportedRules = supportedRules;
     }
 
     /**
@@ -546,6 +548,100 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
+    /**
+     * check if rule applies for a given date or calculed days.
+     * @param {array} rule - bucket lifecycle rule
+     * @param {number} daysSinceInitiated - Days passed since entity (object or version) last modified
+     * NOTE: entity is not an in-progress MPU or a delete marker.
+     * @param {number} currentDate - current date
+     * @return {boolean} true if rule applies - false otherwise.
+     */
+    _isRuleApplying(rule, daysSinceInitiated, currentDate) {
+        if (rule.Expiration && this._supportedRules.includes('expiration')) {
+            if (rule.Expiration.Days !== undefined && daysSinceInitiated >= rule.Expiration.Days) {
+                return true;
+            }
+
+            if (rule.Expiration.Date && rule.Expiration.Date < currentDate) {
+                return true;
+            }
+            // Expiration.ExpiredObjectDeleteMarker rule's action does not apply
+            // since object is not a delete marker.
+            // AbortIncompleteMultipartUpload.DaysAfterInitiation rule's action does not apply
+            // since in-progress MPUs are beeing handled separetly prior to this checks.
+        }
+
+        if (rule.Transitions && rule.Transitions.length > 0
+        && this._supportedRules.includes('transitions')) {
+            return rule.Transitions.some(t => {
+                if (t.Days !== undefined && daysSinceInitiated >= t.Days) {
+                    return true;
+                }
+                if (t.Date && t.Date < currentDate) {
+                    return true;
+                }
+                return false;
+            });
+        }
+
+        return false;
+    }
+
+    /**
+     * Check if entity (object or version) is eligible for expiration or transition based on its date.
+     * This function was introduced to avoid having to go further into processing
+     * (call getObjectTagging, headObject...) if the entity was not eligible based on its date.
+     * @param {array} rules - array of bucket lifecycle rules
+     * @param {object} entity - object or object version
+     * NOTE: entity is not an in-progress MPU or a delete marker.
+     * @param {string} versioningStatus - 'Enabled', 'Suspended', or 'Disabled'
+     * @return {boolean} true if eligible - false otherwise.
+     */
+    _isEntityEligible(rules, entity, versioningStatus) {
+        const currentDate = this._lifecycleDateTime.getCurrentDate();
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
+            new Date(entity.LastModified)
+        );
+        const { staleDate } = entity;
+        const daysSinceStaled = staleDate ?
+            this._lifecycleDateTime.findDaysSince(new Date(staleDate)) : null;
+
+        // Always eligible if object is a current version delete marker because
+        // it requires extra s3 call (list versions).
+        if (entity.IsLatest && this._isDeleteMarker(entity)) {
+            return true;
+        }
+
+        return rules.some(rule => {
+            if (rule.Status === 'Disabled') {
+                return false;
+            }
+
+            if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                if (entity.IsLatest) {
+                    return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+                }
+
+                if (!staleDate) {
+                    // NOTE: this should never happen. A non-current version should always have
+                    // a stale date. If it is the case, we will log later for debug purposes.
+                    return true;
+                }
+
+                if (rule.NoncurrentVersionExpiration
+                && this._supportedRules.includes('noncurrentVersionExpiration')) {
+                    if (rule.NoncurrentVersionExpiration.NoncurrentDays !== undefined &&
+                    daysSinceStaled >= rule.NoncurrentVersionExpiration.NoncurrentDays) {
+                        return true;
+                    }
+                }
+                return false;
+            }
+
+            return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+        });
+    }
+
 
     /**
      * Get rules and compare with each object or version
@@ -563,23 +659,30 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            async.waterfall([
+            const eligible =
+                this._isEntityEligible(lcRules, obj, versioningStatus);
+            if (!eligible) {
+                log.debug('entity is not eligible for lifecycle', {
+                    bucket: bucketData.target.bucket,
+                    key: obj.Key,
+                    versionId: obj.VersionId,
+                    isLatest: obj.IsLatest,
+                    lastModified: obj.LastModified,
+                    staleDate: obj.staleDate,
+                    versioningStatus,
+                });
+                return process.nextTick(cb);
+            }
+
+            return async.waterfall([
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
-                    let rules = applicableRules;
-                    // Hijack for testing
-                    // Idea is to set any "Days" rule to `Days - 1`
-                    const testIsOn = process.env.CI === 'true';
-                    if (testIsOn) {
-                        rules = this._adjustRulesForTesting(rules);
-                    }
-
-                    if (versioningStatus === 'Enabled' ||
-                    versioningStatus === 'Suspended') {
+                    if (versioningStatus === 'Enabled'
+                    || versioningStatus === 'Suspended') {
                         return this._compareVersion(bucketData, obj, contents,
-                            rules, versioningStatus, log, next);
+                            applicableRules, versioningStatus, log, next);
                     }
-                    return this._compareObject(bucketData, obj, rules, log,
+                    return this._compareObject(bucketData, obj, applicableRules, log,
                         next);
                 },
             ], cb);
@@ -998,37 +1101,6 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Only to be used when testing (when process.env.CI is true).
-     * The idea is to adjust any "Days" or "NoncurrentDays" rules so that rules
-     * set with 1 day should expire, but any days set with 2+ days will not.
-     * Since Days/NoncurrentDays cannot be set to 0, this is a way to set the
-     * rule and test methods are working as intended.
-     * @param {object} rules - applicable rules
-     * @return {object} adjusted rules object
-     */
-    _adjustRulesForTesting(rules) {
-        /* eslint-disable no-param-reassign */
-        if (rules.Expiration &&
-        rules.Expiration.Days) {
-            rules.Expiration.Days--;
-        }
-        const ncve = 'NoncurrentVersionExpiration';
-        const ncd = 'NoncurrentDays';
-        if (rules[ncve] &&
-        rules[ncve][ncd]) {
-            rules[ncve][ncd]--;
-        }
-        const aimu = 'AbortIncompleteMultipartUpload';
-        const dai = 'DaysAfterInitiation';
-        if (rules[aimu] &&
-        rules[aimu][dai]) {
-            rules[aimu][dai]--;
-        }
-        /* eslint-enable no-param-reassign */
-        return rules;
-    }
-
-    /**
      * Compare a version to most applicable rules
      * @param {object} bucketData - bucket data
      * @param {object} version - single version from `_getObjectVersions`
@@ -1129,14 +1201,7 @@ class LifecycleTask extends BackbeatTask {
             // Tags do not apply to UploadParts
             const noTags = { TagSet: [] };
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, upload, noTags);
-            let aRules = this._lifecycleUtils.getApplicableRules(filteredRules, {});
-
-            // Hijack for testing
-            // Idea is to set any "Days" rule to `Days - 1`
-            const testIsOn = process.env.CI === 'true';
-            if (testIsOn) {
-                aRules = this._adjustRulesForTesting(aRules);
-            }
+            const aRules = this._lifecycleUtils.getApplicableRules(filteredRules, {});
 
             const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
                 new Date(upload.Initiated)

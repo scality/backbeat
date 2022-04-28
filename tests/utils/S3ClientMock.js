@@ -15,6 +15,7 @@ class S3ClientMock {
             Contents: [
                 {
                     Key: 'obj1',
+                    LastModified: '2021-10-04T21:46:49.157Z',
                 },
             ],
         });
@@ -92,6 +93,7 @@ class S3ClientMock {
             Contents: [
                 {
                     Key: 'obj1',
+                    LastModified: '2021-10-04T21:46:49.157Z',
                     ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
                     Size: 1,
                     StorageClass: 'site1',
@@ -112,7 +114,7 @@ class S3ClientMock {
                     Size: 1,
                     StorageClass: 'site1',
                     IsLatest: true,
-                    LastModified: '2021-04-18T21:46:49.157Z',
+                    LastModified: '2021-10-04T21:46:49.157Z',
                 },
             ],
         });
@@ -123,7 +125,7 @@ class S3ClientMock {
         this.stubMethod('listMultipartUploads', {
             IsTruncated: true,
             Uploads: [{
-                Initiated: '2021-04-18T21:46:49.157Z',
+                Initiated: '2021-10-04T21:46:49.157Z',
                 Key: 'mpu1',
             }],
             UploadIdMarker: 'id',
