@@ -6,10 +6,6 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
-const LifecycleDeleteObjectTask =
-      require('../tasks/LifecycleDeleteObjectTask');
-const LifecycleUpdateTransitionTask =
-      require('../tasks/LifecycleUpdateTransitionTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
@@ -48,10 +44,7 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
-     * @param {Object} lcConfig.objectProcessor - kafka consumer object
-     * @param {String} lcConfig.objectProcessor.groupId - kafka
      * consumer group id
-     * @param {Number} [lcConfig.objectProcessor.concurrency] - number
      *  of max allowed concurrent operations
      * @param {Object} s3Config - S3 configuration
      * @param {Object} s3Config.host - s3 endpoint host
@@ -65,7 +58,8 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
-        this._authConfig = lcConfig.objectProcessor.auth || lcConfig.auth;
+        this._processConfig = this.getProcessConfig(this._lcConfig);
+        this._authConfig = this.getAuthConfig(this._lcConfig);
         this._s3Config = s3Config;
         this._transport = transport;
         this._consumer = null;
@@ -99,8 +93,8 @@ class LifecycleObjectProcessor extends EventEmitter {
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
             topic: this._lcConfig.objectTasksTopic,
-            groupId: this._lcConfig.objectProcessor.groupId,
-            concurrency: this._lcConfig.objectProcessor.concurrency,
+            groupId: this._processConfig.groupId,
+            concurrency: this._processConfig.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
         });
         this._consumer.on('error', err => {
@@ -262,6 +256,32 @@ class LifecycleObjectProcessor extends EventEmitter {
     }
 
     /**
+     * Retrieve object processor config
+     * @return {object} - process config
+     */
+    getProcessConfig() {
+        throw new Error('LifecycleObjectProcessor.getProcessConfig not implemented');
+    }
+
+    /**
+     * Retrieve process auth config
+     * @return {object} - auth config
+     */
+    getAuthConfig() {
+        throw new Error('LifecycleObjectProcessor.getAuthConfig not implemented');
+    }
+
+    /**
+     * Retrieve object processor task action
+     * @param {ActionQueueEntry} actionEntry - lifecycle action entry
+     * @return {BackbeatTask|null} - backbeat task object
+     */
+    // eslint-disable-next-line
+    getTask(actionEntry) {
+        return null;
+    }
+
+    /**
      * Proceed to the lifecycle action of an object given a kafka
      * object lifecycle queue entry
      *
@@ -279,20 +299,12 @@ class LifecycleObjectProcessor extends EventEmitter {
         }
         this._log.debug('processing lifecycle object entry',
                           actionEntry.getLogInfo());
-        const actionType = actionEntry.getActionType();
-        let task;
-        if (actionType === 'deleteObject' ||
-            actionType === 'deleteMPU') {
-            task = new LifecycleDeleteObjectTask(this);
-        } else if (actionType === 'copyLocation' &&
-                   actionEntry.getContextAttribute('ruleType')
-                   === 'transition') {
-            task = new LifecycleUpdateTransitionTask(this);
-        } else {
-            this._log.warn(`skipped unsupported action ${actionType}`,
-                             actionEntry.getLogInfo());
+        const task = this.getTask(actionEntry);
+
+        if (task === null) {
             return process.nextTick(done);
         }
+
         return this.retryWrapper.retry({
             actionDesc: 'process lifecycle object entry',
             logFields: actionEntry.getLogInfo(),
@@ -306,6 +318,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         return {
             s3Config: this._s3Config,
             lcConfig: this._lcConfig,
+            processConfig: this._processConfig,
             authConfig: this._authConfig,
             getS3Client: this._getS3Client.bind(this),
             getBackbeatClient: this._getBackbeatClient.bind(this),
@@ -317,7 +330,6 @@ class LifecycleObjectProcessor extends EventEmitter {
     isReady() {
         return this._consumer && this._consumer.isReady();
     }
-
 }
 
 module.exports = LifecycleObjectProcessor;

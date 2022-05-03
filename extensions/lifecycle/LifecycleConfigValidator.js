@@ -46,6 +46,13 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
+    transitionProcessor: {
+        auth: inheritedAuthJoi,
+        groupId: joi.string().required(),
+        retry: retryParamsJoi,
+        concurrency: joi.number().greater(0).default(10),
+        probeServer: probeServerJoi.default(),
+    },
 });
 
 function configValidator(backbeatConfig, extConfig) {

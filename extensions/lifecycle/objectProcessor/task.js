@@ -12,7 +12,8 @@ const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 const { initManagement } = require('../../../lib/management/index');
-const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
+const LifecycleObjectExpirationProcessor = require('./LifecycleObjectExpirationProcessor');
+const LifecycleObjectTransitionProcessor = require('./LifecycleObjectTransitionProcessor');
 const { startProbeServer } = require('../../../lib/util/probe');
 const config = require('../../../lib/Config');
 
@@ -24,8 +25,19 @@ const transport = config.transport;
 
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Consumer');
 
-const objectProcessor = new LifecycleObjectProcessor(
-    zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+let objectProcessor;
+
+switch (process.env.LIFECYCLE_OBJECT_PROCESSOR_TYPE) {
+    case 'transition':
+        objectProcessor = new LifecycleObjectTransitionProcessor(
+            zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+        break;
+    case 'expiration': // fallthrough
+    default:
+        objectProcessor = new LifecycleObjectExpirationProcessor(
+            zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+        break;
+}
 
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });

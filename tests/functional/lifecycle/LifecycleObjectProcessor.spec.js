@@ -2,8 +2,8 @@
 
 const werelogs = require('werelogs');
 
-const LifecycleObjectProcessor = require(
-    '../../../extensions/lifecycle/objectProcessor/LifecycleObjectProcessor');
+const LifecycleObjectExpirationProcessor = require(
+    '../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
 
 const { S3ClientMock } = require('../../utils/S3ClientMock');
 
@@ -23,7 +23,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
 
     function generateRetryTest(failures, message) {
         return function testRetries(done) {
-            const lop = new LifecycleObjectProcessor(
+            const lop = new LifecycleObjectExpirationProcessor(
                 zkConfig, kafkaConfig, lcConfig, s3Config);
 
             const s3Client = new S3ClientMock(failures);

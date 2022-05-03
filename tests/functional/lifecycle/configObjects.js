@@ -24,6 +24,9 @@ const lcConfig = {
     objectProcessor: {
         groupId: `object-processor-test-${Math.random()}`,
     },
+    transitionProcessor: {
+        groupId: `transition-processor-test-${Math.random()}`,
+    },
     bucketTasksTopic,
     objectTasksTopic,
     rules: {
