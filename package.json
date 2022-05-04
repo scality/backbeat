@@ -12,6 +12,7 @@
     "lifecycle_bucket_processor": "node extensions/lifecycle/bucketProcessor/task.js",
     "lifecycle_object_processor": "node extensions/lifecycle/objectProcessor/task.js",
     "lifecycle_object_transition_processor": "LIFECYCLE_OBJECT_PROCESSOR_TYPE=transition node extensions/lifecycle/objectProcessor/task.js",
+    "oplog_populator": "node extensions/oplogPopulator/OplogPopulatorTask.js",
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
