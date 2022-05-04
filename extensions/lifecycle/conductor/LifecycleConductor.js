@@ -583,10 +583,10 @@ class LifecycleConductor {
         this._setupVaultClientCache();
         return async.series([
             next => this._setupProducer(next),
-            next => this._setupZookeeperClient(next),
+            /*next => this._setupZookeeperClient(next),
             next => this._setupBucketdClient(next),
             next => this._setupMongodbClient(next),
-            next => this._initKafkaBacklogMetrics(next),
+            next => this._initKafkaBacklogMetrics(next),*/
         ], done);
     }
 
@@ -645,12 +645,14 @@ class LifecycleConductor {
      * @return {undefined}
      */
     start(done) {
+
         if (this._started) {
             // already started
             return process.nextTick(done);
         }
         this._started = true;
         return this.init(err => {
+
             if (err) {
                 return done(err);
             }
@@ -704,7 +706,14 @@ class LifecycleConductor {
         const allReady = Object.values(components).every(v => v);
 
         if (!allReady) {
-            this.logger.error('ready state', components);
+            this.logger.error('ready state', {
+                zkState,
+                zkConnectState,
+                producer: !!(this._producer && this._producer.isReady()),
+                kafkaBacklogMetrics: (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady()),
+                tempCreds: this._tempCredentialsReady(),
+                components,
+            });
         }
 
         return allReady;
