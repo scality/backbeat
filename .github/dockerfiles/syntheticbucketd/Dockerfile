@@ -3,7 +3,7 @@ FROM node:16
 RUN mkdir /app
 COPY package.json /app
 COPY yarn.lock /app
-RUN cd /app && yarn install
+RUN cd /app && yarn install --network-concurrency 1
 
 COPY tests/utils /app
 
