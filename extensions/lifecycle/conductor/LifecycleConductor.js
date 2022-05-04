@@ -80,6 +80,7 @@ class LifecycleConductor {
         this._cronJob = null;
         this._vaultClientCache = null;
         this._initialized = false;
+        this._batchInProgress = false;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
@@ -147,6 +148,7 @@ class LifecycleConductor {
         async.waterfall([
             next => this._controlBacklog(next),
             next => {
+                this._batchInProgress = true;
                 log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
                 this.listBuckets(messageSendQueue, log, next);
             },
@@ -157,6 +159,8 @@ class LifecycleConductor {
                     next);
             },
         ], err => {
+            this._batchInProgress = false;
+
             if (err && err.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
                 if (cb) {
@@ -270,6 +274,10 @@ class LifecycleConductor {
     }
 
     _controlBacklog(done) {
+        if (this._batchInProgress) {
+            return done(errors.Throttling);
+        }
+
         // skip backlog control step in the following cases:
         // - disabled in config
         // - backlog metrics not configured
