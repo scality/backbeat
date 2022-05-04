@@ -27,7 +27,7 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 COPY package.json yarn.lock /usr/src/app/
-RUN yarn install --ignore-engines --frozen-lockfile --production \
+RUN yarn install --ignore-engines --frozen-lockfile --production --network-concurrency 1 \
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf ~/.node-gyp \
     && rm -rf /tmp/yarn-*

@@ -104,7 +104,7 @@ jobs:
         node-version: '16'
         cache: yarn
     - name: Install node dependencies
-      run: yarn install --ignore-engines --frozen-lockfile
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
     - name: Install ginkgo
       run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
     - name: Lint markdown
