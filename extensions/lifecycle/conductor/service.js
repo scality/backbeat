@@ -65,14 +65,14 @@ async.waterfall([
             logger.error('error starting probe server', { error: err });
             return done(err);
         }
-        /*if (probeServer !== undefined) {
+        if (probeServer !== undefined) {
             // following the same pattern as other extensions, where liveness
             // and readiness are handled by the same handler
             probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
             // retaining the old route and adding support to new route, until
             // metrics handling is consolidated
             probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
-        }*/
+        }
         return done();
     }),
     done => lcConductor.start(done),
