@@ -583,10 +583,10 @@ class LifecycleConductor {
         this._setupVaultClientCache();
         return async.series([
             next => this._setupProducer(next),
-            /*next => this._setupZookeeperClient(next),
+            next => this._setupZookeeperClient(next),
             next => this._setupBucketdClient(next),
             next => this._setupMongodbClient(next),
-            next => this._initKafkaBacklogMetrics(next),*/
+            next => this._initKafkaBacklogMetrics(next),
         ], done);
     }
 
