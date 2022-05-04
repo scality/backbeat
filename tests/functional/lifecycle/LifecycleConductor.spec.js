@@ -111,6 +111,89 @@ werelogs.configure({ level: 'info', dump: 'error' });
 describe('lifecycle conductor', function lifecycleConductor() {
     this.timeout(TIMEOUT);
 
+    describe('backlog control', () => {
+        const bucketdPort = 14344;
+        let bucketd;
+
+        const bucketdHandler = (_, res) => {
+            setTimeout(
+                () => {
+                    res.end(JSON.stringify({
+                        Contents: [],
+                        IsTruncated: false,
+                    }));
+                },
+                1000);
+        };
+
+        beforeEach(done => {
+            bucketd = http.createServer(bucketdHandler);
+            bucketd.listen(bucketdPort, done);
+        });
+
+        afterEach(done => {
+            bucketd.close(done);
+        });
+
+        it('should detect ongoing batches', done => {
+            const lcConfig = {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    cronRule: '*/5 */5 */5 */5 */5 */5',
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: 'localhost',
+                        port: bucketdPort,
+                    },
+                    backlogControl: {
+                        enabled: true,
+                    },
+                },
+                bucketProcessor: {
+                    groupId: 'a',
+                },
+                objectProcessor: {
+                    groupId: 'b',
+                },
+            };
+
+            // make topic unique so that different tests' bootstrap messages don't interfere
+            lcConfig.bucketTasksTopic += Math.random();
+
+            const localKafkaConfig = {
+                ...kafkaConfig,
+                backlogMetrics: {
+                    zkPath: '/backbeat/run/kafka-backlog-metrics',
+                    intervalS: 60,
+                },
+            };
+
+            const lc = new LifecycleConductor(zkConfig.zookeeper,
+                localKafkaConfig, lcConfig, repConfig);
+
+            async.series([
+                next => lc.start(next),
+                next => async.parallel([
+                    nextp => lc.processBuckets(nextp),
+                    nextp => setTimeout(() => {
+                        lc.processBuckets(err => {
+                            // test explicitly for the non-backlog-metrics related error
+                            if (err && err.Throttling && err.description === 'Batch in progress') {
+                                return nextp();
+                            }
+
+                            const e = new Error('should have returned a `Throttling` error');
+                            return nextp(e);
+                        });
+                    }, 500),
+                ], next),
+                next => lc.stop(next),
+            ],
+            done);
+        });
+    });
+
     function describeConductorSpec(opts) {
         const {
             description,
