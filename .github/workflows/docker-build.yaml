@@ -45,3 +45,12 @@ jobs:
           ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
           ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml
         working-directory: monitoring
+
+      - name: Push policies into the development namespace
+        run: |
+          oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}-dev/${{ env.PROJECT_NAME }}-policies:${{ github.sha }} \
+          extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
+          extensions/gc/policy.json:application/vnd.iam-policy+json
