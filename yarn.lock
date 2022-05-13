@@ -459,6 +459,16 @@ ajv@6.12.2:
     json-schema-traverse "^0.4.1"
     uri-js "^4.2.2"
 
+ajv@6.12.3:
+  version "6.12.3"
+  resolved "https://registry.yarnpkg.com/ajv/-/ajv-6.12.3.tgz#18c5af38a111ddeb4f2697bd78d68abc1cabd706"
+  integrity sha512-4K0cK3L1hsqk9xIb2z9vs/XU+PGJZ9PNpJRDS9YLzmNdX6jmVPfamLvTJr0aDAusnHyCHO6MjzlkAsgtqp9teA==
+  dependencies:
+    fast-deep-equal "^3.1.1"
+    fast-json-stable-stringify "^2.0.0"
+    json-schema-traverse "^0.4.1"
+    uri-js "^4.2.2"
+
 ajv@^6.10.2, ajv@^6.12.3, ajv@^6.9.1:
   version "6.12.6"
   resolved "https://registry.yarnpkg.com/ajv/-/ajv-6.12.6.tgz#baf5a62e802b07d977034586f8c3baf5adf26df4"
@@ -611,6 +621,46 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
+"arsenal@git+https://github.com/scality/Arsenal#8.1.48":
+  version "8.1.48"
+  resolved "git+https://github.com/scality/Arsenal#3ed46f2d16a1bf08b58f57fd7549ab4e7440dc6c"
+  dependencies:
+    "@types/async" "^3.2.12"
+    "@types/utf8" "^3.0.1"
+    JSONStream "^1.0.0"
+    agentkeepalive "^4.1.3"
+    ajv "6.12.3"
+    async "~2.6.4"
+    aws-sdk "2.80.0"
+    azure-storage "2.10.3"
+    backo "^1.1.0"
+    base-x "3.0.8"
+    base62 "2.0.1"
+    bson "4.0.0"
+    debug "~4.1.0"
+    diskusage "^1.1.1"
+    fcntl "github:scality/node-fcntl#0.2.0"
+    hdclient scality/hdclient#1.1.0
+    https-proxy-agent "^2.2.0"
+    ioredis "^4.28.5"
+    ipaddr.js "1.9.1"
+    joi "^17.6.0"
+    level "~5.0.1"
+    level-sublevel "~6.6.5"
+    mongodb "^3.0.1"
+    node-forge "^1.3.0"
+    prom-client "10.2.3"
+    simple-glob "^0.2.0"
+    socket.io "2.4.1"
+    socket.io-client "2.4.0"
+    sproxydclient "github:scality/sproxydclient#8.0.3"
+    utf8 "3.0.0"
+    uuid "^3.0.1"
+    werelogs scality/werelogs#8.1.0
+    xml2js "~0.4.23"
+  optionalDependencies:
+    ioctl "^2.0.2"
+
 "arsenal@github:scality/Arsenal#8.1.27", arsenal@scality/Arsenal#8.1.27:
   version "8.1.27"
   resolved "https://codeload.github.com/scality/Arsenal/tar.gz/3c9ab1bb99c2b3134882e7d8ad12573a073188f4"
@@ -737,6 +787,13 @@ async@~2.5.0:
   integrity sha512-e+lJAJeNWuPCNyxZKOBdaJGyLGHugXVQtrAwtuAe2vhxTYxFTKE73p8JuTmdH0qdQZtDvI4dhJwjZc5zsfIsYw==
   dependencies:
     lodash "^4.14.0"
+
+async@~2.6.4:
+  version "2.6.4"
+  resolved "https://registry.yarnpkg.com/async/-/async-2.6.4.tgz#706b7ff6084664cd7eae713f6f965433b5504221"
+  integrity sha512-mzo5dfJYwAn29PeiJ0zvwTo04zj8HDJj0Mn8TD7sno7q12prdbnasKJHhkm2c1LgrhlJ0teaea8860oxi51mGA==
+  dependencies:
+    lodash "^4.17.14"
 
 asynckit@^0.4.0:
   version "0.4.0"
@@ -3984,6 +4041,11 @@ node-forge@^0.8.0:
   version "0.8.5"
   resolved "https://registry.yarnpkg.com/node-forge/-/node-forge-0.8.5.tgz#57906f07614dc72762c84cef442f427c0e1b86ee"
   integrity sha512-vFMQIWt+J/7FLNyKouZ9TazT74PRV3wgv9UT4cRjC8BffxFbKXkgIWR42URCPSnHm/QDz6BOlb2Q0U4+VQT67Q==
+
+node-forge@^1.3.0:
+  version "1.3.1"
+  resolved "https://registry.yarnpkg.com/node-forge/-/node-forge-1.3.1.tgz#be8da2af243b2417d5f646a770663a92b7e9ded3"
+  integrity sha512-dPEtOeMvF9VMcYV/1Wb8CPoVAXtp6MKMlcbAt4ddqmGqUJ6fQZFXkNZNkNlfevtNkGtaSoXf/vNNNSvgrdXwtA==
 
 node-gyp-build@^4.3.0:
   version "4.3.0"
