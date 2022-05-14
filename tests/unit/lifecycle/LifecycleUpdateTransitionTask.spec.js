@@ -6,61 +6,11 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleUpdateTransitionTask');
 
-class GarbageCollectorProducerMock {
-    constructor() {
-        this.receivedEntry = null;
-    }
-
-    publishActionEntry(gcEntry) {
-        this.receivedEntry = gcEntry;
-    }
-
-    getReceivedEntry() {
-        return this.receivedEntry;
-    }
-}
-
-
-class BackbeatClientMock {
-    constructor() {
-        this.mdObj = null;
-        this.receivedMd = null;
-    }
-
-    setMdObj(mdObj) {
-        this.mdObj = mdObj;
-    }
-
-    getMetadata(params, log, cb) {
-        return cb(null, { Body: this.mdObj.getSerialized() });
-    }
-
-    putMetadata(params, log, cb) {
-        this.receivedMd = JSON.parse(params.mdBlob);
-        return cb();
-    }
-
-    getReceivedMd() {
-        return this.receivedMd;
-    }
-}
-
-class LifecycleObjectProcessorMock {
-    constructor(backbeatClient, gcProducer) {
-        this.backbeatClient = backbeatClient;
-        this.gcProducer = gcProducer;
-        this.logger = new werelogs.Logger('test:LifecycleUpdateTransitionTask');
-    }
-
-    getStateVars() {
-        return {
-            backbeatClient: this.backbeatClient,
-            gcProducer: this.gcProducer,
-            logger: this.logger,
-            getBackbeatClient: () => this.backbeatClient,
-        };
-    }
-}
+const {
+    GarbageCollectorProducerMock,
+    BackbeatClientMock,
+    LifecycleObjectProcessorMock,
+} = require('./mocks');
 
 describe('LifecycleUpdateTransitionTask', () => {
     let backbeatClient;
@@ -94,7 +44,10 @@ describe('LifecycleUpdateTransitionTask', () => {
         backbeatClient = new BackbeatClientMock();
         gcProducer = new GarbageCollectorProducerMock();
         objectProcessor = new LifecycleObjectProcessorMock(
-            backbeatClient, gcProducer);
+            null,
+            backbeatClient,
+            gcProducer,
+            new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
         mdObj = new ObjectMD();
         mdObj.setLocation(oldLocation)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
