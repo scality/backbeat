@@ -106,6 +106,11 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             next => this._checkDate(entry, log, next),
             next => this._executeDelete(entry, log, next),
         ], err => {
+            if (err && err.statusCode === 404) {
+                log.debug('Unable to find object to delete, skipping',
+                    entry.getLogInfo());
+                return done();
+            }
             if (err && err.statusCode === 412) {
                 log.info('Object was modified after delete entry ' +
                          'created so object was not deleted',
