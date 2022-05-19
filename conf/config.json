@@ -197,15 +197,52 @@
         },
         "lifecycle": {
             "auth": {
-                "type": "service",
-                "account": "service-lifecycle"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "Y18BE7V20Z0PYUAR24XE",
+                    "secretKey": "57/VYIjTHwy3yjEXEhNtbiOLKAZy3NMCiyrF2x4g"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
-                "cronRule": "0 */5 * * * *",
+                "auth": {
+                    "type": "assumeRole",
+                    "roleName": "scality-internal/backbeat-lifecycle-conductor",
+                    "sts": {
+                        "host": "127.0.0.1",
+                        "port": 8800,
+                        "accessKey": "F95VPLOY6GMMZGKLP5VY",
+                        "secretKey": "u6c0GxSeniCLllO2z67j1SjA=QXQI5qp7+GWNsPF"
+                    },
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8600
+                    }
+                },
+                "cronRule": "*/10 * * * * *",
                 "concurrency": 10,
+                "bucketSource": "mongodb",
+                "mongodb": {
+                    "replicaSetHosts":
+                        "localhost:27017,localhost:27018,localhost:27019",
+                    "writeConcern": "majority",
+                    "replicaSet": "rs0",
+                    "readPreference": "primary",
+                    "database": "metadata"
+                },
+                "vaultAdmin": {
+                    "host": "127.0.0.1",
+                    "port": 8500
+                },
                 "probeServer": {
                     "bindAddress": "0.0.0.0",
                     "port": 8552
