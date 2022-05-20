@@ -207,12 +207,16 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @return {BackbeatClient} The S3 client instance to make requests with
      */
     _getBackbeatClient(canonicalId, accountId) {
+        console.log('this._stsConfig!!!', this._stsConfig);
+        console.log('this._authConfig!!!', this._authConfig);
         const credentials = this.credentialsManager.getCredentials({
             id: canonicalId,
             accountId,
             stsConfig: this._stsConfig,
             authConfig: this._authConfig,
         });
+
+        console.log('credentials!!!', credentials);
 
         if (credentials === null) {
             return null;

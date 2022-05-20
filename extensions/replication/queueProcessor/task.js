@@ -159,6 +159,7 @@ function initAndStart(zkClient) {
             const updatedSites = destConfig.bootstrapList.map(i => i.site);
             const allSites = [...new Set(activeSites.concat(updatedSites))];
 
+
             async.each(allSites, (site, next) => {
                 if (updatedSites.includes(site)) {
                     if (!activeSites.includes(site)) {
@@ -194,6 +195,8 @@ function initAndStart(zkClient) {
                 }
             });
         });
+
+        console.log('bootstrapList!!!', bootstrapList);
 
         // Start QueueProcessor for each site
         const siteNames = bootstrapList.map(i => i.site);

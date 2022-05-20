@@ -57,12 +57,14 @@ class CopyLocationTask extends BackbeatTask {
 
     _createCredentials(actionEntry, log) {
         const authConfig = this.sourceConfig.auth;
+        console.log('authConfig!!!', authConfig);
         const accountCredentials = getAccountCredentials(authConfig, log);
         if (accountCredentials) {
             return accountCredentials;
         }
         const vaultclient = this.vaultclientCache.getClient('source:s3');
         const actionAuth = actionEntry.getAttribute('auth');
+        console.log('ACTION AUTH!!!', actionAuth);
         return new RoleCredentials(
             vaultclient, 'replication', actionAuth.roleArn, log);
     }
@@ -87,6 +89,7 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     processQueueEntry(actionEntry, kafkaEntry, done) {
+        console.log('COPY LOCATION processQueueEntry!!!');
         const log = this.logger.newRequestLogger();
         actionEntry.addLoggedAttributes({
             bucketName: 'target.bucket',
@@ -115,6 +118,7 @@ class CopyLocationTask extends BackbeatTask {
                 return next(null, objMD);
             }),
             (objMD, next) => {
+                console.log('SOURCE objMD!!!', objMD);
                 const err = this._checkObjectState(actionEntry, objMD);
                 if (err) {
                     return next(err);
@@ -141,6 +145,7 @@ class CopyLocationTask extends BackbeatTask {
                 return this._getAndPutObject(actionEntry, objMD, log, next);
             },
         ], err => {
+            console.log('DATA COPY WORKED???', err);
             const retArgs = this._publishCopyLocationStatus(
                 err, actionEntry, kafkaEntry, log);
 
@@ -823,6 +828,8 @@ class CopyLocationTask extends BackbeatTask {
             topic: actionEntry.getResultsTopic(),
             message: actionEntry.toKafkaMessage(),
         });
+        console.log('TOPIC!!!!', actionEntry.getResultsTopic());
+        console.log('MESSAGE!!!', actionEntry.toKafkaMessage());
         this.replicationStatusProducer.sendToTopic(
             actionEntry.getResultsTopic(),
             [{ message: actionEntry.toKafkaMessage() }], deliveryErr => {

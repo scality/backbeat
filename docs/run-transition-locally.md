@@ -161,12 +161,9 @@ aws configure --profile account1
 ```
 
 ```
-aws s3api create-bucket --bucket bucket1 --endpoint-url http://127.0.0.1:8000 --profile account1
+aws s3api create-bucket --bucket bucket1 --create-bucket-configuration LocationConstraint=s3c-location --endpoint-url http://127.0.0.1:8000 --profile account1
 ```
 
-```
-aws s3api create-bucket --bucket bucket1 --endpoint-url http://127.0.0.1:8000 --profile account1
-```
 
 Create `transition.json`
 
@@ -303,7 +300,7 @@ aws configure --profile lifecycle-conductor
 },
 ```
 
-`extension.lifecycle.conductor`
+Add the following to the `extension.lifecycle.conductor`
 
 ```
 "bucketSource": "mongodb",
@@ -321,7 +318,82 @@ aws configure --profile lifecycle-conductor
 },
 ```
 
+Add the following to `extensions.replication.destination.bootstrapList`
+It will be used by the queue_processor to check the site.
+
+```
+{ "site": "aws-location", "type": "aws_s3" }
+```
+
+Update `extensions.replication.source.auth`
+TODO: We will soon support `"type": "assumeRole",`
+
+```json
+"auth": {
+    "type": "account",
+    "account": "account1",
+    "vault": {
+        "host": "127.0.0.1",
+        "port": 8500,
+        "adminPort": 8600
+    }
+}
+```
+
+Update `extension.gc.auth`
+TODO: We will soon support `"type": "assumeRole",`
+
+```json
+"auth": {
+    "type": "account",
+    "account": "account1",
+    "vault": {
+        "host": "127.0.0.1",
+        "port": 8500,
+        "adminPort": 8600
+    }
+}
+```
+
+### Update conf/authdata.json with account1 informations and keys.
+TODO: When we support `"type": "assumeRole",` for replication, this step
+will not be needed.
+
+Note: To retreive account1 information, use vaulclient:
+`bin/vaultclient get-account --account-name account1 --port 8600`
+
+```json
+{
+    "accounts": [{
+        "name": "account1",
+        "arn": "arn:aws:iam::924286670056:/account1/",
+        "canonicalID": "56a321265db286f6045e24cadae44a9f3874dd8deca559a16718f268031d8b18",
+        "displayName": "account1",
+        "keys": {
+            "access": "MC50MQ6FNYPAVCM88PNW",
+            "secret": "/lmgQTi5TqX1o2BMip42nReeecta15RvekzvBDlr"
+        }
+    }
+    ]
+}
+```
+
 ### Run lifecycle conductor
 
 `yarn run lifecycle_conductor`
 
+### Run lifecycle bucket processor
+
+`EXPIRE_ONE_DAY_EARLIER=true TRANSITION_ONE_DAY_EARLIER=true REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_bucket_processor`
+
+### Run lifecycle object transition processor
+
+`REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_object_transition_processor`
+
+### Run queue processor that includes the data mover consumer
+
+`REMOTE_MANAGEMENT_DISABLE=true yarn run queue_processor`
+
+### Run garbage collector
+
+`REMOTE_MANAGEMENT_DISABLE=true yarn run garbage_collector`

@@ -54,6 +54,7 @@ class LifecycleTask extends BackbeatTask {
             this._lifecycleDateTime
         );
         this._supportedRules = supportedLifecycleRules;
+        console.log('supportedLifecycleRules!!!!', supportedLifecycleRules);
     }
 
     setSupportedRules(supportedRules) {
@@ -543,6 +544,8 @@ class LifecycleTask extends BackbeatTask {
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, tags);
+            console.log('filteredRules!!!', JSON.stringify(filteredRules));
+            console.log('APPLICABLE RULES!!!', this._lifecycleUtils.getApplicableRules(filteredRules, object));
             // reduce filteredRules to only get earliest dates
             return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
         });
@@ -661,6 +664,7 @@ class LifecycleTask extends BackbeatTask {
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
             const eligible =
                 this._isEntityEligible(lcRules, obj, versioningStatus);
+            console.log('eligible!!!', eligible);
             if (!eligible) {
                 log.debug('entity is not eligible for lifecycle', {
                     bucket: bucketData.target.bucket,
@@ -818,6 +822,7 @@ class LifecycleTask extends BackbeatTask {
             fromLocation: objectMD.getDataStoreName(),
             contentLength: objectMD.getContentLength(),
             resultsTopic: this.objectTasksTopic,
+            accountId: params.accountId,
         });
         entry.addContext({
             origin: 'lifecycle',
@@ -825,7 +830,10 @@ class LifecycleTask extends BackbeatTask {
             reqId: log.getSerializedUids(),
         });
 
+        console.log('ENTRY SENT TO DATA MOVER!!!', entry);
+
         if (this._canUnconditionallyGarbageCollect(objectMD)) {
+            console.log('_canUnconditionallyGarbageCollect!!!');
             return cb(null, entry);
         }
         const locations = objectMD.getLocation();
@@ -1049,6 +1057,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _compareObject(bucketData, obj, rules, log, done) {
+        console.log('COMPARE!!!', rules);
         const params = {
             Bucket: bucketData.target.bucket,
             Key: obj.Key,
@@ -1087,6 +1096,7 @@ class LifecycleTask extends BackbeatTask {
             if (rules.Transition) {
                 this._applyTransitionRule({
                     owner: bucketData.target.owner,
+                    accountId: bucketData.target.accountId,
                     bucket: bucketData.target.bucket,
                     objectKey: obj.Key,
                     eTag: obj.ETag,
@@ -1167,6 +1177,7 @@ class LifecycleTask extends BackbeatTask {
         if (rules.Transition) {
             this._applyTransitionRule({
                 owner: bucketData.target.owner,
+                accountId: bucketData.target.accountId,
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
                 eTag: version.ETag,

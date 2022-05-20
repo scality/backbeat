@@ -279,8 +279,11 @@ class QueueProcessor extends EventEmitter {
         }
 
         this.taskScheduler = new TaskScheduler(
-            (ctx, done) => ctx.task.processQueueEntry(
-                ctx.entry, ctx.kafkaEntry, done),
+            (ctx, done) => {
+                console.log('TaskScheduler!!!!');
+                ctx.task.processQueueEntry(
+                ctx.entry, ctx.kafkaEntry, done);
+            },
             ctx => getTaskSchedulerQueueKey(ctx.entry),
             ctx => getTaskSchedulerDedupeKey(ctx.entry));
     }
@@ -963,7 +966,9 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processDataMoverEntry(kafkaEntry, done) {
+        console.log('processDataMoverEntry!!! kafkaEntry', kafkaEntry.value.toString());
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+        console.log('processDataMoverEntry!!! actionEntry', actionEntry);
         if (actionEntry.error) {
             this.logger.error('error processing source entry',
                               { error: actionEntry.error,
@@ -975,6 +980,7 @@ class QueueProcessor extends EventEmitter {
             return process.nextTick(done);
         }
         let task;
+        console.log('actionEntry.getActionType()!!!!', actionEntry.getActionType());
         if (actionEntry.getActionType() === 'copyLocation') {
             if (actionEntry.getAttribute('toLocation') === this.site) {
                 task = new CopyLocationTask(this);
@@ -986,6 +992,7 @@ class QueueProcessor extends EventEmitter {
             });
         }
         if (task) {
+            console.log('COPY TASK PUSHED!!!!');
             this.logger.debug('data mover entry is being pushed', {
                 entry: actionEntry.getLogInfo(),
             });

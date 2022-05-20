@@ -495,6 +495,7 @@ class LifecycleConductor {
             if (err) {
                 return done(err);
             }
+            console.log('checkResults!!!', checkResults);
             const doSkip = Object.keys(checkResults).some(
                 checkType => checkResults[checkType] !== undefined);
             if (doSkip) {

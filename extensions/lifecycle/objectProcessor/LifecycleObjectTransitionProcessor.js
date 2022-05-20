@@ -53,6 +53,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
     }
 
     getTask(actionEntry) {
+        console.log('actionEntry!!!', actionEntry);
         const actionType = actionEntry.getActionType();
 
         if (actionType !== 'copyLocation' ||

@@ -87,6 +87,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         //
         // TODO add a condition on metadata cookie and retry if needed
         const { bucket, key, version } = entry.getAttribute('target');
+        console.log('objMD.getSerialized()!!!', objMD.getSerialized());
         return backbeatClient.putMetadata({
             bucket,
             objectKey: key,

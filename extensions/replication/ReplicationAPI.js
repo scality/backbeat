@@ -34,6 +34,7 @@ class ReplicationAPI {
         const action = ActionQueueEntry.create('copyLocation');
         action
             .setAttribute('target', {
+                accountId: params.accountId,
                 owner: params.owner,
                 bucket: params.bucketName,
                 key: params.objectKey,
