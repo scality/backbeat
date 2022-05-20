@@ -818,6 +818,7 @@ class LifecycleTask extends BackbeatTask {
             fromLocation: objectMD.getDataStoreName(),
             contentLength: objectMD.getContentLength(),
             resultsTopic: this.objectTasksTopic,
+            accountId: params.accountId,
         });
         entry.addContext({
             origin: 'lifecycle',
@@ -1087,6 +1088,7 @@ class LifecycleTask extends BackbeatTask {
             if (rules.Transition) {
                 this._applyTransitionRule({
                     owner: bucketData.target.owner,
+                    accountId: bucketData.target.accountId,
                     bucket: bucketData.target.bucket,
                     objectKey: obj.Key,
                     eTag: obj.ETag,
@@ -1167,6 +1169,7 @@ class LifecycleTask extends BackbeatTask {
         if (rules.Transition) {
             this._applyTransitionRule({
                 owner: bucketData.target.owner,
+                accountId: bucketData.target.accountId,
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
                 eTag: version.ETag,

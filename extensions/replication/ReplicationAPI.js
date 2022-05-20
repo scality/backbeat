@@ -16,6 +16,7 @@ class ReplicationAPI {
      * @param {object} params - params object
      * @param {string} params.bucketName - bucket name
      * @param {string} params.objectKey - object key
+     * @param {string} params.accountId - object's bucket's account id
      * @param {string} [params.versionId] - encoded version ID
      * @param {string} [params.eTag] - ETag of object
      * @param {string} [params.lastModified] - object last modification date
@@ -34,6 +35,7 @@ class ReplicationAPI {
         const action = ActionQueueEntry.create('copyLocation');
         action
             .setAttribute('target', {
+                accountId: params.accountId,
                 owner: params.owner,
                 bucket: params.bucketName,
                 key: params.objectKey,
