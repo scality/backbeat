@@ -1,0 +1,57 @@
+[
+	{
+		"_id" : "Mtest1",
+		"value" : {
+			"owner-display-name" : "account1",
+			"owner-id" : "56a321265db286f6045e24cadae44a9f3874dd8deca559a16718f268031d8b18",
+			"content-length" : 256,
+			"content-md5" : "2ee73362c5a79809ccc81af773d5fee6",
+			"content-language" : "",
+			"x-amz-version-id" : "null",
+			"x-amz-server-version-id" : "",
+			"x-amz-storage-class" : "STANDARD",
+			"x-amz-server-side-encryption" : "",
+			"x-amz-server-side-encryption-aws-kms-key-id" : "",
+			"x-amz-server-side-encryption-customer-algorithm" : "",
+			"x-amz-website-redirect-location" : "",
+			"acl" : {
+				"Canned" : "private",
+				"FULL_CONTROL" : [ ],
+				"WRITE_ACP" : [ ],
+				"READ" : [ ],
+				"READ_ACP" : [ ]
+			},
+			"key" : "test1",
+			"location" : [
+				{
+					"key" : "bucket1/test1",
+					"size" : 256,
+					"start" : 0,
+					"dataStoreName" : "s3c-location",
+					"dataStoreType" : "aws_s3",
+					"dataStoreETag" : "1:2ee73362c5a79809ccc81af773d5fee6",
+					"dataStoreVersionId" : "3938333436393432303232363035393939393939524730303120203238302e323831362e313930"
+				}
+			],
+			"isDeleteMarker" : false,
+			"tags" : {
+
+			},
+			"replicationInfo" : {
+				"status" : "",
+				"backends" : [ ],
+				"content" : [ ],
+				"destination" : "",
+				"storageClass" : "",
+				"role" : "",
+				"storageType" : "",
+				"dataStoreVersionId" : "",
+				"isNFS" : null
+			},
+			"dataStoreName" : "s3c-location",
+			"originOp" : "s3:ObjectCreated:Put",
+			"last-modified" : "2022-05-20T14:46:17.491Z",
+			"md-model-version" : 5
+		}
+	}
+]
