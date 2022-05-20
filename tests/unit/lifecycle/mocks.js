@@ -53,6 +53,7 @@ class LifecycleObjectProcessorMock {
             gcProducer: this.gcProducer,
             logger: this.logger,
             getBackbeatClient: () => this.backbeatClient,
+            getBackbeatMetadataProxy: () => this.backbeatClient,
             getS3Client: () => this.s3Client,
         };
     }

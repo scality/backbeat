@@ -1,6 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const http = require('http');
 const { EventEmitter } = require('events');
 
 const errors = require('arsenal').errors;
@@ -8,6 +7,7 @@ const Logger = require('werelogs').Logger;
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
+const ClientManager = require('../../lib/clients/ClientManager');
 const GarbageCollectorTask = require('./tasks/GarbageCollectorTask');
 
 /**
@@ -59,15 +59,19 @@ class GarbageCollector extends EventEmitter {
         super();
 
         this._kafkaConfig = params.kafkaConfig;
-        this._s3Config = params.s3Config;
         this._gcConfig = params.gcConfig;
-        this._transport = params.transport || 'http';
         this._consumer = null;
         this._started = false;
         this._isActive = false;
 
-        this._httpAgent = new http.Agent({ keepAlive: true });
         this._logger = new Logger('Backbeat:GC');
+
+        this.clientManager = new ClientManager({
+            id: 'garbage collector',
+            authConfig: this._gcConfig.auth,
+            s3Config: params.s3Config,
+            transport: params.transport,
+        }, this._logger);
     }
 
     /**
@@ -101,6 +105,9 @@ class GarbageCollector extends EventEmitter {
             this._logger.info('garbage collector service successfully started');
             return this.emit('ready');
         });
+
+        this.clientManager.initSTSConfig();
+        this.clientManager.initCredentialsManager();
     }
 
     /**
@@ -129,11 +136,12 @@ class GarbageCollector extends EventEmitter {
 
     getStateVars() {
         return {
-            s3Config: this._s3Config,
             gcConfig: this._gcConfig,
-            transport: this._transport,
-            httpAgent: this._httpAgent,
             logger: this._logger,
+            getS3Client:
+                this.clientManager.getS3Client.bind(this.clientManager),
+            getBackbeatClient:
+                this.clientManager.getBackbeatClient.bind(this.clientManager),
         };
     }
 

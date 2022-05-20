@@ -26,7 +26,7 @@ describe('LifecycleDeleteObjectTask', () => {
         task = new LifecycleDeleteObjectTask(objectProcessor);
     });
 
-    it('should not return error for 404s', (done) => {
+    it('should not return error for 404s', done => {
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
             .setAttribute('target.bucket', 'testbucket')
@@ -40,7 +40,7 @@ describe('LifecycleDeleteObjectTask', () => {
         task.processActionEntry(entry, done);
     });
 
-    it('should return error non-404 errors', (done) => {
+    it('should return error non-404 errors', done => {
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
             .setAttribute('target.bucket', 'testbucket')
@@ -57,7 +57,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('successful request', (done) => {
+    it('successful request', done => {
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
             .setAttribute('target.bucket', 'testbucket')

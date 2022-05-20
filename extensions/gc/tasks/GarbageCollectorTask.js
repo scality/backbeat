@@ -1,8 +1,7 @@
-const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+const errors = require('arsenal').errors;
+
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const { getAccountCredentials } =
-          require('../../../lib/credentials/AccountCredentials');
 
 class GarbageCollectorTask extends BackbeatTask {
     /**
@@ -15,29 +14,27 @@ class GarbageCollectorTask extends BackbeatTask {
         super();
         const gcState = gc.getStateVars();
         Object.assign(this, gcState);
-
-        this._setup();
-    }
-
-    _setup() {
-        const accountCreds = getAccountCredentials(
-            this.gcConfig.auth, this.logger);
-        const s3 = this.s3Config;
-        const transport = this.transport;
-        this.logger.debug('creating backbeat client', { transport, s3 });
-        this._backbeatClient = new BackbeatClient({
-            endpoint: `${transport}://${s3.host}:${s3.port}`,
-            credentials: accountCreds,
-            sslEnabled: transport === 'https',
-            httpOptions: { agent: this.httpAgent, timeout: 0 },
-            maxRetries: 0,
-        });
     }
 
     _executeDeleteData(entry, log, done) {
         log.debug('action execution starts', entry.getLogInfo());
-        const locations = entry.getAttribute('target.locations');
-        const req = this._backbeatClient.batchDelete({
+        const {
+            locations,
+            owner: canonicalId,
+            accountId
+        } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
+
+        if (!backbeatClient) {
+            log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+
+        const req = backbeatClient.batchDelete({
             Locations: locations.map(location => ({
                 key: location.key,
                 dataStoreName: location.dataStoreName,

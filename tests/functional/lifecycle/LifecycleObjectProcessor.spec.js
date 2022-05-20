@@ -27,7 +27,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
                 zkConfig, kafkaConfig, lcConfig, s3Config);
 
             const s3Client = new S3ClientMock(failures);
-            lop._getS3Client = () => s3Client;
+            lop.clientManager.getS3Client = () => s3Client;
 
             lop.start(err => {
                 if (err) {

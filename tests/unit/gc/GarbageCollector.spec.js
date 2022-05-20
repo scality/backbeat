@@ -8,6 +8,9 @@ const GarbageCollectorTask =
       require('../../../extensions/gc/tasks/GarbageCollectorTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
+
+const ownerId = '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
+
 describe('garbage collector', function garbageCollector() {
     this.timeout(10000);
     let gc;
@@ -72,7 +75,8 @@ describe('garbage collector', function garbageCollector() {
             size: 10,
         }];
         const action = ActionQueueEntry.create('deleteData')
-              .setAttribute('target.locations', expectBatchDeleteLocations);
+              .setAttribute('target.locations', expectBatchDeleteLocations)
+              .setAttribute('target.owner', ownerId);
         gcTask.processActionEntry(action, done);
     });
     it('should send batch delete request with locations array with ' +
@@ -84,7 +88,8 @@ describe('garbage collector', function garbageCollector() {
             dataStoreVersionId: 'someversion',
         }];
         const action = ActionQueueEntry.create('deleteData')
-              .setAttribute('target.locations', expectBatchDeleteLocations);
+              .setAttribute('target.locations', expectBatchDeleteLocations)
+              .setAttribute('target.owner', ownerId);
         gcTask.processActionEntry(action, done);
     });
 });

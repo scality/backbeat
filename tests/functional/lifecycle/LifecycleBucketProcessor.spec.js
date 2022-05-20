@@ -46,8 +46,9 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
         const lbp = new LifecycleBucketProcessor(
             zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
 
-        lbp._getS3Client = () => s3Client;
-        lbp._getBackbeatClient = () => ({});
+        lbp.clientManager.getS3Client = () => s3Client;
+        lbp.clientManager.getBackbeatClient = () => ({});
+        lbp.clientManager.getBackbeatMetadataProxy = () => ({});
 
         const start = new Promise((resolve, reject) => {
             lbp.start(err => {

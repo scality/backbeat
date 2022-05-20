@@ -1,23 +1,14 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const http = require('http');
-const https = require('https');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
-const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
-const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
-const { authTypeAssumeRole } = require('../../../lib/constants');
+const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-
-// TODO: test inactive credential deletion
-const DELETE_INACTIVE_CREDENTIALS_INTERVAL = 1000 * 60 * 30; // 30m
-const MAX_INACTIVE_DURATION = 1000 * 60 * 60 * 2; // 2hr
 
 /**
  * @class LifecycleObjectProcessor
@@ -59,25 +50,16 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
         this._processConfig = this.getProcessConfig(this._lcConfig);
-        this._authConfig = this.getAuthConfig(this._lcConfig);
-        this._s3Config = s3Config;
-        this._transport = transport;
         this._consumer = null;
         this._gcProducer = null;
 
-        // global variables
-        if (transport === 'https') {
-            this.s3Agent = new https.Agent({ keepAlive: true });
-            this.stsAgent = new https.Agent({ keepAlive: true });
-        } else {
-            this.s3Agent = new http.Agent({ keepAlive: true });
-            this.stsAgent = new http.Agent({ keepAlive: true });
-        }
+        this.clientManager = new ClientManager({
+            id: 'lifecycle',
+            authConfig: this.getAuthConfig(this._lcConfig),
+            s3Config,
+            transport,
+        }, this._log);
 
-        this._stsConfig = null;
-        this.s3Clients = {};
-        this.backbeatClients = {};
-        this.credentialsManager = new CredentialsManager('lifecycle', this._log);
         this.retryWrapper = new BackbeatTask();
     }
 
@@ -123,8 +105,8 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @return {undefined}
      */
     start(done) {
-        this._initSTSConfig();
-        this._initCredentialsManager();
+        this.clientManager.initSTSConfig();
+        this.clientManager.initCredentialsManager();
         async.parallel([
             done => this._setupConsumer(done),
             done => {
@@ -132,112 +114,6 @@ class LifecycleObjectProcessor extends EventEmitter {
                 this._gcProducer.setupProducer(done);
             },
         ], done);
-    }
-
-    _initSTSConfig() {
-        if (this._authConfig.type === authTypeAssumeRole) {
-            const { sts } = this._authConfig;
-            const stsWithCreds = this.credentialsManager.resolveExternalFileSync(sts);
-            this._stsConfig = {
-                endpoint: `${this._transport}://${sts.host}:${sts.port}`,
-                credentials: {
-                    accessKeyId: stsWithCreds.accessKey,
-                    secretAccessKey: stsWithCreds.secretKey,
-                },
-                region: 'us-east-1',
-                signatureVersion: 'v4',
-                sslEnabled: this._transport === 'https',
-                httpOptions: { agent: this.stsAgent, timeout: 0 },
-                maxRetries: 0,
-            };
-        }
-    }
-
-    _initCredentialsManager() {
-        this.credentialsManager.on('deleteCredentials', clientId => {
-            delete this.s3Clients[clientId];
-            delete this.backbeatClients[clientId];
-        });
-
-        this._deleteInactiveCredentialsInterval = setInterval(() => {
-            this.credentialsManager.removeInactiveCredentials(MAX_INACTIVE_DURATION);
-        }, DELETE_INACTIVE_CREDENTIALS_INTERVAL);
-    }
-
-    /**
-     * Return an S3 client instance
-     * @param {String} canonicalId - The canonical ID of the bucket owner.
-     * @param {String} accountId - The account ID of the bucket owner .
-     * @return {AWS.S3} The S3 client instance to make requests with
-     */
-    _getS3Client(canonicalId, accountId) {
-        const credentials = this.credentialsManager.getCredentials({
-            id: canonicalId,
-            accountId,
-            stsConfig: this._stsConfig,
-            authConfig: this._authConfig,
-        });
-
-        if (credentials === null) {
-            return null;
-        }
-
-        const clientId = canonicalId;
-        const client = this.s3Clients[clientId];
-
-        if (client) {
-            return client;
-        }
-
-        this.s3Clients[clientId] = createS3Client({
-            transport: this._transport,
-            port: this._s3Config.port,
-            host: this._s3Config.host,
-            credentials,
-            agent: this.s3Agent,
-        });
-
-        return this.s3Clients[clientId];
-    }
-
-    /**
-     * Return an backbeat client instance
-     * @param {String} canonicalId - The canonical ID of the bucket owner.
-     * @param {String} accountId - The account ID of the bucket owner .
-     * @return {BackbeatClient} The S3 client instance to make requests with
-     */
-    _getBackbeatClient(canonicalId, accountId) {
-        const credentials = this.credentialsManager.getCredentials({
-            id: canonicalId,
-            accountId,
-            stsConfig: this._stsConfig,
-            authConfig: this._authConfig,
-        });
-
-        if (credentials === null) {
-            return null;
-        }
-
-        const clientId = canonicalId;
-        const client = this.backbeatClients[clientId];
-
-        if (client) {
-            return new BackbeatMetadataProxy(
-            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
-            .setBackbeatClient(client);
-        }
-
-        this.backbeatClients[clientId] = createBackbeatClient({
-            transport: this._transport,
-            port: this._s3Config.port,
-            host: this._s3Config.host,
-            credentials,
-            agent: this.s3Agent,
-        });
-
-        return new BackbeatMetadataProxy(
-            `${this._transport}://${this._s3Config.host}:${this._s3Config.port}`, this._authConfig)
-            .setBackbeatClient(this.backbeatClients[clientId]);
     }
 
     /**
@@ -319,9 +195,12 @@ class LifecycleObjectProcessor extends EventEmitter {
             s3Config: this._s3Config,
             lcConfig: this._lcConfig,
             processConfig: this._processConfig,
-            authConfig: this._authConfig,
-            getS3Client: this._getS3Client.bind(this),
-            getBackbeatClient: this._getBackbeatClient.bind(this),
+            getS3Client:
+                this.clientManager.getS3Client.bind(this.clientManager),
+            getBackbeatClient:
+                this.clientManager.getBackbeatClient.bind(this.clientManager),
+            getBackbeatMetadataProxy:
+                this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
             gcProducer: this._gcProducer,
             logger: this._log,
         };

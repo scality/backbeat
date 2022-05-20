@@ -1,4 +1,4 @@
-'LifecycleObjectExpirationProcessor'; // eslint-disable-line
+'use strict'; // eslint-disable-line
 
 const Logger = require('werelogs').Logger;
 

@@ -23,7 +23,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _getMetadata(entry, log, done) {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
+        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', {
                 canonicalId,
@@ -75,7 +75,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
 
     _putMetadata(entry, objMD, log, done) {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
+        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', {
                 canonicalId,
@@ -112,7 +112,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
-        const { bucket, key, version, eTag } = entry.getAttribute('target');
+        const { bucket, key, version, eTag, accountId, owner } = entry.getAttribute('target');
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
@@ -125,6 +125,8 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
               })
               .setAttribute('source', entry.getAttribute('source'))
               .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner)
               .setAttribute('target.locations', locations);
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
