@@ -1,18 +1,14 @@
 <!-- markdownlint-disable MD013 -->
 
-# OOB update locally on MacOS
+# S3 Lifecycle transition from Ring S3C to AWS S3 location
 
-## Kafka
+## Kafka and Zookeeper
 
-### Install kafka
-
-```
-brew install kafka && brew install zookeeper
-```
+### Install kafka and Zookeeper
 
 ### Start kafka and zookeeper servers
 
-```
+```sh
 mkdir ~/kafka && \
 cd ~/kafka && \
 curl https://archive.apache.org/dist/kafka/0.11.0.0/kafka_2.11-0.11.0.0.tgz | tar xvz && \
@@ -33,13 +29,13 @@ From: https://docs.mongodb.com/manual/tutorial/deploy-replica-set/
 Create the necessary data directories for each member by issuing a
 command similar to the following:
 
-```
+```sh
 mkdir -p /tmp/mongodb/rs0-0 /tmp/mongodb/rs0-1 /tmp/mongodb/rs0-2
 ```
 
 Start your mongod instances in their own shell windows by issuing the following commands:
 
-```
+```sh
 mongod --replSet rs0 --port 27018 --bind_ip localhost --dbpath /tmp/mongodb/rs0-0 --oplogSize 128
 mongod --replSet rs0 --port 27019 --bind_ip localhost --dbpath /tmp/mongodb/rs0-1 --oplogSize 128
 mongod --replSet rs0 --port 27020 --bind_ip localhost --dbpath /tmp/mongodb/rs0-2 --oplogSize 128
@@ -47,7 +43,7 @@ mongod --replSet rs0 --port 27020 --bind_ip localhost --dbpath /tmp/mongodb/rs0-
 
 Connect to one of your mongod:
 
-```
+```sh
 mongo --port 27018
 ```
 
@@ -67,23 +63,61 @@ rs.initiate( rsconf )
 
 (SKIP THIS STEP - Only use it to clean up your mongo) Clean up:
 
-```
+```sh
 rm -rf /tmp/mongodb/rs0-0/*  /tmp/mongodb/rs0-1/* /tmp/mongodb/rs0-2/*
 ```
 
 ## CloudServer
 
-/!\ IMPORTANT: locationConfig.json should be identical to the backbeat conf/locationConfig.json.
-Add Ring access key and secret key in locationConfig.json:
-https://github.com/scality/backbeat/blob/1657782020009d63be8f3df342917305dea7671b/conf/locationConfig.json
-
 Add the following item to the replicationEndpoints section in the `config.json`.
-This would be the location name we will transition our data to.
+It is the location name we will transition our data to.
 
 ```
 {
     "site": "aws-location",
     "type": "aws_s3"
+}
+```
+
+Update `locationConfig.json` with the following locations:
+
+```json
+{
+    "us-east-1": {
+        "details": {
+            "supportsVersioning": true
+        },
+        "isTransient": false,
+        "legacyAwsBehavior": false,
+        "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+        "type": "file"
+    },
+    "s3c-location": {
+        "type": "aws_s3",
+        "legacyAwsBehavior": true,
+        "objectId": "1b1d9226-a694-11eb-bc21-baec55d199cd",
+        "details": {
+            "awsEndpoint": "<RING_S3C_ENDPOINT>",
+            "bucketName": "<RING_S3C_VERSIONED_BUCKET>",
+            "bucketMatch": false,
+            "credentialsProfile": "<RING_S3C_PROFILE (from ~/.aws/credentials)>",
+            "serverSideEncryption": true,
+            "https": false,
+            "pathStyle": true
+        }
+    },
+    "aws-location": {
+        "type": "aws_s3",
+        "legacyAwsBehavior": true,
+        "objectId": "2b1d9226-a694-11eb-bc21-baec55d199cd",
+        "details": {
+            "awsEndpoint": "s3.amazonaws.com",
+            "bucketName": "<AWS_S3_VERSIONED_BUCKET>",
+            "bucketMatch": false,
+            "credentialsProfile": "<AWS_S3_PROFILE (from ~/.aws/credentials)>",
+            "serverSideEncryption": true
+        }
+    }
 }
 ```
 
@@ -93,7 +127,7 @@ REMOTE_MANAGEMENT_DISABLE=true S3VAULT=multiple yarn start_mongo
 
 ## Vault
 
-```
+```sh
 VAULT_DB_BACKEND="MONGODB" yarn start
 ```
 
@@ -148,26 +182,26 @@ We keep it wild for testing purposes.
 ### Create a customer account with a lifecycle transition bucket
 
 
-```
+```sh
 bin/vaultclient create-account --name account1 --email customer@account --port 8600
 ```
 
-```
+```sh
 bin/vaultclient generate-account-access-key --name account1 --port 8600
 ```
 
-```
+```sh
 aws configure --profile account1
 ```
 
-```
+```sh
 aws s3api create-bucket --bucket bucket1 --create-bucket-configuration LocationConstraint=s3c-location --endpoint-url http://127.0.0.1:8000 --profile account1
 ```
 
 
 Create `transition.json`
 
-```
+```json
 {
     "Rules": [
         {
@@ -183,7 +217,7 @@ Create `transition.json`
 }
 ```
 
-```
+```sh
 aws s3api put-bucket-lifecycle-configuration --endpoint-url http://127.0.0.1:8000 --profile account1 --bucket bucket1 --lifecycle-configuration file://transition.json
 ```
 
@@ -192,15 +226,15 @@ aws s3api put-bucket-lifecycle-configuration --endpoint-url http://127.0.0.1:800
 This management account will hold all the services accounts.
 Those services user will assume the customer accounts's role to gain permission access.
 
-```
+```sh
 bin/vaultclient create-account --name management --email dev@null --port 8600 --accountid 000000000000
 ```
 
-```
+```sh
 bin/vaultclient generate-account-access-key --name management --port 8600
 ```
 
-```
+```sh
 aws configure --profile management
 ```
 
@@ -213,15 +247,15 @@ When creating the service user, we can make sure that the lifecycle service user
 (i.e. `arn:aws:iam::000000000000:user/lifecycle`) defined in the `config.json` in the Vault section.
 Indeed, the lifecycle service user is the only user trusted to assume the customer account's role.
 
-```
+```sh
 aws iam create-user --user-name lifecycle --endpoint-url http://127.0.0.1:8600 --profile management
 ```
 
-```
+```sh
 aws iam create-access-key --user-name lifecycle --endpoint-url http://127.0.0.1:8600 --profile management
 ```
 
-```
+```sh
 aws configure --profile lifecycle
 ```
 
@@ -241,11 +275,11 @@ Create `assume.json` policy:
 
 ```
 
-```
+```sh
 aws iam create-policy --policy-name assume --policy-document file://assume.json --endpoint-url http://127.0.0.1:8600 --profile management
 ```
 
-```
+```sh
 aws iam attach-user-policy --policy-arn arn:aws:iam::000000000000:policy/assume --user-name lifecycle --endpoint-url http://127.0.0.1:8600 --profile management
 ```
 
@@ -264,7 +298,7 @@ aws configure --profile lifecycle-conductor
 
 `extensions.lifecycle.auth`
 
-```
+```json
 "auth": {
     "type": "assumeRole",
     "roleName": "scality-internal/scality-role1",
@@ -283,7 +317,7 @@ aws configure --profile lifecycle-conductor
 
 `extension.lifecycle.conductor.auth`
 
-```
+```json
 "auth": {
     "type": "assumeRole",
     "roleName": "scality-internal/backbeat-lifecycle-conductor",
@@ -302,7 +336,7 @@ aws configure --profile lifecycle-conductor
 
 Add the following to the `extension.lifecycle.conductor`
 
-```
+```json
 "bucketSource": "mongodb",
 "mongodb": {
     "replicaSetHosts":
@@ -321,7 +355,7 @@ Add the following to the `extension.lifecycle.conductor`
 Add the following to `extensions.replication.destination.bootstrapList`
 It will be used by the queue_processor to check the site.
 
-```
+```json
 { "site": "aws-location", "type": "aws_s3" }
 ```
 
@@ -341,18 +375,22 @@ TODO: We will soon support `"type": "assumeRole",`
 ```
 
 Update `extension.gc.auth`
-TODO: We will soon support `"type": "assumeRole",`
 
 ```json
 "auth": {
-    "type": "account",
-    "account": "account1",
+    "type": "assumeRole",
+    "roleName": "scality-internal/scality-role1",
+    "sts": {
+        "host": "127.0.0.1",
+        "port": 8800,
+        "accessKey": "<lifecycle profile access key>",
+        "secretKey": "<lifecycle profile secret key>"
+    },
     "vault": {
         "host": "127.0.0.1",
-        "port": 8500,
-        "adminPort": 8600
+        "port": 8600
     }
-}
+},
 ```
 
 ### Update conf/authdata.json with account1 informations and keys.
@@ -380,20 +418,48 @@ Note: To retreive account1 information, use vaulclient:
 
 ### Run lifecycle conductor
 
-`yarn run lifecycle_conductor`
+```sh
+yarn run lifecycle_conductor
+```
 
 ### Run lifecycle bucket processor
 
-`EXPIRE_ONE_DAY_EARLIER=true TRANSITION_ONE_DAY_EARLIER=true REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_bucket_processor`
+```sh
+EXPIRE_ONE_DAY_EARLIER=true TRANSITION_ONE_DAY_EARLIER=true REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_bucket_processor
+```
 
 ### Run lifecycle object transition processor
 
-`REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_object_transition_processor`
+```sh
+REMOTE_MANAGEMENT_DISABLE=true yarn run lifecycle_object_transition_processor
+```
 
 ### Run queue processor that includes the data mover consumer
 
-`REMOTE_MANAGEMENT_DISABLE=true yarn run queue_processor`
+```sh
+REMOTE_MANAGEMENT_DISABLE=true yarn run queue_processor
+```
 
 ### Run garbage collector
 
-`REMOTE_MANAGEMENT_DISABLE=true yarn run garbage_collector`
+```sh
+REMOTE_MANAGEMENT_DISABLE=true yarn run garbage_collector
+```
+
+## Put object for transition and check it worked
+
+```sh
+aws s3api put-object --bucket bucket1 --key test0 --body happyface.jpg --endpoint-url http://127.0.0.1:8000 --profile account1
+```
+
+### Check that the object "bucket1/test0" has been transitioned to its destination i.e. AWS S3
+
+```sh
+aws s3api head-object --bucket <AWS_S3_VERSIONED_BUCKET> --key bucket1/test0 --profile <AWS_S3_PROFILE>
+```
+
+### Check that the object "bucket1/test0" in the Ring S3C bucket has been garbage collected (deleted)
+
+```sh
+aws s3api list-object-versions --bucket <RING_S3C_VERSIONED_BUCKET> --endpoint-url http://10.100.5.232:8000 --profile <RING_S3C_PROFILE>
+```
