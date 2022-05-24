@@ -9,10 +9,11 @@ const bucketdPort = 9001;
 
 const bucketNumber = Number.parseInt(process.argv[2], 10);
 const accountsNumber = Number.parseInt(process.argv[3], 10);
+const extraAccountsFilename = process.argv[4];
 
 if (!Number.isSafeInteger(bucketNumber) ||
     !Number.isSafeInteger(accountsNumber)) {
-    logger.error(`usage: ${process.argv[1]} <bucketNumber> <accountsNumber>`);
+    logger.error(`usage: ${process.argv[1]} <bucketNumber> <accountsNumber> [file-with-extra-accounts]`);
     process.exit(1);
 }
 
@@ -71,11 +72,18 @@ const bucketdHandler = (req, res) => {
 
     log.info('listing request', { marker, maxKeys, isTruncated, index });
 
+    let contents = makeListing(marker, maxKeys).map(key => ({
+        key,
+        value: {},
+    }));
+
+    if (!isTruncated && extraAccountsFilename) {
+        const extraAccounts = require(`./${extraAccountsFilename}`);
+        contents = contents.concat(...extraAccounts);
+    }
+
     res.end(JSON.stringify({
-        Contents: makeListing(marker, maxKeys).map(key => ({
-            key,
-            value: {},
-        })),
+        Contents: contents,
         IsTruncated: isTruncated,
     }));
 };

@@ -7,4 +7,4 @@ RUN cd /app && yarn install
 
 COPY tests/utils /app
 
-CMD ["node", "/app/syntheticbucketd.js", "200000", "1000"]
+CMD ["node", "/app/syntheticbucketd.js", "36000000", "1000", "extraaccounts.json"]
