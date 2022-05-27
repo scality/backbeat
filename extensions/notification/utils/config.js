@@ -54,8 +54,11 @@ function validateEntryWithFilter(filterRules, entry) {
 function filterConfigsByEvent(bnConfigs, event) {
     return bnConfigs.filter(config => config.events.some(evt => {
         // support wildcard events
-        const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
-        return event.toLowerCase().startsWith(starts.toLowerCase());
+        if (evt.endsWith('*')) {
+            const starts = evt.replace('*', '');
+            return event.toLowerCase().startsWith(starts.toLowerCase());
+        }
+        return event.toLowerCase() === evt.toLowerCase();
     }));
 }
 
