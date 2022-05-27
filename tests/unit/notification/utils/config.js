@@ -127,6 +127,19 @@ const testConfigs = [
             ],
         },
     },
+    {
+        bucket: 'bucket8',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectRemoved:Delete'],
+                    queueArn: 'q8',
+                    filterRules: [],
+                    id: 'config8',
+                },
+            ],
+        },
+    },
 ];
 
 const tests = [
@@ -190,6 +203,15 @@ const tests = [
             eventType: 's3:ObjectCreated:Post',
             bucket: 'bucket1',
             key: 'test.png',
+        },
+        pass: false,
+    },
+    {
+        desc: 'fail if the event type does not match config',
+        entry: {
+            eventType: 's3:ObjectRemoved:DeleteMarkerCreated',
+            bucket: 'bucket8',
+            key: 'abcd.png',
         },
         pass: false,
     },

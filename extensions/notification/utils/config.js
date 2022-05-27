@@ -58,8 +58,11 @@ function filterConfigsByEvent(queueConfig, eventType) {
         // this returns true when at least one event is the same as eventType
         config.events.some(evt => {
             // support wildcard events
-            const starts = evt.endsWith('*') ? evt.replace('*', '') : evt;
-            return eventType.toLowerCase().startsWith(starts.toLowerCase());
+            if (evt.endsWith('*')) {
+                const starts = evt.replace('*', '');
+                return eventType.toLowerCase().startsWith(starts.toLowerCase());
+            }
+            return eventType.toLowerCase() === evt.toLowerCase();
         })
     );
 }
