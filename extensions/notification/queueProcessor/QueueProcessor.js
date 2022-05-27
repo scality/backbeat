@@ -204,7 +204,9 @@ class QueueProcessor extends EventEmitter {
                     const message
                         = messageUtil.transformToSpec(sourceEntry);
                     const msg = {
-                        key: this.destinationId,
+                        // for Kafka keyed partitioning, to map a
+                        // particular bucket and key to a partition
+                        key: `${bucket}/${key}`,
                         message,
                     };
                     const msgDesc = 'sending message to external destination';
