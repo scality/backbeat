@@ -96,12 +96,9 @@ describe('NotificationConfigManager ::', () => {
         const changeStreamEvent = {
             _id: 'resumeToken',
             operationType: 'delete',
-            fullDocument: {
+            documentKey: {
                 _id: 'example-bucket-1',
-                value: {
-                    notificationConfiguration,
-                }
-            }
+            },
         };
         manager._metastoreChangeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
@@ -121,6 +118,9 @@ describe('NotificationConfigManager ::', () => {
         const changeStreamEvent = {
             _id: 'resumeToken',
             operationType: 'replace',
+            documentKey: {
+                _id: 'example-bucket-1',
+            },
             fullDocument: {
                 _id: 'example-bucket-1',
                 value: {
@@ -139,7 +139,7 @@ describe('NotificationConfigManager ::', () => {
         manager._metastoreChangeStream.emit('change', changeStreamEvent);
         assert.strictEqual(manager._cachedConfigs.count(), 2);
         assert.deepEqual(manager._cachedConfigs.get('example-bucket-2'),
-            notificationConfigurationVariant);
+            notificationConfiguration);
     });
 
     it('Change stream should resume from cached resumeToken', async () => {
@@ -151,6 +151,9 @@ describe('NotificationConfigManager ::', () => {
         const changeStreamEvent = {
             _id: 'resumeToken',
             operationType: 'update',
+            documentKey: {
+                _id: 'example-bucket-1',
+            },
             fullDocument: {
                 _id: 'example-bucket-1',
                 value: {

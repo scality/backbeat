@@ -97,19 +97,19 @@ class NotificationConfigManager {
         // caching change stream resume token
         this._changeStreamResumeToken = change._id;
         // invalidating cached notification configs
-        const cachedConfig = this._cachedConfigs.get(change.fullDocument._id);
-        const bucketNotificationConfiguration = change.fullDocument.value.
-            notificationConfiguration;
+        const cachedConfig = this._cachedConfigs.get(change.documentKey._id);
+        const bucketNotificationConfiguration = change.fullDocument ? change.fullDocument.value.
+            notificationConfiguration : null;
         switch (change.operationType) {
             case 'delete':
                 // if no bucket config was cached, nothing is done
-                this._cachedConfigs.remove(change.fullDocument._id);
+                this._cachedConfigs.remove(change.documentKey._id);
                 break;
             case 'replace':
             case 'update':
                 if (cachedConfig) {
                     // add() replaces the value of an entry if it exists in cache
-                    this._cachedConfigs.add(change.fullDocument._id, bucketNotificationConfiguration);
+                    this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
                 }
                 break;
             default:
@@ -138,7 +138,7 @@ class NotificationConfigManager {
         if (!this._metastoreChangeStream.isClosed()) {
             await this._metastoreChangeStream.close();
         }
-        this._setMetastoreChangeStream(() => {});
+        this._setMetastoreChangeStream();
     }
 
     /**
@@ -170,6 +170,7 @@ class NotificationConfigManager {
                 $project: {
                     '_id': 1,
                     'operationType': 1,
+                    'documentKey._id': 1,
                     'fullDocument._id': 1,
                     'fullDocument.value.notificationConfiguration': 1
                 },
