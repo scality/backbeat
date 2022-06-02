@@ -142,4 +142,4 @@ jobs:
         # Constrain heap long-lived heap size to 50MB, so that pushing 200K messages
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
-        NODE_OPTIONS: '--max-old-space-size=60'
+        NODE_OPTIONS: '--max-old-space-size=70'
