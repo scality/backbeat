@@ -8,7 +8,7 @@ const events = require('events');
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
 const KafkaConnectWrapper =
-    require('../../../extensions/oplogPopulator/KafkaConnectWrapper');
+    require('../../../../lib/wrappers/KafkaConnectWrapper');
 
 describe('KafkaConnectWrapper', () => {
     let wrapper;
