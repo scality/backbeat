@@ -14,6 +14,7 @@ const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
+const { AccountIdCache } = require('../util/AccountIdCache');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -82,6 +83,17 @@ class LifecycleConductor {
         this._initialized = false;
         this._batchInProgress = false;
 
+        // this cache only needs to be the size of one listing.
+        // worst case scenario is 1 account per bucket:
+        // - max size is this._concurrency, rotated entirely at each listing
+        // best case scenario is only a few accounts for all buckets
+        // - the cache never reaches max size and only a few calls to vault are issued
+        // middle case scenario is:
+        // - the last entry of the last listing is reused for this listing, the others are pushed out
+        //   as necessary, because listings are ordered by canonical id
+        // - some entries are expired for each listing
+        this._accountIdCache = new AccountIdCache(this._concurrency);
+
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
 
@@ -113,7 +125,9 @@ class LifecycleConductor {
 
     processBuckets(cb) {
         const log = this.logger.newRequestLogger();
+        const start = new Date();
         let nBucketsQueued = 0;
+        let messageDeliveryReports = 0;
 
         const messageSendQueue = async.cargo((tasks, done) => {
             if (tasks.length === 0) {
@@ -122,28 +136,75 @@ class LifecycleConductor {
 
             nBucketsQueued += tasks.length;
 
-            const canonicalIds = new Set(tasks.map(t => t.canonicalId));
-            return this._getAccountIds([...canonicalIds], (err, accountIds) => {
-                if (err) {
-                    log.error('could not get account ids, skipping batch', { error: err });
-                    return done();
-                }
-                const messages = tasks.map(t => ({
-                    message: JSON.stringify({
-                        action: 'processObjects',
-                        target: {
-                            bucket: t.bucketName,
-                            owner: t.canonicalId,
-                            accountId: accountIds[t.canonicalId],
-                        },
-                        details: {},
-                    }),
-                }));
+            const unknownCanonicalIds = new Set(
+                tasks
+                    .map(t => t.canonicalId)
+                    .filter(c => !this._accountIdCache.isKnown(c))
+            );
 
-                log.info('bucket push progress', { bucketsInBatch: tasks.length, nBucketsQueued });
-                return this._producer.send(messages, done);
-            });
-        }, this._concurrency);
+            return async.eachLimit(
+                unknownCanonicalIds,
+                10,
+                (canonicalId, done) => {
+                    this._getAccountIds([canonicalId], (err, accountIds) => {
+                        if (err) {
+                            if (err.NoSuchEntity) {
+                                log.error('canonical id does not exist', { error: err, canonicalId });
+                                this._accountIdCache.miss(canonicalId);
+                            } else {
+                                log.error('could not get account id', { error: err, canonicalId });
+                            }
+
+                            // don't propagate the error, to avoid interrupting the whole cargo
+                            return done();
+                        }
+
+                        this._accountIdCache.set(canonicalId, accountIds[canonicalId]);
+
+                        return done();
+                    });
+                },
+                () => {
+                    // ignore error, it has been reported before and should not stop the whole cargo
+                    const messages = tasks
+                        .filter(t => {
+                            if (!this._accountIdCache.has(t.canonicalId)) {
+                                log.warn('skipping bucket, unknown canonical id', {
+                                    bucketName: t.bucketName,
+                                    canonicalId: t.canonicalId,
+                                });
+                                return false;
+                            }
+                            return true;
+                        })
+                        .map(t => ({
+                            message: JSON.stringify({
+                                action: 'processObjects',
+                                target: {
+                                    bucket: t.bucketName,
+                                    owner: t.canonicalId,
+                                    accountId: this._accountIdCache.get(t.canonicalId),
+                                },
+                                details: {},
+                            }),
+                        }));
+
+                    log.info('bucket push progress', {
+                        nBucketsQueued,
+                        bucketsInCargo: tasks.length,
+                        kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
+                        kafkaEnqueueRateHz: Math.round(nBucketsQueued * 1000 / (new Date() - start)),
+                    });
+
+                    this._accountIdCache.expireOldest();
+
+                    return this._producer.send(messages, (err, res) => {
+                        messageDeliveryReports += messages.length;
+                        done(err, res);
+                    });
+                }
+            );
+        });
 
         async.waterfall([
             next => this._controlBacklog(next),
@@ -168,16 +229,17 @@ class LifecycleConductor {
             }
 
             this._batchInProgress = false;
+            const unknownCanonicalIds = this._accountIdCache.getMisses();
 
             if (err) {
-                log.error('lifecycle batch failed', { error: err });
+                log.error('lifecycle batch failed', { error: err, unknownCanonicalIds });
                 if (cb) {
                     cb(err);
                 }
                 return;
             }
 
-            log.info('finished pushing lifecycle batch', { nBucketsQueued });
+            log.info('finished pushing lifecycle batch', { nBucketsQueued, unknownCanonicalIds });
             if (cb) {
                 cb();
             }
@@ -236,7 +298,7 @@ class LifecycleConductor {
                         nEnqueuedToDownstream: nEnqueued,
                         inFlight: queue.length(),
                         maxInFlight: this._maxInFlightBatchSize,
-                        enqueueRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                        bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
                     });
 
                     return setTimeout(next, 10000);
