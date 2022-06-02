@@ -123,7 +123,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
                         IsTruncated: false,
                     }));
                 },
-                1000);
+                2000);
         };
 
         beforeEach(done => {
@@ -187,6 +187,17 @@ describe('lifecycle conductor', function lifecycleConductor() {
                             return nextp(e);
                         });
                     }, 500),
+                    nextp => setTimeout(() => {
+                        lc.processBuckets(err => {
+                            // test explicitly for the non-backlog-metrics related error
+                            if (err && err.Throttling && err.description === 'Batch in progress') {
+                                return nextp();
+                            }
+
+                            const e = new Error('should have returned a `Throttling` error');
+                            return nextp(e);
+                        });
+                    }, 1000),
                 ], next),
                 next => lc.stop(next),
             ],
