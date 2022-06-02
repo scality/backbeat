@@ -10,10 +10,12 @@ werelogs.configure({ level: config.log.logLevel,
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
+const activeExtensions = Object.keys(config.extensions);
 
 const oplogPopulator = new OplogPopulator({
     config: oplogPopulatorConfig,
     mongoConfig,
+    activeExtensions,
     logger,
 });
 
@@ -23,13 +25,8 @@ const oplogPopulator = new OplogPopulator({
     } catch (error) {
         logger.error('Error when starting up the oplog populator', {
             method: 'OplogPopulatorTask.setup',
-            error,
+            error: error.description,
         });
-        process.emit('SIGTERM');
+        process.exit(0);
     }
 })();
-
-process.on('SIGTERM', () => {
-    logger.info('received SIGTERM, exiting');
-    process.exit(0);
-});
