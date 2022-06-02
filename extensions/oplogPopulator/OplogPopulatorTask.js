@@ -10,7 +10,8 @@ werelogs.configure({ level: config.log.logLevel,
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
-const activeExtensions = Object.keys(config.extensions);
+// Temporary as no extension uses the oplogPopulator for now
+const activeExtensions = [];
 
 const oplogPopulator = new OplogPopulator({
     config: oplogPopulatorConfig,
