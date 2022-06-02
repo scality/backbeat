@@ -159,8 +159,6 @@ class LifecycleConductor {
                     next);
             },
         ], err => {
-            this._batchInProgress = false;
-
             if (err && err.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
                 if (cb) {
@@ -168,6 +166,8 @@ class LifecycleConductor {
                 }
                 return;
             }
+
+            this._batchInProgress = false;
 
             if (err) {
                 log.error('lifecycle batch failed', { error: err });
