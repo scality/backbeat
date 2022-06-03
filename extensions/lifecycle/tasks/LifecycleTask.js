@@ -861,6 +861,21 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _applyTransitionRule(params, log) {
+        // ZENKO-4173
+        // IF params.site is cold location:
+        // PUSH a Kafka entry to "cold-archive-req-<params.site>" topic
+        // Entry could look like:
+        // NOTE: the message value of the entry should be review by the topic consumer's developer.
+        // {
+        //     "bucketName": "<BUCKET_NAME>",
+        //     "objectKey": "<KEY_NAME>",
+        //     "objectVersion": "<VERSION_ID>",
+        //     "accountId": "<ACCOUNT_ID>"
+        //     "size": "<SIZE>",
+        //     "requestId": "<req_id>"
+        // }
+
+        // ELSE
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, next),
