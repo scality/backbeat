@@ -9,7 +9,10 @@ const bucketdPort = 9001;
 
 const bucketNumber = Number.parseInt(process.argv[2], 10);
 const accountsNumber = Number.parseInt(process.argv[3], 10);
-const extraAccountsFilename = process.argv[4];
+const extraBucketsFilename = process.argv[4];
+
+let extraBuckets;
+let predefinedAccounts;
 
 if (!Number.isSafeInteger(bucketNumber) ||
     !Number.isSafeInteger(accountsNumber)) {
@@ -30,7 +33,10 @@ function generateAccountIds(accountsNumber) {
     const ret = [];
 
     for (let i = 0; i < accountsNumber; i++) {
-        ret.push((`${accountPadding}${i}`.slice(-20)));
+        const canonicalId = predefinedAccounts ?
+            predefinedAccounts[i % predefinedAccounts.length] :
+            `${accountPadding}${i}`.slice(-20);
+        ret.push(canonicalId);
     }
 
     ret.sort(() => Math.random() - 0.5);
@@ -77,9 +83,10 @@ const bucketdHandler = (req, res) => {
         value: {},
     }));
 
-    if (!isTruncated && extraAccountsFilename) {
-        const extraAccounts = require(`./${extraAccountsFilename}`);
-        contents = contents.concat(...extraAccounts);
+    // add any non-generated predefined buckets/accounts at the end
+    // of the listing
+    if (!isTruncated && extraBuckets) {
+        contents = contents.concat(...extraBuckets);
     }
 
     res.end(JSON.stringify({
@@ -87,6 +94,15 @@ const bucketdHandler = (req, res) => {
         IsTruncated: isTruncated,
     }));
 };
+
+if (extraBucketsFilename) {
+    extraBuckets = require(`./${extraBucketsFilename}`);
+
+    const canonicalIds = extraBuckets
+        .map(b => b.key.split('..|..')[0]);
+
+    predefinedAccounts = [... new Set(canonicalIds)];
+}
 
 http.createServer(bucketdHandler)
     .listen(bucketdPort, () => {
