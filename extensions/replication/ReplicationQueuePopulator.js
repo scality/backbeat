@@ -1,4 +1,4 @@
-const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const { isMasterKey } = require('../../lib/util/versioning');
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 
 const QueuePopulatorExtension =

@@ -2,7 +2,7 @@ const { zenkoIDHeader } = require('arsenal').constants;
 
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
-const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const { isMasterKey } = require('../../lib/util/versioning');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
