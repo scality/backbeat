@@ -117,6 +117,115 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
+    _handleRestoreOp(entry) {
+        if (entry.type !== 'put' ||
+            entry.key.startsWith(mpuBucketPrefix)) {
+            return;
+        }
+
+        // TODO: we might need some extra check.
+
+        const value = JSON.parse(entry.value);
+        // NOTE: once parsed, the entry value looks like:
+        // {
+        //     "owner-display-name": "account1",
+        //     "owner-id": "56a321265db286f6045e24cadae44a9f3874dd8deca559a16718f268031d8b18",
+        //     "cache-control": "",
+        //     "content-disposition": "",
+        //     "content-encoding": "",
+        //     "expires": "",
+        //     "content-length": 231,
+        //     "content-type": "",
+        //     "content-md5": "13bc3e1ff93133bc45aff53912404f74",
+        //     "content-language": "",
+        //     "creation-time": "2022-06-03T14:13:17.852Z",
+        //     "x-amz-version-id": "null",
+        //     "x-amz-server-version-id": "",
+        //     "x-amz-storage-class": "aws-location",
+        //     "x-amz-server-side-encryption": "",
+        //     "x-amz-server-side-encryption-aws-kms-key-id": "",
+        //     "x-amz-server-side-encryption-customer-algorithm": "",
+        //     "x-amz-website-redirect-location": "",
+        //     "acl": {
+        //         "Canned": "private",
+        //         "FULL_CONTROL": [],
+        //         "WRITE_ACP": [],
+        //         "READ": [],
+        //         "READ_ACP": []
+        //     },
+        //     "key": "key11",
+        //     "location": [
+        //         {
+        //         "key": "bucket1/key11",
+        //         "size": 231,
+        //         "start": 0,
+        //         "dataStoreName": "aws-location",
+        //         "dataStoreType": "aws_s3",
+        //         "dataStoreETag": "1:13bc3e1ff93133bc45aff53912404f74",
+        //         "dataStoreVersionId": "WrMzKu4YCYv6hDeLNtSDLoAlGRGaxpCT"
+        //         }
+        //     ],
+        //     "isDeleteMarker": false,
+        //     "tags": {},
+        //     "replicationInfo": {
+        //         "status": "",
+        //         "backends": [],
+        //         "content": [],
+        //         "destination": "",
+        //         "storageClass": "",
+        //         "role": "",
+        //         "storageType": "",
+        //         "dataStoreVersionId": "",
+        //         "isNFS": null
+        //     },
+        //     "dataStoreName": "aws-location",
+        //     "originOp": "s3:ObjectRestore",
+        //     "last-modified": "2022-06-03T14:13:17.852Z",
+        //     "md-model-version": 5,
+        //     "archive": {
+        //         "restoreRequestedAt": "2022-06-03T17:20:38.183Z",
+        //         "restoreRequestedDays": 10
+        //     }
+        // }
+
+        // TODO: We will need to add `objectMD.originOp = 's3:ObjectRestore';`
+        // in CloudServer object restore API
+        const operation = value.originOp;
+        if (operation !== 's3:ObjectRestore') {
+            return;
+        }
+
+        const locationName = value.dataStoreName;
+
+        // if object already restore nothing to do, S3 has already updated object MD
+        const isObjectAlreadyRestored = value.archive
+        && value.archive.restoreCompletedAt
+        && new Date(value.archive.restoreWillExpireAt) >= new Date(Date.now());
+
+        if (!value.archive || !value.archive.restoreRequestedAt ||
+        !value.archive.restoreRequestedDays || isObjectAlreadyRestored) {
+            return;
+        }
+
+        // TODO: (To be double checked by the entry consumer)
+        // We would need to provide the object's bucket's account id as part of the kafka entry.
+        // This account id would be used by Sorbet to assume the bucket's account role.
+        // The assumed credentials will be sent and used by TLP server to put object version
+        // to the specific S3 bucket.
+
+
+        // remove logReader to prevent circular stringify
+        const publishedEntry = Object.assign({}, entry);
+        delete publishedEntry.logReader;
+
+        this.log.trace('publishing bucket replication entry',
+                       { bucket: entry.bucket });
+
+        const topic = `cold-restore-req-${locationName}`;
+        this.publish(topic,
+                    `${entry.bucket}/${entry.key}`, JSON.stringify(publishedEntry));
+    }
+
     /**
      * Filter record log entries for those that are potentially relevant to
      * lifecycle.
@@ -127,6 +236,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (entry.type !== 'put') {
             return undefined;
         }
+
+        this._handleRestoreOp(entry);
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
