@@ -117,6 +117,64 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
+    // TODO: ZENKO-4175
+    _handleRestoreOp(entry) {
+        if (entry.type !== 'put' ||
+            entry.key.startsWith(mpuBucketPrefix)) {
+            return;
+        }
+
+        // TODO: we might need some extra check.
+
+        const value = JSON.parse(entry.value);
+
+        // TODO: We will need to add `objectMD.originOp = 's3:ObjectRestore';`
+        // in CloudServer object restore API
+        const operation = value.originOp;
+        if (operation !== 's3:ObjectRestore') {
+            return;
+        }
+
+        const locationName = value.dataStoreName;
+
+        // if object already restore nothing to do, S3 has already updated object MD
+        const isObjectAlreadyRestored = value.archive
+        && value.archive.restoreCompletedAt
+        && new Date(value.archive.restoreWillExpireAt) >= new Date(Date.now());
+
+        if (!value.archive || !value.archive.restoreRequestedAt ||
+        !value.archive.restoreRequestedDays || isObjectAlreadyRestored) {
+            return;
+        }
+
+        // TODO: (To be double checked by the entry consumer)
+        // We would need to provide the object's bucket's account id as part of the kafka entry.
+        // This account id would be used by Sorbet to assume the bucket's account role.
+        // The assumed credentials will be sent and used by TLP server to put object version
+        // to the specific S3 bucket.
+
+
+        // NOTE: the message value of the entry should be review by the topic consumer's developer.
+        // {
+        //     "bucketName": "<BUCKET_NAME>",
+        //     "objectKey": "<KEY_NAME>",
+        //     "objectVersion": "<VERSION_ID>",
+        //     "accountId": "<ACCOUNT_ID>"
+        //     "archiveInfo": {
+        //         "archiveId": "<ARCHIVE_ID>",
+        //         "archiveVersion": "<ARCHIVE_VERSION>"
+        //     }
+        //     "requestId": "<req_id>"
+        // }
+
+        this.log.trace('publishing bucket replication entry',
+                       { bucket: entry.bucket });
+
+        const topic = `cold-restore-req-${locationName}`;
+        this.publish(topic,
+                    `${entry.bucket}/${entry.key}`, JSON.stringify({}));
+    }
+
     /**
      * Filter record log entries for those that are potentially relevant to
      * lifecycle.
@@ -127,6 +185,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (entry.type !== 'put') {
             return undefined;
         }
+
+        this._handleRestoreOp(entry);
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
