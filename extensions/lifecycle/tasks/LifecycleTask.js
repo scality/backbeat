@@ -861,6 +861,44 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _applyTransitionRule(params, log) {
+        // ZENKO-4173
+        // IF params.site is cold location:
+        // PUSH a Kafka entry to "cold-archive-req-<params.site>" topic
+        // Entry could look like:
+        // NOTE: the content of the entry should be review by the topic consumer's developer.
+        // [{
+        //     "key": "<BUCKET_NAME>/<OBJECT_NAME>",
+        //     "message": {
+        //         {
+        //             "actionId": "3d32f4fe-4431-41db-a964-3f6a9a416a7c",
+        //             "action": "archive",
+        //             "source": {
+        //                 "accountId": "<ACCOUNT_ID>",
+        //                 "owner": "<OWNER>",
+        //                 "bucket": "<BUCKET_NAME>",
+        //                 "key": "<KEY_NAME>",
+        //                 "eTag": "\"13bc3e1ff93133bc45aff53912404f74\"",
+        //                 "lastModified": "2022-06-03T14:13:17.852Z",
+        //                 "contentLength": 231
+        //             },
+        //             "toLocation": "aws-location",
+        //             "metrics": {
+        //                 "origin": "lifecycle",
+        //                 "fromLocation": "s3c-location",
+        //                 "contentLength": 231
+        //             },
+        //             "resultsTopic": "backbeat-lifecycle-object-tasks", <- might be useful for consumer/Sorbet to know what topic
+        // to publish to update archive.archiveInfo & location for objectInfo when "write to tape" succeeded.
+        //             "contextInfo": {
+        //                 "origin": "lifecycle",
+        //                 "ruleType": "transition",
+        //                 "reqId": "<req_id>"
+        //             }
+        //         }
+        //     }
+        // }]
+
+        // ELSE
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, next),
