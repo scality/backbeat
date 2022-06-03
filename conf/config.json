@@ -281,12 +281,7 @@
         "oplogPopulator": {
             "topic": "backbeat-oplog",
             "kafkaConnectHost": "127.0.0.1",
-            "kafkaConnectPort": 8083,
-            "connectors": [
-                {
-                    "name": "mongo-source"
-                }
-            ]
+            "kafkaConnectPort": 8083
         }
     },
     "log": {

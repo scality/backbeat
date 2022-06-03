@@ -150,10 +150,13 @@ describe('NotificationConfigManager ::', () => {
     });
 
     describe('_handleChangeStreamChangeEvent ::', () => {
-        it('Should remove entry from cache', async () => {
+        it('Should remove entry from cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'delete',
+                documentKey: {
+                    _id: 'example-bucket-1',
+                },
                 fullDocument: {
                     _id: 'example-bucket-1',
                     value: {
@@ -173,10 +176,13 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 0);
         });
 
-        it('Should replace entry from cache', async () => {
+        it('Should replace entry from cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'replace',
+                documentKey: {
+                    _id: 'example-bucket-1',
+                },
                 fullDocument: {
                     _id: 'example-bucket-1',
                     value: {
@@ -208,10 +214,13 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 1);
         });
 
-        it('Should do nothing when config not in cache', async () => {
+        it('Should do nothing when config not in cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'delete',
+                documentKey: {
+                    _id: 'example-bucket-2',
+                },
                 fullDocument: {
                     _id: 'example-bucket-2',
                     value: {
@@ -232,10 +241,13 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 1);
         });
 
-        it('Should do nothing when operation is not supported', async () => {
+        it('Should do nothing when operation is not supported', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'insert',
+                documentKey: {
+                    _id: 'example-bucket-1',
+                },
                 fullDocument: {
                     _id: 'example-bucket-2',
                     value: {
@@ -306,11 +318,11 @@ describe('NotificationConfigManager ::', () => {
             const closeStub = sinon.stub();
             const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
             manager._metastoreChangeStream = {
-                removeEventListener: removeEventListenerStub,
+                removeListener: removeEventListenerStub,
                 isClosed: () => true,
                 close: closeStub,
             };
-            manager._handleChangeStreamErrorEvent(err => {
+            await manager._handleChangeStreamErrorEvent(err => {
                 assert.ifError(err);
                 assert(setMetastoreChangeStreamStub.calledOnce);
                 assert(closeStub.notCalled);
@@ -327,11 +339,11 @@ describe('NotificationConfigManager ::', () => {
             const closeStub = sinon.stub();
             const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
             manager._metastoreChangeStream = {
-                removeEventListener: removeEventListenerStub,
+                removeListener: removeEventListenerStub,
                 isClosed: () => false,
                 close: closeStub,
             };
-            manager._handleChangeStreamErrorEvent(err => {
+            await manager._handleChangeStreamErrorEvent(err => {
                 assert.ifError(err);
                 assert(setMetastoreChangeStreamStub.calledOnce);
                 assert(closeStub.called);
