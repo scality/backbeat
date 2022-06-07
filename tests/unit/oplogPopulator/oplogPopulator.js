@@ -3,15 +3,12 @@ const sinon = require('sinon');
 const errors = require('arsenal').errors;
 const werelogs = require('werelogs');
 const events = require('events');
-const MongoClient = require('mongodb').MongoClient;
-
+const { MongoClient } = require('mongodb');
 
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
 const OplogPopulator =
     require('../../../extensions/oplogPopulator/OplogPopulator');
-const KafkaConnectWrapper =
-    require('../../../lib/wrappers/KafkaConnectWrapper');
 const ChangeStream =
     require('../../../lib/wrappers/ChangeStream');
 
@@ -34,18 +31,6 @@ const mongoConfig = {
     }
 };
 
-const connectorConfig = {
-    'name': 'source-connector',
-    'database': 'metadata',
-    'connection.uri': 'mongodb://user:password@localhost:27017,localhost:27018,' +
-        'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0',
-    'topic.namespace.map': '{\"*\":\"oplog\"}',
-    'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-    'change.stream.full.document': 'updateLookup',
-    'pipeline': '[]',
-    'collection': '',
-};
-
 const activeExtensions = ['ingestion', 'replication', 'notification', 'lifecycle'];
 
 describe('OplogPopulator', () => {
@@ -65,7 +50,7 @@ describe('OplogPopulator', () => {
     });
 
     describe('constructor', () => {
-        it('should fail when params invalid', done => {
+        it('should fail when params invalid', () => {
             assert.throws(() => new OplogPopulator({}));
             assert.throws(() => new OplogPopulator({
                 config: oplogPopulatorConfig,
@@ -110,21 +95,14 @@ describe('OplogPopulator', () => {
                 logger,
             });
             assert(op instanceof OplogPopulator);
-            return done();
         });
 
-        it('should initialize kafka wrapper', done => {
-            assert(oplogPopulator._connectWrapper instanceof KafkaConnectWrapper);
-            return done();
-        });
-
-        it('should set mongo connection info', done => {
+        it('should set mongo connection info', () => {
             const mongoUrl = 'mongodb://user:password@localhost:27017,' +
                 'localhost:27018,localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
             assert.strictEqual(oplogPopulator._mongoUrl, mongoUrl);
             assert.strictEqual(oplogPopulator._replicaSet, 'rs0');
             assert.strictEqual(oplogPopulator._database, 'metadata');
-            return done();
         });
     });
 
@@ -214,35 +192,6 @@ describe('OplogPopulator', () => {
         });
     });
 
-    describe('getDefaultConnectorConfiguration', () => {
-        it('should return default configuration (relica set)', done => {
-            const config = oplogPopulator._getDefaultConnectorConfiguration(
-                'source-connector');
-            assert.deepEqual(config, connectorConfig);
-            return done();
-        });
-
-        it('should return default configuration (sharded)', done => {
-            // making config without replica set
-            const shardedMongoConfig = Object.assign({}, mongoConfig);
-            shardedMongoConfig.replicaSet = '';
-            const op = new OplogPopulator({
-                config: oplogPopulatorConfig,
-                mongoConfig: shardedMongoConfig,
-                activeExtensions,
-                logger,
-            });
-            // getting default config
-            const config = op._getDefaultConnectorConfiguration(
-                'source-connector');
-            // removing replica set from expected default config
-            const shardedConnectorConfig = Object.assign({}, connectorConfig);
-            shardedConnectorConfig['connection.uri'] = 'mongodb://user:password@localhost:27017,' +
-                'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
-            assert.deepEqual(config, shardedConnectorConfig);
-            return done();
-        });
-    });
 
     describe('_getBackbeatEnabledBuckets', () => {
         [
@@ -283,14 +232,6 @@ describe('OplogPopulator', () => {
                         'value.ingestion.status': 'enabled',
                     }
                 ],
-            },
-            {
-                extensions: ['gc'],
-                filter: [],
-            },
-            {
-                extensions: ['mongoProcessor'],
-                filter: [],
             },
             {
                 extensions: ['notification', 'replication', 'ingestion', 'lifecycle'],
@@ -388,44 +329,6 @@ describe('OplogPopulator', () => {
                 assert.strict(buckets, undefined);
             })
             .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
-    });
-
-    describe('_generateNewConnectorPipeline', () => {
-        it('should return new pipeline', done => {
-            const buckets = ['example-bucket-1', 'example-bucket-2'];
-            const pipeline = oplogPopulator._generateNewConnectorPipeline(buckets);
-            assert.strictEqual(pipeline, JSON.stringify([
-                {
-                    $match: {
-                        'ns.coll': {
-                            $in: buckets,
-                        }
-                    }
-                }
-            ]));
-            return done();
-        });
-    });
-
-    describe('_listenToBucket', () => {
-        it('Should update connector pipeline', done => {
-            const updateStub = sinon.stub(oplogPopulator, 'updateConnectorPipeline');
-            oplogPopulator._listenToBucket('example-bucket');
-            assert(oplogPopulator._bucketsForConnector.has('example-bucket'));
-            assert(updateStub.calledOnceWith('source-connector', ['example-bucket']));
-            return done();
-        });
-    });
-
-    describe('_stopListeningToBucket', () => {
-        it('Should update connector pipeline', done => {
-            const updateStub = sinon.stub(oplogPopulator, 'updateConnectorPipeline');
-            oplogPopulator._bucketsForConnector.add('example-bucket');
-            oplogPopulator._stopListeningToBucket('example-bucket');
-            assert.strictEqual(oplogPopulator._bucketsForConnector.has('example-bucket'), false);
-            assert(updateStub.calledOnceWith('source-connector', []));
-            return done();
         });
     });
 
@@ -594,21 +497,15 @@ describe('OplogPopulator', () => {
             },
         ].forEach(scenario => {
             const { exts, metadata, result } = scenario;
-            it(`Should validate bucket if at least one extension active (${exts})`, done => {
+            it(`Should validate bucket if at least one extension active (${exts})`, () => {
                 const valid = oplogPopulator._isBucketBackbeatEnabled(metadata);
                 assert.strictEqual(valid, result);
-                return done();
             });
         });
     });
 
-    describe.skip('_handleChangeStreamChangeEvent', () => {
-        // TODO: tests will be written in BB-164
-        // as function will change
-    });
-
     describe('_setMetastoreChangeStream ::', () =>  {
-        it('Should create and listen to the metastore change stream', done => {
+        it('Should create and listen to the metastore change stream', () => {
             const changeStreamPipeline = [
                 {
                     $project: {
@@ -625,206 +522,111 @@ describe('OplogPopulator', () => {
             oplogPopulator._setMetastoreChangeStream();
             assert(oplogPopulator._changeStreamWrapper instanceof ChangeStream);
             assert.deepEqual(oplogPopulator._changeStreamWrapper._pipeline, changeStreamPipeline);
-            return done();
         });
     });
 
-    describe.skip('updateConnectorConfig', () => {
-        // TODO: tests will be written in BB-164
-        // as function will change
-    });
-
-    describe('_configureConnector', () => {
-        it('should update a connector', async () => {
-            const getConnectorsStub = sinon.stub(oplogPopulator._connectWrapper, 'getConnectors')
-                .resolves(['source-connector']);
-            const updateConfStub = sinon.stub(oplogPopulator._connectWrapper, 'updateConnectorConfig')
-                .resolves(null);
-            const createConnectorStub = sinon.stub(oplogPopulator._connectWrapper, 'createConnector')
-                .resolves(null);
-            await oplogPopulator._configureConnector({
-                name: 'source-connector',
-                config: {},
-            })
-            .then(() => {
-                assert(getConnectorsStub.calledOnce);
-                assert(updateConfStub.calledOnceWith('source-connector', {}));
-                assert(createConnectorStub.notCalled);
-            })
-            .catch(err => assert.ifError(err));
+    describe('_handleChangeStreamChangeEvent', () => {
+        it('should stop listening to bucket if got deleted', () => {
+            const stopListening = sinon.stub();
+            oplogPopulator._allocator = {
+                stopListeningToBucket: stopListening.resolves(),
+                has: () => true,
+            };
+            const changeDocument = {
+                operationType: 'delete',
+                documentKey: {
+                    _id: 'example-bucket',
+                },
+            };
+            oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+            assert(stopListening.calledOnceWith('example-bucket'));
         });
 
-        it('should create a connector', async () => {
-            const getConnectorsStub = sinon.stub(oplogPopulator._connectWrapper, 'getConnectors')
-                .resolves([]);
-            const updateConfStub = sinon.stub(oplogPopulator._connectWrapper, 'updateConnectorConfig')
-                .resolves(null);
-            const createConnectorStub = sinon.stub(oplogPopulator._connectWrapper, 'createConnector')
-                .resolves(null);
-            await oplogPopulator._configureConnector({
-                name: 'source-connector',
-                config: {},
-            })
-            .then(() => {
-                assert(getConnectorsStub.calledOnce);
-                assert(updateConfStub.notCalled);
-                assert(createConnectorStub.calledWithMatch({
-                    name: 'source-connector',
-                    config: {},
-                }));
-            })
-            .catch(err => assert.ifError(err));
+        it('should do nothing if operation type not supported', () => {
+            const stopListening = sinon.stub().resolves();
+            const startListening = sinon.stub().resolves();
+            oplogPopulator._allocator = {
+                stopListeningToBucket: stopListening,
+                listenToBucket: startListening,
+                has: () => true,
+            };
+            const changeDocument = {
+                operationType: 'drop',
+                documentKey: {
+                    _id: 'example-bucket',
+                },
+            };
+            oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+            assert(stopListening.notCalled);
+            assert(startListening.notCalled);
         });
 
-        it('should throw error if it fails to get connectors', async () => {
-            const getConnectorsStub = sinon.stub(oplogPopulator._connectWrapper, 'getConnectors')
-                .rejects(errors.InternalError);
-            const updateConfStub = sinon.stub(oplogPopulator._connectWrapper, 'updateConnectorConfig')
-                .resolves(null);
-            const createConnectorStub = sinon.stub(oplogPopulator._connectWrapper, 'createConnector')
-                .resolves(null);
-            await oplogPopulator._configureConnector({
-                name: 'source-connector',
-                config: {},
-            })
-            .then(() => {
-                assert(getConnectorsStub.calledOnce);
-                assert(updateConfStub.notCalled);
-                assert(createConnectorStub.notCalled);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
+        ['replace', 'insert', 'update'].forEach(opType => {
+            it(`should stop listening if bucket becomes invalid (${opType})`, () => {
+                const stopListening = sinon.stub().resolves();
+                const startListening = sinon.stub().resolves();
+                oplogPopulator._allocator = {
+                    stopListeningToBucket: stopListening,
+                    listenToBucket: startListening,
+                    has: () => true,
+                };
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
+                    .returns(false);
+                const changeDocument = {
+                    operationType: opType,
+                    documentKey: {
+                        _id: 'example-bucket',
+                    },
+                    fullDocument: {},
+                };
+                oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+                assert(stopListening.calledOnceWith('example-bucket'));
+                assert(startListening.notCalled);
+            });
 
-        it('should throw error if it fails to update connector', async () => {
-            const getConnectorsStub = sinon.stub(oplogPopulator._connectWrapper, 'getConnectors')
-                .resolves(['source-connector']);
-            const updateConfStub = sinon.stub(oplogPopulator._connectWrapper, 'updateConnectorConfig')
-                .rejects(errors.InternalError);
-            const createConnectorStub = sinon.stub(oplogPopulator._connectWrapper, 'createConnector')
-                .resolves(null);
-            await oplogPopulator._configureConnector({
-                name: 'source-connector',
-                config: {},
-            })
-            .then(() => {
-                assert(getConnectorsStub.calledOnce);
-                assert(updateConfStub.calledOnce);
-                assert(createConnectorStub.notCalled);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
+            it(`should start listening to bucket if it becomes valid ((${opType})`, () => {
+                const stopListening = sinon.stub().resolves();
+                const startListening = sinon.stub().resolves();
+                oplogPopulator._allocator = {
+                    stopListeningToBucket: stopListening,
+                    listenToBucket: startListening,
+                    has: () => false,
+                };
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
+                    .returns(true);
+                const changeDocument = {
+                    operationType: opType,
+                    documentKey: {
+                        _id: 'example-bucket',
+                    },
+                    fullDocument: {},
+                };
+                oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+                assert(startListening.calledOnceWith('example-bucket'));
+                assert(stopListening.notCalled);
+            });
 
-        it('should throw error if it fails to create connector', async () => {
-            const getConnectorsStub = sinon.stub(oplogPopulator._connectWrapper, 'getConnectors')
-                .resolves([]);
-            const updateConfStub = sinon.stub(oplogPopulator._connectWrapper, 'updateConnectorConfig')
-                .resolves(null);
-            const createConnectorStub = sinon.stub(oplogPopulator._connectWrapper, 'createConnector')
-                .rejects(errors.InternalError);
-            await oplogPopulator._configureConnector({
-                name: 'source-connector',
-                config: {},
-            })
-            .then(() => {
-                assert(getConnectorsStub.calledOnce);
-                assert(updateConfStub.notCalled);
-                assert(createConnectorStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
-    });
-
-    describe('setup', () => {
-        it('should setup the OplogPopulator', async () => {
-            const setupMongoStub = sinon.stub(oplogPopulator, '_setupMongoClient')
-                .resolves();
-            const setupMetastore = sinon.stub(oplogPopulator, '_setMetastoreChangeStream')
-                .resolves();
-            const getbucketStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets')
-                .resolves([]);
-            const getDefaultConfigStub = sinon.stub(oplogPopulator, '_getDefaultConnectorConfiguration')
-                .returns(connectorConfig);
-            const generatePipelineStub = sinon.stub(oplogPopulator, '_generateNewConnectorPipeline')
-                .returns('[]');
-            const configureConnectorsStub = sinon.stub(oplogPopulator, '_configureConnector')
-                .resolves();
-            await oplogPopulator.setup()
-            .then(() => {
-                assert(setupMongoStub.calledOnce);
-                assert(getbucketStub.calledOnce);
-                assert(getDefaultConfigStub.calledOnceWithMatch('source-connector'));
-                assert(generatePipelineStub.calledOnceWithMatch([]));
-                assert(configureConnectorsStub.calledOnceWithMatch({
-                    name: 'source-connector',
-                    config: connectorConfig,
-                }));
-                assert(setupMetastore.calledOnce);
-            })
-            .catch(err => assert.ifError(err));
-        });
-
-        it('should fail if it can\'t connect to mongo', async () => {
-            const setupMongoStub = sinon.stub(oplogPopulator, '_setupMongoClient')
-                .rejects(errors.InternalError);
-            await oplogPopulator.setup()
-            .then(() => {
-                assert(setupMongoStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
-
-        it('should fail if it can\'t establish change stream', async () => {
-            const setupMongoStub = sinon.stub(oplogPopulator, '_setupMongoClient')
-                .resolves();
-            const setupMetastore = sinon.stub(oplogPopulator, '_setMetastoreChangeStream')
-                .rejects(errors.InternalError);
-            await oplogPopulator.setup()
-            .then(() => {
-                assert(setupMongoStub.calledOnce);
-                assert(setupMetastore.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
-
-        it('should fail if it can\'t get backbeat enabled buckets', async () => {
-            const setupMongoStub = sinon.stub(oplogPopulator, '_setupMongoClient')
-                .resolves();
-            const setupMetastore = sinon.stub(oplogPopulator, '_setMetastoreChangeStream')
-                .resolves();
-            const getbucketStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets')
-                .rejects(errors.InternalError);
-            await oplogPopulator.setup()
-            .then(() => {
-                assert(setupMongoStub.calledOnce);
-                assert(setupMetastore.calledOnce);
-                assert(getbucketStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
-        });
-
-        it('should fail if connector configuration fails', async () => {
-            const setupMongoStub = sinon.stub(oplogPopulator, '_setupMongoClient')
-                .resolves();
-            const setupMetastore = sinon.stub(oplogPopulator, '_setMetastoreChangeStream')
-                .resolves();
-            const getbucketStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets')
-                .resolves([]);
-            const getDefaultConfigStub = sinon.stub(oplogPopulator, '_getDefaultConnectorConfiguration')
-                .returns(connectorConfig);
-            const generatePipelineStub = sinon.stub(oplogPopulator, '_generateNewConnectorPipeline')
-                .returns('[]');
-            const configureConnectorsStub = sinon.stub(oplogPopulator, '_configureConnector')
-                .rejects(errors.InternalError);
-            await oplogPopulator.setup()
-            .then(() => {
-                assert(setupMongoStub.calledOnce);
-                assert(setupMetastore.calledOnce);
-                assert(getbucketStub.calledOnce);
-                assert(getDefaultConfigStub.calledOnceWithMatch(oplogPopulatorConfig.connectors[0]));
-                assert(generatePipelineStub.calledOnceWithMatch([]));
-                assert(configureConnectorsStub.calledOnce);
-            })
-            .catch(err => assert.deepEqual(err, errors.InternalError));
+            it(`should do nothing if bucket invalid and not listening to bucket ((${opType})`, () => {
+                const stopListening = sinon.stub().resolves();
+                const startListening = sinon.stub().resolves();
+                oplogPopulator._allocator = {
+                    stopListeningToBucket: stopListening,
+                    listenToBucket: startListening,
+                    has: () => false,
+                };
+                sinon.stub(oplogPopulator, '_isBucketBackbeatEnabled')
+                    .returns(false);
+                const changeDocument = {
+                    operationType: opType,
+                    documentKey: {
+                        _id: 'example-bucket',
+                    },
+                    fullDocument: {},
+                };
+                oplogPopulator._handleChangeStreamChangeEvent(changeDocument);
+                assert(startListening.notCalled);
+                assert(stopListening.notCalled);
+            });
         });
     });
 });
