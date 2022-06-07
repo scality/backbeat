@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 const config = require('../../lib/Config');
 const OplogPopulator = require('./OplogPopulator');
 
-const logger = new werelogs.Logger('Backbeat:OplogPopulator:task');
+const logger = new werelogs.Logger('Backbeat:OplogPopulator');
 werelogs.configure({ level: config.log.logLevel,
     dump: config.log.dumpLevel });
 
@@ -26,7 +26,7 @@ const oplogPopulator = new OplogPopulator({
     } catch (error) {
         logger.error('Error when starting up the oplog populator', {
             method: 'OplogPopulatorTask.setup',
-            error: error.description,
+            error: error.description || error.message,
         });
         process.exit(0);
     }
