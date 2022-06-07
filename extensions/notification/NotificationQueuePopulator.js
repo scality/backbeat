@@ -84,7 +84,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     eventTime: message.dateTime,
                 });
                 this.publish(this.notificationConfig.topic,
-                    bucket,
+                    `${bucket}/${key}`,
                     JSON.stringify(message));
             }
             return undefined;
