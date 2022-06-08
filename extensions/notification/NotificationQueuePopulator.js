@@ -73,21 +73,40 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 key,
                 eventType,
             });
-            if (configUtil.validateEntry(config, ent)) {
-                const message
-                    = messageUtil.addLogAttributes(value, ent);
-                this.log.info('publishing message', {
-                    method: 'NotificationQueuePopulator._processObjectEntry',
-                    bucket,
-                    key: message.key,
-                    eventType,
-                    eventTime: message.dateTime,
-                });
-                this.publish(this.notificationConfig.topic,
-                    `${bucket}/${key}`,
-                    JSON.stringify(message));
-            }
-            return undefined;
+            // validate and push kafka message foreach destination topic
+            this.notificationConfig.destinations.forEach(destination => {
+                // get destination specific notification config
+                const destBnConf = config.queueConfig.find(
+                    c => c.queueArn.split(':').pop()
+                        === destination.resource);
+                if (!destBnConf) {
+                    // skip, if there is no config for the current
+                    // destination resource
+                    return undefined;
+                }
+                // pass only destination resource specific config to
+                // validate entry
+                const bnConfig = {
+                    queueConfig: [destBnConf],
+                };
+                if (configUtil.validateEntry(bnConfig, ent)) {
+                    const message
+                        = messageUtil.addLogAttributes(value, ent);
+                    this.log.info('publishing message', {
+                        method: 'NotificationQueuePopulator._processObjectEntry',
+                        bucket,
+                        key: message.key,
+                        eventType,
+                        eventTime: message.dateTime,
+                    });
+                    const internalTopic = destination.internalTopic ||
+                        this.notificationConfig.topic;
+                    this.publish(internalTopic,
+                        `${bucket}/${key}`,
+                        JSON.stringify(message));
+                }
+                return undefined;
+            });
         }
         // skip if there is no bucket notification configuration
         return undefined;
