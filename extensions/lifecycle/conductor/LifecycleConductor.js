@@ -9,6 +9,7 @@ const Logger = require('werelogs').Logger;
 const BucketClient = require('bucketclient').RESTClient;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
+const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const { authTypeAssumeRole } = require('../../../lib/constants');
@@ -290,6 +291,7 @@ class LifecycleConductor {
         let marker = null;
         let nEnqueued = 0;
         const start = new Date();
+        const retryWrapper = new BackbeatTask();
 
         async.doWhilst(
             next => {
@@ -304,32 +306,39 @@ class LifecycleConductor {
                     return setTimeout(next, 10000);
                 }
 
-                return this._bucketClient.listObject(
-                    constants.usersBucket,
-                    log.getSerializedUids(),
-                    { marker, prefix: '', maxKeys: this._concurrency },
-                    (err, resp) => {
-                        if (err) {
-                            return next(err);
-                        }
+                return retryWrapper.retry({
+                    actionDesc: 'list accounts+buckets',
+                    logFields: { marker },
+                    actionFunc: done =>
+                        this._bucketClient.listObject(
+                            constants.usersBucket,
+                            log.getSerializedUids(),
+                            { marker, prefix: '', maxKeys: this._concurrency },
+                            (err, resp) => {
+                                if (err) {
+                                    return done(err);
+                                }
 
-                        const { error, result } = safeJsonParse(resp);
-                        if (error) {
-                            return next(error);
-                        }
+                                const { error, result } = safeJsonParse(resp);
+                                if (error) {
+                                    return done(error);
+                                }
 
-                        isTruncated = result.IsTruncated;
-                        nEnqueued += result.Contents.length;
+                                isTruncated = result.IsTruncated;
+                                nEnqueued += result.Contents.length;
 
-                        result.Contents.forEach(o => {
-                            marker = o.key;
-                            const [canonicalId, bucketName] = marker.split(constants.splitter);
-                            queue.push({ canonicalId, bucketName });
-                        });
+                                result.Contents.forEach(o => {
+                                    marker = o.key;
+                                    const [canonicalId, bucketName] = marker.split(constants.splitter);
+                                    queue.push({ canonicalId, bucketName });
+                                });
 
-                        return next();
-                    }
-                );
+                                return done();
+                            }
+                        ),
+                    shouldRetryFunc: () => true,
+                    log,
+                }, next);
             },
             () => isTruncated,
             err => cb(err, nEnqueued));
