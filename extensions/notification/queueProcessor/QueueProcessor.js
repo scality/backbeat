@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
+const assert = require('assert');
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
@@ -28,20 +29,21 @@ class QueueProcessor extends EventEmitter {
      *   consumer group ID
      * @param {String} notifConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
-     * @param {Object} destinationConfig - destination configuration object
      * @param {String} destinationConfig.type - destination type
      * @param {String} destinationConfig.host - destination host
      * @param {String} destinationConfig.auth - destination auth configuration
      * @param {String} destinationId - resource name/id of destination
      */
-    constructor(mongoConfig, kafkaConfig, notifConfig, destinationConfig,
-        destinationId) {
+    constructor(mongoConfig, kafkaConfig, notifConfig, destinationId) {
         super();
         this.mongoConfig = mongoConfig;
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
-        this.destinationConfig = destinationConfig;
         this.destinationId = destinationId;
+        this.destinationConfig
+            = notifConfig.destinations.find(dest => dest.resource === destinationId);
+        assert(this.destinationConfig, `Invalid destination argument "${destinationId}".` +
+        ' Destination could not be found in destinations defined');
         this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;
@@ -107,12 +109,14 @@ class QueueProcessor extends EventEmitter {
                 const { groupId, concurrency }
                     = this.notifConfig.queueProcessor;
                 const consumerGroupId = `${groupId}-${this.destinationId}`;
+                const internalTopic = this.destinationConfig.internalTopic ||
+                    this.notifConfig.topic;
                 this._consumer = new BackbeatConsumer({
                     kafka: {
                         hosts: this.kafkaConfig.hosts,
                         site: this.kafkaConfig.site,
                     },
-                    topic: this.notifConfig.topic,
+                    topic: internalTopic,
                     groupId: consumerGroupId,
                     concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
