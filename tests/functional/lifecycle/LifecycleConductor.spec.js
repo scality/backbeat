@@ -205,6 +205,82 @@ describe('lifecycle conductor', function lifecycleConductor() {
         });
     });
 
+    describe('bucketd listing', () => {
+        const bucketdPort = 14344;
+        let bucketd;
+        let called = false;
+
+        const bucketdHandler = (_, res) => {
+            setTimeout(
+                () => {
+                    if (!called) {
+                        called = true;
+                        res.statusCode = 500; // eslint-disable-line no-param-reassign
+                        return res.end();
+                    }
+                    return res.end(JSON.stringify({
+                        Contents: [],
+                        IsTruncated: false,
+                    }));
+                },
+                2000);
+        };
+
+        beforeEach(done => {
+            bucketd = http.createServer(bucketdHandler);
+            bucketd.listen(bucketdPort, done);
+        });
+
+        afterEach(done => {
+            bucketd.close(done);
+        });
+
+        it('should retry on bucketd errors', done => {
+            const lcConfig = {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    cronRule: '*/5 */5 */5 */5 */5 */5',
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: 'localhost',
+                        port: bucketdPort,
+                    },
+                    backlogControl: {
+                        enabled: true,
+                    },
+                },
+                bucketProcessor: {
+                    groupId: 'a',
+                },
+                objectProcessor: {
+                    groupId: 'b',
+                },
+            };
+
+            // make topic unique so that different tests' bootstrap messages don't interfere
+            lcConfig.bucketTasksTopic += Math.random();
+
+            const localKafkaConfig = {
+                ...kafkaConfig,
+                backlogMetrics: {
+                    zkPath: '/backbeat/run/kafka-backlog-metrics',
+                    intervalS: 60,
+                },
+            };
+
+            const lc = new LifecycleConductor(zkConfig.zookeeper,
+                localKafkaConfig, lcConfig, repConfig);
+
+            async.series([
+                next => lc.start(next),
+                next => lc.processBuckets(next),
+                next => lc.stop(next),
+            ],
+            done);
+        });
+    });
+
     function describeConductorSpec(opts) {
         const {
             description,
