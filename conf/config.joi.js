@@ -56,7 +56,6 @@ const joiSchema = {
     },
     certFilePaths: certFilePathsJoi,
     internalCertFilePaths: certFilePathsJoi,
-    bucketNotificationDestinations: joi.array().items(joi.object()).default([]),
 };
 
 module.exports = joiSchema;
