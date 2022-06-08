@@ -25,7 +25,27 @@
             "queueProcessor": {
                 "groupId": "backbeat-bucket-notification-group",
                 "concurrency": 10
-            }
+            },
+            "destinations": [
+                {
+                    "resource": "destination1",
+                    "type": "kafka",
+                    "host": "localhost:9092",
+                    "port": 9092,
+                    "topic": "destination-topic-1",
+                    "internalTopic": "internal-notification-topic-destination1",
+                    "auth": {}
+                },
+                {
+                    "resource": "destination2",
+                    "type": "kafka",
+                    "host": "localhost:9092",
+                    "port": 9092,
+                    "topic": "destination-topic-2",
+                    "internalTopic": "internal-notification-topic-destination2",
+                    "auth": {}
+                }
+            ]
         }
     },
     "log": {
@@ -74,16 +94,6 @@
             }
         ],
         "sentinelPassword": ""
-    },
-    "bucketNotificationDestinations": [
-        {
-            "resource": "destination1",
-            "type": "kafka",
-            "host": "localhost:9092",
-            "port": 9092,
-            "topic": "destination-topic",
-            "auth": {}
-        }
-    ]
+    }
 }
 

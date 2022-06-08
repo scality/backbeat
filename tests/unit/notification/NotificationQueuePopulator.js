@@ -16,8 +16,13 @@ const logger = new werelogs.Logger('NotificationConfigManager:test');
 const notificationConfiguration = {
     queueConfig: [
         {
-            events: ['s3:ObjectCreated:*'],
+            events: ['s3:ObjectCreated:Put'],
             queueArn: 'arn:scality:bucketnotif:::destination1',
+            filterRules: [],
+        },
+        {
+            events: ['s3:ObjectRemoved:Delete'],
+            queueArn: 'arn:scality:bucketnotif:::destination2',
             filterRules: [],
         },
     ],
@@ -56,7 +61,7 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('_processObjectEntry ::', () => {
-        it('Should publish object entry in notification topic', async () => {
+        it('Should publish object entry in notification topic of destination1', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
                 'example-bucket',
@@ -70,8 +75,25 @@ describe('NotificationQueuePopulator ::', () => {
                     'md-model-version': '1',
                 },
                 'put');
-            assert(publishStub.calledOnce);
+            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
+
+        it('Should publish object entry in notification topic of destination2', async () => {
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'originOp': 's3:ObjectRemoved:Delete',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'versionId': '1234',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                },
+                'delete');
+                assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
+            });
 
         it('Should not publish object entry in notification topic if ' +
             'config validation failed', async () => {
@@ -80,7 +102,7 @@ describe('NotificationQueuePopulator ::', () => {
                 'example-bucket',
                 'example-key',
                 {
-                    'originOp': 's3:ObjectRemoved:Delete',
+                    'originOp': 's3:ObjectRemoved:DeleteMarkerCreated',
                     'dataStoreName': 'metastore',
                     'content-length': '100',
                     'versionId': '1234',
