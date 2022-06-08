@@ -4,6 +4,7 @@ const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
+const util = require('util');
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
@@ -47,6 +48,10 @@ class QueueProcessor extends EventEmitter {
         this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;
+        // Once the notification manager is initialized
+        // this will hold the callback version of the getConfig
+        // function of the notification config manager
+        this._getConfig = null;
 
         this.logger = new Logger('Backbeat:Notification:QueueProcessor');
     }
@@ -128,6 +133,9 @@ class QueueProcessor extends EventEmitter {
                         'notification entries');
                     this.emit('ready');
                 });
+                // callbackify getConfig from notification config manager
+                this._getConfig = util.callbackify(this.bnConfigManager
+                    .getConfig.bind(this.bnConfigManager));
                 return next();
             }),
         ], err => {
@@ -162,59 +170,68 @@ class QueueProcessor extends EventEmitter {
      * @param {function} done - callback function
      * @return {undefined}
      */
-    async processKafkaEntry(kafkaEntry, done) {
+    processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
         const { bucket, key, eventType } = sourceEntry;
         try {
-            const notifConfig = await this.bnConfigManager.getConfig(bucket);
-            if (notifConfig && Object.keys(notifConfig).length > 0) {
-                const destBnConf = notifConfig.queueConfig.find(
-                    c => c.queueArn.split(':').pop()
-                        === this.destinationId);
-                if (!destBnConf) {
-                    // skip, if there is no config for the current
-                    // destination resource
-                    return done();
+            return this._getConfig(bucket, (err, notifConfig) => {
+                if (err) {
+                    this.logger.err('Error while getting notification configuration', {
+                        bucket,
+                        key,
+                        eventType,
+                        err,
+                    });
+                    return done(err);
                 }
-                // pass only destination resource specific config to
-                // validate entry
-                const bnConfig = {
-                    queueConfig: [destBnConf],
-                };
-                this.logger.debug('validating entry', {
-                    method: 'QueueProcessor.processKafkaEntry',
-                    bucket,
-                    key,
-                    eventType,
-                    destination: this.destinationId,
-                });
-                if (configUtil.validateEntry(bnConfig, sourceEntry)) {
-                    // add notification configuration id to the message
-                    sourceEntry.configurationId = destBnConf.id;
-                    const message
-                        = messageUtil.transformToSpec(sourceEntry);
-                    const msg = {
-                        // for Kafka keyed partitioning, to map a
-                        // particular bucket and key to a partition
-                        key: `${bucket}/${key}`,
-                        message,
+                if (notifConfig && Object.keys(notifConfig).length > 0) {
+                    const destBnConf = notifConfig.queueConfig.find(
+                        c => c.queueArn.split(':').pop()
+                            === this.destinationId);
+                    if (!destBnConf) {
+                        // skip, if there is no config for the current
+                        // destination resource
+                        return done();
+                    }
+                    // pass only destination resource specific config to
+                    // validate entry
+                    const bnConfig = {
+                        queueConfig: [destBnConf],
                     };
-                    const msgDesc = 'sending message to external destination';
-                    const eventRecord = message.Records[0];
-                    this.logger.info(msgDesc, {
+                    this.logger.debug('validating entry', {
                         method: 'QueueProcessor.processKafkaEntry',
                         bucket,
                         key,
-                        eventType: eventRecord.eventName,
-                        eventTime: eventRecord.eventTime,
+                        eventType,
                         destination: this.destinationId,
                     });
-                    return this._destination.send([msg], done);
+                    if (configUtil.validateEntry(bnConfig, sourceEntry)) {
+                        // add notification configuration id to the message
+                        sourceEntry.configurationId = destBnConf.id;
+                        const message
+                            = messageUtil.transformToSpec(sourceEntry);
+                        const msg = {
+                            // for Kafka keyed partitioning, to map a
+                            // particular bucket and key to a partition
+                            key: `${bucket}/${key}`,
+                            message,
+                        };
+                        const msgDesc = 'sending message to external destination';
+                        const eventRecord = message.Records[0];
+                        this.logger.info(msgDesc, {
+                            method: 'QueueProcessor.processKafkaEntry',
+                            bucket,
+                            key,
+                            eventType: eventRecord.eventName,
+                            eventTime: eventRecord.eventTime,
+                            destination: this.destinationId,
+                        });
+                        return this._destination.send([msg], done);
+                    }
                 }
+                // skip if there is no bucket notification configuration
                 return done();
-            }
-            // skip if there is no bucket notification configuration
-            return done();
+            });
         } catch (error) {
             if (error) {
                 this.logger.err('error processing entry', {
