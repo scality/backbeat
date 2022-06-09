@@ -168,7 +168,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
         });
     });
 
-    it.only('should not retry for NoSuchBucket errors', () => {
+    it('should not retry for NoSuchBucket errors', () => {
         const s3Client = new S3ClientMock({ getBucketLifecycleConfiguration: 2 });
         s3Client.stubMethod('getBucketLifecycleConfiguration', null, errors.NoSuchBucket);
 

@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const { isMasterKey } = require('../../lib/util/versioning');
+const { isMasterKey } = require('arsenal').versioning;
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
