@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const werelogs = require('werelogs');
+const { errors } = require('arsenal');
 
 const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
@@ -42,7 +43,7 @@ werelogs.configure({ level: 'warn', dump: 'error' });
 describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     this.timeout(testTimeout);
 
-    function generateRetryTest(s3Client) {
+    function generateRetryTest(s3Client, shouldRetry = true) {
         const lbp = new LifecycleBucketProcessor(
             zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
 
@@ -78,7 +79,11 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
                     return;
                 };
                 lbp._consumer.onEntryCommittable = () => {
-                    s3Client.verifyRetries();
+                    if (shouldRetry) {
+                        s3Client.verifyRetries();
+                    } else {
+                        s3Client.verifyNoRetries();
+                    }
                     resolve(messages);
                 };
             })
@@ -160,6 +165,16 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
             const expectedActions = ['processObjects', 'deleteObject'];
 
             assert.deepStrictEqual(actions, expectedActions);
+        });
+    });
+
+    it.only('should not retry for NoSuchBucket errors', () => {
+        const s3Client = new S3ClientMock({ getBucketLifecycleConfiguration: 2 });
+        s3Client.stubMethod('getBucketLifecycleConfiguration', null, errors.NoSuchBucket);
+
+        return generateRetryTest(s3Client, false).then(messages => {
+            assert.deepStrictEqual(messages, []);
+            assert.deepStrictEqual(s3Client.calls.getBucketLifecycleConfiguration, 1);
         });
     });
 
