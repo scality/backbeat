@@ -45,6 +45,8 @@ class OplogPopulator {
         this._changeStreamWrapper = null;
         this._allocator = null;
         this._connectorsManager  = null;
+        // contains OplogPopulatorUtils class of each supported extension
+        this._extHelpers = {};
         // MongoDB related
         this._mongoClient = null;
         this._metastore = null;
@@ -86,6 +88,20 @@ class OplogPopulator {
     }
 
     /**
+     * Load OplogPopulatorUtils Class of each
+     * supported active backbeat extension
+     * @returns {undefined}
+     */
+    _loadOplogHelperClasses() {
+        this._activeExtensions.forEach(extName => {
+            const index = require(`../../extensions/${extName}/index.js`);
+            if (index.oplogPopulatorUtils) {
+                this._extHelpers[extName] = index.oplogPopulatorUtils;
+            }
+        });
+    }
+
+    /**
      * Get buckets that have at least one extension active
      * @returns {string[]} list of buckets to listen to
      * @throws {InternalError}
@@ -94,47 +110,12 @@ class OplogPopulator {
         const filter = {
             $or: [],
         };
-        // notification filter
-        if (this._activeExtensions.includes('notification')) {
-            const field = constants.extensionConfigField.notification;
-            const extFilter = {};
-            // notification config should be an object
-            extFilter[`value.${field}`] = { $type: 3 };
+        // getting MongoDB filters of extensions
+        Object.values(this._extHelpers).forEach(extHelper => {
+            const extFilter = extHelper.getExtensionMongoDBFilter();
             filter.$or.push(extFilter);
-        }
-        // replication filter
-        if (this._activeExtensions.includes('replication')) {
-            const field = constants.extensionConfigField.replication;
-            const extFilter = {};
-            // processing buckets where at least one replication
-            // rule is enabled
-            extFilter[`value.${field}.rules`] = {
-                $elemMatch: {
-                    enabled: true,
-                },
-            };
-            filter.$or.push(extFilter);
-        }
-        // lifecycle filter
-        if (this._activeExtensions.includes('lifecycle')) {
-            const field = constants.extensionConfigField.lifecycle;
-            const extFilter = {};
-            // processing buckets where at least one lifecycle
-            // rule is enabled
-            extFilter[`value.${field}.rules`] = {
-                $elemMatch: {
-                    ruleStatus: 'Enabled',
-                },
-            };
-            filter.$or.push(extFilter);
-        }
-        // ingestion filter
-        if (this._activeExtensions.includes('ingestion')) {
-            const field = constants.extensionConfigField.ingestion;
-            const extFilter = {};
-            extFilter[`value.${field}.status`] = 'enabled';
-            filter.$or.push(extFilter);
-        }
+        });
+
         // return empty list if no extension active
         if (filter.$or.length === 0) {
             return [];
@@ -160,46 +141,8 @@ class OplogPopulator {
      * @returns {boolean} is bucket backbeat enabled
      */
     _isBucketBackbeatEnabled(bucketMetadata) {
-        const areExtensionsEnabled = [];
-        // notification extension
-        if (this._activeExtensions.includes('notification')) {
-            const field = constants.extensionConfigField.notification;
-            areExtensionsEnabled.push(Boolean(bucketMetadata[field] !== null));
-        }
-        // replication extension
-        if (this._activeExtensions.includes('replication')) {
-            const field = constants.extensionConfigField.replication;
-            const rules = (bucketMetadata[field] && bucketMetadata[field].rules)
-                || null;
-            if (!rules || rules.length === 0) {
-                areExtensionsEnabled.push(false);
-            } else {
-                const areRulesActive = rules.some(rule =>
-                    rule.enabled === true);
-                areExtensionsEnabled.push(areRulesActive);
-            }
-        }
-        // lifecycle extension
-        if (this._activeExtensions.includes('lifecycle')) {
-            const field = constants.extensionConfigField.lifecycle;
-            const rules = (bucketMetadata[field] && bucketMetadata[field].rules)
-                || null;
-            if (!rules || rules.length === 0) {
-                areExtensionsEnabled.push(false);
-            } else {
-                const areRulesActive = rules.some(rule =>
-                    rule.ruleStatus === 'Enabled');
-                areExtensionsEnabled.push(areRulesActive);
-            }
-        }
-        // ingestion extension
-        if (this._activeExtensions.includes('ingestion')) {
-            const field = constants.extensionConfigField.ingestion;
-            const enabled = (bucketMetadata[field] && bucketMetadata[field].status)
-                || null;
-            areExtensionsEnabled.push(Boolean(enabled === 'enabled'));
-        }
-        return areExtensionsEnabled.some(ext => ext);
+        return Object.values(this._extHelpers).some(extHelper =>
+            extHelper.isBucketExtensionEnabled(bucketMetadata));
     }
 
     /**
@@ -279,6 +222,7 @@ class OplogPopulator {
      */
     async setup() {
        try {
+           this._loadOplogHelperClasses();
            this._connectorsManager = new ConnectorsManager({
                nbConnectors: this._config.numberOfConnectors,
                database: this._database,

@@ -7,12 +7,6 @@ const constants = {
         'pipeline': '[]',
         'collection': '',
     },
-    extensionConfigField: {
-        notification: 'notificationConfiguration',
-        replication: 'replicationConfiguration',
-        lifecycle: 'lifecycleConfiguration',
-        ingestion: 'ingestion',
-    },
 };
 
 module.exports = constants;
