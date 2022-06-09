@@ -97,6 +97,7 @@ describe('lifecycle task helper methods', () => {
             'noncurrentVersionExpiration',
             'abortIncompleteMultipartUpload',
             'transitions',
+            'noncurrentVersionTransitions',
         ]);
     });
 

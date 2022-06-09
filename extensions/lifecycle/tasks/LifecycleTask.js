@@ -635,6 +635,13 @@ class LifecycleTask extends BackbeatTask {
                         return true;
                     }
                 }
+
+                if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
+                && this._supportedrules.includes('noncurrentVersionTransition')) {
+                    return rule.noncurrentVersionTransitions.some(t =>
+                        (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
+                }
+
                 return false;
             }
 
@@ -888,6 +895,37 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Helper method for NoncurrentVersionTransition.NoncurrentDays rule
+     * Check if Noncurrent Transition rule applies on the version
+     * @param {object} bucketData - bucket data
+     * @param {object} version - single non-current version
+     * @param {string} version.LastModified - last modified date of version
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {undefined}
+     */
+    _checkAndApplyNCVTransitionRule(bucketData, version, rules, log) {
+        const staleDate = version.staleDate;
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
+        const ncvt = 'NoncurrentVersionTransition';
+        const ncd = 'NoncurrentDays';
+        const doesNCVTransitionRuleApply = (rules[ncvt] &&
+            rules[ncvt][ncd] !== undefined &&
+            daysSinceInitiated >= rules[ncvt][ncd]);
+        if (doesNCVTransitionRuleApply) {
+            this._applyTransitionRule({
+                owner: bucketData.target.owner,
+                accountId: bucketData.target.accountId,
+                bucket: bucketData.target.bucket,
+                objectKey: version.Key,
+                eTag: version.ETag,
+                lastModified: version.LastModified,
+                site: rules[ncvt].StorageClass,
+            }, log);
+        }
+    }
+
+    /**
      * Helper method for Expiration.ExpiredObjectDeleteMarker rule
      * Check if ExpiredObjectDeleteMarker rule applies to the `IsLatest` delete
      * marker
@@ -1133,9 +1171,21 @@ class LifecycleTask extends BackbeatTask {
             return done(errors.InternalError.customizeDescription(errMsg));
         }
 
-        // TODO: Add support for NoncurrentVersionTransitions.
-        this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log);
+        if (rules.NoncurrentVersionExpiration) {
+            this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log);
+            return done();
+        }
 
+        if (rules.NoncurrentVersionTransition) {
+            this._checkAndApplyNCVTransitionRule(bucketData, version, rules, log);
+            return done();
+        }
+
+        log.debug('no action taken on versioned object', {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+            versioningStatus,
+        });
         return done();
     }
 
