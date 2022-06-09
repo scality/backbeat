@@ -192,7 +192,6 @@ describe('OplogPopulator', () => {
         });
     });
 
-
     describe('_getBackbeatEnabledBuckets', () => {
         [
             {
@@ -226,15 +225,7 @@ describe('OplogPopulator', () => {
                 ],
             },
             {
-                extensions: ['ingestion'],
-                filter: [
-                    {
-                        'value.ingestion.status': 'enabled',
-                    }
-                ],
-            },
-            {
-                extensions: ['notification', 'replication', 'ingestion', 'lifecycle'],
+                extensions: ['notification', 'replication', 'lifecycle'],
                 filter: [
                     { 'value.notificationConfiguration': { $type: 3 } },
                     {
@@ -251,9 +242,6 @@ describe('OplogPopulator', () => {
                             },
                         },
                     },
-                    {
-                        'value.ingestion.status': 'enabled',
-                    }
                 ],
             }
         ].forEach(scenario => {
@@ -266,9 +254,15 @@ describe('OplogPopulator', () => {
                         }),
                     })
                 });
-                oplogPopulator._metastore = { find: findStub };
-                oplogPopulator._activeExtensions = extensions;
-                await oplogPopulator._getBackbeatEnabledBuckets()
+                const tmpOplogPopulator = new OplogPopulator({
+                    config: oplogPopulatorConfig,
+                    mongoConfig,
+                    activeExtensions: extensions,
+                    logger,
+                });
+                tmpOplogPopulator._metastore = { find: findStub };
+                tmpOplogPopulator._loadOplogHelperClasses();
+                await tmpOplogPopulator._getBackbeatEnabledBuckets()
                 .then(buckets => {
                     assert(findStub.calledOnceWith({
                         $or: filter,
@@ -335,7 +329,8 @@ describe('OplogPopulator', () => {
     describe('_isBucketBackbeatEnabled', () => {
         [
             {
-                exts: 'all extensions active',
+                desc: 'all extensions active',
+                exts: ['notification', 'lifecycle', 'replication'],
                 metadata: {
                     notificationConfiguration: {},
                     lifecycleConfiguration: {
@@ -351,15 +346,12 @@ describe('OplogPopulator', () => {
                                 enabled: true,
                             },
                         ]
-                    },
-                    ingestion: {
-                        status: 'enabled',
-                    },
+                    }
                 },
                 result: true,
             },
             {
-                exts: 'notification active',
+                exts: ['notification'],
                 metadata: {
                     notificationConfiguration: {},
                     replicationConfiguration: null,
@@ -369,7 +361,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
-                exts: 'replication active',
+                exts: ['replication'],
                 metadata: {
                     notificationConfiguration: null,
                     lifecycleConfiguration: null,
@@ -388,7 +380,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
-                exts: 'replication disabled',
+                exts: [],
                 metadata: {
                     notificationConfiguration: null,
                     lifecycleConfiguration: null,
@@ -404,7 +396,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
-                exts: 'replication no rules',
+                exts: [],
                 metadata: {
                     notificationConfiguration: null,
                     lifecycleConfiguration: null,
@@ -416,7 +408,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
-                exts: 'lifecycle active',
+                exts: ['lifecycle'],
                 metadata: {
                     notificationConfiguration: null,
                     replicationConfiguration: null,
@@ -435,7 +427,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
-                exts: 'lifecycle no rules',
+                exts: [],
                 metadata: {
                     notificationConfiguration: null,
                     replicationConfiguration: null,
@@ -447,7 +439,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
-                exts: 'lifecycle no rules active',
+                exts: [],
                 metadata: {
                     notificationConfiguration: null,
                     replicationConfiguration: null,
@@ -463,31 +455,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
-                exts: 'ingestion active',
-                metadata: {
-                    notificationConfiguration: null,
-                    replicationConfiguration: null,
-                    lifecycleConfiguration: null,
-                    ingestion: {
-                        status: 'enabled',
-                    },
-                },
-                result: true,
-            },
-            {
-                exts: 'ingestion disabled',
-                metadata: {
-                    notificationConfiguration: null,
-                    replicationConfiguration: null,
-                    lifecycleConfiguration: null,
-                    ingestion: {
-                        status: 'disabled',
-                    },
-                },
-                result: false,
-            },
-            {
-                exts: 'no extension active',
+                exts: [],
                 metadata: {
                     notificationConfiguration: null,
                     replicationConfiguration: null,
@@ -496,9 +464,16 @@ describe('OplogPopulator', () => {
                 result: false,
             },
         ].forEach(scenario => {
-            const { exts, metadata, result } = scenario;
-            it(`Should validate bucket if at least one extension active (${exts})`, () => {
-                const valid = oplogPopulator._isBucketBackbeatEnabled(metadata);
+            const { desc, exts, metadata, result } = scenario;
+            it(`Should validate bucket if at least one extension active (${desc})`, () => {
+                const tmpOplogPopulator = new OplogPopulator({
+                    config: oplogPopulatorConfig,
+                    mongoConfig,
+                    activeExtensions: exts,
+                    logger,
+                });
+                tmpOplogPopulator._loadOplogHelperClasses();
+                const valid = tmpOplogPopulator._isBucketBackbeatEnabled(metadata);
                 assert.strictEqual(valid, result);
             });
         });
