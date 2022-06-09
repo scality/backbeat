@@ -1,4 +1,5 @@
 const LifecycleConfigValidator = require('./LifecycleConfigValidator');
+const LifecycleOplogPopulatorUtils = require('./LifecycleOplogPopulatorUtils');
 
 module.exports = {
     name: 'lifecycle',
@@ -6,4 +7,5 @@ module.exports = {
     configValidator: LifecycleConfigValidator,
     // we need a dynamic require to avoid a circular dependency
     queuePopulatorExtension: () => require('./LifecycleQueuePopulator'),
+    oplogPopulatorUtils: LifecycleOplogPopulatorUtils,
 };
