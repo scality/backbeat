@@ -3,7 +3,7 @@ const errors = require('arsenal').errors;
 const sinon = require('sinon');
 
 const config = require('../../config.json');
-const notificationConfig = require('../../config.notification.json');
+const { notification } = require('../../config.notification.json').extensions;
 const ReplicateObject =
     require('../../../extensions/replication/tasks/ReplicateObject');
 const { sourceEntry } = require('../../utils/mockEntries');
@@ -13,7 +13,7 @@ const configUtil = require('../../../extensions/notification/utils/config');
 
 const retryConfig = { scality: { timeoutS: 300 } };
 
-describe('MultipleBackendTask', function test() {
+describe('ReplicateObject', function test() {
     this.timeout(5000);
 
     afterEach(() => {
@@ -32,15 +32,18 @@ describe('MultipleBackendTask', function test() {
                     sourceConfig: config.extensions.replication.source,
                     destConfig: config.extensions.replication.destination,
                     site: 'test-site-2',
-                    notificationConfig,
+                    notificationConfig: notification,
+                    notificationConfigManager: {
+                        getConfig: () => null
+                    }
                 }),
             });
-            const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+            const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification')
+                .callsArg(2);
             const publishReplicationStatusStub = sinon.stub(task, '_publishReplicationStatus');
             task._handleReplicationOutcome(errors.InternalError, sourceEntry, sourceEntry, replicationEntry, fakeLogger,
-                (err, data) => {
+                err => {
                 assert.ifError(err);
-                assert(data);
                 assert(publishReplicationStatusStub.calledOnceWith(sourceEntry, 'FAILED', {
                     log: fakeLogger,
                     reason: errors.InternalError.description,
@@ -62,15 +65,18 @@ describe('MultipleBackendTask', function test() {
                     sourceConfig: config.extensions.replication.source,
                     destConfig: config.extensions.replication.destination,
                     site: 'test-site-2',
-                    notificationConfig,
+                    notificationConfig: notification,
+                    notificationConfigManager: {
+                        getConfig: () => null
+                    }
                 }),
             });
-            const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+            const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification')
+            .callsArg(2);
             const publishReplicationStatusStub = sinon.stub(task, '_publishReplicationStatus');
             task._handleReplicationOutcome(null, sourceEntry, sourceEntry, replicationEntry, fakeLogger,
-                (err, data) => {
+                err => {
                 assert.ifError(err);
-                assert(data);
                 assert(publishReplicationStatusStub.calledOnceWith(sourceEntry, 'COMPLETED', {
                     log: fakeLogger,
                     kafkaEntry: replicationEntry,
@@ -82,9 +88,12 @@ describe('MultipleBackendTask', function test() {
     });
 
     describe('::_publishFailedReplicationStatusNotification', () => {
-        it('should publish entry to notification topic in correct format', async () => {
-            sinon.stub(configUtil, 'validateEntry').returns(true);
-            const notificationProducerSend = sinon.stub().callsFake((entries, cb) => cb());
+        it('should publish entry to notification destination topic in correct format', done => {
+            const validateStub = sinon.stub(configUtil, 'validateEntry');
+            validateStub.onCall(0).returns(true);
+            validateStub.onCall(1).returns(false);
+            const notificationProducerSend1 = sinon.stub().callsFake((entries, cb) => cb());
+            const notificationProducerSend2 = sinon.stub().callsFake((entries, cb) => cb());
             const task = new ReplicateObject({
                 getStateVars: () => ({
                     repConfig: {
@@ -95,13 +104,28 @@ describe('MultipleBackendTask', function test() {
                     sourceConfig: config.extensions.replication.source,
                     destConfig: config.extensions.replication.destination,
                     site: 'test-site-2',
-                    notificationConfig,
-                    notificationProducer: {
-                        send: notificationProducerSend,
+                    notificationConfig: notification,
+                    notificationProducers: {
+                        destination1: {
+                            send: notificationProducerSend1
+                        },
+                        destination2: {
+                            send: notificationProducerSend2
+                        },
                     },
                     notificationConfigManager: {
-                        getConfig: () => ({
-                            key: 'value',
+                        getConfig: async () => ({
+                            queueConfig: [
+                                {
+                                    events: [
+                                        's3:ObjectCreated:*',
+                                        's3:ObjectRemoved:*',
+                                        's3:Replication:OperationFailedReplication'
+                                    ],
+                                    queueArn: 'arn:scality:bucketnotif:::destination1',
+                                    id: 'NjhiYzg2YTQtZmM3NS00YTJlLWJkMWYtMzcwZjk0MjA5YzAz'
+                                }
+                            ],
                         }),
                     }
                 }),
@@ -117,7 +141,6 @@ describe('MultipleBackendTask', function test() {
                 'content-length': '6',
                 'versionId': '1234',
             });
-            await task._publishFailedReplicationStatusNotification(sourceEntry, fakeLogger);
             const message = {
                 dateTime: '0000',
                 eventType: 's3:Replication:OperationFailedReplication',
@@ -132,7 +155,12 @@ describe('MultipleBackendTask', function test() {
                 key: 'example-bucket',
                 message: JSON.stringify(message),
             };
-            assert(notificationProducerSend.calledOnceWith([entryPublished]));
+            task._publishFailedReplicationStatusNotification(sourceEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(notificationProducerSend1.calledOnceWith([entryPublished]));
+                assert(notificationProducerSend2.notCalled);
+                return done();
+            });
         });
     });
 });

@@ -55,6 +55,9 @@ describe('MultipleBackendTask', function test() {
                 sourceConfig: config.extensions.replication.source,
                 destConfig: config.extensions.replication.destination,
                 site: 'test-site-2',
+                notificationConfigManager: {
+                    getConfig: () => null
+                }
             }),
         });
     });
