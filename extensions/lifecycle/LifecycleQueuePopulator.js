@@ -1,11 +1,15 @@
-const { mpuBucketPrefix } = require('arsenal').constants;
+const { constants, errorUtils } = require('arsenal');
+const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 const http = require('http');
 const https = require('https');
+const uuid = require('uuid/v4');
+const { ChainableTemporaryCredentials } = require('aws-sdk');
 const safeJsonParse = require('./util/safeJsonParse');
 const { authTypeAssumeRole } = require('../../lib/constants');
 const CredentialsManager = require('../../lib/credentials/CredentialsManager');
+const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
 const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle:populator';
 const METASTORE = '__metastore';
@@ -206,8 +210,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             });
     }
 
-    async _getAccountId(canonicalId) {
-        return this._tempCredsPromise
+    _getAccountId(canonicalId, cb) {
+        this._tempCredsPromise
             .then(creds => this._vaultClientCache.getClientWithAWSCreds(
                 LIFEYCLE_POPULATOR_CLIENT_ID,
                 creds,
@@ -231,7 +235,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             .catch(err => cb(err));
     }
 
-    async _handleRestoreOp(entry) {
+    _handleRestoreOp(entry) {
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
             return;
@@ -260,24 +264,29 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // This account id would be used by Sorbet to assume the bucket's account role.
         // The assumed credentials will be sent and used by TLP server to put object version
         // to the specific S3 bucket.
-        const ownerId = value['owner-id']
-        const accountId = await this._getAccountId(ownerId)
+        const ownerId = value['owner-id'];
+        this._getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                this.log.error('unable to get account', {
+                    ownerId,
+                });
+            }
+            this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
 
-        this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
-
-        const topic = `cold-restore-req-${locationName}`;
-        this.publish(
-            topic,
-            `${entry.bucket}/${entry.key}`,
-            JSON.stringify({
-                bucketName: entry.bucket,
-                objectKey: entry.key,
-                objectVersion: value.versionId,
-                archiveInfo: value.archive.archiveInfo,
-                requestId: "???",
-                accountId
-            }),
-        );
+            const topic = `cold-restore-req-${locationName}`;
+            this.publish(
+                topic,
+                `${entry.bucket}/${entry.key}`,
+                JSON.stringify({
+                    bucketName: entry.bucket,
+                    objectKey: entry.key,
+                    objectVersion: value.versionId,
+                    archiveInfo: value.archive.archiveInfo,
+                    requestId: uuid(),
+                    accountId
+                }),
+            );
+        });
     }
 
     /**
@@ -286,12 +295,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @param {Object} entry - The record log entry from metadata.
      * @return {undefined}
      */
-    async filterAsync(entry) {
+    filter(entry) {
         if (entry.type !== 'put') {
             return undefined;
         }
 
-        await this._handleRestoreOp(entry);
+        this._handleRestoreOp(entry);
 
         if (this.extConfig.conductor.bucketSource !== 'zookeeper') {
             this.log.debug('bucket source is not zookeeper, skipping entry', {
