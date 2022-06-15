@@ -1,4 +1,4 @@
-FROM registry.scality.com/federation/nodesvc-base:latest
+FROM registry.scality.com/federation/nodesvc-base:7.10.5.0
 
 WORKDIR ${HOME_DIR}/backbeat
 
