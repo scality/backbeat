@@ -211,6 +211,11 @@ class LifecycleBucketProcessor {
                     return cb();
                 }
 
+                if (err.code === 'NoSuchBucket') {
+                    this._log.error('skipping non-existent bucket', { bucket });
+                    return cb();
+                }
+
                 this._log.error('error getting bucket lifecycle config', {
                     method: 'LifecycleBucketProcessor._processBucketEntry',
                     bucket,
