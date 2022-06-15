@@ -34,8 +34,10 @@ class QueueProcessor extends EventEmitter {
      * @param {String} destinationConfig.host - destination host
      * @param {String} destinationConfig.auth - destination auth configuration
      * @param {String} destinationId - resource name/id of destination
+     * @param {Object} destinationAuth - destination authentication config
      */
-    constructor(mongoConfig, kafkaConfig, notifConfig, destinationId) {
+    constructor(mongoConfig, kafkaConfig, notifConfig, destinationId,
+        destinationAuth) {
         super();
         this.mongoConfig = mongoConfig;
         this.kafkaConfig = kafkaConfig;
@@ -45,6 +47,11 @@ class QueueProcessor extends EventEmitter {
             = notifConfig.destinations.find(dest => dest.resource === destinationId);
         assert(this.destinationConfig, `Invalid destination argument "${destinationId}".` +
         ' Destination could not be found in destinations defined');
+        // overwriting destination auth config
+        // if it was passed by env var
+        if (destinationAuth) {
+            this.destinationConfig.auth = destinationAuth;
+        }
         this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;

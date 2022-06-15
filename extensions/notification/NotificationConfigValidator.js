@@ -1,5 +1,18 @@
 const joi = require('joi');
 
+const authSchema = joi.object({
+    type: joi.string(),
+    ssl: joi.boolean(),
+    protocol: joi.string(),
+    ca: joi.string(),
+    client: joi.string(),
+    key: joi.string(),
+    keyPassword: joi.string(),
+    keytab: joi.string(),
+    principal: joi.string(),
+    serviceName: joi.string(),
+});
+
 const destinationSchema = joi.object({
     resource: joi.string().required(),
     type: joi.string().required(),
@@ -7,7 +20,7 @@ const destinationSchema = joi.object({
     port: joi.number().required(),
     internalTopic: joi.string(),
     topic: joi.string().required(),
-    auth: joi.object().default({}),
+    auth: authSchema.default({}),
 });
 
 const joiSchema = joi.object({
