@@ -53,18 +53,21 @@ class S3ClientMock {
         return err;
     }
 
-    stubMethod(methodName, successResult) {
+    stubMethod(methodName, successResult, stubError) {
         this.calls[methodName] = 0;
 
         this[methodName] = (params, done) => {
             this.calls[methodName]++;
 
             if (this.failures[methodName] >= this.calls[methodName]) {
+                const error = stubError || this.makeRetryableError();
+
                 if (done) {
-                    return process.nextTick(done, this.makeRetryableError());
+                    return process.nextTick(done, error);
                 }
+
                 return {
-                    send: cb => process.nextTick(cb, this.makeRetryableError()),
+                    send: cb => process.nextTick(cb, error),
                     on: () => {},
                 };
             }
@@ -84,6 +87,13 @@ class S3ClientMock {
         Object.keys(this.failures).forEach(f => {
             assert.strictEqual(this.calls[f], this.failures[f] + 1,
                 `did not retry ${this.failures[f]} times`);
+        });
+    }
+
+    verifyNoRetries() {
+        Object.keys(this.failures).forEach(f => {
+            assert.strictEqual(this.calls[f], 1,
+                `called ${this.calls[f]} times, expected 1`);
         });
     }
 
