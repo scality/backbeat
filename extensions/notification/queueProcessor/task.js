@@ -17,8 +17,26 @@ werelogs.configure({
 try {
     const destination = process.argv[2];
     assert(destination, 'task must be started with a destination as argument');
+    // get destination auth config from environment variables
+    let destinationAuth = {
+        type: process.env.TYPE,
+        ssl: process.env.SSL === 'true',
+        protocol: process.env.PROTOCOL,
+        ca: process.env.CA,
+        client: process.env.CLIENT,
+        key: process.env.KEY,
+        keyPassword: process.env.KEY_PASSWORD,
+        keytab: process.env.KEYTAB,
+        principal: process.env.PRINCIPAL,
+        serviceName: process.env.SERVICE_NAME,
+    };
+    const isDestinationAuthEmpty = Object.values(destinationAuth)
+        .every(x => !x);
+    if (isDestinationAuthEmpty) {
+        destinationAuth = null;
+    }
     const queueProcessor = new QueueProcessor(
-        mongoConfig, kafkaConfig, notifConfig, destination);
+        mongoConfig, kafkaConfig, notifConfig, destination, destinationAuth);
     queueProcessor.start();
 } catch (err) {
     log.error('error starting notification queue processor task', {
