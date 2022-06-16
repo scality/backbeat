@@ -95,6 +95,8 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _snapshotDataMoverTopicOffsets(log) {
+        // TODO: if multiple topics are used in replication API, i.e, one per
+        // location (implemented during cold-storage epic), handle them separately
         this.kafkaBacklogMetrics.snapshotTopicOffsets(
             this.producer.getKafkaProducer(),
             ReplicationAPI.getDataMoverTopic(), 'lifecycle', err => {

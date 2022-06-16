@@ -1,9 +1,11 @@
 const config = require('../../lib/Config');
+const locations = require('../../conf/locationConfig.json') || {};
 
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');
 
 let { dataMoverTopic } = config.extensions.replication;
+const { coldStorageArchiveTopicPrefix } = config.extensions.lifecycle;
 
 class ReplicationAPI {
     /**
@@ -66,24 +68,47 @@ class ReplicationAPI {
      * @return {undefined}
      */
     static sendDataMoverAction(producer, action, log, cb) {
-        const { bucket, key } = action.getAttribute('target');
-        const kafkaEntries = [{ key: `${bucket}/${key}`,
-                                message: action.toKafkaMessage() }];
-        producer.sendToTopic(dataMoverTopic, kafkaEntries, (err, reports) => {
+        const { accountId, bucket, key, version } = action.getAttribute('target');
+        const { origin, fromLocation, contentLength } = action.getAttribute('metrics');
+        const kafkaEntry = {
+            key: `${bucket}/${key}`,
+            message: action.toKafkaMessage(),
+        };
+        let topic = dataMoverTopic;
+        const toLocation = action.getAttribute('toLocation');
+        const locationConfig = locations[toLocation];
+        if (!locationConfig) {
+            const errorMsg = 'could not get destination location configuration';
+            log.error(errorMsg, { method: 'ReplicationAPI.sendDataMoverAction' });
+            return cb(new Error(errorMsg));
+        }
+        if (locationConfig.isCold) {
+            topic = `${coldStorageArchiveTopicPrefix}${toLocation}`;
+            const { reqId } = action.getContext();
+            const message = {
+                accountId,
+                bucketName: bucket,
+                objectKey: key,
+                objectVersion: version,
+                requestId: reqId,
+                // TODO: BB-217 do not use contentLength from metrics
+                size: contentLength,
+            };
+            kafkaEntry.message = JSON.stringify(message);
+        }
+        producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
             if (err) {
                 log.error('could not send data mover action',
-                          Object.assign({
-                              method: 'ReplicationAPI.sendDataMoverAction',
-                              error: err,
-                          }, action.getLogInfo()));
+                    Object.assign({
+                        method: 'ReplicationAPI.sendDataMoverAction',
+                        error: err,
+                    }, action.getLogInfo()));
                 return cb(err);
             }
             log.debug('sent action to the data mover',
-                      Object.assign({
-                          method: 'ReplicationAPI.sendDataMoverAction',
-                      }, action.getLogInfo()));
-            const { origin, fromLocation, contentLength } =
-                  action.getAttribute('metrics');
+                Object.assign({
+                    method: 'ReplicationAPI.sendDataMoverAction',
+                }, action.getLogInfo()));
             ReplicationMetrics.onReplicationQueued(
                 origin, fromLocation, action.getAttribute('toLocation'),
                 contentLength, reports[0].partition);

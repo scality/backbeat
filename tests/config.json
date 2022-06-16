@@ -198,7 +198,8 @@
             "auth": {
                 "type": "account",
                 "account": "bart"
-            }
+            },
+            "coldStorageArchiveTopicPrefix": "cold-archive-req-"
         },
         "gc": {
             "topic": "backbeat-test-gc",

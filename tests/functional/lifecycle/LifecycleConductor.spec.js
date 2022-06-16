@@ -96,6 +96,7 @@ const baseLCConfig = {
         type: 'account',
         account: 'lifecycle',
     },
+    coldStorageArchiveTopicPrefix: 'cold-archive-req-',
 };
 
 function withAccountIds(messages) {
