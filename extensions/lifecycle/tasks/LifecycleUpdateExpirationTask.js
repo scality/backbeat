@@ -1,7 +1,9 @@
 const async = require('async');
 
-const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const errors = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
+const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
 class LifecycleUpdateExpirationTask extends BackbeatTask {
     /**
@@ -17,7 +19,25 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
     }
 
     _getMetadata(entry, log, done) {
-        const { bucket, key, version } = entry.getAttribute('target');
+        const {
+            owner: canonicalId,
+            accountId,
+            bucket,
+            key,
+            version,
+        } = entry.getAttribute('target');
+
+        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
+        if (!backbeatClient) {
+            log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            return done(errors.InternalError.customizeDescription(
+                'Unable to obtain client',
+            ));
+        }
+
         this.backbeatClient.getMetadata({
             bucket,
             objectKey: key,
@@ -36,9 +56,9 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     error: res.error,
                     method: 'LifecycleUpdateExpirationTask._getMetadata',
                 }, entry.getLogInfo()));
-                return done(
-                    errors.InternalError.
-                        customizeDescription('error parsing metadata blob'));
+                return done(errors.InternalError.customizeDescription(
+                    'error parsing metadata blob'
+                ));
             }
             return done(null, res.result);
         });
@@ -107,7 +127,10 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
         async.waterfall([
             next => this._getMetadata(entry, log, next),
             (objMD, next) => {
-                objMD.setArchive(undefined);
+                const archive = objMD.getArchive();
+                objMD.setArchive({
+                    archiveInfo: archive.archiveInfo,
+                });
                 this._putMetadata(entry, objMD, log, err => next(err, objMD));
             },
             (objMD, next) => this._garbageCollectLocation(
