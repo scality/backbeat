@@ -39,6 +39,8 @@ class LifecycleConductor {
      * lifecycle nodes in zookeeper
      * @param {String} lcConfig.bucketTasksTopic - lifecycle
      *   bucket tasks topic name
+     * @param {String} lcConfig.objectTasksTopic - lifecycle object
+     * topic name
      * @param {Object} lcConfig.backlogControl - lifecycle backlog
      * control params
      * @param {Boolean} [lcConfig.backlogControl.enabled] - enable

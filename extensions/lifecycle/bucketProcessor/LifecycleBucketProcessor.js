@@ -47,6 +47,8 @@ class LifecycleBucketProcessor {
      * @param {Object} extensions.lifecycle.auth - authentication info
      * @param {String} extensions.lifecycle.bucketTasksTopic - lifecycle bucket
      * topic name
+     * @param {String} extensions.lifecycle.objectTasksTopic - lifecycle object
+     * topic name
      * @param {Object} extensions.lifecycle.bucketProcessor - kafka consumer
      * object
      * @param {String} extensions.lifecycle.bucketProcessor.groupId - kafka

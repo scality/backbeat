@@ -6,10 +6,9 @@ const AWS = require('aws-sdk');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
-const LifecycleDeleteObjectTask =
-      require('../tasks/LifecycleDeleteObjectTask');
-const LifecycleUpdateTransitionTask =
-      require('../tasks/LifecycleUpdateTransitionTask');
+const LifecycleDeleteObjectTask = require('../tasks/LifecycleDeleteObjectTask');
+const LifecycleUpdateTransitionTask = require('../tasks/LifecycleUpdateTransitionTask');
+const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const { getAccountCredentials } =
@@ -181,16 +180,21 @@ class LifecycleObjectProcessor extends EventEmitter {
                           actionEntry.getLogInfo());
         const actionType = actionEntry.getActionType();
         let task;
-        if (actionType === 'deleteObject' ||
-            actionType === 'deleteMPU') {
+        if (actionType === 'deleteObject' || actionType === 'deleteMPU') {
             task = new LifecycleDeleteObjectTask(this);
-        } else if (actionType === 'copyLocation' &&
-                   actionEntry.getContextAttribute('ruleType')
-                   === 'transition') {
+        } else if (
+            actionType === 'copyLocation' &&
+            actionEntry.getContextAttribute('ruleType') === 'transition'
+        ) {
             task = new LifecycleUpdateTransitionTask(this);
+        }
+        else if (actionType === 'gc') {
+            task = new LifecycleUpdateExpirationTask(this);
         } else {
-            this.logger.warn(`skipped unsupported action ${actionType}`,
-                             actionEntry.getLogInfo());
+            this.logger.warn(
+                `skipped unsupported action ${actionType}`,
+                actionEntry.getLogInfo(),
+            );
             return process.nextTick(done);
         }
         return task.processActionEntry(actionEntry, done);
@@ -211,7 +215,6 @@ class LifecycleObjectProcessor extends EventEmitter {
     isReady() {
         return this._consumer && this._consumer.isReady();
     }
-
 }
 
 module.exports = LifecycleObjectProcessor;
