@@ -4,7 +4,8 @@ name: docker-build
 on:
   push:
     branches-ignore:
-    - 'development/**'
+    - development/**
+    - q/*/**
 
 env:
   REGISTRY_NAME: registry.scality.com
