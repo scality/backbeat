@@ -4,6 +4,9 @@ WORKDIR ${HOME_DIR}/backbeat
 
 COPY ./package.json ./yarn.lock ${HOME_DIR}/backbeat
 
+# Remove when gitcache is sorted out
+RUN rm /root/.gitconfig
+
 RUN yarn install --production --frozen-lockfile --network-concurrency 1
 
 COPY . ${HOME_DIR}/backbeat
