@@ -1,4 +1,5 @@
 const joi = require('joi');
+const { probeServerJoi } = require('../../lib/config/configItems.joi.js');
 
 const authSchema = joi.object({
     type: joi.string(),
@@ -32,6 +33,7 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
     },
     destinations: joi.array().items(destinationSchema).default([]),
+    probeServer: probeServerJoi.default()
 });
 
 function configValidator(backbeatConfig, extConfig) {
