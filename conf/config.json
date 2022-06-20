@@ -290,7 +290,11 @@
             "topic": "backbeat-oplog",
             "kafkaConnectHost": "127.0.0.1",
             "kafkaConnectPort": 8083,
-            "numberOfConnectors": 1
+            "numberOfConnectors": 1,
+            "probeServer": {
+                "bindAddress": "0.0.0.0",
+                "port": 8556
+            }
         }
     },
     "log": {

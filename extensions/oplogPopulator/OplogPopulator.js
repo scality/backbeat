@@ -315,6 +315,26 @@ class OplogPopulator {
             throw errors.InternalError.customizeDescription(err.description);
        }
     }
+
+    /**
+     * Check if OplogPopulator is ready
+     * @returns {bool} is oplogPopulator ready
+     */
+    isReady() {
+        const components = {
+            mongoClient: this._mongoClient,
+            metastore: this._metastore,
+            connectorsManager: this._connectorsManager,
+            allocator: this._allocator,
+            changeStream: this._changeStreamWrapper
+        };
+
+        const allReady = Object.values(components).every(v => v);
+        if (!allReady) {
+            this._logger.error('ready state', components);
+        }
+        return allReady;
+    }
 }
 
 module.exports = OplogPopulator;
