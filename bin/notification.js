@@ -12,9 +12,10 @@ const rConfig = config.redis;
 const vConfig = config.vaultAdmin;
 const qpConfig = config.queuePopulator;
 const extConfigs = config.extensions;
-
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
-
+const { startProbeServer } = require('../lib/util/probe');
+const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
+    require('arsenal').network.probe.ProbeServer;
 const log = new werelogs.Logger('Backbeat:NotificationQueuePopulator');
 
 werelogs.configure({
@@ -49,6 +50,28 @@ const queuePopulator = new QueuePopulator(
     zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
 
 async.waterfall([
+    done => startProbeServer(qpConfig.probeServer, (err, probeServer) => {
+        if (err) {
+            log.error('error starting probe server', {
+                error: err,
+                method: 'NotificationQueuePopulator::startProbeServer',
+            });
+            done(err);
+            return;
+        }
+        if (probeServer !== undefined) {
+            probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE],
+                (res, log) => queuePopulator.handleLiveness(res, log)
+            );
+            if (process.env.ENABLE_METRICS_PROBE === 'true') {
+                probeServer.addHandler(
+                    DEFAULT_METRICS_ROUTE,
+                    (res, log) => queuePopulator.handleMetrics(res, log)
+                );
+            }
+        }
+        done();
+    }),
     done => queuePopulator.open(done),
     done => {
         const taskState = {
