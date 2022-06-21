@@ -33,12 +33,13 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 canonicalId,
                 accountId,
             });
-            return done(errors.InternalError.customizeDescription(
+            done(errors.InternalError.customizeDescription(
                 'Unable to obtain client',
             ));
+            return;
         }
 
-        this.backbeatClient.getMetadata({
+        backbeatClient.getMetadata({
             bucket,
             objectKey: key,
             versionId: version,
@@ -48,7 +49,8 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     method: 'LifecycleUpdateExpirationTask._getMetadata',
                     error: err.message,
                 }, entry.getLogInfo()));
-                return done(err);
+                done(err);
+                return;
             }
             const res = ObjectMD.createFromBlob(blob.Body);
             if (res.error) {
@@ -56,17 +58,38 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     error: res.error,
                     method: 'LifecycleUpdateExpirationTask._getMetadata',
                 }, entry.getLogInfo()));
-                return done(errors.InternalError.customizeDescription(
+                done(errors.InternalError.customizeDescription(
                     'error parsing metadata blob'
                 ));
+            } else {
+                done(null, res.result);
             }
-            return done(null, res.result);
         });
+        return;
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const { bucket, key, version } = entry.getAttribute('target');
-        this.backbeatClient.putMetadata({
+        const {
+            owner: canonicalId,
+            accountId,
+            bucket,
+            key,
+            version,
+        } = entry.getAttribute('target');
+
+        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
+        if (!backbeatClient) {
+            log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            done(errors.InternalError.customizeDescription(
+                'Unable to obtain client',
+            ));
+            return;
+        }
+
+        backbeatClient.putMetadata({
             bucket,
             objectKey: key,
             versionId: version,
@@ -83,10 +106,13 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                         entry.getLogInfo(),
                     )
                 );
-                return done(err);
+                done(err);
+                return;
+            } else {
+                log.end().info('metadata updated for transition', entry.getLogInfo());
+                done();
+                return;
             }
-            log.end().info('metadata updated for transition', entry.getLogInfo());
-            return done();
         });
     }
 
