@@ -57,6 +57,8 @@ class KafkaProducer extends EventEmitter {
         const authObject = auth ? authUtil.generateKafkaAuthObject(auth) : {};
         const producerOptions = {
             'metadata.broker.list': this._kafkaHosts,
+            'batch.num.messages': 1000000,
+            'queue.buffering.max.ms': 10,            
             'message.max.bytes': messageMaxBytes,
             'dr_cb': true,
         };
