@@ -190,14 +190,14 @@ class LifecycleBucketProcessor {
             accountId,
         });
 
-        const s3 = this.clientManager.getS3Client(owner, accountId);
+        const s3 = this.clientManager.getS3Client(accountId);
         if (!s3) {
             return cb(errors.InternalError
                 .customizeDescription('failed to obtain a s3 client'));
         }
 
         const backbeatMetadataProxy =
-            this.clientManager.getBackbeatMetadataProxy(owner, accountId);
+            this.clientManager.getBackbeatMetadataProxy(accountId);
         if (!backbeatMetadataProxy) {
             return cb(errors.InternalError
                 .customizeDescription('failed to obtain a backbeat client'));

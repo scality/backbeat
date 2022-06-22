@@ -22,13 +22,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _getMetadata(entry, log, done) {
-        const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
+        const { accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
-            log.error('failed to get backbeat client', {
-                canonicalId,
-                accountId,
-            });
+            log.error('failed to get backbeat client', { accountId });
             return done(errors.InternalError
                 .customizeDescription('Unable to obtain client'));
         }
@@ -74,13 +71,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
+        const { accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
-            log.error('failed to get backbeat client', {
-                canonicalId,
-                accountId,
-            });
+            log.error('failed to get backbeat client', { accountId });
             return done(errors.InternalError
                 .customizeDescription('Unable to obtain client'));
         }
