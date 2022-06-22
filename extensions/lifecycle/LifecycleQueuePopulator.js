@@ -1,18 +1,15 @@
-const { constants, errorUtils } = require('arsenal');
+const { constants } = require('arsenal');
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
-const http = require('http');
-const https = require('https');
-const uuid = require('uuid/v4');
-const { ChainableTemporaryCredentials } = require('aws-sdk');
-const safeJsonParse = require('./util/safeJsonParse');
 const { authTypeAssumeRole } = require('../../lib/constants');
-const CredentialsManager = require('../../lib/credentials/CredentialsManager');
+const uuid = require('uuid/v4');
+const safeJsonParse = require('./util/safeJsonParse');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
 const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle:populator';
 const METASTORE = '__metastore';
+const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
@@ -24,16 +21,18 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      */
     constructor(params) {
         super(params);
-        this._authConfig = params.config.auth;
-        this._transport = this._authConfig.transport;
+        this._authConfig = params.authConfig;
 
-        if (this._transport === 'https') {
-            this.stsAgent = new https.Agent({ keepAlive: true });
-        } else {
-            this.stsAgent = new http.Agent({ keepAlive: true });
+        this.vaultClientWrapper = new VaultClientWrapper(
+            LIFEYCLE_POPULATOR_CLIENT_ID,
+            params.vaultAdmin,
+            this._authConfig,
+            this.log,
+        );
+
+        if (this._authConfig.type === authTypeAssumeRole) {
+            this.vaultClientWrapper.init();
         }
-        this.credentialsManager = new CredentialsManager('lifecycle', this.logger);
-        this._storeAWSCredentialsPromise();
     }
 
     /**
@@ -146,95 +145,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
-    // directly manages temp creds lifecycle, not going through CredentialsManager,
-    // as vaultclient does not use `AWS.Credentials` objects, and the same set
-    // can be reused forever as the role is assumed in only one account
-    _storeAWSCredentialsPromise() {
-        const { sts, roleName, type } = this._authConfig;
-
-        if (type !== authTypeAssumeRole) {
-            return;
-        }
-
-        const stsWithCreds = this.credentialsManager.resolveExternalFileSync(sts);
-        const stsConfig = {
-            endpoint: `${this._transport}://${sts.host}:${sts.port}`,
-            credentials: {
-                accessKeyId: stsWithCreds.accessKey,
-                secretAccessKey: stsWithCreds.secretKey,
-            },
-            region: 'us-east-1',
-            signatureVersion: 'v4',
-            sslEnabled: this._transport === 'https',
-            httpOptions: { agent: this.stsAgent, timeout: 0 },
-            maxRetries: 0,
-        };
-
-        // FIXME: works with vault 7.10 but not 8.3 (return 501)
-        // https://scality.atlassian.net/browse/VAULT-238
-        // new STS(stsConfig)
-        //     .getCallerIdentity()
-        //     .promise()
-        this._tempCredsPromise =
-            Promise.resolve({
-                Account: '000000000000',
-            })
-            .then(res =>
-                new ChainableTemporaryCredentials({
-                    params: {
-                        RoleArn: `arn:aws:iam::${res.Account}:role/${roleName}`,
-                        RoleSessionName: 'backbeat-lc-vaultclient',
-                        // default expiration: 1 hour,
-                    },
-                    stsConfig,
-                }))
-            .then(creds => {
-                this._tempCredsPromiseResolved = true;
-                return creds;
-            })
-            .catch(err => {
-                if (err.retryable) {
-                    const retryDelayMs = 5000;
-
-                    this.logger.error('could not set up temporary credentials, retrying', {
-                        retryDelayMs,
-                        error: err,
-                    });
-
-                    setTimeout(() => this._storeAWSCredentialsPromise(), retryDelayMs);
-                } else {
-                    this.logger.error('could not set up temporary credentials', {
-                        error: errorUtils.reshapeExceptionError(err),
-                    });
-                }
-            });
-    }
-
-    _getAccountId(canonicalId, cb) {
-        this._tempCredsPromise
-            .then(creds => this._vaultClientCache.getClientWithAWSCreds(
-                LIFEYCLE_POPULATOR_CLIENT_ID,
-                creds,
-            ))
-            .then(client => client.enableIAMOnAdminRoutes())
-            .then(client => {
-                const opts = {};
-                return client.getAccountIds([canonicalId], opts, (err, res) => {
-                    LifecycleMetrics.onVaultRequest(
-                        this.logger,
-                        'getAccountId',
-                        err
-                    );
-
-                    if (err) {
-                        return cb(err);
-                    }
-                    return cb(null, res.message.body[canonicalId]);
-                });
-            })
-            .catch(err => cb(err));
-    }
-
     _handleRestoreOp(entry) {
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
@@ -265,7 +175,9 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // The assumed credentials will be sent and used by TLP server to put object version
         // to the specific S3 bucket.
         const ownerId = value['owner-id'];
-        this._getAccountId(ownerId, (err, accountId) => {
+        this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            LifecycleMetrics.onVaultRequest(this.log, 'getAccountIds', err);
+
             if (err) {
                 this.log.error('unable to get account', {
                     ownerId,

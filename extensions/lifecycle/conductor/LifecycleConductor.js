@@ -1,13 +1,10 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const http = require('http');
-const https = require('https');
 const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
-const { ChainableTemporaryCredentials } = require('aws-sdk');
 
-const { constants, errors, errorUtils } = require('arsenal');
+const { constants, errors } = require('arsenal');
 const Logger = require('werelogs').Logger;
 const BucketClient = require('bucketclient').RESTClient;
 const MongoClient = require('arsenal').storage
@@ -17,11 +14,9 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
-const { authTypeAssumeRole } = require('../../../lib/constants');
-const VaultClientCache = require('../../../lib/clients/VaultClientCache');
-const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const safeJsonParse = require('../util/safeJsonParse');
 const { AccountIdCache } = require('../util/AccountIdCache');
+const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 
@@ -108,17 +103,12 @@ class LifecycleConductor {
         this._accountIdCache = new AccountIdCache(this._concurrency);
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
-        this.credentialsManager = new CredentialsManager('lifecycle', this.logger);
-
-        // global variables
-        if (transport === 'https') {
-            this.stsAgent = new https.Agent({ keepAlive: true });
-        } else {
-            this.stsAgent = new http.Agent({ keepAlive: true });
-        }
-
-        this._tempCredsPromiseResolved = false;
-        this._storeAWSCredentialsPromise();
+        this.vaultClientWrapper = new VaultClientWrapper(
+            LIFEYCLE_CONDUCTOR_CLIENT_ID,
+            this.lcConfig.conductor.vaultAdmin,
+            this._authConfig,
+            this.logger,
+        );
     }
 
     getBucketsZkPath() {
@@ -128,114 +118,6 @@ class LifecycleConductor {
     initZkPaths(cb) {
         async.each([this.getBucketsZkPath()],
                    (path, done) => this._zkClient.mkdirp(path, done), cb);
-    }
-
-    _getAccountIds(canonicalIds, cb) {
-        // if auth is not of type `assumeRole`, then
-        // the accountId can be omitted from work queue messages
-        // because workers won't need to call AssumeRole using
-        // these account IDs to build ARNs.
-        if (this._authConfig.type !== authTypeAssumeRole) {
-            return process.nextTick(cb, null, {});
-        }
-
-        return this._tempCredsPromise
-            .then(creds =>
-                 this._vaultClientCache
-                    .getClientWithAWSCreds(LIFEYCLE_CONDUCTOR_CLIENT_ID, creds)
-
-            )
-            .then(client =>
-                client.enableIAMOnAdminRoutes()
-            )
-            .then(client => {
-                const opts = {};
-                return client.getAccountIds(canonicalIds, opts, (err, res) => {
-                    LifecycleMetrics.onVaultRequest(
-                        this.logger,
-                        'getAccountIds',
-                        err
-                    );
-
-                    if (err) {
-                        return cb(err);
-                    }
-                    return cb(null, res.message.body);
-                });
-            })
-            .catch(err => cb(err));
-    }
-
-    // directly manages temp creds lifecycle, not going through CredentialsManager,
-    // as vaultclient does not use `AWS.Credentials` objects, and the same set
-    // can be reused forever as the role is assumed in only one account
-    _storeAWSCredentialsPromise() {
-        const { sts, roleName, type } = this._authConfig;
-
-        if (type !== authTypeAssumeRole) {
-            return;
-        }
-
-        const stsWithCreds = this.credentialsManager.resolveExternalFileSync(sts);
-        const stsConfig = {
-            endpoint: `${this._transport}://${sts.host}:${sts.port}`,
-            credentials: {
-                accessKeyId: stsWithCreds.accessKey,
-                secretAccessKey: stsWithCreds.secretKey,
-            },
-            region: 'us-east-1',
-            signatureVersion: 'v4',
-            sslEnabled: this._transport === 'https',
-            httpOptions: { agent: this.stsAgent, timeout: 0 },
-            maxRetries: 0,
-        };
-
-        // FIXME: works with vault 7.10 but not 8.3 (return 501)
-        // https://scality.atlassian.net/browse/VAULT-238
-        // new STS(stsConfig)
-        //     .getCallerIdentity()
-        //     .promise()
-        this._tempCredsPromise =
-            Promise.resolve({
-                Account: '000000000000',
-            })
-            .then(res =>
-                new ChainableTemporaryCredentials({
-                    params: {
-                        RoleArn: `arn:aws:iam::${res.Account}:role/${roleName}`,
-                        RoleSessionName: 'backbeat-lc-vaultclient',
-                        // default expiration: 1 hour,
-                    },
-                    stsConfig,
-                }))
-            .then(creds => {
-                this._tempCredsPromiseResolved = true;
-                return creds;
-            })
-            .catch(err => {
-                if (err.retryable) {
-                    const retryDelayMs = 5000;
-
-                    this.logger.error('could not set up temporary credentials, retrying', {
-                        retryDelayMs,
-                        error: err,
-                    });
-
-                    setTimeout(() => this._storeAWSCredentialsPromise(), retryDelayMs);
-                } else {
-                    this.logger.error('could not set up temporary credentials', {
-                        error: errorUtils.reshapeExceptionError(err),
-                    });
-                }
-            });
-    }
-
-    _tempCredentialsReady() {
-        if (this._authConfig.type !== authTypeAssumeRole) {
-            return true;
-        }
-
-        return this._tempCredsPromiseResolved;
     }
 
     processBuckets(cb) {
@@ -261,7 +143,8 @@ class LifecycleConductor {
                 unknownCanonicalIds,
                 10,
                 (canonicalId, done) => {
-                    this._getAccountIds([canonicalId], (err, accountIds) => {
+                    this.vaultClientWrapper.getAccountIds([canonicalId], (err, accountIds) => {
+                        LifecycleMetrics.onVaultRequest(this.logger, 'getAccountIds', err);
                         if (err) {
                             if (err.NoSuchEntity) {
                                 log.error('canonical id does not exist', { error: err, canonicalId });
@@ -657,7 +540,7 @@ class LifecycleConductor {
             return process.nextTick(done);
         }
 
-        this._setupVaultClientCache();
+        this.vaultClientWrapper.init();
         return async.series([
             next => this._setupProducer(next),
             next => this._setupZookeeperClient(next),
@@ -665,18 +548,6 @@ class LifecycleConductor {
             next => this._setupMongodbClient(next),
             next => this._initKafkaBacklogMetrics(next),
         ], done);
-    }
-
-    _setupVaultClientCache() {
-        if (this._authConfig.type !== authTypeAssumeRole) {
-            return;
-        }
-
-        this._vaultClientCache = new VaultClientCache();
-        const { host, port } = this.lcConfig.conductor.vaultAdmin;
-        this._vaultClientCache
-            .setHost(LIFEYCLE_CONDUCTOR_CLIENT_ID, host)
-            .setPort(LIFEYCLE_CONDUCTOR_CLIENT_ID, port);
     }
 
     _initKafkaBacklogMetrics(cb) {
@@ -775,7 +646,7 @@ class LifecycleConductor {
             zkConnectState,
             producer: !!(this._producer && this._producer.isReady()),
             kafkaBacklogMetrics: (!this._kafkaBacklogMetrics || this._kafkaBacklogMetrics.isReady()),
-            tempCreds: this._tempCredentialsReady(),
+            tempCreds: this.vaultClientWrapper.tempCredentialsReady(),
         };
 
         const allReady = Object.values(components).every(v => v);
