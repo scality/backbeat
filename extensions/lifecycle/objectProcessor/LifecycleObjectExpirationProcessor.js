@@ -5,6 +5,7 @@ const Logger = require('werelogs').Logger;
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleDeleteObjectTask =
       require('../tasks/LifecycleDeleteObjectTask');
+const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
 
 class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
 
@@ -55,13 +56,19 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
     getTask(actionEntry) {
         const actionType = actionEntry.getActionType();
 
-        if (actionType !== 'deleteObject' && actionType !== 'deleteMPU') {
-            this._log.warn(`skipped unsupported action ${actionType}`,
-                             actionEntry.getLogInfo());
-            return null;
+        switch (actionType) {
+            case 'deleteObject':
+            case 'deleteMPU':
+                return new LifecycleDeleteObjectTask(this);
+            case 'gc':
+                return new LifecycleUpdateExpirationTask(this);
+            default:
+                this._log.warn(
+                    `skipped unsupported action ${actionType}`,
+                    actionEntry.getLogInfo(),
+                );
+                return null;
         }
-
-        return new LifecycleDeleteObjectTask(this);
     }
 }
 
