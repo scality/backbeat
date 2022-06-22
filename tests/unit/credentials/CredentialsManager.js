@@ -198,8 +198,6 @@ describe('CredentialsManager', () => {
     });
 
     describe('::resolveExternalFileSync', () => {
-        const mgr = new CredentialsManager(extension, log);
-
         it('should return accessKey/secretKey if present', () => {
             const params = {
                 accessKey: 'ak',
@@ -207,7 +205,7 @@ describe('CredentialsManager', () => {
                 otherParam: 'otherValue',
             };
 
-            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
+            assert.deepStrictEqual(CredentialsManager.resolveExternalFileSync(params), params);
         });
 
         it('should read external file if referenced', () => {
@@ -222,7 +220,7 @@ describe('CredentialsManager', () => {
                 otherParam: 'otherValue',
             };
 
-            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), resolvedParams);
+            assert.deepStrictEqual(CredentialsManager.resolveExternalFileSync(params), resolvedParams);
         });
 
         it('should return params untouched if error parsing', () => {
@@ -231,7 +229,7 @@ describe('CredentialsManager', () => {
                 otherParam: 'otherValue',
             };
 
-            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
+            assert.deepStrictEqual(CredentialsManager.resolveExternalFileSync(params), params);
         });
 
         it('should return params untouched if not found', () => {
@@ -240,7 +238,7 @@ describe('CredentialsManager', () => {
                 otherParam: 'otherValue',
             };
 
-            assert.deepStrictEqual(mgr.resolveExternalFileSync(params), params);
+            assert.deepStrictEqual(CredentialsManager.resolveExternalFileSync(params), params);
         });
     });
 });
