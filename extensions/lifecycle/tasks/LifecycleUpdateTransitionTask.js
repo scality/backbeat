@@ -25,12 +25,8 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         return entry.getAttribute('target');
     }
 
-    getSourceAttribute(entry) {
-        return entry.getAttribute('source');
-    }
-
     _getMetadata(entry, log, done) {
-        const { accountId } = this.getTargetAttribute('target');
+        const { accountId } = this.getTargetAttribute(entry);
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
@@ -79,7 +75,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const { accountId } = this.getTargetAttribute('target');
+        const { accountId } = this.getTargetAttribute(entry);
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
@@ -125,7 +121,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                   versionId: version,
                   eTag,
               })
-              .setAttribute('source', this.getSourceAttribute(entry))
+              .setAttribute('source', entry.getAttribute('source'))
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.accountId', accountId)
               .setAttribute('target.owner', owner)

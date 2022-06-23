@@ -4,7 +4,7 @@ const async = require('async');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
-const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const BackbeatConsumerManager = require('../../../lib/BackbeatConsumerManager');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const ClientManager = require('../../../lib/clients/ClientManager');
@@ -50,11 +50,11 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
         this._processConfig = this.getProcessConfig(this._lcConfig);
-        this._consumer = null;
+        this._consumers = null;
         this._gcProducer = null;
 
         this.clientManager = new ClientManager({
-            id: 'lifecycle',
+            id: this.getId(),
             authConfig: this.getAuthConfig(this._lcConfig),
             s3Config,
             transport,
@@ -63,9 +63,12 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.retryWrapper = new BackbeatTask();
     }
 
-    _setupConsumer(cb) {
-        let consumerReady = false;
-        this._consumer = new BackbeatConsumer({
+    getId() {
+        return 'Backbeat:Lifecycle:ObjectProcessor';
+    }
+
+    _getObjecTaskConsumerParams() {
+        return {
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
             },
@@ -77,22 +80,34 @@ class LifecycleObjectProcessor extends EventEmitter {
             topic: this._lcConfig.objectTasksTopic,
             groupId: this._processConfig.groupId,
             concurrency: this._processConfig.concurrency,
-            queueProcessor: this.processKafkaEntry.bind(this),
-        });
-        this._consumer.on('error', err => {
-            if (!consumerReady) {
-                this._log.fatal('unable to start lifecycle consumer', {
-                    error: err,
-                    method: 'LifecycleObjectProcessor._setupConsumer',
-                });
+            queueProcessor: this.processObjectTaskEntry.bind(this),
+        };
+    }
+
+    getConsumerParams() {
+        return {
+            [this._lcConfig.objectTasksTopic]: this._getObjecTaskConsumerParams(),
+        };
+    }
+
+    _setupConsumers(cb) {
+        this._consumers = new BackbeatConsumerManager(
+            this.getId(),
+            this.getConsumerParams(),
+            this._log
+        );
+
+        this._consumers.setupConsumers(err => {
+            if (err) {
+                 this._log.fatal('unable to start lifecycle consumers', {
+                     error: err,
+                     method: 'LifecycleObjectProcessor._setupConsumer',
+                 });
+
                 process.exit(1);
             }
-        });
-        this._consumer.on('ready', () => {
-            consumerReady = true;
-            this._consumer.subscribe();
-            this._log.info(
-                'lifecycle object processor successfully started');
+
+            this._log.info('lifecycle object processor successfully started');
             this.emit('ready');
             cb();
         });
@@ -108,7 +123,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
         async.parallel([
-            done => this._setupConsumer(done),
+            done => this._setupConsumers(done),
             done => {
                 this._gcProducer = new GarbageCollectorProducer();
                 this._gcProducer.setupProducer(done);
@@ -165,7 +180,7 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {function} done - callback function
      * @return {undefined}
      */
-    processKafkaEntry(kafkaEntry, done) {
+    processObjectTaskEntry(kafkaEntry, done) {
         this._log.debug('processing kafka entry');
 
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
@@ -207,7 +222,7 @@ class LifecycleObjectProcessor extends EventEmitter {
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady();
+        return this._consumers && this._consumers.isReady();
     }
 }
 
