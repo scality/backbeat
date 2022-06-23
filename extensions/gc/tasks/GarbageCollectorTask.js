@@ -20,16 +20,12 @@ class GarbageCollectorTask extends BackbeatTask {
         log.debug('action execution starts', entry.getLogInfo());
         const {
             locations,
-            owner: canonicalId,
             accountId
         } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
+        const backbeatClient = this.getBackbeatClient(accountId);
 
         if (!backbeatClient) {
-            log.error('failed to get backbeat client', {
-                canonicalId,
-                accountId,
-            });
+            log.error('failed to get backbeat client', { accountId });
             return done(errors.InternalError
                 .customizeDescription('Unable to obtain client'));
         }

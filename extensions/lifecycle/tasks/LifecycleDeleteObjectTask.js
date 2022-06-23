@@ -20,10 +20,10 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     _checkDate(entry, log, done) {
-        const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const s3Client = this.getS3Client(canonicalId, accountId);
+        const { accountId } = entry.getAttribute('target');
+        const s3Client = this.getS3Client(accountId);
         if (!s3Client) {
-            log.error('failed to get S3 client', { canonicalId, accountId });
+            log.error('failed to get S3 client', { accountId });
             return done(errors.InternalError
                 .customizeDescription('Unable to obtain client'));
         }
@@ -50,10 +50,10 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     _executeDelete(entry, log, done) {
-        const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const s3Client = this.getS3Client(canonicalId, accountId);
+        const { accountId } = entry.getAttribute('target');
+        const s3Client = this.getS3Client(accountId);
         if (!s3Client) {
-            log.error('failed to get S3 client', { canonicalId, accountId });
+            log.error('failed to get S3 client', { accountId });
             return done(errors.InternalError
                 .customizeDescription('Unable to obtain client'));
         }
