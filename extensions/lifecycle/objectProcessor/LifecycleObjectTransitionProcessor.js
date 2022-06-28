@@ -2,9 +2,13 @@
 
 const Logger = require('werelogs').Logger;
 
+
+const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleUpdateTransitionTask =
       require('../tasks/LifecycleUpdateTransitionTask');
+const LifecycleColdStatusArchiveTask =
+      require('../tasks/LifecycleColdStatusArchiveTask');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -37,7 +41,34 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
-        this._log = new Logger('Backbeat:Lifecycle:ObjectTransitionProcessor');
+        this._log = new Logger(this.getId());
+    }
+
+    getId() {
+        return 'Backbeat:Lifecycle:ObjectTransitionProcessor';
+    }
+
+    getConsumerParams() {
+        const consumerParams = super.getConsumerParams();
+
+        this._lcConfig.coldStorageTopics.forEach(topic => {
+            consumerParams[topic] = {
+                zookeeper: {
+                    connectionString: this._zkConfig.connectionString,
+                },
+                kafka: {
+                    hosts: this._kafkaConfig.hosts,
+                    site: this._kafkaConfig.site,
+                    backlogMetrics: this._kafkaConfig.backlogMetrics,
+                },
+                topic,
+                groupId: this._processConfig.groupId,
+                concurrency: this._processConfig.concurrency,
+                queueProcessor: this.processColdStorageStatusEntry.bind(this),
+            };
+        });
+
+        return consumerParams;
     }
 
     getProcessConfig(lcConfig) {
@@ -63,6 +94,33 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         }
 
         return new LifecycleUpdateTransitionTask(this);
+    }
+
+    processColdStorageStatusEntry(kafkaEntry, done) {
+        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry(kafkaEntry);
+        if (entry.error) {
+            this._log.error('malformed status entry', kafkaEntry.value);
+            return process.nextTick(done);
+        }
+        this._log.debug('processing cold storage entry', entry.getLogInfo());
+
+        let task = null;
+
+        switch (entry.op) {
+            case 'archive':
+                task = new LifecycleColdStatusArchiveTask(this);
+                break;
+            default:
+                return process.nextTick(done);
+        }
+
+        return this.retryWrapper.retry({
+            actionDesc: 'process cold storage status entry',
+            logFields: entry.getLogInfo(),
+            actionFunc: done => task.processEntry(entry, done),
+            shouldRetryFunc: err => err.retryable,
+            log: this._log,
+        }, done);
     }
 }
 

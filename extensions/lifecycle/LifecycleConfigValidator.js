@@ -12,6 +12,7 @@ const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
     objectTasksTopic: joi.string().required(),
+    coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
     conductor: {
         auth: inheritedAuthJoi,

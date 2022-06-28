@@ -38,7 +38,11 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
-        this._log = new Logger('Backbeat:Lifecycle:ObjectExpirationProcessor');
+        this._log = new Logger(this.getId());
+    }
+
+    getId() {
+        return 'Backbeat:Lifecycle:ObjectExpirationProcessor';
     }
 
     getProcessConfig(lcConfig) {

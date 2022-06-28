@@ -21,8 +21,12 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         Object.assign(this, procState);
     }
 
+    getTargetAttribute(entry) {
+        return entry.getAttribute('target');
+    }
+
     _getMetadata(entry, log, done) {
-        const { accountId } = entry.getAttribute('target');
+        const { accountId } = this.getTargetAttribute(entry);
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
@@ -30,7 +34,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 .customizeDescription('Unable to obtain client'));
         }
 
-        const { bucket, key, version } = entry.getAttribute('target');
+        const { bucket, key, version } = this.getTargetAttribute(entry);
         return backbeatClient.getMetadata({
             bucket,
             objectKey: key,
@@ -71,7 +75,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const { accountId } = entry.getAttribute('target');
+        const { accountId } = this.getTargetAttribute(entry);
         const backbeatClient = this.getBackbeatMetadataProxy(accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', { accountId });
@@ -80,7 +84,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         }
         //
         // TODO add a condition on metadata cookie and retry if needed
-        const { bucket, key, version } = entry.getAttribute('target');
+        const { bucket, key, version } = this.getTargetAttribute(entry);
         return backbeatClient.putMetadata({
             bucket,
             objectKey: key,
@@ -106,7 +110,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
-        const { bucket, key, version, eTag, accountId, owner } = entry.getAttribute('target');
+        const { bucket, key, version, eTag, accountId, owner } = this.getTargetAttribute(entry);
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',

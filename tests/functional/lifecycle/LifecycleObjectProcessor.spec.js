@@ -34,13 +34,16 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
                     return done(err);
                 }
 
-                lop._consumer.onEntryCommittable = () => {
+                const objectTaskConsumer =
+                    lop._consumers.getConsumer(lcConfig.objectTasksTopic);
+
+                objectTaskConsumer.onEntryCommittable = () => {
                     s3Client.verifyRetries();
                     done();
                 };
 
                 let messagesToConsume = [message];
-                lop._consumer._consumer.consume = (_, cb) => {
+                objectTaskConsumer._consumer.consume = (_, cb) => {
                     process.nextTick(cb, null, messagesToConsume);
                     messagesToConsume = [];
                 };
