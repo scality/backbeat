@@ -117,6 +117,7 @@ describe('queuePopulator', () => {
                     undefined,
                     undefined,
                     undefined,
+                    undefined,
                     testConfig.extensions);
                 queuePopulator.open(next);
             },

@@ -11,6 +11,7 @@ const qpConfig = config.queuePopulator;
 const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
+const vConfig = config.vaultAdmin;
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 const { startProbeServer } = require('../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
@@ -46,7 +47,7 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
-    qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
+    qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
 
 async.waterfall([
     done => startProbeServer(qpConfig.probeServer, (err, probeServer) => {

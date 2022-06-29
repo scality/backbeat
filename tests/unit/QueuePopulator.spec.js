@@ -10,7 +10,7 @@ describe('QueuePopulator', () => {
     beforeEach(() => {
         qp = new QueuePopulator({}, {}, {
             logSource: 'bucketd',
-        }, null, null, null, {});
+        }, null, null, null, null, {});
     });
 
     describe('handle liveness', () => {

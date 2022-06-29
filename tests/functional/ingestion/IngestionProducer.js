@@ -36,6 +36,8 @@ describe('ingestion producer tests with mock', () => {
             testConfig.zookeeper,
             testConfig.kafka,
             testConfig.queuePopulator,
+            null,
+            null,
             testConfig.extensions);
         setupS3Mock(sourceConfig, done);
     });

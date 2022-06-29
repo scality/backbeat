@@ -9,6 +9,7 @@ const kafkaConfig = config.kafka;
 const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const rConfig = config.redis;
+const vConfig = config.vaultAdmin;
 const qpConfig = config.queuePopulator;
 const extConfigs = config.extensions;
 
@@ -45,7 +46,7 @@ function queueBatch(queuePopulator, taskState) {
 /* eslint-enable no-param-reassign */
 
 const queuePopulator = new QueuePopulator(
-    zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, extConfigs);
+    zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
 
 async.waterfall([
     done => queuePopulator.open(done),
