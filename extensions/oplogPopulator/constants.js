@@ -6,6 +6,12 @@ const constants = {
         'change.stream.full.document': 'updateLookup',
         'pipeline': '[]',
         'collection': '',
+        // JSON output converter config
+        // Using a string converter to avoid getting an over-stringified
+        // JSON that is returned by default
+        'output.format.value': 'json',
+        'value.converter.schemas.enable': false,
+        'value.converter': 'org.apache.kafka.connect.storage.StringConverter',
         // Kafka message key config
         // The message key is set to only contain the bucket where the event happend.
         // This will make events of the same bucket always land in the same partition
