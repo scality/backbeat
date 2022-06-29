@@ -18,6 +18,42 @@ const connectorConfig = {
     'change.stream.full.document': 'updateLookup',
     'pipeline': '[]',
     'collection': '',
+    'output.format.value': 'json',
+    'value.converter.schemas.enable': false,
+    'value.converter': 'org.apache.kafka.connect.storage.StringConverter',
+    'output.format.key': 'schema',
+    'output.schema.key': JSON.stringify({
+        type: 'record',
+        name: 'keySchema',
+        fields: [{
+            name: 'ns',
+            type: [{
+                    name: 'ns',
+                    type: 'record',
+                    fields: [{
+                        name: 'coll',
+                        type: ['string', 'null'],
+                    }],
+                }, 'null'],
+        }, {
+            name: 'fullDocument',
+            type: [{
+               type: 'record',
+               name: 'fullDocumentRecord',
+               fields: [{
+                    name: 'value',
+                    type: [{
+                        type: 'record',
+                        name: 'valueRecord',
+                        fields: [{
+                            name: 'key',
+                            type: ['string', 'null'],
+                        }],
+                    }, 'null'],
+               }],
+            }, 'null'],
+        }],
+    }),
 };
 
 const connector1 = new Connector({
