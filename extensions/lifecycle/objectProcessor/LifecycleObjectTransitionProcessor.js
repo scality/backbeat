@@ -1,8 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const Logger = require('werelogs').Logger;
-
-
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleUpdateTransitionTask =
@@ -41,11 +38,10 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
-        this._log = new Logger(this.getId());
     }
 
-    getId() {
-        return 'Backbeat:Lifecycle:ObjectTransitionProcessor';
+    getProcessorType() {
+        return 'transition-processor';
     }
 
     getConsumerParams() {

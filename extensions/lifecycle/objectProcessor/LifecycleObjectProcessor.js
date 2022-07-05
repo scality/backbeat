@@ -10,6 +10,12 @@ const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 
+const logIdFromType = {
+    'object-processor': 'Backbeat:Lifecycle:ObjectProcessor',
+    'transition-processor': 'Backbeat:Lifecycle:ObjectTransitionProcessor',
+    'expiration-processor': 'Backbeat:Lifecycle:ObjectExpirationProcessor',
+};
+
 /**
  * @class LifecycleObjectProcessor
  *
@@ -45,7 +51,7 @@ class LifecycleObjectProcessor extends EventEmitter {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super();
-        this._log = new Logger('Backbeat:Lifecycle:ObjectProcessor');
+        this._log = new Logger(logIdFromType[this.getProcessorType()]);
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
@@ -54,7 +60,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._gcProducer = null;
 
         this.clientManager = new ClientManager({
-            id: this.getId(),
+            id: this.getProcessorType(),
             authConfig: this.getAuthConfig(this._lcConfig),
             s3Config,
             transport,
@@ -63,8 +69,8 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.retryWrapper = new BackbeatTask();
     }
 
-    getId() {
-        return 'Backbeat:Lifecycle:ObjectProcessor';
+    getProcessorType() {
+        return 'object-processor';
     }
 
     _getObjecTaskConsumerParams() {
@@ -92,7 +98,7 @@ class LifecycleObjectProcessor extends EventEmitter {
 
     _setupConsumers(cb) {
         this._consumers = new BackbeatConsumerManager(
-            this.getId(),
+            this.getProcessorType(),
             this.getConsumerParams(),
             this._log
         );
