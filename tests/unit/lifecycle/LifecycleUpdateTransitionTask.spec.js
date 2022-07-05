@@ -8,12 +8,12 @@ const LifecycleUpdateTransitionTask = require(
 
 const {
     GarbageCollectorProducerMock,
-    BackbeatClientMock,
+    BackbeatMetadataProxyMock,
     LifecycleObjectProcessorMock,
 } = require('./mocks');
 
 describe('LifecycleUpdateTransitionTask', () => {
-    let backbeatClient;
+    let backbeatMetadataProxyClient;
     let gcProducer;
     let objectProcessor;
     let mdObj;
@@ -41,18 +41,19 @@ describe('LifecycleUpdateTransitionTask', () => {
             dataStoreVersionId: 'newVersionId',
         }];
 
-        backbeatClient = new BackbeatClientMock();
+        backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
         objectProcessor = new LifecycleObjectProcessorMock(
             null,
-            backbeatClient,
+            null,
+            backbeatMetadataProxyClient,
             gcProducer,
             new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
         mdObj = new ObjectMD();
         mdObj.setLocation(oldLocation)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z');
-        backbeatClient.setMdObj(mdObj);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
         actionEntry = ActionQueueEntry.create('copyLocation')
             .setAttribute('target', {
                 bucket: 'somebucket',
@@ -67,7 +68,7 @@ describe('LifecycleUpdateTransitionTask', () => {
     it('should transition location in metadata', done => {
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedMd = backbeatClient.getReceivedMd();
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.deepStrictEqual(receivedMd.location, newLocation);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
@@ -83,7 +84,7 @@ describe('LifecycleUpdateTransitionTask', () => {
                                  '"6713e7cf89b6b16d5abf11d1fabac587"');
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedMd = backbeatClient.getReceivedMd();
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(receivedMd, null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
@@ -98,7 +99,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         mdObj.setLocation(newLocation);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedMd = backbeatClient.getReceivedMd();
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(receivedMd, null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry, null);
@@ -112,7 +113,7 @@ describe('LifecycleUpdateTransitionTask', () => {
                                  '1970-01-01T00:00:00.001Z');
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedMd = backbeatClient.getReceivedMd();
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(receivedMd, null);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
@@ -132,7 +133,7 @@ describe('LifecycleUpdateTransitionTask', () => {
         });
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
-            const receivedMd = backbeatClient.getReceivedMd();
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
             assert.deepStrictEqual(receivedMd.location, newLocation);
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
