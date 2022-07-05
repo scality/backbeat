@@ -100,7 +100,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                     return process.nextTick(next);
                 }
 
-                return this._executeDeleteData(entry, objectMD, this._log, err => {
+                return this._executeDeleteData(entry, objectMD, log, err => {
                     if (err) {
                         return next(err);
                     }
