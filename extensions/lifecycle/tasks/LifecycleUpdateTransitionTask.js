@@ -103,8 +103,6 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 return done(err);
             }
 
-            log.end().info('metadata updated for transition',
-                           entry.getLogInfo());
             return done();
         });
     }
@@ -205,6 +203,9 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     return this._putMetadata(entry, objMD, log, next);
                 },
                 next => {
+                    log.end().info('metadata updated for transition',
+                        entry.getLogInfo());
+
                     if (!locationToGC) {
                         return next();
                     }

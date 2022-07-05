@@ -54,7 +54,8 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
-    coldStorageArchiveTopicPrefix: joi.string().required(),
+    coldStorageArchiveTopicPrefix: joi.string().default('cold-archive-req-'),
+    coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
 });
 
 function configValidator(backbeatConfig, extConfig) {

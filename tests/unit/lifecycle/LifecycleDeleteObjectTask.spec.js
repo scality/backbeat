@@ -22,6 +22,7 @@ describe('LifecycleDeleteObjectTask', () => {
             s3Client,
             null,
             null,
+            null,
             new werelogs.Logger('test:LifecycleDeleteObjectTask'));
         task = new LifecycleDeleteObjectTask(objectProcessor);
     });

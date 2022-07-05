@@ -1,7 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const Logger = require('werelogs').Logger;
-
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleDeleteObjectTask =
       require('../tasks/LifecycleDeleteObjectTask');
@@ -38,11 +36,10 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
-        this._log = new Logger(this.getId());
     }
 
-    getId() {
-        return 'Backbeat:Lifecycle:ObjectExpirationProcessor';
+    getProcessorType() {
+        return 'expiration-processor';
     }
 
     getProcessConfig(lcConfig) {
