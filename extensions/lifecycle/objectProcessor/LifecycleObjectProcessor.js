@@ -185,7 +185,10 @@ class LifecycleObjectProcessor extends EventEmitter {
 
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
         if (actionEntry.error) {
-            this._log.error('malformed action entry', kafkaEntry.value);
+            this._log.error('malformed action entry', {
+                error: actionEntry.error,
+                entry: kafkaEntry.value,
+            });
             return process.nextTick(done);
         }
         this._log.debug('processing lifecycle object entry',
