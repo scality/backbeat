@@ -5,18 +5,6 @@ const ObjectMDArchive = require('arsenal').models.ObjectMDArchive;
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 
 class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
-    /**
-     * Process a lifecycle object entry
-     *
-     * @constructor
-     * @param {LifecycleObjectProcessor} proc - object processor instance
-     */
-    constructor(proc) {
-        const procState = proc.getStateVars();
-        super();
-        Object.assign(this, procState);
-    }
-
     getTargetAttribute(entry) {
         const {
             bucketName: bucket,
