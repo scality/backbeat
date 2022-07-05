@@ -71,7 +71,7 @@ class VaultClientWrapper {
                 new ChainableTemporaryCredentials({
                     params: {
                         RoleArn: `arn:aws:iam::${res.Account}:role/${roleName}`,
-                        RoleSessionName: `backbeat-vaultclient-${roleName}`,
+                        RoleSessionName: `${this._clientId}`,
                         // default expiration: 1 hour,
                     },
                     stsConfig,
