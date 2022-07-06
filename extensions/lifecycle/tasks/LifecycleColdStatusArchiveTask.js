@@ -96,7 +96,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             },
             next => {
                 const locationToGC = objectMD.getLocation();
-                if (!locationToGC) {
+                if (!locationToGC ||
+                    (Array.isArray(locationToGC) && locationToGC.length === 0)) {
                     return process.nextTick(next);
                 }
 

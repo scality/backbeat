@@ -15,7 +15,51 @@ class GarbageCollectorProducerMock {
     }
 }
 
+class MockRequestAPI {
+    /**
+     * @param {object} args -
+     * @param {object} response -
+     * @param {object} response.error -
+     * @param {object} response.res -
+     */
+    constructor(args, response) {
+        this.response = response;
+        this.args = args;
+        this.doFn = null;
+    }
+
+    send(cb) {
+        if (typeof this.doFn === 'function') {
+            this.doFn(this.args);
+        }
+
+        cb(this.response.error, this.response.res);
+    }
+}
+
 class BackbeatClientMock {
+    constructor() {
+        this.batchDeleteResponse = {};
+        this.times = {
+            batchDeleteResponse: 0,
+        };
+    }
+
+    batchDelete(params, cb) {
+        this.times.batchDeleteResponse += 1;
+
+        const resp = this.batchDeleteResponse;
+        const req = new MockRequestAPI(params, resp);
+
+        if (typeof cb !== 'function') {
+            return req;
+        }
+
+        return cb(resp.error, resp.res);
+    }
+}
+
+class BackbeatMetadataProxyMock {
     constructor() {
         this.mdObj = null;
         this.receivedMd = null;
@@ -40,8 +84,9 @@ class BackbeatClientMock {
 }
 
 class LifecycleObjectProcessorMock {
-    constructor(s3Client, backbeatClient, gcProducer, logger) {
+    constructor(s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, logger) {
         this.s3Client = s3Client;
+        this.backbeatMetadataProxy = backbeatMetadataProxy;
         this.backbeatClient = backbeatClient;
         this.gcProducer = gcProducer;
         this.logger = logger;
@@ -49,11 +94,11 @@ class LifecycleObjectProcessorMock {
 
     getStateVars() {
         return {
-            backbeatClient: this.backbeatClient,
+            backbeatClient: this.backbeatMetadataProxy,
             gcProducer: this.gcProducer,
             logger: this.logger,
             getBackbeatClient: () => this.backbeatClient,
-            getBackbeatMetadataProxy: () => this.backbeatClient,
+            getBackbeatMetadataProxy: () => this.backbeatMetadataProxy,
             getS3Client: () => this.s3Client,
         };
     }
@@ -107,6 +152,7 @@ class S3ClientMock {
 module.exports = {
     LifecycleObjectProcessorMock,
     GarbageCollectorProducerMock,
+    BackbeatMetadataProxyMock,
     BackbeatClientMock,
     S3ClientMock,
 };
