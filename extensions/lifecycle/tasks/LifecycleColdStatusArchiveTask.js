@@ -113,7 +113,14 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                     // set location to null
                     objectMD.setLocation();
                     // TODO: set different data store name?
-                    return this._putMetadata(entry, objectMD, log, next);
+                    return this._putMetadata(entry, objectMD, log, err => {
+                        if (!err) {
+                            log.end().info('completed expiration of archived data',
+                                entry.getLogInfo());
+                        }
+
+                        next(err);
+                    });
                 });
             },
         ], done);
