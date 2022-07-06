@@ -49,8 +49,16 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
-        // ALlow a non-versioned object if being replicated from an NFS bucket.
-        if (isMasterKey(entry.key) && !queueEntry.getReplicationIsNFS()) {
+
+        // Allow non versioned master keys as OOB buckets might contain objects
+        // that were created before versioning was enabled
+        const isNonVersionedMaster = !queueEntry.getVersionId();
+        // Allow objects created after version suspension, those have a null version master only
+        const isNullVersionMaster = queueEntry.getVersionId() && queueEntry.getIsNull();
+        // Allow a non-versioned object if being replicated from an NFS bucket.
+        const isNFS = queueEntry.getReplicationIsNFS();
+
+        if (isMasterKey(entry.key) && !isNFS && !isNullVersionMaster && !isNonVersionedMaster) {
             return;
         }
         if (queueEntry.getReplicationStatus() !== 'PENDING') {

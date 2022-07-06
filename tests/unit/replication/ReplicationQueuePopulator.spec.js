@@ -127,18 +127,6 @@ describe('replication queue populator', () => {
 
     [
         {
-            desc: 'object entry, not a master key',
-            entry: Object.assign({}, {
-                type: 'put',
-                bucket: 'test-bucket-source',
-                key: 'a-test-key',
-                logReader: {
-                    getMetricLabels: stubMetricLabels(),
-                },
-            }, { value: JSON.stringify(kafkaValue) }),
-            results: {},
-        },
-        {
             desc: 'object entry, master key',
             entry: Object.assign({}, {
                 type: 'put',
