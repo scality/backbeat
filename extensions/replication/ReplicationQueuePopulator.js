@@ -45,7 +45,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const value = JSON.parse(entry.value);
 
         // FIXME: remove
-        this.log.info('ENTRY', { entry });
+        this.log.info('ENTRY', { entry: value });
 
         const queueEntry = new ObjectQueueEntry(entry.bucket,
                                                 entry.key, value);
@@ -94,7 +94,6 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
 
-        this.log.info('QUEUE ENTRY', { publishedEntry });
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
