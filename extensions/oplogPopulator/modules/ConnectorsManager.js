@@ -118,6 +118,10 @@ class ConnectorsManager {
             if (spawn) {
                 await connector.spawn();
             }
+            this._logger.debug('Successfully created connector', {
+                method: 'ConnectorsManager.addConnector',
+                connector: connector.name
+            });
             return connector;
         } catch (err) {
             this._logger.error('An error occurred while creating connector', {
@@ -165,8 +169,16 @@ class ConnectorsManager {
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
                 });
+                this._logger.debug('Successfully retreived old connector', {
+                    method: 'ConnectorsManager._getOldConnectors',
+                    connector: connector.name
+                });
                 return connector;
             }));
+            this._logger.info('Successfully retreived old connectors', {
+                method: 'ConnectorsManager._getOldConnectors',
+                numberOfConnectors: connectors.length
+            });
             return connectors;
         } catch (err) {
             this._logger.error('An error occurred while getting old connectors', {
@@ -232,6 +244,11 @@ class ConnectorsManager {
                 connector: connector.name,
                 numberOfBucketsRemoved: invalidBuckets.length
             });
+            this._logger.debug('Successfully removed invalid buckets from connector', {
+                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
+                connector: connector.name,
+                numberOfBucketsRemoved: invalidBuckets.length
+            });
         } catch (err) {
             this._logger.error('An error occurred while removing invalid buckets from a connector', {
                 method: 'ConnectorsManager.removeConnectorInvalidBuckets',
@@ -252,6 +269,9 @@ class ConnectorsManager {
         try {
             await eachLimit(this._oldConnectors, 10, async connector =>
                 this.removeConnectorInvalidBuckets(connector, buckets));
+            this._logger.info('Successfully removed invalid buckets from old connectors', {
+                method: 'ConnectorsManager.removeInvalidBuckets',
+            });
             this._logger.info('Successfully removed invalid buckets from old connectors', {
                 method: 'ConnectorsManager.removeInvalidBuckets',
             });

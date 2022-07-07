@@ -69,7 +69,7 @@ class Allocator {
                 const connector = this._allocationStrategy.getConnector(connectors);
                 await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
-                this._logger.debug('Started listening to bucket', {
+                this._logger.info('Started listening to bucket', {
                     method: 'Allocator.listenToBucket',
                     bucket,
                     connector: connector.name,
@@ -99,7 +99,7 @@ class Allocator {
             if (connector) {
                 await connector.removeBucket(bucket);
                 this._bucketsToConnectors.delete(bucket);
-                this._logger.debug('Stoped listening to bucket', {
+                this._logger.info('Stopped listening to bucket', {
                     method: 'Allocator.listenToBucket',
                     bucket,
                     connector: connector.name,
