@@ -1,4 +1,5 @@
 'use strict'; // eslint-disable-line
+const assert = require('assert');
 
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
@@ -46,8 +47,17 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
     getConsumerParams() {
         const consumerParams = super.getConsumerParams();
+        const locations = require('../../../conf/locationConfig.json') || {};
 
         this._lcConfig.coldStorageTopics.forEach(topic => {
+            if (!topic.startsWith(this._lcConfig.coldStorageStatusTopicPrefix)) {
+                return;
+            }
+
+            const coldLocation = topic.slice(this._lcConfig.coldStorageStatusTopicPrefix.length);
+            assert(locations[coldLocation], `${coldLocation}: unknown location`);
+            assert(locations[coldLocation].isCold, `${coldLocation} is not a valid cold storage location`);
+
             consumerParams[topic] = {
                 zookeeper: {
                     connectionString: this._zkConfig.connectionString,
@@ -60,7 +70,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 topic,
                 groupId: this._processConfig.groupId,
                 concurrency: this._processConfig.concurrency,
-                queueProcessor: this.processColdStorageStatusEntry.bind(this),
+                queueProcessor: this.processColdStorageStatusEntry.bind(this, coldLocation),
             };
         });
 
@@ -92,7 +102,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         return new LifecycleUpdateTransitionTask(this);
     }
 
-    processColdStorageStatusEntry(kafkaEntry, done) {
+    processColdStorageStatusEntry(coldLocation, kafkaEntry, done) {
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry(kafkaEntry);
         if (entry.error) {
             this._log.error('malformed status entry', {
@@ -116,7 +126,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         return this.retryWrapper.retry({
             actionDesc: 'process cold storage status entry',
             logFields: entry.getLogInfo(),
-            actionFunc: done => task.processEntry(entry, done),
+            actionFunc: done => task.processEntry(coldLocation, entry, done),
             shouldRetryFunc: err => err.retryable,
             log: this._log,
         }, done);

@@ -77,28 +77,39 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
         });
     }
 
-    processEntry(entry, done) {
+    processEntry(coldLocation, entry, done) {
         const log = this.logger.newRequestLogger();
         let objectMD;
+        let skipLocationDeletion = false;
+
         return async.series([
             next => this._getMetadata(entry, log, (err, res) => {
                 if (err) {
                     return next(err);
                 }
 
+                const locations = res.getLocation();
                 objectMD = res;
+                skipLocationDeletion = !locations ||
+                    (Array.isArray(locations) && locations.length === 0);
+
                 return next();
             }),
             next => {
                 // set new ObjectMDArchive to ObjectMD
                 objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
+
+                if (skipLocationDeletion) {
+                    objectMD.setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation);
+                }
+
                 this._putMetadata(entry, objectMD, log, next);
+
             },
             next => {
-                const locationToGC = objectMD.getLocation();
-                if (!locationToGC ||
-                    (Array.isArray(locationToGC) && locationToGC.length === 0)) {
-                    return process.nextTick(next);
+                if (skipLocationDeletion) {
+                    return process.nextTick(done);
                 }
 
                 return this._executeDeleteData(entry, objectMD, log, err => {
@@ -112,8 +123,9 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         objectVersion: entry.target.objectVersion,
                     });
                     // set location to null
-                    objectMD.setLocation();
-                    // TODO: set different data store name?
+                    objectMD.setLocation()
+                        .setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation);
                     return this._putMetadata(entry, objectMD, log, err => {
                         if (!err) {
                             log.end().info('completed expiration of archived data',

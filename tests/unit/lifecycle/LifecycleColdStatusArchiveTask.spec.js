@@ -24,6 +24,8 @@ const message = Buffer.from(`{
 "requestId":"060733275a408411c862"
 }`);
 
+const coldLocation = 'cold';
+
 const loc = [{
     key: 'key',
     size: 10,
@@ -61,14 +63,17 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
         mdObj.setLocation(loc)
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
             .setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
-        archiveTask.processEntry(entry, err => {
+        archiveTask.processEntry(coldLocation, entry, err => {
             assert.ifError(err);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(updatedMD.location, null);
+            assert.strictEqual(updatedMD.dataStoreName, coldLocation);
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
@@ -82,14 +87,18 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
         mdObj.setLocation(loc)
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
             .setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
-        archiveTask.processEntry(entry, err => {
+        archiveTask.processEntry(coldLocation, entry, err => {
             assert.strictEqual(err.statusCode, 500);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
             assert.deepStrictEqual(updatedMD.location, loc);
+            assert.strictEqual(updatedMD.dataStoreName, 'us-east-1');
+            assert.strictEqual(updatedMD['x-amz-storage-class'], 'us-east-1');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
@@ -103,14 +112,18 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
         mdObj.setLocation(loc)
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
             .setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
-        archiveTask.processEntry(entry, err => {
+        archiveTask.processEntry(coldLocation, entry, err => {
             assert.ifError(err);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(updatedMD.location, null);
+            assert.strictEqual(updatedMD.dataStoreName, 'cold');
+            assert.strictEqual(updatedMD['x-amz-storage-class'], 'cold');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
@@ -124,15 +137,19 @@ describe('LifecycleColdStatusArchiveTask', () => {
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
         mdObj.setLocation()
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
             .setArchive(null);
         backbeatMetadataProxyClient.setMdObj(mdObj);
 
-        archiveTask.processEntry(entry, err => {
+        archiveTask.processEntry(coldLocation, entry, err => {
             assert.ifError(err);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
             assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
             assert.strictEqual(updatedMD.location, null);
+            assert.strictEqual(updatedMD.dataStoreName, 'cold');
+            assert.strictEqual(updatedMD['x-amz-storage-class'], 'cold');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
