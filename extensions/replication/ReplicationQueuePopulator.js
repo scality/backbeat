@@ -43,8 +43,13 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             return;
         }
         const value = JSON.parse(entry.value);
+
+        // FIXME: remove
+        this.log.info('ENTRY', { entry });
+
         const queueEntry = new ObjectQueueEntry(entry.bucket,
                                                 entry.key, value);
+
         const sanityCheckRes = queueEntry.checkSanity();
         if (sanityCheckRes) {
             return;
@@ -89,6 +94,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
 
+        this.log.info('QUEUE ENTRY', { publishedEntry });
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
