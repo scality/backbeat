@@ -23,7 +23,7 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
 
-const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle:conductor';
+const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle-conductor';
 
 /**
  * @class LifecycleConductor
