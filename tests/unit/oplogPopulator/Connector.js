@@ -94,7 +94,7 @@ describe('Connector', () => {
     });
 
     describe('_generateConnectorPipeline', () => {
-        it('should return new pipeline', () => {
+        it('Should return new pipeline', () => {
             const buckets = ['example-bucket-1', 'example-bucket-2'];
             const pipeline = connector._generateConnectorPipeline(buckets);
             assert.strictEqual(pipeline, JSON.stringify([
@@ -109,15 +109,92 @@ describe('Connector', () => {
         });
     });
 
+    describe('_updateConnectorState', () => {
+        it('Should update all fields when a bucket is added/removed', () => {
+            const clock = sinon.useFakeTimers();
+            clock.tick(100);
+            connector._state.bucketsGotModified = false;
+            const oldDate = connector._state.lastUpdated;
+            connector._updateConnectorState(true);
+            assert.strictEqual(connector._state.bucketsGotModified, true);
+            assert.notEqual(oldDate, connector._state.lastUpdated);
+        });
+
+        it('Should update all fields when connector got updated and no other operations occured', () => {
+            connector._state.bucketsGotModified = true;
+            const oldDate = connector._state.lastUpdated;
+            const now = Date.now();
+            const clock = sinon.useFakeTimers();
+            clock.tick(100);
+            connector._updateConnectorState(false, now);
+            assert.strictEqual(connector._state.bucketsGotModified, false);
+            assert.notEqual(oldDate, connector._state.lastUpdated);
+        });
+
+        it('Should only update date incase an opetation happend while updating connector', () => {
+            const oldDate = Date.now();
+            connector._state.lastUpdated = oldDate;
+            connector._state.bucketsGotModified = true;
+            const clock = sinon.useFakeTimers();
+            clock.tick(100);
+            const now = Date.now();
+            connector._updateConnectorState(false, now);
+            assert.strictEqual(connector._state.bucketsGotModified, true);
+            assert.notEqual(oldDate, connector._state.lastUpdated);
+        });
+    });
+
     describe('updatePipeline', () => {
-        it('Should update connector pipeline', async () => {
+        it('Should only update connector pipeline data if conditions are met', async () => {
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
                 .resolves();
-            await connector.updatePipeline();
+            const didUpdate = await connector.updatePipeline();
+            assert.strictEqual(didUpdate, false);
+            assert(pipelineStub.calledOnceWith([]));
+            assert(updateStub.notCalled);
+        });
+
+        it('Should update connector', async () => {
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+                .returns('example-pipeline');
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true);
+            assert.strictEqual(didUpdate, true);
             assert(pipelineStub.calledOnceWith([]));
             assert(updateStub.calledOnceWith('example-connector', 'example-pipeline'));
+        });
+
+        it('Should not update when buckets assigned to connector haven\'t changed', async () => {
+            connector._state.bucketsGotModified = false;
+            connector._state.isUpdating = false;
+            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+                .returns('example-pipeline');
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true);
+            assert.strictEqual(didUpdate, false);
+            assert(pipelineStub.notCalled);
+            assert(updateStub.notCalled);
+        });
+
+        it('Should not update when connector is updating', async () => {
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = true;
+            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+                .returns('example-pipeline');
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true);
+            assert.strictEqual(didUpdate, false);
+            assert(pipelineStub.notCalled);
+            assert(updateStub.notCalled);
         });
     });
 });
