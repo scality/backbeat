@@ -37,6 +37,18 @@ class Connector {
         this._name = params.name;
         this._config = params.config;
         this._buckets = new Set(params.buckets);
+        this._state = {
+            // Used to check if buckets assigned to this connector
+            // got modified from the last connector update
+            bucketsGotModified: true,
+            // Used to avoid concurrency issues when updating the state.
+            // the state value gets updated to false only when the connector
+            // update is successful. And because updating the connector is an
+            // asynchronous operation, multiple updates could of happened in the
+            // mean time, so we only set to false when no other update happened.
+            lastUpdated: Date.now(),
+            isUpdating: false,
+        };
         this._logger = params.logger;
         this._kafkaConnect = new KafkaConnectWrapper({
             kafkaConnectHost: params.kafkaConnectHost,
@@ -109,13 +121,14 @@ class Connector {
      * Add bucket to this connector
      * Connector is updated with the new bucket list
      * @param {string} bucket bucket to add
-     * @param {boolean} [doUpdate=true] updates connector if true
+     * @param {boolean} [doUpdate=false] updates connector if true
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
      */
-    async addBucket(bucket, doUpdate = true) {
+    async addBucket(bucket, doUpdate = false) {
+        this._buckets.add(bucket);
+        this._updateConnectorState(true);
         try {
-            this._buckets.add(bucket);
             await this.updatePipeline(doUpdate);
         } catch (err) {
             this._logger.error('Error while adding bucket to connector', {
@@ -132,13 +145,14 @@ class Connector {
      * Remove bucket from this connector
      * Connector is updated with new bucket list
      * @param {string} bucket bucket to add
-     * @param {boolean} [doUpdate=true] updates connector if true
+     * @param {boolean} [doUpdate=false] updates connector if true
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
      */
-    async removeBucket(bucket, doUpdate = true) {
+    async removeBucket(bucket, doUpdate = false) {
+        this._buckets.delete(bucket);
+        this._updateConnectorState(true);
         try {
-            this._buckets.delete(bucket);
             await this.updatePipeline(doUpdate);
         } catch (err) {
             this._logger.error('Error while removing bucket from connector', {
@@ -171,19 +185,57 @@ class Connector {
     }
 
     /**
+     * Handles updating the values of _bucketsGotModified
+     * @param {boolean} bucketsGotModified value of _state.bucketsGotModified
+     * to set
+     * @param {number} timeBeforeUpdate time just before async
+     * connector update operation (only needed when updated connector)
+     * @returns {undefined}
+     */
+    _updateConnectorState(bucketsGotModified, timeBeforeUpdate = 0) {
+        const currentTime = Date.now();
+        // If updating to false (connector got updated), we
+        // need to check if any update occured while asynchronously
+        // updating the connector, as those operations were not included
+        // in the update
+        const shouldUpdateState = !bucketsGotModified && !!timeBeforeUpdate &&
+            timeBeforeUpdate >= this._state.lastUpdated;
+        // If updating to true (a bucket got added/removed or update failed)
+        // directly update the value as checking is not required
+        if (bucketsGotModified || shouldUpdateState) {
+            this._state.bucketsGotModified = bucketsGotModified;
+        }
+        this._state.lastUpdated = currentTime;
+        return undefined;
+    }
+
+    /**
      * Updates connector pipeline with
      * buckets assigned to this connector
-     * @param {boolean} [doUpdate=true] updates connector if true
-     * @returns {Promise|undefined} undefined
+     * @param {boolean} [doUpdate=false] updates connector if true
+     * @returns {Promise|boolean} connector did update
      * @throws {InternalError}
      */
-    async updatePipeline(doUpdate = true) {
+    async updatePipeline(doUpdate = false) {
+        // Only update when buckets changed and when not already updating
+        if (!this._state.bucketsGotModified || this._state.isUpdating) {
+            return false;
+        }
         this._config.pipeline = this._generateConnectorPipeline([...this._buckets]);
         try {
             if (doUpdate) {
+                const timeBeforeUpdate = Date.now();
+                this._state.isUpdating = true;
                 await this._kafkaConnect.updateConnectorPipeline(this._name, this._config.pipeline);
+                this._updateConnectorState(false, timeBeforeUpdate);
+                this._state.isUpdating = false;
+                return true;
             }
+            return false;
         } catch (err) {
+            // make sure to trigger the next update in case of error
+            this._state.isUpdating = false;
+            this._updateConnectorState(true);
             this._logger.error('Error while updating connector pipeline', {
                 method: 'Connector.updatePipeline',
                 connector: this._name,

@@ -1,5 +1,4 @@
 const joi = require('joi');
-const async = require('async');
 const { errors } = require('arsenal');
 const LeastFullConnector = require('../allocationStrategy/LeastFullConnector');
 
@@ -7,10 +6,6 @@ const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
     logger: joi.object().required(),
 }).required();
-
-// Number of times the allocator should try to update
-// a connector
-const MAX_RETRIES = process.env.OPLOG_POPULATOR_ALLOCATOR_RETRY || 3;
 
 /**
  * @class Allocator
@@ -72,7 +67,7 @@ class Allocator {
             if (!this._bucketsToConnectors.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
                 const connector = this._allocationStrategy.getConnector(connectors);
-                await async.retry(MAX_RETRIES, async () => connector.addBucket(bucket));
+                await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
                 this._logger.debug('Started listening to bucket', {
                     method: 'Allocator.listenToBucket',
@@ -102,7 +97,7 @@ class Allocator {
         try {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
-                await async.retry(MAX_RETRIES, async () => connector.removeBucket(bucket));
+                await connector.removeBucket(bucket);
                 this._bucketsToConnectors.delete(bucket);
                 this._logger.debug('Stoped listening to bucket', {
                     method: 'Allocator.listenToBucket',

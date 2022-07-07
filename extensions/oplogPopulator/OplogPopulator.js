@@ -228,6 +228,7 @@ class OplogPopulator {
                database: this._database,
                mongoUrl: this._mongoUrl,
                oplogTopic: this._config.topic,
+               cronRule: this._config.connectorsUpdateCronRule,
                prefix: this._config.prefix,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
@@ -248,7 +249,8 @@ class OplogPopulator {
             this._setMetastoreChangeStream();
             // remove no longer valid buckets from old connectors
             await this._connectorsManager.removeInvalidBuckets(validBuckets);
-            this._logger.debug('OplogPopulator setup complete', {
+            // start scheduler for updating connectors
+            this._connectorsManager.scheduleConnectorUpdates();
                 method: 'OplogPopulator.setup',
             });
        } catch (err) {

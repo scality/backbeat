@@ -1,6 +1,8 @@
 const joi = require('joi');
 const async = require('async');
 const uuid = require('uuid');
+const util = require('util');
+const schedule = require('node-schedule');
 const { errors } = require('arsenal');
 const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
@@ -11,11 +13,17 @@ const paramsJoi = joi.object({
     database: joi.string().required(),
     mongoUrl: joi.string().required(),
     oplogTopic: joi.string().required(),
+    cronRule: joi.string().required(),
     prefix: joi.string(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
     logger: joi.object().required(),
 }).required();
+
+// Promisify async functions
+const eachSeries = util.promisify(async.eachSeries);
+const eachLimit = util.promisify(async.eachLimit);
+const timesLimit = util.promisify(async.timesLimit);
 
 /**
  * @class ConnectorsManager
@@ -32,6 +40,7 @@ class ConnectorsManager {
      * @param {string} params.database MongoDB database to use (for connector)
      * @param {string} params.mongoUrl MongoDB connection url
      * @param {string} params.oplogTopic topic to use for oplog
+     * @param {string} params.cronRule connector updates cron rule
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
      * @param {Logger} params.logger logger object
@@ -39,6 +48,7 @@ class ConnectorsManager {
     constructor(params) {
         joi.attempt(params, paramsJoi);
         this._nbConnectors = params.nbConnectors;
+        this._cronRule = params.cronRule;
         this._logger = params.logger;
         this._kafkaConnectHost = params.kafkaConnectHost;
         this._kafkaConnectPort = params.kafkaConnectPort;
@@ -140,7 +150,7 @@ class ConnectorsManager {
      */
     async _getOldConnectors(connectorNames) {
         try {
-            const connectors = Promise.all(connectorNames.map(async connectorName => {
+            const connectors = await Promise.all(connectorNames.map(async connectorName => {
                 // get old connector config
                 const config = await this._kafkaConnect.getConnectorConfig(connectorName);
                 // extract buckets from old connector config and filter them
@@ -184,11 +194,14 @@ class ConnectorsManager {
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
-            for (let i = 0; i < nbConnectorsToAdd; i++) {
-                // eslint-disable-next-line no-await-in-loop
+            await timesLimit(nbConnectorsToAdd, 10, async () => {
                 const newConnector = await this.addConnector();
                 this._connectors.push(newConnector);
-            }
+            });
+            this._logger.info('Successfully initialized connectors', {
+                method: 'ConnectorsManager.initializeConnectors',
+                numberOfActiveConnectors: this._connectors.length
+            });
             return this._connectors;
         } catch (err) {
             this._logger.error('An error occurred while initializing connectors', {
@@ -212,10 +225,13 @@ class ConnectorsManager {
             const invalidBuckets = connector.buckets.filter(bucket =>
                 !buckets.includes(bucket));
             // removing invalid buckets
-            await async.eachLimit(invalidBuckets, 10, async bucket =>
-                connector.removeBucket(bucket, false));
-            // updating connector pipeline
-            await connector.updatePipeline(true);
+            await eachSeries(invalidBuckets, async bucket =>
+                connector.removeBucket(bucket));
+            this._logger.debug('Successfully removed invalid buckets from connector', {
+                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
+                connector: connector.name,
+                numberOfBucketsRemoved: invalidBuckets.length
+            });
         } catch (err) {
             this._logger.error('An error occurred while removing invalid buckets from a connector', {
                 method: 'ConnectorsManager.removeConnectorInvalidBuckets',
@@ -234,8 +250,11 @@ class ConnectorsManager {
      */
     async removeInvalidBuckets(buckets) {
         try {
-            await Promise.all(this._oldConnectors.map(connector =>
-                this.removeConnectorInvalidBuckets(connector, buckets)));
+            await eachLimit(this._oldConnectors, 10, async connector =>
+                this.removeConnectorInvalidBuckets(connector, buckets));
+            this._logger.info('Successfully removed invalid buckets from old connectors', {
+                method: 'ConnectorsManager.removeInvalidBuckets',
+            });
         } catch (err) {
             this._logger.error('An error occurred while removing invalid buckets from connectors', {
                 method: 'ConnectorsManager.removeInvalidBuckets',
@@ -243,6 +262,44 @@ class ConnectorsManager {
             });
             throw errors.InternalError.customizeDescription(err.description);
         }
+    }
+
+    /**
+     * Schedules connector updates
+     * @returns {undefined}
+     */
+    scheduleConnectorUpdates() {
+        schedule.scheduleJob(this._cronRule, async () => {
+            const connectorsStatus = {};
+            let connectorUpdateFailed = false;
+            await eachLimit(this._connectors, 10, async connector => {
+                connectorsStatus[connector.name] = {
+                    numberOfBuckets: connector.bucketCount,
+                    updated: null,
+                };
+                try {
+                    const updated = await connector.updatePipeline(true);
+                    connectorsStatus[connector.name].updated = updated;
+                } catch (err) {
+                    connectorUpdateFailed = true;
+                    connectorsStatus[connector.name].updated = false;
+                    this._logger.error('Failed to updated connector', {
+                        method: 'ConnectorsManager.scheduleConnectorUpdates',
+                        connector: connector.name,
+                        bucketCount: connector.bucketCount,
+                        error: err.description || err.message,
+                    });
+                }
+            });
+            const logMessage = connectorUpdateFailed ? 'Failed to update some or all the connectors' :
+                'Successfully updated all the connectors';
+            const logFunction = connectorUpdateFailed ? this._logger.error.bind(this._logger) :
+                this._logger.info.bind(this._logger);
+            logFunction(logMessage, {
+                method: 'ConnectorsManager.scheduleConnectorUpdates',
+                connectorsStatus,
+            });
+        });
     }
 
     /**
