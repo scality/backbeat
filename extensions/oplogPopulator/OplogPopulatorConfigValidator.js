@@ -1,4 +1,5 @@
 const joi = require('joi');
+const { probeServerJoi } = require('../../lib/config/configItems.joi');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
@@ -6,6 +7,7 @@ const joiSchema = joi.object({
     kafkaConnectPort: joi.number().required(),
     numberOfConnectors: joi.number().required().min(1),
     prefix: joi.string().optional(),
+    probeServer: probeServerJoi.default(),
 });
 
 function configValidator(backbeatConfig, extConfig) {
