@@ -5,18 +5,6 @@ const ObjectMDArchive = require('arsenal').models.ObjectMDArchive;
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 
 class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
-    /**
-     * Process a lifecycle object entry
-     *
-     * @constructor
-     * @param {LifecycleObjectProcessor} proc - object processor instance
-     */
-    constructor(proc) {
-        const procState = proc.getStateVars();
-        super();
-        Object.assign(this, procState);
-    }
-
     getTargetAttribute(entry) {
         const {
             bucketName: bucket,
@@ -89,30 +77,42 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
         });
     }
 
-    processEntry(entry, done) {
+    processEntry(coldLocation, entry, done) {
         const log = this.logger.newRequestLogger();
         let objectMD;
+        let skipLocationDeletion = false;
+
         return async.series([
             next => this._getMetadata(entry, log, (err, res) => {
                 if (err) {
                     return next(err);
                 }
 
+                const locations = res.getLocation();
                 objectMD = res;
+                skipLocationDeletion = !locations ||
+                    (Array.isArray(locations) && locations.length === 0);
+
                 return next();
             }),
             next => {
                 // set new ObjectMDArchive to ObjectMD
                 objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
-                this._putMetadata(entry, objectMD, log, next);
-            },
-            next => {
-                const locationToGC = objectMD.getLocation();
-                if (!locationToGC) {
-                    return process.nextTick(next);
+
+                if (skipLocationDeletion) {
+                    objectMD.setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation);
                 }
 
-                return this._executeDeleteData(entry, objectMD, this._log, err => {
+                this._putMetadata(entry, objectMD, log, next);
+
+            },
+            next => {
+                if (skipLocationDeletion) {
+                    return process.nextTick(done);
+                }
+
+                return this._executeDeleteData(entry, objectMD, log, err => {
                     if (err) {
                         return next(err);
                     }
@@ -123,9 +123,17 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         objectVersion: entry.target.objectVersion,
                     });
                     // set location to null
-                    objectMD.setLocation();
-                    // TODO: set different data store name?
-                    return this._putMetadata(entry, objectMD, log, next);
+                    objectMD.setLocation()
+                        .setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation);
+                    return this._putMetadata(entry, objectMD, log, err => {
+                        if (!err) {
+                            log.end().info('completed expiration of archived data',
+                                entry.getLogInfo());
+                        }
+
+                        next(err);
+                    });
                 });
             },
         ], done);
