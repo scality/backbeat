@@ -7,7 +7,7 @@ const uuid = require('uuid/v4');
 const safeJsonParse = require('./util/safeJsonParse');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
-const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle:populator';
+const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle-populator';
 const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 

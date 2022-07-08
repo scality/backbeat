@@ -101,6 +101,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
                 if (skipLocationDeletion) {
                     objectMD.setDataStoreName(coldLocation);
+                    objectMD.setAmzStorageClass(coldLocation);
                 }
 
                 this._putMetadata(entry, objectMD, log, next);

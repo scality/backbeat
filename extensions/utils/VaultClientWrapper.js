@@ -71,7 +71,8 @@ class VaultClientWrapper {
                 new ChainableTemporaryCredentials({
                     params: {
                         RoleArn: `arn:aws:iam::${res.Account}:role/${roleName}`,
-                        RoleSessionName: `backbeat-vaultclient-${roleName}`,
+                        // RoleSessionName: `backbeat-vaultclient-${roleName}`,
+                        RoleSessionName: `${this._clientId}`,
                         // default expiration: 1 hour,
                     },
                     stsConfig,
@@ -109,6 +110,7 @@ class VaultClientWrapper {
     }
 
     getAccountIds(canonicalIds, cb) {
+        console.log('canonicalIds!!!', canonicalIds);
         if (this._authConfig.type !== authTypeAssumeRole) {
             return process.nextTick(cb, null, {});
         }

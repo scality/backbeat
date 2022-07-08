@@ -110,6 +110,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
     processColdStorageStatusEntry(coldLocation, kafkaEntry, done) {
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry(kafkaEntry);
+        console.log('STATUS ENTRY FROM SORBET!!!', entry);
         if (entry.error) {
             this._log.error('malformed status entry', {
                 error: entry.error,

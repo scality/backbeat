@@ -94,6 +94,8 @@ class ReplicationAPI {
                 // TODO: BB-217 do not use contentLength from metrics
                 size: contentLength,
             };
+            console.log('KAFKA TOPIC!!!', topic);
+            console.log('KAKFA MESSAGE!!!', message);
             kafkaEntry.message = JSON.stringify(message);
         }
         producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {

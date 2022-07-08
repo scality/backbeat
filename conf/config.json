@@ -41,13 +41,23 @@
             "readPreference": "primary",
             "database": "metadata"
         },
-        "kafka": {
-            "topic": "backbeat-oplog",
-            "consumerGroupId": "backbeat-qp-oplog-group"
-        },
         "probeServer": {
             "bindAddress": "0.0.0.0",
             "port": 4042
+        },
+        "auth": {
+            "type": "assumeRole",
+            "roleName": "scality-internal/scality-role1",
+            "sts": {
+                "host": "127.0.0.1",
+                "port": 8800,
+                "accessKey": "Y18BE7V20Z0PYUAR24XE",
+                "secretKey": "57/VYIjTHwy3yjEXEhNtbiOLKAZy3NMCiyrF2x4g"
+            },
+            "vault": {
+                "host": "127.0.0.1",
+                "port": 8600
+            }
         }
     },
     "extensions": {
@@ -106,8 +116,8 @@
                     "port": 8000
                 },
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication",
+                    "type": "account",
+                    "account": "account1",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -120,7 +130,13 @@
                 "bootstrapList": [
                     { "site": "zenko", "servers": ["localhost:8001"],
                       "echo": false },
-                    { "site": "wontwork-location", "type": "aws_s3" }
+                    {
+                        "site": "aws-location",
+                        "type": "aws_s3"
+                    }, {
+                        "site": "azure-location",
+                        "type": "azure"
+                    }
                 ],
                 "auth": {
                     "type": "service",
@@ -204,16 +220,54 @@
             }
         },
         "lifecycle": {
+            "coldStorageTopics": ["cold-status-location-dmf-v1"],
             "auth": {
-                "type": "service",
-                "account": "service-lifecycle"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "Y18BE7V20Z0PYUAR24XE",
+                    "secretKey": "57/VYIjTHwy3yjEXEhNtbiOLKAZy3NMCiyrF2x4g"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
-                "cronRule": "0 */5 * * * *",
+                "auth": {
+                    "type": "assumeRole",
+                    "roleName": "scality-internal/backbeat-lifecycle-conductor",
+                    "sts": {
+                        "host": "127.0.0.1",
+                        "port": 8800,
+                        "accessKey": "F95VPLOY6GMMZGKLP5VY",
+                        "secretKey": "u6c0GxSeniCLllO2z67j1SjA=QXQI5qp7+GWNsPF"
+                    },
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8600
+                    }
+                },
+                "cronRule": "*/10 * * * * *",
                 "concurrency": 10,
+                "bucketSource": "mongodb",
+                "mongodb": {
+                    "replicaSetHosts":
+                        "localhost:27017,localhost:27018,localhost:27019",
+                    "writeConcern": "majority",
+                    "replicaSet": "rs0",
+                    "readPreference": "primary",
+                    "database": "metadata"
+                },
+                "vaultAdmin": {
+                    "host": "127.0.0.1",
+                    "port": 8500
+                },
                 "probeServer": {
                     "bindAddress": "0.0.0.0",
                     "port": 8552
@@ -255,14 +309,35 @@
                     "port": 8554
                 }
             },
-            "coldStorageArchiveTopicPrefix": "cold-archive-req-",
-            "coldStorageStatusTopicPrefix": "cold-status-"
+            "transitionProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8556
+                }
+            },
+            "coldStorageArchiveTopicPrefix": "cold-archive-req-"
         },
         "gc": {
             "topic": "backbeat-gc",
             "auth": {
-                "type": "service",
-                "account": "service-gc"
+                "type": "account",
+                "account": "account1",
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8500
+                }
             },
             "consumer": {
                 "groupId": "backbeat-gc-consumer-group",
