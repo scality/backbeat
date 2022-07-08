@@ -642,8 +642,8 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
-                && this._supportedrules.includes('noncurrentVersionTransition')) {
-                    return rule.noncurrentVersionTransitions.some(t =>
+                && this._supportedRules.includes('noncurrentVersionTransition')) {
+                    return rule.NoncurrentVersionTransitions.some(t =>
                         (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
                 }
 
@@ -839,7 +839,7 @@ class LifecycleTask extends BackbeatTask {
             bucketName: params.bucket,
             owner: params.owner,
             objectKey: params.objectKey,
-            versionId: params.encodedVersionId,
+            versionId: params.versionId,
             eTag: params.eTag,
             lastModified: params.lastModified,
             toLocation: params.site,
@@ -967,6 +967,7 @@ class LifecycleTask extends BackbeatTask {
                 accountId: bucketData.target.accountId,
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
+                versionId: version.VersionId,
                 eTag: version.ETag,
                 lastModified: version.LastModified,
                 site: rules[ncvt].StorageClass,
