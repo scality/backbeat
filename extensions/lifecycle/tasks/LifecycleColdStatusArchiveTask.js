@@ -101,7 +101,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
                 if (skipLocationDeletion) {
                     objectMD.setDataStoreName(coldLocation)
-                        .setAmzStorageClass(coldLocation);
+                        .setAmzStorageClass(coldLocation)
+                        .setTransitionInProgress(false);
                 }
 
                 this._putMetadata(entry, objectMD, log, next);
@@ -125,7 +126,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                     // set location to null
                     objectMD.setLocation()
                         .setDataStoreName(coldLocation)
-                        .setAmzStorageClass(coldLocation);
+                        .setAmzStorageClass(coldLocation)
+                        .setTransitionInProgress(false);
                     return this._putMetadata(entry, objectMD, log, err => {
                         if (!err) {
                             log.end().info('completed expiration of archived data',

@@ -15,6 +15,10 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const locationsConfig = require('../../../conf/locationConfig.json') || {};
+
+const errorTransitionInProgress = errors.InternalError.
+    customizeDescription('transition is currently in progress');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -788,6 +792,7 @@ class LifecycleTask extends BackbeatTask {
                     error: err,
                     bucket: params.bucket,
                     objectKey: params.objectKey,
+                    versionId: params.versionId,
                 });
                 return cb(err);
             }
@@ -797,6 +802,22 @@ class LifecycleTask extends BackbeatTask {
                 return cb(errors.InternalError.customizeDescription(msg));
             }
             return cb(null, result);
+        });
+    }
+
+    _putObjectMD(params, log, cb) {
+        return this.backbeatMetadataProxy.putMetadata(params, log, err => {
+            if (err) {
+                log.error('failed to put object metadata', {
+                    method: 'LifecycleTask._putObjectMD',
+                    error: err,
+                    bucket: params.bucket,
+                    objectKey: params.objectKey,
+                    versionId: params.versionId,
+                });
+                return cb(err);
+            }
+            return cb();
         });
     }
 
@@ -873,16 +894,47 @@ class LifecycleTask extends BackbeatTask {
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, next),
-            (objectMD, next) =>
-                this._getTransitionActionEntry(params, objectMD, log, next),
-            (entry, next) =>
-                ReplicationAPI.sendDataMoverAction(
-                    this.producer, entry, log, next),
+            (objectMD, next) => {
+                // If transition is in progress, do not re-publish entry
+                // to data-mover or cold-archive topic.
+                if (objectMD.getTransitionInProgress()) {
+                    return next(errorTransitionInProgress);
+                }
+                return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
+                    next(err, entry, objectMD));
+            },
+            (entry, objectMD, next) =>
+                ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err =>
+                    next(err, entry, objectMD)),
+            (entry, objectMD, next) => {
+                // Update object metadata with "x-amz-scal-transition-in-progress"
+                // to avoid transitioning object a second time from a new batch.
+                // Only implemented for transitions to cold location.
+                const toLocation = entry.getAttribute('toLocation');
+                const locationConfig = locationsConfig[toLocation];
+                if (locationConfig && locationConfig.isCold) {
+                        objectMD.setTransitionInProgress(true);
+                        const putParams = {
+                            bucket: params.bucket,
+                            objectKey: params.objectKey,
+                            versionId: params.versionId,
+                            mdBlob: objectMD.getSerialized(),
+                        };
+
+                        return this._putObjectMD(putParams, log, next);
+                }
+
+                return process.nextTick(next);
+            }
         ], err => {
             if (err) {
                 log.error('could not apply transition rule', {
                     method: 'LifecycleTask._applyTransitionRule',
-                    error: err,
+                    error: err.description || err.message,
+                    owner: params.owner,
+                    bucket: params.bucket,
+                    key: params.objectKey,
+                    site: params.site,
                 });
             } else {
                 log.debug('transition rule applied', {
