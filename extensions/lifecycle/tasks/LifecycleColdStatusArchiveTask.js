@@ -100,8 +100,9 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
 
                 if (skipLocationDeletion) {
-                    objectMD.setDataStoreName(coldLocation);
-                    objectMD.setAmzStorageClass(coldLocation);
+                    objectMD.setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation)
+                        .setTransitionInProgress(false);
                 }
 
                 this._putMetadata(entry, objectMD, log, next);
@@ -124,7 +125,9 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                     });
                     // set location to null
                     objectMD.setLocation();
-                    objectMD.setDataStoreName(coldLocation);
+                    objectMD.setDataStoreName(coldLocation)
+                        .setAmzStorageClass(coldLocation)
+                        .setTransitionInProgress(false);
                     return this._putMetadata(entry, objectMD, log, err => {
                         if (!err) {
                             log.end().info('completed expiration of archived data',
