@@ -771,6 +771,7 @@ describe('queue processor functional tests with mocking', () => {
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
 
         const qpParams = [
+            'backbeat-func-test-dummy-topic',
             { connectionString: '127.0.0.1:2181/backbeat',
               autoCreateNamespace: false },
             null,

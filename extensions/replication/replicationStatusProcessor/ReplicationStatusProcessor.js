@@ -3,6 +3,7 @@
 const async = require('async');
 const http = require('http');
 const https = require('https');
+const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -17,6 +18,7 @@ const UpdateReplicationStatus = require('../tasks/UpdateReplicationStatus');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
+const ReplayProducer = require('../replay/ReplayProducer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 
 // StatsClient constant default for site metrics
@@ -86,7 +88,7 @@ class ReplicationStatusProcessor {
      * @param {Object} repConfig - replication configuration object
      * @param {String} repConfig.replicationStatusTopic - replication
      *   status topic name
-     * @param {String} repConfig.replicationStatusProcessor - config object
+     * @param {Object} repConfig.replicationStatusProcessor - config object
      *   specific to replication status processor
      * @param {String} repConfig.replicationStatusProcessor.groupId - kafka
      *   consumer group ID
@@ -104,6 +106,8 @@ class ReplicationStatusProcessor {
      *  randomness
      * @param {number} [repConfig.retry.backoff.factor] -
      *  backoff factor
+     * @param {Array.<{topicName: String, retries: Number}>}
+     * repConfig.replayTopics - array of replay topics
      * @param {Object} [internalHttpsConfig] - internal HTTPS
      *   configuration object
      * @param {String} [internalHttpsConfig.key] - client private key
@@ -150,6 +154,50 @@ class ReplicationStatusProcessor {
         this.taskScheduler = new TaskScheduler(
             (ctx, done) => ctx.task.processQueueEntry(ctx.entry, done),
             ctx => ctx.entry.getCanonicalKey());
+
+        this._ReplayProducers = [];
+
+        this._replayTopics = this._reshapeReplayTopics(repConfig.replayTopics);
+        this._replayTopicNames = this._makeTopicNames(repConfig.replayTopics);
+    }
+
+    /**
+     * Return an array of replay topic's names
+     *
+     * @param {Array.<{topicName: String, retries: Number}>} [replayTopics] -
+     * array of replay topics
+     * @return {array | undefined} [names] - replay topic's names
+     * @param {String} names[0] - name of the topic
+     * name.length equals topic's names retries
+     */
+    _reshapeReplayTopics(replayTopics) {
+        if (!replayTopics || replayTopics.length === 0) {
+            return undefined;
+        }
+        // duplicate replayTopics array because
+        // reverse() is destructive -- it changes the original array
+        const r = [...replayTopics];
+        return r.reverse().reduce((prev, curr) => {
+            for (let i = 0; i < curr.retries; i++) {
+                prev.push(curr.topicName);
+            }
+            return prev;
+        }, []);
+    }
+
+    /**
+     * Return an array of unique replay topic's name
+     *
+     * @param {array} [replayTopics] - array of replay topics' objects from config
+     * @return {array} - array of unique replay topic's name.
+     */
+    _makeTopicNames(replayTopics) {
+        if (!replayTopics || replayTopics.length === 0) {
+            return [];
+        }
+        return replayTopics
+            .map(t => t.topicName)
+            .filter((item, pos, self) => self.indexOf(item) === pos);
     }
 
     _setupVaultclientCache() {
@@ -170,6 +218,26 @@ class ReplicationStatusProcessor {
         }
     }
 
+    _producerLiveness(p, componentName, responses) {
+        if (p === undefined || p === null ||
+            p._producer === undefined ||
+            p._producer === null) {
+            responses.push({
+                component: componentName,
+                status: constants.statusUndefined,
+            });
+            return constants.statusUndefined;
+        }
+        if (!p._producer.isReady()) {
+            responses.push({
+                component: componentName,
+                status: constants.statusNotReady,
+            });
+            return constants.statusNotReady;
+        }
+        return constants.statusReady;
+    }
+
     getStateVars() {
         return {
             sourceConfig: this.sourceConfig,
@@ -181,7 +249,10 @@ class ReplicationStatusProcessor {
             mProducer: this._mProducer,
             statsClient: this._statsClient,
             failedCRRProducer: this._failedCRRProducer,
+            replayProducers: this._ReplayProducers,
             logger: this.logger,
+            replayTopics: this._replayTopics,
+            replayTopicNames: this._replayTopicNames,
         };
     }
 
@@ -198,7 +269,17 @@ class ReplicationStatusProcessor {
         async.parallel([
             done => {
                 this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
-                this._failedCRRProducer.setupProducer(done);
+                this._replayTopicNames.forEach(t => {
+                    this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
+                });
+                this._failedCRRProducer.setupProducer(err => {
+                    if (err) {
+                        return done(err);
+                    }
+                    return async.each(this._replayTopicNames, (topicName, next) =>
+                        this._ReplayProducers[topicName].setupProducer(next),
+                    done);
+                });
             },
             done => {
                 this._gcProducer = new GarbageCollectorProducer();
@@ -339,23 +420,14 @@ class ReplicationStatusProcessor {
             verboseLiveness.consumer = constants.statusReady;
         }
 
-        if (this._failedCRRProducer === undefined || this._failedCRRProducer === null ||
-            this._failedCRRProducer._producer === undefined ||
-            this._failedCRRProducer._producer === null) {
-            verboseLiveness.failedCRRProducer = constants.statusUndefined;
-            responses.push({
-                component: 'Failed CRR Producer',
-                status: constants.statusUndefined,
-            });
-        } else if (!this._failedCRRProducer._producer.isReady()) {
-            verboseLiveness.failedCRRProducer = constants.statusNotReady;
-            responses.push({
-                component: 'Failed CRR Producer',
-                status: constants.statusNotReady,
-            });
-        } else {
-            verboseLiveness.failedCRRProducer = constants.statusReady;
-        }
+        verboseLiveness.failedCRRProducer =
+            this._producerLiveness(this._failedCRRProducer, 'Failed CRR Producer', responses);
+
+        this._replayTopicNames.forEach(topicName => {
+            const componentName = `Replay CRR Producer to ${topicName}`;
+            verboseLiveness[`replayCRRProducer-${topicName}`] =
+                this._producerLiveness(this._ReplayProducers[topicName], componentName, responses);
+        });
 
         log.debug('verbose liveness', verboseLiveness);
 

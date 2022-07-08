@@ -120,7 +120,8 @@
                 "bootstrapList": [
                     { "site": "zenko", "servers": ["localhost:8001"],
                       "echo": false },
-                    { "site": "wontwork-location", "type": "aws_s3" }
+                    { "site": "wontwork-location", "type": "aws_s3" },
+                    { "site": "aws-location", "type": "aws_s3" }
                 ],
                 "auth": {
                     "type": "service",
@@ -133,6 +134,12 @@
             "replicationFailedTopic": "backbeat-replication-failed",
             "monitorReplicationFailures": true,
             "monitorReplicationFailureExpiryTimeS": 86400,
+            "replayTopics": [
+                {
+                    "topicName": "backbeat-replication-replay-0",
+                    "retries": 5
+                }
+            ],
             "queueProcessor": {
                 "groupId": "backbeat-replication-group",
                 "retry": {

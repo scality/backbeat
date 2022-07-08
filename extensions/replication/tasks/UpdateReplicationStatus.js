@@ -203,10 +203,13 @@ class UpdateReplicationStatus extends BackbeatTask {
         } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
         } else if (newStatus === 'FAILED') {
-            entry = refreshedEntry.toFailedEntry(site);
-            if (this.repConfig.monitorReplicationFailures) {
-                this._pushFailedEntry(sourceEntry);
+            entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
+            if (!entry) {
+                // return here because no need to update source object md,
+                // since site replication status should stay "PENDING".
+                return null;
             }
+
         } else if (newStatus === 'PENDING') {
             entry = refreshedEntry.toPendingEntry(site);
         }
@@ -264,6 +267,97 @@ class UpdateReplicationStatus extends BackbeatTask {
         });
     }
 
+    /**
+     * Decrement count value by 1 and push failed entry to the "replay" topic.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @param {string} site - site name.
+     * @param {Logger} log - Logger
+     * @return {undefined}
+     */
+    _pushReplayEntry(queueEntry, site, log) {
+        queueEntry.decReplayCount();
+        const count = queueEntry.getReplayCount();
+        const retryEntry = queueEntry.toRetryEntry(site).toKafkaEntry();
+        const topicName = this.replayTopics[count];
+        if (topicName && this.replayProducers[topicName]) {
+            this.replayProducers[topicName].publishReplayEntry(retryEntry);
+            log.info('push failed entry to the replay topic', {
+                entry: queueEntry.getLogInfo(),
+                topicName,
+                count,
+                site,
+            });
+        } else {
+            log.error('error pushing failed entry to the replay topic',
+                {
+                    entry: queueEntry.getLogInfo(),
+                    topicName,
+                    count,
+                    site,
+                });
+        }
+    }
+
+    /**
+     * Manage entry that failed replication.
+     * if replay topics are not defined in the configuration, replay logic is disabled.
+     * else:
+     *  - if count value has not been set,
+     *      - set it to max total attempt,
+     *      - decrement count value by 1,
+     *      - push entry to "replay topic".
+     *  - if count value > 0
+     *      - decrement count value by 1,
+     *      - push entry to "replay topic".
+     *  - if count value is 0
+     *      - push entry "failed topic"
+     *      - update source object md with site replication status set to FAILED
+     * @param {QueueEntry} refreshedEntry - Updated queue entry with latest "source object" metadata.
+     * @param {QueueEntry} queueEntry - The queue entry with the failed status.
+     * @param {string} site - site name.
+     * @param {Logger} log - Logger
+     * @return {null | ObjectQueueEntry} updated "source object" metadata - either null
+     * if no "source object" metadata update needed, or ObjectQueueEntry with the "source object" metadata
+     */
+    _handleFailedReplicationEntry(refreshedEntry, queueEntry, site, log) {
+        if (!this.replayTopics) {
+            // if replay topics are not defined in the configuration,
+            // replay logic is disabled.
+            if (this.repConfig.monitorReplicationFailures) {
+                this._pushFailedEntry(queueEntry);
+            }
+            return refreshedEntry.toFailedEntry(site);
+        }
+        const count = queueEntry.getReplayCount();
+        const totalAttemps = this.replayTopics.length;
+        if (count === 0) {
+            if (this.repConfig.monitorReplicationFailures) {
+                this._pushFailedEntry(queueEntry);
+            }
+            return refreshedEntry.toFailedEntry(site);
+        }
+        if (count > 0) {
+            if (count > totalAttemps) { // might happen if replay config has changed
+                queueEntry.setReplayCount(totalAttemps);
+            }
+            this._pushReplayEntry(queueEntry, site, log);
+            return null;
+        }
+        if (!count) {
+            // If no replay count has been defined yet:
+            queueEntry.setReplayCount(totalAttemps);
+            this._pushReplayEntry(queueEntry, site, log);
+            return null;
+        }
+        log.error('count value is invalid',
+            {
+                entry: queueEntry.getLogInfo(),
+                count,
+                site,
+            });
+        return null;
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         const error = this._checkStatus(sourceEntry);
         if (error) {
@@ -277,7 +371,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             const params = { sourceEntry, refreshedEntry };
             const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
             if (!updatedSourceEntry) {
-                return done();
+                return process.nextTick(done);
             }
             return this._putMetadata(updatedSourceEntry, log, err => {
                 if (err) {

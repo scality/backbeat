@@ -9,6 +9,7 @@ describe('Queue Processor', () => {
     let qp;
     beforeEach(() => {
         qp = new QueueProcessor(
+            'backbeat-func-test-dummy-topic',
             { connectionString: '127.0.0.1:2181/backbeat',
               autoCreateNamespace: false },
             null,

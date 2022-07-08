@@ -150,6 +150,7 @@ class QueueProcessor extends EventEmitter {
      * entries to a target S3 endpoint.
      *
      * @constructor
+     * @param {string} topic - topic name
      * @param {Object} zkConfig - zookeeper configuration object
      * @param {node-zookeeper-client.Client} zkClient - zookeeper client
      * @param {Object} kafkaConfig - kafka configuration object
@@ -204,11 +205,12 @@ class QueueProcessor extends EventEmitter {
      * @param {Object} notificationConfig.topic - notification topic name
      * @param {Object} mongoConfig - mongodb connection config
      */
-    constructor(zkConfig, zkClient, kafkaConfig,
+    constructor(topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
                 site, notificationConfig, mongoConfig) {
         super();
+        this.topic = topic;
         this.zkConfig = zkConfig;
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
@@ -811,7 +813,7 @@ class QueueProcessor extends EventEmitter {
                     return done();
                 }
                 this._consumer = this._createConsumer(
-                    this.repConfig.topic,
+                    this.topic,
                     this.processReplicationEntry.bind(this), options);
                 return this._consumer.once('canary', done);
             },
@@ -827,7 +829,7 @@ class QueueProcessor extends EventEmitter {
             },
         ], () => {
             this.logger.info('queue processor is ready to consume ' +
-                             'replication entries');
+                             'replication entries from ${this.topic}');
             this.emit('ready');
         });
     }

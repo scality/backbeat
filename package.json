@@ -15,6 +15,7 @@
     "oplog_populator": "node extensions/oplogPopulator/OplogPopulatorTask.js",
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
+    "replay_processor": "node extensions/replication/replayProcessor/task.js",
     "test": "mocha --recursive tests/unit",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",

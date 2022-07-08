@@ -28,6 +28,7 @@ const constants = {
 };
 
 const qpParams = [
+    'backbeat-func-test-dummy-topic',
     { connectionString: '127.0.0.1:2181/backbeat',
       autoCreateNamespace: false },
     null,
