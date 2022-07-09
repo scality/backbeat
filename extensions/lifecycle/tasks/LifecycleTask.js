@@ -903,8 +903,8 @@ class LifecycleTask extends BackbeatTask {
                     next(err, entry, objectMD));
             },
             (entry, objectMD, next) =>
-                ReplicationAPI.sendDataMoverAction(
-                    this.producer, entry, log, err => next(err, entry, objectMD)),
+                ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err =>
+                    next(err, entry, objectMD)),
             (entry, objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.

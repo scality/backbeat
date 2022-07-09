@@ -75,8 +75,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 topic,
                 groupId: this._processConfig.groupId,
                 concurrency: this._processConfig.concurrency,
-                queueProcessor:
-                    this.processColdStorageStatusEntry.bind(this, coldLocation),
+                queueProcessor: this.processColdStorageStatusEntry.bind(this),
             };
         });
 
@@ -108,7 +107,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         return new LifecycleUpdateTransitionTask(this);
     }
 
-    processColdStorageStatusEntry(coldLocation, kafkaEntry, done) {
+    processColdStorageStatusEntry(kafkaEntry, done) {
+        const coldLocation = kafkaEntry.topic.slice(this._lcConfig.coldStorageStatusTopicPrefix.length);
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry(kafkaEntry);
         console.log('STATUS ENTRY FROM SORBET!!!', entry);
         if (entry.error) {
