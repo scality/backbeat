@@ -6,7 +6,10 @@ const werelogs = require('werelogs');
 const config = require('../lib/Config');
 const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
-const extConfigs = config.extensions;
+// removing notification extension config as it needs to
+// be run in a separate instance of the queue populator
+// as it uses a different log consumer
+const { notification, ...extConfigs } = config.extensions;
 const qpConfig = config.queuePopulator;
 const httpsConfig = config.internalHttps;
 const mConfig = config.metrics;

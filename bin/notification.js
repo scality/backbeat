@@ -11,7 +11,8 @@ const mConfig = config.metrics;
 const rConfig = config.redis;
 const vConfig = config.vaultAdmin;
 const qpConfig = config.queuePopulator;
-const extConfigs = config.extensions;
+// Only consider the notification extension
+const extConfigs = config.extensions.notification ? { notification: config.extensions.notification } : {};
 const QueuePopulator = require('../lib/queuePopulator/QueuePopulator');
 const { startProbeServer } = require('../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
