@@ -459,9 +459,9 @@ arraybuffer.slice@~0.0.7:
   resolved "https://registry.yarnpkg.com/arraybuffer.slice/-/arraybuffer.slice-0.0.7.tgz#3bbc4275dd584cc1b10809b89d4e8b63a69e7675"
   integrity sha512-wGUIVQXuehL5TCqQun8OW81jGzAWycqzFF8lFp+GOM5BXLYj3bKNsYC4daB7n6XjCqxQA/qgTJ+8ANR3acjrog==
 
-"arsenal@git+https://github.com/scality/Arsenal#7.10.26":
-  version "7.10.26"
-  resolved "git+https://github.com/scality/Arsenal#3179d1c620393481d1c61ab927d40133103cb4a4"
+"arsenal@git+https://github.com/scality/Arsenal#7.10.27":
+  version "7.10.27"
+  resolved "git+https://github.com/scality/Arsenal#785b824b69807482e5817d9c6cf340c0240a389a"
   dependencies:
     "@types/async" "^3.2.12"
     "@types/utf8" "^3.0.1"
