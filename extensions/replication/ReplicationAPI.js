@@ -96,7 +96,7 @@ class ReplicationAPI {
             };
             kafkaEntry.message = JSON.stringify(message);
         }
-        producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
+        return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
             if (err) {
                 log.error('could not send data mover action',
                     Object.assign({
@@ -114,7 +114,6 @@ class ReplicationAPI {
                 contentLength, reports[0].partition);
             return cb();
         });
-        return undefined;
     }
 
     static getDataMoverTopic() {

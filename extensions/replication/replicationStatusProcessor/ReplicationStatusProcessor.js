@@ -3,7 +3,6 @@
 const async = require('async');
 const http = require('http');
 const https = require('https');
-const async = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;

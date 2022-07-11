@@ -829,7 +829,7 @@ class QueueProcessor extends EventEmitter {
             },
         ], () => {
             this.logger.info('queue processor is ready to consume ' +
-                             'replication entries from ${this.topic}');
+                             `replication entries from ${this.topic}`);
             this.emit('ready');
         });
     }
