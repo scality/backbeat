@@ -114,7 +114,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         if (entry.error) {
             this._log.error('malformed status entry', {
                 error: entry.error,
-                entry: kafkaEntry.value,
+                entry: kafkaEntry.value.toString(),
             });
             return process.nextTick(done);
         }
