@@ -898,6 +898,7 @@ class LifecycleTask extends BackbeatTask {
             (objectMD, next) => {
                 // If transition is in progress, skip publishing entry to data-mover/archive.
                 const dataStoreName = objectMD.getDataStoreName();
+                // We do not transtion cold objects
                 const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
                     && locationsConfig[dataStoreName].isCold;
                 if (isObjectCold) {
