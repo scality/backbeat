@@ -63,13 +63,15 @@ describe('CRR Pause/Resume status updates', function d() {
             const zkClient = zkHelper.getClient();
 
             // qpSite1 (first site) is not paused
-            qpSite1 = new QueueProcessor(zkConfig, zkClient,
+            qpSite1 = new QueueProcessor(
+                'backbeat-func-test-dummy-topic', zkConfig, zkClient,
                 kafkaConfig, sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, {}, {}, firstSite);
             qpSite1.start();
 
             // qpSite2 (second site) is paused and has a scheduled resume
-            qpSite2 = new QueueProcessor(zkConfig, zkClient,
+            qpSite2 = new QueueProcessor(
+                'backbeat-func-test-dummy-topic', zkConfig, zkClient,
                kafkaConfig, sourceConfig, destConfig, repConfig,
                redisConfig, mConfig, {}, {}, secondSite);
             qpSite2.start({ paused: true });
