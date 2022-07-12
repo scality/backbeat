@@ -19,10 +19,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
         }
-        if (!isMasterKey(entry.key)) {
-            return this._filterVersionedKey(entry);
-        }
-        return undefined;
+        return this._filterVersionedKey(entry);
     }
 
     _filterBucketOp(entry) {
@@ -51,6 +48,11 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
+        // Allow a non-versioned object if being replicated from an NFS bucket.
+        // Or if the master key is of a non versioned object
+        if (!this._entryCanBeReplicated(queueEntry)) {
+            return;
+        }
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
             return;
         }
@@ -77,6 +79,29 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
                      JSON.stringify(publishedEntry));
+    }
+
+    /**
+     * Filter if the entry is considered a valid master key entry.
+     * There is a case where a single null entry looks like a master key and
+     * will not have a duplicate versioned key. They are created when you have a
+     * non-versioned bucket with objects, and then convert bucket to versioned.
+     * If no new versioned objects are added for given object(s), they look like
+     * standalone master keys. The `isNull` case is undefined for these entries.
+     * Non-versioned objects if being replicated from an NFS bucket are also allowed
+     * @param {ObjectQueueEntry} entry - raw queue entry
+     * @return {Boolean} true if we should filter entry
+     */
+    _entryCanBeReplicated(entry) {
+        const isMaster = isMasterKey(entry.getObjectVersionedKey());
+        // single null entries will have a version id as undefined.
+        // do not filter single null entries
+        const isNonVersionedMaster = entry.getVersionId() === undefined;
+        if (isMaster && !isNonVersionedMaster) {
+            this.log.trace('skipping master key entry');
+            return false;
+        }
+        return true;
     }
 }
 
