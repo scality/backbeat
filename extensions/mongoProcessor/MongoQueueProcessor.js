@@ -8,7 +8,6 @@ const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const ObjectMD = require('arsenal').models.ObjectMD;
-const { encode } = require('arsenal').versioning.VersionID;
 
 const Config = require('../../lib/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
@@ -274,7 +273,7 @@ class MongoQueueProcessor {
         // To hold reference to this null object, we need to encode "null"
         // as its dataStoreVersionId
         const dataStoreVersionId = entry.getVersionId() ?
-            entry.getEncodedVersionId() : encode('null');
+            entry.getEncodedVersionId() : 'null';
         let zenkoDataLocations;
         if (!locations || locations.length === 0) {
             zenkoDataLocations = [{
