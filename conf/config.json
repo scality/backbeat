@@ -327,7 +327,9 @@
                     "port": 8556
                 }
             },
-            "coldStorageArchiveTopicPrefix": "cold-archive-req-"
+            "coldStorageArchiveTopicPrefix": "cold-archive-req-",
+            "coldStorageRestoreTopicPrefix": "cold-restore-req-",
+            "coldStorageStatusTopicPrefix": "cold-status-"
         },
         "gc": {
             "topic": "backbeat-gc",

@@ -11,6 +11,10 @@ const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle-populator';
 const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
+const config = require('../../lib/Config');
+const { coldStorageRequest } = config.extensions.lifecycle;
+const BackbeatProducer = require('../../lib/BackbeatProducer');
+
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
     /**
@@ -33,6 +37,35 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (this._authConfig.type === authTypeAssumeRole) {
             this.vaultClientWrapper.init();
         }
+
+        this.kafkaConfig = params.kafkaConfig;
+        this._producers = {};
+    }
+
+    _setupProducer(topic, done) {
+        if (this._producers[topic] !== undefined) {
+            return process.nextTick(() => done(this._producers[topic]));
+        }
+        const producer = new BackbeatProducer({
+            kafka: { hosts: this.kafkaConfig.hosts },
+            topic,
+        });
+        producer.once('error', done);
+        producer.once('ready', () => {
+            this.log.debug('producer is ready',
+                {
+                    kafkaConfig: this.kafkaConfig,
+                    topic,
+                });
+            producer.removeAllListeners('error');
+            producer.on('error', err => {
+                this.log.error('error from backbeat producer',
+                    { topic, error: err });
+            });
+            this._producers[topic] = producer;
+            done(producer);
+        });
+        return undefined;
     }
 
     /**
@@ -100,8 +133,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 if (!err) {
                     this.log.info(
                         'removed lifecycle zookeeper watch node for bucket',
-                        { owner: attributes.owner,
-                          bucket: attributes.name });
+                        {
+                            owner: attributes.owner,
+                            bucket: attributes.name
+                        });
                 }
                 return undefined;
             });
@@ -117,8 +152,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             if (!err) {
                 this.log.info(
                     'created lifecycle zookeeper watch node for bucket',
-                    { owner: attributes.owner,
-                      bucket: attributes.name });
+                    {
+                        owner: attributes.owner,
+                        bucket: attributes.name
+                    });
             }
             return undefined;
         });
@@ -185,19 +222,21 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             }
             this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
 
-            const topic = `cold-restore-req-${locationName}`;
-            this.publish(
-                topic,
-                `${entry.bucket}/${entry.key}`,
-                JSON.stringify({
-                    bucketName: entry.bucket,
-                    objectKey: entry.key,
-                    objectVersion: value.versionId,
-                    archiveInfo: value.archive.archiveInfo,
-                    requestId: uuid(),
-                    accountId
-                }),
-            );
+            const topic = coldStorageRequest + locationName;
+            const key = `${entry.bucket}/${entry.key}`;
+            const message = JSON.stringify({
+                bucketName: entry.bucket,
+                objectKey: entry.key,
+                objectVersion: value.versionId,
+                archiveInfo: value.archive.archiveInfo,
+                requestId: uuid(),
+                accountId
+            });
+
+            this._setupProducer(topic, producer => {
+                const kafkaEntry = { key: encodeURIComponent(key), message };
+                producer.send([kafkaEntry]);
+            });
         });
     }
 
@@ -244,7 +283,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const { error, result } = safeJsonParse(entry.value);
             if (error) {
                 this.log.error('could not parse file md log entry',
-                            { value: entry.value, error });
+                    { value: entry.value, error });
                 return undefined;
             }
             bucketValue = result;
@@ -254,8 +293,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (lifecycleConfiguration !== undefined) {
             return this._updateZkBucketNode(bucketValue);
         }
+
         return undefined;
     }
 }
-
 module.exports = LifecycleQueuePopulator;
