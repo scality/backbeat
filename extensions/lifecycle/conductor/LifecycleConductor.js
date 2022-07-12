@@ -196,6 +196,8 @@ class LifecycleConductor {
 
                     this._accountIdCache.expireOldest();
 
+                    console.log('messages!!!', messages);
+
                     return this._producer.send(messages, (err, res) => {
                         messageDeliveryReports += messages.length;
                         LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, messages.length);

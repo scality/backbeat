@@ -917,6 +917,7 @@ class LifecycleTask extends BackbeatTask {
                 // to avoid transitioning object a second time from a new batch.
                 // Only implemented for transitions to cold location.
                 // TODO: Implement it for transitions to non-cold location.
+                console.log('SEND TO DATA MOVER!!!');
                 const toLocation = entry.getAttribute('toLocation');
                 const locationConfig = locationsConfig[toLocation];
                 if (locationConfig && locationConfig.isCold) {
