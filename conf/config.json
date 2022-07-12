@@ -256,6 +256,7 @@
                 }
             },
             "coldStorageArchiveTopicPrefix": "cold-archive-req-",
+            "coldStorageRestoreTopicPrefix": "cold-restore-req-",
             "coldStorageStatusTopicPrefix": "cold-status-"
         },
         "gc": {

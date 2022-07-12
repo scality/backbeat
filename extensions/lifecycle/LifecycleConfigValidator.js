@@ -55,6 +55,7 @@ const joiSchema = joi.object({
         probeServer: probeServerJoi.default(),
     },
     coldStorageArchiveTopicPrefix: joi.string().default('cold-archive-req-'),
+    coldStorageRestoreTopicPrefix: joi.string().default('cold-restore-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
 });
 
