@@ -18,6 +18,7 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 
 const errorTransitionInProgress = new Error('transition is curently in progress');
+const errorTransitionColdObject = new Error('transitioning a cold object is forbidden');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -896,6 +897,12 @@ class LifecycleTask extends BackbeatTask {
                 this._getObjectMD(params, log, next),
             (objectMD, next) => {
                 // If transition is in progress, skip publishing entry to data-mover/archive.
+                const dataStoreName = objectMD.getDataStoreName();
+                const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
+                    && locationsConfig[dataStoreName].isCold;
+                if (isObjectCold) {
+                    return next(errorTransitionColdObject);
+                }
                 if (objectMD.getTransitionInProgress()) {
                     return next(errorTransitionInProgress);
                 }
