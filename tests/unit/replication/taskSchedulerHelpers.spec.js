@@ -2,12 +2,14 @@ const assert = require('assert');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const { ObjectMD } = require('arsenal').models;
 
 const { getTaskSchedulerQueueKey, getTaskSchedulerDedupeKey } = require(
     '../../../extensions/replication/queueProcessor/taskSchedulerHelpers');
 
 function makeObjectQueueEntry({ key, versionId, contentMd5 }) {
-    return new ObjectQueueEntry('test-bucket-name', key)
+    const objMd = new ObjectMD().setKey(key);
+    return new ObjectQueueEntry('test-bucket-name', key, objMd)
         .setVersionId(versionId)
         .setContentMd5(contentMd5);
 }
