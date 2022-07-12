@@ -92,7 +92,16 @@ class ReplicationQueuePopulatorMock extends ReplicationQueuePopulator {
 
 function overwriteBackends(obj, backends) {
     /* eslint-disable no-param-reassign */
+    obj = JSON.parse(JSON.stringify(obj));
     obj.replicationInfo.backends = backends;
+    return JSON.stringify(obj);
+    /* eslint-enable no-param-reassign */
+}
+
+function overwriteDataStoreName(obj, dataStoreName) {
+    /* eslint-disable no-param-reassign */
+    obj = JSON.parse(JSON.stringify(obj));
+    obj.dataStoreName = dataStoreName;
     return JSON.stringify(obj);
     /* eslint-enable no-param-reassign */
 }
@@ -136,6 +145,18 @@ describe('replication queue populator', () => {
                     getMetricLabels: stubMetricLabels(),
                 },
             }, { value: JSON.stringify(kafkaValue) }),
+            results: {},
+        },
+        {
+            desc: 'cold object entry',
+            entry: Object.assign({}, {
+                type: 'put',
+                bucket: 'test-bucket-source',
+                key: 'a-test-key\u000098477724999464999999RG001  1.30.12',
+                logReader: {
+                    getMetricLabels: stubMetricLabels(),
+                },
+            }, { value: overwriteDataStoreName(kafkaValue, 'location-dmf-v1') }),
             results: {},
         },
         {

@@ -4,6 +4,7 @@ const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
+const locationsConfig = require('../../conf/locationConfig.json') || {};
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -49,11 +50,18 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (sanityCheckRes) {
             return;
         }
-        // ALlow a non-versioned object if being replicated from an NFS bucket.
+        // Allow a non-versioned object if being replicated from an NFS bucket.
         if (isMasterKey(entry.key) && !queueEntry.getReplicationIsNFS()) {
             return;
         }
         if (queueEntry.getReplicationStatus() !== 'PENDING') {
+            return;
+        }
+        const dataStoreName = queueEntry.getDataStoreName();
+        const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
+            && locationsConfig[dataStoreName].isCold;
+        // We do not replicate cold objects.
+        if (isObjectCold) {
             return;
         }
 
