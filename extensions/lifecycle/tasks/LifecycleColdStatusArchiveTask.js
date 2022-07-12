@@ -109,7 +109,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             },
             next => {
                 if (skipLocationDeletion) {
-                    return process.nextTick(done);
+                    return process.nextTick(next);
                 }
 
                 return this._executeDeleteData(entry, objectMD, log, err => {
