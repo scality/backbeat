@@ -569,7 +569,9 @@ class QueueProcessor extends EventEmitter {
                     });
                 } else {
                     this._consumer.pause(this.site);
-                    this._dataMoverConsumer.pause(this.site);
+                    if (this._dataMoverConsumer) {
+                        this._dataMoverConsumer.pause(this.site);
+                    }
                     this.logger.info('paused replication for location: ' +
                         `${this.site}`);
                     this._deleteScheduledResumeService();
@@ -604,7 +606,9 @@ class QueueProcessor extends EventEmitter {
                     });
                 } else {
                     this._consumer.resume(this.site);
-                    this._dataMoverConsumer.resume(this.site);
+                    if (this._dataMoverConsumer) {
+                        this._dataMoverConsumer.resume(this.site);
+                    }
                     this.logger.info('resumed replication for location: ' +
                         `${this.site}`);
                     this._deleteScheduledResumeService();
@@ -826,6 +830,10 @@ class QueueProcessor extends EventEmitter {
             },
             done  => {
                 if (options && options.disableConsumer) {
+                    return done();
+                }
+                if (this.isReplayTopic) {
+                    // Do not process dataMover topic in replay processors
                     return done();
                 }
                 this._dataMoverConsumer = this._createConsumer(
