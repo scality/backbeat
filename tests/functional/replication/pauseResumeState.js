@@ -13,6 +13,7 @@ const config = require('../../config.json');
 const {
     zookeeperNamespace,
     zkStatePath,
+    zkReplayStatePath,
 } = require('../../../extensions/replication/constants');
 const redisConfig = {
     host: config.redis.host,
@@ -32,6 +33,8 @@ const mConfig = config.metrics;
 
 // Constants
 const ZK_TEST_CRR_STATE_PATH = `${zookeeperNamespace}${zkStatePath}`;
+const ZK_TEST_CRR_REPLAY_TOPIC = 'backbeat-func-replay-topic';
+const ZK_TEST_CRR_REPLAY_STATE_PATH = `${zookeeperNamespace}${zkReplayStatePath}/${ZK_TEST_CRR_REPLAY_TOPIC}`;
 
 // Future Date to be used in tests
 const futureDate = new Date();
@@ -51,6 +54,12 @@ describe('CRR Pause/Resume status updates', function d() {
     let qpSite2;
     let consumer1;
     let consumer2;
+
+    let replayConsumer1;
+    let replayConsumer2;
+    let replayProcessor1;
+    let replayProcessor2;
+    let zkReplayHelper;
 
     before(done => {
         mockAPI = new MockAPI(repConfig);
@@ -88,6 +97,44 @@ describe('CRR Pause/Resume status updates', function d() {
         });
     });
 
+    before(done => {
+        zkReplayHelper = new ZKStateHelper(config.zookeeper, ZK_TEST_CRR_REPLAY_STATE_PATH,
+            firstSite, secondSite, futureDate);
+        zkReplayHelper.init(err => {
+            if (err) {
+                return done(err);
+            }
+            const zkClient = zkReplayHelper.getClient();
+            const replayConfig = { ...repConfig };
+            replayConfig.replayTopics = [
+                { topicName: ZK_TEST_CRR_REPLAY_TOPIC, retries: 5 }
+            ];
+            // replay processor
+            replayProcessor1 = new QueueProcessor(
+                ZK_TEST_CRR_REPLAY_TOPIC, zkConfig, zkClient,
+                kafkaConfig, sourceConfig, destConfig, replayConfig,
+                redisConfig, mConfig, {}, {}, firstSite);
+            replayProcessor1.start();
+
+            // replay processor 2 (second site) is paused
+            replayProcessor2 = new QueueProcessor(
+                ZK_TEST_CRR_REPLAY_TOPIC, zkConfig, zkClient,
+                kafkaConfig, sourceConfig, destConfig, replayConfig,
+                redisConfig, mConfig, {}, {}, secondSite);
+            replayProcessor2.start({ paused: true });
+            replayProcessor2.scheduleResume(futureDate);
+
+            // wait for clients/jobs to set
+            return async.whilst(() => (
+                !replayConsumer1 && !replayConsumer2 && !replayProcessor2.scheduledResume
+            ), cb => setTimeout(() => {
+                replayConsumer1 = replayProcessor1._consumer;
+                replayConsumer2 = replayProcessor2._consumer;
+                return cb();
+            }, 1000), done);
+        });
+    });
+
     afterEach(done => {
         consumer1.resume();
         consumer2.pause();
@@ -103,8 +150,24 @@ describe('CRR Pause/Resume status updates', function d() {
         });
     });
 
+    afterEach(done => {
+        replayConsumer1.resume();
+        replayConsumer2.pause();
+        async.whilst(() => replayProcessor1.scheduledResume !== null ||
+            !replayProcessor2.scheduledResume,
+        cb => setTimeout(() => {
+            replayProcessor1._deleteScheduledResumeService();
+            replayProcessor2.scheduleResume(futureDate);
+            cb();
+        }, 1000), err => {
+            assert.ifError(err);
+            zkReplayHelper.reset(done);
+        });
+    });
+
     after(() => {
         zkHelper.close();
+        zkReplayHelper.close();
     });
 
     it('should pause an active location', done => {
@@ -127,6 +190,35 @@ describe('CRR Pause/Resume status updates', function d() {
             assert.strictEqual(zkPauseState, true);
             // is the consumer currently subscribed to any topics?
             assert.strictEqual(isConsumerActive(consumer1), false);
+            return done();
+        });
+    });
+
+    it('should use a different path for replay processor', done => {
+        assert.notStrictEqual(replayProcessor1._getZkSiteNode(), qpSite1._getZkSiteNode());
+        return done();
+    });
+
+    it('should pause replay processor as well', done => {
+        let zkPauseState;
+        // send fake api request
+        mockAPI.pauseService(firstSite);
+
+        return async.doWhilst(cb => setTimeout(() => {
+            zkReplayHelper.get(firstSite, (err, data) => {
+                if (err) {
+                    return cb(err);
+                }
+                zkPauseState = data.paused;
+                return cb();
+            });
+        }, 1000), () => isConsumerActive(replayConsumer1),
+        err => {
+            assert.ifError(err);
+            // is zookeeper state shown as paused?
+            assert.strictEqual(zkPauseState, true);
+            // is the consumer currently subscribed to any topics?
+            assert.strictEqual(isConsumerActive(replayConsumer1), false);
             return done();
         });
     });
@@ -178,6 +270,28 @@ describe('CRR Pause/Resume status updates', function d() {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
             assert.strictEqual(isConsumerActive(consumer2), true);
+            return done();
+        });
+    });
+
+    it('should resume replay processor as well', done => {
+        let zkPauseState;
+        // send fake api request
+        mockAPI.resumeService(secondSite);
+
+        return async.doWhilst(cb => setTimeout(() => {
+            zkReplayHelper.get(secondSite, (err, data) => {
+                if (err) {
+                    return cb(err);
+                }
+                zkPauseState = data.paused;
+                return cb();
+            });
+        }, 1000), () => !isConsumerActive(replayConsumer2),
+        err => {
+            assert.ifError(err);
+            assert.strictEqual(zkPauseState, false);
+            assert.strictEqual(isConsumerActive(replayConsumer2), true);
             return done();
         });
     });

@@ -39,6 +39,7 @@ const NotificationConfigManager = require('../../notification/NotificationConfig
 const {
     zookeeperNamespace,
     zkStatePath,
+    zkReplayStatePath,
     zkStateProperties,
     proxyVaultPath,
     proxyIAMPath,
@@ -211,6 +212,8 @@ class QueueProcessor extends EventEmitter {
                 site, notificationConfig, mongoConfig) {
         super();
         this.topic = topic;
+        this.isReplayTopic = repConfig.replayTopics &&
+            repConfig.replayTopics.some(t => t.topicName === topic);
         this.zkConfig = zkConfig;
         this.zkClient = zkClient;
         this.kafkaConfig = kafkaConfig;
@@ -630,6 +633,10 @@ class QueueProcessor extends EventEmitter {
     }
 
     _getZkSiteNode() {
+        if (this.isReplayTopic) {
+            return `${zookeeperNamespace}${zkReplayStatePath}/${this.topic}/${this.site}`;
+        }
+
         return `${zookeeperNamespace}${zkStatePath}/${this.site}`;
     }
 

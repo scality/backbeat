@@ -9,7 +9,7 @@ const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { reshapeExceptionError } = require('arsenal').errorUtils;
 const zookeeper = require('../../../lib/clients/zookeeper');
-const { zookeeperNamespace, zkStatePath } =
+const { zookeeperNamespace, zkStatePath, zkReplayStatePath } =
     require('../constants');
 
 const zkConfig = config.zookeeper;
@@ -57,7 +57,11 @@ const topic = getTopic(process.argv[2]);
 const activeQProcessors = {};
 
 function getCRRStateZkPath() {
-    return `${zookeeperNamespace}${zkStatePath}`;
+    if (topic === repConfig.topic) {
+        return `${zookeeperNamespace}${zkStatePath}`;
+    }
+
+    return `${zookeeperNamespace}${zkReplayStatePath}/${topic}`;
 }
 
 /**

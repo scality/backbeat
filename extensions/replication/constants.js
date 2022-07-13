@@ -6,6 +6,7 @@ const constants = {
     zookeeperNamespace:
         testIsOn ? '/backbeattest/replication' : '/backbeat/replication',
     zkStatePath: '/state',
+    zkReplayStatePath: '/replayState',
     zkStateProperties: ['paused', 'scheduledResume'],
     proxyVaultPath: '/_/backbeat/vault',
     proxyIAMPath: '/_/backbeat/iam',
