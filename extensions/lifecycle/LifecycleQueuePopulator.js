@@ -12,7 +12,7 @@ const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
 const config = require('../../lib/Config');
-const { coldStorageRequest } = config.extensions.lifecycle;
+const { coldStorageRestoreTopicPrefix } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
@@ -218,11 +218,14 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             if (err) {
                 this.log.error('unable to get account', {
                     ownerId,
+                    err,
                 });
+                return;
             }
+
             this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
 
-            const topic = coldStorageRequest + locationName;
+            const topic = coldStorageRestoreTopicPrefix + locationName;
             const key = `${entry.bucket}/${entry.key}`;
             const message = JSON.stringify({
                 bucketName: entry.bucket,
@@ -235,7 +238,14 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             this._setupProducer(topic, producer => {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
-                producer.send([kafkaEntry]);
+                producer.send([kafkaEntry], err => {
+                    if (err) {
+                        this.log.error('error publishing GC.deleteData entry', {
+                            error: err,
+                            method: 'LifecycleQueuePopulator._handleRestoreOp',
+                        });
+                    }
+                });
             });
         });
     }
