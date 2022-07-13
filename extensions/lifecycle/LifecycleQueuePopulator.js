@@ -12,7 +12,7 @@ const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
 const config = require('../../lib/Config');
-const { coldStorageRequest } = config.extensions.lifecycle;
+const { coldStorageRestoreTopicPrefix } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
@@ -25,7 +25,9 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      */
     constructor(params) {
         super(params);
-        this._authConfig = params.authConfig;
+        console.log('params.config.conductor.auth!!!', params.config.conductor.auth);
+        console.log('params!!!', params);
+        this._authConfig = params.config.conductor.auth;
 
         this.vaultClientWrapper = new VaultClientWrapper(
             LIFEYCLE_POPULATOR_CLIENT_ID,
@@ -218,11 +220,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             if (err) {
                 this.log.error('unable to get account', {
                     ownerId,
+                    error: err,
                 });
+                return;
             }
             this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
 
-            const topic = coldStorageRequest + locationName;
+            const topic = coldStorageRestoreTopicPrefix + locationName;
             const key = `${entry.bucket}/${entry.key}`;
             const message = JSON.stringify({
                 bucketName: entry.bucket,
@@ -235,7 +239,17 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             this._setupProducer(topic, producer => {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
-                producer.send([kafkaEntry]);
+                console.log('SEND TO TOPIC!!!: ', topic);
+                console.log('ENTRY!!!!', message);
+                producer.send([kafkaEntry], err => {
+                    if (err) {
+                        this._log.error('error publishing entry', {
+                            error: err,
+                            topic,
+                            method: 'LifecycleQueuePopulator._handleRestoreOp',
+                        });
+                    }
+                });
             });
         });
     }
