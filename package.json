@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.4.5",
+  "version": "8.4.10",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -43,7 +43,7 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "JSONStream": "^1.3.5",
-    "arsenal": "git+https://github.com/scality/Arsenal#8.1.60",
+    "arsenal": "git+https://github.com/scality/Arsenal#8.1.61",
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
