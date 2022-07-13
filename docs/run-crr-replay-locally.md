@@ -211,7 +211,7 @@ yarn run queue_populator
 ### Queue processor
 
 ```
-yarn run queue_processor aws-location
+yarn run queue_processor
 ```
 
 ### Replication status processor
@@ -222,10 +222,10 @@ S3_REPLICATION_METRICS_PROBE=true yarn run replication_status_processor
 
 ### Replication replay processor
 
-For location: `aws-location` and topic: `backbeat-replication-replay-0`
+For topic: `backbeat-replication-replay-0`
 
 ```
-yarn run replay_processor aws-location backbeat-replication-replay-0
+yarn run queue_processor backbeat-replication-replay-0
 ```
 
 ## AWS S3 CLI

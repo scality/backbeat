@@ -1,5 +1,6 @@
 'use strict'; // eslint-disable-line
 const async = require('async');
+const assert = require('assert');
 const werelogs = require('werelogs');
 
 const QueueProcessor = require('./QueueProcessor');
@@ -34,6 +35,24 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
+function getTopic(topic) {
+    if (!topic) {
+        return repConfig.topic;
+    }
+
+    const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
+    assert(isTopicUsed, 'Invalid topic argument. Topic must match ' +
+            'one of the replay topic defined');
+    return topic;
+}
+
+// QueueProcessor and ReplayProcessor are actually the same, the only difference
+// is the topic used as input:
+// - If a topic is passed in argument, it must be one of the `replayTopics` from
+//   config, and the process will actually be a "replay processor"
+// - If no topic is given, then `repConfig.topic` is used and this is the "queue
+//   processor"
+const topic = getTopic(process.argv[2]);
 
 const activeQProcessors = {};
 
@@ -163,8 +182,7 @@ function initAndStart(zkClient) {
                 if (updatedSites.includes(site)) {
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(
-                            repConfig.topic,
-                            zkConfig, zkClient, kafkaConfig,
+                            topic, zkConfig, zkClient, kafkaConfig,
                             sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
@@ -200,9 +218,9 @@ function initAndStart(zkClient) {
         const siteNames = bootstrapList.map(i => i.site);
         async.each(siteNames, (site, next) => {
             const qp = new QueueProcessor(
-                repConfig.topic, zkConfig, zkClient,
-                kafkaConfig, sourceConfig, destConfig, repConfig,
-                redisConfig, mConfig, httpsConfig, internalHttpsConfig,
+                topic, zkConfig, zkClient, kafkaConfig,
+                sourceConfig, destConfig, repConfig, redisConfig,
+                mConfig, httpsConfig, internalHttpsConfig,
                 site, notificationConfig, mongoConfig);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
