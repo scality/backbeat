@@ -243,7 +243,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
                     if (err) {
-                        this.log.error('error publishing GC.deleteData entry', {
+                        this.log.error('error publishing object restore request entry', {
                             error: err,
                             method: 'LifecycleQueuePopulator._handleRestoreOp',
                         });
