@@ -1,4 +1,5 @@
 const { constants } = require('arsenal');
+const { encode } = require('arsenal').versioning.VersionID;
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
@@ -232,8 +233,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const key = `${entry.bucket}/${entry.key}`;
             const message = JSON.stringify({
                 bucketName: entry.bucket,
-                objectKey: entry.key,
-                objectVersion: value.versionId,
+                objectKey: value.key,
+                objectVersion: encode(value.versionId),
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
                 accountId
