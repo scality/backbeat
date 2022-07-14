@@ -9,8 +9,8 @@ const LifecycleUpdateTransitionTask = require(
 const {
     GarbageCollectorProducerMock,
     BackbeatMetadataProxyMock,
-    LifecycleObjectProcessorMock,
-} = require('./mocks');
+    ProcessorMock,
+} = require('../mocks');
 
 describe('LifecycleUpdateTransitionTask', () => {
     let backbeatMetadataProxyClient;
@@ -43,7 +43,7 @@ describe('LifecycleUpdateTransitionTask', () => {
 
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
-        objectProcessor = new LifecycleObjectProcessorMock(
+        objectProcessor = new ProcessorMock(
             null,
             null,
             backbeatMetadataProxyClient,

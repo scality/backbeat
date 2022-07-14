@@ -9,16 +9,16 @@ const ColdStorageStatusQueueEntry =
 
 const {
     GarbageCollectorProducerMock,
-    LifecycleObjectProcessorMock,
+    ProcessorMock,
     BackbeatClientMock,
     BackbeatMetadataProxyMock,
-} = require('./mocks');
+} = require('../mocks');
 
 const message = Buffer.from(`{
 "op":"archive",
 "bucketName":"testBucket",
 "objectKey":"testObj",
-"objectVersion":"testversionkey",
+"objectVersion":"testversion",
 "accountId":"834789881858",
 "archiveInfo":{"archiveId":"da80b6dc-280d-4dce-83b5-d5b40276e321","archiveVersion":5166759712787974},
 "requestId":"060733275a408411c862"
@@ -49,7 +49,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient = new BackbeatClientMock();
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
-        objectProcessor = new LifecycleObjectProcessorMock(
+        objectProcessor = new ProcessorMock(
             null,
             backbeatClient,
             backbeatMetadataProxyClient,
@@ -58,7 +58,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         archiveTask = new LifecycleColdStatusArchiveTask(objectProcessor);
     });
 
-    it('should delete set archive info and delete location info', done => {
+    it('should set archive info and publish gc info', done => {
         backbeatClient.batchDeleteResponse = { error: null, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
@@ -72,33 +72,17 @@ describe('LifecycleColdStatusArchiveTask', () => {
             assert.ifError(err);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
-            assert.strictEqual(updatedMD.location, null);
-            assert.strictEqual(updatedMD.dataStoreName, coldLocation);
-            assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
-                archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
-                archiveVersion: 5166759712787974,
+            const gcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(gcEntry.getActionType(), 'deleteArchivedSourceData');
+            assert.deepStrictEqual(gcEntry.getAttribute('target'), {
+                oldLocation: 'us-east-1',
+                newLocation: 'cold',
+                bucket: 'testBucket',
+                version: 'testversion',
+                key: 'testObj',
+                accountId: '834789881858',
             });
-            done();
-        });
-    });
-
-    it('should not delete location info if gc failed', done => {
-        backbeatClient.batchDeleteResponse = { error: { statusCode: 500 }, res: null };
-
-        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation(loc)
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass('us-east-1')
-            .setArchive(null);
-        backbeatMetadataProxyClient.setMdObj(mdObj);
-
-        archiveTask.processEntry(coldLocation, entry, err => {
-            assert.strictEqual(err.statusCode, 500);
-
-            const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
-            assert.deepStrictEqual(updatedMD.location, loc);
             assert.strictEqual(updatedMD.dataStoreName, 'us-east-1');
-            assert.strictEqual(updatedMD['x-amz-storage-class'], 'us-east-1');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
@@ -107,32 +91,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
         });
     });
 
-    it('should delete location info if gc failed with 404', done => {
-        backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
-
-        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
-        mdObj.setLocation(loc)
-            .setDataStoreName('us-east-1')
-            .setAmzStorageClass('us-east-1')
-            .setArchive(null);
-        backbeatMetadataProxyClient.setMdObj(mdObj);
-
-        archiveTask.processEntry(coldLocation, entry, err => {
-            assert.ifError(err);
-
-            const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
-            assert.strictEqual(updatedMD.location, null);
-            assert.strictEqual(updatedMD.dataStoreName, 'cold');
-            assert.strictEqual(updatedMD['x-amz-storage-class'], 'cold');
-            assert.deepStrictEqual(updatedMD.archive.archiveInfo, {
-                archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
-                archiveVersion: 5166759712787974,
-            });
-            done();
-        });
-    });
-
-    it('should skip delete gc if location info is empty', done => {
+    it('should set archive info and not publish gc entry if location info is empty', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 404 }, res: null };
 
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
@@ -146,8 +105,8 @@ describe('LifecycleColdStatusArchiveTask', () => {
             assert.ifError(err);
 
             const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
-            assert.strictEqual(backbeatClient.times.batchDeleteResponse, 0);
-            assert.strictEqual(updatedMD.location, null);
+            const gcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(gcEntry, null);
             assert.strictEqual(updatedMD.dataStoreName, 'cold');
             assert.strictEqual(updatedMD['x-amz-storage-class'], 'cold');
             assert.deepStrictEqual(updatedMD.archive.archiveInfo, {

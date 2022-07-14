@@ -8,8 +8,8 @@ const LifecycleDeleteObjectTask = require(
 
 const {
     S3ClientMock,
-    LifecycleObjectProcessorMock,
-} = require('./mocks');
+    ProcessorMock,
+} = require('../mocks');
 
 describe('LifecycleDeleteObjectTask', () => {
     let s3Client;
@@ -18,7 +18,7 @@ describe('LifecycleDeleteObjectTask', () => {
 
     beforeEach(() => {
         s3Client = new S3ClientMock();
-        objectProcessor = new LifecycleObjectProcessorMock(
+        objectProcessor = new ProcessorMock(
             s3Client,
             null,
             null,

@@ -142,6 +142,8 @@ class GarbageCollector extends EventEmitter {
                 this.clientManager.getS3Client.bind(this.clientManager),
             getBackbeatClient:
                 this.clientManager.getBackbeatClient.bind(this.clientManager),
+            getBackbeatMetadataProxy:
+                this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
         };
     }
 
