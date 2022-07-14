@@ -21,6 +21,9 @@ const errorTransitionInProgress = errors.InternalError.
     customizeDescription('transition is currently in progress');
 const errorTransitionColdObject = errors.InternalError.
     customizeDescription('transitioning a cold object is forbidden');
+const errorObjectTemporarilyRestored = errors.InternalError.
+    customizeDescription('object temporarily restored');
+
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -909,6 +912,14 @@ class LifecycleTask extends BackbeatTask {
                 if (objectMD.getTransitionInProgress()) {
                     return next(errorTransitionInProgress);
                 }
+
+                // If object is temporarily restored, don't try
+                // to transition it again.
+                const archive = objectMD.getArchive();
+                if (archive && archive.restoreCompletedAt) {
+                    return next(errorObjectTemporarilyRestored);
+                }
+
                 return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
                     next(err, entry, objectMD));
             },
@@ -937,6 +948,9 @@ class LifecycleTask extends BackbeatTask {
             }
         ], err => {
             if (err) {
+                // FIXME: this can get verbose with expected errors
+                // such as temporarily restored objects. A flag
+                // needs to be added to expected errors.
                 log.error('could not apply transition rule', {
                     method: 'LifecycleTask._applyTransitionRule',
                     error: err.description || err.message,
