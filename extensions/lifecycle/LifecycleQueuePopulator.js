@@ -223,7 +223,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 return;
             }
 
-            this.log.trace('publishing bucket replication entry', { bucket: entry.bucket });
+            this.log.trace(
+                'publishing object restore entry',
+                { bucket: entry.bucket, key: entry.key, version: value.versionId },
+            );
 
             const topic = coldStorageRestoreTopicPrefix + locationName;
             const key = `${entry.bucket}/${entry.key}`;
