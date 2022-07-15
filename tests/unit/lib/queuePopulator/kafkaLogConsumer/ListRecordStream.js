@@ -20,8 +20,7 @@ const changeStreamDocument = {
     }
 };
 const kafkaMessage = {
-    // kafka-connect double stringifies the message
-    value: Buffer.from(JSON.stringify(JSON.stringify(changeStreamDocument))),
+    value: Buffer.from(JSON.stringify(changeStreamDocument)),
     timestamp: Date.now(),
     size: 2,
     topic: 'oplog-topic',
@@ -109,18 +108,6 @@ describe('ListRecordStream', () => {
                 });
                 return done();
             });
-        });
-    });
-
-    describe('_parseKafkaMessageValue', () => {
-        it('Should parse doubly stringified object', () => {
-            const objStr = JSON.stringify(JSON.stringify(changeStreamDocument));
-            const parsed = listRecordStream._parseKafkaMessageValue(objStr);
-            assert.deepEqual(parsed, changeStreamDocument);
-        });
-        it('Should return empty object when format is invalid', () => {
-            const parsed = listRecordStream._parseKafkaMessageValue('');
-            assert.deepEqual(parsed, {});
         });
     });
 });

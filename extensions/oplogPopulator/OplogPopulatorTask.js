@@ -19,8 +19,8 @@ werelogs.configure({ level: config.log.logLevel,
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
-// Temporary as no extension uses the oplogPopulator for now
-const activeExtensions = [];
+// Notification extension is the only one using OplogPopulator for now
+const activeExtensions = config.extensions.notification ? ['notification'] : [];
 
 const oplogPopulator = new OplogPopulator({
     config: oplogPopulatorConfig,

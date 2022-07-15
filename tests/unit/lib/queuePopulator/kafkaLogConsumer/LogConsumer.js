@@ -30,8 +30,7 @@ const changeStreamDocument = {
     }
 };
 const kafkaMessage = {
-    // kafka-connect double stringifies the message
-    value: Buffer.from(JSON.stringify(JSON.stringify(changeStreamDocument))),
+    value: Buffer.from(JSON.stringify(changeStreamDocument)),
     timestamp: Date.now(),
     size: 2,
     topic: 'oplog-topic',
