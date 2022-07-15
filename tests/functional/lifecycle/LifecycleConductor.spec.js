@@ -402,7 +402,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
         }
 
-        describe(description, () => {
+        return describe(description, () => {
             beforeEach(done => {
                 bucketdListing = [];
 

@@ -2,7 +2,7 @@ const fs = require('fs');
 const joi = require('joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi, probeServerJoi } =
-    require('../../lib/config/configItems.joi.js');
+    require('../../lib/config/configItems.joi');
 
 const qpRetryJoi = joi.object({
     aws_s3: retryParamsJoi, // eslint-disable-line camelcase

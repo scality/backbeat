@@ -7,7 +7,7 @@ const jsutil = require('arsenal').jsutil;
 const Logger = require('werelogs').Logger;
 
 const authUtil = require('../utils/auth');
-const Constants = require('../../../lib/constants.js');
+const Constants = require('../../../lib/constants');
 
 // waits for an ack for messages
 const REQUIRE_ACKS = 1;

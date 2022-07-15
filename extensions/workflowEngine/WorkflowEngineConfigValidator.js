@@ -1,7 +1,7 @@
 // eslint-disable-next-line
 const joi = require('joi');
 
-const { hostPortJoi } = require('../../lib/config/configItems.joi.js');
+const { hostPortJoi } = require('../../lib/config/configItems.joi');
 
 const joiSchema = {
     zookeeperPath: joi.string().required(),

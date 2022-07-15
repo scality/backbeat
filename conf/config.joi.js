@@ -6,7 +6,7 @@ const {
     transportJoi,
     logJoi,
     certFilePathsJoi,
-} = require('../lib/config/configItems.joi.js');
+} = require('../lib/config/configItems.joi');
 
 const joiSchema = {
     zookeeper: {

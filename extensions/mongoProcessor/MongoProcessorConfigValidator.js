@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { retryParamsJoi, probeServerJoi } = require('../../lib/config/configItems.joi.js');
+const { retryParamsJoi, probeServerJoi } = require('../../lib/config/configItems.joi');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),

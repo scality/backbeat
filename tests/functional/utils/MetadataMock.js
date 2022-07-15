@@ -1,6 +1,6 @@
 const errors = require('arsenal').errors;
 const { decode } = require('arsenal').versioning.VersionID;
-const mockRes = require('./mockRes');
+const mockRes = require('./mockRes.json');
 
 const mockLogs = mockRes.raftLogs['1'];
 const objectList = mockRes.objectList.objectList1;
