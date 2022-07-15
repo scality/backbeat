@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const { isMasterKey } = require('arsenal/lib/versioning/Version');
+const { isMasterKey } = require('arsenal').versioning;
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
 const VID_SEP = require('arsenal').versioning.VersioningConstants
     .VersionId.Separator;
