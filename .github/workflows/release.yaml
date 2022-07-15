@@ -18,6 +18,15 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v2
+      
+      # TODO: remove the following step once Oras CLI 0.13.0 bug https://github.com/oras-project/oras/issues/447 is fixed. 
+      - name: Downgrade Oras to 0.12.0 
+        run: |
+          curl -LO https://github.com/oras-project/oras/releases/download/v0.12.0/oras_0.12.0_linux_amd64.tar.gz
+          mkdir -p oras-install/
+          tar -zxf oras_0.12.0_*.tar.gz -C oras-install/
+          mv oras-install/oras /usr/local/bin/
+          rm -rf oras_0.12.0_*.tar.gz oras-install/
 
       - name: Set up Docker Buildk
         uses: docker/setup-buildx-action@v1
