@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { probeServerJoi } = require('../../lib/config/configItems.joi.js');
+const { probeServerJoi } = require('../../lib/config/configItems.joi');
 
 const joiSchema = joi.object({
     auth: joi.object({

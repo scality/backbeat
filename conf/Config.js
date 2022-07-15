@@ -5,7 +5,7 @@ const path = require('path');
 const joi = require('joi');
 
 const extensions = require('../extensions');
-const backbeatConfigJoi = require('./config.joi.js');
+const backbeatConfigJoi = require('./config.joi');
 
 class Config {
     constructor() {

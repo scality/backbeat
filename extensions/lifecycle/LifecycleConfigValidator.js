@@ -6,7 +6,7 @@ const {
     mongoJoi,
     probeServerJoi,
     retryParamsJoi,
-} = require('../../lib/config/configItems.joi.js');
+} = require('../../lib/config/configItems.joi');
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
