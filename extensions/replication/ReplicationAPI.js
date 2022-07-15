@@ -114,6 +114,7 @@ class ReplicationAPI {
                 contentLength, reports[0].partition);
             return cb();
         });
+        return undefined;
     }
 
     static getDataMoverTopic() {
