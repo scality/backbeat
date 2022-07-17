@@ -25,6 +25,11 @@ function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
 }
 
+// BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
+// When set, the value is the target percentage of errors.
+const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
+    process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
+
 class ReplicateObject extends BackbeatTask {
     /**
      * Process a single replication entry
@@ -442,10 +447,12 @@ class ReplicateObject extends BackbeatTask {
             });
             return cb(errors.InternalError.customizeDescription(errMessage));
         }
-        // For Replication Replay "manual testing" only, uncomment the following lines.
-        // if (Math.random() < 0.5) {
-        // return process.nextTick(() => cb(new Error('Replication error')));
-        // }
+        // For Replication Replay testing, set the BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
         const locations = sourceEntry.getReducedLocations();
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
         return mapLimitWaitPendingIfError(locations, mpuConcLimit, (part, done) => {
