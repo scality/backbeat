@@ -1,5 +1,6 @@
 const { constants } = require('arsenal');
 const { encode } = require('arsenal').versioning.VersionID;
+const { isMasterKey } = require('arsenal').versioning;
 const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
@@ -183,6 +184,12 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             !(entry.key && entry.key.startsWith(mpuBucketPrefix));
     }
 
+    _isVersionedObject(mdValue) {
+        return mdValue.versionId !== undefined ||
+            mdValue.isNull ||
+            mdValue.isDeleteMarker;
+    }
+
     _handleRestoreOp(entry) {
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
@@ -205,6 +212,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
             !value.archive.restoreRequestedDays || isObjectAlreadyRestored) {
+            return;
+        }
+
+        // if entry is a versioned object and is the master entry, skip task as
+        // the non-master entry will be processed
+        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
+            this.log.trace('skip processing of object master entry');
             return;
         }
 
