@@ -231,10 +231,16 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             const topic = coldStorageRestoreTopicPrefix + locationName;
             const key = `${entry.bucket}/${entry.key}`;
+
+            let version;
+            if (value.versionId) {
+                version = encode(value.versionId);
+            }
+
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
-                objectVersion: encode(value.versionId),
+                objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
                 accountId
