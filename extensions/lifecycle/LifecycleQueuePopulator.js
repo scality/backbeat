@@ -1,3 +1,4 @@
+const async = require('async');
 const { constants } = require('arsenal');
 const { encode } = require('arsenal').versioning.VersionID;
 const { isMasterKey } = require('arsenal').versioning;
@@ -16,6 +17,7 @@ const VaultClientWrapper = require('../utils/VaultClientWrapper');
 const config = require('../../lib/Config');
 const { coldStorageRestoreTopicPrefix } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
+const locations = require('../../conf/locationConfig.json') || {};
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
@@ -24,6 +26,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @param {Object} params - constructor params
      * @param {Object} params.config - extension-specific configuration object
      * @param {Logger} params.logger - logger object
+     * @param {Object} params.locationConfigs - location configurations
      */
     constructor(params) {
         super(params);
@@ -41,12 +44,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         this.kafkaConfig = params.kafkaConfig;
+        this.locationConfigs = params.locationConfigs || locations;
         this._producers = {};
     }
 
     _setupProducer(topic, done) {
         if (this._producers[topic] !== undefined) {
-            return process.nextTick(() => done(this._producers[topic]));
+            return done();
         }
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
@@ -61,13 +65,35 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 });
             producer.removeAllListeners('error');
             producer.on('error', err => {
-                this.log.error('error from backbeat producer',
-                    { topic, error: err });
+                this.log.error('error from backbeat producer', { topic, error: err });
             });
             this._producers[topic] = producer;
-            done(producer);
+            return done();
         });
         return undefined;
+    }
+
+    /**
+     * Setup a producer for each cold location
+     *
+     * @param {function} cb - callback function
+     * @return {undefined}
+     */
+    setupProducers(cb) {
+        const locConfigs = this.locationConfigs;
+        // eslint-disable-next-line no-unused-vars
+        const coldLocations = Object.entries(locConfigs).filter(([key, val]) => val.isCold).map(([key]) => key);
+        if (coldLocations.length > 0) {
+            return async.each(coldLocations, (location, done) => {
+                const topic = `${coldStorageRestoreTopicPrefix}${location}`;
+                return this._setupProducer(topic, done);
+            }, cb);
+        } else {
+            this.log.info('No cold locations found to setup producers', {
+                method: 'LifecycleQueuePopulator.setupProducers',
+            });
+            return cb();
+        }
     }
 
     /**
@@ -204,6 +230,16 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         const locationName = value.dataStoreName;
+        const locationConfig = this.locationConfigs[locationName];
+        if (!locationConfig) {
+            this.log.error('could not get location configuration', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                location: locationName,
+                bucket: entry.bucket,
+                key: entry.key,
+            });
+            return;
+        }
 
         // if object already restore nothing to do, S3 has already updated object MD
         const isObjectAlreadyRestored = value.archive
@@ -243,7 +279,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 { bucket: entry.bucket, key: entry.key, version: value.versionId },
             );
 
-            const topic = coldStorageRestoreTopicPrefix + locationName;
+            const topic = `${coldStorageRestoreTopicPrefix}${locationName}`;
             const key = `${entry.bucket}/${entry.key}`;
 
             let version;
@@ -260,7 +296,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 accountId
             });
 
-            this._setupProducer(topic, producer => {
+            const producer = this._producers[topic];
+            if (producer) {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
                     if (err) {
@@ -270,7 +307,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                         });
                     }
                 });
-            });
+            } else {
+                this.log.error(`producer not available for location ${locationName}`, {
+                    method: 'LifecycleQueuePopulator._handleRestoreOp',
+                });
+            }
         });
     }
 
