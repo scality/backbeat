@@ -93,7 +93,6 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 objectMD = res;
                 skipLocationDeletion = !locations ||
                     (Array.isArray(locations) && locations.length === 0);
-                console.log('1 GET METADATA!!!');
                 return next();
             }),
             next => {
@@ -106,7 +105,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         .setTransitionInProgress(false);
                 }
 
-                this._putMetadata(entry, objectMD, log, err => { console.log('2 PUT METADATA!!!'); return next(err); });
+                this._putMetadata(entry, objectMD, log, next);
 
             },
             next => {
@@ -118,8 +117,6 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                     if (err) {
                         return next(err);
                     }
-
-                    console.log('3 DELETE DATA!!!');
 
                     log.debug('successfully deleted location data', {
                         bucketName: entry.target.bucketName,
@@ -136,7 +133,6 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                             log.end().info('completed expiration of archived data',
                                 entry.getLogInfo());
                         }
-                        console.log('4 PUT METADATA!!!');
 
                         next(err);
                     });
