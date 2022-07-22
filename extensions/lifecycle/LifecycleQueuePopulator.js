@@ -47,6 +47,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (this._producers[topic] !== undefined) {
             return process.nextTick(() => done(this._producers[topic]));
         }
+        console.log('new producer for topic!!!', topic);
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
             topic,

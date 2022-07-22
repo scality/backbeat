@@ -930,6 +930,7 @@ class LifecycleTask extends BackbeatTask {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
                 // Only implemented for transitions to cold location.
+                console.log('SEND TO DATA MOVER!!!', params.objectKey);
                 const toLocation = entry.getAttribute('toLocation');
                 const locationConfig = locationsConfig[toLocation];
                 if (locationConfig && locationConfig.isCold) {
@@ -948,10 +949,9 @@ class LifecycleTask extends BackbeatTask {
             }
         ], err => {
             if (err) {
-                // FIXME: this can get verbose with expected errors
-                // such as temporarily restored objects. A flag
-                // needs to be added to expected errors.
-                log.error('could not apply transition rule', {
+                const logType = err === errorTransitionInProgress ||
+                err === errorObjectTemporarilyRestored ? 'debug' : 'error';
+                log[logType]('could not apply transition rule', {
                     method: 'LifecycleTask._applyTransitionRule',
                     error: err.description || err.message,
                     owner: params.owner,

@@ -157,6 +157,7 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     _processBucketEntry(entry, cb) {
+        console.log('CONSUME ENTRY!!!!');
         const { error, result } = safeJsonParse(entry.value);
         if (error) {
             this._log.error('could not parse bucket entry',

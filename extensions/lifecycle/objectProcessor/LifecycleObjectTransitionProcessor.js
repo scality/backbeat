@@ -124,13 +124,19 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 return process.nextTick(done);
         }
 
+
         return this.retryWrapper.retry({
             actionDesc: 'process cold storage status entry',
             logFields: entry.getLogInfo(),
-            actionFunc: done => task.processEntry(coldLocation, entry, done),
+            actionFunc: cb => task.processEntry(coldLocation, entry, function coco(err) {
+                return cb(err);
+            }),
             shouldRetryFunc: err => err.retryable,
             log: this._log,
-        }, done);
+        // }, done);
+        }, function final(err, other) {
+            return done(err);
+        });
     }
 }
 
