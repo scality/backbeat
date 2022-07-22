@@ -1300,6 +1300,7 @@ class LifecycleTask extends BackbeatTask {
                 accountId: bucketData.target.accountId,
                 bucket: bucketData.target.bucket,
                 objectKey: version.Key,
+                versionId: version.VersionId,
                 eTag: version.ETag,
                 lastModified: version.LastModified,
                 site: rules.Transition.StorageClass,
