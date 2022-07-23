@@ -150,6 +150,10 @@ class LifecycleTask extends BackbeatTask {
             params.Marker = bucketData.details.marker;
         }
 
+        log.debug('calling _getObjectList', {
+            method: 'LifecycleTask._getObjectList',
+            bucket: params.Bucket,
+        });
         const req = this.s3target.listObjects(params);
         attachReqUids(req, log);
         async.waterfall([
@@ -179,6 +183,10 @@ class LifecycleTask extends BackbeatTask {
                     const entry = Object.assign({}, bucketData, {
                         details: { marker },
                     });
+                    log.debug('data is truncated', {
+                        method: 'LifecycleTask._getObjectList',
+                        bucket: params.Bucket,
+                    });
                     this._sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
@@ -189,6 +197,10 @@ class LifecycleTask extends BackbeatTask {
                     });
                 }
 
+                log.debug('moving on to _compareRulesToList', {
+                    method: 'LifecycleTask._getObjectList',
+                    bucket: params.Bucket,
+                });
                 this._compareRulesToList(bucketData, bucketLCRules,
                     data.Contents, log, 'Disabled', next);
             },
@@ -214,7 +226,16 @@ class LifecycleTask extends BackbeatTask {
             paramDetails.VersionIdMarker = bucketData.details.versionIdMarker;
         }
 
+        log.debug('calling _getObjectVersions', {
+            method: 'LifecycleTask._getObjectVersions',
+            bucket: bucketData,
+        });
+
         this._listVersions(bucketData, paramDetails, log, (err, data) => {
+            log.debug('calling _listVersions', {
+                method: 'LifecycleTask._getObjectVersions',
+                bucket: bucketData,
+            });
             if (err) {
                 // error already logged at source
                 return done(err);
@@ -237,6 +258,10 @@ class LifecycleTask extends BackbeatTask {
                         prevDate: last.LastModified,
                     },
                 });
+                log.debug('data is truncated', {
+                    method: 'LifecycleTask._getObjectVersions',
+                    bucket: bucketData,
+                });
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
                         log.debug('sent kafka entry for bucket ' +
@@ -250,6 +275,10 @@ class LifecycleTask extends BackbeatTask {
             // if no versions to process, skip further processing for this
             // batch
             if (allVersionsWithStaleDate.length === 0) {
+                log.debug('no versions to process', {
+                    method: 'LifecycleTask._getObjectVersions',
+                    bucket: bucketData,
+                });
                 return done(null);
             }
 
@@ -257,6 +286,10 @@ class LifecycleTask extends BackbeatTask {
             // bucket rules, match with `staleDate` to
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
+            log.debug('moving on to _compareRulesToList', {
+                method: 'LifecycleTask._getObjectVersions',
+                bucket: bucketData,
+            });
             return this._compareRulesToList(bucketData, bucketLCRules,
                 allVersionsWithStaleDate, log, versioningStatus, done);
         });
@@ -275,6 +308,10 @@ class LifecycleTask extends BackbeatTask {
     _getMPUs(bucketData, bucketLCRules, params, nbRetries, log, done) {
         const req = this.s3target.listMultipartUploads(params);
         attachReqUids(req, log);
+        log.debug('calling _getMPUs', {
+            method: 'LifecycleTask._getMPUs',
+            bucket: params.Bucket,
+        });
         async.waterfall([
             next => req.send((err, data) => {
                 LifecycleMetrics.onS3Request(log, 'ListMultipartUploads', 'bucket', err);
@@ -300,6 +337,10 @@ class LifecycleTask extends BackbeatTask {
                             uploadIdMarker: data.NextUploadIdMarker,
                         },
                     });
+                    log.debug('calling _getMPUs data is truncated', {
+                        method: 'LifecycleTask._getMPUs',
+                        bucket: params.Bucket,
+                    });
                     return this._sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
@@ -310,6 +351,10 @@ class LifecycleTask extends BackbeatTask {
                         return next(null, data);
                     });
                 }
+                log.debug('calling _getMPUs data no truncated', {
+                    method: 'LifecycleTask._getMPUs',
+                    bucket: params.Bucket,
+                });
                 return process.nextTick(() => next(null, data));
             },
         ], (err, data) => {
@@ -673,7 +718,15 @@ class LifecycleTask extends BackbeatTask {
      */
     _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus,
     done) {
+        log.debug('_compareRulesToList called', {
+            method: 'LifecycleTask._compareRulesToList',
+            bucket: bucketData,
+        });
         if (!contents.length) {
+            log.debug('contents length is zero', {
+                method: 'LifecycleTask._compareRulesToList',
+                bucket: bucketData,
+            });
             return done();
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
@@ -692,14 +745,26 @@ class LifecycleTask extends BackbeatTask {
                 return process.nextTick(cb);
             }
 
+            log.debug('moving on to _getRules', {
+                method: 'LifecycleTask._compareRulesToList',
+                bucket: bucketData.target.bucket,
+            });
             return async.waterfall([
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
                     if (versioningStatus === 'Enabled'
                     || versioningStatus === 'Suspended') {
+                        log.debug('moving on to _compareVersion', {
+                            method: 'LifecycleTask._compareRulesToList',
+                            bucket: bucketData.target.bucket,
+                        });
                         return this._compareVersion(bucketData, obj, contents,
                             applicableRules, versioningStatus, log, next);
                     }
+                    log.debug('moving on to _compareObject', {
+                        method: 'LifecycleTask._compareRulesToList',
+                        bucket: bucketData.target.bucket,
+                    });
                     return this._compareObject(bucketData, obj, applicableRules, log,
                         next);
                 },
@@ -896,6 +961,11 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _applyTransitionRule(params, log) {
+        log.debug('_applyTransitionRule called', {
+            method: 'LifecycleTask._applyTransitionRule',
+            bucket: params.bucket,
+            key: params.objectKey,
+        });
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, next),
@@ -905,11 +975,21 @@ class LifecycleTask extends BackbeatTask {
                     && locationsConfig[dataStoreName].isCold;
                 // We do not transition cold objects
                 if (isObjectCold) {
+                    log.debug('cold object no transition', {
+                        method: 'LifecycleTask._applyTransitionRule',
+                        bucket: params.bucket,
+                        key: params.objectKey,
+                    });
                     return next(errorTransitionColdObject);
                 }
                 // If transition is in progress, do not re-publish entry
                 // to data-mover or cold-archive topic.
                 if (objectMD.getTransitionInProgress()) {
+                    log.debug('transition in progress', {
+                        method: 'LifecycleTask._applyTransitionRule',
+                        bucket: params.bucket,
+                        key: params.objectKey,
+                    });
                     return next(errorTransitionInProgress);
                 }
 
@@ -917,19 +997,40 @@ class LifecycleTask extends BackbeatTask {
                 // to transition it again.
                 const archive = objectMD.getArchive();
                 if (archive && archive.restoreCompletedAt) {
+                    log.debug('archived object so no transition', {
+                        method: 'LifecycleTask._applyTransitionRule',
+                        bucket: params.bucket,
+                        key: params.objectKey,
+                    });
                     return next(errorObjectTemporarilyRestored);
                 }
 
+                log.debug('calling _getTransitionActionEntry', {
+                    method: 'LifecycleTask._applyTransitionRule',
+                    bucket: params.bucket,
+                    key: params.objectKey,
+                });
                 return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
                     next(err, entry, objectMD));
             },
-            (entry, objectMD, next) =>
-                ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err =>
-                    next(err, entry, objectMD)),
+            (entry, objectMD, next) => {
+                log.debug('moving on to sendDataMoverAction', {
+                    method: 'LifecycleTask._applyTransitionRule',
+                    bucket: params.bucket,
+                    key: params.objectKey,
+                });
+                return ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err =>
+                    next(err, entry, objectMD));
+            },
             (entry, objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
                 // Only implemented for transitions to cold location.
+                log.debug('sendDataMoverAction complete', {
+                    method: 'LifecycleTask._applyTransitionRule',
+                    bucket: params.bucket,
+                    key: params.objectKey,
+                });
                 const toLocation = entry.getAttribute('toLocation');
                 const locationConfig = locationsConfig[toLocation];
                 if (locationConfig && locationConfig.isCold) {
@@ -941,6 +1042,11 @@ class LifecycleTask extends BackbeatTask {
                             mdBlob: objectMD.getSerialized(),
                         };
 
+                        log.debug('moving on to _putObjectMD', {
+                            method: 'LifecycleTask._applyTransitionRule',
+                            bucket: params.bucket,
+                            key: params.objectKey,
+                        });
                         return this._putObjectMD(putParams, log, next);
                 }
 
@@ -1166,6 +1272,11 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _compareObject(bucketData, obj, rules, log, done) {
+        log.debug('_compareObject called', {
+            method: 'LifecycleTask._compareObject',
+            bucket: bucketData.target.bucket,
+            objectKey: obj.Key,
+        });
         const params = {
             Bucket: bucketData.target.bucket,
             Key: obj.Key,
@@ -1201,7 +1312,17 @@ class LifecycleTask extends BackbeatTask {
                     log);
                 return done();
             }
+            log.debug('checking transition rule', {
+                method: 'LifecycleTask._compareObject',
+                bucket: bucketData.target.bucket,
+                objectKey: obj.Key,
+            });
             if (rules.Transition) {
+                log.debug('moving on to _applyTransitionRule', {
+                    method: 'LifecycleTask._compareObject',
+                    bucket: bucketData.target.bucket,
+                    objectKey: obj.Key,
+                });
                 this._applyTransitionRule({
                     owner: bucketData.target.owner,
                     accountId: bucketData.target.accountId,
@@ -1213,6 +1334,11 @@ class LifecycleTask extends BackbeatTask {
                 }, log);
                 return done();
             }
+            log.debug('no transition rule found', {
+                method: 'LifecycleTask._compareObject',
+                bucket: bucketData.target.bucket,
+                objectKey: obj.Key,
+            });
 
             return done();
         });
@@ -1231,6 +1357,10 @@ class LifecycleTask extends BackbeatTask {
      */
     _compareVersion(bucketData, version, listOfVersions, rules,
     versioningStatus, log, done) {
+        log.debug('_compareVersion called', {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+        });
         // if version is latest, only expiration action applies
         if (version.IsLatest) {
             return this._compareIsLatestVersion(bucketData, version,
@@ -1447,6 +1577,10 @@ class LifecycleTask extends BackbeatTask {
                 // if this marker exists on the Bucket entry, the entry is
                 // handling an MPU request
                 if (bucketData.details.uploadIdMarker) {
+                    log.debug('bucketData.details.uploadIdMarker', {
+                        bucket: bucketData.target.bucket,
+                        method: 'LifecycleTask.processBucketEntry',
+                    });
                     return cb();
                 }
 
@@ -1478,10 +1612,18 @@ class LifecycleTask extends BackbeatTask {
                     (versioningStatus, next) => {
                         if (versioningStatus === 'Enabled' ||
                         versioningStatus === 'Suspended') {
+                            log.debug('versioned bucket', {
+                                method: 'LifecycleTask.processBucketEntry',
+                                bucket: bucketData.target.bucket,
+                            });
                             return this._getObjectVersions(bucketData,
                                 bucketLCRules, versioningStatus, nbRetries, log, next);
                         }
 
+                        log.debug('non versioned bucket', {
+                            method: 'LifecycleTask.processBucketEntry',
+                            bucket: bucketData.target.bucket,
+                        });
                         return this._getObjectList(bucketData, bucketLCRules, nbRetries,
                             log, next);
                     },

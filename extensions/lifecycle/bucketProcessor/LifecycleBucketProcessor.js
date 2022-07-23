@@ -158,6 +158,10 @@ class LifecycleBucketProcessor {
      */
     _processBucketEntry(entry, cb) {
         const { error, result } = safeJsonParse(entry.value);
+        this._log.info('bucket entry', {
+            method: 'LifecycleBucketProcessor._processBucketEntry',
+            entry: result,
+        });
         if (error) {
             this._log.error('could not parse bucket entry',
                             { value: entry.value, error });

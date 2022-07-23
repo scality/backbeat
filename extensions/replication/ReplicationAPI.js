@@ -77,6 +77,11 @@ class ReplicationAPI {
         let topic = dataMoverTopic;
         const toLocation = action.getAttribute('toLocation');
         const locationConfig = locations[toLocation];
+        log.info('sendDataMoverAction called', {
+            method: 'ReplicationAPI.sendDataMoverAction',
+            bucket,
+            key,
+        });
         if (!locationConfig) {
             const errorMsg = 'could not get destination location configuration';
             log.error(errorMsg, { method: 'ReplicationAPI.sendDataMoverAction' });
@@ -98,6 +103,8 @@ class ReplicationAPI {
         }
         log.info(`sending message to ${topic} for bucket ${bucket} and key ${key}`, {
             method: 'ReplicationAPI.sendDataMoverAction',
+            bucket,
+            key,
         });
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
             if (err) {
