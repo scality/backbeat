@@ -582,12 +582,43 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getRules(bucketData, bucketLCRules, object, log, done) {
+        log.debug('_getRules called', {
+            method: 'LifecycleTask._getRules',
+            bucket: bucketData,
+            rules: bucketLCRules,
+            key: object.key,
+        });
         if (this._isDeleteMarker(object)) {
+            log.debug('delete marker', {
+                method: 'LifecycleTask._getRules',
+                bucket: bucketData,
+                rules: bucketLCRules,
+                key: object.key,
+            });
             // DeleteMarkers don't have any tags, so avoid calling
             // `getObjectTagging` which will throw an error
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, []);
-            return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
+            log.debug('delete marker filtered rules', {
+                method: 'LifecycleTask._getRules',
+                bucket: bucketData,
+                rules: filteredRules,
+                md: object,
+            });
+            const applicableRules = this._lifecycleUtils.getApplicableRules(filteredRules, object);
+            log.debug('delete marker applicable rules', {
+                method: 'LifecycleTask._getRules',
+                bucket: bucketData,
+                rules: applicableRules,
+                md: object,
+            });
+            return done(null, applicableRules);
         }
+        log.debug('not a delete marker', {
+            method: 'LifecycleTask._getRules',
+            bucket: bucketData,
+            rules: bucketLCRules,
+            key: object.key,
+        });
 
         const tagParams = { Bucket: bucketData.target.bucket, Key: object.Key };
         if (object.VersionId) {
@@ -600,8 +631,21 @@ class LifecycleTask extends BackbeatTask {
             }
             // tags.TagSet === [{ Key: '', Value: '' }, ...]
             const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, tags);
+            log.debug('tag filtered rules', {
+                method: 'LifecycleTask._getRules',
+                bucket: bucketData,
+                rules: filteredRules,
+                md: object,
+            });
             // reduce filteredRules to only get earliest dates
-            return done(null, this._lifecycleUtils.getApplicableRules(filteredRules, object));
+            const applicableRules = this._lifecycleUtils.getApplicableRules(filteredRules, object);
+            log.debug('tag applicable rules', {
+                method: 'LifecycleTask._getRules',
+                bucket: bucketData,
+                rules: applicableRules,
+                md: object,
+            });
+            return done(null, applicableRules);
         });
     }
 
