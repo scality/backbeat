@@ -235,6 +235,7 @@ class LifecycleBucketProcessor {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
+                rules: config.Rules,
                 details: result.details,
             });
             return this._internalTaskScheduler.push({

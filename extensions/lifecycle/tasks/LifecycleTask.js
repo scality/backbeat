@@ -200,6 +200,7 @@ class LifecycleTask extends BackbeatTask {
                 log.debug('moving on to _compareRulesToList', {
                     method: 'LifecycleTask._getObjectList',
                     bucket: params.Bucket,
+                    rules: bucketLCRules,
                 });
                 this._compareRulesToList(bucketData, bucketLCRules,
                     data.Contents, log, 'Disabled', next);
@@ -721,6 +722,7 @@ class LifecycleTask extends BackbeatTask {
         log.debug('_compareRulesToList called', {
             method: 'LifecycleTask._compareRulesToList',
             bucket: bucketData,
+            rules: lcRules,
         });
         if (!contents.length) {
             log.debug('contents length is zero', {
@@ -1276,6 +1278,7 @@ class LifecycleTask extends BackbeatTask {
             method: 'LifecycleTask._compareObject',
             bucket: bucketData.target.bucket,
             objectKey: obj.Key,
+            rules,
         });
         const params = {
             Bucket: bucketData.target.bucket,
