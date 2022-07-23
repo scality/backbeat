@@ -39,7 +39,7 @@ switch (process.env.LIFECYCLE_OBJECT_PROCESSOR_TYPE) {
         break;
 }
 
-werelogs.configure({ level: config.log.logLevel,
+werelogs.configure({ level: 'trace',
     dump: config.log.dumpLevel });
 
 function livenessCheck(res, log) {

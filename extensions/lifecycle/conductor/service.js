@@ -24,7 +24,7 @@ const repConfig = config.extensions.replication;
 const lcConductor = new LifecycleConductor(zkConfig, kafkaConfig, lcConfig, repConfig);
 
 werelogs.configure({
-    level: config.log.logLevel,
+    level: 'trace',
     dump: config.log.dumpLevel,
 });
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Conductor:service');

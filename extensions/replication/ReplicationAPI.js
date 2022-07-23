@@ -96,6 +96,9 @@ class ReplicationAPI {
             };
             kafkaEntry.message = JSON.stringify(message);
         }
+        log.info(`sending message to ${topic} for bucket ${bucket} and key ${key}`, {
+            method: 'ReplicationAPI.sendDataMoverAction',
+        });
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
             if (err) {
                 log.error('could not send data mover action',

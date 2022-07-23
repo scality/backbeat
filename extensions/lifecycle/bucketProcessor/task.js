@@ -22,7 +22,7 @@ const lcConfig = extensions.lifecycle;
 const repConfig = extensions.replication;
 
 werelogs.configure({
-    level: log.logLevel,
+    level: 'trace',
     dump: log.dumpLevel,
 });
 
