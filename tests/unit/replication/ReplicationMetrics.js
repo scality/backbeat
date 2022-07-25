@@ -7,14 +7,45 @@ const { promMetricNames } =
       require('../../../extensions/replication/constants');
 
 describe('ReplicationMetrics', () => {
+    let totalMetric;
+    let queuedBytesMetric;
+    let processedBytesMetric;
+    let elapsedMetric;
+
+    beforeEach(() => {
+        totalMetric = ZenkoMetrics.getMetric(
+            promMetricNames.replicationQueuedTotal);
+
+        queuedBytesMetric = ZenkoMetrics.getMetric(
+            promMetricNames.replicationQueuedBytes);
+
+        processedBytesMetric = ZenkoMetrics.getMetric(
+            promMetricNames.replicationProcessedBytes);
+
+        elapsedMetric = ZenkoMetrics.getMetric(
+                promMetricNames.replicationElapsedSeconds);
+
+        // reset counter not to be altered by other tests
+        totalMetric.reset();
+        queuedBytesMetric.reset();
+        processedBytesMetric.reset();
+        elapsedMetric.reset();
+    });
+
+    afterEach(() => {
+        // reset counter not to alter other tests
+        totalMetric.reset();
+        queuedBytesMetric.reset();
+        processedBytesMetric.reset();
+        elapsedMetric.reset();
+    });
+
     [123456, '123456'].forEach(contentLength => {
         it('should maintain replication queuing metrics with ' +
         `content-length as ${typeof contentLength}`, () => {
             ReplicationMetrics.onReplicationQueued(
                 'testOrigin', 'fromLoc', 'toLoc', contentLength, 2);
 
-            const totalMetric = ZenkoMetrics.getMetric(
-                promMetricNames.replicationQueuedTotal);
             const totalValues = totalMetric.get().values;
             // only one metric value exists because we published with one
             // distinct label set
@@ -29,12 +60,8 @@ describe('ReplicationMetrics', () => {
                 toLocationType: 'local',
                 partition: 2,
             });
-            // reset counter not to alter other tests
-            totalMetric.reset();
 
-            const bytesMetric = ZenkoMetrics.getMetric(
-                promMetricNames.replicationQueuedBytes);
-            const bytesValues = bytesMetric.get().values;
+            const bytesValues = queuedBytesMetric.get().values;
             // only one metric value exists because we published with one
             // distinct label set
             assert.strictEqual(bytesValues.length, 1);
@@ -48,8 +75,6 @@ describe('ReplicationMetrics', () => {
                 toLocationType: 'local',
                 partition: 2,
             });
-            // reset counter not to alter other tests
-            bytesMetric.reset();
         });
     });
 
@@ -71,9 +96,7 @@ describe('ReplicationMetrics', () => {
                 'error', 5000);
 
             // Check that the byte count is accurate
-            const bytesMetric = ZenkoMetrics.getMetric(
-                promMetricNames.replicationProcessedBytes);
-            const bytesValues = bytesMetric.get().values;
+            const bytesValues = processedBytesMetric.get().values;
 
             // only one metric value exists because we published with one
             // distinct label set
@@ -100,8 +123,6 @@ describe('ReplicationMetrics', () => {
                 toLocationType: 'local',
                 status: 'error',
             });
-            // reset counter not to alter other tests
-            bytesMetric.reset();
 
             // Check that the elapsed time histogram is accurate.
             //
@@ -111,8 +132,6 @@ describe('ReplicationMetrics', () => {
             // this. We will not check the other values pushed to keep the
             // test short, as they basically share the same logic.
 
-            const elapsedMetric = ZenkoMetrics.getMetric(
-                promMetricNames.replicationElapsedSeconds);
             const elapsedValues = elapsedMetric.get().values;
 
             // check that all histogram values which "less-or-equal" timing
@@ -134,9 +153,6 @@ describe('ReplicationMetrics', () => {
                           value.labels.le > 2));
             assert(leAboveTwoSeconds10M.length > 0);
             assert(leAboveTwoSeconds10M.every(value => value.value === 1));
-
-            // reset counter not to alter other tests
-            elapsedMetric.reset();
         });
     });
 });
