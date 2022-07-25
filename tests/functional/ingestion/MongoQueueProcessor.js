@@ -127,7 +127,8 @@ class MongoClientMock {
     deleteObject(bucket, key, params, log, cb) {
         assert.strictEqual(bucket, BUCKET);
         assert([KEY, `${KEY}${VID_SEP}${VERSION_ID}`].includes(key));
-        this._deleted.push(key);
+        const versionId = params && params.versionId;
+        this._deleted.push({ key, versionId });
         return cb();
     }
 
@@ -546,7 +547,7 @@ describe('MongoQueueProcessor', function mqp() {
     });
 
     describe('::_processDeleteOpQueueEntry', () => {
-        it('should delete an existing object from mongo', done => {
+        it('should delete an existing versioned object from mongo', done => {
             // use existing version id
             const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
             const objmd = new ObjectMD()
@@ -563,7 +564,27 @@ describe('MongoQueueProcessor', function mqp() {
 
                 const deleted = mqp.getDeleted();
                 assert.strictEqual(deleted.length, 1);
-                assert.strictEqual(deleted[0], versionKey);
+                assert.strictEqual(deleted[0].key, KEY);
+                assert.strictEqual(deleted[0].versionId, VERSION_ID);
+                done();
+            });
+        });
+
+        it('should delete an existing non versioned object from mongo', done => {
+            const objmd = new ObjectMD().setKey(KEY);
+            const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, next),
+            ], err => {
+                assert.ifError(err);
+
+                const deleted = mqp.getDeleted();
+                assert.strictEqual(deleted.length, 1);
+                assert.strictEqual(deleted[0].key, KEY);
+                assert.strictEqual(deleted[0].versionId, undefined);
                 done();
             });
         });

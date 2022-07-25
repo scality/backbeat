@@ -8,6 +8,7 @@ const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 const ObjectMD = require('arsenal').models.ObjectMD;
+const { extractVersionId } = require('../../lib/util/versioning');
 
 const Config = require('../../lib/Config');
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
@@ -385,14 +386,19 @@ class MongoQueueProcessor {
      */
     _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
         const bucket = sourceEntry.getBucket();
-        const key = sourceEntry.getObjectVersionedKey();
+        const key = sourceEntry.getObjectKey();
+        const versionId = extractVersionId(sourceEntry.getObjectVersionedKey());
 
-        // Always call deleteObject with version params undefined so
-        // that mongoClient will use deleteObjectNoVer which just deletes
-        // the object without further manipulation/actions.
-        // S3 takes care of the versioning logic so consuming the queue
-        // is sufficient to replay the version logic in the consumer.
-        return this._mongoClient.deleteObject(bucket, key, undefined, log,
+        const options = versionId ? { versionId } : undefined;
+
+        // Calling deleteObject with undefined options to use deleteObjectNoVer which is used for
+        // deleting non versioned objects that only have master keys.
+        // When deleting a versioned object however we supply the version id in the options, which
+        // causes the function to call the deleteObjectVer function that is used to handle objects that
+        // have both a master and version keys. This handles the deletion of both the version and the master
+        // keys in the case where no other version is available, or deleting the version and updating the
+        // master key otherwise.
+        return this._mongoClient.deleteObject(bucket, key, options, log,
             err => {
                 if (err) {
                     this._normalizePendingMetric(location);
