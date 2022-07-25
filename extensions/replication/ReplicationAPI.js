@@ -93,7 +93,7 @@ class ReplicationAPI {
                 requestId: reqId,
                 // TODO: BB-217 do not use contentLength from metrics
                 size: contentLength,
-                etag: eTag,
+                eTag,
             };
             kafkaEntry.message = JSON.stringify(message);
         }
