@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.4.16",
+  "version": "8.4.17",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -43,11 +43,11 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "JSONStream": "^1.3.5",
-    "arsenal": "git+https://github.com/scality/Arsenal#8.1.61",
+    "arsenal": "git+https://github.com/scality/Arsenal#8.1.64",
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
-    "bucketclient": "scality/bucketclient#8.1.1",
+    "bucketclient": "scality/bucketclient#8.1.5",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl#0.2.1",
     "ioredis": "^4.9.5",
@@ -60,7 +60,7 @@
     "node-zookeeper-client": "^1.1.3",
     "prom-client": "^12.0.0",
     "uuid": "^3.1.0",
-    "vaultclient": "scality/vaultclient#8.3.2",
+    "vaultclient": "scality/vaultclient#8.3.6",
     "werelogs": "scality/werelogs#8.1.0",
     "workflow-engine-defs": "github:scality/workflow-engine-defs#development/1.0"
   },
