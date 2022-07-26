@@ -217,8 +217,16 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     }
 
     _handleRestoreOp(entry) {
+        this.log.info('_handleRestoreOp called', {
+            method: 'LifecycleQueuePopulator._handleRestoreOp',
+            entry,
+        });
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
+            this.log.info('starts with mpu bucket prefix, returning', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             return;
         }
 
@@ -226,12 +234,20 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         const operation = value.originOp;
         if (operation !== 's3:ObjectRestore') {
+            this.log.info('no s3:ObjectRestore', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             return;
         }
 
         const locationName = value.dataStoreName;
         const locationConfig = this.locationConfigs[locationName];
         if (!locationConfig) {
+            this.log.info('could not get location configuration', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             this.log.error('could not get location configuration', {
                 method: 'LifecycleQueuePopulator._handleRestoreOp',
                 location: locationName,
@@ -248,6 +264,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
             !value.archive.restoreRequestedDays || isObjectAlreadyRestored) {
+            this.log.info('already restored returning..', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             return;
         }
 
@@ -255,6 +275,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // the non-master entry will be processed
         if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
             this.log.trace('skip processing of object master entry');
+            this.log.info('master entry, returning..', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             return;
         }
 
@@ -296,10 +320,18 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 accountId
             });
 
+            this.log.info('sending message', {
+                method: 'LifecycleQueuePopulator._handleRestoreOp',
+                entry,
+            });
             const producer = this._producers[topic];
             if (producer) {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
+                    this.log.info('sent message', {
+                        method: 'LifecycleQueuePopulator._handleRestoreOp',
+                        kafkaEntry,
+                    });
                     if (err) {
                         this.log.error('error publishing object restore request entry', {
                             error: err,
@@ -322,6 +354,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
+        this.log.info('filter called', {
+            method: 'LifecycleQueuePopulator.filter',
+            entry,
+        });
         if (entry.type !== 'put') {
             return undefined;
         }
