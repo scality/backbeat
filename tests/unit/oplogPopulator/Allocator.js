@@ -82,19 +82,6 @@ describe('Allocator', () => {
             assert(getConnectorStub.notCalled);
             assert(addBucketStub.notCalled);
         });
-
-        it('Should allow retries', async () => {
-            allocator._connectorsManager.connectors = [connector1];
-            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
-                .returns(connector1);
-            const addBucketStub = sinon.stub(connector1, 'addBucket');
-            addBucketStub.onCall(0).rejects();
-            addBucketStub.onCall(1).resolves();
-            await allocator.listenToBucket('example-bucket-1');
-            assert(getConnectorStub.calledOnce);
-            const assignedConnector = allocator._bucketsToConnectors.get('example-bucket-1');
-            assert.deepEqual(assignedConnector, connector1);
-        });
     });
 
     describe('stopListeningToBucket', () => {
@@ -111,17 +98,6 @@ describe('Allocator', () => {
             const removeBucketStub = sinon.stub(connector1, 'removeBucket').resolves();
             await allocator.stopListeningToBucket('example-bucket-1');
             assert(removeBucketStub.notCalled);
-        });
-
-        it('Should allow retries', async () => {
-            allocator._bucketsToConnectors.set('example-bucket-1', connector1);
-            const removeBucketStub = sinon.stub(connector1, 'removeBucket');
-            removeBucketStub.onCall(0).rejects();
-            removeBucketStub.onCall(1).resolves();
-            await allocator.stopListeningToBucket('example-bucket-1');
-            assert(removeBucketStub.calledOnce);
-            const exists = allocator._bucketsToConnectors.has('example-bucket-1');
-            assert.strictEqual(exists, false);
         });
     });
 });

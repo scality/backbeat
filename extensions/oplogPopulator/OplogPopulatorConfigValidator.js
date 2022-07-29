@@ -8,6 +8,7 @@ const joiSchema = joi.object({
     numberOfConnectors: joi.number().required().min(1),
     prefix: joi.string().optional(),
     probeServer: probeServerJoi.default(),
+    connectorsUpdateCronRule: joi.string().default('*/1 * * * * *'),
 });
 
 function configValidator(backbeatConfig, extConfig) {

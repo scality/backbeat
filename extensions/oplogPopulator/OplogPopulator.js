@@ -74,7 +74,7 @@ class OplogPopulator {
             });
             // get metastore collection
             this._metastore = this._mongoClient.collection(constants.bucketMetastore);
-            this._logger.debug('Connected to MongoDB', {
+            this._logger.info('Connected to MongoDB', {
                 method: 'OplogPopulator._setupMongoClient',
             });
             return undefined;
@@ -174,14 +174,14 @@ class OplogPopulator {
                 }
                 break;
             default:
-                this._logger.debug('Skipping unsupported change stream event', {
+                this._logger.info('Skipping unsupported change stream event', {
                     method: 'OplogPopulator._handleChangeStreamChange',
                     type: change.operationType,
                     key: change.documentKey._id,
                 });
                 break;
         }
-        this._logger.debug('Change stream event processed', {
+        this._logger.info('Change stream event processed', {
             method: 'OplogPopulator._handleChangeStreamChange',
             type: change.operationType,
             key: change.documentKey._id,
@@ -228,6 +228,7 @@ class OplogPopulator {
                database: this._database,
                mongoUrl: this._mongoUrl,
                oplogTopic: this._config.topic,
+               cronRule: this._config.connectorsUpdateCronRule,
                prefix: this._config.prefix,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
@@ -248,7 +249,9 @@ class OplogPopulator {
             this._setMetastoreChangeStream();
             // remove no longer valid buckets from old connectors
             await this._connectorsManager.removeInvalidBuckets(validBuckets);
-            this._logger.debug('OplogPopulator setup complete', {
+            // start scheduler for updating connectors
+            this._connectorsManager.scheduleConnectorUpdates();
+            this._logger.info('OplogPopulator setup complete', {
                 method: 'OplogPopulator.setup',
             });
        } catch (err) {

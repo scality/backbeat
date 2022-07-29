@@ -73,6 +73,7 @@ describe('ConnectorsManager', () => {
             database: 'metadata',
             mongoUrl: 'mongodb://localhost:27017/?w=majority&readPreference=primary',
             oplogTopic: 'oplog',
+            cronRule: '*/5 * * * * *',
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
             logger,
@@ -179,8 +180,8 @@ describe('ConnectorsManager', () => {
             await connectorsManager.removeConnectorInvalidBuckets(connector1, [
                 'valid-bucket-1',
             ]);
-            assert(removeStub.getCall(0).calledWith('invalid-bucket-1', false));
-            assert(removeStub.getCall(1).calledWith('invalid-bucket-2', false));
+            assert(removeStub.getCall(0).calledWith('invalid-bucket-1'));
+            assert(removeStub.getCall(1).calledWith('invalid-bucket-2'));
         });
     });
 
