@@ -1,5 +1,6 @@
 const assert = require('assert');
 const jsutil = require('arsenal').jsutil;
+const sinon = require('sinon');
 
 const config = require('../../config.json');
 const MultipleBackendTask =
@@ -57,7 +58,8 @@ describe('MultipleBackendTask', function test() {
                 site: 'test-site-2',
                 notificationConfigManager: {
                     getConfig: () => null
-                }
+                },
+                logger: fakeLogger,
             }),
         });
     });
@@ -288,6 +290,148 @@ describe('MultipleBackendTask', function test() {
                     start: range * (ranges.length - 1),
                     end: contentLen - 1,
                 }, msg);
+            });
+        });
+    });
+
+    describe('::processQueueEntry', () => {
+        let queueEntry;
+        beforeEach(() => {
+            fakeLogger.newRequestLogger = () => fakeLogger;
+            queueEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            sinon.stub(task, '_setupClients').yields(null);
+            sinon.stub(task, '_refreshSourceEntry').yields(null, queueEntry);
+            sinon.stub(task, '_handleReplicationOutcome').callsFake(
+                (err, sourceEntry, kafkaEntry, log, done) => done(err, null));
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should call delete marker handler function', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(true);
+            const deleteMarkerHandler = sinon.stub(task, '_putDeleteMarker').yields(null);
+            task.processQueueEntry(queueEntry, replicationEntry, err => {
+                assert.ifError(err);
+                assert(deleteMarkerHandler.calledOnce);
+                return done();
+            });
+        });
+
+        it('should skip entry when it has a COMPLETED state', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('COMPLETED');
+            task.processQueueEntry(queueEntry, replicationEntry, err => {
+                assert(err.is.InvalidObjectState);
+                return done();
+            });
+        });
+
+        it('should call _putObjectTagging if tags were added and object was previously replicated', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'PUT_TAGGING']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            sinon.stub(queueEntry, 'getReplicationSiteDataStoreVersionId').returns('1234');
+            const putTaggingHandler = sinon.stub(task, '_putObjectTagging').yields(null);
+            task.processQueueEntry(queueEntry, replicationEntry, err => {
+                assert.ifError(err);
+                assert(putTaggingHandler.calledOnce);
+                return done();
+            });
+        });
+
+        it('should replicate whole object if putting tags and object wasn\'t previously replicated', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'PUT_TAGGING']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            sinon.stub(queueEntry, 'getReplicationSiteDataStoreVersionId').returns(null);
+            task.repConfig.queueProcessor.minMPUSizeMB = 10;
+            sinon.stub(queueEntry, 'getContentLength').returns(1000000);
+            sinon.stub(queueEntry, 'isMultipartUpload').returns(false);
+            const putObjectHandler = sinon.stub(task, '_getAndPutObject').yields(null);
+            task.processQueueEntry(queueEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(putObjectHandler.calledOnce);
+                delete task.repConfig.queueProcessor.minMPUSizeMB;
+                return done();
+            });
+        });
+
+        it('should call _deleteObjectTagging if tags were removed  and object was previously replicated', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'DELETE_TAGGING']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            sinon.stub(queueEntry, 'getReplicationSiteDataStoreVersionId').returns('1234');
+            const deleteTaggingHandler = sinon.stub(task, '_deleteObjectTagging').yields(null);
+            task.processQueueEntry(queueEntry, replicationEntry, err => {
+                assert.ifError(err);
+                assert(deleteTaggingHandler.calledOnce);
+                return done();
+            });
+        });
+
+        it('should replicate whole object if deleting tags and object wasn\'t previously replicated', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA', 'DELETE_TAGGING']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            sinon.stub(queueEntry, 'getReplicationSiteDataStoreVersionId').returns(null);
+            task.repConfig.queueProcessor.minMPUSizeMB = 10;
+            sinon.stub(queueEntry, 'getContentLength').returns(1000000);
+            sinon.stub(queueEntry, 'isMultipartUpload').returns(false);
+            const putObjectHandler = sinon.stub(task, '_getAndPutObject').yields(null);
+            task.processQueueEntry(queueEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(putObjectHandler.calledOnce);
+                delete task.repConfig.queueProcessor.minMPUSizeMB;
+                return done();
+            });
+        });
+
+        it('should call MPU handler when object is bigger than threshold', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            task.repConfig.queueProcessor.minMPUSizeMB = 10;
+            sinon.stub(queueEntry, 'getContentLength').returns(100000000);
+            const mpuHandler = sinon.stub(task, '_getAndPutMultipartUpload').yields(null);
+            task.processQueueEntry(queueEntry, replicationEntry, err => {
+                assert.ifError(err);
+                assert(mpuHandler.calledOnce);
+                return done();
+            });
+        });
+
+        it('should call MPU handler when object is tagged as an MPU', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            task.repConfig.queueProcessor.minMPUSizeMB = 10;
+            sinon.stub(queueEntry, 'getContentLength').returns(1000000);
+            sinon.stub(queueEntry, 'isMultipartUpload').returns(true);
+            const mpuHandler = sinon.stub(task, '_getAndPutMultipartUpload').yields(null);
+            task.processQueueEntry(queueEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(mpuHandler.calledOnce);
+                delete task.repConfig.queueProcessor.minMPUSizeMB;
+                return done();
+            });
+        });
+
+        it('should call normal put handler when object is not MPU', done => {
+            sinon.stub(queueEntry, 'getIsDeleteMarker').returns(false);
+            sinon.stub(queueEntry, 'getReplicationContent').returns(['METADATA', 'DATA']);
+            sinon.stub(queueEntry, 'getReplicationSiteStatus').returns('PENDING');
+            task.repConfig.queueProcessor.minMPUSizeMB = 10;
+            sinon.stub(queueEntry, 'getContentLength').returns(1000000);
+            sinon.stub(queueEntry, 'isMultipartUpload').returns(false);
+            const putObjectHandler = sinon.stub(task, '_getAndPutObject').yields(null);
+            task.processQueueEntry(queueEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(putObjectHandler.calledOnce);
+                delete task.repConfig.queueProcessor.minMPUSizeMB;
+                return done();
             });
         });
     });

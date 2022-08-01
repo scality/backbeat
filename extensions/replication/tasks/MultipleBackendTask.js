@@ -1117,10 +1117,14 @@ class MultipleBackendTask extends ReplicateObject {
                     return next(errors.InvalidObjectState.customizeDescription(
                         errMessage));
                 }
-                if (content.includes('PUT_TAGGING')) {
+                // Only put/delete tags if object was previously
+                // replicated. Otherwise we replicate the whole object
+                // which should also replicate the updated tags.
+                const dataStoreVersionId = sourceEntry.getReplicationSiteDataStoreVersionId(this.site);
+                if (content.includes('PUT_TAGGING') && dataStoreVersionId) {
                     return this._putObjectTagging(sourceEntry, log, next);
                 }
-                if (content.includes('DELETE_TAGGING')) {
+                if (content.includes('DELETE_TAGGING') && dataStoreVersionId) {
                     return this._deleteObjectTagging(sourceEntry, log, next);
                 }
                 // Do a multipart upload when either the size is above
