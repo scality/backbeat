@@ -1,5 +1,6 @@
 const assert = require('assert');
 const { EventEmitter } = require('events');
+const { ObjectMD } = require('arsenal').models;
 
 class GarbageCollectorProducerMock {
     constructor() {
@@ -15,7 +16,7 @@ class GarbageCollectorProducerMock {
     }
 }
 
-class MockRequestAPI {
+class MockRequestAPI extends EventEmitter {
     /**
      * @param {object} args -
      * @param {object} response -
@@ -23,6 +24,7 @@ class MockRequestAPI {
      * @param {object} response.res -
      */
     constructor(args, response) {
+        super();
         this.response = response;
         this.args = args;
         this.doFn = null;
@@ -75,6 +77,7 @@ class BackbeatMetadataProxyMock {
 
     putMetadata(params, log, cb) {
         this.receivedMd = JSON.parse(params.mdBlob);
+        this.mdObj = ObjectMD.createFromBlob(params.mdBlob).result;
         return cb();
     }
 
@@ -83,7 +86,7 @@ class BackbeatMetadataProxyMock {
     }
 }
 
-class LifecycleObjectProcessorMock {
+class ProcessorMock {
     constructor(s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, logger) {
         this.s3Client = s3Client;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
@@ -150,7 +153,7 @@ class S3ClientMock {
 }
 
 module.exports = {
-    LifecycleObjectProcessorMock,
+    ProcessorMock,
     GarbageCollectorProducerMock,
     BackbeatMetadataProxyMock,
     BackbeatClientMock,
