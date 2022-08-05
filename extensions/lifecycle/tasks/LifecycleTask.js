@@ -40,6 +40,8 @@ function isLifecycleUser(canonicalID) {
     return serviceName === 'lifecycle';
 }
 
+class ObjectLockedError extends Error {}
+
 class LifecycleTask extends BackbeatTask {
     /**
      * Processes Kafka Bucket entries and determines if specific Lifecycle
@@ -136,12 +138,15 @@ class LifecycleTask extends BackbeatTask {
      * Handles non-versioned objects
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {object} bucketConfigs - object with bucket configurations
+     * @param {string} bucketConfigs.versioningStatus - 'Enabled' or 'Suspended'
+     * @param {string} bucketConfigs.objectLockStatus - 'Enabled'
      * @param {number} nbRetries - Number of time the process has been retried
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
+    _getObjectList(bucketData, bucketLCRules, bucketConfigs, nbRetries, log, done) {
         const params = {
             Bucket: bucketData.target.bucket,
             MaxKeys: MAX_KEYS,
@@ -190,7 +195,7 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 this._compareRulesToList(bucketData, bucketLCRules,
-                    data.Contents, log, 'Disabled', next);
+                    data.Contents, log, bucketConfigs, next);
             },
         ], done);
     }
@@ -199,13 +204,15 @@ class LifecycleTask extends BackbeatTask {
      * Handles versioned objects (both enabled and suspended)
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
-     * @param {string} versioningStatus - 'Enabled' or 'Suspended'
+     * @param {object} bucketConfigs - object with bucket configurations
+     * @param {string} bucketConfigs.versioningStatus - 'Enabled' or 'Suspended'
+     * @param {string} bucketConfigs.objectLockStatus - 'Enabled'
      * @param {number} nbRetries - Number of time the process has been retried
      * @param {Logger.newRequestLogger} log - logger object
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
+    _getObjectVersions(bucketData, bucketLCRules, bucketConfigs, nbRetries, log, done) {
         const paramDetails = {};
 
         if (bucketData.details.versionIdMarker &&
@@ -258,7 +265,7 @@ class LifecycleTask extends BackbeatTask {
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
             return this._compareRulesToList(bucketData, bucketLCRules,
-                allVersionsWithStaleDate, log, versioningStatus, done);
+                allVersionsWithStaleDate, log, bucketConfigs, done);
         });
     }
 
@@ -599,6 +606,56 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Checks object lock status; returns an ObjectLockError if the object
+     * is locked.
+     * @param {object} bucketData - bucket data
+     * @param {object} bucketConfigs - object with bucket configurations
+     * @param {string} bucketConfigs.versioningStatus - 'Enabled' or 'Suspended'
+     * @param {string} bucketConfigs.objectLockStatus - 'Enabled'
+     * @param {object} object - object or object version
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - callback
+     * @return {undefined}
+     */
+    _isObjectLocked(bucketData, bucketConfigs, object, log, cb) {
+        if (bucketConfigs.objectLockStatus !== 'Enabled') {
+            return process.nextTick(cb);
+        }
+
+        const params = {
+            bucket: bucketData.target.bucket,
+            objectKey: object.Key,
+            versionId: object.VersionId,
+        };
+
+        return this._getObjectMD(params, log, (err, objectMD) => {
+            if (err) {
+                return cb(err);
+            }
+
+            const objectLegalHold = objectMD.legalHold;
+            if (objectLegalHold) {
+                return cb(new ObjectLockedError('object locked'));
+            }
+
+            const retentionMode = objectMD.retentionMode;
+            const retentionDate = objectMD.retentionDate;
+            if (!retentionMode || !retentionDate) {
+                return cb(null);
+            }
+
+            const objectDate = new Date(retentionDate);
+            const now = new Date();
+
+            if (now < objectDate) {
+                return cb(new ObjectLockedError('object locked'));
+            }
+
+            return cb(null);
+        });
+    }
+
+    /**
      * Check if entity (object or version) is eligible for expiration or transition based on its date.
      * This function was introduced to avoid having to go further into processing
      * (call getObjectTagging, headObject...) if the entity was not eligible based on its date.
@@ -667,15 +724,20 @@ class LifecycleTask extends BackbeatTask {
      * @param {array} lcRules - array of bucket lifecycle rules
      * @param {array} contents - list of objects or object versions
      * @param {Logger.newRequestLogger} log - logger object
-     * @param {string} versioningStatus - 'Enabled', 'Suspended', or 'Disabled'
+     * @param {object} bucketConfigs - object with bucket configurations
+     * @param {string} bucketConfigs.versioningStatus - 'Enabled' or 'Suspended'
+     * @param {string} bucketConfigs.objectLockStatus - 'Enabled'
      * @param {function} done - callback(error, data)
      * @return {undefined}
      */
-    _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus,
-    done) {
+    _compareRulesToList(bucketData, lcRules, contents, log, bucketConfigs,
+        done) {
         if (!contents.length) {
             return done();
         }
+
+        const { versioningStatus } = bucketConfigs;
+
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
             const eligible =
                 this._isEntityEligible(lcRules, obj, versioningStatus);
@@ -693,6 +755,7 @@ class LifecycleTask extends BackbeatTask {
             }
 
             return async.waterfall([
+                next => this._isObjectLocked(bucketData, bucketConfigs, obj, log, next),
                 next => this._getRules(bucketData, lcRules, obj, log, next),
                 (applicableRules, next) => {
                     if (versioningStatus === 'Enabled'
@@ -703,7 +766,13 @@ class LifecycleTask extends BackbeatTask {
                     return this._compareObject(bucketData, obj, applicableRules, log,
                         next);
                 },
-            ], cb);
+            ], err => {
+                if (err && !(err instanceof ObjectLockedError)) {
+                    return cb(err);
+                }
+
+                return cb(null);
+            });
         }, done);
     }
 
@@ -1451,7 +1520,12 @@ class LifecycleTask extends BackbeatTask {
                     return cb();
                 }
 
-                return async.waterfall([
+                const bucketConfigs = {
+                    versioningStatus: null,
+                    objectLockStatus: null,
+                };
+
+                return async.series([
                     next => {
                         const req = this.s3target.getBucketVersioning({
                             Bucket: bucketData.target.bucket,
@@ -1472,19 +1546,41 @@ class LifecycleTask extends BackbeatTask {
                                 });
                                 return next(err);
                             }
-
-                            return next(null, data.Status);
+                            bucketConfigs.versioningStatus = data.Status || 'Disabled';
+                            return next(null);
                         });
                     },
-                    (versioningStatus, next) => {
-                        if (versioningStatus === 'Enabled' ||
-                        versioningStatus === 'Suspended') {
+                    next => {
+                        const req = this.s3target.getObjectLockConfiguration({
+                            Bucket: bucketData.target.bucket,
+                        });
+                        attachReqUids(req, log);
+                        req.send((err, data) => {
+                            if (err && err.code === 'ObjectLockConfigurationNotFoundError') {
+                                return next(null);
+                            }
+
+                            if (err) {
+                                log.error('error checking bucket object-lock configuration', {
+                                    method: 'LifecycleTask.processBucketEntry',
+                                    error: err,
+                                });
+                                return next(err);
+                            }
+
+                            bucketConfigs.objectLockStatus = data.ObjectLockConfiguration;
+                            return next(null);
+                        });
+                    },
+                    next => {
+                        if (bucketConfigs.versioningStatus === 'Enabled'
+                        || bucketConfigs.versioningStatus === 'Suspended') {
                             return this._getObjectVersions(bucketData,
-                                bucketLCRules, versioningStatus, nbRetries, log, next);
+                                bucketLCRules, bucketConfigs, nbRetries, log, next);
                         }
 
-                        return this._getObjectList(bucketData, bucketLCRules, nbRetries,
-                            log, next);
+                        return this._getObjectList(bucketData, bucketLCRules, bucketConfigs,
+                            nbRetries, log, next);
                     },
                 ], cb);
             },
