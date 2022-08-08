@@ -116,12 +116,13 @@ class LifecycleConductor {
 
         const client = this._vaultClientCache.getClient(LIFEYCLE_CONDUCTOR_CLIENT_ID);
         const opts = {};
-        return client.getAccountIds(canonicalIds, opts, (err, res) => {
-            if (err) {
-                return cb(err);
-            }
-            return cb(null, res.message.body);
-        });
+        return cb(null, { be288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143: '818552818426' });
+        // return client.getAccountIds(canonicalIds, opts, (err, res) => {
+        //     if (err) {
+        //         return cb(err);
+        //     }
+        //     // return cb(null, res.message.body);
+        // });
     }
 
     processBuckets(cb) {
@@ -189,7 +190,7 @@ class LifecycleConductor {
                                 details: {},
                             }),
                         }));
-
+                    console.log('MESSAGE!!!!', messages);
                     log.info('bucket push progress', {
                         nBucketsQueued,
                         bucketsInCargo: tasks.length,
@@ -286,6 +287,7 @@ class LifecycleConductor {
             });
     }
 
+    // TO BE MODIFIED
     listBucketdBuckets(queue, log, cb) {
         let isTruncated = false;
         let marker = null;
@@ -330,6 +332,8 @@ class LifecycleConductor {
                                 result.Contents.forEach(o => {
                                     marker = o.key;
                                     const [canonicalId, bucketName] = marker.split(constants.splitter);
+                                    // BEFORE PUSH
+                                    console.log('canonicalId, bucketName!!!', canonicalId, bucketName);
                                     queue.push({ canonicalId, bucketName });
                                 });
 
@@ -428,9 +432,19 @@ class LifecycleConductor {
         if (this._bucketSource === 'bucketd') {
             const { host, port } = this._bucketdConfig;
             // TODO https support S3C-4659
-            this._bucketClient = new BucketClient(`${host}:${port}`);
+            // this._bucketClient = new BucketClient(`${host}:${port}`);
+            this._bucketClient = {
+                listObject: (a, b, c, cb) => {
+                    return cb(null, JSON.stringify({
+                        Contents: [
+                            {
+                                key: 'be288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143..|..bucket1',
+                            },
+                        ],
+                    }));
+                },
+            };
         }
-
         process.nextTick(cb);
     }
 

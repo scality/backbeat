@@ -123,16 +123,16 @@
         "lifecycle": {
             "auth": {
                 "type": "assumeRole",
-                "roleName": "lifecycle-role",
+                "roleName": "scality-internal/scality-role1",
                 "sts": {
                     "host": "127.0.0.1",
                     "port": 8800,
-                    "accessKey": "lifecycleKey",
-                    "secretKey": "lifecycleSecret"
+                    "accessKey": "LYSPUEB23HZPP3IEYP15",
+                    "secretKey": "6iWK7yMeALAIHfW+DEc9gN/IrIthWDD5WB=o9K1M"
                 },
                 "vault": {
                     "host": "127.0.0.1",
-                    "port": 8500
+                    "port": 8600
                 }
             },
             "zookeeperPath": "/lifecycle",
@@ -140,8 +140,13 @@
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
                 "backlogControl": { "enabled": true },
-                "cronRule": "0 */5 * * * *",
-                "concurrency": 10
+                "cronRule": "*/10 * * * * *",
+                "concurrency": 10,
+                "bucketd": {
+                    "host": "127.0.0.1",
+                    "port": 9000
+                },
+                "bucketSource": "bucketd"
             },
             "bucketProcessor": {
                 "groupId": "backbeat-lifecycle-bucket-processor-group",
