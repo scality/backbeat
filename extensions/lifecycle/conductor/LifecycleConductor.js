@@ -95,6 +95,10 @@ class LifecycleConductor {
         // - some entries are expired for each listing
         this._accountIdCache = new AccountIdCache(this._concurrency);
 
+        const blacklist = (this.lcConfig.conductor.filter && this.lcConfig.conductor.filter.deny) || {};
+        this.bucketsBlacklisted = new Set(blacklist.buckets);
+        this.accountsBlacklisted = new Set(blacklist.account);
+
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
 
@@ -105,6 +109,10 @@ class LifecycleConductor {
     initZkPaths(cb) {
         async.each([this.getBucketsZkPath()],
                    (path, done) => this._zkClient.mkdirp(path, done), cb);
+    }
+
+    _isBlacklisted(canonicalId, bucketName) {
+        return this.bucketsBlacklisted.has(bucketName) || this.accountsBlacklisted.has(canonicalId);
     }
 
     _getAccountIds(canonicalIds, cb) {
@@ -216,12 +224,15 @@ class LifecycleConductor {
                 this.listBuckets(messageSendQueue, log, next);
             },
             (nBucketsListed, next) => {
+                console.log('nBucketsQueued!!!', nBucketsQueued);
+                console.log('nBucketsListed!!!', nBucketsListed);
                 async.until(
                     () => nBucketsQueued === nBucketsListed,
                     unext => setTimeout(unext, 1000),
                     next);
             },
         ], err => {
+            console.log('BATCH END!!!', err);
             if (err && err.Throttling) {
                 log.info('not starting new lifecycle batch', { reason: err });
                 if (cb) {
@@ -269,25 +280,36 @@ class LifecycleConductor {
                     return cb(err);
                 }
 
-                const batch = buckets.map(bucket => {
-                    const [canonicalId, bucketUID, bucketName] =
-                              bucket.split(':');
-                    if (!canonicalId || !bucketUID || !bucketName) {
-                        log.error(
-                            'malformed zookeeper bucket entry, skipping',
-                            { zkPath: zkBucketsPath, bucket });
-                        return null;
-                    }
+                const batch = buckets
+                    .filter(bucket => {
+                        const [canonicalId, bucketUID, bucketName] =
+                                bucket.split(':');
+                        if (!canonicalId || !bucketUID || !bucketName) {
+                            log.error(
+                                'malformed zookeeper bucket entry, skipping',
+                                { zkPath: zkBucketsPath, bucket });
+                            return false;
+                        }
 
-                    return { canonicalId, bucketName };
-                });
+                        if (this._isBlacklisted(canonicalId, bucketName)) {
+                            return false;
+                        }
+
+                        return true;
+                    })
+                    .map(bucket => {
+                        const split = bucket.split(':');
+                        const canonicalId = split[0];
+                        const bucketName = split[2];
+
+                        return { canonicalId, bucketName };
+                    });
 
                 queue.push(batch);
                 return process.nextTick(cb, null, batch.length);
             });
     }
 
-    // TO BE MODIFIED
     listBucketdBuckets(queue, log, cb) {
         let isTruncated = false;
         let marker = null;
@@ -327,14 +349,15 @@ class LifecycleConductor {
                                 }
 
                                 isTruncated = result.IsTruncated;
-                                nEnqueued += result.Contents.length;
 
                                 result.Contents.forEach(o => {
                                     marker = o.key;
                                     const [canonicalId, bucketName] = marker.split(constants.splitter);
                                     // BEFORE PUSH
-                                    console.log('canonicalId, bucketName!!!', canonicalId, bucketName);
-                                    queue.push({ canonicalId, bucketName });
+                                    if (!this._isBlacklisted(canonicalId, bucketName)) {
+                                        nEnqueued += 1;
+                                        queue.push({ canonicalId, bucketName });
+                                    }
                                 });
 
                                 return done();
@@ -435,12 +458,22 @@ class LifecycleConductor {
             // this._bucketClient = new BucketClient(`${host}:${port}`);
             this._bucketClient = {
                 listObject: (a, b, c, cb) => {
+                    if (c.marker) {
+                        return cb(null, JSON.stringify({
+                            Contents: [
+                                {
+                                    key: 'be288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143..|..bucket2',
+                                },
+                            ],
+                        }));
+                    }
                     return cb(null, JSON.stringify({
                         Contents: [
                             {
                                 key: 'be288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143..|..bucket1',
                             },
                         ],
+                        IsTruncated: true,
                     }));
                 },
             };
@@ -453,21 +486,27 @@ class LifecycleConductor {
             process.nextTick(cb);
             return;
         }
-        this._zkClient = zookeeperHelper.createClient(
-            this.zkConfig.connectionString);
-        this._zkClient.connect();
-        this._zkClient.once('error', cb);
-        this._zkClient.once('ready', () => {
-            // just in case there would be more 'error' events
-            // emitted
-            this._zkClient.removeAllListeners('error');
-            this._zkClient.on('error', err => {
-                this.logger.error(
-                    'error from lifecycle conductor zookeeper client',
-                    { error: err });
-            });
-            cb();
-        });
+        // this._zkClient = zookeeperHelper.createClient(
+        //     this.zkConfig.connectionString);
+        // this._zkClient.connect();
+        // this._zkClient.once('error', cb);
+        // this._zkClient.once('ready', () => {
+        //     // just in case there would be more 'error' events
+        //     // emitted
+        //     this._zkClient.removeAllListeners('error');
+        //     this._zkClient.on('error', err => {
+        //         this.logger.error(
+        //             'error from lifecycle conductor zookeeper client',
+        //             { error: err });
+        //     });
+        //     cb();
+        // });
+        this._zkClient = {
+            getChildren: (a, b, cb) => {
+                cb(null, ['be288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143:fake:bucket1']);
+            },
+        };
+        process.nextTick(cb);
     }
 
     /**

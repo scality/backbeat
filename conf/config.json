@@ -146,7 +146,13 @@
                     "host": "127.0.0.1",
                     "port": 9000
                 },
-                "bucketSource": "bucketd"
+                "bucketSource": "zookeeper",
+                "filter": {
+                    "deny": {
+                        "buckets": [],
+                        "accounts": []
+                    }
+                }
             },
             "bucketProcessor": {
                 "groupId": "backbeat-lifecycle-bucket-processor-group",
