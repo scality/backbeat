@@ -9,6 +9,7 @@ const errors = require('arsenal').errors;
 const { StatsModel } = require('arsenal').metrics;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
 
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
@@ -19,6 +20,8 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+
+const NotificationConfigManager = require('../../notification/NotificationConfigManager');
 
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
@@ -133,9 +136,12 @@ class ReplicationStatusProcessor {
      *   in PEM format
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
+     * @param {Object} bucketNotificationConfig - bucket notification config
+     * @param {Object} mongoConfig - mongodb connection config
      */
     constructor(kafkaConfig, sourceConfig, repConfig,
-                internalHttpsConfig, mConfig) {
+                internalHttpsConfig, mConfig, bucketNotificationConfig,
+                mongoConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
@@ -144,6 +150,11 @@ class ReplicationStatusProcessor {
         this._consumer = null;
         this._gcProducer = null;
         this._mProducer = null;
+        // bucket notification related
+        this.bucketNotificationConfig = bucketNotificationConfig;
+        this.mongoConfig = mongoConfig;
+        this.notificationConfigManager = null;
+        this.notificationProducers = {};
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -269,7 +280,67 @@ class ReplicationStatusProcessor {
             logger: this.logger,
             replayTopics: this._replayTopics,
             replayTopicNames: this._replayTopicNames,
+            bucketNotificationConfig: this.bucketNotificationConfig,
+            notificationConfigManager: this.notificationConfigManager,
+            notificationProducers: this.notificationProducers,
         };
+    }
+
+    _setupNotificationConfigManager(done) {
+        // setup notification configuration manager only if notification
+        // extension is available
+        if (this.bucketNotificationConfig) {
+            try {
+                this.notificationConfigManager = new NotificationConfigManager({
+                    mongoConfig: this.mongoConfig,
+                    logger: this.logger,
+                });
+                return this.notificationConfigManager.setup(done);
+            } catch (err) {
+                return done(err);
+            }
+        }
+        return done();
+    }
+
+    _setupNotificationProducers(done) {
+        // setup notification producers only when
+        // extension is available
+        if (this.bucketNotificationConfig) {
+            // we set one producer per notification target
+            return async.each(this.bucketNotificationConfig.destinations,
+            (destination, cb) => {
+                const internalTopic = destination.internalTopic ||
+                    this.bucketNotificationConfig.topic;
+                const producer = new BackbeatProducer({
+                    kafka: { hosts: this.kafkaConfig.hosts },
+                    topic: internalTopic,
+                });
+                producer.once('error', done);
+                producer.once('ready', () => {
+                    producer.removeAllListeners('error');
+                    producer.on('error', err => {
+                        this.logger.error('error setting replication notification producer', {
+                            destination: destination.resource,
+                            topic: internalTopic,
+                            error: err,
+                        });
+                    });
+                    this.notificationProducers[destination.resource] = producer;
+                    return cb();
+                });
+            },
+            err => {
+                if (err) {
+                    this.logger.error('error setting replication notification producers', {
+                        error: err,
+                    });
+                    return done(err);
+                }
+                return done();
+            });
+        }
+        return done();
     }
 
     /**
@@ -306,6 +377,22 @@ class ReplicationStatusProcessor {
                     this.mConfig);
                 this._mProducer.setupProducer(done);
             },
+            done => this._setupNotificationConfigManager(err => {
+                if (err) {
+                    this.logger.info('error setting up notification config manager',
+                                     { error: err.message });
+                    process.exit(1);
+                }
+                return done();
+            }),
+            done => this._setupNotificationProducers(err => {
+                if (err) {
+                    this.logger.info('error setting up kafka notification producers',
+                                     { error: err.message });
+                    process.exit(1);
+                }
+                return done();
+            }),
             done => {
                 let consumerReady = false;
                 this._consumer = new BackbeatConsumer({
