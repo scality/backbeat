@@ -19,6 +19,7 @@ const { AccountIdCache } = require('../util/AccountIdCache');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
+const ACCOUNT_SPLITTER = ':';
 
 const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle:conductor';
 
@@ -95,7 +96,32 @@ class LifecycleConductor {
         // - some entries are expired for each listing
         this._accountIdCache = new AccountIdCache(this._concurrency);
 
+        const blacklist = (this.lcConfig.conductor.filter && this.lcConfig.conductor.filter.deny) || {};
+        this.bucketsBlacklisted = new Set(blacklist.buckets);
+        const accountCanonicalIds = this._getAccountCanonicalIds(blacklist.accounts);
+        this.accountsBlacklisted = new Set(accountCanonicalIds);
+
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
+    }
+
+    /**
+     * Extract account canonical ids from configuration filter accounts
+     *
+     * @param {array} accounts from filter config -
+     * format: [account1:eb288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143]
+     * @return {array} account canonical ids
+     */
+    _getAccountCanonicalIds(accounts) {
+        if (!accounts) {
+            return [];
+        }
+        return accounts.reduce((store, account) => {
+            const split = account.split(ACCOUNT_SPLITTER);
+            if (split.length === 2) {
+                store.push(split[1]);
+            }
+            return store;
+        }, []);
     }
 
     getBucketsZkPath() {
@@ -105,6 +131,10 @@ class LifecycleConductor {
     initZkPaths(cb) {
         async.each([this.getBucketsZkPath()],
                    (path, done) => this._zkClient.mkdirp(path, done), cb);
+    }
+
+    _isBlacklisted(canonicalId, bucketName) {
+        return this.bucketsBlacklisted.has(bucketName) || this.accountsBlacklisted.has(canonicalId);
     }
 
     _getAccountIds(canonicalIds, cb) {
@@ -268,18 +298,30 @@ class LifecycleConductor {
                     return cb(err);
                 }
 
-                const batch = buckets.map(bucket => {
-                    const [canonicalId, bucketUID, bucketName] =
-                              bucket.split(':');
-                    if (!canonicalId || !bucketUID || !bucketName) {
-                        log.error(
-                            'malformed zookeeper bucket entry, skipping',
-                            { zkPath: zkBucketsPath, bucket });
-                        return null;
-                    }
+                const batch = buckets
+                    .filter(bucket => {
+                        const [canonicalId, bucketUID, bucketName] =
+                                bucket.split(':');
+                        if (!canonicalId || !bucketUID || !bucketName) {
+                            log.error(
+                                'malformed zookeeper bucket entry, skipping',
+                                { zkPath: zkBucketsPath, bucket });
+                            return false;
+                        }
 
-                    return { canonicalId, bucketName };
-                });
+                        if (this._isBlacklisted(canonicalId, bucketName)) {
+                            return false;
+                        }
+
+                        return true;
+                    })
+                    .map(bucket => {
+                        const split = bucket.split(':');
+                        const canonicalId = split[0];
+                        const bucketName = split[2];
+
+                        return { canonicalId, bucketName };
+                    });
 
                 queue.push(batch);
                 return process.nextTick(cb, null, batch.length);
@@ -325,12 +367,15 @@ class LifecycleConductor {
                                 }
 
                                 isTruncated = result.IsTruncated;
-                                nEnqueued += result.Contents.length;
 
                                 result.Contents.forEach(o => {
                                     marker = o.key;
                                     const [canonicalId, bucketName] = marker.split(constants.splitter);
-                                    queue.push({ canonicalId, bucketName });
+
+                                    if (!this._isBlacklisted(canonicalId, bucketName)) {
+                                        nEnqueued += 1;
+                                        queue.push({ canonicalId, bucketName });
+                                    }
                                 });
 
                                 return done();
