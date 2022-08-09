@@ -16,8 +16,6 @@ const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
-const notificationConfig = config.extensions.notification;
-const mongoConfig = config.queuePopulator.mongo;
 const redisConfig = config.redis;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
@@ -190,7 +188,7 @@ function initAndStart(zkClient) {
                             sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
-                            site, notificationConfig, mongoConfig);
+                            site);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -225,7 +223,7 @@ function initAndStart(zkClient) {
                 topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig, redisConfig,
                 mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig, mongoConfig);
+                site);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {

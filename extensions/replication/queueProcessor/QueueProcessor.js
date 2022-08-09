@@ -34,8 +34,6 @@ const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
-const NotificationConfigManager = require('../../notification/NotificationConfigManager');
-
 const {
     zookeeperNamespace,
     zkStatePath,
@@ -204,12 +202,11 @@ class QueueProcessor extends EventEmitter {
      * @param {String} site - site name
      * @param {Object} notificationConfig - notification configuration object
      * @param {Object} notificationConfig.topic - notification topic name
-     * @param {Object} mongoConfig - mongodb connection config
      */
     constructor(topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig, mongoConfig) {
+                site) {
         super();
         this.topic = topic;
         this.isReplayTopic = repConfig.replayTopics &&
@@ -234,11 +231,6 @@ class QueueProcessor extends EventEmitter {
         this.serviceName = libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
-        // bucket notification related
-        this.notificationConfig = notificationConfig;
-        this.notificationConfigManager = null;
-        this.notificationProducers = {};
-        this.mongoConfig = mongoConfig;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -393,63 +385,6 @@ class QueueProcessor extends EventEmitter {
             this.replicationStatusProducer = producer;
             done();
         });
-    }
-
-    _setupNotificationConfigManager(done) {
-        // setup notification configuration manager only if notification
-        // extension is available
-        if (this.notificationConfig) {
-            try {
-                this.notificationConfigManager = new NotificationConfigManager({
-                    mongoConfig: this.mongoConfig,
-                    logger: this.logger,
-                });
-                return this.notificationConfigManager.setup(done);
-            } catch (err) {
-                return done(err);
-            }
-        }
-        return done();
-    }
-
-    _setupNotificationProducers(done) {
-        // setup notification producers only when
-        // extension is available
-        if (this.notificationConfig) {
-            // we set one producer per notification target
-            return async.each(this.notificationConfig.destinations,
-            (destination, cb) => {
-                const internalTopic = destination.internalTopic ||
-                    this.notificationConfig.topic;
-                const producer = new BackbeatProducer({
-                    kafka: { hosts: this.kafkaConfig.hosts },
-                    topic: internalTopic,
-                });
-                producer.once('error', done);
-                producer.once('ready', () => {
-                    producer.removeAllListeners('error');
-                    producer.on('error', err => {
-                        this.logger.error('error setting replication notification producer', {
-                            destination: destination.resource,
-                            topic: internalTopic,
-                            error: err,
-                        });
-                    });
-                    this.notificationProducers[destination.resource] = producer;
-                    return cb();
-                });
-            },
-            err => {
-                if (err) {
-                    this.logger.error('error setting replication notification producers', {
-                        error: err,
-                    });
-                    return done(err);
-                }
-                return done();
-            });
-        }
-        return done();
     }
 
     _createConsumer(topic, queueProcessorFunc, options) {
@@ -764,9 +699,6 @@ class QueueProcessor extends EventEmitter {
             backbeatMetadataProxy: this.backbeatMetadataProxy,
             serviceName: this.serviceName,
             metricsHandler,
-            notificationConfig: this.notificationConfig,
-            notificationConfigManager: this.notificationConfigManager,
-            notificationProducers: this.notificationProducers,
         };
     }
 
@@ -798,22 +730,6 @@ class QueueProcessor extends EventEmitter {
             done => this._setupProducer(err => {
                 if (err) {
                     this.logger.info('error setting up kafka producer',
-                                     { error: err.message });
-                    process.exit(1);
-                }
-                return done();
-            }),
-            done => this._setupNotificationConfigManager(err => {
-                if (err) {
-                    this.logger.info('error setting up notification config manager',
-                                     { error: err.message });
-                    process.exit(1);
-                }
-                return done();
-            }),
-            done => this._setupNotificationProducers(err => {
-                if (err) {
-                    this.logger.info('error setting up kafka notification producers',
                                      { error: err.message });
                     process.exit(1);
                 }
