@@ -30,7 +30,7 @@
                 {
                     "resource": "destination1",
                     "type": "kafka",
-                    "host": "localhost:9092",
+                    "host": "localhost",
                     "port": 9092,
                     "topic": "destination-topic-1",
                     "internalTopic": "internal-notification-topic-destination1",
