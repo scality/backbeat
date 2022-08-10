@@ -19,6 +19,7 @@ const { AccountIdCache } = require('../util/AccountIdCache');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
+const ACCOUNT_SPLITTER = ':';
 
 const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle:conductor';
 
@@ -97,9 +98,30 @@ class LifecycleConductor {
 
         const blacklist = (this.lcConfig.conductor.filter && this.lcConfig.conductor.filter.deny) || {};
         this.bucketsBlacklisted = new Set(blacklist.buckets);
-        this.accountsBlacklisted = new Set(blacklist.account);
+        const accountCanonicalIds = this._getAccountCanonicalIds(blacklist.accounts);
+        this.accountsBlacklisted = new Set(accountCanonicalIds);
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
+    }
+
+    /**
+     * Extract account canonical ids from configuration filter accounts
+     *
+     * @param {array} accounts from filter config -
+     * format: [account1:eb288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143]
+     * @return {array} account canonical ids
+     */
+    _getAccountCanonicalIds(accounts) {
+        if (!accounts) {
+            return [];
+        }
+        return accounts.reduce((store, account) => {
+            const split = account.split(ACCOUNT_SPLITTER);
+            if (split.length === 2) {
+                store.push(split[1]);
+            }
+            return store;
+        }, []);
     }
 
     getBucketsZkPath() {

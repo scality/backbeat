@@ -17,12 +17,12 @@ const joiSchema = {
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
-        filter: {
-            deny: {
+        filter: joi.object({
+            deny: joi.object({
                 buckets: joi.array().items(joi.string()),
                 accounts: joi.array().items(joi.string()),
-            },
-        },
+            }),
+        }),
         probeServer: probeServerJoi.default(),
     },
     bucketProcessor: {
