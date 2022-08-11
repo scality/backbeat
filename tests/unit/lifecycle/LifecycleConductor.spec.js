@@ -1,5 +1,6 @@
 const assert = require('assert');
 const fakeLogger = require('../../utils/fakeLogger');
+const { splitter } = require('arsenal').constants;
 
 const LifecycleConductor = require(
     '../../../extensions/lifecycle/conductor/LifecycleConductor');
@@ -48,7 +49,7 @@ class Queue {
     }
 }
 
-function makeLifecycleConductor(options) {
+function makeLifecycleConductor(options, markers) {
     const { bucketsDenied, accountsDenied, bucketSource } = options;
     const lifecycleConfig = {
         zookeeperPath: '/test/lifecycle',
@@ -76,8 +77,9 @@ function makeLifecycleConductor(options) {
     };
 
     lcConductor._bucketClient = {
-        listObject: (a, b, c, cb) => {
-            if (c.marker) {
+        listObject: (a, b, { marker }, cb) => {
+            if (marker) {
+                markers.push(marker);
                 return cb(null, JSON.stringify({
                     Contents: [
                         {
@@ -132,9 +134,10 @@ describe('LifecycleConductor: listBuckets', () => {
     });
 
     it('should list buckets from bucketd', done => {
+        const markers = [];
         const lcConductor = makeLifecycleConductor({
             bucketSource: 'bucketd',
-        });
+        }, markers);
 
         lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
             assert.strictEqual(length, 2);
@@ -151,6 +154,8 @@ describe('LifecycleConductor: listBuckets', () => {
                 },
             ];
             assert.deepStrictEqual(queue.list(), expectedQueue);
+            // test the listing optimization was not applied.
+            assert.deepStrictEqual(markers, [`${account1}${splitter}${bucket1}`]);
             done();
         });
     });
@@ -177,10 +182,11 @@ describe('LifecycleConductor: listBuckets', () => {
     });
 
     it('should filter by bucket when listing from bucketd', done => {
+        const markers = [];
         const lcConductor = makeLifecycleConductor({
             bucketsDenied: [bucket1],
             bucketSource: 'bucketd',
-        });
+        }, markers);
 
         lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
             assert.strictEqual(length, 1);
@@ -193,6 +199,8 @@ describe('LifecycleConductor: listBuckets', () => {
                 },
             ];
             assert.deepStrictEqual(queue.list(), expectedQueue);
+            // test the listing optimization was not applied.
+            assert.deepStrictEqual(markers, [`${account1}${splitter}${bucket1}`]);
             done();
         });
     });
@@ -219,10 +227,11 @@ describe('LifecycleConductor: listBuckets', () => {
     });
 
     it('should filter by account when listing from bucketd', done => {
+        const markers = [];
         const lcConductor = makeLifecycleConductor({
             accountsDenied: [`${accountName1}:${account1}`],
             bucketSource: 'bucketd',
-        });
+        }, markers);
 
         lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
             assert.strictEqual(length, 1);
@@ -235,6 +244,8 @@ describe('LifecycleConductor: listBuckets', () => {
                 },
             ];
             assert.deepStrictEqual(queue.list(), expectedQueue);
+            // test the listing optimization was applied
+            assert.deepStrictEqual(markers, [`${account1};`]);
             done();
         });
     });
@@ -257,11 +268,12 @@ describe('LifecycleConductor: listBuckets', () => {
     });
 
     it('should filter by account and bucket when listing from bucketd', done => {
+        const markers = [];
         const lcConductor = makeLifecycleConductor({
             accountsDenied: [`${accountName1}:${account1}`],
             bucketsDenied: [bucket2],
             bucketSource: 'bucketd',
-        });
+        }, markers);
 
         lcConductor.listBuckets(queue, fakeLogger, (err, length) => {
             assert.strictEqual(length, 0);
@@ -269,6 +281,8 @@ describe('LifecycleConductor: listBuckets', () => {
 
             const expectedQueue = [];
             assert.deepStrictEqual(queue.list(), expectedQueue);
+            // test the listing optimization was not applied.
+            assert.deepStrictEqual(markers, [`${account1}${splitter}${bucket1}`]);
             done();
         });
     });
