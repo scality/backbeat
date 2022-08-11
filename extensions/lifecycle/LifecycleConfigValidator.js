@@ -27,6 +27,12 @@ const joiSchema = joi.object({
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
+        filter: joi.object({
+            deny: joi.object({
+                buckets: joi.array().items(joi.string()),
+                accounts: joi.array().items(joi.string()),
+            }),
+        }),
         probeServer: probeServerJoi.default(),
         vaultAdmin: hostPortJoi,
     },
