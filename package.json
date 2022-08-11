@@ -4,7 +4,7 @@
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
-    "queue_populator": "node bin/queuePopulator.js",
+    "queue_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=replication,lifecycle node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "ingestion_populator": "node bin/ingestion.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
@@ -28,7 +28,7 @@
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node bin/backbeat.js",
-    "notification_populator": "node bin/notification.js",
+    "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification BACKBEAT_QUEUEPOPULATOR_LOGSOURCE=kafka node bin/queuePopulator.js",
     "notification_processor": "node extensions/notification/queueProcessor/task.js"
   },
   "repository": {
