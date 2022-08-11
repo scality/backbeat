@@ -100,6 +100,7 @@ class LifecycleConductor {
         this.bucketsBlacklisted = new Set(blacklist.buckets);
         const accountCanonicalIds = this._getAccountCanonicalIds(blacklist.accounts);
         this.accountsBlacklisted = new Set(accountCanonicalIds);
+        this.onlyBlacklistAccounts = this.bucketsBlacklisted.size === 0 && this.accountsBlacklisted.size > 0;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
     }
@@ -375,6 +376,14 @@ class LifecycleConductor {
                                     if (!this._isBlacklisted(canonicalId, bucketName)) {
                                         nEnqueued += 1;
                                         queue.push({ canonicalId, bucketName });
+                                    // Optimization:
+                                    // If we only blacklist by accounts, and the last bucket is blacklisted
+                                    //  we can skip listing buckets until the next account.
+                                    // To start the next listing after the blacklisted account, we construct
+                                    // a marker by appending the blacklisted account with a semicolon character.
+                                    // 'canonicalid1;' > 'canonicalid1..|..bucketname1'
+                                    } else if (this.onlyBlacklistAccounts) {
+                                        marker = `${canonicalId};`;
                                     }
                                 });
 
