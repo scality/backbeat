@@ -273,8 +273,13 @@ class MongoQueueProcessor {
         // if version id is undefined, we have a single null object.
         // To hold reference to this null object, we need to encode "null"
         // as its dataStoreVersionId
-        const dataStoreVersionId = entry.getVersionId() ?
-            entry.getEncodedVersionId() : 'null';
+
+        let dataStoreVersionId;
+        if (entry.getIsNull() || (! entry.getVersionId())) {
+            dataStoreVersionId = 'null';
+        } else {
+            dataStoreVersionId = entry.getEncodedVersionId();
+        }
         let zenkoDataLocations;
         if (!locations || locations.length === 0) {
             zenkoDataLocations = [{
