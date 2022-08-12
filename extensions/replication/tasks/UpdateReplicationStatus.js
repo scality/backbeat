@@ -99,10 +99,9 @@ class UpdateReplicationStatus extends BackbeatTask {
     /**
      * Push any failed entry to the "failed" topic.
      * @param {QueueEntry} queueEntry - The queue entry with the failed status.
-     * @param {Logger} log - Logger
      * @return {undefined}
      */
-    _pushFailedEntry(queueEntry, log) {
+    _pushFailedEntry(queueEntry) {
         const site = queueEntry.getSite();
         const bucket = queueEntry.getBucket();
         const objectKey = queueEntry.getObjectKey();
@@ -115,9 +114,6 @@ class UpdateReplicationStatus extends BackbeatTask {
             score,
         };
         this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
-        if (this.bucketNotificationConfig) {
-            this._publishFailedReplicationStatusNotification(queueEntry, log);
-        }
     }
 
     /**
@@ -340,22 +336,19 @@ class UpdateReplicationStatus extends BackbeatTask {
      * if no "source object" metadata update needed, or ObjectQueueEntry with the "source object" metadata
      */
     _handleFailedReplicationEntry(refreshedEntry, queueEntry, site, log) {
-        if (!this.replayTopics) {
-            // if replay topics are not defined in the configuration,
-            // replay logic is disabled.
-            if (this.repConfig.monitorReplicationFailures) {
-                this._pushFailedEntry(queueEntry);
-            }
-            return refreshedEntry.toFailedEntry(site);
-        }
-        const count = queueEntry.getReplayCount();
-        const totalAttempts = this.replayTopics.length;
+        // if replay topics are not defined in the configuration,
+        // replay logic is disabled.
+        const count = !this.replayTopics ? 0 : queueEntry.getReplayCount();
         if (count === 0) {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry, log);
             }
+            if (this.bucketNotificationConfig) {
+                this._publishFailedReplicationStatusNotification(queueEntry, log);
+            }
             return refreshedEntry.toFailedEntry(site);
         }
+        const totalAttempts = this.replayTopics.length;
         if (count > 0) {
             if (count > totalAttempts) { // might happen if replay config has changed
                 queueEntry.setReplayCount(totalAttempts);
