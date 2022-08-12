@@ -402,10 +402,10 @@ class UpdateReplicationStatus extends BackbeatTask {
      * into the notification topic
      * @param {Object} sourceEntry the object entry
      * @param {Logger} log the logger instance
-     * @param {Function} done callback
+     * @param {Function} done optional callback when all notification have been posted
      * @return {undefined}
      */
-    _publishFailedReplicationStatusNotification(sourceEntry, log) {
+    _publishFailedReplicationStatusNotification(sourceEntry, log, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
         const value = sourceEntry.getValue();
@@ -492,6 +492,9 @@ class UpdateReplicationStatus extends BackbeatTask {
                         bucket,
                         key,
                     });
+                    if (done) {
+                        done(err);
+                    }
                 });
             }
         });
