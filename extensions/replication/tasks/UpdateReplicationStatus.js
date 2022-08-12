@@ -4,6 +4,7 @@ const async = require('async');
 const util = require('util');
 
 const config = require('../../../lib/Config');
+const utils = require('../utils/utils');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
@@ -70,7 +71,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            versionId: sourceEntry.getEncodedVersionId(),
+            versionId: utils.getVersionIdForReplication(sourceEntry, true),
         };
         return this.backbeatSourceClient
         .getMetadata(params, log, (err, blob) => {
@@ -260,7 +261,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         return client.putMetadata({
             bucket: updatedSourceEntry.getBucket(),
             objectKey: updatedSourceEntry.getObjectKey(),
-            versionId: updatedSourceEntry.getEncodedVersionId(),
+            versionId: utils.getVersionIdForReplication(updatedSourceEntry, true),
             mdBlob: updatedSourceEntry.getSerialized(),
         }, log, err => {
             if (err) {

@@ -11,6 +11,7 @@ const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
     require('../constants');
+const utils = require('../utils/utils');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -105,7 +106,7 @@ class MultipleBackendTask extends ReplicateObject {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            versionId: sourceEntry.getEncodedVersionId(),
+            versionId: utils.getVersionIdForReplication(sourceEntry, true),
         };
         return this.backbeatSourceProxy.getMetadata(
         params, log, (err, blob) => {
@@ -209,7 +210,7 @@ class MultipleBackendTask extends ReplicateObject {
             sourceReq = this.backbeatSource.getObject({
                 Bucket: sourceEntry.getBucket(),
                 Key: sourceEntry.getObjectKey(),
-                VersionId: sourceEntry.getEncodedVersionId(),
+                VersionId: utils.getVersionIdForReplication(sourceEntry, true),
                 // A 0-byte part has no range.
                 Range: range && `bytes=${range.start}-${range.end}`,
                 LocationConstraint: sourceEntry.getDataStoreName(),
@@ -292,7 +293,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId: utils.getVersionIdForReplication(sourceEntry, true),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
@@ -447,7 +448,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId: utils.getVersionIdForReplication(sourceEntry, true),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType(),
             CacheControl: sourceEntry.getCacheControl() || undefined,
@@ -706,7 +707,7 @@ class MultipleBackendTask extends ReplicateObject {
             sourceReq = this.backbeatSource.getObject({
                 Bucket: sourceEntry.getBucket(),
                 Key: sourceEntry.getObjectKey(),
-                VersionId: sourceEntry.getEncodedVersionId(),
+                VersionId: utils.getVersionIdForReplication(sourceEntry, true),
                 LocationConstraint: sourceEntry.getDataStoreName(),
             });
             attachReqUids(sourceReq, log);
@@ -834,7 +835,7 @@ class MultipleBackendTask extends ReplicateObject {
         this.backbeatSourceProxy.getMetadata({
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            versionId: sourceEntry.getEncodedVersionId(),
+            versionId: utils.getVersionIdForReplication(sourceEntry, true),
         }, log, cb);
     }
 
@@ -857,7 +858,7 @@ class MultipleBackendTask extends ReplicateObject {
             ContentMD5: sourceEntry.getContentMd5(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
-            VersionId: sourceEntry.getEncodedVersionId(),
+            VersionId: utils.getVersionIdForReplication(sourceEntry, true),
             UserMetaData: sourceEntry.getUserMetadata(),
             ContentType: sourceEntry.getContentType() || undefined,
             CacheControl: sourceEntry.getCacheControl() || undefined,
@@ -926,7 +927,7 @@ class MultipleBackendTask extends ReplicateObject {
                     sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
                 Tags: JSON.stringify(sourceEntry.getTags()),
                 SourceBucket: sourceEntry.getBucket(),
-                SourceVersionId: sourceEntry.getVersionId(),
+                SourceVersionId: utils.getVersionIdForReplication(sourceEntry),
                 ReplicationEndpointSite: this.site,
             });
         attachReqUids(destReq, log);
@@ -970,7 +971,7 @@ class MultipleBackendTask extends ReplicateObject {
             DataStoreVersionId:
                 sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
             SourceBucket: sourceEntry.getBucket(),
-            SourceVersionId: sourceEntry.getVersionId(),
+            SourceVersionId: utils.getVersionIdForReplication(sourceEntry),
             ReplicationEndpointSite: this.site,
         });
         attachReqUids(destReq, log);
