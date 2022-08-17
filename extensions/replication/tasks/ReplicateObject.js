@@ -30,6 +30,8 @@ function _extractAccountIdFromRole(role) {
 const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
     process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
 
+const BACKBEAT_CLIENT_TIMEOUT_MS = 120000; // 2 minutes is the default AWS S3 Javascript SDK timeout.
+
 class ReplicateObject extends BackbeatTask {
     /**
      * Process a single replication entry
@@ -716,7 +718,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: BACKBEAT_CLIENT_TIMEOUT_MS },
             maxRetries: 0,
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
