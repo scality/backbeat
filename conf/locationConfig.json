@@ -1,46 +1,97 @@
 {
   "us-east-1": {
-    "details": {
-      "supportsVersioning": true
-    },
-    "isTransient": false,
-    "legacyAwsBehavior": false,
-    "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
-    "type": "file"
-  },
-  "us-east-2": {
-    "details": {},
-    "isTransient": false,
-    "legacyAwsBehavior": false,
-    "objectId": "06a862b3-fee4-11eb-a6ba-26bd22419be2",
-    "type": "aws_s3"
-  },
-  "wontwork-location": {
-    "details": {
-      "awsEndpoint": "217.182.11.36",
-      "bucketMatch": true,
-      "bucketName": "ring-bucket-1",
-      "credentials": {
-        "accessKey": "TO_BE_ADDED",
-        "secretKey": "TO_BE_ADDED"
+      "details": {
+          "supportsVersioning": true
       },
-      "https": false,
-      "pathStyle": true,
-      "region": "us-east-1",
-      "serverSideEncryption": false,
-      "supportsVersioning": true
-    },
-    "isTransient": false,
-    "legacyAwsBehavior": false,
-    "objectId": "06a862b3-fee4-11eb-a6ba-26bd22419be3",
-    "type": "aws_s3",
-    "locationType": "location-scality-ring-s3-v1"
+      "isTransient": false,
+      "legacyAwsBehavior": false,
+      "objectId": "0b1d9226-a694-11eb-bc21-baec55d199cd",
+      "type": "file"
+  },
+  "s3c-location": {
+      "type": "aws_s3",
+      "legacyAwsBehavior": true,
+      "objectId": "1b1d9226-a694-11eb-bc21-baec55d199cd",
+      "details": {
+          "awsEndpoint": "10.100.5.232:8000",
+          "bucketName": "n2b",
+          "bucketMatch": false,
+          "credentialsProfile": "ring",
+          "serverSideEncryption": true,
+          "https": false,
+          "pathStyle": true
+      }
+  },
+  "aws-location": {
+      "type": "aws_s3",
+      "legacyAwsBehavior": true,
+      "objectId": "2b1d9226-a694-11eb-bc21-baec55d199cd",
+      "details": {
+          "awsEndpoint": "s3.amazonaws.com",
+          "bucketName": "aws-n2b",
+          "bucketMatch": false,
+          "credentialsProfile": "aws-account",
+          "serverSideEncryption": true
+      }
+  },
+  "azure-location": {
+      "type": "azure",
+      "legacyAwsBehavior": true,
+      "objectId": "4b1d9226-a694-11eb-bc21-baec55d199cd",
+      "details": {
+          "supportsVersioning": false,
+          "azureStorageEndpoint": "https://nicolas2bert.blob.core.windows.net/",
+          "azureStorageAccountName": "nicolas2bert",
+          "azureStorageAccessKey": "",
+          "bucketMatch": false,
+          "azureContainerName": "container1"
+      }
+  },
+  "azure-location2": {
+    "type": "azure",
+    "legacyAwsBehavior": true,
+    "objectId": "4b1d9226-a694-11eb-bc21-baec55d199nm",
+    "details": {
+        "supportsVersioning": false,
+        "azureStorageEndpoint": "http://127.0.0.1:10000/devstoreaccount1",
+        "azureStorageAccountName": "devstoreaccount1",
+        "azureStorageAccessKey": "Eby8vdM02xNOcqFlqUwJPLlmEtlCDXJ1OUzFT50uSRZ6IFsuFq2UVErCz4I6tq/K1SZFPTOtr/KBHBeksoGMGw==",
+        "bucketMatch": false,
+        "azureContainerName": "container1"
+    }
+  },
+  "ingest-location": {
+      "details": {
+          "awsEndpoint": "10.100.5.232:8000",
+          "bucketMatch": true,
+          "bucketName": "n2b-ingest",
+          "credentialsProfile": "ring",
+          "https": false,
+          "pathStyle": true,
+          "region": "us-east-1",
+          "serverSideEncryption": false,
+          "supportsVersioning": true
+      },
+      "isTransient": false,
+      "legacyAwsBehavior": false,
+      "objectId": "36a862b3-fee4-11eb-a6ba-26bd22419be3",
+      "type": "aws_s3",
+      "locationType": "location-scality-ring-s3-v1"
   },
   "location-dmf-v1": {
-    "type": "dmf",
-    "objectId": "location-dmf-v1",
-    "legacyAwsBehavior": false,
-    "isCold": true,
-    "details": {}
+      "type": "dmf",
+      "objectId": "location-dmf-v1",
+      "legacyAwsBehavior": false,
+      "isCold": true,
+      "details": {
+          "endpoint": "ws://localhost:5001/session",
+      "username": "user1",
+      "password": "pass1",
+      "repoId": [
+              "233aead6-1d7b-4647-a7cf-0d3280b5d1d7",
+              "81e78de8-df11-4acd-8ad1-577ff05a68db"
+          ],
+      "nsId": "65f9fd61-42fe-4a68-9ac0-6ba25311cc85"
+      }
   }
 }

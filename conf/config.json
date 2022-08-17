@@ -48,6 +48,20 @@
         "probeServer": {
             "bindAddress": "0.0.0.0",
             "port": 4042
+        },
+        "auth": {
+            "type": "assumeRole",
+            "roleName": "not_needed_for_crr_used_to_get_account_ids",
+            "sts": {
+                "host": "127.0.0.1",
+                "port": 8800,
+                "accessKey": "C5SLBU70VUJEN4LYPCCQ",
+                "secretKey": "GyvgfCCR+Okt7GzQFGhxZ9GG8h7ESzECrLSU=XoZ"
+            },
+            "vault": {
+                "host": "127.0.0.1",
+                "port": 8600
+            }
         }
     },
     "extensions": {
@@ -106,8 +120,8 @@
                     "port": 8000
                 },
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication",
+                    "type": "account",
+                    "account": "bart",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -118,10 +132,10 @@
             "destination": {
                 "transport": "http",
                 "bootstrapList": [
-                    { "site": "zenko", "servers": ["localhost:8001"],
-                      "echo": false },
-                    { "site": "wontwork-location", "type": "aws_s3" },
-                    { "site": "aws-location", "type": "aws_s3" }
+                    {
+                        "site": "azure-location",
+                        "type": "azure"
+                    }
                 ],
                 "auth": {
                     "type": "service",
@@ -144,44 +158,44 @@
                 "groupId": "backbeat-replication-group",
                 "retry": {
                     "aws_s3": {
-                        "maxRetries": 5,
-                        "timeoutS": 900,
                         "backoff": {
-                            "min": 60000,
-                            "max": 900000,
-                            "jitter": 0.1,
-                            "factor": 1.5
-                        }
+                            "factor": "1.5",
+                            "jitter": "0.1",
+                            "max": 300000,
+                            "min": 1000
+                        },
+                        "maxRetries": 5,
+                        "timeoutS": 300
                     },
                     "azure": {
-                        "maxRetries": 5,
-                        "timeoutS": 900,
                         "backoff": {
-                            "min": 60000,
-                            "max": 900000,
-                            "jitter": 0.1,
-                            "factor": 1.5
-                        }
+                            "factor": "1.5",
+                            "jitter": "0.1",
+                            "max": 120000,
+                            "min": 1000
+                        },
+                        "maxRetries": 2,
+                        "timeoutS": 120
                     },
                     "gcp": {
-                        "maxRetries": 5,
-                        "timeoutS": 900,
                         "backoff": {
-                            "min": 60000,
-                            "max": 900000,
-                            "jitter": 0.1,
-                            "factor": 1.5
-                        }
+                            "factor": "1.5",
+                            "jitter": "0.1",
+                            "max": 300000,
+                            "min": 1000
+                        },
+                        "maxRetries": 5,
+                        "timeoutS": 300
                     },
                     "scality": {
-                        "maxRetries": 5,
-                        "timeoutS": 300,
                         "backoff": {
-                            "min": 1000,
+                            "factor": "1.5",
+                            "jitter": "0.1",
                             "max": 300000,
-                            "jitter": 0.1,
-                            "factor": 1.5
-                        }
+                            "min": 1000
+                        },
+                        "maxRetries": 5,
+                        "timeoutS": 300
                     }
                 },
                 "concurrency": 10,
@@ -308,7 +322,7 @@
         }
     },
     "log": {
-        "logLevel": "info",
+        "logLevel": "debug",
         "dumpLevel": "error"
     },
     "metrics": {

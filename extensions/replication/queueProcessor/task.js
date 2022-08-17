@@ -241,54 +241,54 @@ function initAndStart(zkClient) {
             }
         });
 
-        startProbeServer(
-            repConfig.queueProcessor.probeServer,
-            (err, probeServer) => {
-                if (err) {
-                    log.fatal('error creating probe server', {
-                        error: err,
-                    });
-                    process.exit(1);
-                }
-                if (probeServer !== undefined) {
-                    probeServer.addHandler(
-                        // for backwards compatibility we also include readiness
-                        [DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, '/_/health/readiness'],
-                        (res, log) => {
-                            // take all our processors and create one liveness response
-                            let responses = [];
-                            Object.keys(activeQProcessors).forEach(site => {
-                                const qp = activeQProcessors[site];
-                                responses = responses.concat(qp.handleLiveness(log));
-                            });
-                            if (responses.length > 0) {
-                                const message = JSON.stringify(responses);
-                                log.debug('service unavailable',
-                                    {
-                                        httpCode: 500,
-                                        error: message,
-                                    }
-                                );
-                                res.writeHead(500);
-                                res.end(message);
-                                return undefined;
-                            }
-                            sendSuccess(res, log);
-                            return undefined;
-                        }
-                    );
-                    // TODO: set this variable during deployment
-                    // enable metrics route only when it is enabled
-                    if (process.env.ENABLE_METRICS_PROBE === 'true') {
-                        // TODO: implement metrics route for multi site setup, BB-23
-                        probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
-                            log.info('queue processor metrics route not implemented');
-                            sendSuccess(res, log);
-                        });
-                    }
-                }
-            }
-        );
+        // startProbeServer(
+        //     repConfig.queueProcessor.probeServer,
+        //     (err, probeServer) => {
+        //         if (err) {
+        //             log.fatal('error creating probe server', {
+        //                 error: err,
+        //             });
+        //             process.exit(1);
+        //         }
+        //         if (probeServer !== undefined) {
+        //             probeServer.addHandler(
+        //                 // for backwards compatibility we also include readiness
+        //                 [DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE, '/_/health/readiness'],
+        //                 (res, log) => {
+        //                     // take all our processors and create one liveness response
+        //                     let responses = [];
+        //                     Object.keys(activeQProcessors).forEach(site => {
+        //                         const qp = activeQProcessors[site];
+        //                         responses = responses.concat(qp.handleLiveness(log));
+        //                     });
+        //                     if (responses.length > 0) {
+        //                         const message = JSON.stringify(responses);
+        //                         log.debug('service unavailable',
+        //                             {
+        //                                 httpCode: 500,
+        //                                 error: message,
+        //                             }
+        //                         );
+        //                         res.writeHead(500);
+        //                         res.end(message);
+        //                         return undefined;
+        //                     }
+        //                     sendSuccess(res, log);
+        //                     return undefined;
+        //                 }
+        //             );
+        //             // TODO: set this variable during deployment
+        //             // enable metrics route only when it is enabled
+        //             if (process.env.ENABLE_METRICS_PROBE === 'true') {
+        //                 // TODO: implement metrics route for multi site setup, BB-23
+        //                 probeServer.addHandler(DEFAULT_METRICS_ROUTE, (res, log) => {
+        //                     log.info('queue processor metrics route not implemented');
+        //                     sendSuccess(res, log);
+        //                 });
+        //             }
+        //         }
+        //     }
+        // );
     });
 }
 
