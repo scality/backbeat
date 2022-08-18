@@ -69,6 +69,8 @@ const joiSchema = joi.object({
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
+        clientTimeoutMs: joi.number(),
+        replayClientTimeoutMs: joi.number(),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: probeServerJoi.default(),
     }).required(),

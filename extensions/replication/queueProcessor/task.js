@@ -35,15 +35,20 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
+const CLIENT_TIMEOUT_MS = repConfig.queueProcessor.clientTimeoutMs || 120000; // 2 minutes
+const REPLAY_CLIENT_TIMEOUT_MS = repConfig.queueProcessor.replayClientTimeoutMs || 600000; // 10 minutes
+
 function getTopic(topic) {
     if (!topic) {
-        return repConfig.topic;
+        const clientsConfig = { backbeat: { timeout: CLIENT_TIMEOUT_MS } };
+        return { topic: repConfig.topic, clientsConfig };
     }
 
     const isTopicUsed = repConfig.replayTopics.some(t => t.topicName === topic);
     assert(isTopicUsed, 'Invalid topic argument. Topic must match ' +
             'one of the replay topic defined');
-    return topic;
+    const clientsConfig = { backbeat: { timeout: REPLAY_CLIENT_TIMEOUT_MS } };
+    return { topic, clientsConfig };
 }
 
 // QueueProcessor and ReplayProcessor are actually the same, the only difference
@@ -52,7 +57,7 @@ function getTopic(topic) {
 //   config, and the process will actually be a "replay processor"
 // - If no topic is given, then `repConfig.topic` is used and this is the "queue
 //   processor"
-const topic = getTopic(process.argv[2]);
+const { topic, clientsConfig } = getTopic(process.argv[2]);
 
 const activeQProcessors = {};
 
@@ -190,7 +195,7 @@ function initAndStart(zkClient) {
                             sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
-                            site, notificationConfig, mongoConfig);
+                            site, notificationConfig, mongoConfig, clientsConfig);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -225,7 +230,7 @@ function initAndStart(zkClient) {
                 topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig, redisConfig,
                 mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig, mongoConfig);
+                site, notificationConfig, mongoConfig, clientsConfig);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {

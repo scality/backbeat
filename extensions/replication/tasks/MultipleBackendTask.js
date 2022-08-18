@@ -46,6 +46,8 @@ class MultipleBackendTask extends ReplicateObject {
 
         this._setupSourceClients(this.sourceRole, log);
 
+        console.log('backbeat client!!!', this.backbeatSource);
+
         const req = this.S3source.getBucketReplication({
             Bucket: entry.getBucket(),
         });

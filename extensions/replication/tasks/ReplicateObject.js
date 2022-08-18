@@ -30,8 +30,6 @@ function _extractAccountIdFromRole(role) {
 const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
     process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
 
-const BACKBEAT_CLIENT_TIMEOUT_MS = 60000; // 1 minute
-
 class ReplicateObject extends BackbeatTask {
     /**
      * Process a single replication entry
@@ -698,6 +696,7 @@ class ReplicateObject extends BackbeatTask {
         this.s3sourceCredentials =
             this._createCredentials('source', this.sourceConfig.auth,
                 sourceRole, log);
+        const timeout = this.clientsConfig.backbeat.timeout;
 
         // Disable retries, use our own retry policy (mandatory for
         // putData route in order to fetch data again from source).
@@ -718,7 +717,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: BACKBEAT_CLIENT_TIMEOUT_MS },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout },
             maxRetries: 0,
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(

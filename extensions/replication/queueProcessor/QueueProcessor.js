@@ -205,11 +205,12 @@ class QueueProcessor extends EventEmitter {
      * @param {Object} notificationConfig - notification configuration object
      * @param {Object} notificationConfig.topic - notification topic name
      * @param {Object} mongoConfig - mongodb connection config
+     * @param {Object} clientsConfig - backbeat client timeouts
      */
     constructor(topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site, notificationConfig, mongoConfig) {
+                site, notificationConfig, mongoConfig, clientsConfig) {
         super();
         this.topic = topic;
         this.isReplayTopic = repConfig.replayTopics &&
@@ -239,6 +240,7 @@ class QueueProcessor extends EventEmitter {
         this.notificationConfigManager = null;
         this.notificationProducers = {};
         this.mongoConfig = mongoConfig;
+        this.clientsConfig = clientsConfig;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -767,6 +769,7 @@ class QueueProcessor extends EventEmitter {
             notificationConfig: this.notificationConfig,
             notificationConfigManager: this.notificationConfigManager,
             notificationProducers: this.notificationProducers,
+            clientsConfig: this.clientsConfig,
         };
     }
 
