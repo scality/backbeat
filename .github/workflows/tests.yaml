@@ -16,13 +16,6 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v2
-    - name: Cache Docker layers
-      uses: actions/cache@v2
-      with:
-        path: /tmp/.buildx-cache
-        key: ${{ runner.os }}-buildx-${{ github.sha }}
-        restore-keys: |
-          ${{ runner.os }}-buildx-
     - name: Set up Docker Buildk
       uses: docker/setup-buildx-action@v1
       with:
@@ -40,8 +33,8 @@ jobs:
         push: true
         context: .github/dockerfiles/kafka
         tags: "ghcr.io/scality/backbeat/ci-kafka:${{ github.sha }}"
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
     - name: Build and push syntheticbucketd
       uses: docker/build-push-action@v2
@@ -50,16 +43,8 @@ jobs:
         context: .
         file: .github/dockerfiles/syntheticbucketd/Dockerfile
         tags: "ghcr.io/scality/backbeat/syntheticbucketd:${{ github.sha }}"
-        cache-from: type=local,src=/tmp/.buildx-cache
-        cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
-
-    # Temp fix
-    # https://github.com/docker/build-push-action/issues/252
-    # https://github.com/moby/buildkit/issues/1896
-    - name: Move cache
-      run: |
-        rm -rf /tmp/.buildx-cache
-        mv /tmp/.buildx-cache-new /tmp/.buildx-cache
+        cache-from: type=gha
+        cache-to: type=gha,mode=max
 
   tests:
     needs: build

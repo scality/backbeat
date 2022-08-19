@@ -15,9 +15,9 @@ class KafkaNotificationDestination extends NotificationDestination {
     }
 
     _setupProducer(done) {
-        const { host, topic, auth } = this._destinationConfig;
+        const { host, port, topic, auth } = this._destinationConfig;
         const producer = new KafkaProducer({
-            kafka: { hosts: host },
+            kafka: { hosts: `${host}:${port}` },
             topic,
             auth,
         });

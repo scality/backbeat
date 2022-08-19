@@ -10,14 +10,17 @@ const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
 const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const repConfig = config.extensions.replication;
+const notificationConfig = config.extensions.notification;
 const sourceConfig = repConfig.source;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
+const mongoConfig = config.queuePopulator.mongo;
 
 const { initManagement } = require('../../../lib/management/index');
 
 const replicationStatusProcessor = new ReplicationStatusProcessor(
-    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig);
+    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig,
+    notificationConfig, mongoConfig);
 
 werelogs.configure({ level: config.log.logLevel,
      dump: config.log.dumpLevel });

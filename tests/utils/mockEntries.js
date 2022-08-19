@@ -15,6 +15,9 @@ const sourceEntry = {
     getObjectVersionedKey: () => {},
     getValue: () => {},
     getVersionId: () => {},
+    toFailedEntry: () => {},
+    getReplayCount: () => {},
+    setReplayCount: () => {},
 };
 
 module.exports = { sourceEntry };
