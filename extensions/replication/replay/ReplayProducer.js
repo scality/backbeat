@@ -52,7 +52,9 @@ class ReplayProducer {
     publishReplayEntry(message, deliveryReportCb) {
         this._producer.send([message], err => {
             if (err) {
-                this._log.trace('error publishing replay entry');
+                this._log.error('error publishing replay entry', {
+                    error: err,
+                });
             }
             if (deliveryReportCb) {
                 deliveryReportCb();
