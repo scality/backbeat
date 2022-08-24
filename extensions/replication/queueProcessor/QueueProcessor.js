@@ -412,7 +412,7 @@ class QueueProcessor extends EventEmitter {
         consumer.on('error', () => {
             if (!consumerReady) {
                 this.logger.fatal('queue processor failed to start a ' +
-                                  'backbeat consumer');
+                                  'backbeat consumer', { topic, groupId });
                 process.exit(1);
             }
         });
