@@ -10,7 +10,7 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
-const { attachReqUids } = require('../../../lib/clients/utils');
+const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
@@ -29,8 +29,6 @@ function _extractAccountIdFromRole(role) {
 // When set, the value is the target percentage of errors.
 const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
     process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
-
-const BACKBEAT_CLIENT_TIMEOUT_MS = 120000; // 2 minutes is the default AWS S3 Javascript SDK timeout.
 
 class ReplicateObject extends BackbeatTask {
     /**
@@ -718,7 +716,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: BACKBEAT_CLIENT_TIMEOUT_MS },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS },
             maxRetries: 0,
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
