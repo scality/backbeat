@@ -827,7 +827,8 @@ class QueueProcessor extends EventEmitter {
                 }
                 this._consumer = this._createConsumer(
                     this.topic,
-                    this.processReplicationEntry.bind(this), options);
+                    this.processReplicationEntry.bind(this),
+                    { enableBacklogMetrics: true, ...options });
                 return this._consumer.once('canary', done);
             },
             done  => {
@@ -841,7 +842,7 @@ class QueueProcessor extends EventEmitter {
                 this._dataMoverConsumer = this._createConsumer(
                     this.repConfig.dataMoverTopic,
                     this.processDataMoverEntry.bind(this),
-                    Object.assign({ enableBacklogMetrics: true }, options));
+                    { enableBacklogMetrics: true, ...options });
                 return this._dataMoverConsumer.once('canary', done);
             },
         ], () => {
