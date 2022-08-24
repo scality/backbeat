@@ -716,7 +716,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS, connectTimeout: TIMEOUT_MS },
             maxRetries: 0,
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
@@ -724,7 +724,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             this.sourceConfig.auth, this.sourceHTTPAgent);
         this.backbeatSourceProxy.setSourceRole(sourceRole);
-        this.backbeatSourceProxy.setSourceClient(log);
+        this.backbeatSourceProxy.setBackbeatClient(this.backbeatSource);
     }
 
     _setupDestClients(targetRole, log) {
