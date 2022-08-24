@@ -231,7 +231,9 @@ class QueueProcessor extends EventEmitter {
         this._mProducer = null;
         this.site = site;
         this.mConfig = mConfig;
-        this.serviceName = libConstants.services.replicationQueueProcessor;
+        this.serviceName = this.isReplayTopic ?
+            libConstants.services.replicationReplayProcessor :
+            libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
         // bucket notification related
