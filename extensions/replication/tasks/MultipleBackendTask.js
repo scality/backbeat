@@ -4,7 +4,6 @@ const uuid = require('uuid/v4');
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMD = require('arsenal').models.ObjectMD;
-const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const ReplicateObject = require('./ReplicateObject');
@@ -832,13 +831,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _getSourceMD(sourceEntry, log, cb) {
-        const { transport, s3, auth } = this.sourceConfig;
-        const metadataProxy = new BackbeatMetadataProxy(
-            `${transport}://${s3.host}:${s3.port}`, auth);
-        const sourceRole = sourceEntry.getReplicationRoles().split(',')[0];
-        metadataProxy.setSourceRole(sourceRole);
-        metadataProxy.setSourceClient(log);
-        metadataProxy.getMetadata({
+        this.backbeatSourceProxy.getMetadata({
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
             versionId: sourceEntry.getEncodedVersionId(),
