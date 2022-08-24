@@ -9,7 +9,7 @@ const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
-const { attachReqUids } = require('../../../lib/clients/utils');
+const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
@@ -614,7 +614,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS, connectTimeout: TIMEOUT_MS },
             maxRetries: 0,
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
@@ -622,7 +622,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             this.sourceConfig.auth, this.sourceHTTPAgent);
         this.backbeatSourceProxy.setSourceRole(sourceRole);
-        this.backbeatSourceProxy.setSourceClient(log);
+        this.backbeatSourceProxy.setBackbeatClient(this.backbeatSource);
     }
 
     _setupDestClients(targetRole, log) {
