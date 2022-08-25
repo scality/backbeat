@@ -5,8 +5,10 @@ const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
 
 const { ObjectMD } = require('arsenal').models;
+const { decode } = require('arsenal').versioning.VersionID;
 
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const QueueProcessor = require('../../../extensions/replication' +
                                '/queueProcessor/QueueProcessor');
@@ -20,12 +22,70 @@ const CopyLocationTask =
 const constants = {
     bucket: 'test-bucket',
     objectKey: 'test-object',
-    versionId: 'test-object-versionId',
+    versionId: '7465737456657273696f6e494453757065724c6f6e67',
     dataStoreName: 'us-east-1',
     // data size should be sufficient to have data held in the socket
     // buffers, 10MB seems to work
     contents: Buffer.alloc(10000000).fill('Z'),
 };
+
+const objMetadata = {
+    'cache-control': undefined,
+    'content-disposition': undefined,
+    'content-encoding': undefined,
+    'content-length': 10000000,
+    'content-md5': 'bac4bea7bac4bea7bac4bea7bac4bea7',
+    'content-type': 'application/octet-stream',
+    'owner-id': 'bart',
+    'versionId': decode(constants.versionId),
+    'dataStoreName': 'us-east-1',
+    'replicationInfo': {
+        isNFS: false,
+        storageType: 'aws_s3'
+    },
+    'tags': {},
+    'replayCount': 0
+};
+
+const emptyObjMetadata = {
+    'cache-control': undefined,
+    'content-disposition': undefined,
+    'content-encoding': undefined,
+    'content-length': 10000000,
+    'content-md5': 'bac4bea7bac4bea7bac4bea7bac4bea7',
+    'content-type': 'application/octet-stream',
+    'owner-id': 'bart',
+    'versionId': decode(constants.versionId),
+    'dataStoreName': 'us-east-1',
+    'replicationInfo': {
+        isNFS: false,
+        storageType: 'aws_s3'
+    },
+    'tags': {},
+    'replayCount': 0
+};
+
+class MockQueueEntry extends ObjectQueueEntry {
+    setAmzServerSideEncryption() { return {}; }
+
+    setAmzEncryptionKeyId() { return {}; }
+
+    setAmzEncryptionCustomerAlgorithm() { return {}; }
+
+    setReplicationSiteDataStoreVersionId() { return {}; }
+}
+
+const fullObj = new MockQueueEntry(
+    constants.bucket,
+    `${constants.objectKey}\0${objMetadata.versionId}`,
+    objMetadata
+);
+
+const emptyObj = new MockQueueEntry(
+    constants.bucket,
+    `${constants.objectKey}\0${emptyObjMetadata.versionId}`,
+    emptyObjMetadata
+);
 
 const qpParams = [
     'backbeat-func-test-dummy-topic',
@@ -58,49 +118,6 @@ const qpParams = [
     {},
     'sf',
 ];
-
-const mockSourceEntry = {
-    getLogInfo: () => ({}),
-    getContentLength: () => constants.contents.length,
-    getBucket: () => constants.bucket,
-    getObjectKey: () => constants.objectKey,
-    getEncodedVersionId: () => constants.versionId,
-    getDataStoreName: () => constants.dataStoreName,
-    getReplicationIsNFS: () => false,
-    getOwnerId: () => 'bart',
-    getContentMd5: () => 'bac4bea7bac4bea7bac4bea7bac4bea7',
-    getReplicationStorageType: () => 'aws_s3',
-    getUserMetadata: () => {},
-    getContentType: () => 'application/octet-stream',
-    getCacheControl: () => undefined,
-    getContentDisposition: () => undefined,
-    getContentEncoding: () => undefined,
-    getTags: () => {},
-    setAmzServerSideEncryption: () => {},
-    setAmzEncryptionKeyId: () => {},
-    setAmzEncryptionCustomerAlgorithm: () => {},
-    setReplicationSiteDataStoreVersionId: () => {},
-};
-
-const mockEmptySourceEntry = {
-    getLogInfo: () => ({}),
-    getContentLength: () => 0,
-    getBucket: () => constants.bucket,
-    getObjectKey: () => constants.objectKey,
-    getEncodedVersionId: () => constants.versionId,
-    getDataStoreName: () => constants.dataStoreName,
-    getReplicationIsNFS: () => false,
-    getOwnerId: () => 'bart',
-    getContentMd5: () => 'bac4bea7bac4bea7bac4bea7bac4bea7',
-    getReplicationStorageType: () => 'aws_s3',
-    getUserMetadata: () => {},
-    getContentType: () => 'application/octet-stream',
-    getCacheControl: () => undefined,
-    getContentDisposition: () => undefined,
-    getContentEncoding: () => undefined,
-    getTags: () => {},
-    setReplicationSiteDataStoreVersionId: () => {},
-};
 
 const mockPartInfo = {
     key: 'bac4bea7bac4bea7bac4bea7bac4bea7bac4bea7',
@@ -207,7 +224,7 @@ describe('streamed copy functional tests', () => {
            repTask._setupSourceClients('dummyrole', log);
            repTask._setupDestClients('dummyrole', log);
            repTask._getAndPutPartOnce(
-               mockSourceEntry, mockSourceEntry, mockPartInfo,
+               fullObj, fullObj, mockPartInfo,
                log.newRequestLogger(), cb);
        },
      },
@@ -216,7 +233,7 @@ describe('streamed copy functional tests', () => {
            const mbTask = new MultipleBackendTask(qp);
            mbTask._setupSourceClients('dummyrole', log);
            mbTask._getAndPutObjectOnce(
-               mockSourceEntry, log.newRequestLogger(), cb);
+               fullObj, log.newRequestLogger(), cb);
        },
      },
      { name: 'MultipleBackendTask::_getRangeAndPutMPUPartOnce',
@@ -224,7 +241,7 @@ describe('streamed copy functional tests', () => {
            const mbTask = new MultipleBackendTask(qp);
            mbTask._setupSourceClients('dummyrole', log);
            mbTask._getRangeAndPutMPUPartOnce(
-               mockSourceEntry,
+               fullObj,
                { start: 0, end: constants.contents.length - 1 },
                1, 'uploadId', log.newRequestLogger(), cb);
        },
@@ -286,7 +303,7 @@ describe('streamed copy functional tests', () => {
            const mbTask = new MultipleBackendTask(qp);
            mbTask._setupSourceClients('dummyrole', log);
            mbTask._getAndPutObjectOnce(
-               mockEmptySourceEntry, log.newRequestLogger(), cb);
+               emptyObj, log.newRequestLogger(), cb);
        },
      },
      { name: 'CopyLocationTask::_getAndPutObjectOnce (empty object)',
