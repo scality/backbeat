@@ -6,6 +6,9 @@
             "Effect": "Allow",
             "Action": [
                 "s3:GetLifecycleConfiguration",
+                "s3:GetBucketObjectLockConfiguration",
+                "s3:GetObjectLegalHold",
+                "s3:GetObjectRetention",
                 "s3:GetBucketVersioning",
                 "s3:ListBucket",
                 "s3:ListBucketVersions",
