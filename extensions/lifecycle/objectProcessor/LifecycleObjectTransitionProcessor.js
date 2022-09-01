@@ -7,6 +7,8 @@ const LifecycleUpdateTransitionTask =
       require('../tasks/LifecycleUpdateTransitionTask');
 const LifecycleColdStatusArchiveTask =
       require('../tasks/LifecycleColdStatusArchiveTask');
+const { LifecycleResetTransitionInProgressTask } =
+      require('../tasks/LifecycleResetTransitionInProgressTask');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -91,6 +93,10 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
     getTask(actionEntry) {
         const actionType = actionEntry.getActionType();
+
+        if (actionType === 'requeueTransition') {
+            return new LifecycleResetTransitionInProgressTask(this);
+        }
 
         if (actionType !== 'copyLocation' ||
             actionEntry.getContextAttribute('ruleType') !== 'transition') {
