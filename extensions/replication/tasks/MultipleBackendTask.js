@@ -9,8 +9,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const { metricsExtension, metricsTypeQueued } = require('../constants');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -366,6 +365,7 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             });
             incomingMsg = sourceReq.createReadStream();
+            const readStartTime = Date.now();
             incomingMsg.on('error', err => {
                 if (!sourceReqAborted) {
                     destReq.abort();
@@ -387,6 +387,9 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             });
+            sourceReq.on('end', () => {
+                this._publishReadMetrics(size, readStartTime);
+            });
             log.debug('putting data', { entry: sourceEntry.getLogInfo() });
         }
 
@@ -401,6 +404,7 @@ class MultipleBackendTask extends ReplicateObject {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 if (!destReqAborted) {
@@ -418,9 +422,8 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             }
-            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+
+            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
             return doneOnce(null, data);
         });
     }
@@ -737,6 +740,7 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             });
             incomingMsg = sourceReq.createReadStream();
+            const readStartTime = Date.now();
             incomingMsg.on('error', err => {
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', {
@@ -761,6 +765,9 @@ class MultipleBackendTask extends ReplicateObject {
                     });
                 }
                 return doneOnce(err);
+            });
+            incomingMsg.on('end', () => {
+                this._publishReadMetrics(size, readStartTime);
             });
             log.debug('putting object', { entry: sourceEntry.getLogInfo() });
         }
@@ -875,6 +882,7 @@ class MultipleBackendTask extends ReplicateObject {
             });
         }
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 if (!aborted) {
@@ -892,9 +900,8 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
-            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+
+            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
             return doneOnce(null, data);
         });
     }
@@ -930,6 +937,7 @@ class MultipleBackendTask extends ReplicateObject {
                 ReplicationEndpointSite: this.site,
             });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 log.error('an error occurred putting object tagging to S3', {
@@ -942,6 +950,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }
@@ -974,6 +983,7 @@ class MultipleBackendTask extends ReplicateObject {
             ReplicationEndpointSite: this.site,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 log.error('an error occurred on deleting object tagging', {
@@ -987,6 +997,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }
@@ -1038,6 +1049,7 @@ class MultipleBackendTask extends ReplicateObject {
             StorageClass: this.site,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send(err => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
@@ -1051,6 +1063,7 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }

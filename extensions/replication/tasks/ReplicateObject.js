@@ -363,8 +363,48 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
+    _publishReadMetrics(size, readStartTime) {
         const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            replicationStage: replicationStages.sourceDataRead,
+        }, Date.now() - readStartTime);
+        this.metricsHandler.sourceDataBytes({ serviceName }, size);
+        this.metricsHandler.reads({ serviceName });
+    }
+
+    _publishDataWriteMetrics(size, sourceEntry, writeStartTime) {
+        const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            replicationStage: replicationStages.destinationDataWrite,
+        }, Date.now() - writeStartTime);
+        this.metricsHandler.dataReplicationBytes({ serviceName }, size);
+        this.metricsHandler.writes({
+            serviceName,
+            replicationContent: 'data',
+        });
+        const extMetrics = getExtMetrics(this.site, size, sourceEntry);
+        this.mProducer.publishMetrics(extMetrics,
+            metricsTypeCompleted, metricsExtension, () => {});
+    }
+
+    _publishMetadataWriteMetrics(buffer, writeStartTime) {
+        const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            replicationStage: replicationStages.destinationMetadataWrite,
+        }, Date.now() - writeStartTime);
+        this.metricsHandler.metadataReplicationBytes({
+            serviceName,
+        }, Buffer.byteLength(buffer));
+        this.metricsHandler.writes({
+            serviceName,
+            replicationContent: 'metadata',
+        });
+    }
+
+    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         const doneOnce = jsutil.once(done);
         const partObj = new ObjectMDLocation(part);
         const partNumber = partObj.getPartNumber();
@@ -431,12 +471,7 @@ class ReplicateObject extends BackbeatTask {
             return doneOnce(err);
         });
         incomingMsg.on('end', () => {
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.sourceDataRead,
-            }, Date.now() - readStartTime);
-            this.metricsHandler.sourceDataBytes({ serviceName }, partSize);
-            this.metricsHandler.reads({ serviceName });
+            this._publishReadMetrics(partSize, readStartTime);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo(), part });
         destReq = this.backbeatDest.putData({
@@ -478,18 +513,7 @@ class ReplicateObject extends BackbeatTask {
             destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
             destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
 
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.destinationDataWrite,
-            }, Date.now() - writeStartTime);
-            this.metricsHandler.dataReplicationBytes({ serviceName }, partSize);
-            this.metricsHandler.writes({
-                serviceName,
-                replicationContent: 'data',
-            });
-            const extMetrics = getExtMetrics(this.site, partSize, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics, metricsTypeCompleted,
-                metricsExtension, () => {});
+            this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
             return doneOnce(null, partObj.getValue());
         });
     }
@@ -500,7 +524,6 @@ class ReplicateObject extends BackbeatTask {
             replicationStatus: entry.getReplicationSiteStatus(this.site),
         });
         const cbOnce = jsutil.once(cb);
-        const serviceName = this.serviceName;
 
         // sends extra header x-scal-replication-content to the target
         // if it's a metadata operation only
@@ -533,17 +556,7 @@ class ReplicateObject extends BackbeatTask {
                     });
                 return cbOnce(err);
             }
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.destinationMetadataWrite,
-            }, Date.now() - writeStartTime);
-            this.metricsHandler.metadataReplicationBytes({
-                serviceName,
-            }, Buffer.byteLength(mdBlob));
-            this.metricsHandler.writes({
-                serviceName,
-                replicationContent: 'metadata',
-            });
+            this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
             return cbOnce(null, data);
         });
     }
