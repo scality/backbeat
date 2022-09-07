@@ -1014,7 +1014,7 @@ class QueueProcessor extends EventEmitter {
      * @param {Logger} log - Logger
      * @returns {string} Error response string or undefined
      */
-    handleMetrics(res, log) {
+    static handleMetrics(res, log) {
         log.debug('metrics requested');
 
         res.writeHead(200, {
