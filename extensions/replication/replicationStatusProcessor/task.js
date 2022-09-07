@@ -51,14 +51,9 @@ function initAndStart() {
                     probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE],
                         (res, log) => replicationStatusProcessor.handleLiveness(res, log)
                     );
-                    // TODO: set this variable during deployment
-                    // enable metrics route only when it is enabled
-                    if (process.env.ENABLE_METRICS_PROBE === 'true') {
-                        probeServer.addHandler(
-                            DEFAULT_METRICS_ROUTE,
-                            (res, log) => replicationStatusProcessor.handleMetrics(res, log)
-                        );
-                    }
+                    probeServer.addHandler(DEFAULT_METRICS_ROUTE,
+                        (res, log) => replicationStatusProcessor.handleMetrics(res, log)
+                    );
                 }
                 logger.info('management init done');
             }
