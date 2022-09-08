@@ -7,6 +7,7 @@ const sourceEntry = {
     getLocation: () => ([]),
     getUserMetadata: () => {},
     getContentType: () => {},
+    getContentLength: () => 0,
     getCacheControl: () => {},
     getContentDisposition: () => {},
     getContentEncoding: () => {},

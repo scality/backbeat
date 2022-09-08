@@ -613,6 +613,15 @@ class ReplicationStatusProcessor {
         });
         res.end(promClient.register.metrics());
     }
+
+    /**
+     * Static trampoline, for use from tests.
+     * @param {Object} repConfig - Replication configuration
+     * @returns {ReplicationStatusMetricsHandler} Metric handlers
+     */
+    static loadMetricHandlers(repConfig) {
+        return loadMetricHandlers(repConfig);
+    }
 }
 
 module.exports = ReplicationStatusProcessor;

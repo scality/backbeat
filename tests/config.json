@@ -149,7 +149,8 @@
                     "bindAddress": "localhost",
                     "port": 4045
                 }
-            }
+            },
+            "objectSizeMetrics": [100, 1000]
         },
         "lifecycle": {
             "zookeeperPath": "/lifecycletest",
