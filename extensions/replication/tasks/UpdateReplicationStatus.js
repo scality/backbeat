@@ -263,20 +263,21 @@ class UpdateReplicationStatus extends BackbeatTask {
             versionId: updatedSourceEntry.getEncodedVersionId(),
             mdBlob: updatedSourceEntry.getSerialized(),
         }, log, err => {
+            const replicationStatus = updatedSourceEntry.getReplicationStatus();
             if (err) {
                 log.error('an error occurred when updating metadata', {
                     entry: updatedSourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
-                    replicationStatus:
-                        updatedSourceEntry.getReplicationStatus(),
+                    replicationStatus,
                     error: err.message,
                 });
                 return cb(err);
             }
+            this.metricsHandler.status({ replicationStatus });
             log.end().info('metadata updated', {
                 entry: updatedSourceEntry.getLogInfo(),
-                replicationStatus: updatedSourceEntry.getReplicationStatus(),
+                replicationStatus,
             });
             return cb();
         });
