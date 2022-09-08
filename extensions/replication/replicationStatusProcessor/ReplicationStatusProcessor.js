@@ -72,50 +72,50 @@ function loadMetricHandlers(repConfig) {
     const replayAttempts = new promClient.Counter({
         name: 'replication_replay_attempts_total',
         help: 'Number of total attempts made to replay replication',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replaySuccess = new promClient.Counter({
         name: 'replication_replay_success_total',
         help: 'Number of times an object was replicated during a replay',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedObjects = new promClient.Counter({
         name: 'replication_replay_objects_queued_total',
         help: 'Number of objects added to replay queues',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedBytes = new promClient.Counter({
         name: 'replication_replay_bytes_queued_total',
         help: 'Number of bytes added to replay queues',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedFileSizes = new promClient.Histogram({
         name: 'replication_replay_file_sizes_queued',
         help: 'Number of objects queued for replay by file size',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount'],
         buckets: repConfig.objectSizeMetrics,
     });
 
     const replayCompletedObjects = new promClient.Counter({
         name: 'replication_replay_objects_completed_total',
         help: 'Number of objects completed from replay queues',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedBytes = new promClient.Counter({
         name: 'replication_replay_bytes_completed_total',
         help: 'Number of bytes completed from replay queues',
-        labelNames: ['origin'],
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedFileSizes = new promClient.Histogram({
         name: 'replication_replay_file_sizes_completed',
         help: 'Number of objects completed from replay by file size',
-        labelNames: ['origin', 'replicationStatus'],
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
         buckets: repConfig.objectSizeMetrics,
     });
 

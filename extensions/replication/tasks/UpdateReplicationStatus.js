@@ -214,15 +214,21 @@ class UpdateReplicationStatus extends BackbeatTask {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
         } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
+
+            let replayCount = 0;
             if (sourceEntry.getReplayCount() >= 0) {
-                this.metricsHandler.replaySuccess();
-                this.metricsHandler.replayCompletedObjects();
-                this.metricsHandler.replayCompletedBytes(sourceEntry.getContentLength());
-                this.metricsHandler.replayCompletedFileSizes(
-                    { replicationStatus: 'COMPLETED' },
-                    sourceEntry.getContentLength(),
-                );
+                replayCount = this.replayTopics.length - sourceEntry.getReplayCount();
+                this.metricsHandler.replaySuccess({ location: site, replayCount });
             }
+
+            const labels = {
+                location: site,
+                replayCount,
+                replicationStatus: 'COMPLETED',
+            };
+            this.metricsHandler.replayCompletedObjects(labels);
+            this.metricsHandler.replayCompletedBytes(labels, sourceEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(labels, sourceEntry.getContentLength());
         } else if (newStatus === 'FAILED') {
             entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
             if (!entry) {
@@ -309,7 +315,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                 count,
                 site,
             });
-            this.metricsHandler.replayAttempts();
+            this.metricsHandler.replayAttempts({
+                location: site,
+                replayCount: this.replayTopics.length - count,
+            });
         } else {
             log.error('error pushing failed entry to the replay topic',
                 {
@@ -346,6 +355,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         // if replay topics are not defined in the configuration,
         // replay logic is disabled.
         const count = !this.replayTopics ? 0 : queueEntry.getReplayCount();
+        const totalAttempts = !this.replayTopics ? 0 : this.replayTopics.length;
         if (count === 0) {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry, log);
@@ -353,15 +363,16 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (this.bucketNotificationConfig) {
                 this._publishFailedReplicationStatusNotification(queueEntry, log);
             }
-            this.metricsHandler.replayCompletedObjects();
-            this.metricsHandler.replayCompletedBytes(queueEntry.getContentLength());
-            this.metricsHandler.replayCompletedFileSizes(
-                { replicationStatus: 'FAILED' },
-                queueEntry.getContentLength(),
-            );
+            const labels = {
+                location: site,
+                replayCount: totalAttempts - count,
+                replicationStatus: 'FAILED',
+            };
+            this.metricsHandler.replayCompletedObjects(labels);
+            this.metricsHandler.replayCompletedBytes(labels, queueEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(labels, queueEntry.getContentLength());
             return refreshedEntry.toFailedEntry(site);
         }
-        const totalAttempts = this.replayTopics.length;
         if (count > 0) {
             if (count > totalAttempts) { // might happen if replay config has changed
                 queueEntry.setReplayCount(totalAttempts);
@@ -373,9 +384,11 @@ class UpdateReplicationStatus extends BackbeatTask {
             // If no replay count has been defined yet:
             queueEntry.setReplayCount(totalAttempts);
             this._pushReplayEntry(queueEntry, site, log);
-            this.metricsHandler.replayQueuedObjects();
-            this.metricsHandler.replayQueuedBytes(queueEntry.getContentLength());
-            this.metricsHandler.replayQueuedFileSizes(queueEntry.getContentLength());
+
+            const labels = { location: site, replayCount: 0 };
+            this.metricsHandler.replayQueuedObjects(labels);
+            this.metricsHandler.replayQueuedBytes(labels, queueEntry.getContentLength());
+            this.metricsHandler.replayQueuedFileSizes(labels, queueEntry.getContentLength());
             return null;
         }
         log.error('count value is invalid',
