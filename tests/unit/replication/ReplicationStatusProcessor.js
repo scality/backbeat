@@ -1,5 +1,4 @@
 const assert = require('assert');
-const promClient = require('prom-client');
 
 const ReplicationStatusProcessor =
     require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
@@ -17,12 +16,6 @@ function makeReplicationStatusProcessor(replayTopics) {
 }
 
 describe('ReplicationStatusProcessor', () => {
-    beforeEach(() => {
-        // Clear register to avoid:
-        // Error: A metric with the name kafka_lag has already been registered.
-        promClient.register.clear();
-    });
-
     describe('::_reshapeReplayTopics', () => {
         it('should return undefined if the config replay topics is undefined', () => {
             const replayTopics = undefined;

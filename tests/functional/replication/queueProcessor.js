@@ -4,7 +4,6 @@ const crypto = require('crypto');
 const http = require('http');
 const URL = require('url');
 const querystring = require('querystring');
-const promClient = require('prom-client');
 
 const VersionIDUtils = require('arsenal').versioning.VersionID;
 const routesUtils = require('arsenal').s3routes.routesUtils;
@@ -761,7 +760,6 @@ describe('queue processor functional tests with mocking', () => {
     let copyLocationResultsConsumer;
 
     const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
-    promClient.register.clear();
     const ReplicationStatusProcessor = require('../../../extensions/replication' +
                   '/replicationStatusProcessor/ReplicationStatusProcessor');
 

@@ -5,8 +5,8 @@ const http = require('http');
 const https = require('https');
 
 const Logger = require('werelogs').Logger;
-const errors = require('arsenal').errors;
-const { StatsModel } = require('arsenal').metrics;
+const { errors, jsutil } = require('arsenal');
+const { StatsModel, ZenkoMetrics } = require('arsenal').metrics;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -25,16 +25,11 @@ const NotificationConfigManager = require('../../notification/NotificationConfig
 
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
-const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
 const {
     wrapCounterInc,
     wrapHistogramObserve,
 } = require('../../../lib/util/metrics');
-
-promClient.register.setDefaultLabels({
-    origin: 'replication',
-});
 
 /**
  * Labels used for Prometheus metrics
@@ -62,75 +57,78 @@ promClient.register.setDefaultLabels({
  * @param {Object} repConfig - Replication configuration
  * @returns {ReplicationStatusMetricsHandler} Metric handlers
  */
-function loadMetricHandlers(repConfig) {
-    const replicationStatusMetric = new promClient.Counter({
+const loadMetricHandlers = jsutil.once(repConfig => {
+    const replicationStatusMetric = ZenkoMetrics.createCounter({
         name: 'replication_status_changed_total',
         help: 'Number of objects updated',
         labelNames: ['origin', 'replicationStatus'],
     });
 
-    const replayAttempts = new promClient.Counter({
+    const replayAttempts = ZenkoMetrics.createCounter({
         name: 'replication_replay_attempts_total',
         help: 'Number of total attempts made to replay replication',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
-    const replaySuccess = new promClient.Counter({
+    const replaySuccess = ZenkoMetrics.createCounter({
         name: 'replication_replay_success_total',
         help: 'Number of times an object was replicated during a replay',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
-    const replayQueuedObjects = new promClient.Counter({
+    const replayQueuedObjects = ZenkoMetrics.createCounter({
         name: 'replication_replay_objects_queued_total',
         help: 'Number of objects added to replay queues',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
-    const replayQueuedBytes = new promClient.Counter({
+    const replayQueuedBytes = ZenkoMetrics.createCounter({
         name: 'replication_replay_bytes_queued_total',
         help: 'Number of bytes added to replay queues',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
-    const replayQueuedFileSizes = new promClient.Histogram({
+    const replayQueuedFileSizes = ZenkoMetrics.createHistogram({
         name: 'replication_replay_file_sizes_queued',
         help: 'Number of objects queued for replay by file size',
         labelNames: ['origin', 'location', 'replayCount'],
         buckets: repConfig.objectSizeMetrics,
     });
 
-    const replayCompletedObjects = new promClient.Counter({
+    const replayCompletedObjects = ZenkoMetrics.createCounter({
         name: 'replication_replay_objects_completed_total',
         help: 'Number of objects completed from replay queues',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
-    const replayCompletedBytes = new promClient.Counter({
+    const replayCompletedBytes = ZenkoMetrics.createCounter({
         name: 'replication_replay_bytes_completed_total',
         help: 'Number of bytes completed from replay queues',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
-    const replayCompletedFileSizes = new promClient.Histogram({
+    const replayCompletedFileSizes = ZenkoMetrics.createHistogram({
         name: 'replication_replay_file_sizes_completed',
         help: 'Number of objects completed from replay by file size',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
         buckets: repConfig.objectSizeMetrics,
     });
 
-    return {
-        status: wrapCounterInc(replicationStatusMetric),
-        replayAttempts: wrapCounterInc(replayAttempts),
-        replaySuccess: wrapCounterInc(replaySuccess),
-        replayQueuedObjects: wrapCounterInc(replayQueuedObjects),
-        replayQueuedBytes: wrapCounterInc(replayQueuedBytes),
-        replayQueuedFileSizes: wrapHistogramObserve(replayQueuedFileSizes),
-        replayCompletedObjects: wrapCounterInc(replayCompletedObjects),
-        replayCompletedBytes: wrapCounterInc(replayCompletedBytes),
-        replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes),
+    const defaultLabels = {
+        origin: 'replication',
     };
-}
+    return {
+        status: wrapCounterInc(replicationStatusMetric, defaultLabels),
+        replayAttempts: wrapCounterInc(replayAttempts, defaultLabels),
+        replaySuccess: wrapCounterInc(replaySuccess, defaultLabels),
+        replayQueuedObjects: wrapCounterInc(replayQueuedObjects, defaultLabels),
+        replayQueuedBytes: wrapCounterInc(replayQueuedBytes, defaultLabels),
+        replayQueuedFileSizes: wrapHistogramObserve(replayQueuedFileSizes, defaultLabels),
+        replayCompletedObjects: wrapCounterInc(replayCompletedObjects, defaultLabels),
+        replayCompletedBytes: wrapCounterInc(replayCompletedBytes, defaultLabels),
+        replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes, defaultLabels),
+    };
+});
 
 /**
  * @class ReplicationStatusProcessor
@@ -609,9 +607,9 @@ class ReplicationStatusProcessor {
         log.debug('metrics requested');
 
         res.writeHead(200, {
-            'Content-Type': promClient.register.contentType,
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
-        res.end(promClient.register.metrics());
+        res.end(ZenkoMetrics.asPrometheus());
     }
 
     /**

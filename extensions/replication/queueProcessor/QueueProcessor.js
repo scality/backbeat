@@ -6,7 +6,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
-const promClient = require('prom-client');
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const Logger = require('werelogs').Logger;
 
@@ -44,10 +44,6 @@ const {
     replicationBackends,
 } = require('../constants');
 
-promClient.register.setDefaultLabels({
-    origin: 'replication',
-});
-
 /**
  * Labels used for Prometheus metrics
  * @typedef {Object} MetricLabels
@@ -60,55 +56,58 @@ promClient.register.setDefaultLabels({
  * @property {string} [replicationStage] - Name of the replication stage
  */
 
-const dataReplicationStatusMetric = new promClient.Counter({
+const dataReplicationStatusMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_status_changed_total',
     help: 'Number of status updates',
     labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
-const metadataReplicationStatusMetric = new promClient.Counter({
+const metadataReplicationStatusMetric = ZenkoMetrics.createCounter({
     name: 'replication_metadata_status_changed_total',
     help: 'Number of status updates',
     labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
-const dataReplicationBytesMetric = new promClient.Counter({
+const dataReplicationBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_bytes',
     help: 'Total number of bytes replicated for data operation',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const metadataReplicationBytesMetric = new promClient.Counter({
+const metadataReplicationBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_metadata_bytes',
     help: 'Total number of bytes replicated for metadata operation',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const sourceDataBytesMetric = new promClient.Counter({
+const sourceDataBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_source_data_bytes',
     help: 'Total number of data bytes read from replication source',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const readMetric = new promClient.Counter({
+const readMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_read',
     help: 'Number of read operations',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const writeMetric = new promClient.Counter({
+const writeMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_write',
     help: 'Number of write operations',
     labelNames: ['origin', 'serviceName', 'location', 'replicationContent'],
 });
 
-const timeElapsedMetric = new promClient.Histogram({
+const timeElapsedMetric = ZenkoMetrics.createHistogram({
     name: 'replication_stage_time_elapsed',
     help: 'Elapsed time of a specific stage in replication',
     labelNames: ['origin', 'serviceName', 'location', 'replicationStage'],
     buckets: [0.01, 0.1, 1, 10, 30, 60, 120, 300],
 });
 
+const defaultLabels = {
+    origin: 'replication',
+};
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} MetricsHandler
@@ -122,14 +121,14 @@ const timeElapsedMetric = new promClient.Histogram({
  * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
  */
 const metricsHandler = {
-    dataReplicationStatus: wrapCounterInc(dataReplicationStatusMetric),
-    metadataReplicationStatus: wrapCounterInc(metadataReplicationStatusMetric),
-    dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric),
-    metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric),
-    sourceDataBytes: wrapCounterInc(sourceDataBytesMetric),
-    reads: wrapCounterInc(readMetric),
-    writes: wrapCounterInc(writeMetric),
-    timeElapsed: wrapHistogramObserve(timeElapsedMetric),
+    dataReplicationStatus: wrapCounterInc(dataReplicationStatusMetric, defaultLabels),
+    metadataReplicationStatus: wrapCounterInc(metadataReplicationStatusMetric, defaultLabels),
+    dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric, defaultLabels),
+    metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric, defaultLabels),
+    sourceDataBytes: wrapCounterInc(sourceDataBytesMetric, defaultLabels),
+    reads: wrapCounterInc(readMetric, defaultLabels),
+    writes: wrapCounterInc(writeMetric, defaultLabels),
+    timeElapsed: wrapHistogramObserve(timeElapsedMetric, defaultLabels),
 };
 
 class QueueProcessor extends EventEmitter {
@@ -1009,9 +1008,9 @@ class QueueProcessor extends EventEmitter {
         log.debug('metrics requested');
 
         res.writeHead(200, {
-            'Content-Type': promClient.register.contentType,
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
-        res.end(promClient.register.metrics());
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 
