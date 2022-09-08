@@ -34,14 +34,12 @@ const {
 
 promClient.register.setDefaultLabels({
     origin: 'replication',
-    containerName: process.env.CONTAINER_NAME || '',
 });
 
 /**
  * Labels used for Prometheus metrics
  * @typedef {Object} MetricLabels
  * @property {string} origin - Method that began the replication
- * @property {string} containerName - Name of the container running our process
  * @property {string} [replicationStatus] - Result of the replications status
  * @property {string} [partition] - What kafka partition relates to the metric
  */
@@ -49,26 +47,26 @@ promClient.register.setDefaultLabels({
 const replicationStatusMetric = new promClient.Counter({
     name: 'replication_status_changed_total',
     help: 'Number of objects updated',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
+    labelNames: ['origin', 'replicationStatus'],
 });
 
 // TODO: Kafka lag is not set in 8.x branches see BB-1
 const kafkaLagMetric = new promClient.Gauge({
     name: 'kafka_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition'],
+    labelNames: ['origin', 'partition'],
 });
 
 const replayAttempts = new promClient.Counter({
     name: 'replication_replay_attempts_total',
     help: 'Number of total attempts made to replay replication',
-    labelNames: ['origin', 'containerName'],
+    labelNames: ['origin'],
 });
 
 const replaySuccess = new promClient.Counter({
     name: 'replication_replay_success_total',
     help: 'Number of times an object was replicated during a replay',
-    labelNames: ['origin', 'containerName'],
+    labelNames: ['origin'],
 });
 
 /**

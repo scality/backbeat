@@ -46,7 +46,6 @@ const {
 
 promClient.register.setDefaultLabels({
     origin: 'replication',
-    containerName: process.env.CONTAINER_NAME || '',
 });
 
 /**
@@ -64,56 +63,56 @@ promClient.register.setDefaultLabels({
 const dataReplicationStatusMetric = new promClient.Counter({
     name: 'replication_data_status_changed_total',
     help: 'Number of status updates',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
+    labelNames: ['origin', 'replicationStatus'],
 });
 
 const metadataReplicationStatusMetric = new promClient.Counter({
     name: 'replication_metadata_status_changed_total',
     help: 'Number of status updates',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
+    labelNames: ['origin', 'replicationStatus'],
 });
 
 // TODO: Kafka lag is not set in 8.x branches see BB-1
-const kafkaLagMetric = new promClient.Gauge({
+const kafkaLagMetric = new promClient.Gauge({           // NEVER USED
     name: 'kafka_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
+    labelNames: ['origin', 'partition', 'serviceName'],
 });
 
 const dataReplicationBytesMetric = new promClient.Counter({
     name: 'replication_data_bytes',
     help: 'Total number of bytes replicated for data operation',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName'],
 });
 
 const metadataReplicationBytesMetric = new promClient.Counter({
     name: 'replication_metadata_bytes',
     help: 'Total number of bytes replicated for metadata operation',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName'],
 });
 
 const sourceDataBytesMetric = new promClient.Counter({
     name: 'replication_source_data_bytes',
     help: 'Total number of data bytes read from replication source',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName'],
 });
 
 const readMetric = new promClient.Counter({
     name: 'replication_data_read',
     help: 'Number of read operations',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName'],
 });
 
 const writeMetric = new promClient.Counter({
     name: 'replication_data_write',
     help: 'Number of write operations',
-    labelNames: ['origin', 'containerName', 'serviceName', 'replicationContent'],
+    labelNames: ['origin', 'serviceName', 'replicationContent'],
 });
 
 const timeElapsedMetric = new promClient.Histogram({
     name: 'replication_stage_time_elapsed',
     help: 'Elapsed time of a specific stage in replication',
-    labelNames: ['origin', 'containerName', 'serviceName', 'replicationStage'],
+    labelNames: ['origin', 'serviceName', 'replicationStage'],
 });
 
 /**
