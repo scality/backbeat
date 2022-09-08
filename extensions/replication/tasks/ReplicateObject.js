@@ -181,9 +181,9 @@ class ReplicateObject extends BackbeatTask {
                     replicationStatus,
                     reason,
                 });
-                this.metricsHandler.metadataReplicationStatus({ replicationStatus });
+                this.metricsHandler.metadataReplicationStatus({ replicationStatus, location: this.site });
                 if (updateData) {
-                    this.metricsHandler.dataReplicationStatus({ replicationStatus });
+                    this.metricsHandler.dataReplicationStatus({ replicationStatus, location: this.site });
                 }
             }
             // Commit whether there was an error or not to allow
@@ -367,21 +367,24 @@ class ReplicateObject extends BackbeatTask {
         const serviceName = this.serviceName;
         this.metricsHandler.timeElapsed({
             serviceName,
+            location: this.site,
             replicationStage: replicationStages.sourceDataRead,
-        }, Date.now() - readStartTime);
-        this.metricsHandler.sourceDataBytes({ serviceName }, size);
-        this.metricsHandler.reads({ serviceName });
+        }, (Date.now() - readStartTime) / 1000);
+        this.metricsHandler.sourceDataBytes({ serviceName, location: this.site }, size);
+        this.metricsHandler.reads({ serviceName, location: this.site });
     }
 
     _publishDataWriteMetrics(size, sourceEntry, writeStartTime) {
         const serviceName = this.serviceName;
         this.metricsHandler.timeElapsed({
             serviceName,
+            location: this.site,
             replicationStage: replicationStages.destinationDataWrite,
-        }, Date.now() - writeStartTime);
-        this.metricsHandler.dataReplicationBytes({ serviceName }, size);
+        }, (Date.now() - writeStartTime) / 1000);
+        this.metricsHandler.dataReplicationBytes({ serviceName, location: this.site }, size);
         this.metricsHandler.writes({
             serviceName,
+            location: this.site,
             replicationContent: 'data',
         });
         const extMetrics = getExtMetrics(this.site, size, sourceEntry);
@@ -393,13 +396,16 @@ class ReplicateObject extends BackbeatTask {
         const serviceName = this.serviceName;
         this.metricsHandler.timeElapsed({
             serviceName,
+            location: this.site,
             replicationStage: replicationStages.destinationMetadataWrite,
-        }, Date.now() - writeStartTime);
+        }, (Date.now() - writeStartTime) / 1000);
         this.metricsHandler.metadataReplicationBytes({
             serviceName,
+            location: this.site,
         }, Buffer.byteLength(buffer));
         this.metricsHandler.writes({
             serviceName,
+            location: this.site,
             replicationContent: 'metadata',
         });
     }
