@@ -29,7 +29,6 @@ const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
 const {
     wrapCounterInc,
-    wrapGaugeSet,
     wrapHistogramObserve,
 } = require('../../../lib/util/metrics');
 
@@ -49,7 +48,6 @@ promClient.register.setDefaultLabels({
  * Contains methods to incrememt different metrics
  * @typedef {Object} ReplicationStatusMetricsHandler
  * @property {CounterInc} status - Increments the replication status metric
- * @property {GaugeSet} lag - Set the kafka lag metric
  * @property {CounterInc} replayAttempts - Increments the replay attempts metric
  * @property {CounterInc} replaySuccess - Increments the replay success metric
  * @property {CounterInc} replayQueuedObjects - Increments the replay queued objects metric
@@ -69,12 +67,6 @@ function loadMetricHandlers(repConfig) {
         name: 'replication_status_changed_total',
         help: 'Number of objects updated',
         labelNames: ['origin', 'replicationStatus'],
-    });
-
-    const kafkaLagMetric = new promClient.Gauge({
-        name: 'kafka_lag',
-        help: 'Number of update entries waiting to be consumed from the Kafka topic',
-        labelNames: ['origin', 'partition'],
     });
 
     const replayAttempts = new promClient.Counter({
@@ -129,7 +121,6 @@ function loadMetricHandlers(repConfig) {
 
     return {
         status: wrapCounterInc(replicationStatusMetric),
-        lag: wrapGaugeSet(kafkaLagMetric),
         replayAttempts: wrapCounterInc(replayAttempts),
         replaySuccess: wrapCounterInc(replaySuccess),
         replayQueuedObjects: wrapCounterInc(replayQueuedObjects),

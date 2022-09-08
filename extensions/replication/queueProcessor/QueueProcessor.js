@@ -32,7 +32,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
-const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
 const {
     zookeeperNamespace,
@@ -70,13 +70,6 @@ const metadataReplicationStatusMetric = new promClient.Counter({
     name: 'replication_metadata_status_changed_total',
     help: 'Number of status updates',
     labelNames: ['origin', 'location', 'replicationStatus'],
-});
-
-// TODO: Kafka lag is not set in 8.x branches see BB-1
-const kafkaLagMetric = new promClient.Gauge({           // NEVER USED
-    name: 'kafka_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'partition', 'serviceName', 'site'],
 });
 
 const dataReplicationBytesMetric = new promClient.Counter({
@@ -124,7 +117,6 @@ const timeElapsedMetric = new promClient.Histogram({
  * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
  * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
  * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
- * @property {GaugeSet} lag - Set the kafka lag metric
  * @property {CounterInc} reads - Increments the read metric
  * @property {CounterInc} writes - Increments the write metric
  * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
@@ -135,7 +127,6 @@ const metricsHandler = {
     dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric),
     metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric),
     sourceDataBytes: wrapCounterInc(sourceDataBytesMetric),
-    lag: wrapGaugeSet(kafkaLagMetric),
     reads: wrapCounterInc(readMetric),
     writes: wrapCounterInc(writeMetric),
     timeElapsed: wrapHistogramObserve(timeElapsedMetric),
