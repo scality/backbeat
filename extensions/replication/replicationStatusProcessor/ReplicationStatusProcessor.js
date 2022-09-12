@@ -64,6 +64,13 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         labelNames: ['origin', 'replicationStatus'],
     });
 
+    const replicationStatusDurationSeconds = ZenkoMetrics.createHistogram({
+        name: 'replication_status_process_duration_seconds',
+        help: 'Duration of replication status processing',
+        labelNames: ['origin', 'result', 'replicationStatus'],
+        buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1],
+    });
+
     const replayAttempts = ZenkoMetrics.createCounter({
         name: 'replication_replay_attempts_total',
         help: 'Number of total attempts made to replay replication',
@@ -119,6 +126,8 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     };
     return {
         status: wrapCounterInc(replicationStatusMetric, defaultLabels),
+        statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds,
+            defaultLabels),
         replayAttempts: wrapCounterInc(replayAttempts, defaultLabels),
         replaySuccess: wrapCounterInc(replaySuccess, defaultLabels),
         replayQueuedObjects: wrapCounterInc(replayQueuedObjects, defaultLabels),

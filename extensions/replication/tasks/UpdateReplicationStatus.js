@@ -400,30 +400,48 @@ class UpdateReplicationStatus extends BackbeatTask {
         return null;
     }
 
+    _updateStatusDurationMetric(sourceEntry, err, replicationStatus) {
+        let result = 'nochange';
+        if (err) {
+            result = 'error';
+        } else if (replicationStatus) {
+            result = 'success';
+        }
+        this.metricsHandler.statusDuration({ result, replicationStatus },
+            (Date.now() - sourceEntry.getStartProcessing()) / 1000);
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         const error = this._checkStatus(sourceEntry);
         if (error) {
+            this._updateStatusDurationMetric(sourceEntry, error);
             return done(error);
         }
         return this._refreshSourceEntry(sourceEntry, log,
-        (err, refreshedEntry) => {
-            if (err) {
-                return done(err);
-            }
-            const params = { sourceEntry, refreshedEntry };
-            const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
-            if (!updatedSourceEntry) {
-                return process.nextTick(done);
-            }
-            return this._putMetadata(updatedSourceEntry, log, err => {
+            (err, refreshedEntry) => {
                 if (err) {
+                    this._updateStatusDurationMetric(sourceEntry, err);
                     return done(err);
                 }
-                this._reportMetrics(sourceEntry, updatedSourceEntry);
-                return this._handleGarbageCollection(
-                    updatedSourceEntry, log, done);
+                const params = { sourceEntry, refreshedEntry };
+                const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
+                if (!updatedSourceEntry) {
+                    this._updateStatusDurationMetric(sourceEntry);
+                    return process.nextTick(done);
+                }
+                return this._putMetadata(updatedSourceEntry, log, err => {
+                    this._updateStatusDurationMetric(sourceEntry, err,
+                        updatedSourceEntry.getReplicationStatus());
+
+                    if (err) {
+                        return done(err);
+                    }
+
+                    this._reportMetrics(sourceEntry, updatedSourceEntry);
+                    return this._handleGarbageCollection(
+                        updatedSourceEntry, log, done);
+                });
             });
-        });
     }
 
     /**
