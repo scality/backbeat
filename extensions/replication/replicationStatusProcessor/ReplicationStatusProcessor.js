@@ -218,7 +218,7 @@ class ReplicationStatusProcessor {
         }
 
         this._setupVaultclientCache();
-        this.metricsHandlers = loadMetricHandlers(repConfig);
+        this.metricHandlers = loadMetricHandlers(repConfig);
 
         const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
         this._statsClient = new StatsModel(undefined, INTERVAL,
@@ -526,7 +526,7 @@ class ReplicationStatusProcessor {
         }
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
-            task = new UpdateReplicationStatus(this, this.metricsHandlers);
+            task = new UpdateReplicationStatus(this, this.metricHandlers);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
