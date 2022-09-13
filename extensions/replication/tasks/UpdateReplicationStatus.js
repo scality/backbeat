@@ -229,6 +229,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             this.metricsHandler.replayCompletedObjects(labels);
             this.metricsHandler.replayCompletedBytes(labels, sourceEntry.getContentLength());
             this.metricsHandler.replayCompletedFileSizes(labels, sourceEntry.getContentLength());
+            this.metricsHandler.replayCount({ location: site }, replayCount);
 
             const lastModified = new Date(refreshedEntry.getLastModified());
             this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);

@@ -128,6 +128,15 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         buckets: repConfig.objectSizeMetrics,
     });
 
+    const maxReplayCount = !repConfig.replayTopics ? 0 : repConfig.replayTopics.reduce(
+        (prev, topic) => prev + topic.retries, 0);
+    const replayCount = ZenkoMetrics.createHistogram({
+        name: 'replication_replay_count',
+        help: 'Number of replays to complete replication',
+        labelNames: ['origin', 'location'],
+        buckets: [...Array(maxReplayCount).keys()],
+    });
+
     const defaultLabels = {
         origin: 'replication',
     };
@@ -145,6 +154,7 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         replayCompletedObjects: wrapCounterInc(replayCompletedObjects, defaultLabels),
         replayCompletedBytes: wrapCounterInc(replayCompletedBytes, defaultLabels),
         replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes, defaultLabels),
+        replayCount: wrapHistogramObserve(replayCount, defaultLabels)
     };
 });
 
