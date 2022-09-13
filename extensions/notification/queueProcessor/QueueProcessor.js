@@ -232,7 +232,7 @@ class QueueProcessor extends EventEmitter {
                             // for Kafka keyed partitioning, to map a
                             // particular bucket and key to a partition
                             key: `${bucket}/${key}`,
-                            message,
+                            message: JSON.stringify(message),
                         };
                         const msgDesc = 'sending message to external destination';
                         const eventRecord = message.Records[0];
