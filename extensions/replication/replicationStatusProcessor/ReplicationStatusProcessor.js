@@ -71,6 +71,13 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1],
     });
 
+    const replicationLatency = ZenkoMetrics.createHistogram({
+        name: 'replication_latency_seconds',
+        help: 'Time taken for an object to replicate successfully to the destination',
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
+        buckets: [1, 10, 30, 60, 120, 300, 600],
+    });
+
     const replayAttempts = ZenkoMetrics.createCounter({
         name: 'replication_replay_attempts_total',
         help: 'Number of total attempts made to replay replication',
@@ -127,6 +134,8 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     return {
         status: wrapCounterInc(replicationStatusMetric, defaultLabels),
         statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds,
+            defaultLabels),
+        replicationLatency: wrapHistogramObserve(replicationLatency,
             defaultLabels),
         replayAttempts: wrapCounterInc(replayAttempts, defaultLabels),
         replaySuccess: wrapCounterInc(replaySuccess, defaultLabels),

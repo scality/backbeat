@@ -229,6 +229,9 @@ class UpdateReplicationStatus extends BackbeatTask {
             this.metricsHandler.replayCompletedObjects(labels);
             this.metricsHandler.replayCompletedBytes(labels, sourceEntry.getContentLength());
             this.metricsHandler.replayCompletedFileSizes(labels, sourceEntry.getContentLength());
+
+            const lastModified = new Date(refreshedEntry.getLastModified());
+            this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);
         } else if (newStatus === 'FAILED') {
             entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
             if (!entry) {
@@ -371,6 +374,10 @@ class UpdateReplicationStatus extends BackbeatTask {
             this.metricsHandler.replayCompletedObjects(labels);
             this.metricsHandler.replayCompletedBytes(labels, queueEntry.getContentLength());
             this.metricsHandler.replayCompletedFileSizes(labels, queueEntry.getContentLength());
+
+            const lastModified = new Date(refreshedEntry.getLastModified());
+            this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);
+
             return refreshedEntry.toFailedEntry(site);
         }
         if (count > 0) {

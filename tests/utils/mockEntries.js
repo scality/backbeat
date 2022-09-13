@@ -3,6 +3,7 @@ const sourceEntry = {
     getObjectKey: () => {},
     getReplicationStorageType: () => {},
     getEncodedVersionId: () => {},
+    getLastModified: () => new Date().toJSON(),
     getLogInfo: () => {},
     getLocation: () => ([]),
     getUserMetadata: () => {},
