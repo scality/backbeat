@@ -13,6 +13,14 @@
         "bucketd": {
             "host": "localhost",
             "port": 9000
+        },
+        "mongo": {
+            "logName": "s3-recordlog",
+            "replicaSetHosts": "localhost:27018"
+        },
+        "probeServer": {
+            "bindAddress": "localhost",
+            "port": 4042
         }
     },
     "metrics": {
