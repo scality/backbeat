@@ -1103,6 +1103,12 @@ class MultipleBackendTask extends ReplicateObject {
                 return next(null, res);
             }),
             (refreshedEntry, next) => {
+                const lastModified = new Date(refreshedEntry.getLastModified());
+                this.metricsHandler.rpo({
+                    serviceName: this.serviceName,
+                    location: this.site,
+                }, (Date.now() - lastModified) / 1000);
+
                 if (sourceEntry.getIsDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, log, next);
                 }

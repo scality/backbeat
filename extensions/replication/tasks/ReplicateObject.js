@@ -667,6 +667,11 @@ class ReplicateObject extends BackbeatTask {
         log.debug('processing entry',
             { entry: sourceEntry.getLogInfo() });
 
+        const lastModified = new Date(sourceEntry.getLastModified());
+        this.metricsHandler.rpo({
+            serviceName: this.serviceName,
+            location: this.site,
+        }, (Date.now() - lastModified) / 1000);
 
         if (sourceEntry.getIsDeleteMarker()) {
             return async.waterfall([

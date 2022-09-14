@@ -105,6 +105,14 @@ const timeElapsedMetric = ZenkoMetrics.createHistogram({
     buckets: [0.01, 0.1, 1, 10, 30, 60, 120, 300],
 });
 
+const rpoMetric = ZenkoMetrics.createHistogram({
+    name: 'replication_rpo_seconds',
+    help: 'Difference between the time the object is updated and the time it ' +
+          'is picked up for replication',
+    labelNames: ['origin', 'serviceName', 'location'],
+    buckets: [1, 10, 30, 60, 120, 300, 600],
+});
+
 const defaultLabels = {
     origin: 'replication',
 };
@@ -129,6 +137,7 @@ const metricsHandler = {
     reads: wrapCounterInc(readMetric, defaultLabels),
     writes: wrapCounterInc(writeMetric, defaultLabels),
     timeElapsed: wrapHistogramObserve(timeElapsedMetric, defaultLabels),
+    rpo: wrapHistogramObserve(rpoMetric, defaultLabels),
 };
 
 class QueueProcessor extends EventEmitter {

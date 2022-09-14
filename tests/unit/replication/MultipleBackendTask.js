@@ -60,6 +60,9 @@ describe('MultipleBackendTask', function test() {
                     getConfig: () => null
                 },
                 logger: fakeLogger,
+                metricsHandler: {
+                    rpo: () => {},
+                }
             }),
         });
     });
