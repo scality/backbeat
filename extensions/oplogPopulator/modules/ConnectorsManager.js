@@ -156,10 +156,11 @@ class ConnectorsManager {
         try {
             const connectors = await Promise.all(connectorNames.map(async connectorName => {
                 // get old connector config
-                const config = await this._kafkaConnect.getConnectorConfig(connectorName);
-                // extract buckets from old connector config and filter them
-                // only leaving currently valid buckets
-                const buckets = this._extractBucketsFromConfig(config);
+                const oldConfig = await this._kafkaConnect.getConnectorConfig(connectorName);
+                // extract buckets from old connector config
+                const buckets = this._extractBucketsFromConfig(oldConfig);
+                // generating a new config as the old config can be outdated (wrong topic for example)
+                const config = this._getDefaultConnectorConfiguration(connectorName);
                 // initializing connector
                 const connector = new Connector({
                     name: connectorName,
