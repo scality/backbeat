@@ -1,4 +1,5 @@
 const assert = require('assert');
+const util = require('util');
 
 const { isMasterKey } = require('arsenal').versioning;
 const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
@@ -24,6 +25,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         this.bnConfigManager = params.bnConfigManager;
         assert(this.bnConfigManager, 'bucket notification configuration manager'
             + ' is not set');
+        // callbackify functions
+        this._processObjectEntryCb = util.callbackify(this._processObjectEntry).bind(this);
     }
 
     /**
@@ -141,29 +144,30 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * filter
      *
      * @param {Object} entry - log entry
-     * @return {Promise|undefined} Promise|undefined
+     * @param {Function} cb - callback
+     * @return {undefined} Promise|undefined
      */
-    async filter(entry) {
+    filterAsync(entry, cb) {
         const { bucket, key, type } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
         if (error) {
             this.log.error('could not parse log entry', { value, error });
-            return undefined;
+            return cb(null);
         }
         // ignore bucket operations, mpu's or if the entry has no bucket
         const isUserBucketOp = !bucket || bucket === usersBucket;
         const isMpuOp = key && key.startsWith(mpuBucketPrefix);
         const isBucketOp = bucket && result && this._isBucketEntry(bucket, key);
         if ([isUserBucketOp, isMpuOp, isBucketOp].some(cond => cond)) {
-            return undefined;
+            return cb(null);
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntry(bucket, key, result, type);
+            return this._processObjectEntryCb(bucket, key, result, type, cb);
         }
-        return undefined;
+        return cb(null);
     }
 }
 
