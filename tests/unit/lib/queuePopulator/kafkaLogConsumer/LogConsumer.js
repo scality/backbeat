@@ -124,9 +124,9 @@ describe('LogConsumer', () => {
                         entries: [{
                             key: 'example-key',
                             type: 'put',
-                            value: {
+                            value: JSON.stringify({
                                 field: 'value'
-                            },
+                            }),
                         }],
                     });
                     return done();
