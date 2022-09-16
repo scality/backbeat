@@ -39,6 +39,26 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Returns the correct versionId
+     * to display according to the
+     * versioning state of the object
+     * @param {Object} value log entry object
+     * @return {String} versionId
+     */
+    _getVersionId(value) {
+        const isNullVersion = value.isNull;
+        const isVersioned = !!value.versionId;
+        // Versioning suspended objects have
+        // a versionId, however it is internal
+        // and should not be used to get the object
+        if (isNullVersion || !isVersioned) {
+            return null;
+        } else {
+            return value.versionId;
+        }
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
@@ -48,7 +68,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     async _processObjectEntry(bucket, key, value, type) {
-        const versionId = value.versionId || null;
+        const versionId = this._getVersionId(value);
         if (!isMasterKey(key)) {
             return undefined;
         }
