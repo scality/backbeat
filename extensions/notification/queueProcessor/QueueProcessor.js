@@ -219,6 +219,7 @@ class QueueProcessor extends EventEmitter {
                         method: 'QueueProcessor.processKafkaEntry',
                         bucket,
                         key,
+                        versionId: sourceEntry.versionId,
                         eventType,
                         destination: this.destinationId,
                     });
@@ -239,6 +240,8 @@ class QueueProcessor extends EventEmitter {
                             method: 'QueueProcessor.processKafkaEntry',
                             bucket,
                             key,
+                            versionId: sourceEntry.versionId,
+                            encodedVersionId: eventRecord.versionId,
                             eventType: eventRecord.eventName,
                             eventTime: eventRecord.eventTime,
                             destination: this.destinationId,

@@ -83,7 +83,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             }
             const ent = {
                 bucket,
-                key,
+                key: value.key,
                 eventType,
                 versionId,
             };
@@ -116,13 +116,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         method: 'NotificationQueuePopulator._processObjectEntry',
                         bucket,
                         key: message.key,
+                        versionId,
                         eventType,
                         eventTime: message.dateTime,
                     });
                     const internalTopic = destination.internalTopic ||
                         this.notificationConfig.topic;
                     this.publish(internalTopic,
-                        `${bucket}/${key}`,
+                        // keeping all messages for same object
+                        // in the same partition to keep the order.
+                        // here we use the object name and not the
+                        // "_id" which also includes the versionId
+                        `${bucket}/${message.key}`,
                         JSON.stringify(message));
                 }
                 return undefined;
