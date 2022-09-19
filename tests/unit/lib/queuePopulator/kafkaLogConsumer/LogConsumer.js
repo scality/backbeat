@@ -62,18 +62,6 @@ describe('LogConsumer', () => {
                 return done();
             });
         }).timeout(5000);
-
-        it('Should timeout', done => {
-            const getAssignemntsStub = sinon.stub();
-            getAssignemntsStub.returns([]);
-            logConsumer._consumer = {
-                assignments: getAssignemntsStub,
-            };
-            logConsumer._waitForAssignment(120001, err => {
-                assert.strict(err, true);
-                return done();
-            });
-        }).timeout(5000);
     });
 
     describe('_storeCurrentOffsets', () => {
