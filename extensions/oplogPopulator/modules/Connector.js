@@ -212,6 +212,12 @@ class Connector {
     /**
      * Updates connector pipeline with
      * buckets assigned to this connector
+     *
+     * The first time this function is called,
+     * on an old connector, it updates it's configuration
+     * as it can be outdated; having the wrong topic for example.
+     * That is why we use updateConnectorConfig() instead of
+     * updateConnectorPipeline()
      * @param {boolean} [doUpdate=false] updates connector if true
      * @returns {Promise|boolean} connector did update
      * @throws {InternalError}
@@ -226,7 +232,7 @@ class Connector {
             if (doUpdate) {
                 const timeBeforeUpdate = Date.now();
                 this._state.isUpdating = true;
-                await this._kafkaConnect.updateConnectorPipeline(this._name, this._config.pipeline);
+                await this._kafkaConnect.updateConnectorConfig(this._name, this._config);
                 this._updateConnectorState(false, timeBeforeUpdate);
                 this._state.isUpdating = false;
                 return true;
