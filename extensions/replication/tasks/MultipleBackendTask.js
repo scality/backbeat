@@ -174,7 +174,7 @@ class MultipleBackendTask extends ReplicateObject {
         log, cb) {
         this.retry({
             actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo() },
+            logFields: { entry: sourceEntry.getLogInfo(), range },
             actionFunc: done => this._getRangeAndPutMPUPartOnce(sourceEntry,
                 range, partNumber, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
@@ -430,12 +430,13 @@ class MultipleBackendTask extends ReplicateObject {
 
     _getAndPutMultipartUpload(sourceEntry, log, cb) {
         this.retry({
-            actionDesc: 'stream part data',
+            actionDesc: 'stream multipart data',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
                 log, done),
             shouldRetryFunc: err => err.retryable,
             log,
+            noTimeout: true,
         }, cb);
     }
 
