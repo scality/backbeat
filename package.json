@@ -4,7 +4,7 @@
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
-    "queue_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=replication,lifecycle node bin/queuePopulator.js",
+    "queue_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=replication,lifecycle,gc node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
     "ingestion_populator": "node bin/ingestion.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
