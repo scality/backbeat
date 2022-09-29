@@ -3527,8 +3527,8 @@
             }
           },
           "gridPos": {
-            "h": 8,
-            "w": 8,
+            "h": 9,
+            "w": 7,
             "x": 0,
             "y": 24
           },
@@ -3627,9 +3627,9 @@
             }
           },
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 8,
+            "h": 9,
+            "w": 7,
+            "x": 7,
             "y": 24
           },
           "heatmap": {},
@@ -3727,9 +3727,9 @@
             }
           },
           "gridPos": {
-            "h": 8,
-            "w": 8,
-            "x": 16,
+            "h": 9,
+            "w": 7,
+            "x": 14,
             "y": 24
           },
           "heatmap": {},
@@ -3797,6 +3797,279 @@
           "yBucketBound": null,
           "yBucketNumber": null,
           "yBucketSize": null
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Replication Latency is defined as time taken for an object to replicate successfully to the destination",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "decimals": 1,
+              "mappings": [],
+              "noValue": "-",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#808080",
+                    "index": 0,
+                    "line": true,
+                    "op": "gt",
+                    "value": "null",
+                    "yaxis": "left"
+                  },
+                  {
+                    "color": "blue",
+                    "index": 1,
+                    "line": true,
+                    "op": "gt",
+                    "value": 0.0,
+                    "yaxis": "left"
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 3,
+            "x": 21,
+            "y": 24
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 44,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(rate(replication_stage_time_elapsed_sum{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationSourceDataRead\"}[$__rate_interval]))\n  /\nsum(rate(replication_stage_time_elapsed_count{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationSourceDataRead\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Avg read stage duration",
+          "transformations": [],
+          "transparent": false,
+          "type": "stat"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Replication Latency is defined as time taken for an object to replicate successfully to the destination",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "decimals": 1,
+              "mappings": [],
+              "noValue": "-",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#808080",
+                    "index": 0,
+                    "line": true,
+                    "op": "gt",
+                    "value": "null",
+                    "yaxis": "left"
+                  },
+                  {
+                    "color": "blue",
+                    "index": 1,
+                    "line": true,
+                    "op": "gt",
+                    "value": 0.0,
+                    "yaxis": "left"
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 3,
+            "x": 21,
+            "y": 27
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 45,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(rate(replication_stage_time_elapsed_sum{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationDataWrite\"}[$__rate_interval]))\n  /\nsum(rate(replication_stage_time_elapsed_count{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationDataWrite\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Avg data write stage duration",
+          "transformations": [],
+          "transparent": false,
+          "type": "stat"
+        },
+        {
+          "cacheTimeout": null,
+          "datasource": "${DS_PROMETHEUS}",
+          "description": "Replication Latency is defined as time taken for an object to replicate successfully to the destination",
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "custom": {},
+              "decimals": 1,
+              "mappings": [],
+              "noValue": "-",
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  {
+                    "color": "#808080",
+                    "index": 0,
+                    "line": true,
+                    "op": "gt",
+                    "value": "null",
+                    "yaxis": "left"
+                  },
+                  {
+                    "color": "blue",
+                    "index": 1,
+                    "line": true,
+                    "op": "gt",
+                    "value": 0.0,
+                    "yaxis": "left"
+                  }
+                ]
+              },
+              "unit": "s"
+            },
+            "overrides": []
+          },
+          "gridPos": {
+            "h": 3,
+            "w": 3,
+            "x": 21,
+            "y": 30
+          },
+          "height": null,
+          "hideTimeOverride": false,
+          "id": 46,
+          "interval": null,
+          "links": [],
+          "maxDataPoints": 100,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": {
+              "calcs": [
+                "lastNotNull"
+              ],
+              "fields": "",
+              "values": false
+            },
+            "textMode": "auto"
+          },
+          "repeat": null,
+          "repeatDirection": null,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(rate(replication_stage_time_elapsed_sum{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationMetadataWrite\"}[$__rate_interval]))\n  /\nsum(rate(replication_stage_time_elapsed_count{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationMetadataWrite\"}[$__rate_interval]))",
+              "format": "time_series",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Avg metadata write stage duration",
+          "transformations": [],
+          "transparent": false,
+          "type": "stat"
         }
       ],
       "targets": [],
@@ -3824,7 +4097,7 @@
         "y": 23
       },
       "hideTimeOverride": false,
-      "id": 44,
+      "id": 47,
       "links": [],
       "maxDataPoints": 100,
       "panels": [
@@ -3882,7 +4155,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 45,
+          "id": 48,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3979,7 +4252,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 46,
+          "id": 49,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4076,7 +4349,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 47,
+          "id": 50,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4173,7 +4446,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 48,
+          "id": 51,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4255,7 +4528,7 @@
           "hideTimeOverride": false,
           "hideZeroBuckets": false,
           "highlightCards": true,
-          "id": 49,
+          "id": 52,
           "interval": null,
           "legend": {
             "show": false
@@ -4355,7 +4628,7 @@
           "hideTimeOverride": false,
           "hideZeroBuckets": false,
           "highlightCards": true,
-          "id": 50,
+          "id": 53,
           "interval": null,
           "legend": {
             "show": false
@@ -4442,7 +4715,7 @@
         "y": 24
       },
       "hideTimeOverride": false,
-      "id": 51,
+      "id": 54,
       "links": [],
       "maxDataPoints": 100,
       "panels": [
@@ -4500,7 +4773,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 52,
+          "id": 55,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4596,7 +4869,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 53,
+          "id": 56,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4692,7 +4965,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 54,
+          "id": 57,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,

@@ -680,6 +680,33 @@ queue_processor_stage_time = [
     }.items()
 ]
 
+queue_processor_stage_avg = [
+    Stat(
+        title='Avg ' + stageTitle + ' stage duration',
+        description=Metrics.LATENCY.description,
+        dataSource='${DS_PROMETHEUS}',
+        decimals=1,
+        format=UNITS.SECONDS,
+        noValue='-',
+        reduceCalc='lastNotNull',
+        targets=[Target(
+            expr='\n'.join([
+                'sum(rate(' + Metrics.STAGE_DURATION.sum(replicationStage=stageName) + '))',
+                '  /',
+                'sum(rate(' + Metrics.STAGE_DURATION.count(replicationStage=stageName) + '))',
+            ])
+        )],
+        thresholds=[
+            Threshold("#808080", 0, 0.0),
+            Threshold("blue", 1, 0.0),
+        ],
+    )
+    for stageTitle, stageName in {
+        'read': 'ReplicationSourceDataRead',
+        'data write': 'ReplicationDestinationDataWrite',
+        'metadata write': 'ReplicationDestinationMetadataWrite',
+    }.items()
+]
 
 replay_processor_rate, replay_processor_attempts, replay_processor_success_attempts, replay_processor_failed_attempts = [
     TimeSeries(
@@ -916,7 +943,10 @@ dashboard = (
                     queue_processor_status_failed,
                     *layout.resize([queue_processor_errors_by_location],  width=4),
                 ], height=6),
-                layout.row(queue_processor_stage_time, height=8),
+                layout.row([
+                    *queue_processor_stage_time,
+                    layout.column(queue_processor_stage_avg, width=3, height=3)
+                ], height=9),
             ])),
             RowPanel(title="Replay", collapsed=True, panels=layout.column([
                 layout.row([replay_processor_rate, replay_processor_attempts],
