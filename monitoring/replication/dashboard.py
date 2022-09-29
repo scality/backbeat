@@ -652,8 +652,6 @@ queue_processor_ops_by_location, queue_processor_errors_by_location = [
     }.items()
 ]
 
-# TODO: does not seem to work reliably, only got "data-write", and only when time frame is large enough... :-/
-# TODO: range does not seem very good either... --> maybe use a summary instead?
 queue_processor_stage_time = [
     Heatmap(
         title='Time in ' + stageTitle + ' stage',
@@ -661,7 +659,7 @@ queue_processor_stage_time = [
         dataFormat='tsbuckets',
         maxDataPoints=15,
         tooltip=Tooltip(show=True, showHistogram=True),
-        yAxis=YAxis(format=UNITS.DURATION_SECONDS, decimals=0),
+        yAxis=YAxis(format=UNITS.MILLI_SECONDS, decimals=0),
         color=HeatmapColor(mode='opacity'),
         targets=[Target(
             expr='\n'.join([
@@ -686,7 +684,7 @@ queue_processor_stage_avg = [
         description=Metrics.LATENCY.description,
         dataSource='${DS_PROMETHEUS}',
         decimals=1,
-        format=UNITS.SECONDS,
+        format=UNITS.MILLI_SECONDS,
         noValue='-',
         reduceCalc='lastNotNull',
         targets=[Target(

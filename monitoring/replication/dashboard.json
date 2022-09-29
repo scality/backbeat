@@ -3587,7 +3587,7 @@
           "xBucketSize": null,
           "yAxis": {
             "decimals": 0,
-            "format": "dtdurations",
+            "format": "ms",
             "label": null,
             "logBase": 1,
             "max": null,
@@ -3687,7 +3687,7 @@
           "xBucketSize": null,
           "yAxis": {
             "decimals": 0,
-            "format": "dtdurations",
+            "format": "ms",
             "label": null,
             "logBase": 1,
             "max": null,
@@ -3787,7 +3787,7 @@
           "xBucketSize": null,
           "yAxis": {
             "decimals": 0,
-            "format": "dtdurations",
+            "format": "ms",
             "label": null,
             "logBase": 1,
             "max": null,
@@ -3831,7 +3831,7 @@
                   }
                 ]
               },
-              "unit": "s"
+              "unit": "ms"
             },
             "overrides": []
           },
@@ -3922,7 +3922,7 @@
                   }
                 ]
               },
-              "unit": "s"
+              "unit": "ms"
             },
             "overrides": []
           },
@@ -4013,7 +4013,7 @@
                   }
                 ]
               },
-              "unit": "s"
+              "unit": "ms"
             },
             "overrides": []
           },
