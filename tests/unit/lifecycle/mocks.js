@@ -73,6 +73,11 @@ class S3RequestMock extends EventEmitter {
 class S3ClientMock {
     constructor() {
         this.response = null;
+        this.calls = {
+            headObject: 0,
+            deleteObject: 0,
+            deleteMultipartObject: 0,
+        };
     }
 
     setResponse(error, data) {
@@ -88,16 +93,19 @@ class S3ClientMock {
     }
 
     headObject() {
+        this.calls.headObject += 1;
         this.assertRespIsSet();
         return new S3RequestMock(this.response.error, this.response.data);
     }
 
     deleteObject() {
+        this.calls.deleteObject += 1;
         this.assertRespIsSet();
         return new S3RequestMock(this.response.error, this.response.data);
     }
 
     deleteMultipartObject() {
+        this.calls.deleteMultipartObject += 1;
         this.assertRespIsSet();
         return new S3RequestMock(this.response.error, this.response.data);
     }
