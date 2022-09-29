@@ -415,7 +415,7 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             });
-            sourceReq.on('end', () => {
+            incomingMsg.on('end', () => {
                 this._publishReadMetrics(size, readStartTime);
             });
             log.debug('putting data', { entry: sourceEntry.getLogInfo() });
