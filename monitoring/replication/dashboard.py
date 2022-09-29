@@ -53,8 +53,7 @@ class Metrics:
             name,
             'location', 'job', *extraLabels, namespace='${namespace}'
         ).with_defaults(
-            'job=~"${data_processor}|${replay_processor}"',
-            'location=~"$location"',
+            'job=~"$queue_processor"', 'location=~"$location"',
         )
         for name, extraLabels in {
             'replication_data_read': [],
@@ -71,8 +70,7 @@ class Metrics:
         'replication_stage_time_elapsed',
         'location', 'job', 'replicationStage', namespace='${namespace}'
     ).with_defaults(
-        'job=~"${data_processor}|${replay_processor}"',
-        'location=~"$location"',
+        'job=~"$queue_processor"', 'location=~"$location"',
     )
 
     RPO = metrics.BucketMetric(
@@ -548,26 +546,32 @@ queue_populator_objects_datarate = TimeSeries(
     )],
 )
 
-queue_processor_lag = TimeSeries(
-    title='Replication processor lag',
-    dataSource='${DS_PROMETHEUS}',
-    fillOpacity=30,
-    lineInterpolation='smooth',
-    unit=UNITS.SHORT,
-    targets=[Target(
-        expr='\n'.join([
-            'label_replace(',
-            '    max(kafka_consumergroup_group_lag{',
-            '        namespace="${namespace}",',
-            '        cluster_name="${kafka}",',
-            '        topic=~"^(${replication_topic}|${replay_topic})$",', # TODO: view topics separately (depending on location?)
-            '        group=~"${queue_processor_group}($location)$",',
-            '    }) by(group),',
-            '"group", "$1", "group", "${queue_processor_group}(.*)$")',
-        ]),
-        legendFormat='{{group}}'
-    )],
-)
+queue_processor_lag = [
+    TimeSeries(
+        title=name + ' processor lag',
+        dataSource='${DS_PROMETHEUS}',
+        fillOpacity=30,
+        lineInterpolation='smooth',
+        unit=UNITS.SHORT,
+        targets=[Target(
+            expr='\n'.join([
+                'label_replace(',
+                '    max(kafka_consumergroup_group_lag{',
+                '        namespace="${namespace}",',
+                '        cluster_name="${kafka}",',
+                '        topic=~"' + topic + '",',
+                '        group=~"${queue_processor_group}($location)$",',
+                '    }) by(group),',
+                '"group", "$1", "group", "${queue_processor_group}(.*)$")',
+            ]),
+            legendFormat='{{group}}'
+        )],
+    )
+    for name, topic in {
+        'Data': '${replication_topic}',
+        'Replay': '${replay_topic}',
+    }.items()
+]
 
 queue_processor_rate = [
     TimeSeries(
@@ -662,7 +666,7 @@ queue_processor_stage_time = [
         targets=[Target(
             expr='\n'.join([
                 'sum(increase(',
-                '  ', Metrics.STAGE_DURATION.bucket(replicationStage=stageName),
+                '  ' + Metrics.STAGE_DURATION.bucket(replicationStage=stageName),
                 ')) by(le)'
             ]),
             format="heatmap",
@@ -860,13 +864,18 @@ dashboard = (
                 includeAll=True,
                 multi=True,
             ),
-        #     Template(
-        #         dataSource='${DS_PROMETHEUS}',
-        #         label='Queue processor',    #---> data_processor or replay_processor
-        #         multi=True,
-        #         name='',
-        #         query='',
-        #     )
+            Template(
+                dataSource='${DS_PROMETHEUS}',
+                label='Queue processor',
+                name='queue_processor',
+                query='label_values(' + Metrics.STAGE_DURATION.bucket.raw(
+                    'job=~"${data_processor}|${replay_processor}"'
+                ) + ', job)',
+                regex='/^(?<value>(' + DEFAULT_JOB_PREFIX + ')?(backbeat-replication-)?(?<text>.*?)(-headless)?)$/',
+                allValue='.*',
+                includeAll=True,
+                multi=True,
+            )
         ]),
         panels=layout.column([
             RowPanel(title="Overview"),
@@ -898,12 +907,7 @@ dashboard = (
                 ], height=6),
             ])),
             RowPanel(title="Queue Processor", collapsed=True, panels=layout.column([
-                # TODO: duplicate for replay-processor --> use selectable variable (so we can either/both the overall + individually?)
-                #       or duplicate panels?
-                layout.row([
-                    queue_processor_lag,
-                    *layout.resize(queue_processor_stage_time, width=5),
-                ], height=6),
+                layout.row(queue_processor_lag, height=6),
                 layout.row(queue_processor_rate, height=6),
                 layout.row(queue_processor_speed, height=6),
                 layout.row([
@@ -912,6 +916,7 @@ dashboard = (
                     queue_processor_status_failed,
                     *layout.resize([queue_processor_errors_by_location],  width=4),
                 ], height=6),
+                layout.row(queue_processor_stage_time, height=8),
             ])),
             RowPanel(title="Replay", collapsed=True, panels=layout.column([
                 layout.row([replay_processor_rate, replay_processor_attempts],

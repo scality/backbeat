@@ -931,7 +931,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1003,7 +1003,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1589,7 +1589,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+          "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1674,7 +1674,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+          "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2517,7 +2517,7 @@
           },
           "gridPos": {
             "h": 6,
-            "w": 9,
+            "w": 12,
             "x": 0,
             "y": 0
           },
@@ -2545,7 +2545,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${kafka}\",\n        topic=~\"^(${replication_topic}|${replay_topic})$\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
+              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${kafka}\",\n        topic=~\"${replication_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2560,74 +2560,94 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Replication processor lag",
+          "title": "Data processor lag",
           "transformations": [],
           "transparent": false,
           "type": "timeseries"
         },
         {
           "cacheTimeout": null,
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateOranges",
-            "exponent": 0.5,
-            "max": null,
-            "min": null,
-            "mode": "opacity"
-          },
-          "dataFormat": "tsbuckets",
           "datasource": "${DS_PROMETHEUS}",
           "description": null,
           "editable": true,
           "error": false,
           "fieldConfig": {
             "defaults": {
+              "color": {
+                "mode": "palette-classic"
+              },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 30,
+                "gradientMode": "none",
+                "hideFrom": {
+                  "legend": false,
+                  "tooltip": false,
+                  "viz": false
+                },
+                "lineInterpolation": "smooth",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": {
+                  "log": 2,
+                  "type": "linear"
+                },
+                "showPoints": "auto",
+                "spanNulls": false,
+                "stacking": {},
+                "thresholdsStyle": {
+                  "mode": "off"
+                }
+              },
+              "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": []
-              }
-            }
+              },
+              "unit": "short"
+            },
+            "overrides": []
           },
           "gridPos": {
             "h": 6,
-            "w": 5,
-            "x": 9,
+            "w": 12,
+            "x": 12,
             "y": 0
           },
-          "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
-          "highlightCards": true,
           "id": 31,
           "interval": null,
-          "legend": {
-            "show": false
-          },
           "links": [],
-          "maxDataPoints": 15,
+          "maxDataPoints": 100,
           "maxPerRow": null,
           "minSpan": null,
-          "options": null,
+          "options": {
+            "legend": {
+              "calcs": [],
+              "displayMode": "list",
+              "placement": "bottom"
+            },
+            "tooltip": {
+              "mode": "single"
+            }
+          },
           "repeat": null,
           "repeatDirection": null,
-          "reverseYBuckets": false,
           "span": null,
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(increase(\n  \nreplication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStage=\"ReplicationSourceDataRead\"}[$__rate_interval]\n)) by(le)",
-              "format": "heatmap",
+              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${kafka}\",\n        topic=~\"${replay_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
+              "format": "time_series",
               "hide": false,
               "instant": false,
               "interval": "",
               "intervalFactor": 1,
-              "legendFormat": "{{le}}",
+              "legendFormat": "{{group}}",
               "metric": "",
               "refId": "",
               "step": 10,
@@ -2636,234 +2656,10 @@
           ],
           "timeFrom": null,
           "timeShift": null,
-          "title": "Time in read stage",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
+          "title": "Replay processor lag",
           "transformations": [],
           "transparent": false,
-          "type": "heatmap",
-          "xAxis": {
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "dtdurations",
-            "label": null,
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true
-          },
-          "yBucketBound": null,
-          "yBucketNumber": null,
-          "yBucketSize": null
-        },
-        {
-          "cacheTimeout": null,
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateOranges",
-            "exponent": 0.5,
-            "max": null,
-            "min": null,
-            "mode": "opacity"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_PROMETHEUS}",
-          "description": null,
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": []
-              }
-            }
-          },
-          "gridPos": {
-            "h": 6,
-            "w": 5,
-            "x": 14,
-            "y": 0
-          },
-          "heatmap": {},
-          "height": null,
-          "hideTimeOverride": false,
-          "hideZeroBuckets": false,
-          "highlightCards": true,
-          "id": 32,
-          "interval": null,
-          "legend": {
-            "show": false
-          },
-          "links": [],
-          "maxDataPoints": 15,
-          "maxPerRow": null,
-          "minSpan": null,
-          "options": null,
-          "repeat": null,
-          "repeatDirection": null,
-          "reverseYBuckets": false,
-          "span": null,
-          "targets": [
-            {
-              "datasource": null,
-              "expr": "sum(increase(\n  \nreplication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStage=\"ReplicationDestinationDataWrite\"}[$__rate_interval]\n)) by(le)",
-              "format": "heatmap",
-              "hide": false,
-              "instant": false,
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "{{le}}",
-              "metric": "",
-              "refId": "",
-              "step": 10,
-              "target": ""
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Time in data write stage",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "transformations": [],
-          "transparent": false,
-          "type": "heatmap",
-          "xAxis": {
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "dtdurations",
-            "label": null,
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true
-          },
-          "yBucketBound": null,
-          "yBucketNumber": null,
-          "yBucketSize": null
-        },
-        {
-          "cacheTimeout": null,
-          "cards": {
-            "cardPadding": null,
-            "cardRound": null
-          },
-          "color": {
-            "cardColor": "#b4ff00",
-            "colorScale": "sqrt",
-            "colorScheme": "interpolateOranges",
-            "exponent": 0.5,
-            "max": null,
-            "min": null,
-            "mode": "opacity"
-          },
-          "dataFormat": "tsbuckets",
-          "datasource": "${DS_PROMETHEUS}",
-          "description": null,
-          "editable": true,
-          "error": false,
-          "fieldConfig": {
-            "defaults": {
-              "thresholds": {
-                "mode": "absolute",
-                "steps": []
-              }
-            }
-          },
-          "gridPos": {
-            "h": 6,
-            "w": 5,
-            "x": 19,
-            "y": 0
-          },
-          "heatmap": {},
-          "height": null,
-          "hideTimeOverride": false,
-          "hideZeroBuckets": false,
-          "highlightCards": true,
-          "id": 33,
-          "interval": null,
-          "legend": {
-            "show": false
-          },
-          "links": [],
-          "maxDataPoints": 15,
-          "maxPerRow": null,
-          "minSpan": null,
-          "options": null,
-          "repeat": null,
-          "repeatDirection": null,
-          "reverseYBuckets": false,
-          "span": null,
-          "targets": [
-            {
-              "datasource": null,
-              "expr": "sum(increase(\n  \nreplication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStage=\"ReplicationDestinationMetadataWrite\"}[$__rate_interval]\n)) by(le)",
-              "format": "heatmap",
-              "hide": false,
-              "instant": false,
-              "interval": "",
-              "intervalFactor": 1,
-              "legendFormat": "{{le}}",
-              "metric": "",
-              "refId": "",
-              "step": 10,
-              "target": ""
-            }
-          ],
-          "timeFrom": null,
-          "timeShift": null,
-          "title": "Time in metadata write stage",
-          "tooltip": {
-            "show": true,
-            "showHistogram": true
-          },
-          "transformations": [],
-          "transparent": false,
-          "type": "heatmap",
-          "xAxis": {
-            "mode": "time",
-            "name": null,
-            "show": true,
-            "values": []
-          },
-          "xBucketNumber": null,
-          "xBucketSize": null,
-          "yAxis": {
-            "decimals": 0,
-            "format": "dtdurations",
-            "label": null,
-            "logBase": 1,
-            "max": null,
-            "min": null,
-            "show": true
-          },
-          "yBucketBound": null,
-          "yBucketNumber": null,
-          "yBucketSize": null
+          "type": "timeseries"
         },
         {
           "cacheTimeout": null,
@@ -2919,7 +2715,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 34,
+          "id": 32,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -2942,7 +2738,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_data_read{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_data_read{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3016,7 +2812,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 35,
+          "id": 33,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3039,7 +2835,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_data_write{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3113,7 +2909,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 36,
+          "id": 34,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3136,7 +2932,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_source_data_bytes{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_source_data_bytes{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3210,7 +3006,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 37,
+          "id": 35,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3233,7 +3029,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_data_bytes{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3307,7 +3103,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 38,
+          "id": 36,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3330,7 +3126,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_metadata_bytes{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_metadata_bytes{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3404,7 +3200,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 39,
+          "id": 37,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3427,7 +3223,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStatus=\"COMPLETED\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStatus=\"COMPLETED\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3476,7 +3272,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 40,
+          "id": 38,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3491,7 +3287,7 @@
             "pieType": "donut",
             "reduceOptions": {
               "calcs": [
-                "lastNotNull"
+                "mean"
               ],
               "fields": "",
               "values": false
@@ -3506,7 +3302,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3580,7 +3376,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 41,
+          "id": 39,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3603,7 +3399,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3652,7 +3448,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 42,
+          "id": 40,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3682,7 +3478,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_metadata_status_changed_total{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -3701,6 +3497,306 @@
           "transformations": [],
           "transparent": false,
           "type": "piechart"
+        },
+        {
+          "cacheTimeout": null,
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateOranges",
+            "exponent": 0.5,
+            "max": null,
+            "min": null,
+            "mode": "opacity"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_PROMETHEUS}",
+          "description": null,
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              }
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 0,
+            "y": 24
+          },
+          "heatmap": {},
+          "height": null,
+          "hideTimeOverride": false,
+          "hideZeroBuckets": false,
+          "highlightCards": true,
+          "id": 41,
+          "interval": null,
+          "legend": {
+            "show": false
+          },
+          "links": [],
+          "maxDataPoints": 15,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": null,
+          "repeat": null,
+          "repeatDirection": null,
+          "reverseYBuckets": false,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(increase(\n  replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationSourceDataRead\"}[$__rate_interval]\n)) by(le)",
+              "format": "heatmap",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{le}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Time in read stage",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "transformations": [],
+          "transparent": false,
+          "type": "heatmap",
+          "xAxis": {
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "dtdurations",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          "yBucketBound": null,
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cacheTimeout": null,
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateOranges",
+            "exponent": 0.5,
+            "max": null,
+            "min": null,
+            "mode": "opacity"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_PROMETHEUS}",
+          "description": null,
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              }
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 8,
+            "y": 24
+          },
+          "heatmap": {},
+          "height": null,
+          "hideTimeOverride": false,
+          "hideZeroBuckets": false,
+          "highlightCards": true,
+          "id": 42,
+          "interval": null,
+          "legend": {
+            "show": false
+          },
+          "links": [],
+          "maxDataPoints": 15,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": null,
+          "repeat": null,
+          "repeatDirection": null,
+          "reverseYBuckets": false,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(increase(\n  replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationDataWrite\"}[$__rate_interval]\n)) by(le)",
+              "format": "heatmap",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{le}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Time in data write stage",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "transformations": [],
+          "transparent": false,
+          "type": "heatmap",
+          "xAxis": {
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "dtdurations",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          "yBucketBound": null,
+          "yBucketNumber": null,
+          "yBucketSize": null
+        },
+        {
+          "cacheTimeout": null,
+          "cards": {
+            "cardPadding": null,
+            "cardRound": null
+          },
+          "color": {
+            "cardColor": "#b4ff00",
+            "colorScale": "sqrt",
+            "colorScheme": "interpolateOranges",
+            "exponent": 0.5,
+            "max": null,
+            "min": null,
+            "mode": "opacity"
+          },
+          "dataFormat": "tsbuckets",
+          "datasource": "${DS_PROMETHEUS}",
+          "description": null,
+          "editable": true,
+          "error": false,
+          "fieldConfig": {
+            "defaults": {
+              "thresholds": {
+                "mode": "absolute",
+                "steps": []
+              }
+            }
+          },
+          "gridPos": {
+            "h": 8,
+            "w": 8,
+            "x": 16,
+            "y": 24
+          },
+          "heatmap": {},
+          "height": null,
+          "hideTimeOverride": false,
+          "hideZeroBuckets": false,
+          "highlightCards": true,
+          "id": 43,
+          "interval": null,
+          "legend": {
+            "show": false
+          },
+          "links": [],
+          "maxDataPoints": 15,
+          "maxPerRow": null,
+          "minSpan": null,
+          "options": null,
+          "repeat": null,
+          "repeatDirection": null,
+          "reverseYBuckets": false,
+          "span": null,
+          "targets": [
+            {
+              "datasource": null,
+              "expr": "sum(increase(\n  replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"$queue_processor\", location=~\"$location\", replicationStage=\"ReplicationDestinationMetadataWrite\"}[$__rate_interval]\n)) by(le)",
+              "format": "heatmap",
+              "hide": false,
+              "instant": false,
+              "interval": "",
+              "intervalFactor": 1,
+              "legendFormat": "{{le}}",
+              "metric": "",
+              "refId": "",
+              "step": 10,
+              "target": ""
+            }
+          ],
+          "timeFrom": null,
+          "timeShift": null,
+          "title": "Time in metadata write stage",
+          "tooltip": {
+            "show": true,
+            "showHistogram": true
+          },
+          "transformations": [],
+          "transparent": false,
+          "type": "heatmap",
+          "xAxis": {
+            "mode": "time",
+            "name": null,
+            "show": true,
+            "values": []
+          },
+          "xBucketNumber": null,
+          "xBucketSize": null,
+          "yAxis": {
+            "decimals": 0,
+            "format": "dtdurations",
+            "label": null,
+            "logBase": 1,
+            "max": null,
+            "min": null,
+            "show": true
+          },
+          "yBucketBound": null,
+          "yBucketNumber": null,
+          "yBucketSize": null
         }
       ],
       "targets": [],
@@ -3728,7 +3824,7 @@
         "y": 23
       },
       "hideTimeOverride": false,
-      "id": 43,
+      "id": 44,
       "links": [],
       "maxDataPoints": 100,
       "panels": [
@@ -3786,7 +3882,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 44,
+          "id": 45,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3883,7 +3979,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 45,
+          "id": 46,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -3980,7 +4076,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 46,
+          "id": 47,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4077,7 +4173,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 47,
+          "id": 48,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4159,7 +4255,7 @@
           "hideTimeOverride": false,
           "hideZeroBuckets": false,
           "highlightCards": true,
-          "id": 48,
+          "id": 49,
           "interval": null,
           "legend": {
             "show": false
@@ -4259,7 +4355,7 @@
           "hideTimeOverride": false,
           "hideZeroBuckets": false,
           "highlightCards": true,
-          "id": 49,
+          "id": 50,
           "interval": null,
           "legend": {
             "show": false
@@ -4346,7 +4442,7 @@
         "y": 24
       },
       "hideTimeOverride": false,
-      "id": 50,
+      "id": 51,
       "links": [],
       "maxDataPoints": 100,
       "panels": [
@@ -4404,7 +4500,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 51,
+          "id": 52,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4500,7 +4596,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 52,
+          "id": 53,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4596,7 +4692,7 @@
           },
           "height": null,
           "hideTimeOverride": false,
-          "id": 53,
+          "id": 54,
           "interval": null,
           "links": [],
           "maxDataPoints": 100,
@@ -4677,6 +4773,33 @@
         "query": "label_values(replication_rpo_seconds_bucket{namespace=\"${namespace}\", job=\"${data_processor}\"}, location)",
         "refresh": 1,
         "regex": null,
+        "sort": 1,
+        "tagValuesQuery": null,
+        "tagsQuery": null,
+        "type": "query",
+        "useTags": false
+      },
+      {
+        "allValue": ".*",
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "current": {
+          "selected": false,
+          "tags": [],
+          "text": null,
+          "value": null
+        },
+        "datasource": "${DS_PROMETHEUS}",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Queue processor",
+        "multi": true,
+        "name": "queue_processor",
+        "options": [],
+        "query": "label_values(replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}, job)",
+        "refresh": 1,
+        "regex": "/^(?<value>(artesca-data-)?(backbeat-replication-)?(?<text>.*?)(-headless)?)$/",
         "sort": 1,
         "tagValuesQuery": null,
         "tagsQuery": null,
