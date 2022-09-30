@@ -665,9 +665,11 @@ queue_processor_stage_time = [
         title='Time in ' + stageTitle + ' stage',
         dataSource='${DS_PROMETHEUS}',
         dataFormat='tsbuckets',
+        hideZeroBuckets=True,
         maxDataPoints=15,
         tooltip=Tooltip(show=True, showHistogram=True),
         yAxis=YAxis(format=UNITS.MILLI_SECONDS, decimals=0),
+        cards={'cardPadding': 1, 'cardRound': 2},
         color=HeatmapColor(mode='opacity'),
         targets=[Target(
             expr='\n'.join([
@@ -738,45 +740,49 @@ replay_processor_rate, replay_processor_attempts, replay_processor_success_attem
 ]
 
 replay_count = Heatmap(
-        title='Replay count distribution',
-        dataSource='${DS_PROMETHEUS}',
-        dataFormat='tsbuckets',
-        maxDataPoints=25,
-        tooltip=Tooltip(show=True, showHistogram=True),
-        yAxis=YAxis(format=UNITS.SHORT, decimals=0),
-        yBucketBound='middle',
-        color=HeatmapColor(mode='opacity'),
-        targets=[Target(
-            expr='\n'.join([
-                'label_replace('
-                '  sum(increase(',
-                '    ' + Metrics.REPLAY_COUNT.bucket(),
-                '  )) by(le),',
-                '"le", "Failed", "le", "\\\\+Inf")'
-            ]),
-            format="heatmap",
-            legendFormat="{{le}}",
-        )],
-    )
+    title='Replay count distribution',
+    dataSource='${DS_PROMETHEUS}',
+    dataFormat='tsbuckets',
+    hideZeroBuckets=True,
+    maxDataPoints=25,
+    tooltip=Tooltip(show=True, showHistogram=True),
+    yAxis=YAxis(format=UNITS.SHORT, decimals=0),
+    yBucketBound='middle',
+    cards={'cardPadding': 1, 'cardRound': 2},
+    color=HeatmapColor(mode='opacity'),
+    targets=[Target(
+        expr='\n'.join([
+            'label_replace('
+            '  sum(increase(',
+            '    ' + Metrics.REPLAY_COUNT.bucket(),
+            '  )) by(le),',
+            '"le", "Failed", "le", "\\\\+Inf")'
+        ]),
+        format="heatmap",
+        legendFormat="{{le}}",
+    )],
+)
 
 replay_by_size = Heatmap(
-        title='Replay distribution by size',
-        dataSource='${DS_PROMETHEUS}',
-        dataFormat='tsbuckets',
-        maxDataPoints=25,
-        tooltip=Tooltip(show=True, showHistogram=True),
-        yAxis=YAxis(format=UNITS.BYTES, decimals=0),
-        color=HeatmapColor(mode='opacity'),
-        targets=[Target(
-            expr='\n'.join([
-                'sum(increase(',
-                '  ' + Metrics.REPLAY_FILE_SIZE.bucket('replayCount!="0"'),
-                ')) by(le)',
-            ]),
-            format="heatmap",
-            legendFormat="{{le}}",
-        )],
-    )
+    title='Replay distribution by size',
+    dataSource='${DS_PROMETHEUS}',
+    dataFormat='tsbuckets',
+    hideZeroBuckets=True,
+    maxDataPoints=25,
+    tooltip=Tooltip(show=True, showHistogram=True),
+    yAxis=YAxis(format=UNITS.BYTES, decimals=0),
+    cards={'cardPadding': 1, 'cardRound': 2},
+    color=HeatmapColor(mode='opacity'),
+    targets=[Target(
+        expr='\n'.join([
+            'sum(increase(',
+            '  ' + Metrics.REPLAY_FILE_SIZE.bucket('replayCount!="0"'),
+            ')) by(le)',
+        ]),
+        format="heatmap",
+        legendFormat="{{le}}",
+    )],
+)
 
 status_processor_partition_lag = TimeSeries(
     title='Status processor lag',

@@ -3508,8 +3508,8 @@
         {
           "cacheTimeout": null,
           "cards": {
-            "cardPadding": null,
-            "cardRound": null
+            "cardPadding": 1,
+            "cardRound": 2
           },
           "color": {
             "cardColor": "#b4ff00",
@@ -3542,7 +3542,7 @@
           "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
+          "hideZeroBuckets": true,
           "highlightCards": true,
           "id": 41,
           "interval": null,
@@ -3608,8 +3608,8 @@
         {
           "cacheTimeout": null,
           "cards": {
-            "cardPadding": null,
-            "cardRound": null
+            "cardPadding": 1,
+            "cardRound": 2
           },
           "color": {
             "cardColor": "#b4ff00",
@@ -3642,7 +3642,7 @@
           "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
+          "hideZeroBuckets": true,
           "highlightCards": true,
           "id": 42,
           "interval": null,
@@ -3708,8 +3708,8 @@
         {
           "cacheTimeout": null,
           "cards": {
-            "cardPadding": null,
-            "cardRound": null
+            "cardPadding": 1,
+            "cardRound": 2
           },
           "color": {
             "cardColor": "#b4ff00",
@@ -3742,7 +3742,7 @@
           "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
+          "hideZeroBuckets": true,
           "highlightCards": true,
           "id": 43,
           "interval": null,
@@ -4499,8 +4499,8 @@
         {
           "cacheTimeout": null,
           "cards": {
-            "cardPadding": null,
-            "cardRound": null
+            "cardPadding": 1,
+            "cardRound": 2
           },
           "color": {
             "cardColor": "#b4ff00",
@@ -4533,7 +4533,7 @@
           "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
+          "hideZeroBuckets": true,
           "highlightCards": true,
           "id": 52,
           "interval": null,
@@ -4599,8 +4599,8 @@
         {
           "cacheTimeout": null,
           "cards": {
-            "cardPadding": null,
-            "cardRound": null
+            "cardPadding": 1,
+            "cardRound": 2
           },
           "color": {
             "cardColor": "#b4ff00",
@@ -4633,7 +4633,7 @@
           "heatmap": {},
           "height": null,
           "hideTimeOverride": false,
-          "hideZeroBuckets": false,
+          "hideZeroBuckets": true,
           "highlightCards": true,
           "id": 53,
           "interval": null,
