@@ -48,7 +48,7 @@ class Threshold(BaseThreshold):
 class Metrics:
     QUEUE_LENGTH, QUEUE_SIZE = [
         metrics.CounterMetric(
-            name, namespace="${namespace}", job="${queue_populator}"
+            name, namespace="${namespace}", job="${job_queue_populator}"
         )
         for name in [
             'replication_populator_objects',
@@ -83,7 +83,7 @@ class Metrics:
 
     RPO = metrics.BucketMetric(
         'replication_rpo_seconds',
-        namespace="${namespace}", job="${data_processor}",
+        namespace="${namespace}", job="${job_data_processor}",
     ).with_description(
         'RPO is defined as the difference between the time an object was '
         'written to and the time when it is picked for replication by the '
@@ -92,7 +92,7 @@ class Metrics:
 
     LATENCY = metrics.BucketMetric(
         'replication_latency_seconds',
-        namespace="${namespace}", job="${status_processor}",
+        namespace="${namespace}", job="${job_status_processor}",
     ).with_description(
         'Replication Latency is defined as time taken for an object to '
         'replicate successfully to the destination'
@@ -101,18 +101,18 @@ class Metrics:
     STATUS = metrics.BucketMetric(
         'replication_status_process_duration_seconds',
         'result', 'replicationStatus',
-        namespace='${namespace}', job="${status_processor}"
+        namespace='${namespace}', job="${job_status_processor}"
     )
 
     STATUS_CHANGED = metrics.CounterMetric(
         'replication_status_changed_total', 'replicationStatus',
-        namespace='${namespace}', job="${status_processor}"
+        namespace='${namespace}', job="${job_status_processor}"
     )
 
     REPLAY_OBJECTS_COMPLETED = metrics.CounterMetric(
         'replication_replay_objects_completed_total',
         'location', 'replayCount', 'replicationStatus',
-        namespace='${namespace}', job="${status_processor}"
+        namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
         'location=~"$location"',
     )
@@ -120,7 +120,7 @@ class Metrics:
     REPLAY_SUCCESS, REPLAY_ATTEMPTS = [
         metrics.CounterMetric(
             m, 'location', 'replayCount',
-            namespace='${namespace}', job="${status_processor}"
+            namespace='${namespace}', job="${job_status_processor}"
         ).with_defaults(
             'location=~"$location"',
         )
@@ -129,14 +129,14 @@ class Metrics:
 
     REPLAY_FILE_SIZE = metrics.BucketMetric(
         'replication_replay_file_sizes_completed', 'location', 'replayCount', 'replicationStatus',
-        namespace='${namespace}', job="${status_processor}"
+        namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
         'location=~"$location"',
     )
 
     REPLAY_COUNT = metrics.BucketMetric(
         'replication_replay_count', 'location', 'replicationStatus',
-        namespace='${namespace}', job="${status_processor}"
+        namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
         'location=~"$location"',
     )
@@ -172,7 +172,7 @@ def up(component: str, expr: str = None, title: str = None, **kwargs):
             expr=expr or '\n'.join([
                 'sum(up{',
                 '    namespace="${namespace}",',
-                '    job="${' + component + '}"',
+                '    job="${job_' + component + '}"',
                 '})',
             ]),
         )],
@@ -193,7 +193,7 @@ zookeeper_quorum = up(
     expr='\n'.join([
         'max(quorum_size{',
         '    namespace="${namespace}",',
-        '    job="${zookeeper}"',
+        '    job="${job_zookeeper}"',
         '})'
     ]),
 )
@@ -204,7 +204,7 @@ kafka_brokers = up(
     expr='\n'.join([
         'count(kafka_server_replicamanager_leadercount{',
         '    namespace="${namespace}",',
-        '    job="${kafka}"',
+        '    job="${job_kafka}"',
         '})',
     ]),
 )
@@ -217,7 +217,7 @@ kafka_offline = Stat(
         expr='\n'.join([
             'sum(kafka_controller_kafkacontroller_offlinepartitionscount{',
             '    namespace="${namespace}",',
-            '    job="${kafka}",',
+            '    job="${job_kafka}",',
             '})',
         ]),
     )],
@@ -237,7 +237,7 @@ kafka_underreplicated = Stat(
             'label_replace(',
             '    sum(kafka_cluster_partition_underreplicated{',
             '        namespace="${namespace}",',
-            '        job="${kafka}",',
+            '        job="${job_kafka}",',
             '        topic=~"^(' + '|'.join(['${' + t + '}' for t in TOPICS]) + ')$",',
             '    }) by(topic),',
             '"topic", "$1", "topic", "' + INSTANCE_ID_RE + '(?:backbeat-)?(.*)$")',
@@ -370,7 +370,7 @@ queue_populator_replication_backlog = TimeSeries(
         expr='\n'.join([
             'max(kafka_consumergroup_group_lag{',
             '    namespace="${namespace}",',
-            '    cluster_name="${kafka}",',
+            '    cluster_name="${job_kafka}",',
             '    topic=~"${replication_topic}"',
             '})',
         ]),
@@ -476,10 +476,10 @@ queue_populator_lag = TimeSeries(
         expr='\n'.join([
             'clamp_min(',
             '   max(mongodb_mongod_replset_oplog_head_timestamp{',
-            '           namespace="${namespace}", job="${mongod}"})',
+            '           namespace="${namespace}", job="${job_mongod}"})',
             '   -',
             '   min(replication_log_timestamp{namespace="${namespace}",',
-            '             job="${queue_populator}"}),',
+            '             job="${job_queue_populator}"}),',
             '0)',
         ]),
     )],
@@ -496,7 +496,7 @@ queue_populator_kafka_injection_rate = TimeSeries(
         expr='\n'.join([
             'sum(rate(kafka_server_brokertopicmetrics_messagesin_total{',
             '            namespace="${namespace}",',
-            '            job="${kafka}",',
+            '            job="${job_kafka}",',
             '            topic=~"${replication_topic}"',
             '         }[$__rate_interval])',
             ')',
@@ -566,7 +566,7 @@ queue_processor_lag = [
                 'label_replace(',
                 '    max(kafka_consumergroup_group_lag{',
                 '        namespace="${namespace}",',
-                '        cluster_name="${kafka}",',
+                '        cluster_name="${job_kafka}",',
                 '        topic=~"' + topic + '",',
                 '        group=~"${queue_processor_group}($location)$",',
                 '    }) by(group),',
@@ -795,7 +795,7 @@ status_processor_partition_lag = TimeSeries(
         expr='\n'.join([
             'max(kafka_consumergroup_group_lag{',
             '    namespace="${namespace}",',
-            '    cluster_name="${kafka}",',
+            '    cluster_name="${job_kafka}",',
             '    topic=~"${status_topic}"',
             '})',
         ]),
@@ -857,14 +857,14 @@ dashboard = (
                 value='zenko',
             ),
             ConstantInput(
-                name='mongod',
+                name='job_mongod',
                 label='Mongod',
                 description='Name of the mongod (shard) job to filter metrics',
                 value='zenko/data-db-mongodb-sharded-shard0-data',
             ),
             *[
                 ConstantInput(
-                    name=name,
+                    name='job_' + name,
                     label=name.replace('_', ' ').title(),
                     description='Name of the ' + name + ' job to filter metrics',
                     value='artesca-data-' + value,
@@ -908,7 +908,7 @@ dashboard = (
                 label='Queue processor',
                 name='queue_processor',
                 query='label_values(' + Metrics.STAGE_DURATION.bucket.raw(
-                    'job=~"${data_processor}|${replay_processor}"'
+                    'job=~"${job_data_processor}|${job_replay_processor}"'
                 ) + ', job)',
                 regex='/^(?<value>(' + DEFAULT_JOB_PREFIX + ')?(backbeat-replication-)?(?<text>.*?)(-headless)?)$/',
                 allValue='.*',

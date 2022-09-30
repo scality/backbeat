@@ -26,49 +26,49 @@
     {
       "description": "Name of the mongod (shard) job to filter metrics",
       "label": "Mongod",
-      "name": "mongod",
+      "name": "job_mongod",
       "type": "constant",
       "value": "zenko/data-db-mongodb-sharded-shard0-data"
     },
     {
       "description": "Name of the queue_populator job to filter metrics",
       "label": "Queue Populator",
-      "name": "queue_populator",
+      "name": "job_queue_populator",
       "type": "constant",
       "value": "artesca-data-backbeat-replication-producer-headless"
     },
     {
       "description": "Name of the data_processor job to filter metrics",
       "label": "Data Processor",
-      "name": "data_processor",
+      "name": "job_data_processor",
       "type": "constant",
       "value": "artesca-data-backbeat-replication-data-processor-headless"
     },
     {
       "description": "Name of the replay_processor job to filter metrics",
       "label": "Replay Processor",
-      "name": "replay_processor",
+      "name": "job_replay_processor",
       "type": "constant",
       "value": "artesca-data-backbeat-replication-replay-processor-headless"
     },
     {
       "description": "Name of the status_processor job to filter metrics",
       "label": "Status Processor",
-      "name": "status_processor",
+      "name": "job_status_processor",
       "type": "constant",
       "value": "artesca-data-backbeat-replication-status-processor-headless"
     },
     {
       "description": "Name of the zookeeper job to filter metrics",
       "label": "Zookeeper",
-      "name": "zookeeper",
+      "name": "job_zookeeper",
       "type": "constant",
       "value": "artesca-data-base-quorum-headless"
     },
     {
       "description": "Name of the kafka job to filter metrics",
       "label": "Kafka",
-      "name": "kafka",
+      "name": "job_kafka",
       "type": "constant",
       "value": "artesca-data-base-queue"
     },
@@ -259,7 +259,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${queue_populator}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${job_queue_populator}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -347,7 +347,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${data_processor}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${job_data_processor}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -435,7 +435,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${replay_processor}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${job_replay_processor}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -523,7 +523,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${status_processor}\"\n})",
+          "expr": "sum(up{\n    namespace=\"${namespace}\",\n    job=\"${job_status_processor}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -611,7 +611,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "max(quorum_size{\n    namespace=\"${namespace}\",\n    job=\"${zookeeper}\"\n})",
+          "expr": "max(quorum_size{\n    namespace=\"${namespace}\",\n    job=\"${job_zookeeper}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -699,7 +699,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "count(kafka_server_replicamanager_leadercount{\n    namespace=\"${namespace}\",\n    job=\"${kafka}\"\n})",
+          "expr": "count(kafka_server_replicamanager_leadercount{\n    namespace=\"${namespace}\",\n    job=\"${job_kafka}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -779,7 +779,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(kafka_controller_kafkacontroller_offlinepartitionscount{\n    namespace=\"${namespace}\",\n    job=\"${kafka}\",\n})",
+          "expr": "sum(kafka_controller_kafkacontroller_offlinepartitionscount{\n    namespace=\"${namespace}\",\n    job=\"${job_kafka}\",\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -859,7 +859,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\n    sum(kafka_cluster_partition_underreplicated{\n        namespace=\"${namespace}\",\n        job=\"${kafka}\",\n        topic=~\"^(${replication_topic}|${status_topic}|${replay_topic}|${failed_topic})$\",\n    }) by(topic),\n\"topic\", \"$1\", \"topic\", \"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\\\.(?:backbeat-)?(.*)$\")",
+          "expr": "label_replace(\n    sum(kafka_cluster_partition_underreplicated{\n        namespace=\"${namespace}\",\n        job=\"${job_kafka}\",\n        topic=~\"^(${replication_topic}|${status_topic}|${replay_topic}|${failed_topic})$\",\n    }) by(topic),\n\"topic\", \"$1\", \"topic\", \"[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}\\\\.(?:backbeat-)?(.*)$\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1110,7 +1110,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "100 / (1 + sum(rate(replication_status_changed_total{namespace=\"${namespace}\", job=\"${status_processor}\", replicationStatus=\"FAILED\"}[$__rate_interval]))\n           /\n           sum(rate(replication_status_changed_total{namespace=\"${namespace}\", job=\"${status_processor}\", replicationStatus=\"COMPLETED\"}[$__rate_interval]))\n      )\nor vector(100)",
+          "expr": "100 / (1 + sum(rate(replication_status_changed_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", replicationStatus=\"FAILED\"}[$__rate_interval]))\n           /\n           sum(rate(replication_status_changed_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", replicationStatus=\"COMPLETED\"}[$__rate_interval]))\n      )\nor vector(100)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1182,7 +1182,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
+          "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\"}[$__rate_interval])) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1254,7 +1254,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(\n  replication_status_changed_total{namespace=\"${namespace}\", job=\"${status_processor}\", replicationStatus=\"FAILED\"}[$__rate_interval]\n)) or vector(0)",
+          "expr": "sum(rate(\n  replication_status_changed_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", replicationStatus=\"FAILED\"}[$__rate_interval]\n)) or vector(0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1349,7 +1349,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "max(kafka_consumergroup_group_lag{\n    namespace=\"${namespace}\",\n    cluster_name=\"${kafka}\",\n    topic=~\"${replication_topic}\"\n})",
+          "expr": "max(kafka_consumergroup_group_lag{\n    namespace=\"${namespace}\",\n    cluster_name=\"${job_kafka}\",\n    topic=~\"${replication_topic}\"\n})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1430,7 +1430,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_rpo_seconds_sum{namespace=\"${namespace}\", job=\"${data_processor}\"}[$__rate_interval]))\n  /\nsum(rate(replication_rpo_seconds_count{namespace=\"${namespace}\", job=\"${data_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(replication_rpo_seconds_sum{namespace=\"${namespace}\", job=\"${job_data_processor}\"}[$__rate_interval]))\n  /\nsum(rate(replication_rpo_seconds_count{namespace=\"${namespace}\", job=\"${job_data_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1511,7 +1511,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(replication_latency_seconds_sum{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval]))\n  /\nsum(rate(replication_latency_seconds_count{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(replication_latency_seconds_sum{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval]))\n  /\nsum(rate(replication_latency_seconds_count{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1767,7 +1767,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.99,\n   sum(rate(replication_rpo_seconds_bucket{namespace=\"${namespace}\", job=\"${data_processor}\"}[$__rate_interval]))\n   by(le, location))",
+          "expr": "histogram_quantile(0.99,\n   sum(rate(replication_rpo_seconds_bucket{namespace=\"${namespace}\", job=\"${job_data_processor}\"}[$__rate_interval]))\n   by(le, location))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1853,7 +1853,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.99,\n   sum(rate(replication_latency_seconds_bucket{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval]))\n   by(le, location)\n)",
+          "expr": "histogram_quantile(0.99,\n   sum(rate(replication_latency_seconds_bucket{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval]))\n   by(le, location)\n)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1970,7 +1970,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "clamp_min(\n   max(mongodb_mongod_replset_oplog_head_timestamp{\n           namespace=\"${namespace}\", job=\"${mongod}\"})\n   -\n   min(replication_log_timestamp{namespace=\"${namespace}\",\n             job=\"${queue_populator}\"}),\n0)",
+              "expr": "clamp_min(\n   max(mongodb_mongod_replset_oplog_head_timestamp{\n           namespace=\"${namespace}\", job=\"${job_mongod}\"})\n   -\n   min(replication_log_timestamp{namespace=\"${namespace}\",\n             job=\"${job_queue_populator}\"}),\n0)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2066,7 +2066,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(kafka_server_brokertopicmetrics_messagesin_total{\n            namespace=\"${namespace}\",\n            job=\"${kafka}\",\n            topic=~\"${replication_topic}\"\n         }[$__rate_interval])\n)",
+              "expr": "sum(rate(kafka_server_brokertopicmetrics_messagesin_total{\n            namespace=\"${namespace}\",\n            job=\"${job_kafka}\",\n            topic=~\"${replication_topic}\"\n         }[$__rate_interval])\n)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2149,7 +2149,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(increase(replication_populator_objects{namespace=\"${namespace}\", job=\"${queue_populator}\"}[$__rate_interval]))",
+              "expr": "sum(increase(replication_populator_objects{namespace=\"${namespace}\", job=\"${job_queue_populator}\"}[$__rate_interval]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2232,7 +2232,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(increase(replication_populator_bytes{namespace=\"${namespace}\", job=\"${queue_populator}\"}[$__rate_interval]))",
+              "expr": "sum(increase(replication_populator_bytes{namespace=\"${namespace}\", job=\"${job_queue_populator}\"}[$__rate_interval]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2329,7 +2329,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_populator_objects{namespace=\"${namespace}\", job=\"${queue_populator}\"}[$__rate_interval]))",
+              "expr": "sum(rate(replication_populator_objects{namespace=\"${namespace}\", job=\"${job_queue_populator}\"}[$__rate_interval]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2426,7 +2426,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_populator_bytes{namespace=\"${namespace}\", job=\"${queue_populator}\"}[$__rate_interval]))",
+              "expr": "sum(rate(replication_populator_bytes{namespace=\"${namespace}\", job=\"${job_queue_populator}\"}[$__rate_interval]))",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2552,7 +2552,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${kafka}\",\n        topic=~\"${replication_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
+              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${job_kafka}\",\n        topic=~\"${replication_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -2648,7 +2648,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${kafka}\",\n        topic=~\"${replay_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
+              "expr": "label_replace(\n    max(kafka_consumergroup_group_lag{\n        namespace=\"${namespace}\",\n        cluster_name=\"${job_kafka}\",\n        topic=~\"${replay_topic}\",\n        group=~\"${queue_processor_group}($location)$\",\n    }) by(group),\n\"group\", \"$1\", \"group\", \"${queue_processor_group}(.*)$\")",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4185,7 +4185,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\", replayCount=\"1\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\", replayCount=\"1\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4282,7 +4282,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_replay_attempts_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4379,7 +4379,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_replay_success_total{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_replay_success_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4476,7 +4476,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_replay_objects_completed_total{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\", replayCount!=\"0\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
+              "expr": "sum(rate(replication_replay_objects_completed_total{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\", replayCount!=\"0\", replicationStatus=\"FAILED\"}[$__rate_interval])) by(location)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4552,7 +4552,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "label_replace(  sum(increase(\n    replication_replay_count_bucket{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\"}[$__rate_interval]\n  )) by(le),\n\"le\", \"Failed\", \"le\", \"\\\\+Inf\")",
+              "expr": "label_replace(  sum(increase(\n    replication_replay_count_bucket{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\"}[$__rate_interval]\n  )) by(le),\n\"le\", \"Failed\", \"le\", \"\\\\+Inf\")",
               "format": "heatmap",
               "hide": false,
               "instant": false,
@@ -4652,7 +4652,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(increase(\n  replication_replay_file_sizes_completed_bucket{namespace=\"${namespace}\", job=\"${status_processor}\", location=~\"$location\", replayCount!=\"0\"}[$__rate_interval]\n)) by(le)",
+              "expr": "sum(increase(\n  replication_replay_file_sizes_completed_bucket{namespace=\"${namespace}\", job=\"${job_status_processor}\", location=~\"$location\", replayCount!=\"0\"}[$__rate_interval]\n)) by(le)",
               "format": "heatmap",
               "hide": false,
               "instant": false,
@@ -4802,7 +4802,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "max(kafka_consumergroup_group_lag{\n    namespace=\"${namespace}\",\n    cluster_name=\"${kafka}\",\n    topic=~\"${status_topic}\"\n})",
+              "expr": "max(kafka_consumergroup_group_lag{\n    namespace=\"${namespace}\",\n    cluster_name=\"${job_kafka}\",\n    topic=~\"${status_topic}\"\n})",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4898,7 +4898,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_status_process_duration_seconds_count{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval])) or vector(0)",
+              "expr": "sum(rate(replication_status_process_duration_seconds_count{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval])) or vector(0)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -4994,7 +4994,7 @@
           "targets": [
             {
               "datasource": null,
-              "expr": "sum(rate(replication_status_process_duration_seconds_sum{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval])) by(result)\n  /\nsum(rate(replication_status_process_duration_seconds_count{namespace=\"${namespace}\", job=\"${status_processor}\"}[$__rate_interval])) by(result)",
+              "expr": "sum(rate(replication_status_process_duration_seconds_sum{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval])) by(result)\n  /\nsum(rate(replication_status_process_duration_seconds_count{namespace=\"${namespace}\", job=\"${job_status_processor}\"}[$__rate_interval])) by(result)",
               "format": "time_series",
               "hide": false,
               "instant": false,
@@ -5050,7 +5050,7 @@
         "multi": true,
         "name": "location",
         "options": [],
-        "query": "label_values(replication_rpo_seconds_bucket{namespace=\"${namespace}\", job=\"${data_processor}\"}, location)",
+        "query": "label_values(replication_rpo_seconds_bucket{namespace=\"${namespace}\", job=\"${job_data_processor}\"}, location)",
         "refresh": 1,
         "regex": null,
         "sort": 1,
@@ -5077,7 +5077,7 @@
         "multi": true,
         "name": "queue_processor",
         "options": [],
-        "query": "label_values(replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${data_processor}|${replay_processor}\", location=~\"$location\"}, job)",
+        "query": "label_values(replication_stage_time_elapsed_bucket{namespace=\"${namespace}\", job=~\"${job_data_processor}|${job_replay_processor}\", location=~\"$location\"}, job)",
         "refresh": 1,
         "regex": "/^(?<value>(artesca-data-)?(backbeat-replication-)?(?<text>.*?)(-headless)?)$/",
         "sort": 1,
