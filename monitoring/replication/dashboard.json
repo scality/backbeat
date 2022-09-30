@@ -1100,6 +1100,13 @@
       "id": 12,
       "links": [],
       "maxDataPoints": 100,
+      "options": {
+        "reduceOptions": {
+          "calcs": [
+            "mean"
+          ]
+        }
+      },
       "targets": [
         {
           "datasource": null,

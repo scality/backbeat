@@ -2,7 +2,6 @@ from enum import Enum
 from grafanalib.core import (
     ConstantInput,
     DataSourceInput,
-    GaugePanel,
     Heatmap,
     HeatmapColor,
     Stat,
@@ -14,7 +13,16 @@ from grafanalib.core import (
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, metrics, PieChart, Target, TimeSeries, Tooltip, Dashboard
+from scalgrafanalib import (
+    layout,
+    metrics,
+    Dashboard,
+    GaugePanel,
+    PieChart,
+    Target,
+    TimeSeries,
+    Tooltip,
+)
 
 import attr
 from attr.validators import instance_of
