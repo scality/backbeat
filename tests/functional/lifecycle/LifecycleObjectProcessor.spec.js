@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const werelogs = require('werelogs');
+const { ObjectMD } = require('arsenal').models;
 
 const LifecycleObjectExpirationProcessor = require(
     '../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
@@ -28,6 +29,10 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
 
             const s3Client = new S3ClientMock(failures);
             lop.clientManager.getS3Client = () => s3Client;
+            lop.clientManager.getBackbeatClient = () => ({
+                getMetadata: (_a, _b, cb) =>
+                    cb(null, { Body: new ObjectMD().getSerialized() }),
+            });
 
             lop.start(err => {
                 if (err) {

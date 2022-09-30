@@ -45,7 +45,6 @@ class S3ClientMock {
             DeleteMarkers: [],
             Versions: [],
         });
-        this.stubMethod('getObjectLockConfiguration', {});
     }
 
     makeRetryableError() {
