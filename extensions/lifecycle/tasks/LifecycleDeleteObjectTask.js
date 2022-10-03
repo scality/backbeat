@@ -1,6 +1,7 @@
 const async = require('async');
-const { errors } = require('arsenal');
+const { errors, versioning } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
+const versionIdUtils = versioning.VersionID;
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -33,10 +34,13 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         }
 
         const { bucket, key, version } = entry.getAttribute('target');
+        const encodedVersionId
+            = version ? versionIdUtils.encode(version) : null;
+
         return backbeatClient.getMetadata({
             bucket,
             objectKey: key,
-            versionId: version,
+            encodedVersionId,
         }, log, (err, blob) => {
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
