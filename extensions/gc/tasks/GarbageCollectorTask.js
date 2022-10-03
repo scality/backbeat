@@ -206,7 +206,10 @@ class GarbageCollectorTask extends BackbeatTask {
                 objMD.setLocation()
                     .setDataStoreName(newLocation)
                     .setAmzStorageClass(newLocation)
-                    .setTransitionInProgress(false);
+                    .setTransitionInProgress(false)
+                    .setUserMetadata({
+                        'x-amz-meta-scal-s3-transition-attempt': undefined,
+                    });
                 return this._putMetadata(entry, objMD, log, err => {
                     if (!err) {
                         log.end().info('completed expiration of archived data',

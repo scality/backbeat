@@ -43,6 +43,7 @@ class ReplicationAPI {
                 key: params.objectKey,
                 version: params.versionId,
                 eTag: params.eTag,
+                attempt: params.attempt,
                 lastModified: params.lastModified,
             })
             .setAttribute('toLocation', params.toLocation)
@@ -68,7 +69,7 @@ class ReplicationAPI {
      * @return {undefined}
      */
     static sendDataMoverAction(producer, action, log, cb) {
-        const { accountId, bucket, key, version, eTag } = action.getAttribute('target');
+        const { accountId, bucket, key, version, eTag, attempt } = action.getAttribute('target');
         const { origin, fromLocation, contentLength } = action.getAttribute('metrics');
         const kafkaEntry = {
             key: `${bucket}/${key}`,
@@ -94,6 +95,7 @@ class ReplicationAPI {
                 // TODO: BB-217 do not use contentLength from metrics
                 size: contentLength,
                 eTag,
+                try: attempt,
             };
             kafkaEntry.message = JSON.stringify(message);
         }
