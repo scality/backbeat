@@ -4,11 +4,10 @@ from grafanalib.core import (
     DataSourceInput,
     Heatmap,
     HeatmapColor,
-    Stat,
     RowPanel,
     Template,
     Templating,
-    Threshold as BaseThreshold,
+    Threshold,
     YAxis,
 )
 
@@ -19,6 +18,7 @@ from scalgrafanalib import (
     Dashboard,
     GaugePanel,
     PieChart,
+    Stat,
     Target,
     TimeSeries,
     Tooltip,
@@ -26,23 +26,6 @@ from scalgrafanalib import (
 
 import attr
 from attr.validators import instance_of
-
-
-def override_threshold_value_field(cls: type, fields: list):
-    ''' Field transformer to override the validator for Threshold, to allow string
-    '''
-    return [
-        f.evolve(validator=instance_of((str, float))) if f.name == 'value' else f
-        for f in fields
-    ]
-
-
-@attr.s(field_transformer=override_threshold_value_field)
-class Threshold(BaseThreshold):
-    ''' Threshold subclass allowing to use string for value, useful for specifying
-    values in parameters
-    '''
-    pass
 
 
 class Metrics:
@@ -167,6 +150,8 @@ def up(component: str, expr: str = None, title: str = None, **kwargs):
     return Stat(
         title=title or component.replace('_', ' ').title(),
         dataSource='${DS_PROMETHEUS}',
+        minValue='0',
+        maxValue='${' + component + '_replicas}',
         reduceCalc='last',
         targets=[Target(
             expr=expr or '\n'.join([
@@ -176,13 +161,11 @@ def up(component: str, expr: str = None, title: str = None, **kwargs):
                 '})',
             ]),
         )],
-        # TODO: instead of passing a variable in threshold (which hides the threshold from UI),
-        #       may be better to pass min/max and use percentage-based thresholds?
-        #       __but__ it requires a custom Stat class with `threshold-mode`, `min` and `max`
+        thresholdType='percentage',
         thresholds=[
             Threshold('red', 0, 0.0),
-            Threshold('yellow', 1, 1.),
-            Threshold('green', 2, '${' + component + '_replicas}'),
+            Threshold('yellow', 1, 50.),
+            Threshold('green', 2, 100.),
         ],
         **kwargs)
 

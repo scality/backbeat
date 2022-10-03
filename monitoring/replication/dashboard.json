@@ -198,9 +198,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${queue_populator_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -215,7 +217,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -223,7 +225,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${queue_populator_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -286,9 +288,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${data_processor_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -303,7 +307,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -311,7 +315,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${data_processor_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -374,9 +378,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${replay_processor_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -391,7 +397,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -399,7 +405,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${replay_processor_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -462,9 +468,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${status_processor_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -479,7 +487,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -487,7 +495,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${status_processor_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -550,9 +558,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${zookeeper_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -567,7 +577,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -575,7 +585,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${zookeeper_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -638,9 +648,11 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "${kafka_replicas}",
+          "min": "0",
           "noValue": "none",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
                 "color": "red",
@@ -655,7 +667,7 @@
                 "index": 1,
                 "line": true,
                 "op": "gt",
-                "value": 1.0,
+                "value": 50.0,
                 "yaxis": "left"
               },
               {
@@ -663,7 +675,7 @@
                 "index": 2,
                 "line": true,
                 "op": "gt",
-                "value": "${kafka_replicas}",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -846,7 +858,7 @@
         "colorMode": "background",
         "graphMode": "area",
         "justifyMode": "auto",
-        "orientation": "horizontal",
+        "orientation": "auto",
         "reduceOptions": {
           "calcs": [
             "last"
