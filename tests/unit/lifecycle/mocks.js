@@ -109,6 +109,12 @@ class S3ClientMock {
         this.assertRespIsSet();
         return new S3RequestMock(this.response.error, this.response.data);
     }
+
+    getObjectLegalHodl() {
+    }
+
+    getObjectRetention() {
+    }
 }
 
 module.exports = {

@@ -21,56 +21,6 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         Object.assign(this, procState);
     }
 
-    _getMetadata(entry, log, done) {
-        const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
-        if (!backbeatClient) {
-            log.error('failed to get backbeat client', {
-                canonicalId,
-                accountId,
-            });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
-        }
-
-        const { bucket, key, version } = entry.getAttribute('target');
-        const encodedVersionId
-            = version ? versionIdUtils.encode(version) : null;
-
-
-        log.info('!!!!!!!!getting lifecycle metadata', {
-            bucket, key, version
-        });
-
-        return backbeatClient.getMetadata({
-            bucket,
-            objectKey: key,
-            encodedVersionId,
-        }, log, (err, blob) => {
-
-            log.info('lifecycle metadata result!!!!!!!!!', { blob, err });
-
-            if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
-                    method: 'LifecycleDeleteObjectTask._getMetadata',
-                    error: err.message,
-                }, entry.getLogInfo()));
-                return done(err);
-            }
-            const res = ObjectMD.createFromBlob(blob.Body);
-            if (res.error) {
-                log.error('error parsing metadata blob', Object.assign({
-                    error: res.error,
-                    method: 'LifecycleDeleteObjectTask._getMetadata',
-                }, entry.getLogInfo()));
-                return done(
-                    errors.InternalError.
-                        customizeDescription('error parsing metadata blob'));
-            }
-            return done(null, res.result);
-        });
-    }
-
     _checkDate(entry, log, done) {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
         const s3Client = this.getS3Client(canonicalId, accountId);
@@ -140,41 +90,77 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     _checkObjectLockState(entry, log, done) {
-        const version = entry.getAttribute('target.version');
+        const { owner: canonicalId, accountId, version } = entry.getAttribute('target');
+        const s3Client = this.getS3Client(canonicalId, accountId);
+        if (!s3Client) {
+            log.error('failed to get S3 client', { canonicalId, accountId });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
 
         if (!version) {
             // if expiration of non-versioned object, ignore object-lock check
             return process.nextTick(done);
         }
 
-        return this._getMetadata(entry, log, (err, objMD) => {
-            log.info('metadata object', { objMD, err });
+        const params = {
+            Bucket: entry.getAttribute('target.bucket'),
+            Key: entry.getAttribute('target.key'),
+            VersionId: version,
+        };
 
-            if (err) {
-                return done(err);
-            }
+        async.series([
+            next => s3Client.getObjectLegalHold(params, (err, res) => {
+                if (err && err.code === 'NoSuchObjectLockConfiguration') {
+                    return next(null);
+                }
 
-            if (objMD.getLegalHold()) {
-                return done(new ObjectLockedError('object locked'));
-            }
+                if (err && err.code === 'InvalidRequest') {
+                    // bucket does not have object lock enabled
+                    return next(null);
+                }
 
-            const retentionMode = objMD.getRetentionMode();
-            const retentionDate = objMD.getRetentionDate();
+                if (err) {
+                    return next(err);
+                }
 
+                if (res.LegalHold && res.LegalHold.Status === 'ON') {
+                    return next(new ObjectLockedError('object locked'));
+                }
 
-            if (!retentionMode || !retentionDate) {
-                return done();
-            }
+                return next(null);
+            }),
+            next => this.s3target.getObjectRetention(params, (err, res) => {
+                if (err && err.code === 'NoSuchObjectLockConfiguration') {
+                    return next(null);
+                }
 
-            const objectDate = new Date(retentionDate);
-            const now = new Date();
+                if (err && err.code === 'InvalidRequest') {
+                    // bucket does not have object lock enabled
+                    return next(null);
+                }
 
-            if (now < objectDate) {
-                return done(new ObjectLockedError('object locked'));
-            }
+                if (err) {
+                    return next(err);
+                }
 
-            return done();
-        });
+                const retentionMode = res.Retention.Mode;
+                const retentionDate = res.Retention.RetainUntilDate;
+
+                if (!retentionMode || !retentionDate) {
+                    return next(null);
+                }
+
+                const objectDate = new Date(retentionDate);
+                const now = new Date();
+
+                if (now < objectDate) {
+                    return next(new ObjectLockedError('object locked'));
+                }
+
+                return next(null);
+            }),
+        ], done);
     }
 
     /**
