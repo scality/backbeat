@@ -226,7 +226,8 @@ class LifecycleObjectProcessor extends EventEmitter {
         const client = this.backbeatClients[clientId];
 
         if (client) {
-            return client;
+            return new BackbeatMetadataProxy(this._lcConfig)
+                .setBackbeatClient(client);
         }
 
         this.backbeatClients[clientId] = createBackbeatClient({

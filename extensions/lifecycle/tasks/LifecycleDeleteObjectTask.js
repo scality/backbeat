@@ -24,7 +24,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
         const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
         if (!backbeatClient) {
-            this.log.error('failed to get backbeat client', {
+            log.error('failed to get backbeat client', {
                 canonicalId,
                 accountId,
             });
@@ -33,10 +33,11 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         }
 
         const { bucket, key, version } = entry.getAttribute('target');
+
         return backbeatClient.getMetadata({
             bucket,
             objectKey: key,
-            versionId: version,
+            encodedVersionId: version,
         }, log, (err, blob) => {
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
