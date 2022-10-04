@@ -23,7 +23,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
     _getMetadata(entry, log, done) {
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
+        const backbeatClient = this.getBackbeatMetadataProxy(canonicalId, accountId);
         if (!backbeatClient) {
             log.error('failed to get backbeat client', {
                 canonicalId,
