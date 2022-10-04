@@ -29,7 +29,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
 
             const s3Client = new S3ClientMock(failures);
             lop.clientManager.getS3Client = () => s3Client;
-            lop.clientManager.getBackbeatClient = () => ({
+            lop.clientManager.getBackbeatMetadataProxy = () => ({
                 getMetadata: (_a, _b, cb) =>
                     cb(null, { Body: new ObjectMD().getSerialized() }),
             });
