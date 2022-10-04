@@ -1,24 +1,26 @@
-FROM node:16-slim
+ARG NODE_VERSION=16.17.1-bullseye-slim
+
+FROM node:${NODE_VERSION} as builder
 
 WORKDIR /usr/src/app
 
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
-    ca-certificates \
-    build-essential \
-    wget \
-    bash \
-    python3 \
-    git \
-    jq \
-    zlib1g-dev \
-    libncurses5-dev \
-    libgdbm-dev \
-    libnss3-dev \
-    libssl-dev \
-    libreadline-dev \
-    libffi-dev \
-    libzstd-dev
+        ca-certificates \
+        build-essential \
+        wget \
+        bash \
+        python3 \
+        git \
+        jq \
+        zlib1g-dev \
+        libncurses5-dev \
+        libgdbm-dev \
+        libnss3-dev \
+        libssl-dev \
+        libreadline-dev \
+        libffi-dev \
+        libzstd-dev
 
 ENV DOCKERIZE_VERSION v0.6.1
 
@@ -32,8 +34,20 @@ RUN yarn install --ignore-engines --frozen-lockfile --production --network-concu
     && rm -rf ~/.node-gyp \
     && rm -rf /tmp/yarn-*
 
+################################################################################
+FROM node:${NODE_VERSION}
+
+RUN apt-get update && \
+    apt-get install -y --no-install-recommends \
+        jq \
+    && rm -rf /var/lib/apt/lists/*
+
+WORKDIR /usr/src/app
+
 # Keep the .git directory in order to properly report version
 COPY . /usr/src/app
+COPY --from=builder /usr/src/app/node_modules ./node_modules/
+COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
 ENTRYPOINT ["/usr/src/app/docker-entrypoint.sh"]
 
