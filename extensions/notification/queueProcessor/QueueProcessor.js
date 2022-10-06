@@ -193,7 +193,7 @@ class QueueProcessor extends EventEmitter {
         try {
             return this._getConfig(bucket, (err, notifConfig) => {
                 if (err) {
-                    this.logger.err('Error while getting notification configuration', {
+                    this.logger.error('Error while getting notification configuration', {
                         bucket,
                         key,
                         eventType,
@@ -232,7 +232,7 @@ class QueueProcessor extends EventEmitter {
                             // for Kafka keyed partitioning, to map a
                             // particular bucket and key to a partition
                             key: `${bucket}/${key}`,
-                            message,
+                            message: JSON.stringify(message),
                         };
                         const msgDesc = 'sending message to external destination';
                         const eventRecord = message.Records[0];
@@ -254,7 +254,7 @@ class QueueProcessor extends EventEmitter {
             });
         } catch (error) {
             if (error) {
-                this.logger.err('error processing entry', {
+                this.logger.error('error processing entry', {
                     bucket,
                     key,
                     error,
