@@ -296,11 +296,6 @@
                 "port": 8555
             }
         },
-        "workflowEngineDataSource": {
-            "zookeeperPath": "/workflow-engine-data-source",
-            "topic": "backbeat-workflow-engine",
-            "groupId": "backbeat-workflow-engine-group"
-        },
         "oplogPopulator": {
             "topic": "backbeat-oplog",
             "kafkaConnectHost": "127.0.0.1",
