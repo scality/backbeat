@@ -112,7 +112,7 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     const replayCompletedObjects = ZenkoMetrics.createCounter({
         name: 'replication_replay_objects_completed_total',
         help: 'Number of objects completed from replay queues',
-        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
+        labelNames: ['origin', 'location',  'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedBytes = ZenkoMetrics.createCounter({

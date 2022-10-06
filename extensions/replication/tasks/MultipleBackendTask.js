@@ -13,6 +13,28 @@ const { metricsExtension, metricsTypeQueued } = require('../constants');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
+// BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
+// When set, the value is the target percentage of errors.
+const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
+    process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
+
+// When BACKBEAT_INJECT_REPLICATION_ERROR_RATE is set, BACKBEAT_INJECT_REPLICATION_ERRORS
+// variable can be set to choose which "operations" get random errors. This is comma-separated
+// list of: copyObject, copyPart, deleteObject, putTag and deletetag.
+const BACKBEAT_INJECT_REPLICATION_ERRORS =
+    (process.env.BACKBEAT_INJECT_REPLICATION_ERRORS || 'copyObject').split(',');
+
+const BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('copyPart');
+const BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('copyObject');
+const BACKBEAT_INJECT_REPLICATION_ERROR_DELOBJ =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('deleteObject');
+const BACKBEAT_INJECT_REPLICATION_ERROR_PUTTAG =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('putTag');
+const BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('deleteTag');
+
 class MultipleBackendTask extends ReplicateObject {
 
     _getReplicationEndpointType() {
@@ -172,6 +194,12 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _getRangeAndPutMPUPart(sourceEntry, range, partNumber, uploadId,
         log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'stream part data',
             logFields: { entry: sourceEntry.getLogInfo(), range },
@@ -387,7 +415,7 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             });
-            sourceReq.on('end', () => {
+            incomingMsg.on('end', () => {
                 this._publishReadMetrics(size, readStartTime);
             });
             log.debug('putting data', { entry: sourceEntry.getLogInfo() });
@@ -689,7 +717,14 @@ class MultipleBackendTask extends ReplicateObject {
             sourceEntry.getContentLength(), sourceEntry);
         this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
             metricsExtension, () => {});
-        this.retry({
+
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
+        return this.retry({
             actionDesc: 'stream object data',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._getAndPutObjectOnce(
@@ -908,6 +943,12 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _putObjectTagging(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_PUTTAG) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'send object tagging XML data',
             entry: sourceEntry,
@@ -957,6 +998,12 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _deleteObjectTagging(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'delete object tagging',
             logFields: { entry: sourceEntry.getLogInfo() },
@@ -1004,6 +1051,12 @@ class MultipleBackendTask extends ReplicateObject {
     }
 
     _putDeleteMarker(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_DELOBJ) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'put delete marker',
             logFields: { entry: sourceEntry.getLogInfo() },

@@ -100,9 +100,9 @@ const writeMetric = ZenkoMetrics.createCounter({
 
 const timeElapsedMetric = ZenkoMetrics.createHistogram({
     name: 'replication_stage_time_elapsed',
-    help: 'Elapsed time of a specific stage in replication',
+    help: 'Elapsed time of a specific stage in replication (in millisecond)',
     labelNames: ['origin', 'serviceName', 'location', 'replicationStage'],
-    buckets: [0.01, 0.1, 1, 10, 30, 60, 120, 300],
+    buckets: [10, 100, 1000, 10000, 30000, 60000, 120000, 300000],
 });
 
 const rpoMetric = ZenkoMetrics.createHistogram({

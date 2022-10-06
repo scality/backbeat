@@ -369,7 +369,7 @@ class ReplicateObject extends BackbeatTask {
             serviceName,
             location: this.site,
             replicationStage: replicationStages.sourceDataRead,
-        }, (Date.now() - readStartTime) / 1000);
+        }, Date.now() - readStartTime);
         this.metricsHandler.sourceDataBytes({ serviceName, location: this.site }, size);
         this.metricsHandler.reads({ serviceName, location: this.site });
     }
@@ -380,7 +380,7 @@ class ReplicateObject extends BackbeatTask {
             serviceName,
             location: this.site,
             replicationStage: replicationStages.destinationDataWrite,
-        }, (Date.now() - writeStartTime) / 1000);
+        }, Date.now() - writeStartTime);
         this.metricsHandler.dataReplicationBytes({ serviceName, location: this.site }, size);
         this.metricsHandler.writes({
             serviceName,
@@ -398,7 +398,7 @@ class ReplicateObject extends BackbeatTask {
             serviceName,
             location: this.site,
             replicationStage: replicationStages.destinationMetadataWrite,
-        }, (Date.now() - writeStartTime) / 1000);
+        }, Date.now() - writeStartTime);
         this.metricsHandler.metadataReplicationBytes({
             serviceName,
             location: this.site,

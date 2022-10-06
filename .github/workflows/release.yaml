@@ -41,25 +41,27 @@ jobs:
       - name: Push dashboards into the production namespace
         run: |
           oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-dashboards:${{ github.event.inputs.tag }} \
-          ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
-          ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
-          ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
-          ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
-          ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml \
-          lifecycle/dashboard.json:application/grafana-dashboard+json \
-          lifecycle/alerts.yaml:application/prometheus-alerts+yaml \
-          cold-storage/dashboard.json:application/grafana-dashboard+json
+            ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
+            ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml \
+            lifecycle/dashboard.json:application/grafana-dashboard+json \
+            lifecycle/alerts.yaml:application/prometheus-alerts+yaml \
+            cold-storage/dashboard.json:application/grafana-dashboard+json \
+            replication/dashboard.json:application/grafana-dashboard+json \
+            replication/alerts.yaml:application/prometheus-alerts+yaml
         working-directory: monitoring
 
       - name: Push policies into the production namespace
         run: |
           oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-policies:${{ github.event.inputs.tag }} \
-          extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
-          extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
-          extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
-          extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
-          extensions/gc/policy.json:application/vnd.iam-policy+json \
-          policies/queue_populator_policy.json:application/vnd.iam-policy+json
+            extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
+            extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
+            extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
+            extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
+            extensions/gc/policy.json:application/vnd.iam-policy+json \
+            policies/queue_populator_policy.json:application/vnd.iam-policy+json
 
       - name: Build and push
         uses: docker/build-push-action@v2
