@@ -12,6 +12,7 @@ const qpRetryJoi = joi.object({
 });
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
+const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
 
 const joiSchema = joi.object({
     source: {
@@ -78,6 +79,7 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
+    objectSizeMetrics: joi.array().items(joi.number()).default(OBJECT_SIZE_METRICS),
 });
 
 function _loadAdminCredentialsFromFile(filePath) {

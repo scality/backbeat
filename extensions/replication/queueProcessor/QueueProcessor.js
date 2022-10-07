@@ -6,7 +6,7 @@ const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
-const promClient = require('prom-client');
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const Logger = require('werelogs').Logger;
 
@@ -32,7 +32,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
-const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
 
 const {
     zookeeperNamespace,
@@ -43,11 +43,6 @@ const {
     proxyIAMPath,
     replicationBackends,
 } = require('../constants');
-
-promClient.register.setDefaultLabels({
-    origin: 'replication',
-    containerName: process.env.CONTAINER_NAME || '',
-});
 
 /**
  * Labels used for Prometheus metrics
@@ -61,61 +56,66 @@ promClient.register.setDefaultLabels({
  * @property {string} [replicationStage] - Name of the replication stage
  */
 
-const dataReplicationStatusMetric = new promClient.Counter({
+const dataReplicationStatusMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_status_changed_total',
     help: 'Number of status updates',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
+    labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
-const metadataReplicationStatusMetric = new promClient.Counter({
+const metadataReplicationStatusMetric = ZenkoMetrics.createCounter({
     name: 'replication_metadata_status_changed_total',
     help: 'Number of status updates',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
+    labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
-// TODO: Kafka lag is not set in 8.x branches see BB-1
-const kafkaLagMetric = new promClient.Gauge({
-    name: 'kafka_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
-});
-
-const dataReplicationBytesMetric = new promClient.Counter({
+const dataReplicationBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_bytes',
     help: 'Total number of bytes replicated for data operation',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const metadataReplicationBytesMetric = new promClient.Counter({
+const metadataReplicationBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_metadata_bytes',
     help: 'Total number of bytes replicated for metadata operation',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const sourceDataBytesMetric = new promClient.Counter({
+const sourceDataBytesMetric = ZenkoMetrics.createCounter({
     name: 'replication_source_data_bytes',
     help: 'Total number of data bytes read from replication source',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const readMetric = new promClient.Counter({
+const readMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_read',
     help: 'Number of read operations',
-    labelNames: ['origin', 'containerName', 'serviceName'],
+    labelNames: ['origin', 'serviceName', 'location'],
 });
 
-const writeMetric = new promClient.Counter({
+const writeMetric = ZenkoMetrics.createCounter({
     name: 'replication_data_write',
     help: 'Number of write operations',
-    labelNames: ['origin', 'containerName', 'serviceName', 'replicationContent'],
+    labelNames: ['origin', 'serviceName', 'location', 'replicationContent'],
 });
 
-const timeElapsedMetric = new promClient.Histogram({
+const timeElapsedMetric = ZenkoMetrics.createHistogram({
     name: 'replication_stage_time_elapsed',
-    help: 'Elapsed time of a specific stage in replication',
-    labelNames: ['origin', 'containerName', 'serviceName', 'replicationStage'],
+    help: 'Elapsed time of a specific stage in replication (in millisecond)',
+    labelNames: ['origin', 'serviceName', 'location', 'replicationStage'],
+    buckets: [10, 100, 1000, 10000, 30000, 60000, 120000, 300000],
 });
 
+const rpoMetric = ZenkoMetrics.createHistogram({
+    name: 'replication_rpo_seconds',
+    help: 'Difference between the time the object is updated and the time it ' +
+          'is picked up for replication',
+    labelNames: ['origin', 'serviceName', 'location'],
+    buckets: [1, 10, 30, 60, 120, 300, 600],
+});
+
+const defaultLabels = {
+    origin: 'replication',
+};
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} MetricsHandler
@@ -124,21 +124,20 @@ const timeElapsedMetric = new promClient.Histogram({
  * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
  * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
  * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
- * @property {GaugeSet} lag - Set the kafka lag metric
  * @property {CounterInc} reads - Increments the read metric
  * @property {CounterInc} writes - Increments the write metric
  * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
  */
 const metricsHandler = {
-    dataReplicationStatus: wrapCounterInc(dataReplicationStatusMetric),
-    metadataReplicationStatus: wrapCounterInc(metadataReplicationStatusMetric),
-    dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric),
-    metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric),
-    sourceDataBytes: wrapCounterInc(sourceDataBytesMetric),
-    lag: wrapGaugeSet(kafkaLagMetric),
-    reads: wrapCounterInc(readMetric),
-    writes: wrapCounterInc(writeMetric),
-    timeElapsed: wrapHistogramObserve(timeElapsedMetric),
+    dataReplicationStatus: wrapCounterInc(dataReplicationStatusMetric, defaultLabels),
+    metadataReplicationStatus: wrapCounterInc(metadataReplicationStatusMetric, defaultLabels),
+    dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric, defaultLabels),
+    metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric, defaultLabels),
+    sourceDataBytes: wrapCounterInc(sourceDataBytesMetric, defaultLabels),
+    reads: wrapCounterInc(readMetric, defaultLabels),
+    writes: wrapCounterInc(writeMetric, defaultLabels),
+    timeElapsed: wrapHistogramObserve(timeElapsedMetric, defaultLabels),
+    rpo: wrapHistogramObserve(rpoMetric, defaultLabels),
 };
 
 class QueueProcessor extends EventEmitter {
@@ -1014,13 +1013,13 @@ class QueueProcessor extends EventEmitter {
      * @param {Logger} log - Logger
      * @returns {string} Error response string or undefined
      */
-    handleMetrics(res, log) {
+    static handleMetrics(res, log) {
         log.debug('metrics requested');
 
         res.writeHead(200, {
-            'Content-Type': promClient.register.contentType,
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
-        res.end(promClient.register.metrics());
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 

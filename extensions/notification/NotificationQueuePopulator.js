@@ -39,6 +39,26 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Returns the correct versionId
+     * to display according to the
+     * versioning state of the object
+     * @param {Object} value log entry object
+     * @return {String} versionId
+     */
+    _getVersionId(value) {
+        const isNullVersion = value.isNull;
+        const isVersioned = !!value.versionId;
+        // Versioning suspended objects have
+        // a versionId, however it is internal
+        // and should not be used to get the object
+        if (isNullVersion || !isVersioned) {
+            return null;
+        } else {
+            return value.versionId;
+        }
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
@@ -48,7 +68,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     async _processObjectEntry(bucket, key, value, type) {
-        const versionId = value.versionId || null;
+        const versionId = this._getVersionId(value);
         if (!isMasterKey(key)) {
             return undefined;
         }
@@ -63,7 +83,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             }
             const ent = {
                 bucket,
-                key,
+                key: value.key,
                 eventType,
                 versionId,
             };
@@ -96,13 +116,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         method: 'NotificationQueuePopulator._processObjectEntry',
                         bucket,
                         key: message.key,
+                        versionId,
                         eventType,
                         eventTime: message.dateTime,
                     });
                     const internalTopic = destination.internalTopic ||
                         this.notificationConfig.topic;
                     this.publish(internalTopic,
-                        `${bucket}/${key}`,
+                        // keeping all messages for same object
+                        // in the same partition to keep the order.
+                        // here we use the object name and not the
+                        // "_id" which also includes the versionId
+                        `${bucket}/${message.key}`,
                         JSON.stringify(message));
                 }
                 return undefined;

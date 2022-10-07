@@ -3,6 +3,8 @@ const sinon = require('sinon');
 
 const UpdateReplicationStatus =
     require('../../../extensions/replication/tasks/UpdateReplicationStatus');
+const ReplicationStatusProcessor =
+    require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const { replicationEntry } = require('../../utils/kafkaEntries');
 const { sourceEntry } = require('../../utils/mockEntries');
@@ -31,6 +33,9 @@ function checkReplicationInfo(site, status, updatedSourceEntry) {
         updatedSourceEntry.getReplicationSiteStatus(site), status);
 }
 
+const metricHandlers = ReplicationStatusProcessor.loadMetricHandlers(
+    config.extensions.replication);
+
 const rspMock = {
     getStateVars: () => ({
         repConfig: {
@@ -48,7 +53,7 @@ const rspMock = {
 };
 
 describe('UpdateReplicationStatus._getUpdatedSourceEntry()', () => {
-    const updateReplicationStatus = new UpdateReplicationStatus(rspMock);
+    const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
 
     it('should return a COMPLETED entry when site status is PENDING', () => {
         const sourceEntry = getCompletedEntry();
@@ -81,7 +86,7 @@ describe('UpdateReplicationStatus._getUpdatedSourceEntry()', () => {
 });
 
 describe('UpdateReplicationStatus._getNFSUpdatedSourceEntry()', () => {
-    const updateReplicationStatus = new UpdateReplicationStatus(rspMock);
+    const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
 
     it('should return a COMPLETED entry when metadata has not changed', () => {
         const sourceEntry = getCompletedEntry();
@@ -131,9 +136,9 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 bucketNotificationConfig: notification,
                 notificationConfigManager: {
                     getConfig: () => null
-                }
+                },
             }),
-        });
+        }, metricHandlers);
         const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
         const getReplayCountStub = sinon.stub(sourceEntry, 'getReplayCount');
@@ -160,7 +165,7 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 replayTopics: ['replay-topic'],
             }),
-        });
+        }, metricHandlers);
         const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
         sinon.stub(sourceEntry, 'getReplayCount').returns(0);
@@ -186,7 +191,7 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 replayTopics: ['replay-topic'],
             }),
-        });
+        }, metricHandlers);
         const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
         sinon.stub(sourceEntry, 'getReplayCount').returns(null);
@@ -197,7 +202,7 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
         return done();
     });
 
-    it('should not publish replication failure notification on first replay', done => {
+    it('should not publish replication failure notification on next replay', done => {
         const task = new UpdateReplicationStatus({
             getStateVars: () => ({
                 repConfig: {
@@ -212,7 +217,7 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 replayTopics: ['replay-topic'],
             }),
-        });
+        }, metricHandlers);
         const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
         sinon.stub(sourceEntry, 'getReplayCount').returns(1);

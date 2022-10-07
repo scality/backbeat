@@ -9,11 +9,32 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
+const { metricsExtension, metricsTypeQueued } = require('../constants');
 const utils = require('../utils/utils');
 
 const MPU_GCP_MAX_PARTS = 1024;
+
+// BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
+// When set, the value is the target percentage of errors.
+const BACKBEAT_INJECT_REPLICATION_ERROR_RATE =
+    process.env.BACKBEAT_INJECT_REPLICATION_ERROR_RATE / 100;
+
+// When BACKBEAT_INJECT_REPLICATION_ERROR_RATE is set, BACKBEAT_INJECT_REPLICATION_ERRORS
+// variable can be set to choose which "operations" get random errors. This is comma-separated
+// list of: copyObject, copyPart, deleteObject, putTag and deletetag.
+const BACKBEAT_INJECT_REPLICATION_ERRORS =
+    (process.env.BACKBEAT_INJECT_REPLICATION_ERRORS || 'copyObject').split(',');
+
+const BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('copyPart');
+const BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('copyObject');
+const BACKBEAT_INJECT_REPLICATION_ERROR_DELOBJ =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('deleteObject');
+const BACKBEAT_INJECT_REPLICATION_ERROR_PUTTAG =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('putTag');
+const BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG =
+    BACKBEAT_INJECT_REPLICATION_ERROR_RATE && BACKBEAT_INJECT_REPLICATION_ERRORS.includes('deleteTag');
 
 class MultipleBackendTask extends ReplicateObject {
 
@@ -174,9 +195,15 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _getRangeAndPutMPUPart(sourceEntry, range, partNumber, uploadId,
         log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYPART) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'stream part data',
-            logFields: { entry: sourceEntry.getLogInfo() },
+            logFields: { entry: sourceEntry.getLogInfo(), range },
             actionFunc: done => this._getRangeAndPutMPUPartOnce(sourceEntry,
                 range, partNumber, uploadId, log, done),
             shouldRetryFunc: err => err.retryable,
@@ -367,6 +394,7 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             });
             incomingMsg = sourceReq.createReadStream();
+            const readStartTime = Date.now();
             incomingMsg.on('error', err => {
                 if (!sourceReqAborted) {
                     destReq.abort();
@@ -388,6 +416,9 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             });
+            incomingMsg.on('end', () => {
+                this._publishReadMetrics(size, readStartTime);
+            });
             log.debug('putting data', { entry: sourceEntry.getLogInfo() });
         }
 
@@ -402,6 +433,7 @@ class MultipleBackendTask extends ReplicateObject {
             Body: incomingMsg,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 if (!destReqAborted) {
@@ -419,21 +451,21 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return doneOnce(err);
             }
-            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+
+            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
             return doneOnce(null, data);
         });
     }
 
     _getAndPutMultipartUpload(sourceEntry, log, cb) {
         this.retry({
-            actionDesc: 'stream part data',
+            actionDesc: 'stream multipart data',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._getAndPutMultipartUploadOnce(sourceEntry,
                 log, done),
             shouldRetryFunc: err => err.retryable,
             log,
+            noTimeout: true,
         }, cb);
     }
 
@@ -686,7 +718,14 @@ class MultipleBackendTask extends ReplicateObject {
             sourceEntry.getContentLength(), sourceEntry);
         this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
             metricsExtension, () => {});
-        this.retry({
+
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
+        return this.retry({
             actionDesc: 'stream object data',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._getAndPutObjectOnce(
@@ -738,6 +777,7 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             });
             incomingMsg = sourceReq.createReadStream();
+            const readStartTime = Date.now();
             incomingMsg.on('error', err => {
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', {
@@ -762,6 +802,9 @@ class MultipleBackendTask extends ReplicateObject {
                     });
                 }
                 return doneOnce(err);
+            });
+            incomingMsg.on('end', () => {
+                this._publishReadMetrics(size, readStartTime);
             });
             log.debug('putting object', { entry: sourceEntry.getLogInfo() });
         }
@@ -876,6 +919,7 @@ class MultipleBackendTask extends ReplicateObject {
             });
         }
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 if (!aborted) {
@@ -893,14 +937,19 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
-            const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics,
-                metricsTypeCompleted, metricsExtension, () => {});
+
+            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
             return doneOnce(null, data);
         });
     }
 
     _putObjectTagging(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_PUTTAG) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'send object tagging XML data',
             entry: sourceEntry,
@@ -931,6 +980,7 @@ class MultipleBackendTask extends ReplicateObject {
                 ReplicationEndpointSite: this.site,
             });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 log.error('an error occurred putting object tagging to S3', {
@@ -943,11 +993,18 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }
 
     _deleteObjectTagging(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'delete object tagging',
             logFields: { entry: sourceEntry.getLogInfo() },
@@ -975,6 +1032,7 @@ class MultipleBackendTask extends ReplicateObject {
             ReplicationEndpointSite: this.site,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send((err, data) => {
             if (err) {
                 log.error('an error occurred on deleting object tagging', {
@@ -988,11 +1046,18 @@ class MultipleBackendTask extends ReplicateObject {
             }
             sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
                 data.versionId);
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }
 
     _putDeleteMarker(sourceEntry, log, cb) {
+        if (BACKBEAT_INJECT_REPLICATION_ERROR_DELOBJ) {
+            if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
+                return process.nextTick(() => cb(new Error('Replication error')));
+            }
+        }
+
         this.retry({
             actionDesc: 'put delete marker',
             logFields: { entry: sourceEntry.getLogInfo() },
@@ -1039,6 +1104,7 @@ class MultipleBackendTask extends ReplicateObject {
             StorageClass: this.site,
         });
         attachReqUids(destReq, log);
+        const writeStartTime = Date.now();
         return destReq.send(err => {
             if (err) {
                 // eslint-disable-next-line no-param-reassign
@@ -1052,6 +1118,7 @@ class MultipleBackendTask extends ReplicateObject {
                 });
                 return doneOnce(err);
             }
+            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
             return doneOnce();
         });
     }
@@ -1091,6 +1158,12 @@ class MultipleBackendTask extends ReplicateObject {
                 return next(null, res);
             }),
             (refreshedEntry, next) => {
+                const lastModified = new Date(refreshedEntry.getLastModified());
+                this.metricsHandler.rpo({
+                    serviceName: this.serviceName,
+                    location: this.site,
+                }, (Date.now() - lastModified) / 1000);
+
                 if (sourceEntry.getIsDeleteMarker()) {
                     return this._putDeleteMarker(sourceEntry, log, next);
                 }

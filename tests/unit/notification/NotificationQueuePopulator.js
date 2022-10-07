@@ -172,4 +172,30 @@ describe('NotificationQueuePopulator ::', () => {
             return done();
         });
     });
+
+    describe('_getVersionId', () => {
+        [
+            {
+                desc: 'non versioned',
+                input: {},
+                out: null
+            },
+            {
+                desc: 'versioned',
+                input: { versionId: '1234' },
+                out: '1234'
+            },
+            {
+                desc: 'a null version',
+                input: { isNull: true, versionId: '1234' },
+                out: null
+            },
+        ].forEach(tests => {
+            const { desc, input, out } = tests;
+            it(`Should return ${out} when object is ${desc}`, () => {
+                const versionId = notificationQueuePopulator._getVersionId(input);
+                assert.strictEqual(versionId, out);
+            });
+        });
+    });
 });

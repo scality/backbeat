@@ -1,10 +1,12 @@
 const async = require('async');
 const { errors } = require('arsenal');
+const ObjectMD = require('arsenal').models.ObjectMD;
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 
+class ObjectLockedError extends Error {}
 
 class LifecycleDeleteObjectTask extends BackbeatTask {
     /**
@@ -17,6 +19,45 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const procState = proc.getStateVars();
         super();
         Object.assign(this, procState);
+    }
+
+    _getMetadata(entry, log, done) {
+        const { owner: canonicalId, accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatMetadataProxy(accountId);
+        if (!backbeatClient) {
+            log.error('failed to get backbeat client', {
+                canonicalId,
+                accountId,
+            });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
+
+        const { bucket, key, version } = entry.getAttribute('target');
+        return backbeatClient.getMetadata({
+            bucket,
+            objectKey: key,
+            versionId: version,
+        }, log, (err, blob) => {
+            if (err) {
+                log.error('error getting metadata blob from S3', Object.assign({
+                    method: 'LifecycleDeleteObjectTask._getMetadata',
+                    error: err.message,
+                }, entry.getLogInfo()));
+                return done(err);
+            }
+            const res = ObjectMD.createFromBlob(blob.Body);
+            if (res.error) {
+                log.error('error parsing metadata blob', Object.assign({
+                    error: res.error,
+                    method: 'LifecycleDeleteObjectTask._getMetadata',
+                }, entry.getLogInfo()));
+                return done(
+                    errors.InternalError.
+                        customizeDescription('error parsing metadata blob'));
+            }
+            return done(null, res.result);
+        });
     }
 
     _checkDate(entry, log, done) {
@@ -93,6 +134,42 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         });
     }
 
+    _checkObjectLockState(entry, log, done) {
+        const version = entry.getAttribute('target.version');
+
+        if (!version) {
+            // if expiration of non-versioned object, ignore object-lock check
+            return process.nextTick(done);
+        }
+
+        return this._getMetadata(entry, log, (err, objMD) => {
+            if (err) {
+                return done(err);
+            }
+
+            if (objMD.getLegalHold()) {
+                return done(new ObjectLockedError('object locked'));
+            }
+
+            const retentionMode = objMD.getRetentionMode();
+            const retentionDate = objMD.getRetentionDate();
+
+
+            if (!retentionMode || !retentionDate) {
+                return done();
+            }
+
+            const objectDate = new Date(retentionDate);
+            const now = new Date();
+
+            if (now < objectDate) {
+                return done(new ObjectLockedError('object locked'));
+            }
+
+            return done();
+        });
+    }
+
     /**
      * Execute the action specified in action entry to delete an object
      *
@@ -111,8 +188,14 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
         return async.series([
             next => this._checkDate(entry, log, next),
+            next => this._checkObjectLockState(entry, log, next),
             next => this._executeDelete(entry, log, next),
         ], err => {
+            if (err && err instanceof ObjectLockedError) {
+                log.debug('Object is locked, skipping',
+                    entry.getLogInfo());
+                return done();
+            }
             if (err && err.statusCode === 404) {
                 log.debug('Unable to find object to delete, skipping',
                     entry.getLogInfo());

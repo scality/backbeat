@@ -215,9 +215,25 @@ class UpdateReplicationStatus extends BackbeatTask {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
         } else if (newStatus === 'COMPLETED') {
             entry = refreshedEntry.toCompletedEntry(site);
+
+            let replayCount = 0;
             if (sourceEntry.getReplayCount() >= 0) {
-                this.metricsHandler.replaySuccess();
+                replayCount = this.replayTopics.length - sourceEntry.getReplayCount();
+                this.metricsHandler.replaySuccess({ location: site, replayCount });
             }
+
+            const labels = {
+                location: site,
+                replayCount,
+                replicationStatus: 'COMPLETED',
+            };
+            this.metricsHandler.replayCompletedObjects(labels);
+            this.metricsHandler.replayCompletedBytes(labels, sourceEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(labels, sourceEntry.getContentLength());
+            this.metricsHandler.replayCount({ location: site }, replayCount);
+
+            const lastModified = new Date(refreshedEntry.getLastModified());
+            this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);
         } else if (newStatus === 'FAILED') {
             entry = this._handleFailedReplicationEntry(refreshedEntry, sourceEntry, site, log);
             if (!entry) {
@@ -264,20 +280,21 @@ class UpdateReplicationStatus extends BackbeatTask {
             versionId: utils.getVersionIdForReplication(updatedSourceEntry, true),
             mdBlob: updatedSourceEntry.getSerialized(),
         }, log, err => {
+            const replicationStatus = updatedSourceEntry.getReplicationStatus();
             if (err) {
                 log.error('an error occurred when updating metadata', {
                     entry: updatedSourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
-                    replicationStatus:
-                        updatedSourceEntry.getReplicationStatus(),
+                    replicationStatus,
                     error: err.message,
                 });
                 return cb(err);
             }
+            this.metricsHandler.status({ replicationStatus });
             log.end().info('metadata updated', {
                 entry: updatedSourceEntry.getLogInfo(),
-                replicationStatus: updatedSourceEntry.getReplicationStatus(),
+                replicationStatus,
             });
             return cb();
         });
@@ -303,7 +320,10 @@ class UpdateReplicationStatus extends BackbeatTask {
                 count,
                 site,
             });
-            this.metricsHandler.replayAttempts();
+            this.metricsHandler.replayAttempts({
+                location: site,
+                replayCount: this.replayTopics.length - count,
+            });
         } else {
             log.error('error pushing failed entry to the replay topic',
                 {
@@ -340,6 +360,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         // if replay topics are not defined in the configuration,
         // replay logic is disabled.
         const count = !this.replayTopics ? 0 : queueEntry.getReplayCount();
+        const totalAttempts = !this.replayTopics ? 0 : this.replayTopics.length;
         if (count === 0) {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry, log);
@@ -347,9 +368,20 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (this.bucketNotificationConfig) {
                 this._publishFailedReplicationStatusNotification(queueEntry, log);
             }
+            const labels = {
+                location: site,
+                replayCount: totalAttempts - count,
+                replicationStatus: 'FAILED',
+            };
+            this.metricsHandler.replayCompletedObjects(labels);
+            this.metricsHandler.replayCompletedBytes(labels, queueEntry.getContentLength());
+            this.metricsHandler.replayCompletedFileSizes(labels, queueEntry.getContentLength());
+
+            const lastModified = new Date(refreshedEntry.getLastModified());
+            this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);
+
             return refreshedEntry.toFailedEntry(site);
         }
-        const totalAttempts = this.replayTopics.length;
         if (count > 0) {
             if (count > totalAttempts) { // might happen if replay config has changed
                 queueEntry.setReplayCount(totalAttempts);
@@ -361,6 +393,11 @@ class UpdateReplicationStatus extends BackbeatTask {
             // If no replay count has been defined yet:
             queueEntry.setReplayCount(totalAttempts);
             this._pushReplayEntry(queueEntry, site, log);
+
+            const labels = { location: site, replayCount: 0 };
+            this.metricsHandler.replayQueuedObjects(labels);
+            this.metricsHandler.replayQueuedBytes(labels, queueEntry.getContentLength());
+            this.metricsHandler.replayQueuedFileSizes(labels, queueEntry.getContentLength());
             return null;
         }
         log.error('count value is invalid',
@@ -372,30 +409,48 @@ class UpdateReplicationStatus extends BackbeatTask {
         return null;
     }
 
+    _updateStatusDurationMetric(sourceEntry, err, replicationStatus) {
+        let result = 'nochange';
+        if (err) {
+            result = 'error';
+        } else if (replicationStatus) {
+            result = 'success';
+        }
+        this.metricsHandler.statusDuration({ result, replicationStatus },
+            (Date.now() - sourceEntry.getStartProcessing()) / 1000);
+    }
+
     _updateReplicationStatus(sourceEntry, log, done) {
         const error = this._checkStatus(sourceEntry);
         if (error) {
+            this._updateStatusDurationMetric(sourceEntry, error);
             return done(error);
         }
         return this._refreshSourceEntry(sourceEntry, log,
-        (err, refreshedEntry) => {
-            if (err) {
-                return done(err);
-            }
-            const params = { sourceEntry, refreshedEntry };
-            const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
-            if (!updatedSourceEntry) {
-                return process.nextTick(done);
-            }
-            return this._putMetadata(updatedSourceEntry, log, err => {
+            (err, refreshedEntry) => {
                 if (err) {
+                    this._updateStatusDurationMetric(sourceEntry, err);
                     return done(err);
                 }
-                this._reportMetrics(sourceEntry, updatedSourceEntry);
-                return this._handleGarbageCollection(
-                    updatedSourceEntry, log, done);
+                const params = { sourceEntry, refreshedEntry };
+                const updatedSourceEntry = this._getUpdatedSourceEntry(params, log);
+                if (!updatedSourceEntry) {
+                    this._updateStatusDurationMetric(sourceEntry);
+                    return process.nextTick(done);
+                }
+                return this._putMetadata(updatedSourceEntry, log, err => {
+                    this._updateStatusDurationMetric(sourceEntry, err,
+                        updatedSourceEntry.getReplicationStatus());
+
+                    if (err) {
+                        return done(err);
+                    }
+
+                    this._reportMetrics(sourceEntry, updatedSourceEntry);
+                    return this._handleGarbageCollection(
+                        updatedSourceEntry, log, done);
+                });
             });
-        });
     }
 
     /**

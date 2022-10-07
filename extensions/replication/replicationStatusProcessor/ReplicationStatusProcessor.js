@@ -5,8 +5,8 @@ const http = require('http');
 const https = require('https');
 
 const Logger = require('werelogs').Logger;
-const errors = require('arsenal').errors;
-const { StatsModel } = require('arsenal').metrics;
+const { errors, jsutil } = require('arsenal');
+const { StatsModel, ZenkoMetrics } = require('arsenal').metrics;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -25,66 +25,138 @@ const NotificationConfigManager = require('../../notification/NotificationConfig
 
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
-const promClient = require('prom-client');
 const constants = require('../../../lib/constants');
 const {
     wrapCounterInc,
-    wrapGaugeSet,
+    wrapHistogramObserve,
 } = require('../../../lib/util/metrics');
-
-promClient.register.setDefaultLabels({
-    origin: 'replication',
-    containerName: process.env.CONTAINER_NAME || '',
-});
 
 /**
  * Labels used for Prometheus metrics
  * @typedef {Object} MetricLabels
  * @property {string} origin - Method that began the replication
- * @property {string} containerName - Name of the container running our process
  * @property {string} [replicationStatus] - Result of the replications status
  * @property {string} [partition] - What kafka partition relates to the metric
  */
-
-const replicationStatusMetric = new promClient.Counter({
-    name: 'replication_status_changed_total',
-    help: 'Number of objects updated',
-    labelNames: ['origin', 'containerName', 'replicationStatus'],
-});
-
-// TODO: Kafka lag is not set in 8.x branches see BB-1
-const kafkaLagMetric = new promClient.Gauge({
-    name: 'kafka_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition'],
-});
-
-const replayAttempts = new promClient.Counter({
-    name: 'replication_replay_attempts_total',
-    help: 'Number of total attempts made to replay replication',
-    labelNames: ['origin', 'containerName'],
-});
-
-const replaySuccess = new promClient.Counter({
-    name: 'replication_replay_success_total',
-    help: 'Number of times an object was replicated during a replay',
-    labelNames: ['origin', 'containerName'],
-});
 
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} ReplicationStatusMetricsHandler
  * @property {CounterInc} status - Increments the replication status metric
- * @property {GaugeSet} lag - Set the kafka lag metric
  * @property {CounterInc} replayAttempts - Increments the replay attempts metric
  * @property {CounterInc} replaySuccess - Increments the replay success metric
+ * @property {CounterInc} replayQueuedObjects - Increments the replay queued objects metric
+ * @property {CounterInc} replayQueuedBytes - Increments the replay queued bytes metric
+ * @property {CounterInc} replayQueuedFileSizes - Increments the replay queued file sizes metric
+ * @property {CounterInc} replayCompletedObjects - Increments the replay completed objects metric
+ * @property {CounterInc} replayCompletedBytes - Increments the replay completed bytes metric
+ * @property {CounterInc} replayCompletedFileSizes - Increments the replay completed file sizes metric
  */
-const metricsHandler = {
-    status: wrapCounterInc(replicationStatusMetric),
-    lag: wrapGaugeSet(kafkaLagMetric),
-    replayAttempts: wrapCounterInc(replayAttempts),
-    replaySuccess: wrapCounterInc(replaySuccess),
-};
+
+/**
+ * @param {Object} repConfig - Replication configuration
+ * @returns {ReplicationStatusMetricsHandler} Metric handlers
+ */
+const loadMetricHandlers = jsutil.once(repConfig => {
+    const replicationStatusMetric = ZenkoMetrics.createCounter({
+        name: 'replication_status_changed_total',
+        help: 'Number of objects updated',
+        labelNames: ['origin', 'replicationStatus'],
+    });
+
+    const replicationStatusDurationSeconds = ZenkoMetrics.createHistogram({
+        name: 'replication_status_process_duration_seconds',
+        help: 'Duration of replication status processing',
+        labelNames: ['origin', 'result', 'replicationStatus'],
+        buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1],
+    });
+
+    const replicationLatency = ZenkoMetrics.createHistogram({
+        name: 'replication_latency_seconds',
+        help: 'Time taken for an object to replicate successfully to the destination',
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
+        buckets: [1, 10, 30, 60, 120, 300, 600],
+    });
+
+    const replayAttempts = ZenkoMetrics.createCounter({
+        name: 'replication_replay_attempts_total',
+        help: 'Number of total attempts made to replay replication',
+        labelNames: ['origin', 'location', 'replayCount'],
+    });
+
+    const replaySuccess = ZenkoMetrics.createCounter({
+        name: 'replication_replay_success_total',
+        help: 'Number of times an object was replicated during a replay',
+        labelNames: ['origin', 'location', 'replayCount'],
+    });
+
+    const replayQueuedObjects = ZenkoMetrics.createCounter({
+        name: 'replication_replay_objects_queued_total',
+        help: 'Number of objects added to replay queues',
+        labelNames: ['origin', 'location', 'replayCount'],
+    });
+
+    const replayQueuedBytes = ZenkoMetrics.createCounter({
+        name: 'replication_replay_bytes_queued_total',
+        help: 'Number of bytes added to replay queues',
+        labelNames: ['origin', 'location', 'replayCount'],
+    });
+
+    const replayQueuedFileSizes = ZenkoMetrics.createHistogram({
+        name: 'replication_replay_file_sizes_queued',
+        help: 'Number of objects queued for replay by file size',
+        labelNames: ['origin', 'location', 'replayCount'],
+        buckets: repConfig.objectSizeMetrics,
+    });
+
+    const replayCompletedObjects = ZenkoMetrics.createCounter({
+        name: 'replication_replay_objects_completed_total',
+        help: 'Number of objects completed from replay queues',
+        labelNames: ['origin', 'location',  'replayCount', 'replicationStatus'],
+    });
+
+    const replayCompletedBytes = ZenkoMetrics.createCounter({
+        name: 'replication_replay_bytes_completed_total',
+        help: 'Number of bytes completed from replay queues',
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
+    });
+
+    const replayCompletedFileSizes = ZenkoMetrics.createHistogram({
+        name: 'replication_replay_file_sizes_completed',
+        help: 'Number of objects completed from replay by file size',
+        labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
+        buckets: repConfig.objectSizeMetrics,
+    });
+
+    const maxReplayCount = !repConfig.replayTopics ? 0 : repConfig.replayTopics.reduce(
+        (prev, topic) => prev + topic.retries, 0);
+    const replayCount = ZenkoMetrics.createHistogram({
+        name: 'replication_replay_count',
+        help: 'Number of replays to complete replication',
+        labelNames: ['origin', 'location'],
+        buckets: [...Array(maxReplayCount).keys()],
+    });
+
+    const defaultLabels = {
+        origin: 'replication',
+    };
+    return {
+        status: wrapCounterInc(replicationStatusMetric, defaultLabels),
+        statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds,
+            defaultLabels),
+        replicationLatency: wrapHistogramObserve(replicationLatency,
+            defaultLabels),
+        replayAttempts: wrapCounterInc(replayAttempts, defaultLabels),
+        replaySuccess: wrapCounterInc(replaySuccess, defaultLabels),
+        replayQueuedObjects: wrapCounterInc(replayQueuedObjects, defaultLabels),
+        replayQueuedBytes: wrapCounterInc(replayQueuedBytes, defaultLabels),
+        replayQueuedFileSizes: wrapHistogramObserve(replayQueuedFileSizes, defaultLabels),
+        replayCompletedObjects: wrapCounterInc(replayCompletedObjects, defaultLabels),
+        replayCompletedBytes: wrapCounterInc(replayCompletedBytes, defaultLabels),
+        replayCompletedFileSizes: wrapHistogramObserve(replayCompletedFileSizes, defaultLabels),
+        replayCount: wrapHistogramObserve(replayCount, defaultLabels)
+    };
+});
 
 /**
  * @class ReplicationStatusProcessor
@@ -172,6 +244,7 @@ class ReplicationStatusProcessor {
         }
 
         this._setupVaultclientCache();
+        this.metricHandlers = loadMetricHandlers(repConfig);
 
         const { monitorReplicationFailureExpiryTimeS } = this.repConfig;
         this._statsClient = new StatsModel(undefined, INTERVAL,
@@ -479,7 +552,7 @@ class ReplicationStatusProcessor {
         }
         let task;
         if (sourceEntry instanceof ObjectQueueEntry) {
-            task = new UpdateReplicationStatus(this, metricsHandler);
+            task = new UpdateReplicationStatus(this, this.metricHandlers);
         }
         if (task) {
             return this.taskScheduler.push({ task, entry: sourceEntry },
@@ -562,9 +635,18 @@ class ReplicationStatusProcessor {
         log.debug('metrics requested');
 
         res.writeHead(200, {
-            'Content-Type': promClient.register.contentType,
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
-        res.end(promClient.register.metrics());
+        res.end(ZenkoMetrics.asPrometheus());
+    }
+
+    /**
+     * Static trampoline, for use from tests.
+     * @param {Object} repConfig - Replication configuration
+     * @returns {ReplicationStatusMetricsHandler} Metric handlers
+     */
+    static loadMetricHandlers(repConfig) {
+        return loadMetricHandlers(repConfig);
     }
 }
 

@@ -150,7 +150,7 @@ describe('Connector', () => {
             connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
-            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline();
             assert.strictEqual(didUpdate, false);
@@ -163,12 +163,12 @@ describe('Connector', () => {
             connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
-            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline(true);
             assert.strictEqual(didUpdate, true);
             assert(pipelineStub.calledOnceWith([]));
-            assert(updateStub.calledOnceWith('example-connector', 'example-pipeline'));
+            assert(updateStub.calledOnceWith('example-connector', connector._config));
         });
 
         it('Should not update when buckets assigned to connector haven\'t changed', async () => {
@@ -176,7 +176,7 @@ describe('Connector', () => {
             connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
-            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline(true);
             assert.strictEqual(didUpdate, false);
@@ -189,7 +189,7 @@ describe('Connector', () => {
             connector._state.isUpdating = true;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
-            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorPipeline')
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline(true);
             assert.strictEqual(didUpdate, false);

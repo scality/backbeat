@@ -181,9 +181,9 @@ class ReplicateObject extends BackbeatTask {
                     replicationStatus,
                     reason,
                 });
-                this.metricsHandler.metadataReplicationStatus({ replicationStatus });
+                this.metricsHandler.metadataReplicationStatus({ replicationStatus, location: this.site });
                 if (updateData) {
-                    this.metricsHandler.dataReplicationStatus({ replicationStatus });
+                    this.metricsHandler.dataReplicationStatus({ replicationStatus, location: this.site });
                 }
             }
             // Commit whether there was an error or not to allow
@@ -363,8 +363,54 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
+    _publishReadMetrics(size, readStartTime) {
         const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            location: this.site,
+            replicationStage: replicationStages.sourceDataRead,
+        }, Date.now() - readStartTime);
+        this.metricsHandler.sourceDataBytes({ serviceName, location: this.site }, size);
+        this.metricsHandler.reads({ serviceName, location: this.site });
+    }
+
+    _publishDataWriteMetrics(size, sourceEntry, writeStartTime) {
+        const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            location: this.site,
+            replicationStage: replicationStages.destinationDataWrite,
+        }, Date.now() - writeStartTime);
+        this.metricsHandler.dataReplicationBytes({ serviceName, location: this.site }, size);
+        this.metricsHandler.writes({
+            serviceName,
+            location: this.site,
+            replicationContent: 'data',
+        });
+        const extMetrics = getExtMetrics(this.site, size, sourceEntry);
+        this.mProducer.publishMetrics(extMetrics,
+            metricsTypeCompleted, metricsExtension, () => {});
+    }
+
+    _publishMetadataWriteMetrics(buffer, writeStartTime) {
+        const serviceName = this.serviceName;
+        this.metricsHandler.timeElapsed({
+            serviceName,
+            location: this.site,
+            replicationStage: replicationStages.destinationMetadataWrite,
+        }, Date.now() - writeStartTime);
+        this.metricsHandler.metadataReplicationBytes({
+            serviceName,
+            location: this.site,
+        }, Buffer.byteLength(buffer));
+        this.metricsHandler.writes({
+            serviceName,
+            location: this.site,
+            replicationContent: 'metadata',
+        });
+    }
+
+    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
         const doneOnce = jsutil.once(done);
         const partObj = new ObjectMDLocation(part);
         const partNumber = partObj.getPartNumber();
@@ -431,12 +477,7 @@ class ReplicateObject extends BackbeatTask {
             return doneOnce(err);
         });
         incomingMsg.on('end', () => {
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.sourceDataRead,
-            }, Date.now() - readStartTime);
-            this.metricsHandler.sourceDataBytes({ serviceName }, partSize);
-            this.metricsHandler.reads({ serviceName });
+            this._publishReadMetrics(partSize, readStartTime);
         });
         log.debug('putting data', { entry: destEntry.getLogInfo(), part });
         destReq = this.backbeatDest.putData({
@@ -478,18 +519,7 @@ class ReplicateObject extends BackbeatTask {
             destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
             destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
 
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.destinationDataWrite,
-            }, Date.now() - writeStartTime);
-            this.metricsHandler.dataReplicationBytes({ serviceName }, partSize);
-            this.metricsHandler.writes({
-                serviceName,
-                replicationContent: 'data',
-            });
-            const extMetrics = getExtMetrics(this.site, partSize, sourceEntry);
-            this.mProducer.publishMetrics(extMetrics, metricsTypeCompleted,
-                metricsExtension, () => {});
+            this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
             return doneOnce(null, partObj.getValue());
         });
     }
@@ -500,7 +530,6 @@ class ReplicateObject extends BackbeatTask {
             replicationStatus: entry.getReplicationSiteStatus(this.site),
         });
         const cbOnce = jsutil.once(cb);
-        const serviceName = this.serviceName;
 
         // sends extra header x-scal-replication-content to the target
         // if it's a metadata operation only
@@ -533,17 +562,7 @@ class ReplicateObject extends BackbeatTask {
                     });
                 return cbOnce(err);
             }
-            this.metricsHandler.timeElapsed({
-                serviceName,
-                replicationStage: replicationStages.destinationMetadataWrite,
-            }, Date.now() - writeStartTime);
-            this.metricsHandler.metadataReplicationBytes({
-                serviceName,
-            }, Buffer.byteLength(mdBlob));
-            this.metricsHandler.writes({
-                serviceName,
-                replicationContent: 'metadata',
-            });
+            this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
             return cbOnce(null, data);
         });
     }
@@ -648,6 +667,11 @@ class ReplicateObject extends BackbeatTask {
         log.debug('processing entry',
             { entry: sourceEntry.getLogInfo() });
 
+        const lastModified = new Date(sourceEntry.getLastModified());
+        this.metricsHandler.rpo({
+            serviceName: this.serviceName,
+            location: this.site,
+        }, (Date.now() - lastModified) / 1000);
 
         if (sourceEntry.getIsDeleteMarker()) {
             return async.waterfall([

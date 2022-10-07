@@ -208,7 +208,12 @@
                     "bindAddress": "localhost",
                     "port": 4045
                 }
-            }
+            },
+            "objectSizeMetrics": [
+                66560,
+                8388608,
+                68157440
+            ]
         },
         "lifecycle": {
             "auth": {

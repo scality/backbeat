@@ -1,9 +1,4 @@
 const assert = require('assert');
-const promClient = require('prom-client');
-
-// Clear register to avoid:
-// Error: A metric with the name kafka_lag has already been registered.
-promClient.register.clear();
 
 const ReplicationStatusProcessor =
     require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
@@ -16,7 +11,7 @@ function makeReplicationStatusProcessor(replayTopics) {
             s3: {},
             transport: 'http',
         },
-        { replayTopics },
+        { replayTopics, objectSizeMetrics: [100, 1000] },
         {});
 }
 
