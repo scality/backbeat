@@ -1,0 +1,9 @@
+{
+  "name": "syntheticbucketd",
+  "version": "1.0.0",
+  "main": "/app/syntheticbucketd.js",
+  "license": "MIT",
+  "dependencies": {
+    "werelogs": "scality/werelogs#8.1.0"
+  }
+}

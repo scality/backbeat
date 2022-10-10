@@ -44,8 +44,7 @@ jobs:
       uses: docker/build-push-action@v4
       with:
         push: true
-        context: .
-        file: .github/dockerfiles/syntheticbucketd/Dockerfile
+        context: tests/utils/syntheticbucketd
         tags: "ghcr.io/scality/backbeat/syntheticbucketd:${{ github.sha }}"
         cache-from: type=gha,scope=syntheticbucketd
         cache-to: type=gha,mode=max,scope=syntheticbucketd
