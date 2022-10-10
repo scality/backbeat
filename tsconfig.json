@@ -1,0 +1,32 @@
+{
+  "compilerOptions": {
+      "target": "es6",
+      "module": "commonjs",
+      "rootDir": ".",
+      "resolveJsonModule": true,
+      "allowJs": true,
+      "checkJs": false,
+      "outDir": "dist",
+      "esModuleInterop": true,
+      "forceConsistentCasingInFileNames": true,
+      "strict": true,
+      "declaration": true,
+      "noImplicitAny": false,
+      "noEmitOnError": false,
+      "sourceMap": true,
+      "skipLibCheck": true
+  },
+  "include": [
+      "./bin",
+      "./conf",
+      "./extensions",
+      "./index.js",
+      "./lib",
+      "./policies",
+      "./tests/**/*.json"
+  ],
+  "exclude": [
+    "node_modules/*"
+  ],
+  "compileOnSave": true
+}

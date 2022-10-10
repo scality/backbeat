@@ -33,6 +33,8 @@ RUN yarn install --ignore-engines --frozen-lockfile --production --network-concu
     && rm -rf /var/lib/apt/lists/* \
     && rm -rf ~/.node-gyp \
     && rm -rf /tmp/yarn-*
+COPY . /usr/src/app
+RUN yarn build
 
 ################################################################################
 FROM node:${NODE_VERSION}
@@ -46,7 +48,6 @@ RUN apt-get update && \
 WORKDIR /usr/src/app
 
 # Keep the .git directory in order to properly report version
-COPY . /usr/src/app
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
