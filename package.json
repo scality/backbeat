@@ -77,10 +77,11 @@
   },
   "devDependencies": {
     "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
-    "eslint": "^8.14.0",
+    "eslint": "^8.25.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#8.2.0",
     "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jest": "^27.1.1",
     "jest": "^29.1.2",
     "lolex": "^2.7.5",
     "mocha": "^3.3.0",

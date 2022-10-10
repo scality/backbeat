@@ -1,9 +1,13 @@
 {
-    "extends": "scality",
+    "extends": [
+        "scality",
+        "plugin:jest/recommended"
+    ],
     "parserOptions": {
         "ecmaVersion": 2020
     },
     "plugins": [
+        "jest",
         "mocha"
     ],
     "rules": {
@@ -37,7 +41,22 @@
         "no-undef-init": "off",
         "newline-per-chained-call": "off",
         "no-useless-escape": "off",
-        "mocha/no-exclusive-tests": "error"
+        "mocha/no-exclusive-tests": "error",
+        "jest/no-done-callback": "off",
+        "jest/expect-expect": [
+            "warn",
+            {
+                "assertFunctionNames": [
+                    "expect",
+                    "assert",
+                    "assert.*",
+                    "_assertCredentials"
+                ]
+            }
+        ]
+    },
+    "env": {
+	"jest/globals": true
     },
     "settings": {
         "import/resolver": {

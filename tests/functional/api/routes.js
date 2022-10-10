@@ -755,7 +755,7 @@ describe('API routes', () => {
             });
         });
 
-        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
+        it('should return all metrics for route:' + ` /_/metrics/crr/${site1}` +
             `/progress/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
             done =>
             getRequest(`/_/metrics/crr/${site1}/progress/${BUCKET_NAME}/` +
@@ -768,7 +768,7 @@ describe('API routes', () => {
                 done();
             }));
 
-        it(`should return all metrics for route: /_/metrics/crr/${site1}` +
+        it('should return all metrics for route:' + `/_/metrics/crr/${site1}` +
             `/throughput/${BUCKET_NAME}/${OBJECT_KEY}?versionId=${VERSION_ID}`,
             done =>
             getRequest(`/_/metrics/crr/${site1}/throughput/${BUCKET_NAME}/` +
