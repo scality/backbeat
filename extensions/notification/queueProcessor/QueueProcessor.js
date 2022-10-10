@@ -5,12 +5,54 @@ const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
 const util = require('util');
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
+
+// Bucket Notification target
+const NOTIFICATION_LABEL_DESTINATION =  'target';
+// can be one of :
+// - 'success' : if event got correctly processed
+// - 'ignore' : if event was skipped as a result of an invalid config
+// - 'fail' : if processing failed for some reason
+const NOTIFICATION_LABEL_EVENT_PROCESSED_STATUS =  'status';
+// notification event type
+const NOTIFICATION_LABEL_EVENT_PROCESSED_TYPE = 'eventType';
+
+const processedEvents = ZenkoMetrics.createCounter({
+    name: 'notification_queue_processor_processed_events',
+    help: 'Total number of processed oplog events',
+    labelNames: [
+        NOTIFICATION_LABEL_DESTINATION,
+        NOTIFICATION_LABEL_EVENT_PROCESSED_STATUS,
+        NOTIFICATION_LABEL_EVENT_PROCESSED_TYPE,
+    ],
+});
+
+const processingDelay = ZenkoMetrics.createSummary({
+    name: 'notification_queue_processor_processing_lag_sec',
+    help: 'Time it takes to process an event and send the notification',
+    labelNames: [
+        NOTIFICATION_LABEL_DESTINATION,
+    ],
+});
+
+function onQueueProcessorEventProcessed(destination, eventType, status, delay) {
+    processedEvents.inc({
+        [NOTIFICATION_LABEL_DESTINATION]: destination,
+        [NOTIFICATION_LABEL_EVENT_PROCESSED_STATUS]: status,
+        [NOTIFICATION_LABEL_EVENT_PROCESSED_TYPE]: eventType,
+    });
+    if (delay) {
+        processingDelay.set({
+            [NOTIFICATION_LABEL_DESTINATION]: destination,
+        }, delay);
+    }
+}
 
 class QueueProcessor extends EventEmitter {
     /**
@@ -72,6 +114,7 @@ class QueueProcessor extends EventEmitter {
         try {
             this.bnConfigManager = new NotificationConfigManager({
                 mongoConfig: this.mongoConfig,
+                origin: 'QueueProcessor',
                 logger: this.logger,
             });
             return this.bnConfigManager.setup(done);
@@ -190,6 +233,7 @@ class QueueProcessor extends EventEmitter {
     processKafkaEntry(kafkaEntry, done) {
         const sourceEntry = JSON.parse(kafkaEntry.value);
         const { bucket, key, eventType } = sourceEntry;
+        const startTime = Date.now();
         try {
             return this._getConfig(bucket, (err, notifConfig) => {
                 if (err) {
@@ -199,6 +243,11 @@ class QueueProcessor extends EventEmitter {
                         eventType,
                         err,
                     });
+                    onQueueProcessorEventProcessed(
+                        this.destinationId,
+                        eventType,
+                        'fail',
+                    );
                     return done(err);
                 }
                 if (notifConfig && Object.keys(notifConfig).length > 0) {
@@ -246,10 +295,22 @@ class QueueProcessor extends EventEmitter {
                             eventTime: eventRecord.eventTime,
                             destination: this.destinationId,
                         });
+                        const delay = Date.now() - startTime;
+                        onQueueProcessorEventProcessed(
+                            this.destinationId,
+                            eventType,
+                            'success',
+                            delay,
+                        );
                         return this._destination.send([msg], done);
                     }
                 }
                 // skip if there is no bucket notification configuration
+                onQueueProcessorEventProcessed(
+                    this.destinationId,
+                    eventType,
+                    'ignore',
+                );
                 return done();
             });
         } catch (error) {
@@ -259,6 +320,11 @@ class QueueProcessor extends EventEmitter {
                     key,
                     error,
                 });
+                onQueueProcessorEventProcessed(
+                    this.destinationId,
+                    eventType,
+                    'fail',
+                );
             }
             return done();
         }
@@ -271,6 +337,21 @@ class QueueProcessor extends EventEmitter {
      */
     isReady() {
         return this._consumer && this._consumer.isReady();
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {undefined}
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+        res.writeHead(200, {
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+        });
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 

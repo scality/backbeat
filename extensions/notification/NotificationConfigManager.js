@@ -1,18 +1,72 @@
 const joi = require('joi');
 
+const { ZenkoMetrics } = require('arsenal').metrics;
 const LRUCache = require('arsenal').algorithms
     .cache.LRUCache;
 const MongoClient = require('mongodb').MongoClient;
-
 const constants = require('./constants');
 
 const paramsJoi = joi.object({
     mongoConfig: joi.object().required(),
+    origin: joi.string().required(),
     logger: joi.object().required(),
 }).required();
 
 const MAX_CACHED_ENTRIES = Number(process.env.MAX_CACHED_BUCKET_NOTIFICATION_CONFIGS)
     || 1000;
+
+// Config manager is used in both the QueuePopulator and QueueProcessor
+// we use this label to distinguish between the two
+const CONFIG_MANAGER_LABEL_ORIGIN =  'origin';
+// should equal true if config manager's cache was hit during a get operation
+const CONFIG_MANAGER_CACHE_HIT = 'cache_hit';
+
+const cacheUpdates = ZenkoMetrics.createCounter({
+    name: 'notification_config_manager_cache_updates',
+    help: 'Total number of cache updates',
+    labelNames: [
+        CONFIG_MANAGER_LABEL_ORIGIN,
+    ],
+});
+
+const configGet = ZenkoMetrics.createCounter({
+    name: 'notification_config_manager_config_get',
+    help: 'Total number of config get operations in the notification config manager',
+    labelNames: [
+        CONFIG_MANAGER_LABEL_ORIGIN,
+        CONFIG_MANAGER_CACHE_HIT,
+    ],
+});
+
+const cachedBuckets = ZenkoMetrics.createGauge({
+    name: 'notification_config_manager_cached_buckets_count',
+    help: 'Total number of cached buckets in the notification config manager',
+    labelNames: [
+        CONFIG_MANAGER_LABEL_ORIGIN,
+    ],
+});
+
+function onConfigManagerCacheUpdate(origin, op) {
+    cacheUpdates.inc({
+        [NOTIFICATION_LABEL_ORIGIN]: origin
+    });
+    if (op === 'add') {
+        cachedBuckets.inc({
+            [NOTIFICATION_LABEL_ORIGIN]: origin
+        });
+    } else if (op === 'remove') {
+        cachedBuckets.dec({
+            [NOTIFICATION_LABEL_ORIGIN]: origin
+        });
+    }
+}
+
+function onConfigManagerConfigGet(origin, hitMiss) {
+    configGet.inc({
+        [NOTIFICATION_LABEL_ORIGIN]: origin,
+        [CONFIG_MANAGET_CACHE_HIT]: hitMiss,
+    });
+}
 
 /**
  * @class NotificationConfigManager
@@ -32,6 +86,7 @@ class NotificationConfigManager {
         joi.attempt(params, paramsJoi);
         this._logger = params.logger;
         this._mongoConfig = params.mongoConfig;
+        this._origin = params.origin;
         this._cachedConfigs = new LRUCache(MAX_CACHED_ENTRIES);
         this._mongoClient = null;
         this._metastore = null;
@@ -102,14 +157,17 @@ class NotificationConfigManager {
             notificationConfiguration : null;
         switch (change.operationType) {
             case 'delete':
-                // if no bucket config was cached, nothing is done
-                this._cachedConfigs.remove(change.documentKey._id);
+                if (cachedConfig) {
+                    this._cachedConfigs.remove(change.documentKey._id);
+                    onConfigManagerCacheUpdate(this._origin, 'delete');
+                }
                 break;
             case 'replace':
             case 'update':
                 if (cachedConfig) {
                     // add() replaces the value of an entry if it exists in cache
                     this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
+                    onConfigManagerCacheUpdate(this._origin, 'update');
                 }
                 break;
             default:
@@ -229,8 +287,10 @@ class NotificationConfigManager {
         // return cached config for bucket if it exists
         const cachedConfig = this._cachedConfigs.get(bucket);
         if (cachedConfig) {
+            onConfigManagerConfigGet(this._origin, true);
             return cachedConfig;
         }
+        onConfigManagerConfigGet(this._origin, false);
         try {
             // retreiving bucket metadata from the metastore
             const bucketMetadata = await this._metastore.findOne({ _id: bucket });
@@ -238,6 +298,7 @@ class NotificationConfigManager {
                 bucketMetadata.value.notificationConfiguration) || undefined;
             // caching the bucket configuration
             this._cachedConfigs.add(bucket, bucketNotificationConfiguration);
+            onConfigManagerCacheUpdate(this._origin, 'add');
             return bucketNotificationConfiguration;
         } catch (err) {
             this._logger.error('An error occured when getting notification ' +

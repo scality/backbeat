@@ -1,5 +1,56 @@
 const NotificationDestination = require('./NotificationDestination');
 const KafkaProducer = require('./KafkaProducer');
+const { ZenkoMetrics } = require('arsenal').metrics;
+
+// Bucket Notification target
+const NOTIFICATION_LABEL_DESTINATION =  'target';
+// can be one of :
+// - 'success' : if notification got delivered successfully
+// - 'fail' : if an error happended while sending notification
+const NOTIFICATION_LABEL_DELIVERY_STATUS =  'status';
+
+const notificationsSent = ZenkoMetrics.createCounter({
+    name: 'notification_queue_processor_notifications_sent',
+    help: 'Total number of notifications sent',
+    labelNames: [
+        NOTIFICATION_LABEL_DESTINATION,
+        NOTIFICATION_LABEL_DELIVERY_STATUS
+    ],
+});
+
+const notificationSize = ZenkoMetrics.createCounter({
+    name: 'notification_queue_processor_notification_size',
+    help: 'Total size of the notifications that were sent',
+    labelNames: [
+        NOTIFICATION_LABEL_DESTINATION
+    ],
+});
+
+const deliveryDelay = ZenkoMetrics.createSummary({
+    name: 'notification_queue_processor_notification_delivery_delay_sec',
+    help: 'Difference between the time a notification is sent and when it gets delivered',
+    labelNames: [
+        NOTIFICATION_LABEL_DESTINATION
+    ],
+});
+
+function onNotificationSent(destination, status, messages, delay) {
+    notificationsSent.inc({
+        [NOTIFICATION_LABEL_DESTINATION]: destination,
+        [NOTIFICATION_LABEL_DELIVERY_STATUS]: status,
+    });
+    // Update total size of notifications sent
+    const messageSize = new TextEncoder().encode(JSON.stringify(messages)).length;
+    notificationSize.inc({
+        [NOTIFICATION_LABEL_DESTINATION]: destination,
+    }, messageSize);
+    // update notification delivery delay
+    if (delay) {
+        deliveryDelay.set({
+            [NOTIFICATION_LABEL_DESTINATION]: destination,
+        }, delay);
+    }
+}
 
 class KafkaNotificationDestination extends NotificationDestination {
     /**
@@ -60,13 +111,27 @@ class KafkaNotificationDestination extends NotificationDestination {
      * @return {undefined}
      */
     send(messages, done) {
+        const starTime = Date.now();
         this._notificationProducer.send(messages, error => {
             if (error) {
                 this._log.error('error publishing message', {
                     method: 'KafkaNotificationDestination.send',
                     error,
                 });
+                onNotificationSent(
+                    this._destinationConfig.resource,
+                    'fail',
+                    messages,
+                    null,
+                );
             }
+            const delay = Date.now() - starTime;
+            onNotificationSent(
+                this._destinationConfig.resource,
+                'success',
+                messages,
+                delay,
+            );
             done();
         });
     }
