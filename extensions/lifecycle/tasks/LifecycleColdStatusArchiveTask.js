@@ -64,8 +64,11 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 if (skipLocationDeletion) {
                     objectMD.setDataStoreName(coldLocation)
                         .setAmzStorageClass(coldLocation)
-                        .setTransitionInProgress(false);
-                }
+                        .setTransitionInProgress(false)
+                        .setUserMetadata({
+                            'x-amz-meta-scal-s3-transition-attempt': undefined,
+                        });
+                    }
 
                 this._putMetadata(entry, objectMD, log, next);
             },

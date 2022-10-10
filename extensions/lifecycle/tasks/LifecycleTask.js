@@ -841,6 +841,16 @@ class LifecycleTask extends BackbeatTask {
     }
 
     _getTransitionActionEntry(params, objectMD, log, cb) {
+        let attempt;
+        const umd = objectMD.getUserMetadata();
+        if (umd) {
+            const parsed = JSON.parse(umd);
+            const rawAttempt = parsed['x-amz-meta-scal-s3-transition-attempt'];
+            if (rawAttempt) {
+                attempt = Number.parseInt(rawAttempt, 10);
+            }
+        }
+
         const entry = ReplicationAPI.createCopyLocationAction({
             bucketName: params.bucket,
             owner: params.owner,
@@ -854,6 +864,7 @@ class LifecycleTask extends BackbeatTask {
             contentLength: objectMD.getContentLength(),
             resultsTopic: this.objectTasksTopic,
             accountId: params.accountId,
+            attempt,
         });
         entry.addContext({
             origin: 'lifecycle',
