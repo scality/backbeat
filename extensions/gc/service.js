@@ -20,6 +20,15 @@ const s3Config = config.s3;
 const gcConfig = config.extensions.gc;
 const transport = config.transport;
 
+// TO BE MOVED
+const Kafka = require('node-rdkafka');
+
+const client = Kafka.AdminClient.create({
+  'client.id': 'kafka-admin',
+  'metadata.broker.list': config.kafka.hosts,
+});
+const RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS = 36
+
 const garbageCollector = new GarbageCollector({
     kafkaConfig,
     s3Config,
@@ -72,24 +81,40 @@ function initAndStart() {
             return;
         }
         logger.info('management init done');
-        startProbeServer(gcConfig.probeServer, (err, probeServer) => {
-            if (err) {
-                logger.error('error starting probe server', { error: err });
+        client.createTopic({
+            topic: gcConfig.topic,
+            num_partitions: 5,
+            replication_factor: 1
+        }, err => {
+            if (err && err.code !== RD_KAFKA_RESP_ERR_TOPIC_ALREADY_EXISTS) {
+                logger.error('error creating topic', {
+                    error: err,
+                });
+                process.exit(1);
+                return;
             }
-            if (probeServer !== undefined) {
-                // following the same pattern as other extensions, where liveness
-                // and readiness are handled by the same handler
-                probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
-                // retaining the old route and adding support to new route, until
-                // metrics handling is consolidated
-                probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
-            }
-            garbageCollector.start(err => {
+            logger.info('kafka topic created', {
+                topic: gcConfig.topic,
+            });
+            startProbeServer(gcConfig.probeServer, (err, probeServer) => {
                 if (err) {
-                    logger.error('error during garbage collector initialization', { error: err.message });
-                } else {
-                    logger.info('garbage collector is running');
+                    logger.error('error starting probe server', { error: err });
                 }
+                if (probeServer !== undefined) {
+                    // following the same pattern as other extensions, where liveness
+                    // and readiness are handled by the same handler
+                    probeServer.addHandler([DEFAULT_LIVE_ROUTE, DEFAULT_READY_ROUTE], handleLiveness);
+                    // retaining the old route and adding support to new route, until
+                    // metrics handling is consolidated
+                    probeServer.addHandler(['/_/monitoring/metrics', DEFAULT_METRICS_ROUTE], handleMetrics);
+                }
+                garbageCollector.start(err => {
+                    if (err) {
+                        logger.error('error during garbage collector initialization', { error: err.message });
+                    } else {
+                        logger.info('garbage collector is running');
+                    }
+                });
             });
         });
     });
