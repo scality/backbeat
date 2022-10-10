@@ -48,6 +48,20 @@
         "probeServer": {
             "bindAddress": "0.0.0.0",
             "port": 4042
+        },
+        "auth": {
+            "type": "assumeRole",
+            "roleName": "scality-internal/backbeat-lifecycle-conductor",
+            "sts": {
+                "host": "127.0.0.1",
+                "port": 8800,
+                "accessKey": "CVXGA8JA53P7S4NVLM2J",
+                "secretKey": "6fsILmGSuYysDdkR1VSlPzRl1wxRyQllys+UBvCD"
+            },
+            "vault": {
+                "host": "127.0.0.1",
+                "port": 8600
+            }
         }
     },
     "extensions": {
@@ -106,8 +120,8 @@
                     "port": 8000
                 },
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication",
+                    "type": "account",
+                    "account": "account1",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -216,19 +230,75 @@
             ]
         },
         "lifecycle": {
+            "coldStorageTopics": ["cold-status-location-dmf-v1"],
+            "transitionProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8556
+                }
+            },
             "auth": {
-                "type": "service",
-                "account": "service-lifecycle"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "MYFB066OV4JCMP3PH9RY",
+                    "secretKey": "XuMCWNO+4OmpBw2uWDxRW1YqnlvzUmFPCpMiLDTs"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
-                "cronRule": "0 */5 * * * *",
+                "auth": {
+                    "type": "assumeRole",
+                    "roleName": "scality-internal/backbeat-lifecycle-conductor",
+                    "sts": {
+                        "host": "127.0.0.1",
+                        "port": 8800,
+                        "accessKey": "CVXGA8JA53P7S4NVLM2J",
+                        "secretKey": "6fsILmGSuYysDdkR1VSlPzRl1wxRyQllys+UBvCD"
+                    },
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8600
+                    }
+                },
+                "cronRule": "*/10 * * * * *",
                 "concurrency": 10,
                 "probeServer": {
                     "bindAddress": "0.0.0.0",
                     "port": 8552
+                },
+                "bucketSource": "mongodb",
+                "mongodb": {
+                    "replicaSetHosts":
+                        "localhost:27017,localhost:27018,localhost:27019",
+                    "writeConcern": "majority",
+                    "replicaSet": "rs0",
+                    "readPreference": "primary",
+                    "database": "metadata"
+                },
+                "vaultAdmin": {
+                    "host": "127.0.0.1",
+                    "port": 8500
                 }
             },
             "bucketProcessor": {
@@ -274,8 +344,18 @@
         "gc": {
             "topic": "backbeat-gc",
             "auth": {
-                "type": "service",
-                "account": "service-gc"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "MYFB066OV4JCMP3PH9RY",
+                    "secretKey": "XuMCWNO+4OmpBw2uWDxRW1YqnlvzUmFPCpMiLDTs"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "consumer": {
                 "groupId": "backbeat-gc-consumer-group",
@@ -313,7 +393,7 @@
         }
     },
     "log": {
-        "logLevel": "info",
+        "logLevel": "debug",
         "dumpLevel": "error"
     },
     "metrics": {
