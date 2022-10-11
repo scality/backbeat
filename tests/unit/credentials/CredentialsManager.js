@@ -121,7 +121,7 @@ describe('CredentialsManager', () => {
         const stsResponses = sinon.stub();
         let stsServer = null;
 
-        before(done => {
+        beforeAll(done => {
             const server = http.createServer();
             server.on('request', (req, res) => {
                 const payload = stsResponseToXML(stsResponses());
@@ -146,7 +146,7 @@ describe('CredentialsManager', () => {
             stsResponses.reset();
         });
 
-        after(() => {
+        afterAll(() => {
             stsServer.close();
         });
 

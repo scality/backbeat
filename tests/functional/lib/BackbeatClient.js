@@ -30,7 +30,7 @@ const serverMock = new MetadataMock();
 
 describe('BackbeatClient unit tests with mock server', () => {
     let httpServer;
-    before(done => {
+    beforeAll(done => {
         expectedLogs.log.forEach((log, i) => {
             log.entries.forEach((entry, j) => {
                 expectedLogs.log[i].entries[j].value.attributes =
@@ -48,7 +48,7 @@ describe('BackbeatClient unit tests with mock server', () => {
                 .listen(backbeatClientTestPort, done);
     });
 
-    after(() => httpServer.close());
+    afterAll(() => httpServer.close());
 
     // skipping this test because ingestion does not need list bucket per raft
     it.skip('should get list of buckets managed by raft session', done => {

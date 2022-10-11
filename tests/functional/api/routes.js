@@ -89,14 +89,14 @@ describe('API routes', () => {
                 res.on('end', () => {
                     data = JSON.parse(rawData);
                     if (done) {
-                        // only set in before() processing
+                        // only set in beforeAll() processing
                         done();
                     }
                 });
             });
         }
 
-        before(done => {
+        beforeAll(done => {
             async.series([
                 next => {
                     testProducer = new Producer({
@@ -129,7 +129,7 @@ describe('API routes', () => {
             ], done);
         });
 
-        after(() => {
+        afterAll(() => {
             clearInterval(healthcheckTimer);
         });
 
@@ -161,11 +161,11 @@ describe('API routes', () => {
                 return done();
             }
             timer = setInterval(_checkValidKeys, 1000);
-        }).timeout(20000);
+        }, 20000);
     });
 
-    describe('metrics routes', function dF() {
-        this.timeout(10000);
+    describe('metrics routes', () => {
+        jest.setTimeout(10000);
         const OPS = 'test:bb:ops';
         const BYTES = 'test:bb:bytes';
         const OBJECT_BYTES = 'test:bb:object:bytes';
@@ -214,7 +214,7 @@ describe('API routes', () => {
             `test-bucket:test-key:${testVersionId}1:${site2}`,
         ];
 
-        before(done =>
+        beforeAll(done =>
             async.parallel([
                 next => addMembers(redisClient, site1, members, next),
                 next => redisClient.incrby(`${site1}:${OPS_PENDING}`, 2, next),
@@ -251,7 +251,7 @@ describe('API routes', () => {
                 },
             ], done));
 
-        after(done => {
+        afterAll(done => {
             const redis = new Redis();
             redis.flushall(done);
         });
@@ -780,7 +780,7 @@ describe('API routes', () => {
             }));
 
         describe('No metrics data in Redis', () => {
-            before(done => {
+            beforeAll(done => {
                 redis.keys('*:test:bb:*').then(keys => {
                     const pipeline = redis.pipeline();
                     keys.forEach(key => {
@@ -941,7 +941,7 @@ describe('API routes', () => {
                 });
             }
 
-            before(done => {
+            beforeAll(done => {
                 redis1 = new Redis();
                 redis2 = new Redis();
 
@@ -964,7 +964,7 @@ describe('API routes', () => {
                 cache2 = [];
             });
 
-            after(() => {
+            afterAll(() => {
                 if (zkClient) {
                     zkClient.close();
                     zkClient = null;

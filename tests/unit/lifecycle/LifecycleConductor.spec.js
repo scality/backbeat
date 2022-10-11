@@ -45,9 +45,7 @@ describe('Lifecycle Conductor', () => {
         sinon.restore();
     });
 
-    describe('processBuckets', function test() {
-        // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
-        this.timeout(4000);
+    describe('processBuckets', () => {
         // tests that `activeIndexingJobRetrieved` is not reset until the e
         it('should not reset `activeIndexingJobsRetrieved` while async operations are in progress', done => {
             const order = [];
@@ -98,7 +96,7 @@ describe('Lifecycle Conductor', () => {
 
                 done();
             });
-        });
+        }, 4000); // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
     });
 
     describe('_indexesGetOrCreate', () => {

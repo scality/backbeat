@@ -203,11 +203,11 @@ function deleteScheduledResumeLocation(iPopulator, location, done) {
 */
 
 describe('Ingestion Pause/Resume', function d() {
-    this.timeout(10000);
+    jest.setTimeout(10000);
 
     this.mockAPI = new MockAPI(ingestionConfig);
 
-    before(done => {
+    beforeAll(done => {
         this.zkHelper = new ZKStateHelper(zkConfig, ZK_TEST_STATE_PATH,
             firstBucket.locationConstraint, secondBucket.locationConstraint,
             futureDate);
@@ -259,7 +259,7 @@ describe('Ingestion Pause/Resume', function d() {
         }
     });
 
-    after(() => {
+    afterAll(() => {
         this.zkHelper.close();
     });
 

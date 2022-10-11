@@ -472,15 +472,15 @@ s3mock, params, cb) {
     });
 }
 
-describe('lifecycle task functional tests', function dF() {
-    this.timeout(10000);
+describe('lifecycle task functional tests', () => {
+    jest.setTimeout(10000);
 
     let lcp;
     let lcTask;
     let s3;
     let s3Helper;
 
-    before(() => {
+    beforeAll(() => {
         lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
@@ -1759,7 +1759,7 @@ describe('lifecycle task functional tests', function dF() {
     describe('incomplete mpu objects', () => {
         const bucketName = 'test-mpu-bucket';
 
-        before(done => {
+        beforeAll(done => {
             s3Helper.setAndCreateBucket(bucketName, done);
         });
 
@@ -1783,7 +1783,7 @@ describe('lifecycle task functional tests', function dF() {
             });
         });
 
-        after(done => {
+        afterAll(done => {
             s3.deleteBucket({ Bucket: bucketName }, done);
         });
 

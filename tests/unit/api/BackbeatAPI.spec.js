@@ -16,7 +16,7 @@ describe('BackbeatAPI', () => {
     const coldSite = Object.keys(locationConfig)
         .filter(site => locationConfig[site].isCold)[0];
 
-    before(() => {
+    beforeAll(() => {
         setupIngestionSiteMock();
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
     });

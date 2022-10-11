@@ -96,7 +96,7 @@ const lp = {
 describe('lifecycle task helper methods', () => {
     let lct;
 
-    before(() => {
+    beforeAll(() => {
         lct = new LifecycleTask(lp);
         lct.setSupportedRules([
             'expiration',
@@ -495,7 +495,7 @@ describe('lifecycle task helper methods', () => {
             },
         ];
 
-        before(() => {
+        beforeAll(() => {
             // overwrite _sendObjectAction to read entry sent
             class LifecycleTaskMock extends LifecycleTask {
                 _sendObjectAction(entry, cb) {
@@ -1517,7 +1517,7 @@ describe('lifecycle task helper methods', () => {
             },
         ];
 
-        before(() => {
+        beforeAll(() => {
             class LifecycleTaskMock extends LifecycleTask {
                 _sendObjectAction(entry, cb) {
                     this.latestEntry = entry;
@@ -1665,7 +1665,7 @@ describe('lifecycle task helper methods', () => {
             },
         ];
 
-        before(() => {
+        beforeAll(() => {
             class LifecycleTaskMock extends LifecycleTask {
                 _sendObjectAction(entry, cb) {
                     this.latestEntry = entry;
@@ -1710,7 +1710,7 @@ describe('lifecycle task helper methods', () => {
     describe('_ncvHeapObjectsClear', () => {
         let lct2;
 
-        before(() => {
+        beforeAll(() => {
             class LifecycleTaskMock extends LifecycleTask {
                 _sendObjectAction(entry, cb) {
                     this.latestEntry = entry;
@@ -1794,7 +1794,7 @@ describe('lifecycle task helper methods', () => {
     describe('_ncvHeapBucketClear', () => {
         let lct2;
 
-        before(() => {
+        beforeAll(() => {
             class LifecycleTaskMock extends LifecycleTask {
                 _sendObjectAction(entry, cb) {
                     this.latestEntry = entry;
@@ -1879,7 +1879,7 @@ describe('lifecycle task helper methods', () => {
             details: {},
         };
 
-        before(() => {
+        beforeAll(() => {
             class LifecycleTaskMock extends LifecycleTask {
                 constructor(lp) {
                     super(lp);

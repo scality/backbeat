@@ -749,7 +749,7 @@ function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
     });
 }
 
-/* eslint-enable max-len */
+jest.setTimeout(60000);
 
 describe('queue processor functional tests with mocking', () => {
     let queueProcessorSF;
@@ -763,8 +763,7 @@ describe('queue processor functional tests with mocking', () => {
     const ReplicationStatusProcessor = require('../../../extensions/replication' +
                   '/replicationStatusProcessor/ReplicationStatusProcessor');
 
-    before(function before(done) {
-        this.timeout(60000);
+    beforeAll(done => {
         const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
 
@@ -877,7 +876,7 @@ describe('queue processor functional tests with mocking', () => {
         httpServer.listen(7777);
     });
 
-    after(done => {
+    afterAll(done => {
         httpServer.close();
         async.parallel([
             done => queueProcessorSF.stop(done),
@@ -891,9 +890,7 @@ describe('queue processor functional tests with mocking', () => {
         s3mock.resetTest();
     });
 
-    describe('success path tests', function successPath() {
-        this.timeout(30000);
-
+    describe('success path tests', () => {
         [{ caption: 'object with single part',
             nbParts: 1 },
         { caption: 'encrypted object with single part',
@@ -906,7 +903,7 @@ describe('queue processor functional tests with mocking', () => {
             encrypted: true },
         { caption: 'empty object',
             nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
-                before(() => {
+                beforeAll(() => {
                     s3mock.setParam('nbParts', testCase.nbParts);
                     if (testCase.encrypted) {
                         s3mock.setParam('target.bucketIsEncrypted', true);
@@ -984,12 +981,9 @@ describe('queue processor functional tests with mocking', () => {
                     }),
             ], done);
         });
-    });
+    }, 30000);
 
-    describe('error paths', function errorPaths() {
-        this.timeout(20000); // give more time to leave room for retry
-                             // delays and timeout
-
+    describe('error paths', () => {
         describe('source Vault errors', () => {
             ['assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {

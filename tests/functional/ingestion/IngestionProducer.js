@@ -21,7 +21,7 @@ describe('ingestion producer tests with mock', () => {
     let metadataMock;
     const bucket = sourceConfig.bucket;
 
-    before(done => {
+    beforeAll(done => {
         metadataMock = new MetadataMock();
         httpServer = http.createServer(
             (req, res) => metadataMock.onRequest(req, res)).listen(7998);
@@ -42,7 +42,7 @@ describe('ingestion producer tests with mock', () => {
         setupS3Mock(sourceConfig, done);
     });
 
-    after(done => {
+    afterAll(done => {
         httpServer.close();
 
         emptyAndDeleteVersionedBucket(sourceConfig, done);

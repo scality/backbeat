@@ -30,16 +30,16 @@ const CONSUMER_TIMEOUT = 60000;
 
 werelogs.configure({ level: 'info', dump: 'error' });
 
-describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
+describe('KafkaBacklogMetrics class', () => {
     let zkPath;
     let zkClient;
     let kafkaBacklogMetrics;
     let consumer;
     let producer;
 
-    this.timeout(TIMEOUT);
+    jest.setTimeout(TIMEOUT);
 
-    before(done => {
+    beforeAll(done => {
         zkPath = kafkaConfig.backlogMetrics.zkPath;
         async.series([
             next => {
@@ -83,7 +83,7 @@ describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
         ], done);
     });
 
-    after(done => {
+    afterAll(done => {
         async.waterfall([
             next => zkClient.removeRecur(zkPath, next),
             next => producer.close(next),

@@ -225,8 +225,7 @@ describe('MultipleBackendTask', function test() {
         });
 
         it('should ensure all parts of the original object are intact',
-        function test() {
-            this.timeout(10000);
+        () => {
             const minMPUObjectSize = MIN_AWS_PART_SIZE + 1;
             const contentLengths = [MAX_AWS_OBJECT_SIZE];
             Array.from(Array(1024).keys()).forEach(n => {
@@ -253,7 +252,7 @@ describe('MultipleBackendTask', function test() {
                 }
                 assert(sum === contentLength);
             });
-        });
+        }, 10000);
 
         it('should get single part count for GCP', () => {
             const contentLength = (1024 * 1024) * 5;

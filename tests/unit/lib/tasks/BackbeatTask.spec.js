@@ -40,5 +40,5 @@ describe('BackbeatTask', () => {
             // the retry logic.
             setTimeout(done, 2000);
         });
-    }).timeout(10000);
+    }, 10000);
 });

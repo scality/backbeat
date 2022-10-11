@@ -11,19 +11,19 @@ const ProvisionDispatcher =
 const ZK_TEST_PATH = '/tests/prov-test';
 
 describe('provision dispatcher based on zookeeper recipes',
-function testDispatch() {
+() => {
     const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
     let clients = [];
 
-    this.timeout(60000);
+    jest.setTimeout(60000);
 
     const zk = new ZookeeperMock({
         doLog: false,
         maxRandomDelay: 100,
     });
 
-    before(done => {
+    beforeAll(done => {
         const zkClient = zk.createClient('localhost:2181');
         zkClient.connect();
         zkClient.on('connected', () => {

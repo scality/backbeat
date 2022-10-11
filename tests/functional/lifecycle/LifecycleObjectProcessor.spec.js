@@ -23,8 +23,8 @@ werelogs.configure({ level: 'warn', dump: 'error' });
 
 const backbeatRoutes = ['deleteObject'];
 
-describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
-    this.timeout(testTimeout);
+describe('Lifecycle Object Processor', () => {
+    jest.setTimeout(testTimeout);
 
     function generateRetryTest(name, failures, message) {
         return function testRetries(done) {

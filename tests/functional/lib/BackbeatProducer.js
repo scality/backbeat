@@ -25,11 +25,11 @@ const oneBigMessage = [{ key: 'large-foo',
         this.timeout(10000);
 
         let producer;
-        before(done => {
+        beforeAll(done => {
             producer = new BackbeatProducer(item.config);
             producer.on('ready', () => done());
         });
-        after(() => { producer = null; });
+        afterAll(() => { producer = null; });
 
         it('should be able to send one message and get delivery reports back',
         done => {
@@ -76,14 +76,14 @@ describe('BackbeatProducer - Error case', function backbeatProducerErrors() {
     this.timeout(10000);
 
     let producer;
-    before(done => {
+    beforeAll(done => {
         producer = new BackbeatProducer({ kafka: kafkaConf, topic });
         producer
             .on('ready', () => producer.close(done))
             .on('error', done);
     });
 
-    after(() => { producer = null; });
+    afterAll(() => { producer = null; });
 
     it('should get an error if producer is not ready', done => {
         producer.send(oneMessage, err => {

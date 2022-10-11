@@ -85,7 +85,7 @@ describe('patchConfiguration', () => {
     const bucket3 = createBucketMDObject('bucket-3', 'location-2',
         { status: 'enabled' });
 
-    before(done => {
+    beforeAll(done => {
         async.waterfall([
             next => {
                 this.md = new Metadata('mongodb', { mongodb: mongoConfig },
@@ -113,7 +113,7 @@ describe('patchConfiguration', () => {
         Config.setIngestionBuckets({}, []);
     });
 
-    after(() => {
+    afterAll(() => {
         const client = this.md.client;
         client.db.dropDatabase();
     });

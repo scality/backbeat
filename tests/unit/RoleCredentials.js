@@ -55,7 +55,7 @@ function _assertCredentials(err, roleCredentials, cb) {
 describe('Credentials Manager', () => {
     let roleCredentials = null;
     let vaultServer = null;
-    before(done => {
+    beforeAll(done => {
         const vaultclient = new Client(vaultHost, vaultPort, undefined,
             undefined, undefined, undefined, undefined, undefined, undefined,
             undefined, proxyPath);
@@ -69,7 +69,7 @@ describe('Credentials Manager', () => {
     afterEach(() => {
         simulateServerError = false;
     });
-    after(() => {
+    afterAll(() => {
         roleCredentials = null;
         vaultServer.close();
     });
@@ -79,8 +79,7 @@ describe('Credentials Manager', () => {
             roleCredentials, done));
     });
 
-    it('should use same credentials if not expired or about to expire', function test(done) {
-        this.timeout(10000);
+    it('should use same credentials if not expired or about to expire', done => {
         roleCredentials.get(err => {
             if (err) {
                 return done(err);
@@ -99,10 +98,9 @@ describe('Credentials Manager', () => {
                     done();
                 })), retryTimeout);
         });
-    });
+    }, 10000);
 
-    it('should refresh credentials upon expiration', function test(done) {
-        this.timeout(10000);
+    it('should refresh credentials upon expiration', done => {
         roleCredentials.get(err => {
             if (err) {
                 return done(err);
@@ -120,10 +118,9 @@ describe('Credentials Manager', () => {
                     done();
                 })), retryTimeout);
         });
-    });
+    }, 10000);
 
-    it('should refresh credentials a bit before expiration', function test(done) {
-        this.timeout(10000);
+    it('should refresh credentials a bit before expiration', done => {
         roleCredentials.get(err => {
             if (err) {
                 return done(err);
@@ -142,10 +139,9 @@ describe('Credentials Manager', () => {
                     done();
                 })), retryTimeout);
         });
-    });
+    }, 10000);
 
-    it('should handle non arsenal errors on refresh', function test(done) {
-        this.timeout(10000);
+    it('should handle non arsenal errors on refresh', done => {
         const retryTimeout = (roleCredentials.expiration - Date.now()) +
             1000;
         return setTimeout(() => {
@@ -158,7 +154,7 @@ describe('Credentials Manager', () => {
                 done();
             });
         }, retryTimeout);
-    });
+    }, 10000);
 
     it('RoleCredentials should use a default renewal anticipation delay if not explicit', () => {
         const vaultclient = new Client(
