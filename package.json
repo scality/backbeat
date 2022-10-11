@@ -91,6 +91,7 @@
     "zookeeper-mock": "^1.2.0"
   },
   "jest": {
+    "maxWorkers": 1,
     "testPathIgnorePatterns": [
       "/dist/",
       "/node_modules/"
