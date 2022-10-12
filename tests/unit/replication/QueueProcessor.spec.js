@@ -48,6 +48,10 @@ describe('Queue Processor', () => {
         );
     });
 
+    afterEach(() => {
+        qp._redis.quit();
+    });
+
     describe('handle liveness', () => {
         let mockLog;
         beforeEach(() => {

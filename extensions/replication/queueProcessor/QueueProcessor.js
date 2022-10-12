@@ -459,10 +459,10 @@ class QueueProcessor extends EventEmitter {
      */
     _setupRedis(redisConfig) {
         // redis pub/sub for pause/resume
-        const redis = new Redis(redisConfig);
+        this._redis = new Redis(redisConfig);
         // redis subscribe to site specific channel
         const channelName = `${this.repConfig.topic}-${this.site}`;
-        redis.subscribe(channelName, err => {
+        this._redis.subscribe(channelName, err => {
             if (err) {
                 this.logger.fatal('queue processor failed to subscribe to ' +
                                   `crr redis channel for location ${this.site}`,
@@ -470,7 +470,7 @@ class QueueProcessor extends EventEmitter {
                                     error: err });
                 process.exit(1);
             }
-            redis.on('message', (channel, message) => {
+            this._redis.on('message', (channel, message) => {
                 const validActions = {
                     pauseService: this._pauseService.bind(this),
                     resumeService: this._resumeService.bind(this),
