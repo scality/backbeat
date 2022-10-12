@@ -210,4 +210,10 @@ describe('BackbeatAPI', () => {
             assert.deepStrictEqual(sites, params.expected);
         });
     });
+
+    afterAll(() => {
+        bbapi._redisPublisher.quit();
+        bbapi._redisClient.disconnect();
+        bbapi._metrics.disconnect();
+    });
 });
