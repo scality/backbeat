@@ -1,7 +1,7 @@
 const assert = require('assert');
 
 const mapLimitWaitPendingIfError =
-      require('../../../../lib/util/mapLimitWaitPendingIfError');
+      require('../../../../lib/util/mapLimitWaitPendingIfError').default;
 
 describe('mapLimitWaitPendingIfError', () => {
     it('should process an empty array', done => {

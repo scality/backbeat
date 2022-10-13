@@ -8,7 +8,7 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
-const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
+const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError').default;
 const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');

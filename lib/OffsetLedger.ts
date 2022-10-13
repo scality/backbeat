@@ -1,4 +1,11 @@
-const assert = require('assert');
+import assert from 'assert';
+
+type PartitionOffsets = {
+    processing: number[],
+    latestConsumed: number | null
+};
+
+type TopicOffsets = { [key: number]: PartitionOffsets}
 
 /**
  * @class OffsetLedger
@@ -8,16 +15,20 @@ const assert = require('assert');
  * when messages are processed asynchronously and processing may end
  * out-of-order.
  */
-class OffsetLedger {
+
+ export default class OffsetLedger {
+
+    #ledger: { [topic: string]: TopicOffsets };
+
     constructor() {
-        this._ledger = {};
+        this.#ledger = {};
     }
 
-    _getPartitionOffsets(topic, partition) {
-        let topicOffsets = this._ledger[topic];
+    _getPartitionOffsets(topic: string, partition: number) {
+        let topicOffsets = this.#ledger[topic];
         if (!topicOffsets) {
             topicOffsets = {};
-            this._ledger[topic] = topicOffsets;
+            this.#ledger[topic] = topicOffsets;
         }
         let partitionOffsets = topicOffsets[partition];
         if (!partitionOffsets) {
@@ -30,7 +41,7 @@ class OffsetLedger {
         return partitionOffsets;
     }
 
-    _getPartitionCommittableOffset(partitionOffsets) {
+    _getPartitionCommittableOffset(partitionOffsets: PartitionOffsets): number | null {
         // we can commit up to the lowest offset still being processed
         // since it means all lower offsets have already been
         // processed. If nothing is being processed, the latest
@@ -49,13 +60,8 @@ class OffsetLedger {
     /**
      * Function to be called as soon as a new message is received from
      * a Kafka topic and about to start being processed.
-     *
-     * @param {string} topic - topic name
-     * @param {number} partition - partition number
-     * @param {number} offset - offset of consumed message
-     * @return {undefined}
      */
-    onOffsetConsumed(topic, partition, offset) {
+    onOffsetConsumed(topic: string, partition: number, offset: number): undefined {
         // make sure offset is a positive number not to jeopardize
         // processing sanity
         assert(Number.isInteger(offset) && offset >= 0);
@@ -78,13 +84,10 @@ class OffsetLedger {
     /**
      * Function to be called when a message is completely processed.
      *
-     * @param {string} topic - topic name
-     * @param {number} partition - partition number
-     * @param {number} offset - offset of processed message
-     * @return {number} - highest committable offset for this
-     * topic/partition (as returned by getCommittableOffset())
+     * @return highest committable offset for this topic/partition
+     * (as returned by getCommittableOffset())
      */
-    onOffsetProcessed(topic, partition, offset) {
+    onOffsetProcessed(topic: string, partition: number, offset: number): number | null {
         const partitionOffsets = this._getPartitionOffsets(topic, partition);
         partitionOffsets.processing =
             partitionOffsets.processing.filter(pOff => pOff !== offset);
@@ -94,12 +97,9 @@ class OffsetLedger {
     /**
      * Get the highest committable offset for a topic/partition
      *
-     * @param {string} topic - topic name
-     * @param {number} partition - partition number
-     * @param {number} offset - offset of processed message
-     * @return {number} - highest committable offset for this topic/partition
+     * @return highest committable offset for this topic/partition
      */
-    getCommittableOffset(topic, partition) {
+    getCommittableOffset(topic: string, partition: number): number | null {
         const partitionOffsets = this._getPartitionOffsets(topic, partition);
         return this._getPartitionCommittableOffset(partitionOffsets);
     }
@@ -108,28 +108,25 @@ class OffsetLedger {
      * Get how many entries have been consumed but not yet fully
      * processed/committable
      *
-     * @param {string} [topic] - topic name
-     * @param {number} [partition] - partition number
-     * @return {number} - number of consumed but not committable
-     * entries for this topic/partition, or for this topic (if no
-     * partition given), or for all topics and partitions (if none of
-     * topic and partition is provided)
+     * @return number of consumed but not committable entries for this 
+     * topic/partition, or for this topic (if no partition given), or for
+     * all topics and partitions (if none of topic and partition is provided)
      */
-    getProcessingCount(topic, partition) {
-        if (topic && !this._ledger[topic]) {
+    getProcessingCount(topic?: string, partition?: number): number {
+        if (topic && !this.#ledger[topic]) {
             return 0;
         }
         if (topic && partition !== undefined &&
-            !this._ledger[topic][partition]) {
+            !this.#ledger[topic][partition]) {
             return 0;
         }
         let count = 0;
-        const topics = topic ? [topic] : Object.keys(this._ledger);
+        const topics = topic ? [topic] : Object.keys(this.#ledger);
         topics.forEach(t => {
             const partitions = partition !== undefined ?
-                  [partition] : Object.keys(this._ledger[t]);
+                  [partition] : Object.keys(this.#ledger[t]);
             partitions.forEach(p => {
-                const partitionOffsets = this._ledger[t][p];
+                const partitionOffsets = this.#ledger[t][p];
                 count += partitionOffsets.processing.length;
             });
         });
@@ -139,12 +136,10 @@ class OffsetLedger {
     /**
      * Export the ledger in JSON format (useful for debugging)
      *
-     * @return {string} a JSON-serialized representation of the
+     * @return a JSON-serialized representation of the
      * current state of the ledger
      */
-    toString() {
-        return JSON.stringify(this._ledger);
+    toString(): string {
+        return JSON.stringify(this.#ledger);
     }
 }
-
-module.exports = OffsetLedger;

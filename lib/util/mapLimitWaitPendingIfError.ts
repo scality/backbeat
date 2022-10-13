@@ -28,14 +28,24 @@
  *
  * @return {undefined}
  */
-function mapLimitWaitPendingIfError(coll, limit, iteratee, callback) {
+
+
+type ItemCallback<Res> = (err: Error | null, res: Res) => void
+type ResultCallback<ResList> = (err: Error | null, res: ResList) => void;
+
+export default function mapLimitWaitPendingIfError<Item, Result>(
+    coll: Item[],
+    limit: number,
+    iteratee: (item: Item, cb: ItemCallback<Result>) => Result,
+    callback: ResultCallback<Result[]>
+): void | undefined {
     if (coll.length === 0) {
         return callback(null, []);
     }
-    const results = [];
+    const results: Result[] = [];
     let nPendingRequests = 0;
     let nextIdx = 0;
-    let pendingError = null;
+    let pendingError: Error | null = null;
     const processNext = () => {
         const idx = nextIdx;
         nextIdx += 1;
