@@ -30,7 +30,7 @@
  */
 
 
-type ItemCallback<Res> = (err: Error | null, res: Res) => void
+type ItemCallback<Res> = (err: Error | null, res: Res) => void;
 type ResultCallback<ResList> = (err: Error | null, res: ResList) => void;
 
 export default function mapLimitWaitPendingIfError<Item, Result>(
@@ -74,5 +74,3 @@ export default function mapLimitWaitPendingIfError<Item, Result>(
     }
     return undefined;
 }
-
-module.exports = mapLimitWaitPendingIfError;

@@ -27,7 +27,7 @@
     "ft_test:api:routes": "jest tests/functional/api/routes.js --testTimeout 30000",
     "ft_test:api:retry": "jest tests/functional/api/retry.js --testTimeout 30000",
     "bh_test": "jest tests/behavior",
-    "lint": "eslint $(git ls-files '*.js' '*.ts')",
+    "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node dist/bin/backbeat.js",
     "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification BACKBEAT_QUEUEPOPULATOR_LOGSOURCE=kafka node dist/bin/queuePopulator.js",

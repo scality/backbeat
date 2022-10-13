@@ -53,16 +53,27 @@
                     "_assertCredentials"
                 ]
             }
+        ],
+        "import/extensions": [
+            "error",
+            "ignorePackages",
+            {
+                "js": "never",
+                "jsx": "never",
+                "ts": "never",
+                "tsx": "never"
+            }
         ]
     },
     "env": {
-	"jest/globals": true
+        "jest/globals": true
     },
     "settings": {
         "import/resolver": {
-          "node": {
-            "paths": ["/backbeat/node_modules", "node_modules"]
-          }
+            "node": {
+                "paths": ["/backbeat/node_modules", "node_modules"],
+                "extensions": [".js", ".jsx", ".ts", ".tsx"]
+            }
         }
-      }
+    }
 }

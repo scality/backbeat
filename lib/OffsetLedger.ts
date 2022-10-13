@@ -108,7 +108,7 @@ type TopicOffsets = { [key: number]: PartitionOffsets}
      * Get how many entries have been consumed but not yet fully
      * processed/committable
      *
-     * @return number of consumed but not committable entries for this 
+     * @return number of consumed but not committable entries for this
      * topic/partition, or for this topic (if no partition given), or for
      * all topics and partitions (if none of topic and partition is provided)
      */
