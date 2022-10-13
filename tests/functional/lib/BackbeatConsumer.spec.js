@@ -374,178 +374,6 @@ describe('BackbeatConsumer rebalance tests', () => {
     }, 60000);
 });
 
-describe('BackbeatConsumer rebalance tests', () => {
-    const topic = 'backbeat-consumer-spec-rebalance';
-    const groupId = `replication-group-${Math.random()}`;
-    const messages = [
-        { key: 'foo', message: '{"hello":"foo"}' },
-        { key: 'bar', message: '{"world":"bar"}' },
-        { key: 'qux', message: '{"hi":"qux"}' },
-    ];
-    let producer;
-    let consumer;
-    let consumer2;
-    let processedMessages;
-    let consumedMessages;
-    let timer;
-
-    function queueProcessor(message, cb) {
-        assert(processedMessages.length < messages.length);
-
-        const res = consumer.emit('consumed.message', message.value.toString());
-
-        if (res && message.value.toString() === 'taskStuck') {
-            consumer._log.info('processing message...');
-            return;
-        }
-
-        // Shorter delay for first message, to ensure there is something being processed during the
-        // rebalance
-        setTimeout(() => {
-            processedMessages.push(message.value);
-            assert(processedMessages.length <= messages.length);
-
-            process.nextTick(() => {
-                cb();
-
-                consumer.emit('processed.message', message.value.toString());
-
-                if (processedMessages.length === messages.length) {
-                    assert.deepStrictEqual(
-                        processedMessages.map(buffer => buffer.toString()),
-                        messages.map(e => e.message));
-                    consumer.emit('processed.all');
-                }
-            });
-        }, consumedMessages++ ? 4000 : 2000);
-    }
-
-    beforeAll(done => {
-        // Bootstrap just once at the beginning of the test suite
-        consumer = new BackbeatConsumer({
-            zookeeper: zookeeperConf,
-            kafka: { hosts: consumerKafkaConf.hosts }, groupId, topic,
-            queueProcessor,
-            bootstrap: true,
-        });
-        consumer.on('ready', () => consumer.close(done));
-    });
-
-    beforeEach(done => {
-        consumedMessages = 0;
-        processedMessages = [];
-        producer = new BackbeatProducer({
-            kafka: producerKafkaConf, topic,
-            pollIntervalMs: 100
-        });
-        consumer = new BackbeatConsumer({
-            clientId: 'BackbeatConsumer-1',
-            zookeeper: zookeeperConf,
-            kafka: { ...consumerKafkaConf, maxPollIntervalMs: 45000 },
-            groupId, topic,
-            queueProcessor,
-            concurrency: 2,
-        });
-
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => async.series([
-                cb => consumer.on('ready', cb),
-                cb => {
-                    consumer2 = new BackbeatConsumer({
-                        clientId: 'BackbeatConsumer-2',
-                        zookeeper: zookeeperConf,
-                        kafka: consumerKafkaConf, groupId, topic,
-                        queueProcessor,
-                    });
-                    consumer2.on('ready', cb);
-                },
-            ], innerDone),
-        ], done);
-    });
-
-    afterEach(done => {
-        if (timer) {
-            clearInterval(timer);
-            timer = null;
-        }
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => consumer.close(innerDone),
-            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
-        ], done);
-    }, 10000);
-
-    it('should handle rebalance when no task in progress', done => {
-        consumer.on('processed.all', () => {
-            // create second consumer: should rebalance...
-            consumer2._queueProcessor = message => {
-                assert.fail(`unexpected message received ${message.value}`);
-            };
-            consumer2.subscribe();
-
-            // wait a bit, ensure no message happens afterwards...
-            setTimeout(done, 5000);
-        });
-
-        consumer.subscribe();
-
-        // send data to topic : should be consumed
-        producer.send(messages, err => {
-            assert.ifError(err);
-        });
-    }, 40000);
-
-    it('should commit current tasks during rebalance', done => {
-        consumer.on('processed.all', () => {
-            // wait a bit, ensure no message happens afterwards...
-            setTimeout(done, 5000);
-        });
-
-        consumer.on('consumed.message', message => {
-            consumer._log.debug('consumed', { message });
-            if (consumedMessages === 0) {
-                // trigger rebalance during processing of first message
-                consumer2.subscribe();
-            }
-        });
-
-        consumer.subscribe();
-
-        // send data to topic : should be consumed
-        producer.send(messages, err => {
-            assert.ifError(err);
-        });
-    }, 40000);
-
-    it('should fail healthcheck on rebalance timeout', done => {
-        assert(consumer.isReady());
-        assert(consumer2.isReady());
-
-        consumer.on('consumed.message', () => {
-            if (consumedMessages === 0) {
-                // trigger rebalance during processing of first message
-                consumer2.subscribe();
-            }
-
-            return true;
-        });
-
-        consumer.subscribe();
-        producer.send([{ key: 'msg', message: 'taskStuck' }], err => {
-            assert.ifError(err);
-        });
-
-        // The consumer should become unhealthy eventually
-        timer = setInterval(() => {
-            if (!consumer.isReady()) {
-                assert(consumer2.isReady());
-                done();
-            }
-        }, 1000);
-    });
-});
-
 describe('BackbeatConsumer concurrency tests', () => {
     const topicConc = 'backbeat-consumer-spec-conc-1000';
     const groupIdConc = `replication-group-conc-${Math.random()}`;
@@ -828,7 +656,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
             },
         },
     ])('should $description',
-        ({ description, expectedMessages, breakerConf }, done) => {
+        ({ expectedMessages, breakerConf }, done) => {
             const boatloadOfMessages = [];
             for (let i = 0; i < nMessages; ++i) {
                 boatloadOfMessages.push({
@@ -904,7 +732,7 @@ describe('BackbeatConsumer shutdown tests', () => {
         ], done);
     });
 
-    beforeEach(function beforeEach(done) {
+    beforeEach(done => {
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
             kafka: {
