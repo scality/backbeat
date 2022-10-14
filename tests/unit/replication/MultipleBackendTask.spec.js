@@ -16,8 +16,7 @@ const MAX_AWS_PART_SIZE = (1024 * 1024 * 1024) * 5; // 5GB
 const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
 const retryConfig = { scality: { timeoutS: 300 } };
 
-describe('MultipleBackendTask', function test() {
-    this.timeout(5000);
+describe('MultipleBackendTask', () => {
     let task;
 
     function checkPartLength(contentLength, expectedPartSize) {
@@ -437,4 +436,4 @@ describe('MultipleBackendTask', function test() {
             });
         });
     });
-});
+}, 5000);

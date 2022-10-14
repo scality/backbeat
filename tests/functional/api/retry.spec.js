@@ -572,7 +572,7 @@ describe('CRR Retry feature', () => {
                     done();
                 });
             });
-        }).timeout(10000);
+        }, 10000);
 
     it.skip('should get correct data for POST route: /_/crr/failed ' +
         'when there are multiple matching keys', done => {

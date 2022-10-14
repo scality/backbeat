@@ -61,7 +61,7 @@ describe('LogConsumer', () => {
                 assert.strictEqual(waitAssignementSpy.getCall(1).args.at(0), 2000);
                 return done();
             });
-        }).timeout(5000);
+        }, 5000);
     });
 
     describe('_storeCurrentOffsets', () => {

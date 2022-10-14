@@ -42,8 +42,8 @@ function _assertCredentials(err, roleCredentials, cb) {
     if (err) {
         return cb(err);
     }
-    const { accessKeyId, secretAccessKey, sessionToken, expired,
-        expiration } = roleCredentials;
+    const { accessKeyId, secretAccessKey, sessionToken, expired, expiration } =
+        roleCredentials;
     assert.strictEqual(accessKeyId, AccessKeyId);
     assert.strictEqual(secretAccessKey, SecretAccessKey);
     assert.strictEqual(sessionToken, SessionToken);
@@ -56,13 +56,26 @@ describe('Credentials Manager', () => {
     let roleCredentials = null;
     let vaultServer = null;
     beforeAll(done => {
-        const vaultclient = new Client(vaultHost, vaultPort, undefined,
-            undefined, undefined, undefined, undefined, undefined, undefined,
-            undefined, proxyPath);
+        const vaultclient = new Client(
+            vaultHost,
+            vaultPort,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            proxyPath
+        );
         roleCredentials = new RoleCredentials(
-            vaultclient, role, extension,
+            vaultclient,
+            role,
+            extension,
             new Logger('test:RoleCredentials').newRequestLogger('requids'),
-            1);
+            1
+        );
         vaultServer = server.listen(vaultPort).on('error', done);
         done();
     });
@@ -75,76 +88,103 @@ describe('Credentials Manager', () => {
     });
 
     it('should be able to acquire credentials on startup', done => {
-        roleCredentials.get(err => _assertCredentials(err,
-            roleCredentials, done));
+        roleCredentials.get(err =>
+            _assertCredentials(err, roleCredentials, done)
+        );
     });
 
     it('should use same credentials if not expired or about to expire', done => {
         roleCredentials.get(err => {
             if (err) {
-                return done(err);
+                done(err);
+                return;
             }
             const currentExpiration = roleCredentials.expiration;
             // wait for less than the expiration time minus the
             // anticipation delay to ensure credentials have not
             // expired
-            const retryTimeout = (roleCredentials.expiration - Date.now()) - 1500;
-            return setTimeout(() => roleCredentials.get(
-                err => _assertCredentials(err, roleCredentials, err => {
-                    assert.ifError(err);
-                    // expiration should not have changed, meaning
-                    // credentials have not been refreshed
-                    assert.strictEqual(currentExpiration, roleCredentials.expiration);
-                    done();
-                })), retryTimeout);
+            const retryTimeout = roleCredentials.expiration - Date.now() - 1500;
+            setTimeout(
+                () =>
+                    roleCredentials.get(err =>
+                        _assertCredentials(err, roleCredentials, err => {
+                            assert.ifError(err);
+                            // expiration should not have changed, meaning
+                            // credentials have not been refreshed
+                            assert.strictEqual(
+                                currentExpiration,
+                                roleCredentials.expiration
+                            );
+                            done();
+                        })
+                    ),
+                retryTimeout
+            );
         });
     }, 10000);
 
     it('should refresh credentials upon expiration', done => {
         roleCredentials.get(err => {
             if (err) {
-                return done(err);
+                done(err);
+                return;
             }
             const currentExpiration = roleCredentials.expiration;
             // wait for more than the expiration time to ensure
             // credentials have expired
-            const retryTimeout = (roleCredentials.expiration - Date.now()) + 1000;
-            return setTimeout(() => roleCredentials.get(
-                err => _assertCredentials(err, roleCredentials, err => {
-                    assert.ifError(err);
-                    // expiration should have changed, meaning
-                    // credentials have been refreshed
-                    assert.notStrictEqual(currentExpiration, roleCredentials.expiration);
-                    done();
-                })), retryTimeout);
+            const retryTimeout = roleCredentials.expiration - Date.now() + 1000;
+            setTimeout(
+                () =>
+                    roleCredentials.get(err =>
+                        _assertCredentials(err, roleCredentials, err => {
+                            assert.ifError(err);
+                            // expiration should have changed, meaning
+                            // credentials have been refreshed
+                            assert.notStrictEqual(
+                                currentExpiration,
+                                roleCredentials.expiration
+                            );
+                            done();
+                        })
+                    ),
+                retryTimeout
+            );
         });
     }, 10000);
 
     it('should refresh credentials a bit before expiration', done => {
         roleCredentials.get(err => {
             if (err) {
-                return done(err);
+                done(err);
+                return;
             }
             const currentExpiration = roleCredentials.expiration;
             // wait for slightly less than the expiration time but
             // more than the anticipation delay for renewing
             // credentials about to expire
-            const retryTimeout = (roleCredentials.expiration - Date.now()) - 100;
-            return setTimeout(() => roleCredentials.get(
-                err => _assertCredentials(err, roleCredentials, err => {
-                    assert.ifError(err);
-                    // expiration should have changed, meaning
-                    // credentials have been refreshed
-                    assert.notStrictEqual(currentExpiration, roleCredentials.expiration);
-                    done();
-                })), retryTimeout);
+            const retryTimeout = roleCredentials.expiration - Date.now() - 100;
+            setTimeout(
+                () =>
+                    roleCredentials.get(err =>
+                        _assertCredentials(err, roleCredentials, err => {
+                            assert.ifError(err);
+                            // expiration should have changed, meaning
+                            // credentials have been refreshed
+                            assert.notStrictEqual(
+                                currentExpiration,
+                                roleCredentials.expiration
+                            );
+                            done();
+                        })
+                    ),
+                retryTimeout
+            );
         });
     }, 10000);
 
     it('should handle non arsenal errors on refresh', done => {
-        const retryTimeout = (roleCredentials.expiration - Date.now()) +
-            1000;
-        return setTimeout(() => {
+        const retryTimeout = roleCredentials.expiration - Date.now() + 1000;
+        setTimeout(() => {
             simulateServerError = true;
             roleCredentials.get(err => {
                 assert(err);
@@ -158,12 +198,24 @@ describe('Credentials Manager', () => {
 
     it('RoleCredentials should use a default renewal anticipation delay if not explicit', () => {
         const vaultclient = new Client(
-            vaultHost, vaultPort, undefined,
-            undefined, undefined, undefined, undefined, undefined, undefined,
-            undefined, proxyPath);
+            vaultHost,
+            vaultPort,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            undefined,
+            proxyPath
+        );
         const rc = new RoleCredentials(
-            vaultclient, role, extension,
-            new Logger('test:RoleCredentials').newRequestLogger('requids'));
+            vaultclient,
+            role,
+            extension,
+            new Logger('test:RoleCredentials').newRequestLogger('requids')
+        );
         assert(rc._refreshCredsAnticipationSeconds > 0);
     });
 });

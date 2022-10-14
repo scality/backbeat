@@ -407,7 +407,7 @@ describe('BackbeatConsumer concurrency tests', () => {
             innerDone => producer.on('ready', innerDone),
             innerDone => consumer.on('ready', innerDone),
         ], done);
-    });
+    }, 60000);
     afterEach(() => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
@@ -542,7 +542,7 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
             innerDone => producer.on('ready', innerDone),
             innerDone => consumer.on('ready', innerDone),
         ], done);
-    });
+    }, 60000);
     afterEach(() => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
