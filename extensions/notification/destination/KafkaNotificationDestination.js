@@ -1,5 +1,36 @@
 const NotificationDestination = require('./NotificationDestination');
 const KafkaProducer = require('./KafkaProducer');
+const { ZenkoMetrics } = require('arsenal').metrics;
+
+const notificationSize = ZenkoMetrics.createCounter({
+    name: 'notification_queue_processor_notification_size',
+    help: 'Total size of the notifications that were sent',
+    labelNames: ['target'],
+});
+
+const deliveryLag = ZenkoMetrics.createHistogram({
+    name: 'notification_queue_processor_notification_delivery_delay_sec',
+    help: 'Difference between the time a notification is sent and when it gets delivered',
+    labelNames: ['target', 'status'],
+    buckets: [0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 1, 10, 100, 1000, 10000],
+});
+
+function onNotificationSent(target, status, messages, delay) {
+    if (status === 'success') {
+        // Update total size of notifications sent
+        const messageSize = new TextEncoder().encode(JSON.stringify(messages)).length;
+        notificationSize.inc({
+            target,
+        }, messageSize);
+    }
+    if (delay) {
+        // update notification delivery delay
+        deliveryLag.observe({
+            target,
+            status,
+        }, delay);
+    }
+}
 
 class KafkaNotificationDestination extends NotificationDestination {
     /**
@@ -60,14 +91,29 @@ class KafkaNotificationDestination extends NotificationDestination {
      * @return {undefined}
      */
     send(messages, done) {
+        const starTime = Date.now();
         this._notificationProducer.send(messages, error => {
             if (error) {
                 this._log.error('error publishing message', {
                     method: 'KafkaNotificationDestination.send',
                     error,
                 });
+                onNotificationSent(
+                    this._destinationConfig.resource,
+                    'failure',
+                    messages,
+                    null,
+                );
+                return done();
             }
-            done();
+            const delay = (Date.now() - starTime) / 1000;
+            onNotificationSent(
+                this._destinationConfig.resource,
+                'success',
+                messages,
+                delay,
+            );
+            return done();
         });
     }
 
