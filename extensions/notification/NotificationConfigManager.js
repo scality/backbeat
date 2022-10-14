@@ -1,9 +1,9 @@
 const joi = require('joi');
 
+const { ZenkoMetrics } = require('arsenal').metrics;
 const LRUCache = require('arsenal').algorithms
     .cache.LRUCache;
 const MongoClient = require('mongodb').MongoClient;
-
 const constants = require('./constants');
 
 const paramsJoi = joi.object({
@@ -13,6 +13,50 @@ const paramsJoi = joi.object({
 
 const MAX_CACHED_ENTRIES = Number(process.env.MAX_CACHED_BUCKET_NOTIFICATION_CONFIGS)
     || 1000;
+
+// should equal true if config manager's cache was hit during a get operation
+const CONFIG_MANAGER_CACHE_HIT = 'cache_hit';
+// Type of operation performed on the cache
+const CONFIG_MANAGER_OPERATION_TYPE = 'op';
+
+const cacheUpdates = ZenkoMetrics.createCounter({
+    name: 'notification_config_manager_cache_updates',
+    help: 'Total number of cache updates',
+    labelNames: [
+        CONFIG_MANAGER_OPERATION_TYPE,
+    ],
+});
+
+const configGetLag = ZenkoMetrics.createHistogram({
+    name: 'notification_config_manager_config_get_sec',
+    help: 'Time it takes in seconds to get a bucket notification config from MongoDB',
+    labelNames: [
+        CONFIG_MANAGER_CACHE_HIT,
+    ],
+    buckets: [0.0000001, 0.000001, 0.00001, 0.0001, 0.001, 0.01, 1, 10, 100, 1000, 10000],
+});
+
+const cachedBuckets = ZenkoMetrics.createGauge({
+    name: 'notification_config_manager_cached_buckets_count',
+    help: 'Total number of cached buckets in the notification config manager',
+});
+
+function onConfigManagerCacheUpdate(op) {
+    cacheUpdates.inc({
+        [CONFIG_MANAGER_OPERATION_TYPE]: op,
+    });
+    if (op === 'add') {
+        cachedBuckets.inc({});
+    } else if (op === 'delete') {
+        cachedBuckets.dec({});
+    }
+}
+
+function onConfigManagerConfigGet(cacheHit, delay) {
+    configGetLag.observe({
+        [CONFIG_MANAGER_CACHE_HIT]: cacheHit,
+    }, delay);
+}
 
 /**
  * @class NotificationConfigManager
@@ -102,14 +146,17 @@ class NotificationConfigManager {
             notificationConfiguration : null;
         switch (change.operationType) {
             case 'delete':
-                // if no bucket config was cached, nothing is done
-                this._cachedConfigs.remove(change.documentKey._id);
+                if (cachedConfig) {
+                    this._cachedConfigs.remove(change.documentKey._id);
+                    onConfigManagerCacheUpdate('delete');
+                }
                 break;
             case 'replace':
             case 'update':
                 if (cachedConfig) {
                     // add() replaces the value of an entry if it exists in cache
                     this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
+                    onConfigManagerCacheUpdate('update');
                 }
                 break;
             default:
@@ -226,9 +273,12 @@ class NotificationConfigManager {
      * @return {Object|undefined} - configuration if available or undefined
      */
     async getConfig(bucket) {
+        const startTime = Date.now();
         // return cached config for bucket if it exists
         const cachedConfig = this._cachedConfigs.get(bucket);
         if (cachedConfig) {
+            const delay = (Date.now() - startTime) / 1000;
+            onConfigManagerConfigGet(true, delay);
             return cachedConfig;
         }
         try {
@@ -238,6 +288,9 @@ class NotificationConfigManager {
                 bucketMetadata.value.notificationConfiguration) || undefined;
             // caching the bucket configuration
             this._cachedConfigs.add(bucket, bucketNotificationConfiguration);
+            const delay = (Date.now() - startTime) / 1000;
+            onConfigManagerConfigGet(false, delay);
+            onConfigManagerCacheUpdate('add');
             return bucketNotificationConfiguration;
         } catch (err) {
             this._logger.error('An error occured when getting notification ' +
