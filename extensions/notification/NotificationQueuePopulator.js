@@ -27,6 +27,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             + ' is not set');
         // callbackify functions
         this._processObjectEntryCb = util.callbackify(this._processObjectEntry).bind(this);
+        this._metricsStore = params.metricsHandler;
     }
 
     /**
@@ -75,6 +76,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         if (!isMasterKey(key)) {
             return undefined;
         }
+        this._metricsStore.notifEvent();
         const config = await this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
             const { eventMessageProperty }
