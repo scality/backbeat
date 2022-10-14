@@ -5,12 +5,26 @@ const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
 const util = require('util');
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
+
+const processedEvents = ZenkoMetrics.createCounter({
+    name: 'notification_queue_processor_event',
+    help: 'Total number of successfully processed events',
+    labelNames: ['target', 'eventType'],
+});
+
+function onQueueProcessorEventProcessed(destination, eventType) {
+    processedEvents.inc({
+        target: destination,
+        eventType,
+    });
+}
 
 class QueueProcessor extends EventEmitter {
     /**
@@ -246,6 +260,10 @@ class QueueProcessor extends EventEmitter {
                             eventTime: eventRecord.eventTime,
                             destination: this.destinationId,
                         });
+                        onQueueProcessorEventProcessed(
+                            this.destinationId,
+                            eventType,
+                        );
                         return this._destination.send([msg], done);
                     }
                 }
@@ -271,6 +289,21 @@ class QueueProcessor extends EventEmitter {
      */
     isReady() {
         return this._consumer && this._consumer.isReady();
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {undefined}
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+        res.writeHead(200, {
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+        });
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 
