@@ -1,0 +1,100 @@
+x-inputs:
+- name: namespace
+  type: constant
+  value: zenko
+- name: job_notification_producer
+  type: config
+  value: artesca-data-backbeat-notification-producer-headless
+- name: job_notification_processors
+  type: config
+  value: artesca-data-backbeat-notification-processor
+- name: notificationFailuresWarningThreshold
+  type: config
+  value: 0.1
+- name: notificationFailuresCriticalThreshold
+  type: config
+  value: 1
+- name: notification_producer_replicas
+  type: config
+  value: 1
+- name: notification_processor_replicas
+  type: config
+  value: 1
+
+groups:
+- name: Bucket Notification
+  rules:
+
+  - alert: NotificationProducerDegraded
+    Expr: |
+      sum(up{namespace="${namespace}",job="${job_notification_producer}"})
+        < ${notification_producer_replicas}
+    For: "30s"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-notification-producer
+      description: "Less than 100% of notification producers are up and healthy"
+      summary: "Notification producer service is degraded"
+
+  - alert: NotificationProducerCritical
+    Expr: |
+      sum(up{namespace="${namespace}",job="${job_notification_producer}"}) * 2
+        < ${notification_producer_replicas}
+    For: "30s"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-notification-producer
+      description: "Less than 50% of notification producers are up and healthy"
+      summary: "Notification producer service is in critical state"
+
+  - alert: NotificationProcessorsDegraded
+    Expr: |
+      label_replace(
+        sum(up{namespace="${namespace}",job=~"${job_notification_processors}.*"}) by(job)
+      , "job", "$1", "job", ".*-(.*)-headless") < ${notification_processor_replicas}
+    For: "30s"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-notification-processor
+      description: "Less than 100% of notification processors for target {{ $labels.job }} are up and healthy"
+      summary: "Notification processor service for target {{ $labels.job }} is degraded"
+
+  - alert: NotificationProcessorsCritical
+    Expr: |
+      label_replace(
+        sum(up{namespace="${namespace}",job=~"${job_notification_processors}.*"}) by(job) * 2 
+      , "job", "$1", "job", ".*-(.*)-headless") < ${notification_processor_replicas}
+    For: "30s"
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-notification-processor
+      description: "Less than 50% of notification processors for target {{ $labels.job }} are up and healthy"
+      summary: "Notification processor service for target {{ $labels.job }} is in critical state"
+
+  - alert: NotificationDeliveryDegraded
+    Expr: |
+      (sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{status="fail",job=~"${job_notification_processors}.*",namespace="${namespace}"}[1m]))
+        / sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{job=~"${job_notification_processors}.*",namespace="${namespace}"}[1m])))
+        >= ${notificationFailuresWarningThreshold}
+    For: "30s"
+    Labels:
+      severity: warning
+    Annotations:
+      description: "Notification failures are higher than warning threshold ${notificationFailuresWarningThreshold} for target {{ $labels.target }}"
+      summary: "Notification delivery to target {{ $labels.target }} degraded"
+
+  - alert: NotificationDeliveryCritical
+    Expr: |
+      (sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{status="failure",job=~"${job_notification_processors}.*",namespace="${namespace}"}[1m]))
+        / sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{job=~"${job_notification_processors}.*",namespace="${namespace}"}[1m])))
+        >= ${notificationFailuresCriticalThreshold}
+    For: "30s"
+    Labels:
+      severity: critical
+    Annotations:
+      description: "Notification failures are higher than critical threshold ${notificationFailuresCriticalThreshold} for target {{ $labels.target }}"
+      summary: "Notification delivery to target {{ $labels.target }} critical"
