@@ -121,7 +121,7 @@ groups:
       description: "Less than 50% of replication status processors are up and healthy"
       summary: "Replication status processor service is critical"
 
-  - alert: ReplicationErrorsWarningThreshold
+  - alert: ReplicationErrorsWarning
     expr: |
       100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
                               job="${job_status_processor}", replicationStatus='FAILED'}
@@ -130,15 +130,15 @@ groups:
                  sum(rate(replication_status_changed_total{namespace="${namespace}",
                               job="${job_status_processor}", replicationStatus='COMPLETED'}
                               [1m]))
-            ) > 100 - ${replicationErrorsWarningThreshold}
+            ) <= 100 - ${replicationErrorsWarningThreshold}
     for: 5m
     labels:
       severity: warning
     annotations:
-      description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}"
+      description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}%"
       summary: "High ratio of replication errors"
 
-  - alert: ReplicationErrorsCriticalThreshold
+  - alert: ReplicationErrorsCritical
     expr: |
       100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
                              job="${job_status_processor}", replicationStatus='FAILED'}
@@ -147,15 +147,15 @@ groups:
                  sum(rate(replication_status_changed_total{namespace="${namespace}",
                                   job="${job_status_processor}", replicationStatus='COMPLETED'}
                                   [1m]))
-            ) > 100 - ${replicationErrorsCriticalThreshold}
+            ) <= 100 - ${replicationErrorsCriticalThreshold}
     for: 5m
     labels:
       severity: critical
     annotations:
-      description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}"
+      description: "Replication error rate is higher than ${replicationErrorsCriticalThreshold}%"
       summary: "Very high ratio of replication errors"
 
-  - alert: RpoWarning
+  - alert: ReplicationRpoWarning
     expr: |
       sum(rate(replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
           / sum(rate(replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
@@ -165,15 +165,15 @@ groups:
       severity: warning
     annotations:
       description: |
-        RPO is higher than ${rpoCriticalThreshold} seconds.
+        Replication RPO is higher than ${rpoWarningThreshold} seconds.
 
         This may indicate an issue with Kafka or the data-processor.
 
         RPO is the delay between the time the object is updated and when it is picked up by the
-        data-processor.
-      summary: "High RPO"
+        replication-processor.
+      summary: "High replication RPO"
 
-  - alert: RpoCritical
+  - alert: ReplicationRpoCritical
     expr: |
       sum(rate(replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
           / sum(rate(replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
@@ -183,13 +183,13 @@ groups:
       severity: critical
     annotations:
       description: |
-        RPO is higher than ${rpoCriticalThreshold} seconds.
+        Replication RPO is higher than ${rpoCriticalThreshold} seconds.
         
         This may indicate an issue with Kafka or the data-processor.
 
         RPO is the delay between the time the object is updated and when it is picked up by the
-        data-processor.
-      summary: "Very high RPO"
+        replication-processor.
+      summary: "Very high replication RPO"
 
   - alert: ReplicationLatencyWarning
     expr: |
@@ -225,7 +225,7 @@ groups:
       severity: critical
     annotations:
       description: |
-        Replication latency is higher than ${latencyWarningThreshold} seconds.
+        Replication latency is higher than ${latencyCriticalThreshold} seconds.
         
         This may indicate an issue with the data-processor or the remote replication site.
 
@@ -248,5 +248,5 @@ groups:
     labels:
       severity: critical
     annotations:
-      description: Alert if processing is slower than the backlog with a threshold 3 hours
+      description: Alert if processing is slower than the backlog for 3 hours
       summary: "Replication backlog grows faster than it is processed"
