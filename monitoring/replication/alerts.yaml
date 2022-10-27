@@ -4,7 +4,7 @@ x-inputs:
   value: zenko
 - name: job_queue_populator
   type: constant
-  value: artesca-data-backbeat-replication-populator-headless
+  value: artesca-data-backbeat-replication-producer-headless
 - name: job_data_processor
   type: constant
   value: artesca-data-backbeat-replication-data-processor-headless
@@ -49,23 +49,23 @@ groups:
 - name: Replication
   rules:
 
-  - alert: ReplicationPopulatorDegraded
+  - alert: ReplicationProducerDegraded
     expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) < ${queue_populator_replicas}
     for: "30s"
     labels:
       severity: warning
     annotations:
-      description: "Less than 100% of replication populator endpoints are up and healthy"
-      summary: "Replication populator service is degraded"
+      description: "Less than 100% of replication producer endpoints are up and healthy"
+      summary: "Replication producer service is degraded"
 
-  - alert: ReplicationPopulatorCritical
+  - alert: ReplicationProducerCritical
     expr: sum(up{namespace="${namespace}", job="${job_queue_populator}"}) * 2 < ${queue_populator_replicas}
     for: "30s"
     labels:
       severity: critical
     annotations:
-      description: "Less than 50% of replication populator endpoints are up and healthy"
-      summary: "Replication populator service is critical"
+      description: "Less than 50% of replication producer endpoints are up and healthy"
+      summary: "Replication producer service is critical"
 
   - alert: ReplicationDataProcessorDegraded
     expr: sum(up{namespace="${namespace}", job="${job_data_processor}"}) < ${data_processor_replicas}
