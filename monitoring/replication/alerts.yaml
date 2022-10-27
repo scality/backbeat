@@ -124,32 +124,36 @@ groups:
   - alert: ReplicationErrorsWarningThreshold
     expr: |
       100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
-                              job="${job_status_processor}", replicationStatus='FAILED'}))
+                              job="${job_status_processor}", replicationStatus='FAILED'}
+                              [1m]))
                    /
                  sum(rate(replication_status_changed_total{namespace="${namespace}",
-                              job="${job_status_processor}", replicationStatus='COMPLETED'}))
+                              job="${job_status_processor}", replicationStatus='COMPLETED'}
+                              [1m]))
             ) > 100 - ${replicationErrorsWarningThreshold}
-    for: "30s"
+    for: 5m
     labels:
       severity: warning
     annotations:
       description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}"
-      summary: "Replication error rate warning"
+      summary: "High ratio of replication errors"
 
   - alert: ReplicationErrorsCriticalThreshold
     expr: |
       100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
-                             job="${job_status_processor}", replicationStatus='FAILED'}))
+                             job="${job_status_processor}", replicationStatus='FAILED'}
+                             [1m]))
                    /
                  sum(rate(replication_status_changed_total{namespace="${namespace}",
-                                  job="${job_status_processor}", replicationStatus='COMPLETED'}))
+                                  job="${job_status_processor}", replicationStatus='COMPLETED'}
+                                  [1m]))
             ) > 100 - ${replicationErrorsCriticalThreshold}
-    for: "30s"
+    for: 5m
     labels:
       severity: critical
     annotations:
       description: "Replication error rate is higher than ${replicationErrorsWarningThreshold}"
-      summary: "Replication error rate critical"
+      summary: "Very high ratio of replication errors"
 
   - alert: RpoWarning
     expr: |
@@ -231,14 +235,14 @@ groups:
 
   - alert: ReplicationBacklogGrowing
     expr: |
-      sum(increase(replication_replay_objects_completed_total{
-                       namespace='${namespace}', job="${job_status_processor}",
-                       replicationStatus=~'FAILED|COMPLETED'
-                   }[$__rate_interval])) by(location)
+      sum(round(increase(replication_replay_objects_completed_total{
+                             namespace='${namespace}', job="${job_status_processor}",
+                             replicationStatus=~'FAILED|COMPLETED'
+                         }[30m]))) by(location)
         -
-      sum(increase(replication_rpo_seconds_count{
-                       namespace="${namespace}", job="${job_data_processor}",
-                   }[$__rate_interval])) by(location)
+      sum(round(increase(replication_rpo_seconds_count{
+                             namespace="${namespace}", job="${job_data_processor}",
+                         }[30m]))) by(location)
       < 0
     for: 3h
     labels:
