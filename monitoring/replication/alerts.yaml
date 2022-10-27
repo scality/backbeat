@@ -55,7 +55,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      description: "Less than 100% of replication producer endpoints are up and healthy"
+      description: "Less than 100% of replication producers are up and healthy"
       summary: "Replication producer service is degraded"
 
   - alert: ReplicationProducerCritical
@@ -64,7 +64,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      description: "Less than 50% of replication producer endpoints are up and healthy"
+      description: "Less than 50% of replication producers are up and healthy"
       summary: "Replication producer service is critical"
 
   - alert: ReplicationDataProcessorDegraded
@@ -73,7 +73,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      description: "Less than 100% of replication data processor endpoints are up and healthy"
+      description: "Less than 100% of replication data processors are up and healthy"
       summary: "Replication data processor service is degraded"
 
   - alert: ReplicationDataProcessorCritical
@@ -82,7 +82,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      description: "Less than 50% of replication data processor endpoints are up and healthy"
+      description: "Less than 50% of replication data processors are up and healthy"
       summary: "Replication data processor service is critical"
 
   - alert: ReplicationReplayProcessorDegraded
@@ -91,7 +91,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      description: "Less than 100% of replication replay processor endpoints are up and healthy"
+      description: "Less than 100% of replication replay processors are up and healthy"
       summary: "Replication replay processor service is degraded"
 
   - alert: ReplicationReplayProcessorCritical
@@ -100,7 +100,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      description: "Less than 50% of replication replay processor endpoints are up and healthy"
+      description: "Less than 50% of replication replay processors are up and healthy"
       summary: "Replication replay processor service is critical"
 
   - alert: ReplicationStatusProcessorDegraded
@@ -109,7 +109,7 @@ groups:
     labels:
       severity: warning
     annotations:
-      description: "Less than 100% of replication status processor endpoints are up and healthy"
+      description: "Less than 100% of replication status processors are up and healthy"
       summary: "Replication status processor service is degraded"
 
   - alert: ReplicationStatusProcessorCritical
@@ -118,7 +118,7 @@ groups:
     labels:
       severity: critical
     annotations:
-      description: "Less than 50% of replication status processor endpoints are up and healthy"
+      description: "Less than 50% of replication status processors are up and healthy"
       summary: "Replication status processor service is critical"
 
   - alert: ReplicationErrorsWarningThreshold
