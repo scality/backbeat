@@ -1,0 +1,156 @@
+evaluation_interval: 1m
+rule_files:
+  - alerts.rendered.yaml
+
+tests:
+
+  - name: Replication Producer Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-replication-producer-headless"}
+        values: 1 0
+    alert_rule_test:
+      - alertname: ReplicationProducerCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationProducerCritical
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Lifecycle producer pod has been down for 30 seconds"
+              summary: "Replication producer service is degraded"
+
+  - name: ReplicationDataProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-replication-data-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="artesca-data-backbeat-replication-data-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-data-backbeat-replication-data-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication data processors are up and healthy"
+              summary: "Replication data processor service is degraded"
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication data processors are up and healthy"
+              summary: "Replication data processor service is degraded"
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication data processors are up and healthy"
+              summary: "Replication data processor service is critical"
+
+  - name: ReplicationReplayProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-replay-backbeat-replication-replay-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="artesca-replay-backbeat-replication-replay-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-replay-backbeat-replication-replay-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is degraded"
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is degraded"
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is critical"
+
+  - name: ReplicationStatusProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-status-backbeat-replication-status-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="artesca-status-backbeat-replication-status-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-status-backbeat-replication-status-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication status processors are up and healthy"
+              summary: "Replication status processor service is degraded"
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication status processors are up and healthy"
+              summary: "Replication status processor service is degraded"
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication status processors are up and healthy"
+              summary: "Replication status processor service is critical"
