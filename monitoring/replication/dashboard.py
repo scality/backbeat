@@ -1,4 +1,3 @@
-from enum import Enum
 from grafanalib.core import (
     ConstantInput,
     DataSourceInput,
@@ -23,9 +22,6 @@ from scalgrafanalib import (
     TimeSeries,
     Tooltip,
 )
-
-import attr
-from attr.validators import instance_of
 
 
 class Metrics:
@@ -826,12 +822,6 @@ dashboard = (
                 label='Prometheus',
                 pluginId='prometheus',
                 pluginName='Prometheus',
-            ),
-            DataSourceInput(
-                name='DS_LOKI',
-                label='Loki',
-                pluginId='loki',
-                pluginName='Loki'
             ),
             ConstantInput(
                 name='namespace',

@@ -1,0 +1,455 @@
+evaluation_interval: 1m
+rule_files:
+  - alerts.rendered.yaml
+
+tests:
+
+  - name: ReplicationProducer Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="backbeat-replication-producer-headless"}
+        values: 1 0
+    alert_rule_test:
+      - alertname: ReplicationProducerCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationProducerCritical
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication producers are up and healthy"
+              summary: "Replication producer service is critical"
+
+  - name: ReplicationDataProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="backbeat-replication-data-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication data processors are up and healthy"
+              summary: "Replication data processor service is degraded"
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationDataProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication data processors are up and healthy"
+              summary: "Replication data processor service is degraded"
+      - alertname: ReplicationDataProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication data processors are up and healthy"
+              summary: "Replication data processor service is critical"
+
+  - name: ReplicationReplayProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="backbeat-replication-replay-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is degraded"
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationReplayProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is degraded"
+      - alertname: ReplicationReplayProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication replay processors are up and healthy"
+              summary: "Replication replay processor service is critical"
+
+  - name: ReplicationStatusProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-1"}
+        values: 1 1 1 
+      - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="backbeat-replication-status-processor-headless",pod="bucket-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication status processors are up and healthy"
+              summary: "Replication status processor service is degraded"
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: ReplicationStatusProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              description: "Less than 100% of replication status processors are up and healthy"
+              summary: "Replication status processor service is degraded"
+      - alertname: ReplicationStatusProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              description: "Less than 50% of replication status processors are up and healthy"
+              summary: "Replication status processor service is critical"
+
+  - name: Replication Errors
+    interval: 1m
+    input_series:
+      # 0.01% error rate for 5m, then 0.1% error rate for 5m, then 1% error rate
+      - series: replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="FAILED"}
+        values: 1+1x3 5+11x4 60+101x6
+      - series: replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="COMPLETED"}
+        values: 9999+9999x15
+    alert_rule_test:
+      - alertname: ReplicationErrorsWarning
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: ReplicationErrorsCritical
+        eval_time: 5m
+        exp_alerts: []
+
+      - alertname: ReplicationErrorsWarning
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: ReplicationErrorsCritical
+        eval_time: 9m
+        exp_alerts: []
+
+      - alertname: ReplicationErrorsWarning
+        eval_time: 10m
+        exp_alerts:
+          - exp_annotations:
+              description: Replication error rate is higher than 0.1%
+              summary: High ratio of replication errors
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationErrorsCritical
+        eval_time: 10m
+        exp_alerts: []
+
+      - alertname: ReplicationErrorsWarning
+        eval_time: 14m
+        exp_alerts:
+          - exp_annotations:
+              description: Replication error rate is higher than 0.1%
+              summary: High ratio of replication errors
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationErrorsCritical
+        eval_time: 14m
+        exp_alerts: []
+
+      - alertname: ReplicationErrorsWarning
+        eval_time: 15m
+        exp_alerts:
+          - exp_annotations:
+              description: Replication error rate is higher than 0.1%
+              summary: High ratio of replication errors
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationErrorsCritical
+        eval_time: 15m
+        exp_alerts:
+          - exp_annotations:
+              description: Replication error rate is higher than 1%
+              summary: Very high ratio of replication errors
+            exp_labels:
+              severity: critical
+
+  - name: ReplicationRpo
+    interval: 1m
+    input_series:
+      # Requests last 50s for 5 min, then up to 600s for 5 min, then 900s for 5min
+      - series: replication_rpo_seconds_sum{namespace="zenko", job="backbeat-replication-data-processor-headless"}
+        values: 500+500x4 3000+6000x4 33000+9000x6
+      - series: replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless"}
+        values: 10+10x16
+    alert_rule_test:
+      - alertname: ReplicationRpoWarning
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: ReplicationRpoCritical
+        eval_time: 6m
+        exp_alerts: []
+
+      - alertname: ReplicationRpoWarning
+        eval_time: 11m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication RPO is higher than 600 seconds.
+
+                This may indicate an issue with Kafka or the data-processor.
+
+                RPO is the delay between the time the object is updated and when it is picked up by the
+                replication-processor.
+              summary: High replication RPO
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationRpoCritical
+        eval_time: 11m
+        exp_alerts: []
+
+      - alertname: ReplicationRpoWarning
+        eval_time: 15m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication RPO is higher than 600 seconds.
+
+                This may indicate an issue with Kafka or the data-processor.
+
+                RPO is the delay between the time the object is updated and when it is picked up by the
+                replication-processor.
+              summary: High replication RPO
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationRpoCritical
+        eval_time: 15m
+        exp_alerts: []
+
+      - alertname: ReplicationRpoWarning
+        eval_time: 16m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication RPO is higher than 600 seconds.
+
+                This may indicate an issue with Kafka or the data-processor.
+
+                RPO is the delay between the time the object is updated and when it is picked up by the
+                replication-processor.
+              summary: High replication RPO
+            exp_labels:
+              severity: warning
+      - alertname: ReplicationRpoCritical
+        eval_time: 16m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication RPO is higher than 900 seconds.
+
+                This may indicate an issue with Kafka or the data-processor.
+
+                RPO is the delay between the time the object is updated and when it is picked up by the
+                replication-processor.
+              summary: Very high replication RPO
+            exp_labels:
+              severity: critical
+
+  - name: Replication Latency
+    interval: 1m
+    input_series:
+      # Requests last 500s for 5 min, then up to 3000s for 5 min, then 9000s for 5min
+      - series: replication_latency_seconds_sum{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
+        values: 5000+5000x4 30000+30000x4 180000+90000x6
+      - series: replication_latency_seconds_count{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
+        values: 10+10x16
+    alert_rule_test:
+      - alertname: ReplicationLatencyWarning
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: ReplicationLatencyCritical
+        eval_time: 6m
+        exp_alerts: []
+
+      - alertname: ReplicationLatencyWarning
+        eval_time: 11m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication latency is higher than 3000 seconds.
+                
+                This may indicate an issue with the data-processor or the remote replication site.
+
+                Replication latency is the time taken for an object to replicate successfully to the
+                destination.
+              summary: High replication latency
+            exp_labels:
+              severity: warning
+              location: remoteSite
+      - alertname: ReplicationLatencyCritical
+        eval_time: 11m
+        exp_alerts: []
+
+      - alertname: ReplicationLatencyWarning
+        eval_time: 15m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication latency is higher than 3000 seconds.
+                
+                This may indicate an issue with the data-processor or the remote replication site.
+
+                Replication latency is the time taken for an object to replicate successfully to the
+                destination.
+              summary: High replication latency
+            exp_labels:
+              severity: warning
+              location: remoteSite
+      - alertname: ReplicationLatencyCritical
+        eval_time: 15m
+        exp_alerts: []
+
+      - alertname: ReplicationLatencyWarning
+        eval_time: 16m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication latency is higher than 3000 seconds.
+                
+                This may indicate an issue with the data-processor or the remote replication site.
+
+                Replication latency is the time taken for an object to replicate successfully to the
+                destination.
+              summary: High replication latency
+            exp_labels:
+              severity: warning
+              location: remoteSite
+      - alertname: ReplicationLatencyCritical
+        eval_time: 16m
+        exp_alerts:
+          - exp_annotations:
+              description: |
+                Replication latency is higher than 6000 seconds.
+                
+                This may indicate an issue with the data-processor or the remote replication site.
+
+                Replication latency is the time taken for an object to replicate successfully to the
+                destination.
+              summary: Very high replication latency
+            exp_labels:
+              severity: critical
+              location: remoteSite
+
+  - name: Replication Backlog Growing
+    interval: 5m
+    input_series:
+      # Complete 10 objects per 5m, but "ingest":
+      #   10 objects per 5m for the 4h
+      #   20 objects per 5m for the next 4h
+      #   0  objects for the next 4h
+      #   50 objects per 5m for the next 1h
+      #   0  objects for the next 2h
+      - series: replication_replay_objects_completed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite", replicationStatus="COMPLETED"}
+        values: 0+10x174
+      - series: replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless", location="remoteSite"}
+        values: 0+10x47 480+20x47 1440+0x47 1440+50x5 1740+0x24
+    alert_rule_test:
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 5m
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 4h
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 6h55m
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 7h5m
+        exp_alerts:
+          - exp_annotations:
+              description: Alert if processing is slower than the backlog for 3 hours
+              summary: Replication backlog grows faster than it is processed
+            exp_labels:
+              severity: critical
+              location: remoteSite
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 8h5m
+        exp_alerts:
+          - exp_annotations:
+              description: Alert if processing is slower than the backlog for 3 hours
+              summary: Replication backlog grows faster than it is processed
+            exp_labels:
+              severity: critical
+              location: remoteSite
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 8h30m
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 12h
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 12h30m
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 13h
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 13h30m
+        exp_alerts: []
+
+      - alertname: ReplicationBacklogGrowing
+        eval_time: 14h
+        exp_alerts: []

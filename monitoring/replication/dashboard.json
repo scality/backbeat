@@ -9,14 +9,6 @@
       "type": "datasource"
     },
     {
-      "description": "",
-      "label": "Loki",
-      "name": "DS_LOKI",
-      "pluginId": "loki",
-      "pluginName": "Loki",
-      "type": "datasource"
-    },
-    {
       "description": "Namespace associated with the Zenko instance",
       "label": "namespace",
       "name": "namespace",
