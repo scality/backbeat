@@ -45,6 +45,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
         return async.series([
             next => this._getMetadata(entry, log, (err, res) => {
+                // LifecycleMetrics.onS3Request(log, 'getMetadata', 'coldStatusArchive', err);
                 if (err) {
                     return next(err);
                 }
@@ -70,11 +71,16 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         });
                     }
 
-                this._putMetadata(entry, objectMD, log, next);
+                this._putMetadata(entry, objectMD, log, err => {
+                    // LifecycleMetrics.onS3Request(log, 'putMetadata', 'coldStatusArchive', err);
+                    return next(err);
+                });
             },
             next => {
                 if (!skipLocationDeletion) {
                     this._garbageCollectArchivedSource(entry, oldLocation, coldLocation, log);
+                    // should _garbageCollectArchivedSource be asynchronous?
+                    // LifecycleMetrics.onKafkaPublish(log, 'GCTopic', 'coldStatusArchive', err, 1);
                 }
 
                 return process.nextTick(next);

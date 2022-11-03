@@ -149,7 +149,10 @@ class GarbageCollectorTask extends BackbeatTask {
         const { bucket, key, version, oldLocation, newLocation } = entry.getAttribute('target');
 
         async.waterfall([
-            next => this._getMetadata(entry, log, next),
+            next => this._getMetadata(entry, log, (err, objMD) => {
+                // LifecycleMetrics.onS3Request(log, 'getMetadata', 'gc', err);
+                return next(err, objMD);
+            }),
             (objMD, next) => {
                 const locations = objMD.getLocation();
 
@@ -170,6 +173,7 @@ class GarbageCollectorTask extends BackbeatTask {
                 };
 
                 this._batchDeleteData(params, entry, log, err => {
+                    // LifecycleMetrics.onS3Request(log, 'batchdelete', 'gc', err);
                     entry.setEnd(err);
                     log.info('action execution ended', entry.getLogInfo());
 

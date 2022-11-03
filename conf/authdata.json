@@ -1,21 +1,12 @@
 {
     "accounts": [{
-        "name": "bart",
-        "arn": "aws::iam:123456789012:root",
-        "canonicalID": "79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be",
-        "displayName": "bart",
+        "name": "account1",
+        "arn": "arn:aws:iam::169890391061:/account1/",
+        "canonicalID": "374bf06eee352f6e2a2a9ea7c9f116b40ded94731c09a18e6bf0644189c54b21",
+        "displayName": "account1",
         "keys": {
-            "access": "accessKey1",
-            "secret": "verySecretKey1"
-        }
-    }, {
-        "name": "lisa",
-        "arn": "aws::iam:123456789013:root",
-        "canonicalID": "79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2bf",
-        "displayName": "lisa",
-        "keys": {
-            "access": "accessKey2",
-            "secret": "verySecretKey2"
+            "access": "7PN37KFQ9J1U8VJ5M44D",
+            "secret": "RDBpwLuoOlb6kPYD5FZdJmg7X9TZDd7NV6ZKTRJZ"
         }
     }]
 }

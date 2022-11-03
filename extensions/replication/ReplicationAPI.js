@@ -100,6 +100,7 @@ class ReplicationAPI {
             kafkaEntry.message = JSON.stringify(message);
         }
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
+            // LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);
             if (err) {
                 log.error('could not send data mover action',
                     Object.assign({

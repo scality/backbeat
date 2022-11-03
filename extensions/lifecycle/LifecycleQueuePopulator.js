@@ -300,6 +300,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             if (producer) {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
+                    // LifecycleMetrics.onKafkaPublish(log, 'ColdStorageRestoreTopic', 'queuePopulator', err, 1);
                     if (err) {
                         this.log.error('error publishing object restore request entry', {
                             error: err,
