@@ -94,16 +94,25 @@ describe('ListRecordStream', () => {
                 return done();
             });
         });
-        it('Should not fail if format is invalid', done => {
+        it('Should skip record if format is invalid', done => {
             listRecordStream.write(InvalidKafkaMessage);
+            listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
+                // Streams guarantee that data is kept in the
+                // same order when writing and reading it.
+                // This means that if the function doesn't work
+                // as intended and processed the invalid
+                // event it should be read in first by this event
+                // handler which'll fail the test
                 assert.deepEqual(data, {
-                    timestamp: new Date(InvalidKafkaMessage.timestamp),
-                    db: undefined,
+                    timestamp: new Date(kafkaMessage.timestamp),
+                    db: 'example-bucket',
                     entries: [{
-                        key: undefined,
-                        type: undefined,
-                        value: undefined,
+                        key: 'example-key',
+                        type: 'put',
+                        value: JSON.stringify({
+                            field: 'value'
+                        }),
                     }],
                 });
                 return done();
