@@ -132,7 +132,7 @@ describe('NotificationQueuePopulator ::', () => {
         });
     });
 
-    describe('filter ::', () => {
+    describe('filterAsync ::', () => {
         it('Should fail if entry value parse fails', done => {
             const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
             const entry = {
@@ -141,9 +141,11 @@ describe('NotificationQueuePopulator ::', () => {
                 type: 'put',
                 value: '}{',
             };
-            notificationQueuePopulator.filter(entry);
-            assert(processEntryStub.notCalled);
-            return done();
+            notificationQueuePopulator.filterAsync(entry, err => {
+                assert.ifError(err);
+                assert(processEntryStub.notCalled);
+                return done();
+            });
         });
 
         it('Should fail if entry is a bucket entry', done => {
@@ -154,22 +156,27 @@ describe('NotificationQueuePopulator ::', () => {
                 type: 'put',
                 value: '{}',
             };
-            notificationQueuePopulator.filter(entry);
-            assert(processEntryStub.notCalled);
-            return done();
+            notificationQueuePopulator.filterAsync(entry, err => {
+                assert.ifError(err);
+                assert(processEntryStub.notCalled);
+                return done();
+            });
         });
 
         it('Should process the entry', done => {
-            const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
+            const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb')
+                .callsArg(4);
             const entry = {
                 bucket: 'example-bucket',
                 key: 'examlpe-key',
                 type: 'put',
                 value: '{}',
             };
-            notificationQueuePopulator.filter(entry);
-            assert(processEntryStub.calledOnceWith(entry.bucket, entry.key, {}, entry.type));
-            return done();
+            notificationQueuePopulator.filterAsync(entry, err => {
+                assert.ifError(err);
+                assert(processEntryCbStub.calledOnceWith(entry.bucket, entry.key, {}, entry.type));
+                return done();
+            });
         });
     });
 
