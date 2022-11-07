@@ -250,4 +250,86 @@ describe('LogReader', () => {
         assert(mockExtension.filter.notCalled);
         done();
     });
+
+    describe('_processFilterEntries', () => {
+        it('Should do nothing if no records where pushed', done => {
+            const batchState = {
+                currentRecords: [],
+            };
+            const processFilterEntryStb = sinon.stub(logReader, '_processFilterEntry');
+            logReader._processFilterEntries(batchState, err => {
+                assert.ifError(err);
+                assert(processFilterEntryStb.notCalled);
+                return done();
+            });
+        });
+
+        it('Should process all records', done => {
+            const batchState = {
+                currentRecords: [1, 2],
+            };
+            const processFilterEntryStb = sinon.stub(logReader, '_processFilterEntry')
+                .callsArg(2);
+            logReader._processFilterEntries(batchState, err => {
+                assert.ifError(err);
+                assert(processFilterEntryStb.calledTwice);
+                return done();
+            });
+        });
+    });
+
+    describe('_processFilterEntry', () => {
+        it('Should do nothing if record is empty', done => {
+            const batchState = {
+                entriesToPublish: {},
+            };
+            const filterEntriesStb = sinon.stub(logReader, '_filterEntries');
+            logReader._processFilterEntry(batchState, {}, err => {
+                assert.ifError(err);
+                assert(filterEntriesStb.notCalled);
+                return done();
+            });
+        });
+
+        it('Should process record', done => {
+            const batchState = {
+                entriesToPublish: {},
+            };
+            const record = {
+                entries: [1]
+            };
+            const setEntryBatchStb = sinon.stub(logReader, '_setEntryBatch');
+            const unsetEntryBatchStb = sinon.stub(logReader, '_unsetEntryBatch');
+            const filterEntriesStb = sinon.stub(logReader, '_filterEntries')
+                .callsArg(2);
+            logReader._processFilterEntry(batchState, record,  err => {
+                assert.ifError(err);
+                assert(filterEntriesStb.calledOnce);
+                assert(setEntryBatchStb.calledOnce);
+                assert(unsetEntryBatchStb.calledOnce);
+                return done();
+            });
+        });
+    });
+
+    describe('_filterEntries', () => {
+        it('Should process all record entries', done => {
+            const batchState = {
+                logStats: {
+                    nbLogEntriesRead: 0,
+                },
+            };
+            const record = {
+                entries: [1, 2]
+            };
+            const processLogEntryStb = sinon.stub(logReader, '_processLogEntry')
+                .callsArg(3);
+            logReader._filterEntries(batchState, record,  err => {
+                assert.ifError(err);
+                assert(processLogEntryStb.calledTwice);
+                assert.strictEqual(batchState.logStats.nbLogEntriesRead, 2);
+                return done();
+            });
+        });
+    });
 });
