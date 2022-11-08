@@ -975,7 +975,7 @@ class MultipleBackendTask extends ReplicateObject {
                     sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
                 Tags: JSON.stringify(sourceEntry.getTags()),
                 SourceBucket: sourceEntry.getBucket(),
-                SourceVersionId: sourceEntry.getVersionId(),
+                SourceVersionId: sourceEntry.getUnencodedVersionId(),
                 ReplicationEndpointSite: this.site,
             });
         attachReqUids(destReq, log);
@@ -1027,7 +1027,7 @@ class MultipleBackendTask extends ReplicateObject {
             DataStoreVersionId:
                 sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
             SourceBucket: sourceEntry.getBucket(),
-            SourceVersionId: sourceEntry.getVersionId(),
+            SourceVersionId: sourceEntry.getUnencodedVersionId(),
             ReplicationEndpointSite: this.site,
         });
         attachReqUids(destReq, log);
