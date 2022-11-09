@@ -43,6 +43,9 @@ describe('NotificationQueuePopulator ::', () => {
             bnConfigManager,
             logger,
         });
+        notificationQueuePopulator._metricsStore = {
+            notifEvent: () => null,
+        };
     });
 
     describe('_isBucketEntry ::', () => {
