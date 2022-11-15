@@ -273,10 +273,15 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     _putMetadata(updatedSourceEntry, log, cb) {
         const client = this.backbeatSourceClient;
+        // must set versionId to undefined in the case of
+        // versioning suspended objects, to avoid creating
+        // a version object
+        const versionId = updatedSourceEntry.getIsNull() ?
+            undefined : updatedSourceEntry.getEncodedVersionId();
         return client.putMetadata({
             bucket: updatedSourceEntry.getBucket(),
             objectKey: updatedSourceEntry.getObjectKey(),
-            versionId: updatedSourceEntry.getEncodedVersionId(),
+            versionId,
             mdBlob: updatedSourceEntry.getSerialized(),
         }, log, err => {
             const replicationStatus = updatedSourceEntry.getReplicationStatus();
