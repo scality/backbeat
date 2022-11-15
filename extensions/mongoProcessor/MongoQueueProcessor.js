@@ -200,7 +200,10 @@ class MongoQueueProcessor {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
-        if (entry.getVersionId()) {
+        // master keys with a 'null' version id comming from
+        // a versioning suspended bucket are considered a version
+        // we should not specify the version id in this case
+        if (entry.getVersionId() && !entry.getIsNull()) {
             params.versionId = entry.getVersionId();
         }
 
@@ -471,7 +474,10 @@ class MongoQueueProcessor {
 
             const objVal = sourceEntry.getValue();
             const params = {};
-            if (sourceEntry.getVersionId()) {
+            // Versioning suspended entries will have a version id but also a isNull tag.
+            // These master keys are considered a version and do not have a duplicate version,
+            // we don't specify the version id and repairMaster in this case
+            if (sourceEntry.getVersionId() && !sourceEntry.getIsNull()) {
                 params.versionId = sourceEntry.getVersionId();
                 params.repairMaster = true;
             }

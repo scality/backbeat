@@ -135,7 +135,10 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
         const isMaster = isMasterKey(entry.getObjectVersionedKey());
         // single null entries will have a version id as undefined or null.
         // do not filter single null entries
-        if (isMaster && entry.getVersionId() !== undefined) {
+        // Versioning suspended entries will have a version id but also a isNull tag.
+        // These master keys are considered a version and do not have a duplicate version,
+        // we also don't filter this type of entry.
+        if (isMaster && entry.getVersionId() !== undefined && !entry.getIsNull()) {
             this.log.trace('skipping master key entry');
             return true;
         }
