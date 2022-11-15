@@ -105,6 +105,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
      * If no new versioned objects are added for given object(s), they look like
      * standalone master keys. The `isNull` case is undefined for these entries.
      * Non-versioned objects if being replicated from an NFS bucket are also allowed
+     * Null versions which are objects created after suspending versioning are allowed,
+     * these only have a master object that has an internal versionId and a 'isNull' flag.
      * @param {ObjectQueueEntry} entry - raw queue entry
      * @return {Boolean} true if we should filter entry
      */
@@ -114,7 +116,8 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         // single null entries will have a version id as undefined or null.
         // do not filter single null entries
         const isNonVersionedMaster = entry.getVersionId() === undefined;
-        if (isMaster && !isNFS && !isNonVersionedMaster) {
+        const isNullVersionedMaster = entry.getIsNull();
+        if (isMaster && !isNFS && !isNonVersionedMaster && !isNullVersionedMaster) {
             this.log.trace('skipping master key entry');
             return false;
         }
