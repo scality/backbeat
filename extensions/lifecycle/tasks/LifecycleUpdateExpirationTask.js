@@ -146,9 +146,12 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             next => this._getMetadata(entry, log, next),
             (objMD, next) => {
                 const archive = objMD.getArchive();
+                // Reset archive flags to no longer
+                // show it as restored
                 objMD.setArchive({
                     archiveInfo: archive.archiveInfo,
                 });
+                objMD.setOriginOp('s3:ObjectRestore:Delete');
                 this._putMetadata(entry, objMD, log, err => next(err, objMD));
             },
             (objMD, next) => this._garbageCollectLocation(
