@@ -49,27 +49,49 @@ describe('ListRecordStream', () => {
         [
             {
                 opType: 'insert',
+                md: {
+                    value: {}
+                },
                 expected: 'put'
             },
             {
                 opType: 'update',
+                md: {
+                    value: {
+                        deleted: false,
+                    }
+                },
                 expected: 'put'
             },
             {
+                opType: 'update',
+                md: {
+                    value: {
+                        deleted: true,
+                    }
+                },
+                expected: 'delete'
+            },
+            {
                 opType: 'replace',
+                md: {
+                    value: {}
+                },
                 expected: 'put'
             },
             {
                 opType: 'delete',
+                md: undefined,
                 expected: 'delete'
             },
             {
                 opType: 'unsupported',
+                md: undefined,
                 expected: undefined
             }].forEach(params => {
-                const { opType, expected } = params;
+                const { opType, md, expected } = params;
                 it(`Should return correct operation type (${opType})`, done => {
-                    const type = listRecordStream._getType(opType);
+                    const type = listRecordStream._getType(opType, md);
                     assert.strictEqual(type, expected);
                     return done();
                 });
