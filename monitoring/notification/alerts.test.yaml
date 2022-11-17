@@ -1,0 +1,107 @@
+evaluation_interval: 1m
+rule_files:
+  - alerts.rendered.yaml
+
+tests:
+
+  - name: NotificationProducer Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-notification-producer-headless",pod="producer-1"}
+        values: 1 1 1
+      - series: up{namespace="zenko",job="artesca-data-backbeat-notification-producer-headless",pod="producer-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-data-backbeat-notification-producer-headless",pod="producer-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: NotificationProducerDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: NotificationProducerCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: NotificationProducerDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-notification-producer
+              description: "Less than 100% of notification producers are up and healthy"
+              summary: "Notification producer service is degraded"
+      - alertname: NotificationProducerCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: NotificationProducerDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-notification-producer
+              description: "Less than 100% of notification producers are up and healthy"
+              summary: "Notification producer service is degraded"
+      - alertname: NotificationProducerCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-notification-producer
+              description: "Less than 50% of notification producers are up and healthy"
+              summary: "Notification producer service is in critical state"
+
+  - name: NotificationProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-notification-processor-target1-headless"}
+        values: 2 2 1
+      - series: up{namespace="zenko",job="artesca-data-backbeat-notification-processor-target2-headless"}
+        values: 2 1 0
+    alert_rule_test:
+      - alertname: NotificationProcessorsDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: NotificationProcessorsCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: NotificationProcessorsDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: target2
+            exp_annotations:
+              zenko_service:  backbeat-notification-processor
+              description: "Less than 100% of notification processors for target target2 are up and healthy"
+              summary: "Notification processor service for target target2 is degraded"
+      - alertname: NotificationProcessorsCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: NotificationProcessorsDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              job: target1
+            exp_annotations:
+              zenko_service:  backbeat-notification-processor
+              description: "Less than 100% of notification processors for target target1 are up and healthy"
+              summary: "Notification processor service for target target1 is degraded"
+          - exp_labels:
+              severity: warning
+              job: target2
+            exp_annotations:
+              zenko_service:  backbeat-notification-processor
+              description: "Less than 100% of notification processors for target target2 are up and healthy"
+              summary: "Notification processor service for target target2 is degraded"
+      - alertname: NotificationProcessorsCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              job: target2
+            exp_annotations:
+              zenko_service:  backbeat-notification-processor
+              description: "Less than 50% of notification processors for target target2 are up and healthy"
+              summary: "Notification processor service for target target2 is in critical state"
