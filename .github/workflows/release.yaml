@@ -51,7 +51,8 @@ jobs:
             cold-storage/dashboard.json:application/grafana-dashboard+json \
             replication/dashboard.json:application/grafana-dashboard+json \
             replication/alerts.yaml:application/prometheus-alerts+yaml \
-            notification/dashboard.json:application/grafana-dashboard+json
+            notification/dashboard.json:application/grafana-dashboard+json \
+            notification/alerts.yaml:application/prometheus-alerts+yaml
         working-directory: monitoring
 
       - name: Push policies into the production namespace
