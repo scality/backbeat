@@ -516,9 +516,9 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/Arsenal#8.1.64":
-  version "8.1.64"
-  resolved "git+https://github.com/scality/Arsenal#480f5a44277e27fafd8e5652b6a81d2b08e9c6fe"
+"arsenal@git+https://github.com/scality/Arsenal#8.1.73":
+  version "8.1.73"
+  resolved "git+https://github.com/scality/Arsenal#8f63687ef3d7dfe47de747a88f1673ae29a9b6ca"
   dependencies:
     "@types/async" "^3.2.12"
     "@types/utf8" "^3.0.1"

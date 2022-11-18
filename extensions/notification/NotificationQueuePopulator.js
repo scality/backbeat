@@ -63,6 +63,35 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Decides if we should process the entry.
+     * Since we get both master and version events,
+     * we need to avoid pushing two notifications for
+     * the same event.
+     * - For non versiond buckets, we process the master
+     * objects' events.
+     * - For versioned buckets, we process version events
+     * and ignore all master events.
+     * - For versioning suspended buckets, we need to process
+     * both master and version events, as the master is considered
+     * a separate version.
+     * @param {String} key object key
+     * @param {Object} value object metadata
+     * @return {boolean} - true if entry is valid
+     */
+    _shouldProcessEntry(key, value) {
+        const isMaster = isMasterKey(key);
+        const isVersionedMaster = isMaster && !!value.versionId;
+        const isNullVersion = isMaster && value.isNull;
+        if (!isMaster
+            || !isVersionedMaster
+            || isNullVersion
+            ) {
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
@@ -71,21 +100,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @param {String} type - entry type
      * @return {undefined}
      */
-    async _processObjectEntry(bucket, key, value, type) {
-        const versionId = this._getVersionId(value);
-        if (!isMasterKey(key)) {
+    async _processObjectEntry(bucket, key, value) {
+        if (!this._shouldProcessEntry(key, value)) {
             return undefined;
         }
         this._metricsStore.notifEvent();
+        const versionId = this._getVersionId(value);
         const config = await this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
             const { eventMessageProperty }
                 = notifConstants;
-            let eventType
+            const eventType
                 = value[eventMessageProperty.eventType];
-            if (eventType === undefined && type === 'delete') {
-                eventType = notifConstants.deleteEvent;
-            }
             const ent = {
                 bucket,
                 key: value.key,
@@ -150,7 +176,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined} Promise|undefined
      */
     filterAsync(entry, cb) {
-        const { bucket, key, type } = entry;
+        const { bucket, key } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -167,7 +193,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntryCb(bucket, key, result, type, cb);
+            return this._processObjectEntryCb(bucket, key, result, cb);
         }
         return cb();
     }
