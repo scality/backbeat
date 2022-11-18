@@ -6,6 +6,7 @@ const ReplicationMetrics = require('./ReplicationMetrics');
 
 let { dataMoverTopic } = config.extensions.replication;
 const { coldStorageArchiveTopicPrefix } = config.extensions.lifecycle;
+const { LifecycleMetrics } = require('../lifecycle/LifecycleMetrics');
 
 class ReplicationAPI {
     /**
@@ -100,6 +101,9 @@ class ReplicationAPI {
             kafkaEntry.message = JSON.stringify(message);
         }
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
+            if (locationConfig.isCold) {
+                LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);
+            }
             if (err) {
                 log.error('could not send data mover action',
                     Object.assign({

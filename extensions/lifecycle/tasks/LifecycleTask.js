@@ -909,7 +909,10 @@ class LifecycleTask extends BackbeatTask {
     _applyTransitionRule(params, log) {
         async.waterfall([
             next =>
-                this._getObjectMD(params, log, next),
+                this._getObjectMD(params, log, (err, objectMD) => {
+                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
+                    return next(err, objectMD);
+                }),
             (objectMD, next) => {
                 const dataStoreName = objectMD.getDataStoreName();
                 const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
@@ -951,8 +954,10 @@ class LifecycleTask extends BackbeatTask {
                             versionId: params.versionId,
                             mdBlob: objectMD.getSerialized(),
                         };
-
-                        return this._putObjectMD(putParams, log, next);
+                        return this._putObjectMD(putParams, log, err => {
+                            LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
+                            return next(err);
+                        });
                 }
 
                 return process.nextTick(next);
@@ -1158,6 +1163,7 @@ class LifecycleTask extends BackbeatTask {
         };
         this.backbeatMetadataProxy.headLocation(
             headLocationParams, log, (err, data) => {
+                LifecycleMetrics.onS3Request(log, 'headLocation', 'bucket', err);
                 if (err) {
                     log.error('error getting head response from CloudServer');
                     return cb(err);

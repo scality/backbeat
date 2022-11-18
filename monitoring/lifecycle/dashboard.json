@@ -766,7 +766,7 @@
           "target": ""
         }
       ],
-      "title": "Expiration Bucket Task Messages in Queue",
+      "title": "Lifecycle Bucket Task Messages in Queue",
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
@@ -851,7 +851,7 @@
           "target": ""
         }
       ],
-      "title": "Expiration Bucket Task Failed Messages",
+      "title": "Lifecycle Bucket Task Failed Messages",
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
