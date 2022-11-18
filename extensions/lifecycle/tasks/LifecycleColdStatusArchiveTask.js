@@ -3,6 +3,7 @@ const async = require('async');
 const ObjectMDArchive = require('arsenal').models.ObjectMDArchive;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 
 class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
     getTargetAttribute(entry) {
@@ -34,7 +35,9 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
               .setAttribute('target.version', version)
               .setAttribute('target.accountId', accountId)
               .setAttribute('target.owner', owner);
-        this.gcProducer.publishActionEntry(gcEntry);
+        this.gcProducer.publishActionEntry(gcEntry, err => {
+            LifecycleMetrics.onKafkaPublish(log, 'GCTopic', 'archive', err, 1);
+        });
     }
 
     processEntry(coldLocation, entry, done) {
@@ -45,6 +48,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
         return async.series([
             next => this._getMetadata(entry, log, (err, res) => {
+                LifecycleMetrics.onS3Request(log, 'getMetadata', 'archive', err);
                 if (err) {
                     return next(err);
                 }
@@ -70,7 +74,10 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         });
                     }
 
-                this._putMetadata(entry, objectMD, log, next);
+                this._putMetadata(entry, objectMD, log, err => {
+                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'archive', err);
+                    return next(err);
+                });
             },
             next => {
                 if (!skipLocationDeletion) {

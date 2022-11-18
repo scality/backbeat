@@ -1,4 +1,5 @@
 const { ZenkoMetrics } = require('arsenal').metrics;
+const { getStatusLabel } = require('../utils/metricsUtil');
 
 const LIFECYCLE_LABEL_ORIGIN =  'origin';
 const LIFECYCLE_LABEL_OP = 'op';
@@ -51,31 +52,6 @@ const lifecycleKafkaPublish = {
         labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_OP],
     }),
 };
-
-function getStatusLabel(err) {
-    if (!err) {
-        return '2xx';
-    }
-
-    const statusCode = err.statusCode;
-
-    if (!statusCode) {
-        return '2xx';
-    }
-
-    if (statusCode >= 500) {
-        return '5xx';
-    }
-    if (statusCode >= 400) {
-        return '4xx';
-    }
-
-    if (statusCode >= 300) {
-        return '3xx';
-    }
-
-    return '2xx';
-}
 
 class LifecycleMetrics {
     static handleError(log, err, method) {
