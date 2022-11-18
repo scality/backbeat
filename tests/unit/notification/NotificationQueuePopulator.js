@@ -73,11 +73,9 @@ describe('NotificationQueuePopulator ::', () => {
                     'originOp': 's3:ObjectCreated:Put',
                     'dataStoreName': 'metastore',
                     'content-length': '100',
-                    'versionId': '1234',
                     'last-modified': '0000',
                     'md-model-version': '1',
-                },
-                'put');
+                });
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
@@ -90,11 +88,9 @@ describe('NotificationQueuePopulator ::', () => {
                     'originOp': 's3:ObjectRemoved:Delete',
                     'dataStoreName': 'metastore',
                     'content-length': '100',
-                    'versionId': '1234',
                     'last-modified': '0000',
                     'md-model-version': '1',
-                },
-                'delete');
+                });
                 assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
             });
 
@@ -111,26 +107,7 @@ describe('NotificationQueuePopulator ::', () => {
                     'versionId': '1234',
                     'last-modified': '0000',
                     'md-model-version': '1',
-                },
-                'put');
-            assert(publishStub.notCalled);
-        });
-
-        it('Should not publish object entry in notification topic if ' +
-            'entry is a version event', async () => {
-            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
-            await notificationQueuePopulator._processObjectEntry(
-                'example-bucket',
-                'example-key\x001234',
-                {
-                    'originOp': 's3:ObjectCreated:Put',
-                    'dataStoreName': 'metastore',
-                    'content-length': '100',
-                    'versionId': '1234',
-                    'last-modified': '0000',
-                    'md-model-version': '1',
-                },
-                'put');
+                });
             assert(publishStub.notCalled);
         });
     });
@@ -168,16 +145,16 @@ describe('NotificationQueuePopulator ::', () => {
 
         it('Should process the entry', done => {
             const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb')
-                .callsArg(4);
+                .callsArg(3);
             const entry = {
                 bucket: 'example-bucket',
-                key: 'examlpe-key',
+                key: 'example-key',
                 type: 'put',
                 value: '{}',
             };
             notificationQueuePopulator.filterAsync(entry, err => {
                 assert.ifError(err);
-                assert(processEntryCbStub.calledOnceWith(entry.bucket, entry.key, {}, entry.type));
+                assert(processEntryCbStub.calledOnceWith(entry.bucket, entry.key, {}));
                 return done();
             });
         });
@@ -205,6 +182,57 @@ describe('NotificationQueuePopulator ::', () => {
             it(`Should return ${out} when object is ${desc}`, () => {
                 const versionId = notificationQueuePopulator._getVersionId(input);
                 assert.strictEqual(versionId, out);
+            });
+        });
+    });
+
+    describe('_shouldProcessEntry ::', () => {
+        [
+            {
+                desc: 'version',
+                key: 'version-key\x001234',
+                value: {
+                    versionId: '1234',
+                },
+                out: true,
+            },
+            {
+                desc: 'non versioned master',
+                key: 'master-key',
+                value: {},
+                out: true,
+            },
+            {
+                desc: 'null versioned master',
+                key: 'master-key',
+                value: {
+                    versionId: '1234',
+                    isNull: true,
+                },
+                out: true,
+            },
+            {
+                desc: 'null versioned PHD master',
+                key: 'master-key',
+                value: {
+                    versionId: '1234',
+                    isNull: true,
+                },
+                out: true,
+            },
+            {
+                desc: 'versioned master',
+                key: 'master-key',
+                value: {
+                    versionId: '1234',
+                },
+                out: false,
+            },
+        ].forEach(params => {
+            const { desc, key, value, out } = params;
+            it(`Should return ${out} if ${desc}`, () => {
+                const val = notificationQueuePopulator._shouldProcessEntry(key, value);
+                assert.strictEqual(val, out);
             });
         });
     });
