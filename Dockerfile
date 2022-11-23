@@ -29,18 +29,21 @@ RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSI
     && rm dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz
 
 COPY package.json yarn.lock /usr/src/app/
-RUN yarn install --ignore-engines --frozen-lockfile --production --network-concurrency 1 \
-    && rm -rf /var/lib/apt/lists/* \
-    && rm -rf ~/.node-gyp \
-    && rm -rf /tmp/yarn-*
+
+RUN yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
 COPY . /usr/src/app
+
 RUN yarn build
+
+RUN rm -rf node_modules \
+    && yarn install --production --frozen-lockfile --ignore-optional
 
 ################################################################################
 FROM node:${NODE_VERSION}
 
-RUN apt-get update && \
-    apt-get install -y --no-install-recommends \
+RUN apt-get update \
+    && apt-get install -y --no-install-recommends \
         jq \
         tini \
     && rm -rf /var/lib/apt/lists/*
@@ -48,6 +51,8 @@ RUN apt-get update && \
 WORKDIR /usr/src/app
 
 # Keep the .git directory in order to properly report version
+COPY ./package.json ./docker-entrypoint.sh ./
+COPY --from=builder /usr/src/app/dist ./
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 

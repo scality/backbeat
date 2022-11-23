@@ -1,20 +1,24 @@
 {
   "compilerOptions": {
-      "target": "es6",
-      "module": "commonjs",
-      "rootDir": ".",
-      "resolveJsonModule": true,
-      "allowJs": true,
-      "checkJs": false,
-      "outDir": "dist",
-      "esModuleInterop": true,
-      "forceConsistentCasingInFileNames": true,
-      "strict": true,
-      "declaration": true,
-      "noImplicitAny": false,
-      "noEmitOnError": false,
-      "sourceMap": true,
-      "skipLibCheck": true
+      /* Visit https://aka.ms/tsconfig to read more about this file */
+      "incremental": true,                                 /* Save .tsbuildinfo files to allow for incremental compilation of projects. */
+      "module": "commonjs",                                /* Specify what module code is generated. */
+      "rootDir": "./",                                     /* Specify the root folder within your source files. */
+      "moduleResolution": "node",                          /* Specify how TypeScript looks up a file from a given module specifier. */
+      "declaration": true,                                 /* Generate .d.ts files from TypeScript and JavaScript files in your project. */
+      "sourceMap": true,                                   /* Create source map files for emitted JavaScript files. */
+      "outDir": "./dist",                                  /* Specify an output folder for all emitted files. */
+      "esModuleInterop": true,                             /* Emit additional JavaScript to ease support for importing CommonJS modules. This enables 'allowSyntheticDefaultImports' for type compatibility. */
+      "forceConsistentCasingInFileNames": true,            /* Ensure that casing is correct in imports. */
+      "strict": true,                                      /* Enable all strict type-checking options. */
+      "noImplicitAny": false,                              /* Enable error reporting for expressions and declarations with an implied 'any' type. */
+      "skipLibCheck": true,                                /* Skip type checking all .d.ts files. */
+      "lib": ["es2021"],                                   /* JS APIs and definitions to include */
+      "target": "es2021",                                  /* Specify JS target revision */
+      "resolveJsonModule": true,                           /* Allows importing modules with a .json extension */
+      "allowJs": true,                                     /* Allow JavaScript files to be imported inside your project */
+      "checkJs": false,                                    /* Enable error reporting for JavaScript files */
+      "noEmitOnError": false,                              /* Do not emit compiler output files like JavaScript source code, source-maps or declarations if any errors were reported. */
   },
   "include": [
       "./bin",
@@ -28,5 +32,6 @@
   "exclude": [
     "node_modules/*"
   ],
-  "compileOnSave": true
+  "compileOnSave": true,
+  "extends": "@tsconfig/node16/tsconfig.json"
 }
