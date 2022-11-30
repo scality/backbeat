@@ -6,6 +6,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
 
 class ObjectLockedError extends Error {}
+class PendingReplicationError extends Error {}
 
 class LifecycleDeleteObjectTask extends BackbeatTask {
     /**
@@ -18,9 +19,14 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const procState = proc.getStateVars();
         super();
         Object.assign(this, procState);
+        this.objectMD = null;
     }
 
     _getMetadata(entry, log, done) {
+        // only retreiving object metadata once
+        if (this.objectMD) {
+            return done(null, this.objectMD);
+        }
         const { owner: canonicalId, accountId } = entry.getAttribute('target');
         const backbeatClient = this.getBackbeatClient(canonicalId, accountId);
         if (!backbeatClient) {
@@ -56,7 +62,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                     errors.InternalError.
                         customizeDescription('error parsing metadata blob'));
             }
-            return done(null, res.result);
+            this.objectMD = res.result;
+            return done(null, this.objectMD);
         });
     }
 
@@ -165,6 +172,33 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
     }
 
     /**
+     * Throws error if object has a 'PENDING' replication status
+     * @param {ActionQueueEntry} entry entry object
+     * @param {Logger} log logger instance
+     * @param {Function} done callback
+     * @returns {undefined}
+     */
+    _checkReplicationStatus(entry, log, done) {
+        const actionType = entry.getActionType();
+        // skip check if entry is an incomplete MPU
+        // as we only replicate complete objects
+        if (actionType === 'deleteMPU') {
+            return done();
+        }
+        return this._getMetadata(entry, log, (err, objMD) => {
+            if (err) {
+                return done(err);
+            }
+            const replicationStatus = objMD.getReplicationStatus();
+            if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
+                const error = new PendingReplicationError('object has a pending replication status');
+                return done(error);
+            }
+            return done();
+        });
+    }
+
+    /**
      * Execute the action specified in action entry to delete an object
      *
      * @param {ActionQueueEntry} entry - action entry to execute
@@ -183,10 +217,16 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         return async.series([
             next => this._checkDate(entry, log, next),
             next => this._checkObjectLockState(entry, log, next),
+            next => this._checkReplicationStatus(entry, log, next),
             next => this._executeDelete(entry, log, next),
         ], err => {
             if (err && err instanceof ObjectLockedError) {
                 log.debug('Object is locked, skipping',
+                    entry.getLogInfo());
+                return done();
+            }
+            if (err && err instanceof PendingReplicationError) {
+                log.debug('Object has pending replication status, skipping',
                     entry.getLogInfo());
                 return done();
             }
