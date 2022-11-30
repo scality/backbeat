@@ -19,8 +19,12 @@ werelogs.configure({ level: config.log.logLevel,
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
-// Notification extension is the only one using OplogPopulator for now
-const activeExtensions = config.extensions.notification ? ['notification'] : [];
+
+const activeExtensions = [
+    'notification',
+    'lifecycle',
+    'replication',
+].filter(ext => config.extensions[ext]);
 
 const oplogPopulator = new OplogPopulator({
     config: oplogPopulatorConfig,
