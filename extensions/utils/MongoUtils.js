@@ -23,9 +23,9 @@ function constructConnectionString(mongoConfig) {
     }
     let url = `mongodb://${cred}${replicaSetHosts}/` +
         `?w=${writeConcern}&readPreference=${readPreference}`;
-    if (replicaSet) {
-        url += `&replicaSet=${replicaSet}`;
-    }
+    // if (replicaSet) {
+    //     url += `&replicaSet=${replicaSet}`;
+    // }
     return url;
 }
 
