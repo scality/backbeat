@@ -6,6 +6,7 @@ const constants = {
         'change.stream.full.document': 'updateLookup',
         'pipeline': '[]',
         'collection': '',
+        'errors.tolerance': 'all',
         // JSON output converter config
         // Using a string converter to avoid getting an over-stringified
         // JSON that is returned by default
