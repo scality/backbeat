@@ -1,5 +1,4 @@
 const { ZenkoMetrics } = require('arsenal').metrics;
-const { getStatusLabel } = require('../utils/metricsUtil');
 
 const LIFECYCLE_LABEL_ORIGIN =  'origin';
 const LIFECYCLE_LABEL_OP = 'op';
@@ -69,10 +68,11 @@ class LifecycleMetrics {
     }
 
     static onVaultRequest(log, op, err) {
+        const statusCode = err && err.statusCode ? err.statusCode : '200';
         try {
             lifecycleVaultOperations.inc({
                 [LIFECYCLE_LABEL_OP]: op,
-                [LIFECYCLE_LABEL_STATUS]: getStatusLabel(err),
+                [LIFECYCLE_LABEL_STATUS]: statusCode,
             });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onVaultRequest');
@@ -88,11 +88,12 @@ class LifecycleMetrics {
     }
 
     static onS3Request(log, op, process, err) {
+        const statusCode = err && err.statusCode ? err.statusCode : '200';
         try {
             lifecycleS3Operations.inc({
                 [LIFECYCLE_LABEL_ORIGIN]: process,
                 [LIFECYCLE_LABEL_OP]: op,
-                [LIFECYCLE_LABEL_STATUS]: getStatusLabel(err),
+                [LIFECYCLE_LABEL_STATUS]: statusCode,
             });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onS3Request');
