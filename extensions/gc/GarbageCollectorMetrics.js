@@ -1,5 +1,4 @@
 const { ZenkoMetrics } = require('arsenal').metrics;
-const { getStatusLabel } = require('../utils/metricsUtil');
 
 const GC_LABEL_ORIGIN =  'origin';
 const GC_LABEL_OP = 'op';
@@ -23,11 +22,12 @@ class GarbageCollectorMetrics {
     }
 
     static onS3Request(log, op, process, err) {
+        const statusCode = err && err.statusCode ? err.statusCode : '200';
         try {
             gcS3Operations.inc({
                 [GC_LABEL_ORIGIN]: process,
                 [GC_LABEL_OP]: op,
-                [GC_LABEL_STATUS]: getStatusLabel(err),
+                [GC_LABEL_STATUS]: statusCode,
             });
         } catch (err) {
             GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onS3Request');
