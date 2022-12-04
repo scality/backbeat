@@ -10,11 +10,11 @@ const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     labelNames: [],
 });
 
-const lifecycleVaultOperations = ZenkoMetrics.createCounter({
-    name: 'lifecycle_vault_operations',
-    help: 'Total number vault operations by lifecycle processes',
-    labelNames: [LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
-});
+// const lifecycleVaultOperations = ZenkoMetrics.createCounter({
+//     name: 'lifecycle_vault_operations',
+//     help: 'Total number vault operations by lifecycle processes',
+//     labelNames: [LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
+// });
 
 const conductorBucketListings = {
     success: ZenkoMetrics.createCounter({
@@ -67,17 +67,18 @@ class LifecycleMetrics {
         }
     }
 
-    static onVaultRequest(log, op, err) {
-        const statusCode = err && err.statusCode ? err.statusCode : '200';
-        try {
-            lifecycleVaultOperations.inc({
-                [LIFECYCLE_LABEL_OP]: op,
-                [LIFECYCLE_LABEL_STATUS]: statusCode,
-            });
-        } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onVaultRequest');
-        }
-    }
+    // TODO: "BB-344 Vaultclient is not returning error with statusCode" fixes me.
+    // static onVaultRequest(log, op, err) {
+    //     const statusCode = err && err.statusCode ? err.statusCode : '200';
+    //     try {
+    //         lifecycleVaultOperations.inc({
+    //             [LIFECYCLE_LABEL_OP]: op,
+    //             [LIFECYCLE_LABEL_STATUS]: statusCode,
+    //         });
+    //     } catch (err) {
+    //         LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onVaultRequest');
+    //     }
+    // }
 
     static onBucketListing(log, err) {
         try {
