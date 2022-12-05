@@ -144,7 +144,8 @@ class LifecycleConductor {
                 10,
                 (canonicalId, done) => {
                     this.vaultClientWrapper.getAccountIds([canonicalId], (err, accountIds) => {
-                        LifecycleMetrics.onVaultRequest(this.logger, 'getAccountIds', err);
+                        // TODO: BB-344 fixes me
+                        // LifecycleMetrics.onVaultRequest(this.logger, 'getAccountIds', err);
                         if (err) {
                             if (err.NoSuchEntity) {
                                 log.error('canonical id does not exist', { error: err, canonicalId });

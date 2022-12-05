@@ -4,6 +4,7 @@ const { ObjectMD } = require('arsenal').models;
 
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
 
 class GarbageCollectorTask extends BackbeatTask {
     /**
@@ -149,7 +150,10 @@ class GarbageCollectorTask extends BackbeatTask {
         const { bucket, key, version, oldLocation, newLocation } = entry.getAttribute('target');
 
         async.waterfall([
-            next => this._getMetadata(entry, log, next),
+            next => this._getMetadata(entry, log, (err, objMD) => {
+                GarbageCollectorMetrics.onS3Request(log, 'getMetadata', 'archive', err);
+                return next(err, objMD);
+            }),
             (objMD, next) => {
                 const locations = objMD.getLocation();
 
@@ -170,6 +174,7 @@ class GarbageCollectorTask extends BackbeatTask {
                 };
 
                 this._batchDeleteData(params, entry, log, err => {
+                    GarbageCollectorMetrics.onS3Request(log, 'batchdelete', 'archive', err);
                     entry.setEnd(err);
                     log.info('action execution ended', entry.getLogInfo());
 
@@ -211,6 +216,7 @@ class GarbageCollectorTask extends BackbeatTask {
                         'x-amz-meta-scal-s3-transition-attempt': undefined,
                     });
                 return this._putMetadata(entry, objMD, log, err => {
+                    GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
                     if (!err) {
                         log.end().info('completed expiration of archived data',
                             entry.getLogInfo());

@@ -264,7 +264,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // to the specific S3 bucket.
         const ownerId = value['owner-id'];
         this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
-            LifecycleMetrics.onVaultRequest(this.log, 'getAccountIds', err);
+            // TODO: BB-344 fixes me
+            // LifecycleMetrics.onVaultRequest(this.log, 'getAccountIds', err);
 
             if (err) {
                 this.log.error('unable to get account', {
@@ -300,6 +301,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             if (producer) {
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
+                    LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageRestoreTopic', 'queuePopulator', err, 1);
                     if (err) {
                         this.log.error('error publishing object restore request entry', {
                             error: err,

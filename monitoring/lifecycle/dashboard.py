@@ -15,15 +15,15 @@ from grafanalib import formatunits as UNITS
 from scalgrafanalib import layout, Tooltip, Target, TimeSeries, Dashboard
 
 
-STATUS_CODE_2XX = '2xx'
-STATUS_CODE_3XX = '3xx'
-STATUS_CODE_4XX = '4xx'
-STATUS_CODE_5XX = '5xx'
+STATUS_CODE_2XX = '2..'
+STATUS_CODE_3XX = '3..'
+STATUS_CODE_4XX = '4..'
+STATUS_CODE_5XX = '5..'
 
 
 def s3_request_timeseries_expr(process, job, code):
     labelSelector = 'namespace="${namespace}"'
-    labelSelector += f',status="{code}"'
+    labelSelector += f',status=~"{code}"'
 
     if job is not None:
         labelSelector += f',job="{job}"'
@@ -66,9 +66,9 @@ def s3_request_error_rate_expr(process, job, code):
     divsLabel = 'namespace="${namespace}"'
 
     if code is not None:
-        divdLabel += f',status="{code}"'
+        divdLabel += f',status=~"{code}"'
     else:
-        divdLabel += ',status!="2xx"'
+        divdLabel += ',status!="200"'
 
     if job is not None:
         divdLabel += f',job="{job}"'
@@ -110,8 +110,8 @@ def s3_request_error_rates(process=None, job=None):
 
 
 def s3_deletion_request_time_series(op):
-    successLabel = f'status="2xx",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
-    errorLabel = f'status!="2xx",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
+    successLabel = f'status="200",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
+    errorLabel = f'status!="200",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
 
     return TimeSeries(
         title=f'{op} Request Rate',
@@ -271,7 +271,7 @@ dashboard = (
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
             RowPanel(title="Kafka"),
-            layout.row(kafka_row("Expiration Bucket Task", "BucketTopic"), height=10),
+            layout.row(kafka_row("Lifecycle Bucket Task", "BucketTopic"), height=10),
             layout.row(kafka_row("Expiration Object Task", "ObjectTopic"), height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
             layout.row([lifecycle_bucket_processor_s3_requests], height=10),

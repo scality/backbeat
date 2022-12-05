@@ -10,11 +10,11 @@ const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     labelNames: [],
 });
 
-const lifecycleVaultOperations = ZenkoMetrics.createCounter({
-    name: 'lifecycle_vault_operations',
-    help: 'Total number vault operations by lifecycle processes',
-    labelNames: [LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
-});
+// const lifecycleVaultOperations = ZenkoMetrics.createCounter({
+//     name: 'lifecycle_vault_operations',
+//     help: 'Total number vault operations by lifecycle processes',
+//     labelNames: [LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
+// });
 
 const conductorBucketListings = {
     success: ZenkoMetrics.createCounter({
@@ -52,31 +52,6 @@ const lifecycleKafkaPublish = {
     }),
 };
 
-function getStatusLabel(err) {
-    if (!err) {
-        return '2xx';
-    }
-
-    const statusCode = err.statusCode;
-
-    if (!statusCode) {
-        return '2xx';
-    }
-
-    if (statusCode >= 500) {
-        return '5xx';
-    }
-    if (statusCode >= 400) {
-        return '4xx';
-    }
-
-    if (statusCode >= 300) {
-        return '3xx';
-    }
-
-    return '2xx';
-}
-
 class LifecycleMetrics {
     static handleError(log, err, method) {
         if (log) {
@@ -92,16 +67,18 @@ class LifecycleMetrics {
         }
     }
 
-    static onVaultRequest(log, op, err) {
-        try {
-            lifecycleVaultOperations.inc({
-                [LIFECYCLE_LABEL_OP]: op,
-                [LIFECYCLE_LABEL_STATUS]: getStatusLabel(err),
-            });
-        } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onVaultRequest');
-        }
-    }
+    // TODO: "BB-344 Vaultclient is not returning error with statusCode" fixes me.
+    // static onVaultRequest(log, op, err) {
+    //     const statusCode = err && err.statusCode ? err.statusCode : '200';
+    //     try {
+    //         lifecycleVaultOperations.inc({
+    //             [LIFECYCLE_LABEL_OP]: op,
+    //             [LIFECYCLE_LABEL_STATUS]: statusCode,
+    //         });
+    //     } catch (err) {
+    //         LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onVaultRequest');
+    //     }
+    // }
 
     static onBucketListing(log, err) {
         try {
@@ -112,11 +89,12 @@ class LifecycleMetrics {
     }
 
     static onS3Request(log, op, process, err) {
+        const statusCode = err && err.statusCode ? err.statusCode : '200';
         try {
             lifecycleS3Operations.inc({
                 [LIFECYCLE_LABEL_ORIGIN]: process,
                 [LIFECYCLE_LABEL_OP]: op,
-                [LIFECYCLE_LABEL_STATUS]: getStatusLabel(err),
+                [LIFECYCLE_LABEL_STATUS]: statusCode,
             });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onS3Request');
