@@ -377,6 +377,7 @@ class LifecycleBucketProcessor {
             groupId: this._lcConfig.bucketProcessor.groupId,
             concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
+            circuitBreaker: this._lcConfig.bucketProcessor.circuitBreaker,
         });
         this._consumer.on('error', err => {
             if (!this._consumerReady) {
