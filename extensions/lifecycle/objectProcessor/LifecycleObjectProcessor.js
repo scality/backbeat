@@ -101,6 +101,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             groupId: this._lcConfig.objectProcessor.groupId,
             concurrency: this._lcConfig.objectProcessor.concurrency,
             queueProcessor: this.processKafkaEntry.bind(this),
+            circuitBreaker: this._lcConfig.objectProcessor.circuitBreaker,
         });
         this._consumer.on('error', err => {
             if (!consumerReady) {

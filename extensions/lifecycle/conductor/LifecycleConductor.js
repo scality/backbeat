@@ -16,6 +16,7 @@ const { authTypeAssumeRole } = require('../../../lib/constants');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
 const { AccountIdCache } = require('../util/AccountIdCache');
+const { CircuitBreaker } = require('breakbeat');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -84,6 +85,7 @@ class LifecycleConductor {
         this._vaultClientCache = null;
         this._initialized = false;
         this._batchInProgress = false;
+        this._circuitBreaker = new CircuitBreaker(this.lcConfig.conductor.circuitBreaker);
 
         // this cache only needs to be the size of one listing.
         // worst case scenario is 1 account per bucket:

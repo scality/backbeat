@@ -25,6 +25,7 @@ const joiSchema = {
             }),
         }),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     },
     bucketProcessor: {
         groupId: joi.string().required(),
@@ -34,12 +35,14 @@ const joiSchema = {
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     },
     objectProcessor: {
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     },
 };
 
