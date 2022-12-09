@@ -1,13 +1,15 @@
 {
   "name": "backbeat",
-  "version": "8.5.2",
+  "version": "8.5.3",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
     "queue_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=replication,lifecycle node bin/queuePopulator.js",
     "queue_processor": "node extensions/replication/queueProcessor/task.js",
+    "replication_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=replication node bin/queuePopulator.js",
     "ingestion_populator": "node bin/ingestion.js",
     "replication_status_processor": "node extensions/replication/replicationStatusProcessor/task.js",
+    "lifecycle_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=lifecycle node bin/queuePopulator.js",
     "lifecycle_conductor": "node extensions/lifecycle/conductor/service.js",
     "lifecycle_bucket_processor": "node extensions/lifecycle/bucketProcessor/task.js",
     "lifecycle_object_processor": "node extensions/lifecycle/objectProcessor/task.js",
