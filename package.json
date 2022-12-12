@@ -49,6 +49,7 @@
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
+    "breakbeat": "scality/breakbeat#v1.0.1",
     "bucketclient": "scality/bucketclient#8.1.7",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl#0.2.1",
@@ -61,6 +62,7 @@
     "node-rdkafka": "^2.12.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^1.1.3",
+    "typescript": "^4.9.5",
     "uuid": "^3.1.0",
     "vaultclient": "scality/vaultclient#8.3.10",
     "werelogs": "scality/werelogs#8.1.2"
