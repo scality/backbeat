@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const http = require('http');
-const https = require('https');
 
 const Logger = require('werelogs').Logger;
 const { errors, jsutil } = require('arsenal');
@@ -20,6 +18,7 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
+const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 const NotificationConfigManager = require('../../notification/NotificationConfigManager');
 
@@ -233,14 +232,14 @@ class ReplicationStatusProcessor {
 
         // global variables
         if (sourceConfig.transport === 'https') {
-            this.sourceHTTPAgent = new https.Agent({
+            this.sourceHTTPAgent = new HttpsAgent.Agent({
                 key: internalHttpsConfig.key,
                 cert: internalHttpsConfig.cert,
                 ca: internalHttpsConfig.ca,
                 keepAlive: true,
             });
         } else {
-            this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+            this.sourceHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
         }
 
         this._setupVaultclientCache();

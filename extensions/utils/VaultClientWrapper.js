@@ -1,11 +1,10 @@
-const http = require('http');
-const https = require('https');
 const { ChainableTemporaryCredentials } = require('aws-sdk');
 const { errorUtils } = require('arsenal');
 
 const { authTypeAssumeRole } = require('../../lib/constants');
 const VaultClientCache = require('../../lib/clients/VaultClientCache');
 const CredentialsManager = require('../../lib/credentials/CredentialsManager');
+const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 class VaultClientWrapper {
     constructor(id, vaultConf, authConfig, logger) {
@@ -15,7 +14,7 @@ class VaultClientWrapper {
         this._vaultConf = vaultConf;
         this.logger = logger;
 
-        const Agent = this._transport === 'https' ? https.Agent : http.Agent;
+        const Agent = this._transport === 'https' ? HttpsAgent.Agent : HttpAgent.Agent;
         this.stsAgent = new Agent({ keepAlive: true });
 
         this._tempCredsPromiseResolved = false;

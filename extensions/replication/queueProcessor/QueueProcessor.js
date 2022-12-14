@@ -1,8 +1,6 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const http = require('http');
-const https = require('https');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
@@ -33,6 +31,7 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
 const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 const {
     zookeeperNamespace,
@@ -238,24 +237,24 @@ class QueueProcessor extends EventEmitter {
 
         // global variables
         if (sourceConfig.transport === 'https') {
-            this.sourceHTTPAgent = new https.Agent({
+            this.sourceHTTPAgent = new HttpsAgent.Agent({
                 key: internalHttpsConfig.key,
                 cert: internalHttpsConfig.cert,
                 ca: internalHttpsConfig.ca,
                 keepAlive: true,
             });
         } else {
-            this.sourceHTTPAgent = new http.Agent({ keepAlive: true });
+            this.sourceHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
         }
         if (destConfig.transport === 'https') {
-            this.destHTTPAgent = new https.Agent({
+            this.destHTTPAgent = new HttpsAgent.Agent({
                 key: httpsConfig.key,
                 cert: httpsConfig.cert,
                 ca: httpsConfig.ca,
                 keepAlive: true,
             });
         } else {
-            this.destHTTPAgent = new http.Agent({ keepAlive: true });
+            this.destHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
         }
 
         this._setupVaultclientCache();
