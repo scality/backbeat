@@ -26,6 +26,7 @@
     "ft_test:ingestion": "jest /functional/ingestion --forceExit --testTimeout  30000",
     "ft_test:api:routes": "jest /functional/api/routes.spec.js --forceExit --testTimeout 30000",
     "ft_test:api:retry": "jest /functional/api/retry.spec.js --forceExit --testTimeout 30000",
+    "perf_test:lifecycle": "jest /performance/lifecycle/ --forceExit --testTimeout 30000",
     "bh_test": "jest /behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",

@@ -878,7 +878,7 @@ describe('queue processor functional tests with mocking', () => {
 
     afterAll(done => {
         httpServer.close();
-        async.parallel([
+        async.series([
             done => queueProcessorSF.stop(done),
             done => queueProcessorAzure.stop(done),
             done => replicationStatusProcessor.stop(done),
@@ -902,7 +902,8 @@ describe('queue processor functional tests with mocking', () => {
             nbParts: 2,
             encrypted: true },
         { caption: 'empty object',
-            nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
+            nbParts: 0 },
+        ].forEach(testCase => describe(testCase.caption, () => {
                 beforeAll(() => {
                     s3mock.setParam('nbParts', testCase.nbParts);
                     if (testCase.encrypted) {

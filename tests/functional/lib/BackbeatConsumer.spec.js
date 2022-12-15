@@ -123,7 +123,7 @@ describe('BackbeatConsumer main tests', () => {
                 setTimeout(() => {
                     _checkZkMetrics(() => {
                         consumeCb();
-                        consumer.unsubscribe();
+                        consumer.pause();
                     });
                 }, 5000);
                 assert.deepStrictEqual(
@@ -147,7 +147,7 @@ describe('BackbeatConsumer main tests', () => {
     'messages from the previous offset', done => {
         let totalConsumed = 0;
         const kafkaConsumer = consumer._consumer;
-        consumer.subscribe();
+        consumer.resume();
 
         async.series([
             next => {

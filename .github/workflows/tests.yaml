@@ -148,11 +148,10 @@ jobs:
         BACKBEAT_CONFIG_FILE: "tests/config.json"
     - name: run backbeat notification feature tests
       run: yarn run ft_test:notification
-
     - name: run ballooning tests for lifecycle conductor
-      run: yarn jest tests/performance/lifecycle/conductor-check-memory-balloon.js
+      run: .github/scripts/run_ft_tests.bash perf_test:lifecycle
       env:
-        # Constrain heap long-lived heap size to 150MB, so that pushing 200K messages
+        # Constrain heap long-lived heap size to 200MB, so that pushing 200K messages
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
-        NODE_OPTIONS: '--max-old-space-size=150'
+        NODE_OPTIONS: '--max-old-space-size=200'

@@ -69,7 +69,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getRaftId({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.strictEqual(data[0], '1');
             return done();
@@ -80,7 +80,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getRaftLog({
             LogId: '1',
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.deepStrictEqual(data, expectedLogs);
             return done();
@@ -91,7 +91,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getBucketMetadata({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             const bucketMd = dummyBucketMD[bucketName];
             const expectedBucketMD = new BucketInfo(bucketMd.name,
@@ -119,7 +119,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getObjectList({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.deepStrictEqual(data, expectedObjectList);
             return done();
@@ -131,7 +131,7 @@ describe('BackbeatClient unit tests with mock server', () => {
             Bucket: bucketName,
             Key: objectName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert(data.Body);
             const dataValue = JSON.parse(data.Body);
@@ -144,7 +144,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getBucketCseq({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert(data[0] && data[0].cseq);
             assert.strictEqual(data[0].cseq, 7);
