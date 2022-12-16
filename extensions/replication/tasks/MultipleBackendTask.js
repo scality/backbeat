@@ -788,6 +788,17 @@ class MultipleBackendTask extends ReplicateObject {
                 return doneOnce(err);
             });
             incomingMsg = sourceReq.createReadStream();
+            if (!this.failedOnceSimple) {
+                this.failedOnceSimple = true;
+                const stream = require('stream');
+                incomingMsg.destroy();
+                incomingMsg = new stream.PassThrough();
+                incomingMsg.push('11234');
+                incomingMsg.push('223456');
+                const error = new Error('timeout');
+                error.code = 'ETIMEDOUT';
+                setTimeout(() => incomingMsg.emit('error', error), 1000);
+            }
             const readStartTime = Date.now();
             incomingMsg.on('error', err => {
                 if (err.statusCode === 404) {
