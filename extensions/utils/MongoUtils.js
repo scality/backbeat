@@ -13,7 +13,7 @@
 function constructConnectionString(mongoConfig) {
     const { authCredentials, writeConcern,
         readPreference } = mongoConfig;
-    const replicaSetHosts = 'data-db-mongodb-sharded-mongos-0.data-db-mongodb-sharded.zenko.svc:27017';
+    const replicaSetHosts = 'data-db-mongodb-sharded-mongos-0.data-db-mongodb-sharded.default.svc.cluster.local:27017';
     let cred = '';
     if (authCredentials &&
         authCredentials.username &&
