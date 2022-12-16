@@ -11,8 +11,9 @@
  * @returns {string} mongo Connection config
  */
 function constructConnectionString(mongoConfig) {
-    const { authCredentials, replicaSetHosts, writeConcern,
-        readPreference, replicaSet } = mongoConfig;
+    const { authCredentials, writeConcern,
+        readPreference } = mongoConfig;
+    const replicaSetHosts = 'data-db-mongodb-sharded-mongos-0.data-db-mongodb-sharded.zenko.svc:27017';
     let cred = '';
     if (authCredentials &&
         authCredentials.username &&
@@ -21,7 +22,7 @@ function constructConnectionString(mongoConfig) {
         const password = encodeURIComponent(authCredentials.password);
         cred = `${username}:${password}@`;
     }
-    let url = `mongodb://${cred}${replicaSetHosts}/` +
+    const url = `mongodb://${cred}${replicaSetHosts}/` +
         `?w=${writeConcern}&readPreference=${readPreference}`;
     // if (replicaSet) {
     //     url += `&replicaSet=${replicaSet}`;
