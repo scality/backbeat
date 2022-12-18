@@ -65,7 +65,7 @@ class OplogPopulator {
     async _setupMongoClient() {
         try {
             const client = await MongoClient.connect(this._mongoUrl, {
-                 replicaSet: this._replicaSet,
+                //  replicaSet: this._replicaSet,
                  useNewUrlParser: true,
             });
             // connect to metadata DB
