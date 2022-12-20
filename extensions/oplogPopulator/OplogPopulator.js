@@ -51,6 +51,10 @@ class OplogPopulator {
         this._mongoClient = null;
         this._metastore = null;
         // setup mongo connection data
+        const isMongoSharded = process.env.MONGODB_SHARDED === 'true';
+        if (isMongoSharded) {
+            delete this._mongoConfig.replicaSet;
+        }
         this._mongoUrl = constructConnectionString(this._mongoConfig);
         this._replicaSet = this._mongoConfig.replicaSet;
         this._database = this._mongoConfig.database;
