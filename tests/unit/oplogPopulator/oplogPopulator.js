@@ -104,6 +104,20 @@ describe('OplogPopulator', () => {
             assert.strictEqual(oplogPopulator._replicaSet, 'rs0');
             assert.strictEqual(oplogPopulator._database, 'metadata');
         });
+
+        it('should unset replicaSet field in mongo config when in sharding mode', () => {
+            const localMongoConfig = { ...mongoConfig };
+            process.env.MONGODB_SHARDED = 'true';
+            const op = new OplogPopulator({
+                config: localMongoConfig,
+                mongoConfig: localMongoConfig,
+                activeExtensions,
+                logger,
+            });
+            delete process.env.MONGODB_SHARDED;
+            assert.strictEqual(op._replicaSet, undefined);
+            assert.strictEqual(op._mongoConfig.replicaSet, undefined);
+        });
     });
 
     describe('_setupMongoClient', () => {
