@@ -121,14 +121,14 @@ describe('OplogPopulator', () => {
     });
 
     describe('_setupMongoClient', () => {
-        it('should connect to mongo and setup client', async () => {
+        it('should connect to mongo and setup client', () => {
             const collectionStub = sinon.stub();
             const dbStub = sinon.stub().returns({
                 collection: collectionStub,
             });
             const mongoConnectStub = sinon.stub(MongoClient, 'connect')
                 .resolves({ db: dbStub });
-            await oplogPopulator._setupMongoClient()
+            return oplogPopulator._setupMongoClient()
             .then(() => {
                 const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
                     'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
@@ -144,10 +144,10 @@ describe('OplogPopulator', () => {
             }).catch(err => assert.ifError(err));
         });
 
-        it('should fail when mongo connection fails', async () => {
+        it('should fail when mongo connection fails', () => {
             const mongoConnectStub = sinon.stub(MongoClient, 'connect')
                 .rejects(errors.InternalError);
-            await oplogPopulator._setupMongoClient()
+            return oplogPopulator._setupMongoClient()
             .then(() => {
                 const mongoUrl = 'mongodb://user:password@localhost:27017,' +
                     'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
@@ -161,13 +161,13 @@ describe('OplogPopulator', () => {
             }).catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should fail if it can\'t get metadata db', async () => {
+        it('should fail if it can\'t get metadata db', () => {
             const dbStub = sinon.stub().returns({
                 collection: sinon.stub().throws(errors.InternalError),
             });
             const mongoConnectStub = sinon.stub(MongoClient, 'connect')
                 .resolves({ db: dbStub });
-            await oplogPopulator._setupMongoClient()
+            return oplogPopulator._setupMongoClient()
             .then(() => {
                 const mongoUrl = 'mongodb://user:password@localhost:27017,' +
                     'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
@@ -182,14 +182,14 @@ describe('OplogPopulator', () => {
             }).catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should fail if it can\'t get metastore collection', async () => {
+        it('should fail if it can\'t get metastore collection', () => {
             const collectionStub = sinon.stub().throws(errors.InternalError);
             const dbStub = sinon.stub().returns({
                 collection: collectionStub,
             });
             const mongoConnectStub = sinon.stub(MongoClient, 'connect')
                 .resolves({ db: dbStub });
-            await oplogPopulator._setupMongoClient()
+            return oplogPopulator._setupMongoClient()
             .then(() => {
                 const mongoUrl = 'mongodb://user:password@localhost:27017,' +
                     'localhost:27018,localhost:27019/?w=majority&readPreference=primary';
@@ -260,7 +260,7 @@ describe('OplogPopulator', () => {
             }
         ].forEach(scenario => {
             const { extensions, filter } = scenario;
-            it(`should correctly set filter (${extensions})`, async () => {
+            it(`should correctly set filter (${extensions})`, () => {
                 const findStub = sinon.stub().returns({
                     project: () => ({
                         map: () => ({
@@ -276,7 +276,7 @@ describe('OplogPopulator', () => {
                 });
                 tmpOplogPopulator._metastore = { find: findStub };
                 tmpOplogPopulator._loadOplogHelperClasses();
-                await tmpOplogPopulator._getBackbeatEnabledBuckets()
+                return tmpOplogPopulator._getBackbeatEnabledBuckets()
                 .then(buckets => {
                     assert(findStub.calledOnceWith({
                         $or: filter,
@@ -296,43 +296,43 @@ describe('OplogPopulator', () => {
                 })
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
+            oplogPopulator._getBackbeatEnabledBuckets()
             .then(buckets => {
                 assert.strict(buckets, undefined);
             })
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should return fail when map operation fails', async () => {
+        it('should return fail when map operation fails', () => {
             const findStub = sinon.stub().returns({
                 project: () => ({
                     map: () => sinon.stub().throws(errors.InternalError),
                 })
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
+            return oplogPopulator._getBackbeatEnabledBuckets()
             .then(buckets => {
                 assert.strict(buckets, undefined);
             })
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should return fail when project operation fails', async () => {
+        it('should return fail when project operation fails', () => {
             const findStub = sinon.stub().returns({
                 project: () => sinon.stub().throws(errors.InternalError),
             });
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
+            return oplogPopulator._getBackbeatEnabledBuckets()
             .then(buckets => {
                 assert.strict(buckets, undefined);
             })
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('should return fail when find operation fails', async () => {
+        it('should return fail when find operation fails', () => {
             const findStub = sinon.stub().throws(errors.InternalError);
             oplogPopulator._metastore = { find: findStub };
-            await oplogPopulator._getBackbeatEnabledBuckets()
+            return oplogPopulator._getBackbeatEnabledBuckets()
             .then(buckets => {
                 assert.strict(buckets, undefined);
             })
