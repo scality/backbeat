@@ -21,7 +21,6 @@ const paramsJoi = joi.object({
 }).required();
 
 // Promisify async functions
-const eachSeries = util.promisify(async.eachSeries);
 const eachLimit = util.promisify(async.eachLimit);
 const timesLimit = util.promisify(async.timesLimit);
 
@@ -226,66 +225,6 @@ class ConnectorsManager {
     }
 
     /**
-     * Removes invalid buckets from connector config
-     * @param {Connector} connector connector
-     * @param {string[]} buckets valid bucket names
-     * @returns {Promise|undefined} undefined
-     * @throws {InternalError}
-     */
-    async removeConnectorInvalidBuckets(connector, buckets) {
-        try {
-            // getting connector's invalid buckets
-            const invalidBuckets = connector.buckets.filter(bucket =>
-                !buckets.includes(bucket));
-            // removing invalid buckets
-            await eachSeries(invalidBuckets, async bucket =>
-                connector.removeBucket(bucket));
-            this._logger.debug('Successfully removed invalid buckets from connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                connector: connector.name,
-                numberOfBucketsRemoved: invalidBuckets.length
-            });
-            this._logger.debug('Successfully removed invalid buckets from connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                connector: connector.name,
-                numberOfBucketsRemoved: invalidBuckets.length
-            });
-        } catch (err) {
-            this._logger.error('An error occurred while removing invalid buckets from a connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                error: err.description || err.message,
-                connector: connector.name,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
-    }
-
-    /**
-     * Removes invalid buckets from old connectors
-     * @param {string[]} buckets valid bucket names
-     * @returns {Promise|undefined} undefined
-     * @throws {InternalError}
-     */
-    async removeInvalidBuckets(buckets) {
-        try {
-            await eachLimit(this._oldConnectors, 10, async connector =>
-                this.removeConnectorInvalidBuckets(connector, buckets));
-            this._logger.info('Successfully removed invalid buckets from old connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-            });
-            this._logger.info('Successfully removed invalid buckets from old connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-            });
-        } catch (err) {
-            this._logger.error('An error occurred while removing invalid buckets from connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-                error: err.description || err.message,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
-    }
-
-    /**
      * Schedules connector updates
      * @returns {undefined}
      */
@@ -324,10 +263,18 @@ class ConnectorsManager {
     }
 
     /**
-     * Get currently active connectors
+     * Get list of connectors created by this
+     * instance of the oplogPopulator
      * @returns {Connectors[]} list of connectors
      */
     get connectors() { return this._connectors; }
+
+    /**
+     * Get list of connectors not created by this
+     * instance of the oplogPopulator
+     * @returns {Connectors[]} list of connectors
+     */
+    get oldConnectors() { return this._oldConnectors; }
 }
 
 module.exports = ConnectorsManager;

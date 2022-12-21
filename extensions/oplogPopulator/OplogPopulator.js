@@ -248,7 +248,14 @@ class OplogPopulator {
             // establish change stream
             this._setMetastoreChangeStream();
             // remove no longer valid buckets from old connectors
-            await this._connectorsManager.removeInvalidBuckets(validBuckets);
+            const oldConnectorBuckets = this._connectorsManager.oldConnectors
+                .map(connector => connector.buckets)
+                .flat();
+            const invalidBuckets = oldConnectorBuckets.filter(bucket => !validBuckets.includes(bucket));
+            await Promise.all(invalidBuckets.map(bucket => this._allocator.stopListeningToBucket(bucket)));
+            this._logger.info('Successfully removed invalid buckets from old connectors', {
+                method: 'ConnectorsManager.removeInvalidBuckets',
+            });
             // start scheduler for updating connectors
             this._connectorsManager.scheduleConnectorUpdates();
             this._logger.info('OplogPopulator setup complete', {
