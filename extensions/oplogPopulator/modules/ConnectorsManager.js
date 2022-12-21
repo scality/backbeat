@@ -4,9 +4,11 @@ const uuid = require('uuid');
 const util = require('util');
 const schedule = require('node-schedule');
 const { errors } = require('arsenal');
+
 const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const Connector = require('./Connector');
+const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 
 const paramsJoi = joi.object({
     nbConnectors: joi.number().required(),
@@ -17,6 +19,8 @@ const paramsJoi = joi.object({
     prefix: joi.string(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
+    metricsHandler: joi.object()
+        .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -56,6 +60,7 @@ class ConnectorsManager {
             kafkaConnectPort: this._kafkaConnectPort,
             logger: this._logger,
         });
+        this._metricsHandler = params.metricsHandler;
         this._database = params.database;
         this._mongoUrl = params.mongoUrl;
         this._oplogTopic = params.oplogTopic;
@@ -203,12 +208,14 @@ class ConnectorsManager {
                 const oldConnectors = await this._getOldConnectors(oldConnectorNames);
                 this._connectors.push(...oldConnectors);
                 this._oldConnectors.push(...oldConnectors);
+                this._metricsHandler.onConnectorsInstantiated(true, oldConnectors.length);
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
             await timesLimit(nbConnectorsToAdd, 10, async () => {
                 const newConnector = await this.addConnector();
                 this._connectors.push(newConnector);
+                this._metricsHandler.onConnectorsInstantiated(false);
             });
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
@@ -233,6 +240,7 @@ class ConnectorsManager {
             const connectorsStatus = {};
             let connectorUpdateFailed = false;
             await eachLimit(this._connectors, 10, async connector => {
+                const startTime = Date.now();
                 connectorsStatus[connector.name] = {
                     numberOfBuckets: connector.bucketCount,
                     updated: null,
@@ -240,9 +248,14 @@ class ConnectorsManager {
                 try {
                     const updated = await connector.updatePipeline(true);
                     connectorsStatus[connector.name].updated = updated;
+                    if (updated) {
+                        const delta = (Date.now() - startTime) / 1000;
+                        this._metricsHandler.onConnectorReconfiguration(connector, true, delta);
+                    }
                 } catch (err) {
                     connectorUpdateFailed = true;
                     connectorsStatus[connector.name].updated = false;
+                    this._metricsHandler.onConnectorReconfiguration(connector, false);
                     this._logger.error('Failed to updated connector', {
                         method: 'ConnectorsManager.scheduleConnectorUpdates',
                         connector: connector.name,

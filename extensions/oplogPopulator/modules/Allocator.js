@@ -1,9 +1,13 @@
 const joi = require('joi');
 const { errors } = require('arsenal');
+
+const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 const LeastFullConnector = require('../allocationStrategy/LeastFullConnector');
 
 const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
+    metricsHandler: joi.object()
+        .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -28,6 +32,7 @@ class Allocator {
         this._allocationStrategy = new LeastFullConnector({
             logger: params.logger,
         });
+        this._metricsHandler = params.metricsHandler;
         // Stores connector assigned for each bucket
         this._bucketsToConnectors = new Map();
         this._initConnectorToBucketMap();
@@ -41,7 +46,10 @@ class Allocator {
         const connectors = this._connectorsManager.connectors;
         connectors.forEach(connector => {
             connector.buckets
-                .forEach(bucket => this._bucketsToConnectors.set(bucket, connector));
+                .forEach(bucket => {
+                    this._bucketsToConnectors.set(bucket, connector);
+                    this._metricsHandler.onConnectorConfigured(connector, 'add');
+                });
         });
     }
 
@@ -69,6 +77,7 @@ class Allocator {
                 const connector = this._allocationStrategy.getConnector(connectors);
                 await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
+                this._metricsHandler.onConnectorConfigured(connector, 'add');
                 this._logger.info('Started listening to bucket', {
                     method: 'Allocator.listenToBucket',
                     bucket,
@@ -99,6 +108,7 @@ class Allocator {
             if (connector) {
                 await connector.removeBucket(bucket);
                 this._bucketsToConnectors.delete(bucket);
+                this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {
                     method: 'Allocator.listenToBucket',
                     bucket,

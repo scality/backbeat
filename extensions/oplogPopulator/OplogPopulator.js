@@ -7,12 +7,14 @@ const ChangeStream = require('../../lib/wrappers/ChangeStream');
 const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
 const { ZenkoMetrics } = require('arsenal').metrics;
+const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
 
 const paramsJoi = joi.object({
     config: joi.object().required(),
     mongoConfig: joi.object().required(),
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
+    enableMetrics: joi.boolean().default(true),
 }).required();
 
 /**
@@ -38,7 +40,8 @@ class OplogPopulator {
      * @param {Object} params.logger - logger
      */
     constructor(params) {
-        joi.attempt(params, paramsJoi);
+        const validatedParams = joi.attempt(params, paramsJoi);
+        Object.assign(params, validatedParams);
         this._config = params.config;
         this._mongoConfig = params.mongoConfig;
         this._activeExtensions = params.activeExtensions;
@@ -55,6 +58,11 @@ class OplogPopulator {
         this._mongoUrl = constructConnectionString(this._mongoConfig);
         this._replicaSet = this._mongoConfig.replicaSet;
         this._database = this._mongoConfig.database;
+        // initialize metrics
+        this._metricsHandler = new OplogPopulatorMetrics(this._logger);
+        if (params.enableMetrics) {
+            this._metricsHandler.registerMetrics();
+        }
     }
 
     /**
@@ -183,6 +191,8 @@ class OplogPopulator {
                 });
                 break;
         }
+        const delta = (Date.now() - new Date(change.clusterTime).getTime()) / 1000;
+        this._metricsHandler.onOplogEventProcessed(change.operationType, delta);
         this._logger.info('Change stream event processed', {
             method: 'OplogPopulator._handleChangeStreamChange',
             type: change.operationType,
@@ -202,7 +212,16 @@ class OplogPopulator {
                     '_id': 1,
                     'operationType': 1,
                     'documentKey._id': 1,
-                    'fullDocument.value': 1
+                    'fullDocument.value': 1,
+                    // transforming the BSON timestamp
+                    // into a usable date
+                    'clusterTime': {
+                        $toDate: {
+                            $dateToString: {
+                                date: '$clusterTime'
+                            }
+                        }
+                    },
                 },
             },
         ];
@@ -234,11 +253,13 @@ class OplogPopulator {
                prefix: this._config.prefix,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
+               metricsHandler: this._metricsHandler,
                logger: this._logger,
             });
             await this._connectorsManager.initializeConnectors();
             this._allocator = new Allocator({
                 connectorsManager: this._connectorsManager,
+                metricsHandler: this._metricsHandler,
                 logger: this._logger,
             });
             // initialize mongo client
