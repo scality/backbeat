@@ -6,6 +6,7 @@ const { constructConnectionString } = require('../utils/MongoUtils');
 const ChangeStream = require('../../lib/wrappers/ChangeStream');
 const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
+const { ZenkoMetrics } = require('arsenal').metrics;
 
 const paramsJoi = joi.object({
     config: joi.object().required(),
@@ -289,6 +290,21 @@ class OplogPopulator {
             this._logger.error('ready state', components);
         }
         return allReady;
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {undefined}
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+        res.writeHead(200, {
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+        });
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 
