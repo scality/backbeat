@@ -6,6 +6,8 @@ const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
 const ConnectorsManager =
     require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
+const OplogPopulatorMetrics =
+    require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -76,6 +78,7 @@ describe('ConnectorsManager', () => {
             cronRule: '*/5 * * * * *',
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
+            metricsHandler: new OplogPopulatorMetrics(logger),
             logger,
         });
     });
@@ -167,31 +170,6 @@ describe('ConnectorsManager', () => {
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
             assert.deepEqual(connectorsManager._oldConnectors, []);
-        });
-    });
-
-    describe('removeConnectorInvalidBuckets', () => {
-        it('Should remove invalid buckets from connector', async () => {
-            connector1._buckets = new Set(['valid-bucket-1', 'invalid-bucket-1', 'invalid-bucket-2']);
-            const removeStub = sinon.stub(connector1, 'removeBucket')
-                .resolves();
-            sinon.stub(connector1, 'updatePipeline')
-                .resolves();
-            await connectorsManager.removeConnectorInvalidBuckets(connector1, [
-                'valid-bucket-1',
-            ]);
-            assert(removeStub.getCall(0).calledWith('invalid-bucket-1'));
-            assert(removeStub.getCall(1).calledWith('invalid-bucket-2'));
-        });
-    });
-
-    describe('removeInvalidBuckets', () => {
-        it('Should remove invalid buckets from old connectors', async () => {
-            connectorsManager._oldConnectors = [connector1];
-            const removeBucketsStub = sinon.stub(connectorsManager, 'removeConnectorInvalidBuckets')
-                .resolves();
-            await connectorsManager.removeInvalidBuckets(['valid-bucket-1']);
-            assert(removeBucketsStub.calledOnceWith(connector1, ['valid-bucket-1']));
         });
     });
 });

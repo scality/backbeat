@@ -197,4 +197,12 @@ describe('Connector', () => {
             assert(updateStub.notCalled);
         });
     });
+
+    describe('getConfigSizeInBytes', () => {
+        it('Should return correct size in bytes', () => {
+            connector._config = { key: 'value' };
+            const size = connector.getConfigSizeInBytes();
+            assert.strictEqual(size, 15);
+        });
+    });
 });
