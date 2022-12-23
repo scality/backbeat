@@ -1,0 +1,52 @@
+evaluation_interval: 1m
+rule_files:
+  - alerts.rendered.yaml
+
+tests:
+
+  - name: Oplog Populator Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-oplog-populator-headless",pod="oplog-populator-1"}
+        values: 1 1 0
+    alert_rule_test:
+      - alertname: OplogPopulatorUnavailable
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: OplogPopulatorUnavailable
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: OplogPopulatorUnavailable
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Oplog populator pod is down"
+              summary: "Oplog populator service is in critical state"
+
+  - name: Connector Configuration Failure
+    interval: 1m
+    input_series:
+      - series: oplog_populator_reconfiguration{connector="example-connector",success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0+0x4 0+40x4 160+50x6
+      - series: oplog_populator_reconfiguration{connector="example-connector",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 100+100x16
+    alert_rule_test:
+      - alertname: KafkaConnectFailedConnectorConfiguration
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: KafkaConnectFailedConnectorConfiguration
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: KafkaConnectFailedConnectorConfiguration
+        eval_time: 16m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              connector: example-connector
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Oplog populator failed to configure connector"
+              summary: "Oplog populator couldn't update kafka connect connector"

@@ -40,3 +40,12 @@ jobs:
           alert_inputs: >-
             namespace=zenko,job_notification_producer=artesca-data-backbeat-notification-producer-headless,job_notification_processors=artesca-data-backbeat-notification-processor,notificationFailuresWarningThreshold=0.1,notificationFailuresCriticalThreshold=0.5,notification_producer_replicas=3,notification_processor_replicas=2
           github_token: ${{ secrets.GIT_ACCESS_TOKEN }}
+
+      - name: Render and test oplog populator 
+        uses: scality/action-prom-render-test@1.0.2
+        with:
+          alert_file_path: monitoring/oplog-populator/alerts.yaml
+          test_file_path: monitoring/oplog-populator/alerts.test.yaml
+          alert_inputs: >-
+            namespace=zenko,oplog_populator_job=artesca-data-backbeat-oplog-populator-headless,oplogPopulatorChangeStreamLagThreshold=10
+          github_token: ${{ secrets.GIT_ACCESS_TOKEN }}
