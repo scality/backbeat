@@ -3,7 +3,6 @@ const constants = {
     defaultConnectorName: 'source-connector',
     defaultConnectorConfig: {
         'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-        'change.stream.full.document': 'updateLookup',
         'pipeline': '[]',
         'collection': '',
         // JSON output converter config
