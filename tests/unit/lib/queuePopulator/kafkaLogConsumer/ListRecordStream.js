@@ -19,25 +19,34 @@ const changeStreamDocument = {
         }
     }
 };
-const kafkaMessage = {
-    value: Buffer.from(JSON.stringify(changeStreamDocument)),
-    timestamp: Date.now(),
-    size: 2,
-    topic: 'oplog-topic',
-    offset: 1337,
-    partition: 0,
-    key: Buffer.from('key'),
+const changeStreamDocumentUpdate = {
+    ns: {
+        db: 'metadata',
+        coll: 'example-bucket',
+    },
+    documentKey: {
+        _id: 'example-key',
+    },
+    operationType: 'update',
+    updateDescription: {
+        updatedFields: {
+            value: {
+                field: 'value',
+            },
+        },
+    },
+    fullDocument: null,
 };
 
-const InvalidKafkaMessage = {
-    value: Buffer.from(''),
+const getKafkaMessage = value => ({
+    value: Buffer.from(value),
     timestamp: Date.now(),
     size: 2,
     topic: 'oplog-topic',
     offset: 1337,
     partition: 0,
     key: Buffer.from('key'),
-};
+});
 
 describe('ListRecordStream', () => {
     let listRecordStream;
@@ -100,6 +109,7 @@ describe('ListRecordStream', () => {
 
     describe('_transform', () => {
         it('Should correct format entry', done => {
+            const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
             listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
                 assert.deepEqual(data, {
@@ -117,6 +127,8 @@ describe('ListRecordStream', () => {
             });
         });
         it('Should skip record if format is invalid', done => {
+            const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
+            const InvalidKafkaMessage = getKafkaMessage('');
             listRecordStream.write(InvalidKafkaMessage);
             listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
@@ -138,6 +150,26 @@ describe('ListRecordStream', () => {
                     }],
                 });
                 return done();
+            });
+        });
+    });
+
+    describe('_getObjectMd', () => {
+        [
+            {
+                it: 'insert',
+                doc: changeStreamDocument,
+                exp: changeStreamDocument.fullDocument.value,
+            },
+            {
+                it: 'update',
+                doc: changeStreamDocumentUpdate,
+                exp: changeStreamDocumentUpdate.updateDescription.updatedFields.value,
+            },
+        ].forEach(params => {
+            it(`Should return correct object metadata (${params.it})`, () => {
+                const md = JSON.parse(listRecordStream._getObjectMd(params.doc));
+                assert.deepEqual(md, params.exp);
             });
         });
     });

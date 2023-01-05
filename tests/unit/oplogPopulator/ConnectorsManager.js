@@ -15,7 +15,6 @@ const connectorConfig = {
     'connection.uri': 'mongodb://localhost:27017/?w=majority&readPreference=primary',
     'topic.namespace.map': '{\"*\":\"oplog\"}',
     'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-    'change.stream.full.document': 'updateLookup',
     'pipeline': '[]',
     'collection': '',
     'output.format.value': 'json',
