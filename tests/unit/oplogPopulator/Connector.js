@@ -14,7 +14,6 @@ const connectorConfig = {
         'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0',
     'topic.namespace.map': '{*:"oplogTopic"}',
     'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
-    'change.stream.full.document': 'updateLookup',
     'pipeline': '[]',
     'collection': '',
 };
