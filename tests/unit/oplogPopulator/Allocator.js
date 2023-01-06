@@ -6,6 +6,8 @@ const Allocator =
     require('../../../extensions/oplogPopulator/modules/Allocator');
 const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
+const OplogPopulatorMetrics =
+    require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 
 const logger = new werelogs.Logger('Allocator');
 
@@ -29,6 +31,7 @@ describe('Allocator', () => {
             connectorsManager: {
                 connectors: [],
             },
+            metricsHandler: new OplogPopulatorMetrics(logger),
             logger,
         });
     });
