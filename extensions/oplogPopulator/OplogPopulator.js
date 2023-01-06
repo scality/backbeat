@@ -6,12 +6,15 @@ const { constructConnectionString } = require('../utils/MongoUtils');
 const ChangeStream = require('../../lib/wrappers/ChangeStream');
 const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
+const { ZenkoMetrics } = require('arsenal').metrics;
+const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
 
 const paramsJoi = joi.object({
     config: joi.object().required(),
     mongoConfig: joi.object().required(),
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
+    enableMetrics: joi.boolean().default(true),
 }).required();
 
 /**
@@ -37,7 +40,8 @@ class OplogPopulator {
      * @param {Object} params.logger - logger
      */
     constructor(params) {
-        joi.attempt(params, paramsJoi);
+        const validatedParams = joi.attempt(params, paramsJoi);
+        Object.assign(params, validatedParams);
         this._config = params.config;
         this._mongoConfig = params.mongoConfig;
         this._activeExtensions = params.activeExtensions;
@@ -54,6 +58,11 @@ class OplogPopulator {
         this._mongoUrl = constructConnectionString(this._mongoConfig);
         this._replicaSet = this._mongoConfig.replicaSet;
         this._database = this._mongoConfig.database;
+        // initialize metrics
+        this._metricsHandler = new OplogPopulatorMetrics(this._logger);
+        if (params.enableMetrics) {
+            this._metricsHandler.registerMetrics();
+        }
     }
 
     /**
@@ -67,6 +76,7 @@ class OplogPopulator {
             const client = await MongoClient.connect(this._mongoUrl, {
                  replicaSet: this._replicaSet,
                  useNewUrlParser: true,
+                 useUnifiedTopology: true,
             });
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
@@ -181,6 +191,8 @@ class OplogPopulator {
                 });
                 break;
         }
+        const delta = (Date.now() - new Date(change.clusterTime).getTime()) / 1000;
+        this._metricsHandler.onOplogEventProcessed(change.operationType, delta);
         this._logger.info('Change stream event processed', {
             method: 'OplogPopulator._handleChangeStreamChange',
             type: change.operationType,
@@ -200,7 +212,16 @@ class OplogPopulator {
                     '_id': 1,
                     'operationType': 1,
                     'documentKey._id': 1,
-                    'fullDocument.value': 1
+                    'fullDocument.value': 1,
+                    // transforming the BSON timestamp
+                    // into a usable date
+                    'clusterTime': {
+                        $toDate: {
+                            $dateToString: {
+                                date: '$clusterTime'
+                            }
+                        }
+                    },
                 },
             },
         ];
@@ -232,11 +253,13 @@ class OplogPopulator {
                prefix: this._config.prefix,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
+               metricsHandler: this._metricsHandler,
                logger: this._logger,
             });
             await this._connectorsManager.initializeConnectors();
             this._allocator = new Allocator({
                 connectorsManager: this._connectorsManager,
+                metricsHandler: this._metricsHandler,
                 logger: this._logger,
             });
             // initialize mongo client
@@ -248,7 +271,14 @@ class OplogPopulator {
             // establish change stream
             this._setMetastoreChangeStream();
             // remove no longer valid buckets from old connectors
-            await this._connectorsManager.removeInvalidBuckets(validBuckets);
+            const oldConnectorBuckets = this._connectorsManager.oldConnectors
+                .map(connector => connector.buckets)
+                .flat();
+            const invalidBuckets = oldConnectorBuckets.filter(bucket => !validBuckets.includes(bucket));
+            await Promise.all(invalidBuckets.map(bucket => this._allocator.stopListeningToBucket(bucket)));
+            this._logger.info('Successfully removed invalid buckets from old connectors', {
+                method: 'ConnectorsManager.removeInvalidBuckets',
+            });
             // start scheduler for updating connectors
             this._connectorsManager.scheduleConnectorUpdates();
             this._logger.info('OplogPopulator setup complete', {
@@ -281,6 +311,21 @@ class OplogPopulator {
             this._logger.error('ready state', components);
         }
         return allReady;
+    }
+
+    /**
+     * Handle ProbeServer metrics
+     *
+     * @param {http.HTTPServerResponse} res - HTTP Response to respond with
+     * @param {Logger} log - Logger
+     * @returns {undefined}
+     */
+    handleMetrics(res, log) {
+        log.debug('metrics requested');
+        res.writeHead(200, {
+            'Content-Type': ZenkoMetrics.asPrometheusContentType(),
+        });
+        res.end(ZenkoMetrics.asPrometheus());
     }
 }
 

@@ -77,6 +77,31 @@ class Connector {
     get bucketCount() { return this._buckets.size; }
 
     /**
+     * Get connector config
+     * @returns {Object} connector config
+     */
+    get config() { return this._config; }
+
+    /**
+     * Calculate config size in bytes
+     * @returns {number} config size
+     */
+    getConfigSizeInBytes() {
+        try {
+            const configSize = Buffer.byteLength(JSON.stringify(this._config));
+            return configSize;
+        } catch (err) {
+            this._logger.error('Error while calculating config size', {
+                method: 'Connector.getConfigSizeInBytes',
+                connector: this._name,
+                config: this._config,
+                error: err.description || err.message,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
+    }
+
+    /**
      * Creates the Kafka-connect mongo connector
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}

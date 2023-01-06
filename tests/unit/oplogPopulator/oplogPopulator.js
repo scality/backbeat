@@ -41,6 +41,7 @@ describe('OplogPopulator', () => {
             config: oplogPopulatorConfig,
             mongoConfig,
             activeExtensions,
+            enableMetrics: false,
             logger,
         });
     });
@@ -92,6 +93,7 @@ describe('OplogPopulator', () => {
                 config: oplogPopulatorConfig,
                 mongoConfig,
                 activeExtensions,
+                enableMetrics: false,
                 logger,
             });
             assert(op instanceof OplogPopulator);
@@ -122,7 +124,8 @@ describe('OplogPopulator', () => {
                     mongoUrl,
                     {
                         replicaSet: 'rs0',
-                        useNewUrlParser: true
+                        useNewUrlParser: true,
+                        useUnifiedTopology: true,
                     }
                 ));
                 assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
@@ -258,6 +261,7 @@ describe('OplogPopulator', () => {
                     config: oplogPopulatorConfig,
                     mongoConfig,
                     activeExtensions: extensions,
+                    enableMetrics: false,
                     logger,
                 });
                 tmpOplogPopulator._metastore = { find: findStub };
@@ -470,6 +474,7 @@ describe('OplogPopulator', () => {
                     config: oplogPopulatorConfig,
                     mongoConfig,
                     activeExtensions: exts,
+                    enableMetrics: false,
                     logger,
                 });
                 tmpOplogPopulator._loadOplogHelperClasses();
@@ -487,7 +492,14 @@ describe('OplogPopulator', () => {
                         '_id': 1,
                         'operationType': 1,
                         'documentKey._id': 1,
-                        'fullDocument.value': 1
+                        'fullDocument.value': 1,
+                        'clusterTime': {
+                            $toDate: {
+                                $dateToString: {
+                                    date: '$clusterTime'
+                                }
+                            }
+                        },
                     },
                 },
             ];
