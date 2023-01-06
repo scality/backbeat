@@ -53,7 +53,8 @@ jobs:
             replication/alerts.yaml:application/prometheus-alerts+yaml \
             notification/dashboard.json:application/grafana-dashboard+json \
             notification/alerts.yaml:application/prometheus-alerts+yaml \
-            oplog-populator/dashboard.json:application/grafana-dashboard+json
+            oplog-populator/dashboard.json:application/grafana-dashboard+json \
+            oplog-populator/alerts.yaml:application/prometheus-alerts+yaml
         working-directory: monitoring
 
       - name: Push policies into the production namespace
