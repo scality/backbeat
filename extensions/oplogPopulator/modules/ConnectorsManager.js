@@ -4,9 +4,11 @@ const uuid = require('uuid');
 const util = require('util');
 const schedule = require('node-schedule');
 const { errors } = require('arsenal');
+
 const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const Connector = require('./Connector');
+const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 
 const paramsJoi = joi.object({
     nbConnectors: joi.number().required(),
@@ -17,11 +19,12 @@ const paramsJoi = joi.object({
     prefix: joi.string(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
+    metricsHandler: joi.object()
+        .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
 }).required();
 
 // Promisify async functions
-const eachSeries = util.promisify(async.eachSeries);
 const eachLimit = util.promisify(async.eachLimit);
 const timesLimit = util.promisify(async.timesLimit);
 
@@ -57,6 +60,7 @@ class ConnectorsManager {
             kafkaConnectPort: this._kafkaConnectPort,
             logger: this._logger,
         });
+        this._metricsHandler = params.metricsHandler;
         this._database = params.database;
         this._mongoUrl = params.mongoUrl;
         this._oplogTopic = params.oplogTopic;
@@ -204,12 +208,14 @@ class ConnectorsManager {
                 const oldConnectors = await this._getOldConnectors(oldConnectorNames);
                 this._connectors.push(...oldConnectors);
                 this._oldConnectors.push(...oldConnectors);
+                this._metricsHandler.onConnectorsInstantiated(true, oldConnectors.length);
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
             await timesLimit(nbConnectorsToAdd, 10, async () => {
                 const newConnector = await this.addConnector();
                 this._connectors.push(newConnector);
+                this._metricsHandler.onConnectorsInstantiated(false);
             });
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
@@ -226,66 +232,6 @@ class ConnectorsManager {
     }
 
     /**
-     * Removes invalid buckets from connector config
-     * @param {Connector} connector connector
-     * @param {string[]} buckets valid bucket names
-     * @returns {Promise|undefined} undefined
-     * @throws {InternalError}
-     */
-    async removeConnectorInvalidBuckets(connector, buckets) {
-        try {
-            // getting connector's invalid buckets
-            const invalidBuckets = connector.buckets.filter(bucket =>
-                !buckets.includes(bucket));
-            // removing invalid buckets
-            await eachSeries(invalidBuckets, async bucket =>
-                connector.removeBucket(bucket));
-            this._logger.debug('Successfully removed invalid buckets from connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                connector: connector.name,
-                numberOfBucketsRemoved: invalidBuckets.length
-            });
-            this._logger.debug('Successfully removed invalid buckets from connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                connector: connector.name,
-                numberOfBucketsRemoved: invalidBuckets.length
-            });
-        } catch (err) {
-            this._logger.error('An error occurred while removing invalid buckets from a connector', {
-                method: 'ConnectorsManager.removeConnectorInvalidBuckets',
-                error: err.description || err.message,
-                connector: connector.name,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
-    }
-
-    /**
-     * Removes invalid buckets from old connectors
-     * @param {string[]} buckets valid bucket names
-     * @returns {Promise|undefined} undefined
-     * @throws {InternalError}
-     */
-    async removeInvalidBuckets(buckets) {
-        try {
-            await eachLimit(this._oldConnectors, 10, async connector =>
-                this.removeConnectorInvalidBuckets(connector, buckets));
-            this._logger.info('Successfully removed invalid buckets from old connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-            });
-            this._logger.info('Successfully removed invalid buckets from old connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-            });
-        } catch (err) {
-            this._logger.error('An error occurred while removing invalid buckets from connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-                error: err.description || err.message,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
-    }
-
-    /**
      * Schedules connector updates
      * @returns {undefined}
      */
@@ -294,6 +240,7 @@ class ConnectorsManager {
             const connectorsStatus = {};
             let connectorUpdateFailed = false;
             await eachLimit(this._connectors, 10, async connector => {
+                const startTime = Date.now();
                 connectorsStatus[connector.name] = {
                     numberOfBuckets: connector.bucketCount,
                     updated: null,
@@ -301,9 +248,14 @@ class ConnectorsManager {
                 try {
                     const updated = await connector.updatePipeline(true);
                     connectorsStatus[connector.name].updated = updated;
+                    if (updated) {
+                        const delta = (Date.now() - startTime) / 1000;
+                        this._metricsHandler.onConnectorReconfiguration(connector, true, delta);
+                    }
                 } catch (err) {
                     connectorUpdateFailed = true;
                     connectorsStatus[connector.name].updated = false;
+                    this._metricsHandler.onConnectorReconfiguration(connector, false);
                     this._logger.error('Failed to updated connector', {
                         method: 'ConnectorsManager.scheduleConnectorUpdates',
                         connector: connector.name,
@@ -324,10 +276,18 @@ class ConnectorsManager {
     }
 
     /**
-     * Get currently active connectors
+     * Get list of connectors created by this
+     * instance of the oplogPopulator
      * @returns {Connectors[]} list of connectors
      */
     get connectors() { return this._connectors; }
+
+    /**
+     * Get list of connectors not created by this
+     * instance of the oplogPopulator
+     * @returns {Connectors[]} list of connectors
+     */
+    get oldConnectors() { return this._oldConnectors; }
 }
 
 module.exports = ConnectorsManager;
