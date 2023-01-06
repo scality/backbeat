@@ -1,0 +1,53 @@
+x-inputs:
+- name: namespace
+  type: constant
+  value: zenko
+- name: oplog_populator_job
+  type: config
+  value: artesca-data-backbeat-oplog-populator-headless
+- name: oplogPopulatorChangeStreamLagThreshold
+  type: config
+  value: 10
+
+groups:
+- name: Oplog Populator
+  rules:
+
+  - alert: OplogPopulatorUnavailable
+    Expr: |
+      sum(up{namespace="${namespace}",job="${oplog_populator_job}"}) < 1
+    For: "30s"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "Oplog populator pod is down"
+      summary: "Oplog populator service is in critical state"
+
+  - alert: KafkaConnectFailedConnectorConfiguration
+    Expr: |
+        sum by(connector) (increase(oplog_populator_reconfiguration{success="false",job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+        > 0
+    For: "5m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "Oplog populator failed to configure connector"
+      summary: "Oplog populator couldn't update kafka connect connector"
+
+  - alert: OplogPopulatorMetastoreChangeStreamLagThreshold
+    Expr: |
+        histogram_quantile(
+          0.99,
+          sum by(le) (rate(oplog_populator_acknowledgement_lag_sec_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+        )
+        >= ${oplogPopulatorChangeStreamLagThreshold}
+    For: "5m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-oplog-populator
+      description: "Oplog populator metastore change stream lag is too big"
+      summary: "Oplog populator configuration lag is above threshold"
+
