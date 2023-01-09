@@ -1,12 +1,12 @@
 ---
 name: release-federation
 
-on:
-  workflow_dispatch:
-    inputs:
-      tag:
-        description: 'Tag to be released'
-        required: true
+on: push
+  # workflow_dispatch:
+  #   inputs:
+  #     tag:
+  #       description: 'Tag to be released'
+  #       required: true
 
 env:
   REGISTRY_NAME: registry.scality.com
@@ -35,16 +35,16 @@ jobs:
           context: .
           file: images/nodesvc-base/Dockerfile
           push: true
-          tags: "${{ env.REGISTRY_NAME }}/${{env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}:${{ github.event.inputs.tag }}-nodesvc-base"
+          tags: "${{ env.REGISTRY_NAME }}/${{env.PROJECT_NAME }}-dev/${{ env.PROJECT_NAME }}:${{ github.sha }}-nodesvc-base"
           cache-from: type=gha
           cache-to: type=gha,mode=max\
 
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Release ${{ github.event.inputs.tag }}
-          tag_name: ${{ github.event.inputs.tag }}
-          generate_release_notes: true
-          target_commitish: ${{ github.sha }}
+      # - name: Create Release
+      #   uses: softprops/action-gh-release@v1
+      #   env:
+      #     GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+      #   with:
+      #     name: Release ${{ github.event.inputs.tag }}
+      #     tag_name: ${{ github.event.inputs.tag }}
+      #     generate_release_notes: true
+      #     target_commitish: ${{ github.sha }}
