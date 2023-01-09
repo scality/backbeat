@@ -127,8 +127,10 @@ class NotificationConfigManager {
     }
 
     _getConfigDataFromBuffer(data) {
+        console.log(data);
         const { error, result } = safeJsonParse(data);
         if (error) {
+            console.log({ error })
             this.log.error('invalid config', { error, config: data });
             return undefined;
         }
