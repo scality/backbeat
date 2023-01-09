@@ -127,7 +127,7 @@ class NotificationConfigManager {
     }
 
     _getConfigDataFromBuffer(data) {
-        console.log(data);
+        console.log(data.toString());
         const { error, result } = safeJsonParse(data);
         if (error) {
             console.log({ error })
