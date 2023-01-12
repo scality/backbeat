@@ -23,6 +23,8 @@ const errorTransitionColdObject = errors.InternalError.
     customizeDescription('transitioning a cold object is forbidden');
 const errorObjectTemporarilyRestored = errors.InternalError.
     customizeDescription('object temporarily restored');
+const errorReplicationInProgress = errors.InternalError.
+    customizeDescription('replication of the object is currently in progress');
 
 
 // Default max AWS limit is 1000 for both list objects and list object versions
@@ -914,6 +916,10 @@ class LifecycleTask extends BackbeatTask {
                     return next(err, objectMD);
                 }),
             (objectMD, next) => {
+                const replicationStatus = objectMD.getReplicationStatus();
+                if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
+                    return next(errorReplicationInProgress);
+                }
                 const dataStoreName = objectMD.getDataStoreName();
                 const isObjectCold = dataStoreName && locationsConfig[dataStoreName]
                     && locationsConfig[dataStoreName].isCold;
