@@ -99,6 +99,29 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
+    [
+      'PENDING',
+      'PROCESSING',
+      'FAILED',
+    ].forEach(status => {
+        it(`should skip replicating object : ${status}`, done => {
+            objMd.setReplicationStatus('PENDING');
+            const entry = ActionQueueEntry.create('deleteObject')
+                .setAttribute('target.owner', 'testowner')
+                .setAttribute('target.bucket', 'testbucket')
+                .setAttribute('target.accountId', 'testid')
+                .setAttribute('target.key', 'testkey')
+                .setAttribute('target.version', 'testversion')
+                .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+            s3Client.setResponse(null, {});
+            task.processActionEntry(entry, err => {
+                assert.strictEqual(s3Client.calls.deleteObject, 0);
+                assert.ifError(err);
+                done();
+            });
+        });
+    });
+
     it('should expire current version of locked object with legal hold',
         done => {
             objMd.setLegalHold(true);
