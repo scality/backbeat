@@ -18,6 +18,7 @@ const {
     bucketTasksTopic,
     objectTasksTopic,
     testTimeout,
+    mongoConfig,
 } = require('./configObjects');
 
 const bucketEntryMessage = {
@@ -45,7 +46,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
 
     function generateRetryTest(s3Client, shouldRetry = true) {
         const lbp = new LifecycleBucketProcessor(
-            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
+            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig);
 
         lbp.clientManager.getS3Client = () => s3Client;
         lbp.clientManager.getBackbeatClient = () => ({});

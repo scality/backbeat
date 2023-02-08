@@ -44,6 +44,14 @@ const repConfig = {
 
 const s3Config = {};
 
+const mongoConfig = {
+    replicaSetHosts: 'localhost:27017,localhost:27018,localhost:27019',
+    writeConcern: 'majority',
+    replicaSet: 'rs0',
+    readPreference: 'primary',
+    database: 'metadata'
+};
+
 const testTimeout = 30000;
 
 module.exports = {
@@ -55,4 +63,5 @@ module.exports = {
     repConfig,
     s3Config,
     testTimeout,
+    mongoConfig,
 };

@@ -26,6 +26,8 @@ const errorObjectTemporarilyRestored = errors.InternalError.
     customizeDescription('object temporarily restored');
 const errorReplicationInProgress = errors.InternalError.
     customizeDescription('replication of the object is currently in progress');
+const errorLocationPaused = errors.InternalError.
+    customizeDescription('lifecycle events to location have been paused');
 
 
 // Default max AWS limit is 1000 for both list objects and list object versions
@@ -1065,12 +1067,20 @@ class LifecycleTask extends BackbeatTask {
      */
     _applyTransitionRule(params, log) {
         async.waterfall([
+            next => {
+                // No transition if lifecycle events to location were paused
+                if (this.pausedLocations.has(params.site)) {
+                    return next(errorLocationPaused);
+                }
+                return next();
+            },
             next =>
                 this._getObjectMD(params, log, (err, objectMD) => {
                     LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
                     return next(err, objectMD);
                 }),
             (objectMD, next) => {
+                // No transition when replication is ongoing or failed
                 const replicationStatus = objectMD.getReplicationStatus();
                 if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
                     return next(errorReplicationInProgress);

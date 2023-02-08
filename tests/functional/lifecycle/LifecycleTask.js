@@ -423,6 +423,7 @@ class LifecycleBucketProcessorMock {
             bucketTasksTopic: 'bucket-tasks',
             objectTasksTopic: 'object-tasks',
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
+            pausedLocations: new Set(),
             log: this._log,
             ncvHeap: this.ncvHeap,
         };

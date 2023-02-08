@@ -17,9 +17,10 @@ const { applyBucketLifecycleWorkflows } = require('../management');
 const { startProbeServer } = require('../../../lib/util/probe');
 const config = require('../../../lib/Config');
 
-const { zookeeper, kafka, extensions, s3, log } = config;
+const { zookeeper, kafka, extensions, s3, log, queuePopulator } = config;
 const lcConfig = extensions.lifecycle;
 const repConfig = extensions.replication;
+const mongoConfig = queuePopulator.mongo;
 
 werelogs.configure({
     level: log.logLevel,
@@ -30,7 +31,7 @@ werelogs.configure({
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
 const bucketProcessor = new LifecycleBucketProcessor(
-    zookeeper, kafka, lcConfig, repConfig, s3, lcConfig.transport
+    zookeeper, kafka, lcConfig, repConfig, s3, mongoConfig, lcConfig.transport,
 );
 
 function livenessCheck(res, log) {

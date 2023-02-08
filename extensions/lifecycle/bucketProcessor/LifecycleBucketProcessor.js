@@ -13,6 +13,7 @@ const LifecycleTask = require('../tasks/LifecycleTask');
 const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
+const LocationStatusStream = require('../../utils/LocationStatusStream');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
@@ -55,14 +56,16 @@ class LifecycleBucketProcessor {
      * @param {Object} s3Config - s3 config
      * @param {String} s3Config.host - host ip
      * @param {String} s3Config.port - port
+     * @param {Object} mongoConfig - MongoDb Connection Config
      * @param {String} transport - http or https
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, transport = 'http') {
+    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, transport = 'http') {
         this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
         this._repConfig = repConfig;
+        this._mongoConfig = mongoConfig;
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
@@ -80,6 +83,9 @@ class LifecycleBucketProcessor {
 
         this._producerReady = false;
         this._consumerReady = false;
+
+        this._pausedLocations = new Set();
+        this._locationStatusStream = null;
 
         this.clientManager = new ClientManager({
             id: 'lifecycle',
@@ -151,8 +157,42 @@ class LifecycleBucketProcessor {
             objectTasksTopic: this._lcConfig.objectTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             ncvHeap: this.ncvHeap,
+            pausedLocations: this._pausedLocations,
             log: this._log,
         };
+    }
+
+    /**
+     * Pause bucket(s) based on given location
+     * @param {String} location - location
+     * @return {undefined}
+     */
+    _pauseServiceForLocation(location) {
+        const paused = this._pausedLocations.has(location);
+        if (!paused) {
+            this._pausedLocations.add(location);
+            this._log.info('location paused', {
+                method: 'LifecycleBucketProcessor._pauseServiceForLocation',
+                location,
+            });
+        }
+    }
+
+    /**
+     * Resume lifecycle operations for a location
+     * @param {String} location - location
+     * @param {Date} [date] - optional date object for scheduling resume
+     * @return {undefined}
+     */
+    _resumeServiceForLocation(location) {
+        const paused = this._pausedLocations.has(location);
+        if (paused) {
+            this._pausedLocations.delete(location);
+            this._log.info('location resumed', {
+                method: 'LifecycleBucketProcessor._resumeServiceForLocation',
+                location,
+            });
+        }
     }
 
     /**
@@ -366,6 +406,14 @@ class LifecycleBucketProcessor {
             done => this._setupProducer(done),
             done => this._initKafkaBacklogMetrics(done),
             done => this._setupConsumer(done),
+            done => {
+                this._locationStatusStream = new LocationStatusStream('lifecycle',
+                    this._mongoConfig,
+                    this._pauseServiceForLocation.bind(this),
+                    this._resumeServiceForLocation.bind(this),
+                    this._log);
+                this._locationStatusStream.start(done);
+            }
         ], done);
     }
 
