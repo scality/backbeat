@@ -94,7 +94,6 @@ class Connector {
             this._logger.error('Error while calculating config size', {
                 method: 'Connector.getConfigSizeInBytes',
                 connector: this._name,
-                config: this._config,
                 error: err.description || err.message,
             });
             throw errors.InternalError.customizeDescription(err.description);
@@ -107,7 +106,6 @@ class Connector {
      * @throws {InternalError}
      */
     async spawn() {
-        const connectorConfig = { ...this._config };
         try {
             await this._kafkaConnect.createConnector({
                 name: this._name,
@@ -117,7 +115,6 @@ class Connector {
             this._logger.error('Error while spawning connector', {
                 method: 'Connector.spawn',
                 connector: this._name,
-                config: connectorConfig,
                 error: err.description || err.message,
             });
             throw errors.InternalError.customizeDescription(err.description);
