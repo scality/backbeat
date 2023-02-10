@@ -131,7 +131,7 @@ describe('KafkaConnectWrapper', () => {
                 assert(makeRequestStub.notCalled);
                 assert(getConnectorStub.calledOnce);
             })
-            .catch(err => assert.ifError(err));
+            .catch(err => assert.strictEqual(err.name, errors.InternalError.name));
         });
 
         it('should throw error when getConnectors fails', async () => {
