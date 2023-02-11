@@ -19,10 +19,11 @@ const { AccountIdCache } = require('../util/AccountIdCache');
 const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
-const { CircuitBreaker } = require('breakbeat');
+const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
+const BUCKET_CHECKPOINT_PUSH_NUMBER = 50;
 
 const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle-conductor';
 
@@ -91,7 +92,6 @@ class LifecycleConductor {
         this._vaultClientCache = null;
         this._initialized = false;
         this._batchInProgress = false;
-        this._circuitBreaker = new CircuitBreaker(this.lcConfig.conductor.circuitBreaker);
 
         // this cache only needs to be the size of one listing.
         // worst case scenario is 1 account per bucket:
@@ -111,15 +111,36 @@ class LifecycleConductor {
             this._authConfig,
             this.logger,
         );
+
+        this._circuitBreaker = this.buildCircuitBreaker(this.lcConfig.conductor.circuitBreaker);
+    }
+
+    buildCircuitBreaker(conf) {
+        try {
+            return new CircuitBreaker(conf);
+        } catch (e) {
+            this.logger.error('invalid circuit breaker configuration');
+            throw e;
+        }
     }
 
     getBucketsZkPath() {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
     }
 
+    getBucketProgressZkPath() {
+        return `${this.lcConfig.zookeeperPath}/data/bucket-send-progress`;
+    }
+
     initZkPaths(cb) {
-        async.each([this.getBucketsZkPath()],
-                   (path, done) => this._zkClient.mkdirp(path, done), cb);
+        async.each(
+            [
+                this.getBucketsZkPath(),
+                this.getBucketProgressZkPath(),
+            ],
+            (path, done) => this._zkClient.mkdirp(path, done),
+            cb,
+        );
     }
 
     processBuckets(cb) {
@@ -357,52 +378,113 @@ class LifecycleConductor {
         let nEnqueued = 0;
         const start = new Date();
 
-        const cursor = this._mongodbClient
-            .getCollection('__metastore')
-            .find()
-            .project({ '_id': 1, 'value.owner': 1 });
+        const lastEntryPath = this.getBucketProgressZkPath();
+        let lastSentId = null;
+        let lastSentVersion = -1;
+        const checkpointBucket = (bucketEntry, cb) => {
+            if (bucketEntry === null) {
+                return process.nextTick(cb);
+            }
 
-        async.during(
-            test => process.nextTick(() => cursor.hasNext(test)),
-            next => {
-                const queueInfo = {
-                    nEnqueuedToDownstream: nEnqueued,
-                    inFlight: queue.length(),
-                    maxInFlight: this._maxInFlightBatchSize,
-                    enqueueRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
-                };
+            return this._zkClient.setData(
+                lastEntryPath,
+                Buffer.from(bucketEntry),
+                lastSentVersion,
+                (err, stat) => {
+                    if (err) {
+                        return cb(err);
+                    }
 
-                if (queue.length() > this._maxInFlightBatchSize) {
-                    log.info('delaying bucket pull', queueInfo);
+                    lastSentVersion = stat.version;
+                    lastSentId = null;
 
-                    return setTimeout(next, 10000);
+                    return cb();
+                },
+            );
+        };
+
+        async.waterfall([
+            done => this._zkClient.getData(lastEntryPath, done),
+            (data, stat, done) => {
+                const entry = data?.toString('ascii');
+                if (stat) {
+                    lastSentVersion = stat.version;
                 }
 
-                return cursor.next((err, doc) => {
-                    if (err) {
-                        log.info('error listing next bucket', {
-                            ...queueInfo,
-                            error: err,
-                        });
+                const cursor = this._mongodbClient
+                    .getCollection('__metastore')
+                    .find(
+                        entry ? { _id: { $gt: entry } } : {}
+                    )
+                    .project({ '_id': 1, 'value.owner': 1 });
 
-                        return setTimeout(next, 500);
-                    }
-
-                    // reverse-lookup the name in case it is special and has been
-                    // rewritten by the client
-                    const name = this._mongodbClient.getCollection(doc._id).collectionName;
-                    if (!this._mongodbClient._isSpecialCollection(name)) {
-                        queue.push({
-                            bucketName: name,
-                            canonicalId: doc.value.owner,
-                        });
-                        nEnqueued += 1;
-                    }
-                    return next();
-                });
+                return done(null, cursor);
             },
-            err => cb(err, nEnqueued)
-        );
+            (cursor, done) => {
+                async.during(
+                    test => process.nextTick(() => cursor.hasNext(test)),
+                    next => {
+                        const breakerState = this._circuitBreaker.state;
+                        const queueInfo = {
+                            nEnqueuedToDownstream: nEnqueued,
+                            inFlight: queue.length(),
+                            maxInFlight: this._maxInFlightBatchSize,
+                            enqueueRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                            breakerState,
+                        };
+
+                        if (queue.length() > this._maxInFlightBatchSize ||
+                            breakerState !== BreakerState.Nominal) {
+                            log.info('delaying bucket pull', queueInfo);
+                            return checkpointBucket(lastSentId, () => {
+                                setTimeout(next, 10000);
+                            });
+                        }
+
+                        return cursor.next((err, doc) => {
+                            if (err) {
+                                log.info('error listing next bucket', {
+                                    ...queueInfo,
+                                    error: err,
+                                });
+
+                                return setTimeout(next, 500);
+                            }
+
+                            // reverse-lookup the name in case it is special and has been
+                            // rewritten by the client
+                            const name = this._mongodbClient.getCollection(doc._id).collectionName;
+                            if (!this._mongodbClient._isSpecialCollection(name)) {
+                                queue.push({
+                                    bucketName: name,
+                                    canonicalId: doc.value.owner,
+                                });
+                                nEnqueued += 1;
+                                lastSentId = doc._id;
+
+                                if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER === 0) {
+                                    return checkpointBucket(doc._id, next);
+                                }
+                                // fallthrough
+                            }
+                            return next();
+                        });
+                    },
+                    err => {
+                        if (!err) {
+                            // clear last seen bucket from zk
+                            checkpointBucket('', err => {
+                                if (err) {
+                                    return done(err);
+                                }
+
+                                return done(null, nEnqueued);
+                            });
+                        }
+                    }
+                );
+            }
+        ], cb);
     }
 
     _controlBacklog(done) {
@@ -511,7 +593,7 @@ class LifecycleConductor {
             return;
         }
         this._zkClient = zookeeperHelper.createClient(
-            this.zkConfig.connectionString);
+            this.zkConfig.connectionString, this.zkConfig);
         this._zkClient.connect();
         this._zkClient.once('error', cb);
         this._zkClient.once('ready', () => {
@@ -523,12 +605,13 @@ class LifecycleConductor {
                     'error from lifecycle conductor zookeeper client',
                     { error: err });
             });
-            cb();
+            this.initZkPaths(cb);
         });
     }
 
     needsZookeeper() {
-        return this._bucketSource === 'zookeeper';
+        return this._bucketSource === 'zookeeper' || // bucket list stored in zk
+            this._bucketSource === 'mongodb'; // bucket stream checkpoints in zk
     }
 
     /**
@@ -543,6 +626,7 @@ class LifecycleConductor {
             return process.nextTick(done);
         }
 
+        this._circuitBreaker.start();
         this.vaultClientWrapper.init();
         return async.series([
             next => this._setupProducer(next),
@@ -632,6 +716,7 @@ class LifecycleConductor {
                 });
             },
         ], err => {
+            this._circuitBreaker.stop();
             this._started = false;
             return done(err);
         });
@@ -642,7 +727,7 @@ class LifecycleConductor {
             !!(this._zkClient && this._zkClient.getState());
 
         const zkConnectState = !this.needsZookeeper() ||
-            (zkState && zkState.code === zookeeper.State.SYNC_CONNECTED.code);
+            (zkState && this._zkClient.getState().code === zookeeper.State.SYNC_CONNECTED.code);
 
         const components = {
             zkState,
