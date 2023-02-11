@@ -20,8 +20,13 @@ const lcConfig = {
     },
 };
 
+const zookeeperConfig = {
+    ...baseConfig.zookeeper,
+    autoCreateNamespace: true,
+};
+
 const lc = new LifecycleConductor(
-    baseConfig.zookeeper,
+    zookeeperConfig,
     baseConfig.kafka,
     lcConfig,
     baseConfig.extensions.replication

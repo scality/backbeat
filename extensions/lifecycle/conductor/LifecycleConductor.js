@@ -16,11 +16,12 @@ const { authTypeAssumeRole } = require('../../../lib/constants');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
 const { AccountIdCache } = require('../util/AccountIdCache');
-const { CircuitBreaker } = require('breakbeat');
+const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
 const ACCOUNT_SPLITTER = ':';
+const BUCKET_CHECKPOINT_PUSH_NUMBER = 50;
 
 const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle:conductor';
 
@@ -85,7 +86,6 @@ class LifecycleConductor {
         this._vaultClientCache = null;
         this._initialized = false;
         this._batchInProgress = false;
-        this._circuitBreaker = new CircuitBreaker(this.lcConfig.conductor.circuitBreaker);
 
         // this cache only needs to be the size of one listing.
         // worst case scenario is 1 account per bucket:
@@ -105,6 +105,16 @@ class LifecycleConductor {
         this.onlyBlacklistAccounts = this.bucketsBlacklisted.size === 0 && this.accountsBlacklisted.size > 0;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
+        this._circuitBreaker = this.buildCircuitBreaker(this.lcConfig.conductor.circuitBreaker);
+    }
+
+    buildCircuitBreaker(conf) {
+        try {
+            return new CircuitBreaker(conf);
+        } catch (e) {
+            this.logger.error('invalid circuit breaker configuration');
+            throw e;
+        }
     }
 
     /**
@@ -131,9 +141,19 @@ class LifecycleConductor {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
     }
 
+    getBucketProgressZkPath() {
+        return `${this.lcConfig.zookeeperPath}/data/bucket-send-progress`;
+    }
+
     initZkPaths(cb) {
-        async.each([this.getBucketsZkPath()],
-                   (path, done) => this._zkClient.mkdirp(path, done), cb);
+        async.each(
+            [
+                this.getBucketsZkPath(),
+                this.getBucketProgressZkPath(),
+            ],
+            (path, done) => this._zkClient.mkdirp(path, done),
+            cb,
+        );
     }
 
     _isBlacklisted(canonicalId, bucketName) {
@@ -496,7 +516,7 @@ class LifecycleConductor {
             return;
         }
         this._zkClient = zookeeperHelper.createClient(
-            this.zkConfig.connectionString);
+            this.zkConfig.connectionString, this.zkConfig);
         this._zkClient.connect();
         this._zkClient.once('error', cb);
         this._zkClient.once('ready', () => {
@@ -508,7 +528,7 @@ class LifecycleConductor {
                     'error from lifecycle conductor zookeeper client',
                     { error: err });
             });
-            cb();
+            this.initZkPaths(cb);
         });
     }
 
@@ -524,6 +544,7 @@ class LifecycleConductor {
             return process.nextTick(done);
         }
 
+        this._circuitBreaker.start();
         this._setupVaultClientCache();
         return async.series([
             next => this._setupProducer(next),
@@ -624,6 +645,7 @@ class LifecycleConductor {
                 });
             },
         ], err => {
+            this._circuitBreaker.stop();
             this._started = false;
             return done(err);
         });
