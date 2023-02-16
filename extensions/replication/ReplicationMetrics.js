@@ -28,21 +28,21 @@ const TIME_BUCKETS = [0.03, 0.1, 0.3, 1, 3, 10, 30, 100, 300, 1000, 3000];
 
 const replicationQueuedTotal = ZenkoMetrics.createCounter({
     name: promMetricNames.replicationQueuedTotal,
-    help: 'Number of objects queued for replication',
+    help: 'Total number of objects queued for replication',
     labelNames: ['origin', 'partition', 'fromLocation', 'fromLocationType',
         'toLocation', 'toLocationType'],
 });
 
 const replicationQueuedBytes = ZenkoMetrics.createCounter({
     name: promMetricNames.replicationQueuedBytes,
-    help: 'Number of bytes queued for replication',
+    help: 'Total number of bytes queued for replication',
     labelNames: ['origin', 'partition', 'fromLocation', 'fromLocationType',
         'toLocation', 'toLocationType'],
 });
 
 const replicationProcessedBytes = ZenkoMetrics.createCounter({
     name: promMetricNames.replicationProcessedBytes,
-    help: 'Number of bytes replicated',
+    help: 'Total number of bytes replicated',
     labelNames: ['origin', 'fromLocation', 'fromLocationType',
         'toLocation', 'toLocationType', 'status'],
 });

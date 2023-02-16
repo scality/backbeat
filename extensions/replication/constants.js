@@ -9,10 +9,10 @@ const constants = {
     metricsExtension: 'crr',
     metricsTypeQueued: 'queued',
     promMetricNames: {
-        replicationQueuedTotal: 'zenko_replication_queued_total',
-        replicationQueuedBytes: 'zenko_replication_queued_bytes',
-        replicationProcessedBytes: 'zenko_replication_processed_bytes',
-        replicationElapsedSeconds: 'zenko_replication_elapsed_seconds',
+        replicationQueuedTotal: 's3_replication_queued_objects_total',
+        replicationQueuedBytes: 's3_replication_queued_bytes_total',
+        replicationProcessedBytes: 's3_replication_processed_bytes_total',
+        replicationElapsedSeconds: 's3_replication_elapsed_seconds',
     },
     metricsTypeProcessed: 'processed',
     redisKeys: {
