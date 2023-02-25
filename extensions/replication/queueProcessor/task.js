@@ -36,7 +36,8 @@ werelogs.configure({ level: config.log.logLevel,
 const metricsProducer = new MetricsProducer(kafkaConfig, mConfig);
 const queueProcessor = new QueueProcessor(
     repConfig.topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-    httpsConfig, internalHttpsConfig, site, metricsProducer
+    httpsConfig, internalHttpsConfig, site, metricsProducer,
+    repConfig.queueProcessor.circuitBreaker,
 );
 
 /**

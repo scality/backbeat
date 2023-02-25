@@ -166,9 +166,10 @@ class QueueProcessor extends EventEmitter {
      *   replication
      * @param {String} site - site name
      * @param {MetricsProducer} mProducer - instance of metrics producer
+     * @param {Object} circuitBreakerConfig - breakbeat configuration
      */
     constructor(topic, kafkaConfig, sourceConfig, destConfig, repConfig,
-        httpsConfig, internalHttpsConfig, site, mProducer) {
+        httpsConfig, internalHttpsConfig, site, mProducer, circuitBreakerConfig) {
         super();
         this.topic = topic;
         this.kafkaConfig = kafkaConfig;
@@ -185,6 +186,7 @@ class QueueProcessor extends EventEmitter {
         this.site = site;
         this._mProducer = mProducer;
         this.serviceName = constants.services.replicationQueueProcessor;
+        this.circuitBreakerConfig = circuitBreakerConfig;
 
         this.echoMode = false;
 
@@ -419,6 +421,7 @@ class QueueProcessor extends EventEmitter {
                 concurrency: this.repConfig.queueProcessor.concurrency,
                 queueProcessor: this.processKafkaEntry.bind(this),
                 logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
+                circuitBreaker: this.circuitBreakerConfig,
             });
             this._consumer.on('error', () => { });
             this._consumer.on('ready', () => {

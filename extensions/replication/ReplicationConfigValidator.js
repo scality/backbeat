@@ -67,6 +67,7 @@ const joiSchema = {
             })
         ),
         sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
+        circuitBreaker: joi.object().optional(),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
