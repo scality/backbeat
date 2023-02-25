@@ -72,6 +72,7 @@ const joiSchema = joi.object({
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),

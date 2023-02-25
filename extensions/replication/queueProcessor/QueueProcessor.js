@@ -198,13 +198,12 @@ class QueueProcessor extends EventEmitter {
      * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
      *   in PEM format
      * @param {String} site - site name
-     * @param {Object} notificationConfig - notification configuration object
-     * @param {Object} notificationConfig.topic - notification topic name
+     * @param {Object} circuitBreakerConfig - breakbeat configuration
      */
     constructor(topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site) {
+                site, circuitBreakerConfig) {
         super();
         this.topic = topic;
         this.isReplayTopic = repConfig.replayTopics &&
@@ -231,6 +230,7 @@ class QueueProcessor extends EventEmitter {
             libConstants.services.replicationQueueProcessor;
         this.echoMode = false;
         this.scheduledResume = null;
+        this.circuitBreakerConfig = circuitBreakerConfig;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -406,6 +406,7 @@ class QueueProcessor extends EventEmitter {
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
             canary: true,
+            circuitBreaker: this.circuitBreakerConfig,
         });
         consumer.on('error', () => {
             if (!consumerReady) {

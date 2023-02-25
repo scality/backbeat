@@ -6,6 +6,7 @@ const joiSchema = joi.object({
     groupId: joi.string().required(),
     retry: retryParamsJoi,
     probeServer: probeServerJoi.default(),
+    circuitBreaker: joi.object().optional(),
 });
 
 function configValidator(backbeatConfig, extConfig) {

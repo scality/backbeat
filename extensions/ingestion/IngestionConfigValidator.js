@@ -12,6 +12,10 @@ const joiSchema = joi.object({
     maxParallelReaders: joi.number().greater(0).default(5),
     sources: joi.array().required(),
     probeServer: probeServerJoi.default(),
+    circuitBreaker: joi.object().optional(),
+    processor: joi.object({
+        circuitBreaker: joi.object().optional(),
+    }).optional(),
 });
 
 function configValidator(backbeatConfig, extConfig) {
