@@ -8,6 +8,7 @@ const {
     LifecycleDateTime,
     LifecycleUtils,
 } = require('arsenal').s3middleware.lifecycleHelpers;
+const { CompareResult, MinHeap } = require('arsenal').algorithms.Heap;
 
 const config = require('../../../lib/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -40,6 +41,30 @@ function isLifecycleUser(canonicalID) {
     const canonicalIDArray = canonicalID.split('/');
     const serviceName = canonicalIDArray[canonicalIDArray.length - 1];
     return serviceName === 'lifecycle';
+}
+
+/**
+ * compare 2 version by their stale dates returning:
+ * - LT (-1) if v1 is less than v2
+ * - EQ (0) if v1 equals v2
+ * - GT (1) if v1 is greater than v2
+ * @param {object} v1 - object version
+ * @param {object} v2 - object version
+ * @returns {number} -
+ */
+function noncurrentVersionCompare(v1, v2) {
+    const v1Date = new Date(v1.staleDate);
+    const v2Date = new Date(v2.staleDate);
+
+    if (v1Date < v2Date) {
+        return CompareResult.LT;
+    }
+
+    if (v1Date > v2Date) {
+        return CompareResult.GT;
+    }
+
+    return CompareResult.EQ;
 }
 
 class LifecycleTask extends BackbeatTask {
@@ -198,6 +223,105 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Adds object to the noncurrent version helper Heap object.
+     * If the heap cap is reached:
+     * - compare the smallest object and the current object
+     *   - if the current object is smaller:
+     *      - remove top object and add the current object into the heap
+     *      - return top object to be expired
+     *  - if the top of the heap is smaller:
+     *      - return the current object to be expired
+     * If the heap cap has not been reached:
+     * - add the current object into the heap and return null
+     * @param {string} bucketName - bucket name
+     * @param {object} rule - rule object
+     * @param {object} version - object version
+     * @return {object | null} - null or the version to be expired
+     */
+    _ncvHeapAdd(bucketName, rule, version) {
+        const ncve = 'NoncurrentVersionExpiration';
+        const nncv = 'NewerNoncurrentVersions';
+
+        if (!rule[ncve] || !rule[ncve][nncv]) {
+            return null;
+        }
+
+        if (!this.ncvHeap.has(bucketName)) {
+            this.ncvHeap.set(bucketName, new Map());
+        }
+
+        if (!this.ncvHeap.get(bucketName).has(version.Key)) {
+            this.ncvHeap.get(bucketName).set(version.Key, new Map());
+        }
+
+        const ncvHeapObject = this.ncvHeap.get(bucketName).get(version.Key);
+
+        const nncvSize = parseInt(rule[ncve][nncv], 10);
+        if (!ncvHeapObject.get(rule.Id)) {
+            ncvHeapObject.set(rule.Id, new MinHeap(nncvSize, noncurrentVersionCompare));
+        }
+
+        const heap = ncvHeapObject.get(rule.Id);
+
+        if (heap.size < nncvSize) {
+            heap.add(version);
+            return null;
+        }
+
+        const heapTop = heap.peek();
+        if (noncurrentVersionCompare(version, heapTop) === CompareResult.LT) {
+            return version;
+        }
+
+        const toExpire = heap.remove();
+        heap.add(version);
+        return toExpire;
+    }
+
+    /**
+     * clear objects level entries from helper Heap object.
+     * @param {string} bucketName - bucket name
+     * @param {Set} uniqueObjectKeys - Set of unique object keys
+     * @return {undefined} -
+     */
+    _ncvHeapObjectsClear(bucketName, uniqueObjectKeys) {
+        if (!this.ncvHeap.has(bucketName)) {
+            return;
+        }
+
+        const ncvHeapBucket = this.ncvHeap.get(bucketName);
+        uniqueObjectKeys.forEach(key => {
+            if (!ncvHeapBucket.has(key)) {
+                return;
+            }
+
+            ncvHeapBucket.get(key).clear();
+            ncvHeapBucket.delete(key);
+        });
+        return;
+    }
+
+    /**
+     * clear bucket level entry from helper Heap object.
+     * @param {string} bucketName - bucket name
+     * @return {undefined} -
+     */
+    _ncvHeapBucketClear(bucketName) {
+        if (!this.ncvHeap.has(bucketName)) {
+            return;
+        }
+
+        const ncvHeapBucket = this.ncvHeap.get(bucketName);
+        // remove references to Heap objects under each Key entries
+        ncvHeapBucket.forEach(objMap => objMap.clear());
+        // remove references to Key maps under each Bucket entries
+        ncvHeapBucket.clear();
+        // delete reference to bucket Map
+        this.ncvHeap.delete(bucketName);
+        return;
+    }
+
+    /**
      * Handles versioned objects (both enabled and suspended)
      * @param {object} bucketData - bucket data
      * @param {array} bucketLCRules - array of bucket lifecycle rules
@@ -227,6 +351,18 @@ class LifecycleTask extends BackbeatTask {
             // for all versions and delete markers, add stale date property
             const allVersionsWithStaleDate = this._addStaleDateToVersions(
                 bucketData.details, allVersions);
+
+            // create Set of unique keys not matching the next marker to
+            // indicate the object level entries to be cleared at the end
+            // of the processing step
+            const uniqueObjectKeysNotNextMarker = new Set();
+            if (data.NextKeyMarker) {
+                allVersions.forEach(v => {
+                    if (v.Key !== data.NextKeyMarker) {
+                        uniqueObjectKeysNotNextMarker.add(v.Key);
+                    }
+                });
+            }
 
             // sending bucket entry - only once - for checking next listing
             if (data.IsTruncated && allVersions.length > 0 && nbRetries === 0) {
@@ -260,7 +396,26 @@ class LifecycleTask extends BackbeatTask {
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
             return this._compareRulesToList(bucketData, bucketLCRules,
-                allVersionsWithStaleDate, log, versioningStatus, done);
+                allVersionsWithStaleDate, log, versioningStatus,
+                err => {
+                    if (err) {
+                        return done(err);
+                    }
+
+                    if (!data.IsTruncated) {
+                        // end of bucket listing
+                        // clear bucket level entry and all object entries
+                        this._ncvHeapBucketClear(bucketData.target.bucket);
+                    } else {
+                        // clear object level entries that have been processed
+                        this._ncvHeapObjectsClear(
+                            bucketData.target.bucket,
+                            uniqueObjectKeysNotNextMarker
+                        );
+                    }
+
+                    return done();
+                });
         });
     }
 
@@ -1135,10 +1290,25 @@ class LifecycleTask extends BackbeatTask {
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncve = 'NoncurrentVersionExpiration';
         const ncd = 'NoncurrentDays';
+        const nncv = 'NewerNoncurrentVersions';
         const doesNCVExpirationRuleApply = (rules[ncve] &&
             rules[ncve][ncd] !== undefined &&
             daysSinceInitiated >= rules[ncve][ncd]);
         if (doesNCVExpirationRuleApply) {
+            let verToExpire = version;
+
+            if (rules[ncve][nncv]) {
+                log.debug('Rule contains NewerNoncurrentVersion. Checking heap for smallest', {
+                    method: '_checkAndApplyNCVExpirationRule',
+                    bucket: bucketData.target.bucket,
+                    key: version.Key,
+                });
+                verToExpire = this._ncvHeapAdd(bucketData.target.bucket, rules, version);
+                if (verToExpire === null) {
+                    return;
+                }
+            }
+
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
                     origin: 'lifecycle',
@@ -1148,8 +1318,8 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
-                .setAttribute('target.key', version.Key)
-                .setAttribute('target.version', version.VersionId);
+                .setAttribute('target.key', verToExpire.Key)
+                .setAttribute('target.version', verToExpire.VersionId);
             this._sendObjectAction(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption',
@@ -1158,6 +1328,7 @@ class LifecycleTask extends BackbeatTask {
                     }, entry.getLogInfo()));
                 }
             });
+            return;
         }
     }
 
