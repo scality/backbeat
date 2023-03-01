@@ -315,7 +315,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (rate(ingestion_objects_queued_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_objects_queued_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",
@@ -429,7 +429,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (metadata_journal_size{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}-ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}+1)",
+          "expr": "sum by (locationNameRaftID) (s3_ingestion_metadata_journal_size{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}-s3_ingestion_read_offset{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}+1)",
           "format": "time_series",
           "instant": false,
           "interval": "",
@@ -529,7 +529,7 @@
       "targets": [
         {
           "exemplar": true,
-          "expr": "sum by (locationNameRaftID) (rate(ingestion_journal_entries_processed_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum by (locationNameRaftID) (rate(s3_ingestion_journal_entries_processed_total{job=\"${job_ingestion_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "format": "time_series",
           "interval": "",
           "legendFormat": "Location and raft ID '{{locationNameRaftID}}'",

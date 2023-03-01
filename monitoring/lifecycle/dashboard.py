@@ -31,7 +31,7 @@ def s3_request_timeseries_expr(process, job, code):
     if process is not None:
         labelSelector += f',origin="{process}"'
 
-    return f'sum(increase(lifecycle_s3_operations{{{labelSelector}}}[$__interval]))'
+    return f'sum(increase(s3_lifecycle_s3_operations_total{{{labelSelector}}}[$__interval]))'
 
 
 def s3_request_timeseries(title, process=None, job=None):
@@ -78,8 +78,8 @@ def s3_request_error_rate_expr(process, job, code):
         divdLabel += f',origin="{process}"'
         divsLabel += f',origin="{process}"'
 
-    divd = f'sum(rate(lifecycle_s3_operations{{{divdLabel}}}[$__rate_interval]))'
-    divs = f'sum(rate(lifecycle_s3_operations{{{divsLabel}}}[$__rate_interval]) > 0)'
+    divd = f'sum(rate(s3_lifecycle_s3_operations_total{{{divdLabel}}}[$__rate_interval]))'
+    divs = f'sum(rate(s3_lifecycle_s3_operations_total{{{divsLabel}}}[$__rate_interval]) > 0)'
 
     return f'{divd}/{divs}'
 
@@ -120,11 +120,11 @@ def s3_deletion_request_time_series(op):
         unit=UNITS.REQUESTS_PER_SEC,
         targets=[
             Target(
-                expr=f'sum(rate(lifecycle_s3_operations{{{successLabel}}}[$__rate_interval]))',
+                expr=f'sum(rate(s3_lifecycle_s3_operations_total{{{successLabel}}}[$__rate_interval]))',
                 legendFormat="success",
             ),
             Target(
-                expr=f'sum(rate(lifecycle_s3_operations{{{errorLabel}}}[$__rate_interval]))',
+                expr=f'sum(rate(s3_lifecycle_s3_operations_total{{{errorLabel}}}[$__rate_interval]))',
                 legendFormat="error",
             ),
         ],
@@ -153,11 +153,11 @@ def kafka_row(topic, op):
     return [
         kafka_messages_time_series(
             f'{topic} Messages in Queue',
-            f'sum(increase(lifecycle_kafka_publish_success{{{label}}}[$__interval]))',
+            f'sum(increase(s3_lifecycle_kafka_publish_success_total{{{label}}}[$__interval]))',
         ),
         kafka_messages_time_series(
             f'{topic} Failed Messages',
-            f'sum(increase(lifecycle_kafka_publish_error{{{label}}}[$__interval]))',
+            f'sum(increase(s3_lifecycle_kafka_publish_error_total{{{label}}}[$__interval]))',
         ),
     ]
 
@@ -193,7 +193,7 @@ lifecycle_batch = Stat(
     format='dateTimeAsLocal',
     targets=[
         Target(
-            expr='lifecycle_latest_batch_start_time{job="${job_lifecycle_producer}",namespace="${namespace}"}',
+            expr='s3_lifecycle_latest_batch_start_time{job="${job_lifecycle_producer}",namespace="${namespace}"}',
             instant=True,
         ),
     ],

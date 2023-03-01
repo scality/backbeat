@@ -22,13 +22,13 @@ groups:
 
   - alert: IngestionProducerLagIncreasedBy3Percent
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
         /
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
       > 0.03
     For:   "5m"
     Labels:
@@ -40,13 +40,13 @@ groups:
 
   - alert: IngestionProducerLagIncreasedBy5Percent
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1) -
+      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
         /
-      sum((metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
-        (ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
+      sum((s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m) -
+        (s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"} offset 5m)+1))
       > 0.05
     For:   "5m"
     Labels:
@@ -58,10 +58,10 @@ groups:
 
   - alert: NoMessagesQueued
     Expr: |
-      ((sum(metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
-        ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1)) > 1)
+      ((sum(s3_ingestion_metadata_journal_size{namespace="${namespace}", job="${job_ingestion_producer}"} -
+        s3_ingestion_read_offset{namespace="${namespace}", job="${job_ingestion_producer}"}+1)) > 1)
       and
-      ((sum(rate(ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))) == 0)
+      ((sum(rate(s3_ingestion_objects_queued_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))) == 0)
     For:   "5m"
     Labels:
       severity: warning
@@ -72,9 +72,9 @@ groups:
 
   - alert: IngestionProducerSourceErrorRate3Percent
     Expr: |
-      sum(rate(ingestion_source_operation{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_source_operation{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.03
     For:   "5m"
     Labels:
@@ -86,9 +86,9 @@ groups:
 
   - alert: IngestionProducerSourceErrorRate3Percent
     Expr: |
-      sum(rate(ingestion_source_operation{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_source_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_source_operation{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_source_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.05
     For:   "5m"
     Labels:
@@ -100,9 +100,9 @@ groups:
 
   - alert: IngestionProducerZookeeperErrorRate3Percent
     Expr: |
-      sum(rate(ingestion_zookeeper_operation{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_zookeeper_operation{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.03
     For:   "5m"
     Labels:
@@ -114,9 +114,9 @@ groups:
 
   - alert: IngestionProducerZookeeperErrorRate5Percent
     Expr: |
-      sum(rate(ingestion_zookeeper_operation{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_zookeeper_operations_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_zookeeper_operation{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_zookeeper_operations_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.05
     For:   "5m"
     Labels:
@@ -128,9 +128,9 @@ groups:
 
   - alert: IngestionProducerTopicPublishErrorIncreasedBy3Percent
     Expr: |
-      sum(rate(ingestion_kafka_publish{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_kafka_publish{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.03
     For:   "5m"
     Labels:
@@ -142,9 +142,9 @@ groups:
 
   - alert: IngestionProducerTopicPublishErrorIncreasedBy5Percent
     Expr: |
-      sum(rate(ingestion_kafka_publish{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_kafka_publish_status_total{status="error", namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
         /
-      sum(rate(ingestion_kafka_publish{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
+      sum(rate(s3_ingestion_kafka_publish_status_total{namespace="${namespace}", job="${job_ingestion_producer}"}[5m]))
       > 0.05
     For:   "5m"
     Labels:

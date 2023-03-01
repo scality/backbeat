@@ -32,9 +32,9 @@ groups:
 
   - alert: IngestionProcessorErrorRate3Percent
     Expr: |
-      (sum(ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+      (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
         /
-      sum(ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+      sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
       > 0.03
     For:   "5m"
     Labels:
@@ -46,9 +46,9 @@ groups:
 
   - alert: IngestionProcessorErrorRate5Percent
     Expr: |
-      (sum(ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
+      (sum(s3_ingestion_mongo_processed_elapsed_seconds_count{status="error", namespace="${namespace}", job="${job_ingestion_processor}" })
         /
-      sum(ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
+      sum(s3_ingestion_mongo_processed_elapsed_seconds_count{namespace="${namespace}", job="${job_ingestion_processor}"}))
       > 0.05
     For:   "5m"
     Labels:
@@ -60,10 +60,10 @@ groups:
 
   - alert: IngestionProcessorTopicConsumeErrorIncreasedBy3Percent
     Expr: |
-      sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
         /
-      sum(rate(ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
-        rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+        rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
       > 0.03
     For:   "5m"
     Labels:
@@ -75,10 +75,10 @@ groups:
 
   - alert: IngestionProcessorTopicConsumeErrorIncreasedBy5Percent
     Expr: |
-      sum(rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      sum(rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
         /
-      sum(rate(ingestion_kafka_message_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
-        rate(ingestion_kafka_consume{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
+      sum(rate(s3_ingestion_kafka_messages_pulled_total{namespace="${namespace}", job="${job_ingestion_processor}"}[5m]) +
+        rate(s3_ingestion_kafka_consume_status_total{status="error", namespace="${namespace}", job="${job_ingestion_processor}"}[5m]))
       > 0.05
     For:   "5m"
     Labels:
