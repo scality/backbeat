@@ -107,6 +107,31 @@ class LifecycleBucketProcessor {
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
         this.retryWrapper = new BackbeatTask();
 
+        // helper object to facilitate the tracking of the the latest x
+        // noncurrent versions of an object when the field
+        // `NewerNoncurrentVersions` is present.
+        //
+        // Structure:
+        // ...
+        // [bucket]: {
+        //      ...
+        //      [object]: {
+        //          ...
+        //          [rule-id]: Heap of <version objects>
+        //      }
+        // }
+        // ...
+        //
+        // Bucket level entries are removed when the listing results are not
+        // truncated and after the listing results have been processed.
+        //
+        // Object level entries are removed when their bucket level entries are
+        // removed or when:
+        // * the NextMarker field in the results is different key from the entry's
+        // * all the object/version of each listing request have been processed
+        //
+        this.ncvHeap = new Map();
+
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
             const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
@@ -144,6 +169,7 @@ class LifecycleBucketProcessor {
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
+            ncvHeap: this.ncvHeap,
             log: this._log,
         };
     }
