@@ -39,7 +39,7 @@
     "@hapi/joi": "^15.1.0",
     "arsenal": "git+https://github.com/scality/Arsenal#7.10.28",
     "async": "^2.3.0",
-    "aws-sdk": "^2.938.0",
+    "aws-sdk": "^2.1326.0",
     "backo": "^1.1.0",
     "bucketclient": "git+https://github.com/scality/bucketclient#7.10.4",
     "commander": "^2.11.0",
