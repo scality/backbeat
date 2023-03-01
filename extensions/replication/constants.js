@@ -14,10 +14,10 @@ const constants = {
     metricsTypeCompleted: 'completed',
     metricsTypeFailed: 'failed',
     promMetricNames: {
-        replicationQueuedTotal: 'replication_queued_total',
-        replicationQueuedBytes: 'replication_queued_bytes',
-        replicationProcessedBytes: 'replication_processed_bytes',
-        replicationElapsedSeconds: 'replication_elapsed_seconds',
+        replicationQueuedTotal: 's3_replication_queued_objects_total',
+        replicationQueuedBytes: 's3_replication_queued_bytes_total',
+        replicationProcessedBytes: 's3_replication_processed_bytes_total',
+        replicationElapsedSeconds: 's3_replication_elapsed_seconds',
     },
     redisKeys: {
         opsPending: testIsOn ? 'test:bb:opspending' : 'bb:crr:opspending',

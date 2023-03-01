@@ -43,14 +43,14 @@ promClient.register.setDefaultLabels({
  */
 
 const replicationStatusMetric = new promClient.Counter({
-    name: 'replication_status_changed_total',
+    name: 's3_replication_status_changed_total',
     help: 'Number of objects updated',
     labelNames: ['origin', 'containerName', 'replicationStatus'],
 });
 
 // TODO: Kafka lag is not set in 8.x branches see BB-1
 const kafkaLagMetric = new promClient.Gauge({
-    name: 'kafka_lag',
+    name: 's3_zenko_queue_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
     labelNames: ['origin', 'containerName', 'partition'],
 });
