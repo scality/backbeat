@@ -83,6 +83,7 @@ const lp = {
                 noncurrentVersionExpiration: { enabled: true },
                 abortIncompleteMultipartUpload: { enabled: true },
             },
+            ncvHeap: new Map(),
         }
     ),
 };
@@ -1290,4 +1291,552 @@ describe('lifecycle task helper methods', () => {
             assert.strictEqual(result, true);
         });
     });
+
+    describe('_checkAndApplyNCVExpirationRule', () => {
+        let lct2;
+
+        const bucketData = {
+            target: {
+                owner: 'test-user',
+                bucket: 'test-bucket',
+            },
+        };
+        const testDate = Date.now();
+        const versions = [
+            {
+                Key: 'testkey',
+                VersionId: '4',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '3',
+                staleDate: new Date(testDate - (2 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '1',
+                staleDate: new Date(testDate - (4 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '2',
+                staleDate: new Date(testDate - (3 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '0',
+                staleDate: new Date(testDate - (5 * DAY)).toISOString(),
+            },
+        ];
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+
+                reset() {
+                    this.latestEntry = undefined;
+                    this.ncvHeap = new Map();
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        describe('when NewerNoncurrentVersion field is present', () => {
+            it('should executed expected behavior', () => {
+                const rules = {
+                    Id: 'rule_name',
+                    NoncurrentVersionExpiration: {
+                        NoncurrentDays: 1,
+                        NewerNoncurrentVersions: 3,
+                    },
+                };
+
+                const expectedEntries = [
+                    undefined,
+                    undefined,
+                    undefined,
+                    versions[2], // VersionId == 1
+                    versions[4], // VersionId == 0
+                ];
+
+                versions.forEach((v, idx) => {
+                    lct2._checkAndApplyNCVExpirationRule(bucketData, versions[idx], rules, fakeLogger);
+                    const latestEntry = lct2.getLatestEntry();
+
+                    if (!expectedEntries[idx]) {
+                        assert.strictEqual(latestEntry, undefined);
+                        return;
+                    }
+
+                    const expectedTarget = Object.assign(
+                        {},
+                        bucketData.target,
+                        {
+                            key: expectedEntries[idx].Key,
+                            version: expectedEntries[idx].VersionId,
+                        }
+                    );
+
+                    assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                    assert.deepStrictEqual(
+                        latestEntry.getAttribute('target'), expectedTarget);
+                });
+            });
+        });
+
+        describe('when NewerNoncurrentVersion field is not present', () => {
+            it('should send all versions for expiration', () => {
+                const rules = {
+                    Id: 'rule_name',
+                    NoncurrentVersionExpiration: {
+                        NoncurrentDays: 1,
+                    },
+                };
+
+                const expectedEntries = [
+                    versions[0],
+                    versions[1],
+                    versions[2],
+                    versions[3],
+                    versions[4],
+                ];
+
+                versions.forEach((v, idx) => {
+                    lct2._checkAndApplyNCVExpirationRule(bucketData, versions[idx], rules, fakeLogger);
+                    const latestEntry = lct2.getLatestEntry();
+
+                    if (!expectedEntries[idx]) {
+                        assert.strictEqual(latestEntry, undefined);
+                        return;
+                    }
+
+                    const expectedTarget = Object.assign(
+                        {},
+                        bucketData.target,
+                        {
+                            key: expectedEntries[idx].Key,
+                            version: expectedEntries[idx].VersionId,
+                        }
+                    );
+
+                    assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
+                    assert.deepStrictEqual(
+                        latestEntry.getAttribute('target'), expectedTarget);
+                });
+            });
+        });
+    });
+
+    describe('_ncvHeapAdd', () => {
+        let lct2;
+
+        const rules = {
+            Id: 'rule_name',
+            NoncurrentVersionExpiration: {
+                NoncurrentDays: 1,
+                NewerNoncurrentVersions: 3,
+            },
+        };
+        const testDate = Date.now();
+        const versions = [
+            {
+                Key: 'testkey',
+                VersionId: '4',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '3',
+                staleDate: new Date(testDate - (2 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '1',
+                staleDate: new Date(testDate - (4 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '2',
+                staleDate: new Date(testDate - (3 * DAY)).toISOString(),
+            },
+            {
+                Key: 'testkey',
+                VersionId: '0',
+                staleDate: new Date(testDate - (5 * DAY)).toISOString(),
+            },
+        ];
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+
+                reset() {
+                    this.latestEntry = undefined;
+                    this.ncvHeap = new Map();
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        it('should popuplate and return null if heap has space', () => {
+            const ret = lct2._ncvHeapAdd('testbucket', rules, versions[0]);
+            assert.strictEqual(ret, null);
+        });
+
+        it('should popuplate and return oldest items from if heap is at capacity', () => {
+            let ret = lct2._ncvHeapAdd('testbucket', rules, versions[0]); // 4
+            assert.strictEqual(ret, null);
+            ret = lct2._ncvHeapAdd('testbucket', rules, versions[2]); // 1
+            assert.strictEqual(ret, null);
+            ret = lct2._ncvHeapAdd('testbucket', rules, versions[3]); // 2
+            assert.strictEqual(ret, null);
+            ret = lct2._ncvHeapAdd('testbucket', rules, versions[4]); // 0
+            assert.strictEqual(ret, versions[4]); // 0
+            ret = lct2._ncvHeapAdd('testbucket', rules, versions[1]); // 3
+            assert.strictEqual(ret, versions[2]); // 1
+        });
+    });
+
+    describe('_ncvHeapObjectsClear', () => {
+        let lct2;
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+
+                reset() {
+                    this.latestEntry = undefined;
+                    this.ncvHeap = new Map();
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        it('should clear the ncvHeap object of the listed bucket/keys', () => {
+            const rules = {
+                Id: 'rule_name',
+                NoncurrentVersionExpiration: {
+                    NoncurrentDays: 1,
+                    NewerNoncurrentVersions: 10,
+                },
+            };
+            const testDate = Date.now();
+            const version1 = {
+                Key: 'testkey1',
+                VersionId: '1',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const version2 = {
+                Key: 'testkey2',
+                VersionId: '2',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const version3 = {
+                Key: 'testkey3',
+                VersionId: '3',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const uniqueKeySet = new Set(['testkey1', 'testkey2']);
+
+            const b1 = 'testbucket1';
+            const b2 = 'testbucket2';
+
+            lct2._ncvHeapAdd(b1, rules, version1);
+            lct2._ncvHeapAdd(b1, rules, version1);
+            lct2._ncvHeapAdd(b1, rules, version2);
+            lct2._ncvHeapAdd(b1, rules, version3);
+            lct2._ncvHeapAdd(b2, rules, version1);
+            lct2._ncvHeapAdd(b2, rules, version2);
+
+            lct2._ncvHeapObjectsClear(b1, uniqueKeySet);
+
+            assert(lct2.ncvHeap.has(b1));
+            assert(!lct2.ncvHeap.get(b1).has(version1.Key));
+            assert(!lct2.ncvHeap.get(b1).has(version2.Key));
+            assert(lct2.ncvHeap.get(b1).get(version3.Key).has(rules.Id));
+            assert.strictEqual(lct2.ncvHeap.get(b1).get(version3.Key).get(rules.Id).size, 1);
+
+            assert(lct2.ncvHeap.has(b2));
+            assert(lct2.ncvHeap.get(b2).has(version1.Key));
+            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(rules.Id));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).has(version2.Key));
+            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(rules.Id));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(rules.Id).size, 1);
+        });
+    });
+
+    describe('_ncvHeapBucketClear', () => {
+        let lct2;
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+
+                reset() {
+                    this.latestEntry = undefined;
+                    this.ncvHeap = new Map();
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        it('should clear the ncvHeap object of the listed bucket/keys', () => {
+            const rules = {
+                Id: 'rule_name',
+                NoncurrentVersionExpiration: {
+                    NoncurrentDays: 1,
+                    NewerNoncurrentVersions: 10,
+                },
+            };
+            const testDate = Date.now();
+            const version1 = {
+                Key: 'testkey1',
+                VersionId: '1',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const version2 = {
+                Key: 'testkey2',
+                VersionId: '2',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const version3 = {
+                Key: 'testkey3',
+                VersionId: '3',
+                staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+            };
+
+            const b1 = 'testbucket1';
+            const b2 = 'testbucket2';
+
+            lct2._ncvHeapAdd(b1, rules, version1);
+            lct2._ncvHeapAdd(b1, rules, version1);
+            lct2._ncvHeapAdd(b1, rules, version2);
+            lct2._ncvHeapAdd(b1, rules, version3);
+            lct2._ncvHeapAdd(b2, rules, version1);
+            lct2._ncvHeapAdd(b2, rules, version2);
+
+            lct2._ncvHeapBucketClear(b1);
+
+            assert(!lct2.ncvHeap.has(b1));
+            assert(lct2.ncvHeap.has(b2));
+            assert(lct2.ncvHeap.get(b2).has(version1.Key));
+            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(rules.Id));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).has(version2.Key));
+            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(rules.Id));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(rules.Id).size, 1);
+        });
+    });
+
+    describe('_getObjectVersions', () => {
+        let lct2;
+
+        const bucketData = {
+            target: {
+                owner: 'test-user',
+                bucket: 'test-bucket',
+            },
+            details: {},
+        };
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                constructor(lp) {
+                    super(lp);
+                    this.listResponse = {};
+                    this.objectsClearCalledWith = null;
+                    this.bucketClearCalledWith = null;
+                }
+
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+
+                _sendBucketEntry(entry, cb) {
+                    this.latestBucketEntry = entry;
+                    return cb();
+                }
+
+                getLatestEntry() {
+                    return this.latestEntry;
+                }
+
+                reset() {
+                    this.latestEntry = undefined;
+                    this.ncvHeap = new Map();
+                    this.listResponse = {};
+                    this.objectsClearCalledWith = null;
+                    this.bucketClearCalledWith = null;
+                }
+
+                _ncvHeapObjectsClear(bucketName, uniqueObjectKeys) {
+                    this.objectsClearCalledWith = {
+                        bucketName,
+                        uniqueObjectKeys,
+                    };
+                }
+
+                _ncvHeapBucketClear(bucketName) {
+                    this.bucketClearCalledWith = { bucketName };
+                }
+
+                _compareRulesToList(
+                    bucketData,
+                    bucketLCRules,
+                    allVersionsWithStateDate,
+                    log,
+                    versioningStatus,
+                    cb
+                ) {
+                    return cb();
+                }
+
+                _listVersions(bucketData, paramDetails, log, cb) {
+                    return cb(null, this.listResponse);
+                }
+            }
+            lct2 = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            lct2.reset();
+        });
+
+        it('should clear heap bucket-level entry when IsTruncated is false', done => {
+            lct2.listResponse = {
+                IsTruncated: false,
+                Versions: [
+                    {
+                        Key: 'obj1',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                    {
+                        Key: 'obj2',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                    {
+                        Key: 'obj3',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                ],
+                DeleteMarkers: [],
+            };
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
+                err => {
+                    assert.ifError(err);
+                    assert.strictEqual(lct2.objectsClearCalledWith, null);
+                    assert.deepStrictEqual(lct2.bucketClearCalledWith, { bucketName: 'test-bucket' });
+                    done();
+                });
+        });
+
+        it('should clear heap object-level entries when IsTruncated is true', done => {
+            lct2.listResponse = {
+                IsTruncated: true,
+                NextKeyMarker: 'obj3',
+                Versions: [
+                    {
+                        Key: 'obj1',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                    {
+                        Key: 'obj2',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                    {
+                        Key: 'obj3',
+                        VersionId: '1',
+                        LastModified: '2021-10-04T21:46:49.157Z',
+                        ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
+                        Size: 1,
+                        StorageClass: 'site1',
+                    },
+                ],
+                DeleteMarkers: [],
+            };
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
+                err => {
+                    assert.ifError(err);
+                    assert.strictEqual(lct2.bucketClearCalledWith, null);
+                    assert.strictEqual(lct2.objectsClearCalledWith.bucketName, 'test-bucket');
+                    assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj1'));
+                    assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj2'));
+                    assert(!lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj3'));
+                    done();
+                });
+        });
+    });
 });
+
