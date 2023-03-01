@@ -53,7 +53,7 @@
     "werelogs": "git+https://github.com/scality/werelogs#7.10.3.9"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "scality/cloudserver#8.2.20",
+    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
     "eslint": "^2.4.0",
     "eslint-config-airbnb": "^6.0.0",
     "eslint-config-scality": "scality/Guidelines#7.10.2",
