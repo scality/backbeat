@@ -59,6 +59,8 @@ const FUTURE = new Date(CURRENT);
 FUTURE.setDate(FUTURE.getDate() + 5);
 
 const OWNER = 'testOwner';
+const ncd = 'NoncurrentDays';
+const nncv = 'NewerNoncurrentVersions';
 
 class S3Helper {
     constructor(client) {
@@ -394,6 +396,7 @@ class LifecycleBucketProcessorMock {
         this._producer = new ProducerMock();
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
+        this.ncvHeap = new Map();
 
         // set test topic name
         ReplicationAPI.setDataMoverTopic('data-mover');
@@ -421,12 +424,14 @@ class LifecycleBucketProcessorMock {
             objectTasksTopic: 'object-tasks',
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             log: this._log,
+            ncvHeap: this.ncvHeap,
         };
     }
 
     reset() {
         this._producer.reset();
         this._kafkaBacklogMetrics.reset();
+        this.ncvHeap.clear();
     }
 }
 
@@ -938,7 +943,7 @@ describe('lifecycle task functional tests', function dF() {
             async.waterfall([
                 next => s3Helper.setAndCreateBucket('test-bucket', next),
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new LifecycleRule().addID('task-1').addNCVExpiration(2).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 2).build(),
                 ], next),
                 (data, next) => s3Helper.createVersions(2, next),
                 next => s3.getBucketLifecycleConfiguration({
@@ -957,7 +962,7 @@ describe('lifecycle task functional tests', function dF() {
                     });
                 },
                 next => s3Helper.setBucketLifecycleConfigurations([
-                    new LifecycleRule().addNCVExpiration(1).build(),
+                    new LifecycleRule().addNCVExpiration(ncd, 1).build(),
                 ], next),
                 (data, next) => s3.getBucketLifecycleConfiguration({
                     Bucket: 'test-bucket',
@@ -1336,7 +1341,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to each versioned object, no pagination',
                 bucketLCRules: [
-                    new LifecycleRule().addID('task-1').addNCVExpiration(1).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 1).build(),
                 ],
                 scenarioFxn: 'createVersions',
                 scenario: 2,
@@ -1359,11 +1364,11 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to correct versions with pagination and prefix',
                 bucketLCRules: [
-                    new LifecycleRule().addID('task-1').addNCVExpiration(3).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 3).build(),
                     new LifecycleRule().addID('task-2').addPrefix('test/')
-                        .addNCVExpiration(1).build(),
+                        .addNCVExpiration(ncd, 1).build(),
                     new LifecycleRule().addID('task-3').addPrefix('src/')
-                        .addNCVExpiration(2).build(),
+                        .addNCVExpiration(ncd, 2).build(),
                 ],
                 scenarioFxn: 'createVersions',
                 scenario: 3,
@@ -1387,9 +1392,9 @@ describe('lifecycle task functional tests', function dF() {
                     ' applies to correct versions with tagging and pagination',
                 bucketLCRules: [
                     new LifecycleRule().addID('task-1').addTag('key1', 'value1')
-                        .addPrefix('src/').addNCVExpiration(1).build(),
+                        .addPrefix('src/').addNCVExpiration(ncd, 1).build(),
                     new LifecycleRule().addID('task-2').addTag('key2', 'value2')
-                        .addNCVExpiration(2).build(),
+                        .addNCVExpiration(ncd, 2).build(),
                 ],
                 scenarioFxn: 'createVersions',
                 scenario: 3,
@@ -1412,7 +1417,7 @@ describe('lifecycle task functional tests', function dF() {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
                     ' applies to delete markers as well with pagination',
                 bucketLCRules: [
-                    new LifecycleRule().addID('task-1').addNCVExpiration(1).build(),
+                    new LifecycleRule().addID('task-1').addNCVExpiration(ncd, 1).build(),
                 ],
                 scenarioFxn: 'createDeleteMarkers',
                 scenario: 2,
@@ -1428,6 +1433,130 @@ describe('lifecycle task functional tests', function dF() {
                     objects: Array(5).fill('version-1'),
                     bucketCount: 1,
                     objectCount: 5,
+                },
+            },
+            // ncve: 1 day rule should expire with NewerNoncurrentVersion 1, no pagination
+            // should expire some
+            // NewerNoncurrentVersions parameter forces some of versions to be kept
+            {
+                message: 'should verify that NoncurrentVersionExpiration ' +
+                    ' rule with NewerNoncurrentVersion ' +
+                    ' applies to 1 versioned object, no pagination',
+                bucketLCRules: [
+                    new LifecycleRule().addID('task-1')
+                        .addNCVExpiration(ncd, 1)
+                        .addNCVExpiration(nncv, 1)
+                        .build(),
+                ],
+                scenarioFxn: 'createVersions',
+                scenario: 2,
+                bucketEntry: {
+                    action: 'testing-ncve',
+                    target: {
+                        bucket: 'test-ncve',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: ['version-1'],
+                    bucketCount: 0,
+                    objectCount: 1,
+                },
+            },
+            // ncve: 1 day rule should expire with NewerNoncurrentVersion, no pagination
+            // should expire none
+            // NewerNoncurrentVersions parameter forces all the versions to be kept
+            {
+                message: 'should verify that NoncurrentVersionExpiration ' +
+                    ' rule with NewerNoncurrentVersion ' +
+                    ' applies does not delete versions, no pagination',
+                bucketLCRules: [
+                    new LifecycleRule().addID('task-1')
+                        .addNCVExpiration(ncd, 1)
+                        .addNCVExpiration(nncv, 2)
+                        .build(),
+                ],
+                scenarioFxn: 'createVersions',
+                scenario: 2,
+                bucketEntry: {
+                    action: 'testing-ncve',
+                    target: {
+                        bucket: 'test-ncve',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: [],
+                    bucketCount: 0,
+                    objectCount: 0,
+                },
+            },
+            // ncve: NewerNoncurrentVersion, pagination, tagging, should expire some
+            // NewerNoncurrentVersions parameter forces some of versions to be kept
+            {
+                message: 'should verify that NoncurrentVersionExpiration ' +
+                    ' rule with NewerNoncurrentVersion ' +
+                    ' applies to correct versions with tagging and pagination',
+                bucketLCRules: [
+                    new LifecycleRule().addID('task-1').addTag('key1', 'value1')
+                        .addPrefix('src/')
+                        .addNCVExpiration(ncd, 1)
+                        .addNCVExpiration(nncv, 1)
+                    .build(),
+                    new LifecycleRule().addID('task-2').addTag('key2', 'value2')
+                        .addNCVExpiration(ncd, 2)
+                        .addNCVExpiration(nncv, 1)
+                    .build(),
+                ],
+                scenarioFxn: 'createVersions',
+                scenario: 3,
+                bucketEntry: {
+                    action: 'testing-ncve',
+                    target: {
+                        bucket: 'test-ncve',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: ['src/obj-2'],
+                    bucketCount: 5,
+                    objectCount: 1,
+                },
+            },
+            // ncve: NewerNoncurrentVersion, pagination, tagging, should expire none
+            // NewerNoncurrentVersions parameter forces all the versions to be kept
+            {
+                message: 'should verify that NoncurrentVersionExpiration ' +
+                    ' rule with NewerNoncurrentVersion ' +
+                    ' applies to correct versions with tagging and pagination',
+                bucketLCRules: [
+                    new LifecycleRule().addID('task-1').addTag('key1', 'value1')
+                        .addPrefix('src/')
+                        .addNCVExpiration(ncd, 1)
+                        .addNCVExpiration(nncv, 10)
+                    .build(),
+                    new LifecycleRule().addID('task-2').addTag('key2', 'value2')
+                        .addNCVExpiration(ncd, 2)
+                        .addNCVExpiration(nncv, 1)
+                    .build(),
+                ],
+                scenarioFxn: 'createVersions',
+                scenario: 3,
+                bucketEntry: {
+                    action: 'testing-ncve',
+                    target: {
+                        bucket: 'test-ncve',
+                        owner: OWNER,
+                    },
+                    details: {},
+                },
+                expected: {
+                    objects: [],
+                    bucketCount: 5,
+                    objectCount: 0,
                 },
             },
         ].forEach(item => {
