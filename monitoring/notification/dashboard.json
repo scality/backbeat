@@ -388,7 +388,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(notification_queue_processor_notification_delivery_delay_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))\n/\nsum(rate(notification_queue_processor_notification_delivery_delay_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=~\".*\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_notification_queue_processor_delivery_delay_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))\n/\nsum(rate(s3_notification_queue_processor_delivery_delay_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=~\".*\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -460,7 +460,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(notification_queue_processor_notification_delivery_delay_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_notification_queue_processor_delivery_delay_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -532,7 +532,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(notification_queue_processor_notification_size{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_notification_queue_processor_notification_size_total{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -816,7 +816,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))",
+          "expr": "sum by(target) (rate(s3_notification_queue_processor_delivery_delay_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -902,7 +902,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(target) (rate(notification_queue_processor_notification_delivery_delay_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"failure\"}[$__rate_interval]))",
+          "expr": "sum by(target) (rate(s3_notification_queue_processor_delivery_delay_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"failure\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -988,7 +988,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(eventType) (rate(notification_queue_processor_event{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
+          "expr": "sum by(eventType) (rate(s3_notification_queue_processor_events_total{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1074,7 +1074,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(notification_queue_populator_event{job=\"${job_notification_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_notification_queue_populator_events_total{job=\"${job_notification_producer}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1160,7 +1160,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(target) (rate(notification_queue_processor_notification_size{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
+          "expr": "sum by(target) (rate(s3_notification_queue_processor_notification_size_total{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1225,7 +1225,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(notification_queue_processor_notification_delivery_delay_sec_sum{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval])) by(le)",
+          "expr": "sum(rate(s3_notification_queue_processor_delivery_delay_seconds_sum{namespace=\"${namespace}\", job=~\"${notification_processor}\", target=~\"${target}\", status=\"success\"}[$__rate_interval])) by(le)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1359,7 +1359,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nsum by(job) (rate(notification_config_manager_config_get_sec_sum{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\", cache_hit=\"true\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
+          "expr": "label_replace(\nsum by(job) (rate(s3_notification_config_manager_config_get_seconds_sum{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\", cache_hit=\"true\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1454,7 +1454,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nsum by (job) (rate (notification_config_manager_cache_updates{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
+          "expr": "label_replace(\nsum by (job) (rate (s3_notification_config_manager_cache_updates_total{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1549,7 +1549,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nsum(notification_config_manager_cached_buckets_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}) by (job)\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
+          "expr": "label_replace(\nsum(s3_notification_config_manager_cached_buckets_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}) by (job)\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1641,7 +1641,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nsum by (job) (rate (notification_config_manager_config_get_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\", cache_hit=\"true\"}[$__rate_interval]))\n/\nsum by (job) (rate (notification_config_manager_config_get_sec_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
+          "expr": "label_replace(\nsum by (job) (rate (s3_notification_config_manager_config_get_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\", cache_hit=\"true\"}[$__rate_interval]))\n/\nsum by (job) (rate (s3_notification_config_manager_config_get_seconds_count{namespace=\"${namespace}\", job=~\"${notification_processor}|${job_notification_producer}\"}[$__rate_interval]))\n, \"job\", \"$1\", \"job\", \".*-(.*)-headless\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1689,7 +1689,7 @@
         "multi": true,
         "name": "notification_processor",
         "options": [],
-        "query": "label_values(notification_queue_processor_event{namespace=\"${namespace}\", job=~\"${job_notification_processors}.*\", target=~\"${target}\"}, job)",
+        "query": "label_values(s3_notification_queue_processor_events_total{namespace=\"${namespace}\", job=~\"${job_notification_processors}.*\", target=~\"${target}\"}, job)",
         "refresh": 1,
         "regex": "/^(?<value>(artesca-data-)?(backbeat-notification-processor-)?(?<text>.*?)(-headless)?)$/",
         "sort": 1,
@@ -1716,7 +1716,7 @@
         "multi": true,
         "name": "target",
         "options": [],
-        "query": "label_values(notification_queue_processor_event{namespace=\"${namespace}\", job=~\"${job_notification_processors}.*\", target=~\".*\"}, target)",
+        "query": "label_values(s3_notification_queue_processor_events_total{namespace=\"${namespace}\", job=~\"${job_notification_processors}.*\", target=~\".*\"}, target)",
         "refresh": 1,
         "regex": null,
         "sort": 1,

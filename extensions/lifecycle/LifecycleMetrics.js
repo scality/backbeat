@@ -5,32 +5,32 @@ const LIFECYCLE_LABEL_OP = 'op';
 const LIFECYCLE_LABEL_STATUS = 'status';
 
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
-    name: 'lifecycle_latest_batch_start_time',
+    name: 's3_lifecycle_latest_batch_start_time',
     help: 'Timestamp of latest lifecycle batch start time',
     labelNames: [],
 });
 
 // const lifecycleVaultOperations = ZenkoMetrics.createCounter({
-//     name: 'lifecycle_vault_operations',
+//     name: 's3_lifecycle_vault_operations_total',
 //     help: 'Total number vault operations by lifecycle processes',
 //     labelNames: [LIFECYCLE_LABEL_OP, LIFECYCLE_LABEL_STATUS],
 // });
 
 const conductorBucketListings = {
     success: ZenkoMetrics.createCounter({
-        name: 'lifecycle_conductor_bucket_list_success',
+        name: 's3_lifecycle_conductor_bucket_list_success_total',
         help: 'Total number of successful bucket listings by lifecycle conductor',
         labelNames: [],
     }),
     error: ZenkoMetrics.createCounter({
-        name: 'lifecycle_conductor_bucket_list_error',
+        name: 's3_lifecycle_conductor_bucket_list_error_total',
         help: 'Total number of failed bucket listings by lifecycle conductor',
         labelNames: [],
     }),
 };
 
 const lifecycleS3Operations = ZenkoMetrics.createCounter({
-    name: 'lifecycle_s3_operations',
+    name: 's3_lifecycle_s3_operations_total',
     help: 'Total number of S3 operations by the lifecycle processes',
     labelNames: [
         LIFECYCLE_LABEL_ORIGIN,
@@ -41,12 +41,12 @@ const lifecycleS3Operations = ZenkoMetrics.createCounter({
 
 const lifecycleKafkaPublish = {
     success: ZenkoMetrics.createCounter({
-        name: 'lifecycle_kafka_publish_success',
+        name: 's3_lifecycle_kafka_publish_success_total',
         help: 'Total number of messages published by lifecycle processes',
         labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_OP],
     }),
     error: ZenkoMetrics.createCounter({
-        name: 'lifecycle_kafka_publish_error',
+        name: 's3_lifecycle_kafka_publish_error_total',
         help: 'Total number of failed messages by lifecycle processes',
         labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_OP],
     }),

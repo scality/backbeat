@@ -40,7 +40,7 @@ groups:
     Expr: |
         histogram_quantile(
           0.99,
-          sum by(le) (rate(oplog_populator_acknowledgement_lag_sec_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
+          sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="${oplog_populator_job}",namespace="${namespace}"}[1m]))
         )
         >= ${oplogPopulatorChangeStreamLagThreshold}
     For: "5m"

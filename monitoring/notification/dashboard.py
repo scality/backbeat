@@ -30,7 +30,7 @@ DEFAULT_JOB_PREFIX = 'artesca-data-'
 
 class Metrics:
     DELIVERY_LAG = metrics.BucketMetric(
-        'notification_queue_processor_notification_delivery_delay_sec',
+        's3_notification_queue_processor_delivery_delay_seconds',
         'target', 'job', 'status', namespace='${namespace}',
     ).with_defaults(
         'job=~"${notification_processor}"',
@@ -38,7 +38,7 @@ class Metrics:
     )
 
     CONSUMED_EVENTS = metrics.CounterMetric(
-        'notification_queue_populator_event',
+        's3_notification_queue_populator_events_total',
         job='${job_notification_producer}', namespace='${namespace}'
     )
 
@@ -49,13 +49,13 @@ class Metrics:
             'job=~"${notification_processor}"',
             'target=~"${target}"',
         ) for name, extraLabels in {
-            'notification_queue_processor_notification_size': [],
-            'notification_queue_processor_event': ['eventType'],
+            's3_notification_queue_processor_notification_size_total': [],
+            's3_notification_queue_processor_events_total': ['eventType'],
         }.items()
     ]
 
     CACHE_LAG = metrics.BucketMetric(
-        'notification_config_manager_config_get_sec',
+        's3_notification_config_manager_config_get_seconds',
         'cache_hit', 'job', namespace='${namespace}',
     ).with_defaults(
         'job=~"${notification_processor}|${job_notification_producer}"'
@@ -67,8 +67,8 @@ class Metrics:
         ).with_defaults(
             'job=~"${notification_processor}|${job_notification_producer}"'
         ) for name, extraLabels in {
-            'notification_config_manager_cache_updates': ['op'],
-            'notification_config_manager_cached_buckets_count': [],
+            's3_notification_config_manager_cache_updates_total': ['op'],
+            's3_notification_config_manager_cached_buckets_count': [],
         }.items()
     ]
 

@@ -3,13 +3,13 @@ const KafkaProducer = require('./KafkaProducer');
 const { ZenkoMetrics } = require('arsenal').metrics;
 
 const notificationSize = ZenkoMetrics.createCounter({
-    name: 'notification_queue_processor_notification_size',
+    name: 's3_notification_queue_processor_notification_size_total',
     help: 'Total size of the notifications that were sent',
     labelNames: ['target'],
 });
 
 const deliveryLag = ZenkoMetrics.createHistogram({
-    name: 'notification_queue_processor_notification_delivery_delay_sec',
+    name: 's3_notification_queue_processor_delivery_delay_seconds',
     help: 'Difference between the time a notification is sent and when it gets delivered',
     labelNames: ['target', 'status'],
     buckets: [0.001, 0.01, 1, 10, 100, 1000, 10000],

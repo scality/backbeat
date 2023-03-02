@@ -18,51 +18,51 @@ class OplogPopulatorMetrics {
 
     registerMetrics() {
         this.acknowledgementLag = ZenkoMetrics.createHistogram({
-            name: 'oplog_populator_acknowledgement_lag_sec',
+            name: 's3_oplog_populator_acknowledgement_lag_seconds',
             help: 'Delay between a config change in mongo and the start of processing by the oplogPopulator in seconds',
             labelNames: ['opType'],
             buckets: [0.001, 0.01, 1, 10, 100, 1000, 10000],
         });
         this.connectorConfiguration = ZenkoMetrics.createCounter({
-            name: 'oplog_populator_connector_configuration',
-            help: 'Number of times we update the configuration of a connector',
+            name: 's3_oplog_populator_connector_configurations_total',
+            help: 'Total number of connector configuration updates',
             labelNames: ['connector', 'opType'],
         });
         this.buckets = ZenkoMetrics.createGauge({
-            name: 'oplog_populator_connector_buckets',
-            help: 'Number of buckets per connector',
+            name: 's3_oplog_populator_connector_buckets',
+            help: 'Total number of buckets per connector',
             labelNames: ['connector'],
         });
         this.requestSize = ZenkoMetrics.createCounter({
-            name: 'oplog_populator_connector_request_bytes',
-            help: 'Size of kafka connect request in bytes',
+            name: 's3_oplog_populator_connector_request_bytes_total',
+            help: 'Total size of kafka connect request in bytes',
             labelNames: ['connector'],
         });
         this.mongoPipelineSize = ZenkoMetrics.createGauge({
-            name: 'oplog_populator_connector_pipeline_bytes',
+            name: 's3_oplog_populator_connector_pipeline_bytes',
             help: 'Size of mongo pipeline in bytes',
             labelNames: ['connector'],
         });
         this.connectors = ZenkoMetrics.createGauge({
-            name: 'oplog_populator_connectors',
+            name: 's3_oplog_populator_connectors',
             help: 'Total number of configured connectors',
             labelNames: ['isOld'],
         });
         this.reconfigurationLag = ZenkoMetrics.createHistogram({
-            name: 'oplog_populator_reconfiguration_lag_sec',
+            name: 's3_oplog_populator_reconfiguration_lag_seconds',
             help: 'Time it takes kafka-connect to respond to a connector configuration request',
             labelNames: ['connector'],
             buckets: [0.001, 0.01, 1, 10, 100, 1000, 10000],
         });
         this.connectorConfigurationApplied = ZenkoMetrics.createCounter({
-            name: 'oplog_populator_connector_configuration_applied',
-            help: 'Number of times we submit the configuration of a connector to kafka-connect',
+            name: 's3_oplog_populator_connector_configuration_applied_total',
+            help: 'Total number of connector configuration submissions to kafka-connect',
             labelNames: ['connector', 'success'],
         });
     }
 
     /**
-     * updates oplog_populator_acknowledgement_lag_sec metric
+     * updates s3_oplog_populator_acknowledgement_lag_seconds metric
      * @param {string} opType oplog operation type
      * @param {number} delta delay between a config change
      * in mongo and it getting processed by the oplogPopulator
@@ -82,8 +82,8 @@ class OplogPopulatorMetrics {
     }
 
     /**
-     * updates oplog_populator_connector_configuration &
-     * oplog_populator_connector_request_bytes metrics
+     * updates s3_oplog_populator_connector_configurations_total &
+     * s3_oplog_populator_connector_request_bytes_total metrics
      * @param {Connector} connector connector instance
      * @param {string} opType operation type, could be one of
      * "add" and "delete"
@@ -113,7 +113,7 @@ class OplogPopulatorMetrics {
     }
 
     /**
-     * updates oplog_populator_connectors metric
+     * updates s3_oplog_populator_connectors metric
      * @param {boolean} isOld true if connectors were not
      * created by this OplogPopulator instance
      * @param {number} count number of connectors added
@@ -133,7 +133,7 @@ class OplogPopulatorMetrics {
     }
 
     /**
-     * updates oplog_populator_reconfiguration_lag_sec metric
+     * updates s3_oplog_populator_reconfiguration_lag_seconds metric
      * @param {Connector} connector connector instance
      * @param {Boolean} success true if reconfiguration was successful
      * @param {number} delta time it takes to reconfigure a connector

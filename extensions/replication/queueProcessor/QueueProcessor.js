@@ -56,56 +56,56 @@ const {
  */
 
 const dataReplicationStatusMetric = ZenkoMetrics.createCounter({
-    name: 'replication_data_status_changed_total',
-    help: 'Number of status updates',
+    name: 's3_replication_data_status_changed_total',
+    help: 'Total number of status updates',
     labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
 const metadataReplicationStatusMetric = ZenkoMetrics.createCounter({
-    name: 'replication_metadata_status_changed_total',
-    help: 'Number of status updates',
+    name: 's3_replication_metadata_status_changed_total',
+    help: 'Total number of status updates',
     labelNames: ['origin', 'location', 'replicationStatus'],
 });
 
 const dataReplicationBytesMetric = ZenkoMetrics.createCounter({
-    name: 'replication_data_bytes',
+    name: 's3_replication_data_bytes_total',
     help: 'Total number of bytes replicated for data operation',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
 const metadataReplicationBytesMetric = ZenkoMetrics.createCounter({
-    name: 'replication_metadata_bytes',
+    name: 's3_replication_metadata_bytes_total',
     help: 'Total number of bytes replicated for metadata operation',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
 const sourceDataBytesMetric = ZenkoMetrics.createCounter({
-    name: 'replication_source_data_bytes',
+    name: 's3_replication_source_data_bytes_total',
     help: 'Total number of data bytes read from replication source',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
 const readMetric = ZenkoMetrics.createCounter({
-    name: 'replication_data_read',
-    help: 'Number of read operations',
+    name: 's3_replication_data_read_total',
+    help: 'Total number of read operations',
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
 const writeMetric = ZenkoMetrics.createCounter({
-    name: 'replication_data_write',
-    help: 'Number of write operations',
+    name: 's3_replication_data_write_total',
+    help: 'Total number of write operations',
     labelNames: ['origin', 'serviceName', 'location', 'replicationContent'],
 });
 
 const timeElapsedMetric = ZenkoMetrics.createHistogram({
-    name: 'replication_stage_time_elapsed',
+    name: 's3_replication_stage_time_elapsed',
     help: 'Elapsed time of a specific stage in replication (in millisecond)',
     labelNames: ['origin', 'serviceName', 'location', 'replicationStage'],
     buckets: [10, 100, 1000, 10000, 30000, 60000, 120000, 300000],
 });
 
 const rpoMetric = ZenkoMetrics.createHistogram({
-    name: 'replication_rpo_seconds',
+    name: 's3_replication_rpo_seconds',
     help: 'Difference between the time the object is updated and the time it ' +
           'is picked up for replication',
     labelNames: ['origin', 'serviceName', 'location'],
