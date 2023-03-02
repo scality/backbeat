@@ -30,8 +30,8 @@ class Metrics:
             name, namespace="${namespace}", job="${job_queue_populator}"
         )
         for name in [
-            'replication_populator_objects',
-            'replication_populator_bytes'
+            's3_replication_populator_objects_total',
+            's3_replication_populator_bytes_total'
         ]
     ]
 
@@ -43,25 +43,25 @@ class Metrics:
             'job=~"$queue_processor"', 'location=~"$location"',
         )
         for name, extraLabels in {
-            'replication_data_read': [],
-            'replication_data_write': [],
-            'replication_data_bytes': [],
-            'replication_metadata_bytes': [],
-            'replication_source_data_bytes': [],
-            'replication_data_status_changed_total': ['replicationStatus'],
-            'replication_metadata_status_changed_total': ['replicationStatus'],
+            's3_replication_data_read_total': [],
+            's3_replication_data_write_total': [],
+            's3_replication_data_bytes_total': [],
+            's3_replication_metadata_bytes_total': [],
+            's3_replication_source_data_bytes_total': [],
+            's3_replication_data_status_changed_total': ['replicationStatus'],
+            's3_replication_metadata_status_changed_total': ['replicationStatus'],
         }.items()
     ]
 
     STAGE_DURATION = metrics.BucketMetric(
-        'replication_stage_time_elapsed',
+        's3_replication_stage_time_elapsed',
         'location', 'job', 'replicationStage', namespace='${namespace}'
     ).with_defaults(
         'job=~"$queue_processor"', 'location=~"$location"',
     )
 
     RPO = metrics.BucketMetric(
-        'replication_rpo_seconds',
+        's3_replication_rpo_seconds',
         namespace="${namespace}", job="${job_data_processor}",
     ).with_description(
         'RPO is defined as the difference between the time an object was '
@@ -70,7 +70,7 @@ class Metrics:
     )
 
     LATENCY = metrics.BucketMetric(
-        'replication_latency_seconds',
+        's3_replication_latency_seconds',
         namespace="${namespace}", job="${job_status_processor}",
     ).with_description(
         'Replication Latency is defined as time taken for an object to '
@@ -78,18 +78,18 @@ class Metrics:
     )
 
     STATUS = metrics.BucketMetric(
-        'replication_status_process_duration_seconds',
+        's3_replication_status_process_duration_seconds',
         'result', 'replicationStatus',
         namespace='${namespace}', job="${job_status_processor}"
     )
 
     STATUS_CHANGED = metrics.CounterMetric(
-        'replication_status_changed_total', 'replicationStatus',
+        's3_replication_status_changed_total', 'replicationStatus',
         namespace='${namespace}', job="${job_status_processor}"
     )
 
     REPLAY_OBJECTS_COMPLETED = metrics.CounterMetric(
-        'replication_replay_objects_completed_total',
+        's3_replication_replay_objects_completed_total',
         'location', 'replayCount', 'replicationStatus',
         namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
@@ -103,18 +103,18 @@ class Metrics:
         ).with_defaults(
             'location=~"$location"',
         )
-        for m in ['replication_replay_success_total', 'replication_replay_attempts_total']
+        for m in ['s3_replication_replay_success_total', 's3_replication_replay_attempts_total']
     ]
 
     REPLAY_FILE_SIZE = metrics.BucketMetric(
-        'replication_replay_file_sizes_completed', 'location', 'replayCount', 'replicationStatus',
+        's3_replication_replay_file_sizes_completed', 'location', 'replayCount', 'replicationStatus',
         namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
         'location=~"$location"',
     )
 
     REPLAY_COUNT = metrics.BucketMetric(
-        'replication_replay_count', 'location', 'replicationStatus',
+        's3_replication_replay_count', 'location', 'replicationStatus',
         namespace='${namespace}', job="${job_status_processor}"
     ).with_defaults(
         'location=~"$location"',
@@ -457,7 +457,7 @@ queue_populator_lag = TimeSeries(
             '   max(mongodb_mongod_replset_oplog_head_timestamp{',
             '           namespace="${namespace}", job="${job_mongod}"})',
             '   -',
-            '   min(replication_log_timestamp{namespace="${namespace}",',
+            '   min(s3_replication_log_timestamp{namespace="${namespace}",',
             '             job="${job_queue_populator}"}),',
             '0)',
         ]),

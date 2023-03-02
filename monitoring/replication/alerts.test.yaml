@@ -158,9 +158,9 @@ tests:
     interval: 1m
     input_series:
       # 0.01% error rate for 5m, then 0.1% error rate for 5m, then 1% error rate
-      - series: replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="FAILED"}
+      - series: s3_replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="FAILED"}
         values: 1+1x3 5+11x4 60+101x6
-      - series: replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="COMPLETED"}
+      - series: s3_replication_status_changed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", replicationStatus="COMPLETED"}
         values: 9999+9999x15
     alert_rule_test:
       - alertname: ReplicationErrorsWarning
@@ -222,9 +222,9 @@ tests:
     interval: 1m
     input_series:
       # Requests last 50s for 5 min, then up to 600s for 5 min, then 900s for 5min
-      - series: replication_rpo_seconds_sum{namespace="zenko", job="backbeat-replication-data-processor-headless"}
+      - series: s3_replication_rpo_seconds_sum{namespace="zenko", job="backbeat-replication-data-processor-headless"}
         values: 500+500x4 3000+6000x4 33000+9000x6
-      - series: replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless"}
+      - series: s3_replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless"}
         values: 10+10x16
     alert_rule_test:
       - alertname: ReplicationRpoWarning
@@ -303,9 +303,9 @@ tests:
     interval: 1m
     input_series:
       # Requests last 500s for 5 min, then up to 3000s for 5 min, then 9000s for 5min
-      - series: replication_latency_seconds_sum{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
+      - series: s3_replication_latency_seconds_sum{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
         values: 5000+5000x4 30000+30000x4 180000+90000x6
-      - series: replication_latency_seconds_count{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
+      - series: s3_replication_latency_seconds_count{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite"}
         values: 10+10x16
     alert_rule_test:
       - alertname: ReplicationLatencyWarning
@@ -393,9 +393,9 @@ tests:
       #   0  objects for the next 4h
       #   50 objects per 5m for the next 1h
       #   0  objects for the next 2h
-      - series: replication_replay_objects_completed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite", replicationStatus="COMPLETED"}
+      - series: s3_replication_replay_objects_completed_total{namespace="zenko", job="backbeat-replication-status-processor-headless", location="remoteSite", replicationStatus="COMPLETED"}
         values: 0+10x174
-      - series: replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless", location="remoteSite"}
+      - series: s3_replication_rpo_seconds_count{namespace="zenko", job="backbeat-replication-data-processor-headless", location="remoteSite"}
         values: 0+10x47 480+20x47 1440+0x47 1440+50x5 1740+0x24
     alert_rule_test:
       - alertname: ReplicationBacklogGrowing

@@ -14,7 +14,7 @@ const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
 
 const processedEvents = ZenkoMetrics.createCounter({
-    name: 'notification_queue_processor_event',
+    name: 's3_notification_queue_processor_events_total',
     help: 'Total number of successfully processed events',
     labelNames: ['target', 'eventType'],
 });

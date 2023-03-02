@@ -294,7 +294,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(oplog_populator_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\"})",
+          "expr": "sum(s3_oplog_populator_connectors{job=\"${oplog_populator_job}\", namespace=\"${namespace}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -367,7 +367,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+          "expr": "sum(s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -440,7 +440,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "max (oplog_populator_connector_pipeline_bytes{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+          "expr": "max (s3_oplog_populator_connector_pipeline_bytes{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -513,7 +513,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(oplog_populator_connector_request_bytes{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_request_bytes_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -598,7 +598,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(oplog_populator_connector_configuration_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"true\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"true\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -683,7 +683,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(oplog_populator_connector_configuration_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"false\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total_applied{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", success=\"false\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -784,7 +784,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(connector) (oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+          "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -870,7 +870,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum by(connector) (oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
+          "expr": "sum by(connector) (s3_oplog_populator_connector_buckets{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"})",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -956,7 +956,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(oplog_populator_connector_configuration{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"add\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"add\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1042,7 +1042,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum (rate(oplog_populator_connector_configuration{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"delete\"}[$__rate_interval]))",
+          "expr": "sum (rate(s3_oplog_populator_connector_configurations_total{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\", opType=\"delete\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1136,7 +1136,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(\n  oplog_populator_acknowledgement_lag_sec_bucket{namespace=\"${namespace}\", job=\"${oplog_populator_job}\"}[$__rate_interval]\n)) by(le)",
+          "expr": "sum(rate(\n  s3_oplog_populator_acknowledgement_lag_seconds_bucket{namespace=\"${namespace}\", job=\"${oplog_populator_job}\"}[$__rate_interval]\n)) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -1220,7 +1220,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(\n  oplog_populator_reconfiguration_lag_sec_bucket{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"}[$__rate_interval]\n)) by(le)",
+          "expr": "sum(rate(\n  s3_oplog_populator_reconfiguration_lag_seconds_bucket{job=\"${oplog_populator_job}\", namespace=\"${namespace}\", connector=~\"${connector}\"}[$__rate_interval]\n)) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -1287,7 +1287,7 @@
         "multi": true,
         "name": "connector",
         "options": [],
-        "query": "label_values(oplog_populator_connector_buckets{job=~\"${oplog_populator_job}.*\", namespace=\"${namespace}\", connector=~\".*\"}, connector)",
+        "query": "label_values(s3_oplog_populator_connector_buckets{job=~\"${oplog_populator_job}.*\", namespace=\"${namespace}\", connector=~\".*\"}, connector)",
         "refresh": 1,
         "regex": null,
         "sort": 1,

@@ -22,14 +22,14 @@ from scalgrafanalib import(
 
 class Metrics:
     RECONFIG_LAG = metrics.BucketMetric(
-        'oplog_populator_reconfiguration_lag_sec', 'connector',
+        's3_oplog_populator_reconfiguration_lag_seconds', 'connector',
         job="${oplog_populator_job}", namespace="${namespace}"
     ).with_defaults(
         'connector=~"${connector}"',
     )
 
     ACK_LAG = metrics.BucketMetric(
-        'oplog_populator_acknowledgement_lag_sec',
+        's3_oplog_populator_acknowledgement_lag_seconds',
         'opType', 'job', namespace="${namespace}"
     ).with_defaults(
         'job="${oplog_populator_job}"',
@@ -42,16 +42,16 @@ class Metrics:
         ).with_defaults(
             'connector=~"${connector}"',
         ) for name, extraLabels in {
-            'oplog_populator_connector_configuration': ['opType'],
-            'oplog_populator_connector_configuration_applied': ['success'],
-            'oplog_populator_connector_buckets': [],
-            'oplog_populator_connector_request_bytes': [],
-            'oplog_populator_connector_pipeline_bytes': [],
+            's3_oplog_populator_connector_configurations_total': ['opType'],
+            's3_oplog_populator_connector_configurations_total_applied': ['success'],
+            's3_oplog_populator_connector_buckets': [],
+            's3_oplog_populator_connector_request_bytes_total': [],
+            's3_oplog_populator_connector_pipeline_bytes': [],
         }.items()
     ]
 
     CONNECTORS = metrics.CounterMetric(
-        'oplog_populator_connectors', 'isOld',
+        's3_oplog_populator_connectors', 'isOld',
         job="${oplog_populator_job}", namespace="${namespace}"
     )
 

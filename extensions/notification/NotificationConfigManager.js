@@ -20,7 +20,7 @@ const CONFIG_MANAGER_CACHE_HIT = 'cache_hit';
 const CONFIG_MANAGER_OPERATION_TYPE = 'op';
 
 const cacheUpdates = ZenkoMetrics.createCounter({
-    name: 'notification_config_manager_cache_updates',
+    name: 's3_notification_config_manager_cache_updates_total',
     help: 'Total number of cache updates',
     labelNames: [
         CONFIG_MANAGER_OPERATION_TYPE,
@@ -28,7 +28,7 @@ const cacheUpdates = ZenkoMetrics.createCounter({
 });
 
 const configGetLag = ZenkoMetrics.createHistogram({
-    name: 'notification_config_manager_config_get_sec',
+    name: 's3_notification_config_manager_config_get_seconds',
     help: 'Time it takes in seconds to get a bucket notification config from MongoDB',
     labelNames: [
         CONFIG_MANAGER_CACHE_HIT,
@@ -37,7 +37,7 @@ const configGetLag = ZenkoMetrics.createHistogram({
 });
 
 const cachedBuckets = ZenkoMetrics.createGauge({
-    name: 'notification_config_manager_cached_buckets_count',
+    name: 's3_notification_config_manager_cached_buckets_count',
     help: 'Total number of cached buckets in the notification config manager',
 });
 
