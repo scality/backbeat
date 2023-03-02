@@ -123,11 +123,11 @@ groups:
 
   - alert: ReplicationErrorsWarning
     expr: |
-      100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
+      100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
                               job="${job_status_processor}", replicationStatus='FAILED'}
                               [1m]))
                    /
-                 sum(rate(replication_status_changed_total{namespace="${namespace}",
+                 sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
                               job="${job_status_processor}", replicationStatus='COMPLETED'}
                               [1m]))
             ) <= 100 - ${replicationErrorsWarningThreshold}
@@ -140,11 +140,11 @@ groups:
 
   - alert: ReplicationErrorsCritical
     expr: |
-      100 / (1 + sum(rate(replication_status_changed_total{namespace="${namespace}",
+      100 / (1 + sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
                              job="${job_status_processor}", replicationStatus='FAILED'}
                              [1m]))
                    /
-                 sum(rate(replication_status_changed_total{namespace="${namespace}",
+                 sum(rate(s3_replication_status_changed_total{namespace="${namespace}",
                                   job="${job_status_processor}", replicationStatus='COMPLETED'}
                                   [1m]))
             ) <= 100 - ${replicationErrorsCriticalThreshold}
@@ -157,8 +157,8 @@ groups:
 
   - alert: ReplicationRpoWarning
     expr: |
-      sum(rate(replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-          / sum(rate(replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+      sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+          / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
         >= ${rpoWarningThreshold}
     for: 5m
     labels:
@@ -175,8 +175,8 @@ groups:
 
   - alert: ReplicationRpoCritical
     expr: |
-      sum(rate(replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
-          / sum(rate(replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+      sum(rate(s3_replication_rpo_seconds_sum{namespace="${namespace}", job="${job_data_processor}"}[1m]))
+          / sum(rate(s3_replication_rpo_seconds_count{namespace="${namespace}", job="${job_data_processor}"}[1m]))
         >= ${rpoCriticalThreshold}
     for: 5m
     labels:
@@ -193,10 +193,10 @@ groups:
 
   - alert: ReplicationLatencyWarning
     expr: |
-      sum(rate(replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+      sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
             by(location)
         /
-      sum(rate(replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+      sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
             by(location)
       >= ${latencyWarningThreshold}
     for: 5m
@@ -214,10 +214,10 @@ groups:
 
   - alert: ReplicationLatencyCritical
     expr: |
-      sum(rate(replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+      sum(rate(s3_replication_latency_seconds_sum{namespace="${namespace}", job="${job_status_processor}"}[1m]))
             by(location)
         /
-      sum(rate(replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
+      sum(rate(s3_replication_latency_seconds_count{namespace="${namespace}", job="${job_status_processor}"}[1m]))
             by(location)
       >= ${latencyCriticalThreshold}
     for: 5m
@@ -235,12 +235,12 @@ groups:
 
   - alert: ReplicationBacklogGrowing
     expr: |
-      sum(round(increase(replication_replay_objects_completed_total{
+      sum(round(increase(s3_replication_replay_objects_completed_total{
                              namespace='${namespace}', job="${job_status_processor}",
                              replicationStatus=~'FAILED|COMPLETED'
                          }[30m]))) by(location)
         -
-      sum(round(increase(replication_rpo_seconds_count{
+      sum(round(increase(s3_replication_rpo_seconds_count{
                              namespace="${namespace}", job="${job_data_processor}",
                          }[30m]))) by(location)
       < 0

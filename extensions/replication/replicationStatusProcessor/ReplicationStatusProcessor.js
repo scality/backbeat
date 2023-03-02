@@ -59,71 +59,71 @@ const {
  */
 const loadMetricHandlers = jsutil.once(repConfig => {
     const replicationStatusMetric = ZenkoMetrics.createCounter({
-        name: 'replication_status_changed_total',
-        help: 'Number of objects updated',
+        name: 's3_replication_status_changed_total',
+        help: 'Total number of objects updated',
         labelNames: ['origin', 'replicationStatus'],
     });
 
     const replicationStatusDurationSeconds = ZenkoMetrics.createHistogram({
-        name: 'replication_status_process_duration_seconds',
+        name: 's3_replication_status_process_duration_seconds',
         help: 'Duration of replication status processing',
         labelNames: ['origin', 'result', 'replicationStatus'],
         buckets: [0.05, 0.1, 0.2, 0.3, 0.4, 0.5, 1],
     });
 
     const replicationLatency = ZenkoMetrics.createHistogram({
-        name: 'replication_latency_seconds',
+        name: 's3_replication_latency_seconds',
         help: 'Time taken for an object to replicate successfully to the destination',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
         buckets: [1, 10, 30, 60, 120, 300, 600],
     });
 
     const replayAttempts = ZenkoMetrics.createCounter({
-        name: 'replication_replay_attempts_total',
-        help: 'Number of total attempts made to replay replication',
+        name: 's3_replication_replay_attempts_total',
+        help: 'Total number of attempts made to replay replication',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replaySuccess = ZenkoMetrics.createCounter({
-        name: 'replication_replay_success_total',
-        help: 'Number of times an object was replicated during a replay',
+        name: 's3_replication_replay_success_total',
+        help: 'Total number of times an object was replicated during a replay',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedObjects = ZenkoMetrics.createCounter({
-        name: 'replication_replay_objects_queued_total',
-        help: 'Number of objects added to replay queues',
+        name: 's3_replication_replay_objects_queued_total',
+        help: 'Total number of objects added to replay queues',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedBytes = ZenkoMetrics.createCounter({
-        name: 'replication_replay_bytes_queued_total',
-        help: 'Number of bytes added to replay queues',
+        name: 's3_replication_replay_bytes_queued_total',
+        help: 'Total Number of bytes added to replay queues',
         labelNames: ['origin', 'location', 'replayCount'],
     });
 
     const replayQueuedFileSizes = ZenkoMetrics.createHistogram({
-        name: 'replication_replay_file_sizes_queued',
-        help: 'Number of objects queued for replay by file size',
+        name: 's3_replication_replay_file_sizes_queued',
+        help: 'Total number of objects queued for replay by file size',
         labelNames: ['origin', 'location', 'replayCount'],
         buckets: repConfig.objectSizeMetrics,
     });
 
     const replayCompletedObjects = ZenkoMetrics.createCounter({
-        name: 'replication_replay_objects_completed_total',
-        help: 'Number of objects completed from replay queues',
+        name: 's3_replication_replay_objects_completed_total',
+        help: 'Total number of objects completed from replay queues',
         labelNames: ['origin', 'location',  'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedBytes = ZenkoMetrics.createCounter({
-        name: 'replication_replay_bytes_completed_total',
-        help: 'Number of bytes completed from replay queues',
+        name: 's3_replication_replay_bytes_completed_total',
+        help: 'Total number of bytes completed from replay queues',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
     });
 
     const replayCompletedFileSizes = ZenkoMetrics.createHistogram({
-        name: 'replication_replay_file_sizes_completed',
-        help: 'Number of objects completed from replay by file size',
+        name: 's3_replication_replay_file_sizes_completed',
+        help: 'Total number of objects completed from replay by file size',
         labelNames: ['origin', 'location', 'replayCount', 'replicationStatus'],
         buckets: repConfig.objectSizeMetrics,
     });
@@ -131,8 +131,8 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     const maxReplayCount = !repConfig.replayTopics ? 0 : repConfig.replayTopics.reduce(
         (prev, topic) => prev + topic.retries, 0);
     const replayCount = ZenkoMetrics.createHistogram({
-        name: 'replication_replay_count',
-        help: 'Number of replays to complete replication',
+        name: 's3_replication_replay_count',
+        help: 'Total number of replays to complete replication',
         labelNames: ['origin', 'location'],
         buckets: [...Array(maxReplayCount).keys()],
     });

@@ -11,7 +11,7 @@ const ingestionProcessedElapsedSeconds = ZenkoMetrics.createHistogram({
 
 const ingestionKafkaPulledTotal = ZenkoMetrics.createCounter({
     name: promMetricNames.ingestionKafkaPulledTotal,
-    help: 'Number of kafka entries pulled for ingestion',
+    help: 'Total number of kafka entries pulled for ingestion',
 });
 
 const ingestionKafkaConsume = ZenkoMetrics.createCounter({

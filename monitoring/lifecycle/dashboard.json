@@ -92,7 +92,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "lifecycle_latest_batch_start_time{job=\"${job_lifecycle_producer}\",namespace=\"${namespace}\"}",
+          "expr": "s3_lifecycle_latest_batch_start_time{job=\"${job_lifecycle_producer}\",namespace=\"${namespace}\"}",
           "format": "time_series",
           "hide": false,
           "instant": true,
@@ -277,7 +277,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"2..\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -291,7 +291,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -305,7 +305,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -319,7 +319,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -399,7 +399,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status!=\"200\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -479,7 +479,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -559,7 +559,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -639,7 +639,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -753,7 +753,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_kafka_publish_success{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_kafka_publish_success_total{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -838,7 +838,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_kafka_publish_error{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_kafka_publish_error_total{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -923,7 +923,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_kafka_publish_success{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_kafka_publish_success_total{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1008,7 +1008,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_kafka_publish_error{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_kafka_publish_error_total{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1122,7 +1122,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1136,7 +1136,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1150,7 +1150,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1164,7 +1164,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1244,7 +1244,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1324,7 +1324,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1404,7 +1404,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1484,7 +1484,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1598,7 +1598,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1612,7 +1612,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1626,7 +1626,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1640,7 +1640,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(increase(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
+          "expr": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1720,7 +1720,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1800,7 +1800,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1880,7 +1880,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1960,7 +1960,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(lifecycle_s3_operations{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2045,7 +2045,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{status=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{status=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2059,7 +2059,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{status!=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{status!=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2144,7 +2144,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{status=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{status=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2158,7 +2158,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(lifecycle_s3_operations{status!=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{status!=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
