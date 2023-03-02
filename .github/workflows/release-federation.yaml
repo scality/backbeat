@@ -30,7 +30,7 @@ jobs:
           password: ${{ secrets.REGISTRY_PASSWORD }}
 
       - name: Build and push
-        uses: docker/build-push-action@v2
+        uses: docker/build-push-action@v3
         with:
           context: .
           file: images/nodesvc-base/Dockerfile
@@ -38,6 +38,7 @@ jobs:
           tags: "${{ env.REGISTRY_NAME }}/${{env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}:${{ github.event.inputs.tag }}-nodesvc-base"
           cache-from: type=gha
           cache-to: type=gha,mode=max\
+          provenance: false
 
       - name: Create Release
         uses: softprops/action-gh-release@v1
