@@ -8,6 +8,7 @@ COPY ./package.json ./yarn.lock ${HOME_DIR}/backbeat
 RUN rm /root/.gitconfig
 
 RUN yarn install --production --frozen-lockfile --network-concurrency 1
+RUN yarn cache clean --all
 
 COPY . ${HOME_DIR}/backbeat
 
