@@ -1,15 +1,20 @@
-FROM registry.scality.com/federation/nodesvc-base:7.10.5.0
+FROM registry.scality.com/federation/nodesvc-base:7.10.7.0 as builder
+
+WORKDIR /tmp/build
+
+COPY ./package.json ./yarn.lock /tmp/build
+
+RUN yarn cache clean \
+    && yarn install --production --frozen-lockfile --ignore-optional --ignore-engines --network-concurrency 1 \
+    && yarn cache clean
+
+################################################################################
+FROM registry.scality.com/federation/nodesvc-base:7.10.7.0
 
 WORKDIR ${HOME_DIR}/backbeat
 
-COPY ./package.json ./yarn.lock ${HOME_DIR}/backbeat
-
-# Remove when gitcache is sorted out
-RUN rm /root/.gitconfig
-
-RUN yarn install --production --frozen-lockfile --network-concurrency 1
-
 COPY . ${HOME_DIR}/backbeat
+COPY --from=builder /tmp/build/node_modules ./node_modules/
 
 RUN chown -R ${USER} ${HOME_DIR}/backbeat
 
