@@ -87,6 +87,12 @@ const baseLCConfig = {
         type: 'account',
         account: 'lifecycle',
     },
+    bucketProcessor: {
+        groupId: 'a',
+        probeServer: {
+            port: 8553,
+        }
+    },
 };
 
 function withAccountIds(messages) {

@@ -6,7 +6,13 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const zkConfig = {};
 const kafkaConfig = {};
-const lcConfig = { auth: {}, bucketProcessor: {} };
+const lcConfig = {
+    auth: {},
+    bucketProcessor: {},
+    objectProcessor: {
+        groupId: 'opcg',
+    },
+};
 const repConfig = {};
 const s3Config = { host: 'init.test.host', port: 8000 };
 

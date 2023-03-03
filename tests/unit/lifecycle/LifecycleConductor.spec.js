@@ -62,6 +62,10 @@ function makeLifecycleConductor(options, markers) {
                 },
             },
         },
+        bucketProcessor: {
+            groupId: 'bpcg',
+        },
+        bucketTasksTopic: 'bb-bucket-tasks',
     };
 
     const lcConductor = new LifecycleConductor(zkConfig.zookeeper,
@@ -73,6 +77,14 @@ function makeLifecycleConductor(options, markers) {
                 `${account1}:bucketuid123:${bucket1}`,
                 `${account2}:bucketuid456:${bucket2}`,
             ]);
+        },
+
+        getData: (path, cb) => {
+            cb(null, null, null);
+        },
+
+        setData: (path, buf, v, cb) => {
+            cb();
         },
     };
 

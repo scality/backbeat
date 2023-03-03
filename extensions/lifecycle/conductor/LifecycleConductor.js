@@ -17,6 +17,9 @@ const VaultClientCache = require('../../../lib/clients/VaultClientCache');
 const safeJsonParse = require('../util/safeJsonParse');
 const { AccountIdCache } = require('../util/AccountIdCache');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const {
+    updateCircuitBreakerConfigForImplicitOutputQueue
+} = require('../../../lib/CircuitBreaker');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -105,7 +108,14 @@ class LifecycleConductor {
         this.onlyBlacklistAccounts = this.bucketsBlacklisted.size === 0 && this.accountsBlacklisted.size > 0;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
-        this._circuitBreaker = this.buildCircuitBreaker(this.lcConfig.conductor.circuitBreaker);
+
+        const circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
+            lcConfig.conductor.circuitBreaker,
+            lcConfig.bucketProcessor.groupId,
+            lcConfig.bucketTasksTopic,
+        );
+
+        this._circuitBreaker = this.buildCircuitBreaker(circuitBreakerConfig);
     }
 
     buildCircuitBreaker(conf) {
