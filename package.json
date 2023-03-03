@@ -69,7 +69,7 @@
   },
   "devDependencies": {
     "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
-    "eslint": "^5.3.0",
+    "eslint": "^8.14.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#8.2.0",
     "eslint-plugin-import": "^2.14.0",
