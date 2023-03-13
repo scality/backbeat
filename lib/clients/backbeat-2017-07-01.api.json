@@ -1196,28 +1196,28 @@
                 }
             }
         },
-        "ListLifecycleMasters": {
+        "ListLifecycleCurrents": {
             "http": {
               "method": "GET",
-              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=master"
+              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=current"
             },
             "input": {
-              "shape": "ListLifecycleObjectsRequest"
+              "shape": "ListLifecycleRequest"
             },
             "output": {
-              "shape": "ListLifecycleObjectsOutput"
+              "shape": "ListLifecycleOutput"
             }
         },
-        "ListLifecycleVersions": {
+        "ListLifecycleNonCurrents": {
             "http": {
               "method": "GET",
-              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=version"
+              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=noncurrent"
             },
             "input": {
-              "shape": "ListLifecycleObjectsRequest"
+              "shape": "ListLifecycleNonCurrentsRequest"
             },
             "output": {
-              "shape": "ListLifecycleObjectsOutput"
+              "shape": "ListLifecycleNonCurrentsOutput"
             }
         },
         "ListLifecycleOrphans": {
@@ -1226,10 +1226,10 @@
               "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=orphan"
             },
             "input": {
-              "shape": "ListLifecycleObjectsRequest"
+              "shape": "ListLifecycleRequest"
             },
             "output": {
-              "shape": "ListLifecycleObjectsOutput"
+              "shape": "ListLifecycleOutput"
             }
         }
     },
@@ -1272,6 +1272,9 @@
         "ETag": {
             "type": "string"
         },
+        "Marker": {
+            "type": "string"
+        },
         "KeyMarker": {
             "type": "string"
         },
@@ -1299,6 +1302,9 @@
             "type": "string"
         },
         "NextKeyMarker": {
+            "type": "string"
+        },
+        "NextMarker": {
             "type": "string"
         },
         "NextVersionIdMarker": {
@@ -1329,7 +1335,7 @@
         "VersionIdMarker": {
             "type": "string"
         },
-        "ListLifecycleObjectsRequest": {
+        "ListLifecycleNonCurrentsRequest": {
             "type": "structure",
             "required": [
               "Bucket"
@@ -1381,7 +1387,7 @@
               }
             }
         },
-        "ListLifecycleObjectsOutput": {
+        "ListLifecycleNonCurrentsOutput": {
             "type": "structure",
             "members": {
               "BeforeDate": {
@@ -1407,6 +1413,93 @@
               "NextVersionIdMarker": {
                 "shape": "NextVersionIdMarker",
                 "documentation": "<p>When the number of responses exceeds the value of <code>MaxKeys</code>, <code>NextVersionIdMarker</code> specifies the first object version not returned that satisfies the search criteria. Use this value for the version-id-marker request parameter in a subsequent request.</p>"
+              },
+              "Contents": {
+                "shape": "ObjectLifecycleList",
+                "documentation": "<p>Metadata about each object returned.</p>"
+              },
+              "Name": {
+                "shape": "BucketName",
+                "documentation": "<p>The bucket name.</p>"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Keys that begin with the indicated prefix.</p>"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>The maximum number of keys returned in the response body.</p>"
+              },
+              "EncodingType": {
+                "shape": "EncodingType",
+                "documentation": "<p>Encoding type used by CloudServer to encode object keys in the response.</p>"
+              }
+            }
+        },
+        "ListLifecycleRequest": {
+            "type": "structure",
+            "required": [
+              "Bucket"
+            ],
+            "members": {
+              "Bucket": {
+                "shape": "BucketName",
+                "documentation": "<p>The name of the bucket containing the objects.</p> <p>When using this action with an access point, you must direct requests to the access point hostname. The access point hostname takes the form <i>AccessPointName</i>-<i>AccountId</i>.s3-accesspoint.<i>Region</i>.amazonaws.com. When using this action with an access point through the Amazon Web Services SDKs, you provide the access point ARN in place of the bucket name. For more information about access point ARNs, see <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/userguide/using-access-points.html\">Using access points</a> in the <i>Amazon S3 User Guide</i>.</p> <p>When using this action with Amazon S3 on Outposts, you must direct requests to the S3 on Outposts hostname. The S3 on Outposts hostname takes the form <code> <i>AccessPointName</i>-<i>AccountId</i>.<i>outpostID</i>.s3-outposts.<i>Region</i>.amazonaws.com</code>. When using this action with S3 on Outposts through the Amazon Web Services SDKs, you provide the Outposts bucket ARN in place of the bucket name. For more information about S3 on Outposts ARNs, see <a href=\"https://docs.aws.amazon.com/AmazonS3/latest/userguide/S3onOutposts.html\">Using Amazon S3 on Outposts</a> in the <i>Amazon S3 User Guide</i>.</p>",
+                "contextParam": {
+                  "name": "Bucket"
+                },
+                "location": "uri",
+                "locationName": "Bucket"
+              },
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>",
+                "location": "querystring",
+                "locationName": "before-date"
+              },
+              "EncodingType": {
+                "shape": "EncodingType",
+                "location": "querystring",
+                "locationName": "encoding-type"
+              },
+              "Marker": {
+                "shape": "Marker",
+                "documentation": "<p>KeyMarker is where you want Cloudserver to start listing from. CloudServer starts listing after this specified key. Marker can be any key in the bucket.</p>",
+                "location": "querystring",
+                "locationName": "marker"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>Sets the maximum number of keys returned in the response. By default the action returns up to 1,000 key names. The response might contain fewer keys but will never contain more. </p>",
+                "location": "querystring",
+                "locationName": "max-keys"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Limits the response to keys that begin with the specified prefix.</p>",
+                "location": "querystring",
+                "locationName": "prefix"
+              }
+            }
+        },
+        "ListLifecycleOutput": {
+            "type": "structure",
+            "members": {
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>"
+              },
+              "Marker": {
+                "shape": "Marker",
+                "documentation": "<p>Indicates where in the bucket listing begins. Marker is included in the response if it was sent with the request.</p>"
+              },
+              "IsTruncated": {
+                "shape": "IsTruncated",
+                "documentation": "<p>A flag that indicates whether Cloudserver returned all of the results that satisfied the search criteria.</p>"
+              },
+              "NextMarker": {
+                "shape": "NextKeyMarker",
+                "documentation": "<p>When response is truncated (the IsTruncated element value in the response is true), you can use the key name in this field as key-marker in the subsequent request to get next set of objects.</p>"
               },
               "Contents": {
                 "shape": "ObjectLifecycleList",

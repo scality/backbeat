@@ -1,12 +1,12 @@
 {
     "accounts": [{
         "name": "account1",
-        "arn": "arn:aws:iam::036892890876:/account1/",
-        "canonicalID": "fb552bc1aea6ff0e5bd72e6bc9567ed5403cf677b2a1b69dc3fd27a8adaccd19",
+        "arn": "arn:aws:iam::345320934593:/account1/",
+        "canonicalID": "f2a3ae88659516fbcad23cae38acc9fbdfcbcaf2e38c05d2e5e1bd1b9f930ff3",
         "displayName": "account1",
         "keys": {
-            "access": "22PU3B9044YJXEYXCFUH",
-            "secret": "oWfFdhXaXNzJas1PCsboyKP5n2GEbtP1cbwrbLkn"
+            "access": "WLI8X7JGPU1AWQEQIKM5",
+            "secret": "0Src2X+kIrR1SUo/NhR5o1V4hqU1dtlePBHAcCbV"
         }
     }
     ]

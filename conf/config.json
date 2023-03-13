@@ -26,8 +26,8 @@
             "sts": {
                 "host": "127.0.0.1",
                 "port": 8800,
-                "accessKey": "NQ67RZXF50ZC62EXAEVN",
-                "secretKey": "LBxag2T/bsrgbwrXh/x2T31rrxIl5byTkt9WRW=9"
+                "accessKey": "TMOF6ZBLKQSPSE3HZX64",
+                "secretKey": "KhFkW=BT33AA5GcsiLN4jHWDRVo6cjK9EZ+fzHlL"
             },
             "vault": {
                 "host": "127.0.0.1",
@@ -254,8 +254,8 @@
                 "sts": {
                     "host": "127.0.0.1",
                     "port": 8800,
-                    "accessKey": "LL74C2RAXOK43V4N62XV",
-                    "secretKey": "8l9G/U/SfS0p0XqupQx=2evDkuR52KRFG1wuz=76"
+                    "accessKey": "F13L3946MAH3MR0L7SK6",
+                    "secretKey": "PFSI8x6l2B0t//=aKoX600FfghGk4BYY4QaaqRvi"
                 },
                 "vault": {
                     "host": "127.0.0.1",
@@ -272,8 +272,8 @@
                     "sts": {
                         "host": "127.0.0.1",
                         "port": 8800,
-                        "accessKey": "NQ67RZXF50ZC62EXAEVN",
-                        "secretKey": "LBxag2T/bsrgbwrXh/x2T31rrxIl5byTkt9WRW=9"
+                        "accessKey": "TMOF6ZBLKQSPSE3HZX64",
+                        "secretKey": "KhFkW=BT33AA5GcsiLN4jHWDRVo6cjK9EZ+fzHlL"
                     },
                     "vault": {
                         "host": "127.0.0.1",
@@ -348,8 +348,8 @@
                 "sts": {
                     "host": "127.0.0.1",
                     "port": 8800,
-                    "accessKey": "LL74C2RAXOK43V4N62XV",
-                    "secretKey": "8l9G/U/SfS0p0XqupQx=2evDkuR52KRFG1wuz=76"
+                    "accessKey": "F13L3946MAH3MR0L7SK6",
+                    "secretKey": "PFSI8x6l2B0t//=aKoX600FfghGk4BYY4QaaqRvi"
                 },
                 "vault": {
                     "host": "127.0.0.1",

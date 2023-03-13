@@ -1,3 +1,5 @@
+const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_TYPE } } = require('../../../lib/constants');
+
 // const bucketLCRules = [{
 //     Expiration: { Days: 5 },
 //     ID: '456',
@@ -57,7 +59,8 @@
 // }];
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
+// TODO: MAX_KEYS TO MOVE BACK TO 1000
+const MAX_KEYS = process.env.CI === 'true' ? 3 : 1;
 
 const bucketLCRules = [{
     Expiration: { Days: 5 },
@@ -104,10 +107,6 @@ const oneDay = 24 * 60 * 60 * 1000;
 const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
 // moves lifecycle expiration deadlines 1 day earlier, only for testing
 const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
-
-const CURRENT_TYPE = 'current';
-const NON_CURRENT_TYPE = 'noncurrent';
-const ORPHAN_TYPE = 'orphan';
 
 
 // const bucketLCRules = [{
@@ -199,13 +198,16 @@ function aggregateByPrefix(rules, prefix, days) {
 }
 
 function reduceTransitionAndExpirationRule(currentDate, r, currents) {
+    // handle the case when rule is disabled.
+    if (r.Status !== 'Enabled') {
+        return currents;
+    }
     const prefix = r.Prefix;
-    const isTransitions = r.Transitions && r.Transitions.length > 0;
+    const isTransitions = r.Transitions && r.Transitions[0];
     let days;
 
-    // TODO: handle the case when rule is disabled.
     // TODO: handle the case when only one transition (no expiration) rule for a given prefix -> 
-    //       introcude DataStoreName listing params.
+    //       introcude DataStoreName to the listing params.
 
     if (r.Expiration) {
         // Expiration Days cannot be 0
@@ -341,13 +343,12 @@ function _rulesToParams(currentDate, r) {
         const p = _makeListParams(CURRENT_TYPE, currentDate, rule);
         listings.push(p);
     });
-    // TODO: check if versions exist.
+
     (r.nonCurrents || []).forEach(rule => {
         const p = _makeListParams(NON_CURRENT_TYPE, currentDate, rule);
         listings.push(p);
     });
 
-    // TODO: check if orphans exist.
     (r.orphans || []).forEach(rule => {
         const p = _makeListParams(ORPHAN_TYPE, currentDate, rule);
         listings.push(p);
@@ -356,7 +357,7 @@ function _rulesToParams(currentDate, r) {
     return listings;
 }
 
-function getListings(versioningStatus, currentDate, bucketLCRules, bucketData) {
+function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData) {
     // TODO: check bucketData.details.listType is valid
     if (bucketData.details.listType) {
         const prefix = bucketData.details.prefix;
@@ -389,11 +390,11 @@ function getListings(versioningStatus, currentDate, bucketLCRules, bucketData) {
 
         return { params, listingDetails, remainings: [] };
     }
-    console.log('bucketLCRules!!!', bucketLCRules);
+
+    // TODO: Separate rulesToParams (in rule.js) and implement RulesReducer.js class
+
     const rules = _reduceRules(versioningStatus, currentDate, bucketLCRules);
-    console.log('rules!!!', rules);
     const listingsParams = _rulesToParams(currentDate, rules);
-    console.log('listingsParams!!!', listingsParams);
     const { prefix, listType, beforeDate } = listingsParams[0];
     const params = {
         Bucket: bucketData.target.bucket,
@@ -417,8 +418,5 @@ function getListings(versioningStatus, currentDate, bucketLCRules, bucketData) {
 // console.log('final!!!', final);
 
 module.exports = {
-    CURRENT_TYPE,
-    NON_CURRENT_TYPE,
-    ORPHAN_TYPE,
-    getListings
+    rulesToParams,
 };

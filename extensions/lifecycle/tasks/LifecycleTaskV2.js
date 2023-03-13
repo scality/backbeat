@@ -5,8 +5,9 @@ const { errors } = require('arsenal');
 
 const LifecycleTask = require('./LifecycleTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { reduceRulesForVersionedBucket, getListings, CURRENT_TYPE,
-    NON_CURRENT_TYPE, ORPHAN_TYPE, rulesToParams } = require('../util/rulesReducer');
+const { reduceRulesForVersionedBucket, rulesToParams } = require('../util/rulesReducer');
+const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_TYPE } } = require('../../../lib/constants');
+
 
 
 // Default max AWS limit is 1000 for both list objects and list object versions
@@ -41,7 +42,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTask._getVersionList',
+                                method: 'LifecycleTaskV2._getVersionList',
                             });
                     }
                 });
@@ -61,7 +62,7 @@ class LifecycleTaskV2 extends LifecycleTask {
     _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
         const currentDate = Date.now();
 
-        const { params, listingDetails, remainings } = getListings('Disabled', currentDate, bucketLCRules, bucketData);
+        const { params, listingDetails, remainings } = rulesToParams('Disabled', currentDate, bucketLCRules, bucketData);
 
         this._sendRemainingBucketEntries(nbRetries, remainings, bucketData, log);
 
@@ -86,7 +87,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTask._getObjectList',
+                                method: 'LifecycleTaskV2._getObjectList',
                             });
                     }
                 });
@@ -98,57 +99,31 @@ class LifecycleTaskV2 extends LifecycleTask {
         });
     }
 
-    _listLifecycle(listType) {
-        let op;
-
-        // if (listType === CURRENT_TYPE) {
-        //     return this.backbeatMetadataProxy.listLifecycleCurrents(params, log, (err, data) => {
-        //         if
-        //     });
-        // }
-
-        if (listType === CURRENT_TYPE) {
-            op = this.backbeatMetadataProxy.listLifecycleCurrents.bind(this.backbeatMetadataProxy);
-        }
-
-        if (listType === NON_CURRENT_TYPE) {
-            op = this.backbeatMetadataProxy.listLifecycleNonCurrents.bind(this.backbeatMetadataProxy);
-        }
-
-        if (listType === ORPHAN_TYPE) {
-            op = this.backbeatMetadataProxy.listLifecycleOrphans.bind(this.backbeatMetadataProxy);
-        }
-        return op;
-    }
-
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const currentDate = Date.now();
 
         const { params, listingDetails, remainings } =
-            getListings(versioningStatus, currentDate, bucketLCRules, bucketData);
+            rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
         console.log('GET_LISTING!!!', { params, listingDetails, remainings });
 
         this._sendRemainingBucketEntries(nbRetries, remainings, bucketData, log);
 
         // nb of listings is limited per bucket with reducer.
-        const op = this._listLifecycle(listingDetails.listType);
-        op(params, log, (err, data) => {
+        this.backbeatMetadataProxy.listLifecycle(listingDetails.listType, params, log, 
+        (err, contents, isTruncated, markerInfo) => {
             if (err) {
                 // TODO: what should we do if the listing fail?
                 return done(err);
             }
             console.log('1 VERSION listingDetails.listType!!!', listingDetails.listType);
-            console.log('2 VERSION data!!!', data);
 
             // re-queue to Kafka topic bucketTasksTopic
             // with bucket name and `data.marker` only once.
-            if (data.IsTruncated && nbRetries === 0) {
+            if (isTruncated && nbRetries === 0) {
                 const entry = Object.assign({}, bucketData, {
                     details: {
                         ...listingDetails,
-                        // TODO: listLifecycleCurrents and listLifecycleOrphans respond with NextMarker
-                        keyMarker: data.NextKeyMarker,
-                        versionIdMarker: data.NextVersionIdMarker,
+                        ...markerInfo,
                     },
                 });
 
@@ -156,14 +131,14 @@ class LifecycleTaskV2 extends LifecycleTask {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTask._getObjectList',
+                                method: 'LifecycleTaskV2._getObjectList',
                             });
                     }
                 });
             }
             // TODO: compare objects to Rules
             return this._compareRulesToList(bucketData, bucketLCRules,
-                data.Contents, log, done);
+                contents, log, done);
         });
     }
 
@@ -216,7 +191,7 @@ class LifecycleTaskV2 extends LifecycleTask {
         if (!obj.staleDate) {
             // NOTE: this should never happen. Logging here for debug purposes
             log.error('missing staleDate on the version', {
-                method: 'LifecycleTask._compareNonCurrent',
+                method: 'LifecycleTaskV2._compareNonCurrent',
                 bucket: bucketData.target.bucket,
                 versionId: obj.VersionId,
             });
@@ -257,6 +232,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             bucket: bucketData.target.bucket,
             key: obj.Key,
             listType: obj.ListType,
+
         });
 
         const errMsg = 'an implementation error occurred: listType is missing';
@@ -291,7 +267,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                 rules.Expiration.Date < Date.now()) ||
             eodm !== false
         );
-        // TODO: check why this check
+        // TODO: check why this check exists
         const validLifecycleUserCase = (
             isLifecycleUser(deleteMarker.Owner.ID) &&
             eodm !== false
@@ -320,7 +296,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                 if (!err) {
                     log.debug('sent object entry for consumption',
                     Object.assign({
-                        method: 'LifecycleTask._checkAndApplyEODMRule',
+                        method: 'LifecycleTaskV2._checkAndApplyEODMRule',
                     }, entry.getLogInfo()));
                 }
             });

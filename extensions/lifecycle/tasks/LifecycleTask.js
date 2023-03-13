@@ -126,7 +126,6 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
-        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => topic', this.objectTasksTopic);
         console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => kafkaEntry', entry.toKafkaMessage());
         return cb();
         // this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
