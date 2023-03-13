@@ -50,6 +50,7 @@ function queueBatch(ingestionPopulator, log) {
     const maxRead = qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates();
+    // HEREEEE
     ingestionPopulator.processLogEntries({ maxRead }, err => {
         if (err) {
             log.fatal('an error occurred during ingestion', {

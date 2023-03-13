@@ -9,7 +9,8 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
-const LifecycleTask = require('../tasks/LifecycleTask');
+// const LifecycleTask = require('../tasks/LifecycleTask');
+const LifecycleTask = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
@@ -233,6 +234,7 @@ class LifecycleBucketProcessor {
                 owner,
                 details: result.details,
             });
+            // TODO: check indexes is created on the collection/bucket before lifecycle
             return this._internalTaskScheduler.push({
                 task: new LifecycleTask(this),
                 rules: config.Rules,

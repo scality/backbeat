@@ -126,10 +126,13 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
-        this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
-            LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
-            return cb(err);
-        });
+        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => topic', this.objectTasksTopic);
+        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => kafkaEntry', entry.toKafkaMessage());
+        return cb();
+        // this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
+        //     LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
+        //     return cb(err);
+        // });
     }
 
     /**
@@ -904,9 +907,10 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} params.lastModified - The last modified date of object
      * @param {string} params.site - The site name to transition the object to
      * @param {Werelogs.Logger} log - Logger object
+     * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _applyTransitionRule(params, log) {
+    _applyTransitionRule(params, log, cb) {
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, (err, objectMD) => {
@@ -984,6 +988,10 @@ class LifecycleTask extends BackbeatTask {
                     site: params.site,
                 });
             }
+            if (cb) {
+                cb(err);
+            }
+            return;
         });
     }
 
@@ -995,9 +1003,10 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} version.LastModified - last modified date of version
      * @param {object} rules - most applicable rules from `_getApplicableRules`
      * @param {Logger.newRequestLogger} log - logger object
+     * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _checkAndApplyNCVTransitionRule(bucketData, version, rules, log) {
+    _checkAndApplyNCVTransitionRule(bucketData, version, rules, log, cb) {
         const staleDate = version.staleDate;
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncvt = 'NoncurrentVersionTransition';
@@ -1015,7 +1024,7 @@ class LifecycleTask extends BackbeatTask {
                 eTag: version.ETag,
                 lastModified: version.LastModified,
                 site: rules[ncvt].StorageClass,
-            }, log);
+            }, log, cb);
         }
     }
 

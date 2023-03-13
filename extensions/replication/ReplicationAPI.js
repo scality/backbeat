@@ -100,27 +100,29 @@ class ReplicationAPI {
             };
             kafkaEntry.message = JSON.stringify(message);
         }
-        return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
-            if (locationConfig.isCold) {
-                LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);
-            }
-            if (err) {
-                log.error('could not send data mover action',
-                    Object.assign({
-                        method: 'ReplicationAPI.sendDataMoverAction',
-                        error: err,
-                    }, action.getLogInfo()));
-                return cb(err);
-            }
-            log.debug('sent action to the data mover',
-                Object.assign({
-                    method: 'ReplicationAPI.sendDataMoverAction',
-                }, action.getLogInfo()));
-            ReplicationMetrics.onReplicationQueued(
-                origin, fromLocation, action.getAttribute('toLocation'),
-                contentLength, reports[0].partition);
-            return cb();
-        });
+        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TRANSITION END!! => topic', topic);
+        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TRANSITION END!! => kafkaEntry', kafkaEntry);
+        // return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
+        //     if (locationConfig.isCold) {
+        //         LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);
+        //     }
+        //     if (err) {
+        //         log.error('could not send data mover action',
+        //             Object.assign({
+        //                 method: 'ReplicationAPI.sendDataMoverAction',
+        //                 error: err,
+        //             }, action.getLogInfo()));
+        //         return cb(err);
+        //     }
+        //     log.debug('sent action to the data mover',
+        //         Object.assign({
+        //             method: 'ReplicationAPI.sendDataMoverAction',
+        //         }, action.getLogInfo()));
+        //     ReplicationMetrics.onReplicationQueued(
+        //         origin, fromLocation, action.getAttribute('toLocation'),
+        //         contentLength, reports[0].partition);
+        //     return cb();
+        // });
     }
 
     static getDataMoverTopic() {

@@ -20,6 +20,20 @@
     },
     "replicationGroupId": "RG001  ",
     "queuePopulator": {
+        "auth": {
+            "type": "assumeRole",
+            "roleName": "scality-internal/backbeat-lifecycle-conductor",
+            "sts": {
+                "host": "127.0.0.1",
+                "port": 8800,
+                "accessKey": "NQ67RZXF50ZC62EXAEVN",
+                "secretKey": "LBxag2T/bsrgbwrXh/x2T31rrxIl5byTkt9WRW=9"
+            },
+            "vault": {
+                "host": "127.0.0.1",
+                "port": 8600
+            }
+        },
         "cronRule": "*/5 * * * * *",
         "batchMaxRead": 10000,
         "batchTimeoutMs": 9000,
@@ -106,8 +120,8 @@
                     "port": 8000
                 },
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication",
+                    "type": "account",
+                    "account": "account1",
                     "vault": {
                         "host": "127.0.0.1",
                         "port": 8500,
@@ -120,7 +134,6 @@
                 "bootstrapList": [
                     { "site": "zenko", "servers": ["localhost:8001"],
                       "echo": false },
-                    { "site": "wontwork-location", "type": "aws_s3" },
                     { "site": "aws-location", "type": "aws_s3" }
                 ],
                 "auth": {
@@ -216,19 +229,75 @@
             ]
         },
         "lifecycle": {
+            "coldStorageTopics": ["cold-status-location-dmf-v1"],
+            "transitionProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8556
+                }
+            },
             "auth": {
-                "type": "service",
-                "account": "service-lifecycle"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "LL74C2RAXOK43V4N62XV",
+                    "secretKey": "8l9G/U/SfS0p0XqupQx=2evDkuR52KRFG1wuz=76"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
             "conductor": {
-                "cronRule": "0 */5 * * * *",
+                "auth": {
+                    "type": "assumeRole",
+                    "roleName": "scality-internal/backbeat-lifecycle-conductor",
+                    "sts": {
+                        "host": "127.0.0.1",
+                        "port": 8800,
+                        "accessKey": "NQ67RZXF50ZC62EXAEVN",
+                        "secretKey": "LBxag2T/bsrgbwrXh/x2T31rrxIl5byTkt9WRW=9"
+                    },
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8600
+                    }
+                },
+                "cronRule": "*/10 * * * * *",
                 "concurrency": 10,
                 "probeServer": {
                     "bindAddress": "0.0.0.0",
                     "port": 8552
+                },
+                "bucketSource": "mongodb",
+                "mongodb": {
+                    "replicaSetHosts":
+                        "localhost:27017,localhost:27018,localhost:27019",
+                    "writeConcern": "majority",
+                    "replicaSet": "rs0",
+                    "readPreference": "primary",
+                    "database": "metadata"
+                },
+                "vaultAdmin": {
+                    "host": "127.0.0.1",
+                    "port": 8500
                 }
             },
             "bucketProcessor": {
@@ -274,8 +343,18 @@
         "gc": {
             "topic": "backbeat-gc",
             "auth": {
-                "type": "service",
-                "account": "service-gc"
+                "type": "assumeRole",
+                "roleName": "scality-internal/scality-role1",
+                "sts": {
+                    "host": "127.0.0.1",
+                    "port": 8800,
+                    "accessKey": "LL74C2RAXOK43V4N62XV",
+                    "secretKey": "8l9G/U/SfS0p0XqupQx=2evDkuR52KRFG1wuz=76"
+                },
+                "vault": {
+                    "host": "127.0.0.1",
+                    "port": 8600
+                }
             },
             "consumer": {
                 "groupId": "backbeat-gc-consumer-group",
@@ -295,11 +374,6 @@
                 "bindAddress": "0.0.0.0",
                 "port": 8555
             }
-        },
-        "workflowEngineDataSource": {
-            "zookeeperPath": "/workflow-engine-data-source",
-            "topic": "backbeat-workflow-engine",
-            "groupId": "backbeat-workflow-engine-group"
         },
         "oplogPopulator": {
             "topic": "backbeat-oplog",
