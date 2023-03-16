@@ -7,25 +7,25 @@ const { promMetricNames } =
       require('../../../extensions/mongoProcessor/constants');
 
 describe('MongoProcessorMetrics', () => {
-    it('onProcessKafkaEntry should increase value', () => {
+    it('onProcessKafkaEntry should increase value', async () => {
         const countMetric = ZenkoMetrics.getMetric(
             promMetricNames.ingestionKafkaPulledTotal);
 
         // before increase.
-        const initialValues = countMetric.get().values;
+        const initialValues = (await countMetric.get()).values;
         assert.strictEqual(initialValues.length, 1);
         assert.strictEqual(initialValues[0].value, 0);
 
         MongoProcessorMetrics.onProcessKafkaEntry();
 
         // after increase.
-        const totalValues = countMetric.get().values;
+        const totalValues = (await countMetric.get()).values;
         assert.strictEqual(totalValues.length, 1);
         assert.strictEqual(totalValues[0].value, 1);
         countMetric.reset();
     });
 
-    it('onIngestionProcessed should observe values', () => {
+    it('onIngestionProcessed should observe values', async () => {
         const elapsedTimeinMS = 5000;
         const status = 'success';
 
@@ -33,13 +33,13 @@ describe('MongoProcessorMetrics', () => {
             promMetricNames.ingestionProcessedElapsedSeconds);
 
         // before observe.
-        const initialValues = elapsedMetric.get().values;
+        const initialValues = (await elapsedMetric.get()).values;
         assert.strictEqual(initialValues.length, 0);
 
         MongoProcessorMetrics.onIngestionProcessed(elapsedTimeinMS, status);
 
         // after observe.
-        const totalValues = elapsedMetric.get().values;
+        const totalValues = (await elapsedMetric.get()).values;
         totalValues.forEach(v => {
             assert.strictEqual(v.labels.status, status);
         });
