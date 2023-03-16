@@ -42,11 +42,11 @@ describe('ReplicationMetrics', () => {
 
     [123456, '123456'].forEach(contentLength => {
         it('should maintain replication queuing metrics with ' +
-        `content-length as ${typeof contentLength}`, () => {
+        `content-length as ${typeof contentLength}`, async () => {
             ReplicationMetrics.onReplicationQueued(
                 'testOrigin', 'fromLoc', 'toLoc', contentLength, 2);
 
-            const totalValues = totalMetric.get().values;
+            const totalValues = (await totalMetric.get()).values;
             // only one metric value exists because we published with one
             // distinct label set
             assert.strictEqual(totalValues.length, 1);
@@ -61,7 +61,7 @@ describe('ReplicationMetrics', () => {
                 partition: 2,
             });
 
-            const bytesValues = queuedBytesMetric.get().values;
+            const bytesValues = (await queuedBytesMetric.get()).values;
             // only one metric value exists because we published with one
             // distinct label set
             assert.strictEqual(bytesValues.length, 1);
@@ -80,7 +80,7 @@ describe('ReplicationMetrics', () => {
 
     [12345678, '12345678'].forEach(contentLength => {
         it('should maintain replication processed metrics with ' +
-        `content-length as ${typeof contentLength}`, () => {
+        `content-length as ${typeof contentLength}`, async () => {
             // Push a few "processed" metrics
             // object of 123456 bytes processed successfully in 300ms
             ReplicationMetrics.onReplicationProcessed(
@@ -96,7 +96,7 @@ describe('ReplicationMetrics', () => {
                 'error', 5000);
 
             // Check that the byte count is accurate
-            const bytesValues = processedBytesMetric.get().values;
+            const bytesValues = (await processedBytesMetric.get()).values;
 
             // only one metric value exists because we published with one
             // distinct label set
@@ -132,7 +132,7 @@ describe('ReplicationMetrics', () => {
             // this. We will not check the other values pushed to keep the
             // test short, as they basically share the same logic.
 
-            const elapsedValues = elapsedMetric.get().values;
+            const elapsedValues = (await elapsedMetric.get()).values;
 
             // check that all histogram values which "less-or-equal" timing
             // criteria is below 2 seconds for this size range is 0 (as no
