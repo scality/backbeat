@@ -5,8 +5,8 @@ const { errors } = require('arsenal');
 
 const LifecycleTask = require('./LifecycleTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const { reduceRulesForVersionedBucket, rulesToParams } = require('../util/rulesReducer');
-const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_TYPE } } = require('../../../lib/constants');
+const { rulesToParams } = require('../util/rules');
+const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
 
 
@@ -28,7 +28,7 @@ function isLifecycleUser(canonicalID) {
 class LifecycleTaskV2 extends LifecycleTask {
 
     _sendRemainingBucketEntries(nbRetries, remainings, bucketData, log) {
-        if (nbRetries === 0 && remainings.length) {
+        if (nbRetries === 0 && remainings && remainings.length) {
             remainings.forEach(l => {
                 const prefix = l.prefix;
                 const listType = l.listType;
@@ -62,12 +62,23 @@ class LifecycleTaskV2 extends LifecycleTask {
     _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
         const currentDate = Date.now();
 
-        const { params, listingDetails, remainings } = rulesToParams('Disabled', currentDate, bucketLCRules, bucketData);
-
+        const { params, listingDetails, remainings } =
+            rulesToParams('Disabled', currentDate, bucketLCRules, bucketData);
+        // If params is undefined listings can be skipped.
+        // Undefined params can happen when lifecycle configuration rule is disabled for example
+        if (!params) {
+            log.debug('no appropriate listing found', {
+                method: 'LifecycleTaskV2._getObjectList',
+                bucketLCRules,
+                currentDate,
+                bucketData,
+            });
+            return process.nextTick(done);
+        }
         this._sendRemainingBucketEntries(nbRetries, remainings, bucketData, log);
 
         // nb of listings is limited per bucket with reducer.
-        this.backbeatMetadataProxy.listLifecycleMasters(params, log, (err, data) => {
+        return this.backbeatMetadataProxy.listLifecycleMasters(params, log, (err, data) => {
             if (err) {
                 // TODO: what should we do if the listing fail?
                 return done(err);
@@ -92,7 +103,6 @@ class LifecycleTaskV2 extends LifecycleTask {
                     }
                 });
             }
-            console.log('data.Contents!!!', data.Contents);
             // TODO: compare objects to Rules
             return this._compareRulesToList(bucketData, bucketLCRules,
                 data.Contents, log, done);
@@ -104,12 +114,23 @@ class LifecycleTaskV2 extends LifecycleTask {
 
         const { params, listingDetails, remainings } =
             rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        // If params is undefined listings can be skipped.
+        // Undefined params can happen when lifecycle configuration rule is disabled for example.
+        if (!params) {
+            log.debug('no appropriate listing found', {
+                method: 'LifecycleTaskV2._getObjectList',
+                bucketLCRules,
+                currentDate,
+                bucketData,
+            });
+            return process.nextTick(done);
+        }
         console.log('GET_LISTING!!!', { params, listingDetails, remainings });
 
         this._sendRemainingBucketEntries(nbRetries, remainings, bucketData, log);
 
         // nb of listings is limited per bucket with reducer.
-        this.backbeatMetadataProxy.listLifecycle(listingDetails.listType, params, log, 
+        return this.backbeatMetadataProxy.listLifecycle(listingDetails.listType, params, log,
         (err, contents, isTruncated, markerInfo) => {
             if (err) {
                 // TODO: what should we do if the listing fail?
@@ -120,6 +141,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             // re-queue to Kafka topic bucketTasksTopic
             // with bucket name and `data.marker` only once.
             if (isTruncated && nbRetries === 0) {
+                console.log('@@@@@@@ ISTRUNCATED!!!!', markerInfo);
                 const entry = Object.assign({}, bucketData, {
                     details: {
                         ...listingDetails,
@@ -160,10 +182,9 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @param {string} obj.LastModified - last modified date of object
      * @param {object} rules - most applicable rules from `_getApplicableRules`
      * @param {Logger.newRequestLogger} log - logger object
-     * @param {function} done - callback(error, data)
+     * @param {function} cb - callback(error, data)
      * @return {undefined}
      */
-
     _compareCurrent(bucketData, obj, rules, log, cb) {
         if (rules.Expiration) {
             this._checkAndApplyExpirationRule(bucketData, obj, rules,
@@ -214,7 +235,7 @@ class LifecycleTaskV2 extends LifecycleTask {
 
     _compare(bucketData, obj, rules, log, cb) {
         // if version is latest, only expiration action applies
-        if (obj.ListType === ORPHAN_TYPE) {
+        if (obj.ListType === ORPHAN_DM_TYPE) {
             this._checkAndApplyEODMRule(bucketData, obj, rules, log);
             return process.nextTick(cb);
         }
