@@ -1013,13 +1013,13 @@ class QueueProcessor extends EventEmitter {
      * @param {Logger} log - Logger
      * @returns {string} Error response string or undefined
      */
-    static handleMetrics(res, log) {
+    static async handleMetrics(res, log) {
         log.debug('metrics requested');
-
+        const metrics = await ZenkoMetrics.asPrometheus();
         res.writeHead(200, {
             'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
-        res.end(ZenkoMetrics.asPrometheus());
+        res.end(metrics);
     }
 }
 

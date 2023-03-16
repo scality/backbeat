@@ -38,12 +38,12 @@ const oneBigMessage = [{ key: 'large-foo',
                 promMetricNames.latestPublishedMessageTimestamp);
             // reset to 0 before the test
             latestPublishedMetric.reset();
-            producer.send(oneMessage, (err, reports) => {
+            producer.send(oneMessage, async (err, reports) => {
                 assert.ifError(err);
                 assert(Array.isArray(reports));
                 assert.strictEqual(reports.length, 1);
                 const latestPublishedMetricValues =
-                      latestPublishedMetric.get().values;
+                      (await latestPublishedMetric.get()).values;
                 assert.strictEqual(latestPublishedMetricValues.length, 1);
                 assert(
                     latestPublishedMetricValues[0].value >= beforeSend / 1000);
