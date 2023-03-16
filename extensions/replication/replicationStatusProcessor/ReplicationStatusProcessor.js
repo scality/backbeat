@@ -2,7 +2,7 @@
 
 const http = require('http');
 const https = require('https');
-const async = require('async');
+const { each } = require('async');
 
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
@@ -340,7 +340,7 @@ class ReplicationStatusProcessor {
                 if (err) {
                     return cb(err);
                 }
-                return async.each(this._replayTopicNames, (topicName, next) =>
+                return each(this._replayTopicNames, (topicName, next) =>
                     this._ReplayProducers[topicName].setupProducer(next), cb);
             });
         });
@@ -445,7 +445,7 @@ class ReplicationStatusProcessor {
      * @param {Logger} log - Logger
      * @returns {string} Error response string or undefined
      */
-    handleMetrics(res, log) {
+    async handleMetrics(res, log) {
         log.debug('metrics requested');
 
         const serviceName = constants.services.replicationStatusProcessor;
@@ -458,11 +458,12 @@ class ReplicationStatusProcessor {
                 this.metricsHandlers.lag({ partition, serviceName }, lagStats[partition]);
             });
         }
+        const metrics = await promClient.register.metrics();
 
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
         });
-        res.end(promClient.register.metrics());
+        res.end(metrics);
     }
 }
 

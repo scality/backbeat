@@ -562,7 +562,7 @@ class QueueProcessor extends EventEmitter {
      * @param {Logger} log - Logger
      * @returns {string} Error response string or undefined
      */
-    handleMetrics(res, log) {
+    async handleMetrics(res, log) {
         log.debug('metrics requested');
 
         // consumer stats lag is on a different update cycle so we need to
@@ -574,11 +574,12 @@ class QueueProcessor extends EventEmitter {
                 serviceName: this.serviceName,
             }, lagStats[partition]);
         });
+        const metrics = await promClient.register.metrics();
 
         res.writeHead(200, {
             'Content-Type': promClient.register.contentType,
         });
-        res.end(promClient.register.metrics());
+        res.end(metrics);
     }
 }
 
