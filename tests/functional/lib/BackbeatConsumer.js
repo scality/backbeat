@@ -103,9 +103,9 @@ describe('BackbeatConsumer main tests', () => {
                 done();
             });
         }
-        function _checkPromMetrics() {
+        async function _checkPromMetrics() {
             const latestConsumedMetricValues =
-                  latestConsumedMetric.get().values;
+                  (await latestConsumedMetric.get()).values;
             assert.strictEqual(latestConsumedMetricValues.length, 1);
             assert(latestConsumedMetricValues[0].value >= beforeConsume / 1000);
         }
