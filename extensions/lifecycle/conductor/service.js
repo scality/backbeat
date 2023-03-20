@@ -51,12 +51,13 @@ function handleLiveness(res, log) {
  * @param {Logger} log - Logger
  * @returns {undefined} response
  */
-function handleMetrics(res, log) {
+async function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
         'Content-Type': ZenkoMetrics.asPrometheusContentType(),
     });
-    res.end(ZenkoMetrics.asPrometheus());
+    let metrics = await ZenkoMetrics.asPrometheus()
+    res.end(metrics);
 }
 
 async.waterfall([

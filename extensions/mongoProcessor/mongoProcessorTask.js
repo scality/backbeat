@@ -52,12 +52,13 @@ const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
-function handleMetrics(res, log) {
+async function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
         'Content-Type': ZenkoMetrics.asPrometheusContentType(),
     });
-    res.end(ZenkoMetrics.asPrometheus());
+    let metrics = await ZenkoMetrics.asPrometheus();
+    res.end(metrics);
 }
 
 function loadManagementDatabase() {
