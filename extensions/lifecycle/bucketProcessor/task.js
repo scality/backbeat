@@ -48,12 +48,13 @@ function livenessCheck(res, log) {
  * @param {Logger} log - Logger
  * @returns {undefined}
  */
- function handleMetrics(res, log) {
+ async function handleMetrics(res, log) {
     log.debug('metrics requested');
     res.writeHead(200, {
         'Content-Type': ZenkoMetrics.asPrometheusContentType(),
     });
-    res.end(ZenkoMetrics.asPrometheus());
+    const metrics = await ZenkoMetrics.asPrometheus();
+    res.end(metrics);
 }
 
 function probeServerSetup(config, done) {
