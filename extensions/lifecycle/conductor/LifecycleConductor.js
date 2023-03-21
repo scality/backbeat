@@ -20,6 +20,9 @@ const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const {
+    updateCircuitBreakerConfigForImplicitOutputQueue
+} = require('../../../lib/CircuitBreaker');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -112,7 +115,13 @@ class LifecycleConductor {
             this.logger,
         );
 
-        this._circuitBreaker = this.buildCircuitBreaker(this.lcConfig.conductor.circuitBreaker);
+        const circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
+            lcConfig.conductor.circuitBreaker,
+            lcConfig.bucketProcessor.groupId,
+            lcConfig.bucketTasksTopic,
+        );
+
+        this._circuitBreaker = this.buildCircuitBreaker(circuitBreakerConfig);
     }
 
     buildCircuitBreaker(conf) {

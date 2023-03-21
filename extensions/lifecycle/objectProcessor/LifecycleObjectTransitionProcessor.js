@@ -9,6 +9,7 @@ const LifecycleColdStatusArchiveTask =
       require('../tasks/LifecycleColdStatusArchiveTask');
 const { LifecycleResetTransitionInProgressTask } =
       require('../tasks/LifecycleResetTransitionInProgressTask');
+const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -60,6 +61,12 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
             assert(locations[coldLocation], `${coldLocation}: unknown location`);
             assert(locations[coldLocation].isCold, `${coldLocation} is not a valid cold storage location`);
 
+            const circuitBreaker = updateCircuitBreakerConfigForImplicitOutputQueue(
+                this._lcConfig.objectProcessor.circuitBreaker,
+                null,
+                topic,
+            );
+
             consumerParams[topic] = {
                 zookeeper: {
                     connectionString: this._zkConfig.connectionString,
@@ -73,6 +80,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 groupId: this._processConfig.groupId,
                 concurrency: this._processConfig.concurrency,
                 queueProcessor: this.processColdStorageStatusEntry.bind(this),
+                circuitBreaker,
             };
         });
 

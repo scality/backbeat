@@ -96,6 +96,12 @@ const baseLCConfig = {
         type: 'account',
         account: 'lifecycle',
     },
+    bucketProcessor: {
+        groupId: 'a',
+        probeServer: {
+            port: 8553,
+        }
+    },
     coldStorageArchiveTopicPrefix: 'cold-archive-req-',
 };
 
