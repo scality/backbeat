@@ -57,13 +57,13 @@ describe('rulesReducer with versioning Disabled', () => {
         const currentDate = Date.now();
         const bucketLCRules = [
             {
-                NoncurrentVersionExpiration: { Date: currentDate },
+                NoncurrentVersionExpiration: { Days: 1 },
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
             },
             {
-                NoncurrentVersionTransitions: [{ Date: currentDate, StorageClass: locationName }],
+                NoncurrentVersionTransitions: [{ Days: 1, StorageClass: locationName }],
                 ID: '456',
                 Prefix: '',
                 Status: 'Enabled',

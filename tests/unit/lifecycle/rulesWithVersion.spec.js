@@ -669,12 +669,217 @@ describe('rulesReducer with versioning Enabled', () => {
                 listType: 'current',
                 prefix: 'titi',
                 beforeDate: expectedBeforeDate,
-             }, {
+            }, {
                 listType: 'orphan',
                 prefix: 'titi',
                 beforeDate: expectedBeforeDate,
-             }]
-         };
+            }]
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with NoncurrentVersionExpiration and NoncurrentVersionTransitions rules', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 0, StorageClass: locationName }],
+                ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: 1000,
+            },
+            listingDetails: {
+                listType: 'noncurrent',
+                prefix: '',
+            },
+            remainings: []
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with NoncurrentVersionExpiration and NoncurrentVersionTransitions rules with different prefix', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '123',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 0, StorageClass: locationName }],
+                ID: '456',
+                Prefix: 'p2',
+                Status: 'Enabled',
+            },
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: 'p2',
+                MaxKeys: 1000,
+            },
+            listingDetails: {
+                listType: 'noncurrent',
+                prefix: 'p2',
+            },
+            remainings: [{
+                listType: 'noncurrent',
+                prefix: 'p1',
+                beforeDate: expectedBeforeDate,
+            }]
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with NoncurrentVersionExpiration and NoncurrentVersionTransitions rules with shared prefix', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '123',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 0, StorageClass: locationName }],
+                ID: '456',
+                Prefix: 'toto/titi',
+                Status: 'Enabled',
+            },
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: 'toto',
+                MaxKeys: 1000,
+            },
+            listingDetails: {
+                listType: 'noncurrent',
+                prefix: 'toto',
+            },
+            remainings: []
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with Expiration, Transtions, NoncurrentVersionExpiration and NoncurrentVersionTransitions rules', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const expectedBeforeDate2 = (new Date(currentDate - 2 * ONE_DAY_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 2 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 2 },
+                ID: '789',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: locationName }],
+                ID: '101',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: 1000,
+                BeforeDate: expectedBeforeDate,
+            },
+            listingDetails: {
+                listType: 'current',
+                prefix: '',
+                beforeDate: expectedBeforeDate,
+            },
+            remainings: [{
+                listType: 'noncurrent',
+                prefix: '',
+                beforeDate: expectedBeforeDate,
+            }, {
+                listType: 'orphan',
+                prefix: '',
+                beforeDate: expectedBeforeDate2,
+            }]
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with Expiration and ExpiredObjectDeleteMarker rules', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Expiration: { ExpiredObjectDeleteMarker: true },
+                ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: 1000,
+                BeforeDate: expectedBeforeDate,
+            },
+            listingDetails: {
+                listType: 'current',
+                prefix: '',
+                beforeDate: expectedBeforeDate,
+            },
+            remainings: [{
+                listType: 'orphan',
+                prefix: '',
+            }]
+        };
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
         assert.deepStrictEqual(result, expected);

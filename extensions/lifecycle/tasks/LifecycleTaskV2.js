@@ -60,7 +60,7 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @return {undefined}
      */
     _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
-        const currentDate = Date.now();
+        const currentDate = new Date();
 
         const { params, listingDetails, remainings } =
             rulesToParams('Disabled', currentDate, bucketLCRules, bucketData);
@@ -110,7 +110,7 @@ class LifecycleTaskV2 extends LifecycleTask {
     }
 
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
-        const currentDate = Date.now();
+        const currentDate = new Date();
 
         const { params, listingDetails, remainings } =
             rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
