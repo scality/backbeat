@@ -1234,13 +1234,19 @@
         }
     },
     "shapes": {
-        "BucketName": {
-            "type": "string"
+        "Archive": {
+            "type": "structure",
+            "members": {
+              "RestoreCompletedAt": {
+                "type": "string",
+                "documentation": "<p></p>"
+              }
+            }
         },
         "BeforeDate": {
             "type": "string"
         },
-        "SateDate": {
+        "BucketName": {
             "type": "string"
         },
         "ChecksumAlgorithm": {
@@ -1259,6 +1265,9 @@
             },
             "flattened": true
         },
+        "DataStoreName": {
+            "type": "string"
+        },
         "DisplayName": {
             "type": "string"
         },
@@ -1275,65 +1284,17 @@
         "Marker": {
             "type": "string"
         },
-        "KeyMarker": {
-            "type": "string"
-        },
-        "MaxKeys": {
-            "type": "integer"
-        },
-        "ObjectStorageClass": {
-            "type": "string"
-        },
-        "Owner": {
-            "type": "structure",
-            "members": {
-              "DisplayName": {
-                "shape": "DisplayName",
-                "documentation": "<p>Container for the display name of the owner.</p>"
-              },
-              "ID": {
-                "shape": "ID",
-                "documentation": "<p>Container for the ID of the owner.</p>"
-              }
-            },
-            "documentation": "<p>Container for the owner's display name and ID.</p>"
-        },
-        "Prefix": {
-            "type": "string"
-        },
-        "NextKeyMarker": {
-            "type": "string"
-        },
-        "NextMarker": {
-            "type": "string"
-        },
-        "NextVersionIdMarker": {
-            "type": "string"
-        },
         "IsTruncated": {
             "type": "boolean"
         },
         "ID": {
             "type": "string"
         },
+        "KeyMarker": {
+            "type": "string"
+        },
         "LastModified": {
-          "type": "timestamp"
-        },
-        "ObjectKey": {
-            "type": "string",
-            "min": 1
-        },
-        "ObjectVersionId": {
-            "type": "string"
-        },
-        "Size": {
-            "type": "integer"
-        },
-        "Value": {
-            "type": "string"
-        },
-        "VersionIdMarker": {
-            "type": "string"
+            "type": "timestamp"
         },
         "ListLifecycleNonCurrentsRequest": {
             "type": "structure",
@@ -1523,29 +1484,19 @@
               }
             }
         },
-        "DataStoreName": {
+        "ListType": {
             "type": "string"
         },
-        "Archive": {
-            "type": "structure",
-            "members": {
-              "RestoreCompletedAt": {
-                "type": "string",
-                "documentation": "<p></p>"
-              }
-            }
+        "MaxKeys": {
+            "type": "integer"
         },
-        "TransitionInProgress": {
-            "type": "boolean"
+        "NextKeyMarker": {
+            "type": "string"
         },
-        "ObjectLifecycleList": {
-            "type": "list",
-            "member": {
-              "shape": "ObjectLifecycle"
-            },
-            "flattened": true
+        "NextMarker": {
+            "type": "string"
         },
-        "ListType": {
+        "NextVersionIdMarker": {
             "type": "string"
         },
         "ObjectLifecycle": {
@@ -1587,7 +1538,7 @@
                 "documentation": "<p>Contains the tag set.</p>"
               },
               "staleDate": {
-                "shape": "SateDate",
+                "shape": "StaleDate",
                 "documentation": "<p>Contains the stale date</p>"
               },
               "VersionId": {
@@ -1617,11 +1568,45 @@
               }
             }
         },
-        "TransitionAttempt": {
-            "type": "integer"
+        "ObjectLifecycleList": {
+            "type": "list",
+            "member": {
+              "shape": "ObjectLifecycle"
+            },
+            "flattened": true
         },
-        "IsDataStoreVersioned": {
-            "type": "boolean"
+        "ObjectKey": {
+            "type": "string",
+            "min": 1
+        },
+        "ObjectStorageClass": {
+            "type": "string"
+        },
+        "ObjectVersionId": {
+            "type": "string"
+        },
+        "Owner": {
+            "type": "structure",
+            "members": {
+              "DisplayName": {
+                "shape": "DisplayName",
+                "documentation": "<p>Container for the display name of the owner.</p>"
+              },
+              "ID": {
+                "shape": "ID",
+                "documentation": "<p>Container for the ID of the owner.</p>"
+              }
+            },
+            "documentation": "<p>Container for the owner's display name and ID.</p>"
+        },
+        "Prefix": {
+            "type": "string"
+        },
+        "StaleDate": {
+            "type": "string"
+        },
+        "Size": {
+            "type": "integer"
         },
         "Tag": {
             "type": "structure",
@@ -1647,6 +1632,21 @@
               "shape": "Tag",
               "locationName": "Tag"
             }
+        },
+        "TransitionAttempt": {
+            "type": "integer"
+        },
+        "TransitionInProgress": {
+            "type": "boolean"
+        },
+        "Value": {
+            "type": "string"
+        },
+        "VersionIdMarker": {
+            "type": "string"
+        },
+        "IsDataStoreVersioned": {
+            "type": "boolean"
         },
         "Sj": {
             "type": "string",

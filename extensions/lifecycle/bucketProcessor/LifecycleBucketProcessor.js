@@ -9,8 +9,8 @@ const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
-// const LifecycleTask = require('../tasks/LifecycleTask');
-const LifecycleTask = require('../tasks/LifecycleTaskV2');
+const LifecycleTask = require('../tasks/LifecycleTask');
+const LifecycleTaskV2 = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
@@ -78,6 +78,9 @@ class LifecycleBucketProcessor {
         } else {
             this._log.debug('no lifecycle rules enabled');
         }
+
+        this._lifecycleTask = new LifecycleTask(this);
+        this._lifecycleTaskV2 = new LifecycleTaskV2(this);
 
         this._producerReady = false;
         this._consumerReady = false;
@@ -228,15 +231,24 @@ class LifecycleBucketProcessor {
             if (!this._shouldProcessConfig(config)) {
                 return cb();
             }
+
+            let task;
+            // TODO: ZENKO-4501 Check if bucket is indexed before using new lifecycle improvement solution
+            if (this._lcConfig.bucketProcessor.forceLegacyListing) {
+                task = new LifecycleTask(this);
+            } else {
+                task = new LifecycleTaskV2(this);
+            }
+
             this._log.info('scheduling new task for bucket lifecycle', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
                 details: result.details,
+                taskName: task.constructor.name,
             });
-            // TODO: check indexes is created on the collection/bucket before lifecycle
             return this._internalTaskScheduler.push({
-                task: new LifecycleTask(this),
+                task,
                 rules: config.Rules,
                 value: result,
                 s3target: s3,

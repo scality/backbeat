@@ -126,12 +126,12 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendObjectAction(entry, cb) {
         const entries = [{ message: entry.toKafkaMessage() }];
-        console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => kafkaEntry', entry.toKafkaMessage());
-        return cb();
-        // this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
-        //     LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
-        //     return cb(err);
-        // });
+        // console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ EXPIRATION END!! => kafkaEntry', entry.toKafkaMessage());
+        // return cb();
+        this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
+            LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
+            return cb(err);
+        });
     }
 
     /**
@@ -148,6 +148,9 @@ class LifecycleTask extends BackbeatTask {
             Bucket: bucketData.target.bucket,
             MaxKeys: MAX_KEYS,
         };
+
+        // TODO: if "new listing" message (ie `bucketData.details.listType` is defined),
+        //       skip listing.
         if (bucketData.details.marker) {
             params.Marker = bucketData.details.marker;
         }
@@ -209,6 +212,9 @@ class LifecycleTask extends BackbeatTask {
      */
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const paramDetails = {};
+
+        // TODO: if "new listing" message (ie `bucketData.details.listType` is defined),
+        //       skip listing.
 
         if (bucketData.details.versionIdMarker &&
         bucketData.details.keyMarker) {
@@ -910,6 +916,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _applyTransitionRule(params, log, cb) {
+        console.log('params!!!', params);
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, (err, objectMD) => {

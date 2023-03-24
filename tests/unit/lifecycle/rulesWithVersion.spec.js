@@ -21,8 +21,13 @@ const bucketData = {
     details: {}
 };
 
+const options = {
+    expireOneDayEarlier: false,
+    transitionOneDayEarlier: false,
+};
+
 const expectedEmptyResult = {
-    listingDetails: undefined,
+    listType: undefined,
     params: undefined,
     remainings: []
 };
@@ -34,7 +39,7 @@ describe('rulesReducer with versioning Enabled', () => {
         const currentDate = Date.now();
         const bucketLCRules = [];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expectedEmptyResult);
     });
 
@@ -49,7 +54,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }
         ];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expectedEmptyResult);
     });
 
@@ -72,14 +77,11 @@ describe('rulesReducer with versioning Enabled', () => {
                Prefix: '',
                MaxKeys: 1000,
             },
-            listingDetails: {
-               listType: 'orphan',
-               prefix: '',
-            },
+            listType: 'orphan',
             remainings: []
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -94,7 +96,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }
         ];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expectedEmptyResult);
     });
 
@@ -115,7 +117,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }
         ];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
                Bucket: bucketName,
@@ -123,10 +125,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                Marker: 'key1',
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: '',
-            },
+            listType: 'current',
             remainings: []
         };
         assert.deepStrictEqual(result, expected);
@@ -150,7 +149,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }
         ];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
                Bucket: bucketName,
@@ -158,10 +157,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                Marker: 'key1',
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-            },
+            listType: 'current',
             remainings: []
         };
         assert.deepStrictEqual(result, expected);
@@ -187,7 +183,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }
         ];
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
         const expected = {
             params: {
                Bucket: bucketName,
@@ -196,11 +192,7 @@ describe('rulesReducer with versioning Enabled', () => {
                Marker: 'key1',
                BeforeDate: beforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-               beforeDate,
-            },
+            listType: 'current',
             remainings: []
         };
         assert.deepStrictEqual(result, expected);
@@ -222,17 +214,14 @@ describe('rulesReducer with versioning Enabled', () => {
                Prefix: '',
                MaxKeys: 1000,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: '',
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix: '',
             }]
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -255,11 +244,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix: '',
@@ -267,7 +252,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -290,11 +275,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix,
@@ -302,7 +283,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -323,14 +304,11 @@ describe('rulesReducer with versioning Enabled', () => {
                Prefix: prefix,
                MaxKeys: 1000,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-            },
+            listType: 'current',
             remainings: []
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -354,11 +332,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix,
@@ -366,7 +340,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -389,10 +363,7 @@ describe('rulesReducer with versioning Enabled', () => {
                Prefix: prefix,
                MaxKeys: 1000,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 beforeDate: expectedBeforeDate,
@@ -400,7 +371,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -425,15 +396,11 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto/titi',
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: []
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -461,11 +428,7 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix: 'toto',
@@ -473,7 +436,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -501,15 +464,11 @@ describe('rulesReducer with versioning Enabled', () => {
                MaxKeys: 1000,
                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-               beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: []
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -534,31 +493,27 @@ describe('rulesReducer with versioning Enabled', () => {
         const expected = {
             params: {
                Bucket: bucketName,
-               Prefix: 'toto',
+               Prefix: 'titi',
                MaxKeys: 1000,
-               BeforeDate: expectedBeforeDate2,
+               BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-               beforeDate: expectedBeforeDate2,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'current',
-                prefix: 'titi',
-                beforeDate: expectedBeforeDate,
-            }, {
-                listType: 'orphan',
                 prefix: 'toto',
                 beforeDate: expectedBeforeDate2,
             }, {
                 listType: 'orphan',
                 prefix: 'titi',
                 beforeDate: expectedBeforeDate,
+            }, {
+                listType: 'orphan',
+                prefix: 'toto',
+                beforeDate: expectedBeforeDate2,
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -582,21 +537,18 @@ describe('rulesReducer with versioning Enabled', () => {
         const expected = {
             params: {
                Bucket: bucketName,
-               Prefix: 'toto',
+               Prefix: 'titi',
                MaxKeys: 1000,
+               BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'current',
-                prefix: 'titi',
-                beforeDate: expectedBeforeDate,
+                prefix: 'toto',
              }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -623,10 +575,7 @@ describe('rulesReducer with versioning Enabled', () => {
                Prefix: 'toto',
                MaxKeys: 1000,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix: 'toto/titi',
@@ -634,7 +583,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
          };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -658,17 +607,14 @@ describe('rulesReducer with versioning Enabled', () => {
         const expected = {
             params: {
                Bucket: bucketName,
-               Prefix: 'toto',
+               Prefix: 'titi',
                MaxKeys: 1000,
+               BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-               listType: 'current',
-               prefix: 'toto',
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'current',
-                prefix: 'titi',
-                beforeDate: expectedBeforeDate,
+                prefix: 'toto',
             }, {
                 listType: 'orphan',
                 prefix: 'titi',
@@ -676,7 +622,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -703,14 +649,11 @@ describe('rulesReducer with versioning Enabled', () => {
                 Prefix: '',
                 MaxKeys: 1000,
             },
-            listingDetails: {
-                listType: 'noncurrent',
-                prefix: '',
-            },
+            listType: 'noncurrent',
             remainings: []
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -735,21 +678,18 @@ describe('rulesReducer with versioning Enabled', () => {
         const expected = {
             params: {
                 Bucket: bucketName,
-                Prefix: 'p2',
+                Prefix: 'p1',
                 MaxKeys: 1000,
+                BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-                listType: 'noncurrent',
-                prefix: 'p2',
-            },
+            listType: 'noncurrent',
             remainings: [{
                 listType: 'noncurrent',
-                prefix: 'p1',
-                beforeDate: expectedBeforeDate,
+                prefix: 'p2',
             }]
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -776,14 +716,11 @@ describe('rulesReducer with versioning Enabled', () => {
                 Prefix: 'toto',
                 MaxKeys: 1000,
             },
-            listingDetails: {
-                listType: 'noncurrent',
-                prefix: 'toto',
-            },
+            listType: 'noncurrent',
             remainings: []
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -825,11 +762,7 @@ describe('rulesReducer with versioning Enabled', () => {
                 MaxKeys: 1000,
                 BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-                listType: 'current',
-                prefix: '',
-                beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'noncurrent',
                 prefix: '',
@@ -841,7 +774,7 @@ describe('rulesReducer with versioning Enabled', () => {
             }]
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
         assert.deepStrictEqual(result, expected);
     });
 
@@ -870,18 +803,210 @@ describe('rulesReducer with versioning Enabled', () => {
                 MaxKeys: 1000,
                 BeforeDate: expectedBeforeDate,
             },
-            listingDetails: {
-                listType: 'current',
-                prefix: '',
-                beforeDate: expectedBeforeDate,
-            },
+            listType: 'current',
             remainings: [{
                 listType: 'orphan',
                 prefix: '',
             }]
         };
 
-        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData);
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with expireOneDayEarlier', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const customOptions = {
+            expireOneDayEarlier: true,
+            transitionOneDayEarlier: false,
+        };
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '1',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName2 }],
+                ID: '2',
+                Prefix: 'p2',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '3',
+                Prefix: 'p3',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: locationName }],
+                ID: '4',
+                Prefix: 'p4',
+                Status: 'Enabled',
+            }
+        ];
+
+        const expected = {
+            params: {
+                Bucket: 'bucket1',
+                Prefix: 'p1',
+                MaxKeys: 1000,
+            },
+            listType: 'current',
+            remainings: [
+                {
+                    prefix: 'p2',
+                    listType: 'current',
+                    beforeDate: expectedBeforeDate,
+                },
+                {
+                    prefix: 'p3',
+                    listType: 'noncurrent',
+                },
+                {
+                    prefix: 'p4',
+                    listType: 'noncurrent',
+                    beforeDate: expectedBeforeDate,
+                },
+                {
+                    prefix: 'p1',
+                    listType: 'orphan',
+                }
+            ]
+        };
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with transitionOneDayEarlier', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const customOptions = {
+            expireOneDayEarlier: false,
+            transitionOneDayEarlier: true,
+        };
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '1',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName2 }],
+                ID: '2',
+                Prefix: 'p2',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '3',
+                Prefix: 'p3',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: locationName }],
+                ID: '4',
+                Prefix: 'p4',
+                Status: 'Enabled',
+            }
+        ];
+
+        const expected = {
+            params: {
+                Bucket: 'bucket1',
+                Prefix: 'p1',
+                MaxKeys: 1000,
+                BeforeDate: expectedBeforeDate,
+            },
+            listType: 'current',
+            remainings: [
+                {
+                    prefix: 'p2',
+                    listType: 'current',
+                },
+                {
+                    prefix: 'p3',
+                    listType: 'noncurrent',
+                    beforeDate: expectedBeforeDate,
+                },
+                {
+                    prefix: 'p4',
+                    listType: 'noncurrent',
+                },
+                {
+                    prefix: 'p1',
+                    listType: 'orphan',
+                    beforeDate: expectedBeforeDate,
+                }
+            ]
+        };
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with expireOneDayEarlier and transitionOneDayEarlier', () => {
+        const currentDate = Date.now();
+        const customOptions = {
+            expireOneDayEarlier: true,
+            transitionOneDayEarlier: true,
+        };
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '1',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName2 }],
+                ID: '2',
+                Prefix: 'p2',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 1 },
+                ID: '3',
+                Prefix: 'p3',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: locationName }],
+                ID: '4',
+                Prefix: 'p4',
+                Status: 'Enabled',
+            }
+        ];
+
+        const expected = {
+            params: {
+                Bucket: 'bucket1',
+                Prefix: 'p1',
+                MaxKeys: 1000,
+            },
+            listType: 'current',
+            remainings: [
+                {
+                    prefix: 'p2',
+                    listType: 'current',
+                },
+                {
+                    prefix: 'p3',
+                    listType: 'noncurrent',
+                },
+                {
+                    prefix: 'p4',
+                    listType: 'noncurrent',
+                },
+                {
+                    prefix: 'p1',
+                    listType: 'orphan',
+                }
+            ]
+        };
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
     });
 });

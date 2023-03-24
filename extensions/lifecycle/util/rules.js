@@ -11,13 +11,13 @@ function _getBeforeDate(currentDate, days) {
     return beforeDate.toISOString();
 }
 
-function _makeListParams(listType, currentDate, rule) {
+function _makeListParams(listType, currentDate, listing) {
     const p = {
-        prefix: rule.prefix,
+        prefix: listing.prefix,
         listType,
     };
-    if (rule.days > 0) {
-        p.beforeDate = _getBeforeDate(currentDate, rule.days);
+    if (listing.days > 0) {
+        p.beforeDate = _getBeforeDate(currentDate, listing.days);
     }
 
     return p;
@@ -35,18 +35,18 @@ function _makeListParams(listType, currentDate, rule) {
 function _mergeParams(currentDate, listings) {
     const mergedListings = [];
 
-    (listings.currents || []).forEach(rule => {
-        const p = _makeListParams(CURRENT_TYPE, currentDate, rule);
+    (listings.currents || []).forEach(l => {
+        const p = _makeListParams(CURRENT_TYPE, currentDate, l);
         mergedListings.push(p);
     });
 
-    (listings.nonCurrents || []).forEach(rule => {
-        const p = _makeListParams(NON_CURRENT_TYPE, currentDate, rule);
+    (listings.nonCurrents || []).forEach(l => {
+        const p = _makeListParams(NON_CURRENT_TYPE, currentDate, l);
         mergedListings.push(p);
     });
 
-    (listings.orphans || []).forEach(rule => {
-        const p = _makeListParams(ORPHAN_DM_TYPE, currentDate, rule);
+    (listings.orphans || []).forEach(l => {
+        const p = _makeListParams(ORPHAN_DM_TYPE, currentDate, l);
         mergedListings.push(p);
     });
 
@@ -61,35 +61,31 @@ function _mergeParams(currentDate, listings) {
  * @param {array} listings.currents    - array of listing { prefix, days }
  * @param {array} listings.nonCurrents - array of listing { prefix, days }
  * @param {array} listings.orphans     - array of listing { prefix, days }
- * @return {Object} info               - listing informations { params, listingDetails, remainings }
+ * @return {Object} info               - listing informations { params, listType, remainings }
  */
 function _getParamsFromListings(bucketName, currentDate, listings) {
     const listingsParams = _mergeParams(currentDate, listings);
     let params;
-    let listingDetails;
+    let listType;
 
     if (listingsParams.length > 0) {
-        const { prefix, listType, beforeDate } = listingsParams[0];
+        const firstParams = listingsParams[0];
+        const { prefix, beforeDate } = firstParams;
+        listType = firstParams.listType;
         params = {
             Bucket: bucketName,
             Prefix: prefix,
             MaxKeys: MAX_KEYS,
         };
 
-        listingDetails = {
-            listType,
-            prefix,
-        };
-
         if (beforeDate) {
             params.BeforeDate = beforeDate;
-            listingDetails.beforeDate = beforeDate;
         }
 
         listingsParams.shift(); // remove the first element
     }
 
-    return { params, listingDetails, remainings: listingsParams };
+    return { params, listType, remainings: listingsParams };
 }
 
 /**
@@ -102,40 +98,34 @@ function _getParamsFromListings(bucketName, currentDate, listings) {
  * @param {string} details.versionIdMarker - next version id marker for versioned buckets
  * @param {string} details.marker - next marker for non-versioned buckets
  * @param {string} details.objectName - used specifically for handling versioned buckets
- * @return {Object} info - listing informations { params, listingDetails, remainings }
+ * @return {Object} info - listing informations { params, listType, remainings }
  */
 function _getParamsFromDetails(bucketName, details) {
     const { prefix, beforeDate, listType } = details;
-        const params = {
-            Bucket: bucketName,
-            Prefix: prefix,
-            MaxKeys: MAX_KEYS,
-        };
+    const params = {
+        Bucket: bucketName,
+        Prefix: prefix,
+        MaxKeys: MAX_KEYS,
+    };
 
-        if (listType === CURRENT_TYPE) {
-            params.Marker = details.marker;
-        }
+    if (listType === CURRENT_TYPE) {
+        params.Marker = details.marker;
+    }
 
-        if (listType === ORPHAN_DM_TYPE) {
-            params.Marker = details.marker;
-        }
+    if (listType === ORPHAN_DM_TYPE) {
+        params.Marker = details.marker;
+    }
 
-        if (listType === NON_CURRENT_TYPE) {
-            params.KeyMarker = details.keyMarker;
-            params.VersionIdMarker = details.versionIdMarker;
-        }
+    if (listType === NON_CURRENT_TYPE) {
+        params.KeyMarker = details.keyMarker;
+        params.VersionIdMarker = details.versionIdMarker;
+    }
 
-        const listingDetails = {
-            listType,
-            prefix,
-        };
+    if (beforeDate) {
+        params.BeforeDate = beforeDate;
+    }
 
-        if (beforeDate) {
-            params.BeforeDate = beforeDate;
-            listingDetails.beforeDate = beforeDate;
-        }
-
-        return { params, listingDetails, remainings: [] };
+    return { params, listType, remainings: [] };
 }
 
 /**
@@ -153,9 +143,12 @@ function _getParamsFromDetails(bucketName, details) {
  * @param {string} [bucketData.details.versionIdMarker] - next version id marker for versioned buckets
  * @param {string} [bucketData.details.marker] - next marker for non-versioned buckets
  * @param {string} [bucketData.details.objectName] - used specifically for handling versioned buckets
+ * @param {Object} options - lifecycle options
+ * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
+ * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
  *
- * @return {Object} info - listing informations { params, listingDetails, remainings }
- * @return {Object} info.params - params used to list the keys to be lifecycled
+ * @return {Object} info - listings informations { params, listingDetails, remainings }
+ * @return {Object} info.params - params of the first lifecycle listing
  * @return {string} info.params.Bucket - bucket name
  * @return {string} info.params.Prefix - limits the response to keys that begin with the specified prefix
  * @return {string} info.params.MaxKeys - maximum number of keys returned in the response
@@ -163,20 +156,17 @@ function _getParamsFromDetails(bucketName, details) {
  * @return {string} info.params.KeyMarker - for versioned buckets, where to start listing from
  * @return {string} info.params.Marker - for versioned buckets, where to start listing from
  * @return {string} [info.params.BeforeDate] - limit keys with last-modified older than beforeDate
- * @return {Object} info.listingDetails - details of the listing
- * @return {Object} info.listingDetails.listType - type of listing (current, noncurrent or orphan)
- * @return {Object} info.listingDetails.prefix - list prefix
- * @return {Object} [info.listingDetails.beforeDate] - list beforeDate
- * @return {Array} info.remainings - array of listingDetails for remaining listings
+ * @return {string} info.listType -  type of listing (current, noncurrent or orphan)
+ * @return {Array} info.remainings - array of remaining listings
  */
-function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData) {
+function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options) {
     // TODO: check bucketData.details.listType is valid
     const bucketName = bucketData.target.bucket;
     if (bucketData.details && bucketData.details.listType) {
         return _getParamsFromDetails(bucketName, bucketData.details);
     }
 
-    const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules)
+    const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
     const listings = rulesReducer.toListings();
 
     return _getParamsFromListings(bucketName, currentDate, listings);

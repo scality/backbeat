@@ -1,17 +1,12 @@
-// moves lifecycle transition deadlines 1 day earlier, only for testing
-const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
-// moves lifecycle expiration deadlines 1 day earlier, only for testing
-const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
-
 const lowest = (acc, cur) => (acc < cur ? acc : cur);
 
 function sortByPrefix(rules) {
     return rules.sort((a, b) => {
         if (a.Prefix > b.Prefix) {
-            return -1;
+            return 1;
         }
         if (b.Prefix > a.Prefix) {
-            return 1;
+            return -1;
         }
 
         return 0;
@@ -26,11 +21,16 @@ class RulesReducer {
      * @param {string} versioningStatus - bucket's version status
      * @param {Date} currentDate - current date
      * @param {Object} bucketLCRules - lifecycle rules
+     * @param {Object} options - rule lifecycle options
+     * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
+     * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
     */
-    constructor(versioningStatus, currentDate, bucketLCRules) {
-        this.isVersioning = versioningStatus === 'Enabled' || versioningStatus === 'Suspended';
-        this.currentDate = currentDate;
-        this.bucketLCRules = bucketLCRules;
+    constructor(versioningStatus, currentDate, bucketLCRules, options) {
+        this._isVersioning = versioningStatus === 'Enabled' || versioningStatus === 'Suspended';
+        this._currentDate = currentDate;
+        this._bucketLCRules = bucketLCRules;
+        this._expireOneDayEarlier = options.expireOneDayEarlier;
+        this._transitionOneDayEarlier = options.transitionOneDayEarlier;
     }
 
     /**
@@ -41,10 +41,34 @@ class RulesReducer {
      * @return {array} aggregatedRules.orphans - array of rules
      */
     toListings() {
-        if (this.isVersioning) {
+        if (this._isVersioning) {
             return this._getListingsForVersionedBucket();
         }
         return this._getListingsForNonVersionedBucket();
+    }
+
+    /**
+     * _decrementExpirationDay: moves lifecycle expiration deadlines 1 day earlier.
+     * @param {number} days - Indicates the lifetime, in days, of the objects that are subject to the rule.
+     * @return {number} days
+     */
+    _decrementExpirationDay(days) {
+        if (days > 0 && this._expireOneDayEarlier) {
+            return days - 1;
+        }
+        return days;
+    }
+
+    /**
+     * _decrementTransitionDay: moves lifecycle transition deadlines 1 day earlier.
+     * @param {number} days - Indicates the lifetime, in days, of the objects that are subject to the rule.
+     * @return {number} days
+     */
+    _decrementTransitionDay(days) {
+        if (days > 0 && this._transitionOneDayEarlier) {
+            return days - 1;
+        }
+        return days;
     }
 
     /**
@@ -56,7 +80,7 @@ class RulesReducer {
      */
     _getListingsForNonVersionedBucket() {
         // TODO: check status
-        const reducedRules = sortByPrefix(this.bucketLCRules).reduce((accumulator, r) => {
+        const reducedRules = sortByPrefix(this._bucketLCRules).reduce((accumulator, r) => {
             const currents = accumulator.currents;
             const reducedCurrents = this._reduceCurrentRules(r, currents);
             return { currents: reducedCurrents };
@@ -78,7 +102,7 @@ class RulesReducer {
      */
     _getListingsForVersionedBucket() {
         // TODO: check status
-        const reducedRules = sortByPrefix(this.bucketLCRules).reduce((accumulator, r) => {
+        const reducedRules = sortByPrefix(this._bucketLCRules).reduce((accumulator, r) => {
             const nonCurrents = accumulator.nonCurrents;
             const currents = accumulator.currents;
             const orphans = accumulator.orphans;
@@ -115,9 +139,9 @@ class RulesReducer {
         if (r.Expiration) {
             // NOTE: Expiration Days cannot be 0.
             if (r.Expiration.Days) {
-                days = r.Expiration.Days;
+                days = this._decrementExpirationDay(r.Expiration.Days);
             } else if (r.Expiration.Date) {
-                if (r.Expiration.Date <= this.currentDate) {
+                if (r.Expiration.Date <= this._currentDate) {
                     days = 0;
                 }
             }
@@ -127,13 +151,14 @@ class RulesReducer {
             // NOTE: Transitions Days cannot be 0.
             // NOTE: Cannot mixed 'Date' and 'Days' based Transition actions.
             if (r.Transitions[0].Days !== undefined) {
-                const lowestTransitionDays = r.Transitions.map(t => t.Days).reduce(lowest);
+                let lowestTransitionDays = r.Transitions.map(t => t.Days).reduce(lowest);
+                lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
 
             } else if (r.Transitions[0].Date) {
                 const lowestDate = r.Transitions.map(t => t.Date).reduce(lowest);
 
-                if (lowestDate <= this.currentDate) {
+                if (lowestDate <= this._currentDate) {
                     days = 0;
                 }
             }
@@ -161,15 +186,16 @@ class RulesReducer {
         if (r.NoncurrentVersionExpiration) {
             // 'NoncurrentDays' for NoncurrentVersionExpiration action is a positive integer
             if (r.NoncurrentVersionExpiration.NoncurrentDays) {
-                days = r.NoncurrentVersionExpiration.NoncurrentDays;
+                days = this._decrementExpirationDay(r.NoncurrentVersionExpiration.NoncurrentDays);
             }
         }
 
         if (isTransitions) {
             // NoncurrentDays for NoncurrentVersionTransitions action can be 0
             if (r.NoncurrentVersionTransitions[0].NoncurrentDays !== undefined) {
-                const lowestTransitionDays = r.NoncurrentVersionTransitions
-                .map(t => t.NoncurrentDays).reduce(lowest);
+                let lowestTransitionDays = r.NoncurrentVersionTransitions
+                    .map(t => t.NoncurrentDays).reduce(lowest);
+                lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
             }
         }
@@ -196,9 +222,9 @@ class RulesReducer {
         // cleanup when the delete markers are old enough to satisfy the age criteria.
         if (r.Expiration) {
             if (r.Expiration.Days) {
-                days = r.Expiration.Days;
+                days = this._decrementExpirationDay(r.Expiration.Days);
             } else if (r.Expiration.Date) {
-                if (r.Expiration.Date <= this.currentDate) {
+                if (r.Expiration.Date <= this._currentDate) {
                     days = 0;
                 }
             } else if (r.Expiration.ExpiredObjectDeleteMarker) {
@@ -221,42 +247,25 @@ class RulesReducer {
      * @return {array} aggregatedListings
      */
     _aggregateByPrefix(listings, prefix, days) {
-        // if days is undefined, no rule matches.
+        // if days is undefined, no rule matched.
         if (days === undefined) {
             return listings;
         }
 
-        let aggregatedListings = listings;
-        let finalDays = days;
-        const withPrefix = listings.filter(m => m.prefix.startsWith(prefix));
-        // NOTE: rules are sorted by prefix in descending alphabetical order.
-        // (rule with prefix "toto/titi" is evaluated before "toto").
-        // If the prefix of the previously evaluated rules starts with the currently evaluated
-        // (by definition widest) prefix, we can remove the previously evaluated rules that start with the prefix
-        // and add a new rule with the evaluated (widest) prefix.
-
-        if (withPrefix.length) {
-            // To make sure we do not miss any key, the value "days" of the new rule will be the minimum number of days
-            // allowed by any aggregated rule.
-            const lowestDays = withPrefix.map(r => r.days).reduce(lowest);
-
-            if (lowestDays < days) {
-                finalDays = lowestDays;
+        const previousListing = listings[listings.length - 1];
+        const shareListing = previousListing && prefix.startsWith(previousListing.prefix);
+        if (shareListing) {
+            if (days < previousListing.days) {
+                previousListing.days = days;
             }
-
-            aggregatedListings = listings.filter(m => !m.prefix.startsWith(prefix));
+        } else {
+            listings.push({
+                prefix,
+                days,
+            });
         }
 
-        if ((transitionOneDayEarlier || expireOneDayEarlier) && finalDays > 0) {
-            finalDays -= 1;
-        }
-
-        aggregatedListings.push({
-            prefix,
-            days: finalDays,
-        });
-
-        return aggregatedListings;
+        return listings;
     }
 }
 
