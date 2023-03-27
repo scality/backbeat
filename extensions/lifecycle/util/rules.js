@@ -2,7 +2,6 @@ const { RulesReducer } = require('./RulesReducer');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
-// TODO: MAX_KEYS TO MOVE BACK TO 1000
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 
 function _getBeforeDate(currentDate, days) {
@@ -24,40 +23,28 @@ function _makeListParams(listType, currentDate, listing) {
 }
 
 /**
- * _mergeParams: flatten the listings array
+ * _mergeParams: flattens the listings array
  * @param {Date} currentDate           - current date
  * @param {Object} listings            - rules grouped by list type (current, noncurrent, orphan)
  * @param {array} listings.currents    - array of listing: { prefix, days }
  * @param {array} listings.nonCurrents - array of listing: { prefix, days }
  * @param {array} listings.orphans     - array of listing: { prefix, days }
- * @return {array} mergedListings      - listing informations, array of { prefix, listType, beforeDate }
+ * @return {array} mergedListings      - listing informations, array of { prefix, listType, [beforeDate] }
  */
-function _mergeParams(currentDate, listings) {
-    const mergedListings = [];
-
-    (listings.currents || []).forEach(l => {
-        const p = _makeListParams(CURRENT_TYPE, currentDate, l);
-        mergedListings.push(p);
-    });
-
-    (listings.nonCurrents || []).forEach(l => {
-        const p = _makeListParams(NON_CURRENT_TYPE, currentDate, l);
-        mergedListings.push(p);
-    });
-
-    (listings.orphans || []).forEach(l => {
-        const p = _makeListParams(ORPHAN_DM_TYPE, currentDate, l);
-        mergedListings.push(p);
-    });
-
-    return mergedListings;
-}
+function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = [] }) {
+    return [
+      ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing)),
+      ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing)),
+      ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing)),
+    ];
+  }
 
 /**
- * _getParamsFromListings: retrieve the lifecycle listing informations from listings
+ * _getParamsFromListings: retrieves the lifecycle listing informations from listings gathered
+ * from the lifecycle rules
  * @param {string} bucketName          - name of the bucket
  * @param {Date} currentDate           - current date
- * @param {Object} listings            - rules grouped by list type
+ * @param {Object} listings            - listings gathered from the lifecycle rules
  * @param {array} listings.currents    - array of listing { prefix, days }
  * @param {array} listings.nonCurrents - array of listing { prefix, days }
  * @param {array} listings.orphans     - array of listing { prefix, days }
@@ -89,30 +76,31 @@ function _getParamsFromListings(bucketName, currentDate, listings) {
 }
 
 /**
- * _getParamsFromDetails: retrieve the lifecycle listing parameters from details
+ * _getParamsFromDetails: retrieves the lifecycle listing parameters from details
  * @param {string} bucketName - name of the bucket
- * @param {Object} details - listing details
+ * @param {Object} details - listing details from "bucketTasks" topic entry
+ * @param {string} details.listType - type of lifecycle listing (current, noncurrent, orphan)
  * @param {string} details.prefix - prefix
  * @param {string} details.beforeDate - before date
  * @param {string} details.keyMarker - next key marker for versioned buckets
  * @param {string} details.versionIdMarker - next version id marker for versioned buckets
  * @param {string} details.marker - next marker for non-versioned buckets
- * @param {string} details.objectName - used specifically for handling versioned buckets
  * @return {Object} info - listing informations { params, listType, remainings }
  */
 function _getParamsFromDetails(bucketName, details) {
     const { prefix, beforeDate, listType } = details;
+    // if listType is invalid, do not list.
+    if (![CURRENT_TYPE, NON_CURRENT_TYPE, ORPHAN_DM_TYPE].includes(listType)) {
+        return {};
+    }
+
     const params = {
         Bucket: bucketName,
         Prefix: prefix,
         MaxKeys: MAX_KEYS,
     };
 
-    if (listType === CURRENT_TYPE) {
-        params.Marker = details.marker;
-    }
-
-    if (listType === ORPHAN_DM_TYPE) {
+    if (listType === CURRENT_TYPE || listType === ORPHAN_DM_TYPE) {
         params.Marker = details.marker;
     }
 
@@ -129,7 +117,7 @@ function _getParamsFromDetails(bucketName, details) {
 }
 
 /**
- * rulesToParams: retrieve the lifecycle listing parameters from the lifecycle rules
+ * rulesToParams: retrieves the lifecycle listing parameters from the lifecycle rules
  * @param {string} versioningStatus - bucket's version status
  * @param {Date} currentDate - current date
  * @param {Object} bucketLCRules - lifecycle rules
@@ -137,12 +125,13 @@ function _getParamsFromDetails(bucketName, details) {
  * @param {object} bucketData.target - target bucket info
  * @param {string} bucketData.target.bucket - bucket name
  * @param {string} bucketData.target.owner - owner id
+ * @param {object} bucketData.details - listing details from "bucketTasks" topic entry
+ * @param {string} bucketData.details.listType - type of lifecycle listing (current, noncurrent, orphan)
  * @param {string} [bucketData.details.prefix] - prefix
  * @param {string} [bucketData.details.beforeDate] - before date
  * @param {string} [bucketData.details.keyMarker] - next key marker for versioned buckets
  * @param {string} [bucketData.details.versionIdMarker] - next version id marker for versioned buckets
  * @param {string} [bucketData.details.marker] - next marker for non-versioned buckets
- * @param {string} [bucketData.details.objectName] - used specifically for handling versioned buckets
  * @param {Object} options - lifecycle options
  * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
  * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
@@ -160,7 +149,6 @@ function _getParamsFromDetails(bucketName, details) {
  * @return {Array} info.remainings - array of remaining listings
  */
 function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options) {
-    // TODO: check bucketData.details.listType is valid
     const bucketName = bucketData.target.bucket;
     if (bucketData.details && bucketData.details.listType) {
         return _getParamsFromDetails(bucketName, bucketData.details);

@@ -1234,36 +1234,11 @@
         }
     },
     "shapes": {
-        "Archive": {
-            "type": "structure",
-            "members": {
-              "RestoreCompletedAt": {
-                "type": "string",
-                "documentation": "<p></p>"
-              }
-            }
-        },
         "BeforeDate": {
             "type": "string"
         },
         "BucketName": {
             "type": "string"
-        },
-        "ChecksumAlgorithm": {
-            "type": "string",
-            "enum": [
-              "CRC32",
-              "CRC32C",
-              "SHA1",
-              "SHA256"
-            ]
-        },
-        "ChecksumAlgorithmList": {
-            "type": "list",
-            "member": {
-              "shape": "ChecksumAlgorithm"
-            },
-            "flattened": true
         },
         "DataStoreName": {
             "type": "string"
@@ -1390,10 +1365,6 @@
               "MaxKeys": {
                 "shape": "MaxKeys",
                 "documentation": "<p>The maximum number of keys returned in the response body.</p>"
-              },
-              "EncodingType": {
-                "shape": "EncodingType",
-                "documentation": "<p>Encoding type used by CloudServer to encode object keys in the response.</p>"
               }
             }
         },
@@ -1477,10 +1448,6 @@
               "MaxKeys": {
                 "shape": "MaxKeys",
                 "documentation": "<p>The maximum number of keys returned in the response body.</p>"
-              },
-              "EncodingType": {
-                "shape": "EncodingType",
-                "documentation": "<p>Encoding type used by CloudServer to encode object keys in the response.</p>"
               }
             }
         },
@@ -1514,13 +1481,6 @@
                 "shape": "ETag",
                 "documentation": "<p>The entity tag is a hash of the object. The ETag reflects changes only to the contents of an object, not its metadata. The ETag may or may not be an MD5 digest of the object data. Whether or not it is depends on how the object was created and how it is encrypted as described below:</p> <ul> <li> <p>Objects created by the PUT Object, POST Object, or Copy operation, or through the Amazon Web Services Management Console, and are encrypted by SSE-S3 or plaintext, have ETags that are an MD5 digest of their object data.</p> </li> <li> <p>Objects created by the PUT Object, POST Object, or Copy operation, or through the Amazon Web Services Management Console, and are encrypted by SSE-C or SSE-KMS, have ETags that are not an MD5 digest of their object data.</p> </li> <li> <p>If an object is created by either the Multipart Upload or Part Copy operation, the ETag is not an MD5 digest, regardless of the method of encryption. If an object is larger than 16 MB, the Amazon Web Services Management Console will upload or copy that object as a Multipart Upload, and therefore the ETag will not be an MD5 digest.</p> </li> </ul>"
               },
-              "ChecksumAlgorithm": {
-                "shape": "ChecksumAlgorithmList",
-                "documentation": "<p>The algorithm that was used to create a checksum of the object.</p>"
-              },
-              "ObjectStorageClass": {
-                "type": "string"
-              },
               "Owner": {
                 "shape": "Owner",
                 "documentation": "<p>The owner of the object</p>"
@@ -1548,20 +1508,6 @@
               "DataStoreName": {
                 "shape": "DataStoreName",
                 "documentation": "<p>The Data location name</p>"
-              },
-              "TransitionInProgress": {
-                "shape": "TransitionInProgress",
-                "documentation": "<p> To avoid transitioning object a second time from a new batch. Only implemented for transitions to cold location</p>"
-              },
-              "Archive": {
-                "shape": "Archive",
-                "documentation": ""
-              },
-              "TransitionAttempt": {
-                  "shape": "TransitionAttempt"
-              },
-              "IsDataStoreVersioned": {
-                  "shape": "IsDataStoreVersioned"
               },
               "ListType": {
                 "shape": "ListType"
@@ -1633,20 +1579,11 @@
               "locationName": "Tag"
             }
         },
-        "TransitionAttempt": {
-            "type": "integer"
-        },
-        "TransitionInProgress": {
-            "type": "boolean"
-        },
         "Value": {
             "type": "string"
         },
         "VersionIdMarker": {
             "type": "string"
-        },
-        "IsDataStoreVersioned": {
-            "type": "boolean"
         },
         "Sj": {
             "type": "string",

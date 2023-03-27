@@ -100,8 +100,6 @@ class ReplicationAPI {
             };
             kafkaEntry.message = JSON.stringify(message);
         }
-        // console.log('~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~ TRANSITION END!! => topic, kafkaEntry', topic, kafkaEntry);
-        // return cb();
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
             if (locationConfig.isCold) {
                 LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);

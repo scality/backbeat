@@ -1,24 +1,11 @@
 const lowest = (acc, cur) => (acc < cur ? acc : cur);
 
-function sortByPrefix(rules) {
-    return rules.sort((a, b) => {
-        if (a.Prefix > b.Prefix) {
-            return 1;
-        }
-        if (b.Prefix > a.Prefix) {
-            return -1;
-        }
-
-        return 0;
-    });
-}
-
 class RulesReducer {
     /**
-     * Constructor of RuleReducer
+     * Constructor of RulesReducer
      *
      * @constructor
-     * @param {string} versioningStatus - bucket's version status
+     * @param {string} versioningStatus - bucket's version status: 'Enabled', 'Disabled' or 'Suspended'
      * @param {Date} currentDate - current date
      * @param {Object} bucketLCRules - lifecycle rules
      * @param {Object} options - rule lifecycle options
@@ -28,13 +15,32 @@ class RulesReducer {
     constructor(versioningStatus, currentDate, bucketLCRules, options) {
         this._isVersioning = versioningStatus === 'Enabled' || versioningStatus === 'Suspended';
         this._currentDate = currentDate;
-        this._bucketLCRules = bucketLCRules;
+        this._bucketLCRules = this._sortByPrefix(bucketLCRules);
         this._expireOneDayEarlier = options.expireOneDayEarlier;
         this._transitionOneDayEarlier = options.transitionOneDayEarlier;
     }
 
     /**
-     * toListings: get listing informations (list params...) from lifecycle rules.
+     * _getRulePrefix: retrieve prefix from a rule
+     * @param {object} r - lifecycle rule
+     * @return {string} prefix
+     */
+    _getRulePrefix(r) {
+        return r.Prefix || (r.Filter && (r.Filter.And ? r.Filter.And.Prefix : r.Filter.Prefix)) || '';
+    }
+
+    /**
+     * _sortByPrefix: sorts the lifecycle rules in ascending order based on the value of the Prefix property
+     * @param {array} rules - lifecycle rules
+     * @return {array} returns the sorted rules
+     */
+    _sortByPrefix(rules) {
+        return rules.sort((a, b) => this._getRulePrefix(a).localeCompare(this._getRulePrefix(b)));
+    }
+
+    /**
+     * toListings: determines the list of API calls needed to list all eligible objects based on
+     * the bucket lifecycle rules.
      * @return {object} aggregatedRules - aggregated rules for each type
      * @return {array} aggregatedRules.currents - array of rules
      * @return {array} aggregatedRules.nonCurrents - array of rules
@@ -72,15 +78,14 @@ class RulesReducer {
     }
 
     /**
-     * _getListingsForNonVersionedBucket: get listings infos from lifecycle rules of a non-versioned bucket
-     * On a non-versioned bucket we can perform one type of listing:
+     * _getListingsForNonVersionedBucket: gets listings infos from lifecycle rules of a non-versioned bucket
+     * NOTE: On a non-versioned bucket, only one type of listing can be performed:
      * - "current" targeting current objects (Expiration and Transitions).
      * @return {object} aggregatedRules - aggregated rules for each type
      * @return {array} aggregatedRules.currents - array of rules
      */
     _getListingsForNonVersionedBucket() {
-        // TODO: check status
-        const reducedRules = sortByPrefix(this._bucketLCRules).reduce((accumulator, r) => {
+        const reducedRules = this._bucketLCRules.reduce((accumulator, r) => {
             const currents = accumulator.currents;
             const reducedCurrents = this._reduceCurrentRules(r, currents);
             return { currents: reducedCurrents };
@@ -90,8 +95,8 @@ class RulesReducer {
     }
 
     /**
-     * _getListingsForVersionedBucket: get listings infos from lifecycle rules of a versioned bucket
-     * On a versioned bucket we can perform three types of listing:
+     * _getListingsForVersionedBucket: gets listings infos from lifecycle rules of a versioned bucket
+     * NOTE: On a versioned bucket, three types of listing can be performed:
      * - "current" targeting current objects (Expiration and Transitions).
      * - "noncurrent" targeting non-current obejcts (NonCurrentExpiration and NonCurrentTransitions).
      * - "orphan" targeting orphan delete markers (Expiration and Expiration.ExpiredObjectDeleteMarker).
@@ -101,8 +106,7 @@ class RulesReducer {
      * @return {array} aggregatedRules.orphans - array of rules
      */
     _getListingsForVersionedBucket() {
-        // TODO: check status
-        const reducedRules = sortByPrefix(this._bucketLCRules).reduce((accumulator, r) => {
+        const reducedRules = this._bucketLCRules.reduce((accumulator, r) => {
             const nonCurrents = accumulator.nonCurrents;
             const currents = accumulator.currents;
             const orphans = accumulator.orphans;
@@ -118,7 +122,8 @@ class RulesReducer {
     }
 
     /**
-     * _reduceCurrentRules: evaluate a given rule and add its result to the listings array.
+     * _reduceCurrentRules: checks if the rule targets current versions and, if so,
+     * adds its result to the listings array.
      * The listings will be used to defined the parameters of "list current versions".
      * @param {object} r - lifecycle rule to be evaluated
      * @param {array} currents - array of current listings information
@@ -129,12 +134,13 @@ class RulesReducer {
         if (r.Status !== 'Enabled') {
             return currents;
         }
-        const prefix = r.Prefix;
+        const prefix = this._getRulePrefix(r);
         const isTransitions = r.Transitions && r.Transitions[0];
         let days;
 
-        // TODO: Handle the case when only one transition (no expiration) rule for a given prefix.
-        //       It will introcude DataStoreName to the listing params.
+        // IMPROVEMENT: ZENKO-4541 If only one transition (no expiration) rule is set for a given prefix,
+        // we can add the filter "value.dataStoreName != destinationLocationName" to our listing query
+        // to only return keys that have not been transitioned yet.
 
         if (r.Expiration) {
             // NOTE: Expiration Days cannot be 0.
@@ -168,7 +174,8 @@ class RulesReducer {
     }
 
     /**
-     * _reduceNonCurrentRules: evaluate a given rule and add its result to the listings array.
+     * _reduceNonCurrentRules: checks if the rule targets non-current versions and, if so,
+     * add its result to the listings array.
      * The listings will be used to defined the parameters of "list non-current versions".
      * @param {object} r - lifecycle rule to be evaluated
      * @param {array} nonCurrents - array of non-current listings information
@@ -179,7 +186,7 @@ class RulesReducer {
             return nonCurrents;
         }
 
-        const prefix = r.Prefix;
+        const prefix = this._getRulePrefix(r);
         const isTransitions = r.NoncurrentVersionTransitions && r.NoncurrentVersionTransitions.length > 0;
         let days;
 
@@ -204,7 +211,8 @@ class RulesReducer {
     }
 
     /**
-     * _reduceOrphanDeleteMarkerRule: evaluate a given rule and add its result to the listings array.
+     * _reduceOrphanDeleteMarkerRule: checks if the rule targets orphan delete markers and, if so,
+     * adds its result to the listings array.
      * The listings will be used to defined the parameters of "list orphan delete markers".
      * @param {object} r - lifecycle rule to be evaluated
      * @param {array} orphans - array of "orphan delete markers" listings information
@@ -215,10 +223,10 @@ class RulesReducer {
             return orphans;
         }
 
-        const prefix = r.Prefix;
+        const prefix = this._getRulePrefix(r);
         let days;
 
-        // When you specify the Days tag, Amazon S3 automatically performs ExpiredObjectDeleteMarker
+        // NOTE: When you specify the Days tag, Amazon S3 automatically performs ExpiredObjectDeleteMarker
         // cleanup when the delete markers are old enough to satisfy the age criteria.
         if (r.Expiration) {
             if (r.Expiration.Days) {
@@ -236,18 +244,18 @@ class RulesReducer {
     }
 
     /**
-     * _aggregateByPrefix: add a new listing and aggregate by prefix
-     * e.g [{ prefix: 's/c/a', days: 1 }, { prefix: 's/c', days: 5 },  { prefix: 's', days: 10 }]
+     * _aggregateByPrefix: adds a new listing or aggregate by prefix
+     * e.g [{ prefix: 's', days: 10 }, { prefix: 's/c', days: 5 }, { prefix: 's/c/a', days: 1 }]
      * should return [{ prefix: 's', days: 1 }] after aggregating by prefix
      * @param {array} listings - [listings] listings
      * @param {string} listings.prefix - rules' prefix
      * @param {string} listings.days - number of days after which action should apply
-     * @param {string} prefix - currently evaluated rule prefix
-     * @param {string} days - currently evaluated rule days
+     * @param {string} prefix - prefix of the currently evaluated rule
+     * @param {string} days - days of the currently evaluated rule
      * @return {array} aggregatedListings
      */
     _aggregateByPrefix(listings, prefix, days) {
-        // if days is undefined, no rule matched.
+        // NOTE: if days is undefined, no listing created.
         if (days === undefined) {
             return listings;
         }
