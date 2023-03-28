@@ -1195,9 +1195,395 @@
                     }
                 }
             }
+        },
+        "ListLifecycleCurrents": {
+            "http": {
+              "method": "GET",
+              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=current"
+            },
+            "input": {
+              "shape": "ListLifecycleRequest"
+            },
+            "output": {
+              "shape": "ListLifecycleOutput"
+            }
+        },
+        "ListLifecycleNonCurrents": {
+            "http": {
+              "method": "GET",
+              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=noncurrent"
+            },
+            "input": {
+              "shape": "ListLifecycleNonCurrentsRequest"
+            },
+            "output": {
+              "shape": "ListLifecycleNonCurrentsOutput"
+            }
+        },
+        "ListLifecycleOrphans": {
+            "http": {
+              "method": "GET",
+              "requestUri": "/_/backbeat/lifecycle/{Bucket}?list-type=orphan"
+            },
+            "input": {
+              "shape": "ListLifecycleRequest"
+            },
+            "output": {
+              "shape": "ListLifecycleOutput"
+            }
         }
     },
     "shapes": {
+        "BeforeDate": {
+            "type": "string"
+        },
+        "BucketName": {
+            "type": "string"
+        },
+        "DataStoreName": {
+            "type": "string"
+        },
+        "DisplayName": {
+            "type": "string"
+        },
+        "EncodingType": {
+            "type": "string",
+            "enum": [
+              "url"
+            ]
+        },
+        "ETag": {
+            "type": "string"
+        },
+        "Marker": {
+            "type": "string"
+        },
+        "IsTruncated": {
+            "type": "boolean"
+        },
+        "ID": {
+            "type": "string"
+        },
+        "KeyMarker": {
+            "type": "string"
+        },
+        "LastModified": {
+            "type": "timestamp"
+        },
+        "ListLifecycleNonCurrentsRequest": {
+            "type": "structure",
+            "required": [
+              "Bucket"
+            ],
+            "members": {
+              "Bucket": {
+                "shape": "BucketName",
+                "documentation": "<p>The bucket name.</p>",
+                "contextParam": {
+                  "name": "Bucket"
+                },
+                "location": "uri",
+                "locationName": "Bucket"
+              },
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>",
+                "location": "querystring",
+                "locationName": "before-date"
+              },
+              "EncodingType": {
+                "shape": "EncodingType",
+                "location": "querystring",
+                "locationName": "encoding-type"
+              },
+              "KeyMarker": {
+                "shape": "KeyMarker",
+                "documentation": "<p>KeyMarker is where you want Cloudserver to start listing from. CloudServer starts listing after this specified key. Marker can be any key in the bucket.</p>",
+                "location": "querystring",
+                "locationName": "key-marker"
+              },
+              "VersionIdMarker": {
+                "shape": "VersionIdMarker",
+                "documentation": "<p>Specifies the object version you want to start listing from.</p>",
+                "location": "querystring",
+                "locationName": "version-id-marker"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>Sets the maximum number of keys returned in the response. By default the action returns up to 1,000 key names. The response might contain fewer keys but will never contain more. </p>",
+                "location": "querystring",
+                "locationName": "max-keys"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Limits the response to keys that begin with the specified prefix.</p>",
+                "location": "querystring",
+                "locationName": "prefix"
+              }
+            }
+        },
+        "ListLifecycleNonCurrentsOutput": {
+            "type": "structure",
+            "members": {
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>"
+              },
+              "KeyMarker": {
+                "shape": "KeyMarker",
+                "documentation": "<p>Indicates where in the bucket listing begins. KeyMarker is included in the response if it was sent with the request.</p>"
+              },
+              "VersionIdMarker": {
+                "shape": "VersionIdMarker",
+                "documentation": "<p>Marks the last version of the key returned in a truncated response.</p>"
+              },
+              "IsTruncated": {
+                "shape": "IsTruncated",
+                "documentation": "<p>A flag that indicates whether Cloudserver returned all of the results that satisfied the search criteria.</p>"
+              },
+              "NextKeyMarker": {
+                "shape": "NextKeyMarker",
+                "documentation": "<p>When response is truncated (the IsTruncated element value in the response is true), you can use the key name in this field as key-marker in the subsequent request to get next set of objects.</p>"
+              },
+              "NextVersionIdMarker": {
+                "shape": "NextVersionIdMarker",
+                "documentation": "<p>When the number of responses exceeds the value of <code>MaxKeys</code>, <code>NextVersionIdMarker</code> specifies the first object version not returned that satisfies the search criteria. Use this value for the version-id-marker request parameter in a subsequent request.</p>"
+              },
+              "Contents": {
+                "shape": "ObjectLifecycleList",
+                "documentation": "<p>Metadata about each object returned.</p>"
+              },
+              "Name": {
+                "shape": "BucketName",
+                "documentation": "<p>The bucket name.</p>"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Keys that begin with the indicated prefix.</p>"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>The maximum number of keys returned in the response body.</p>"
+              }
+            }
+        },
+        "ListLifecycleRequest": {
+            "type": "structure",
+            "required": [
+              "Bucket"
+            ],
+            "members": {
+              "Bucket": {
+                "shape": "BucketName",
+                "documentation": "<p>The bucket name.</p>",
+                "contextParam": {
+                  "name": "Bucket"
+                },
+                "location": "uri",
+                "locationName": "Bucket"
+              },
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>",
+                "location": "querystring",
+                "locationName": "before-date"
+              },
+              "EncodingType": {
+                "shape": "EncodingType",
+                "location": "querystring",
+                "locationName": "encoding-type"
+              },
+              "Marker": {
+                "shape": "Marker",
+                "documentation": "<p>KeyMarker is where you want Cloudserver to start listing from. CloudServer starts listing after this specified key. Marker can be any key in the bucket.</p>",
+                "location": "querystring",
+                "locationName": "marker"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>Sets the maximum number of keys returned in the response. By default the action returns up to 1,000 key names. The response might contain fewer keys but will never contain more. </p>",
+                "location": "querystring",
+                "locationName": "max-keys"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Limits the response to keys that begin with the specified prefix.</p>",
+                "location": "querystring",
+                "locationName": "prefix"
+              }
+            }
+        },
+        "ListLifecycleOutput": {
+            "type": "structure",
+            "members": {
+              "BeforeDate": {
+                "shape": "BeforeDate",
+                "documentation": "<p>Limit the response to keys modified prior to before date.</p>"
+              },
+              "Marker": {
+                "shape": "Marker",
+                "documentation": "<p>Indicates where in the bucket listing begins. Marker is included in the response if it was sent with the request.</p>"
+              },
+              "IsTruncated": {
+                "shape": "IsTruncated",
+                "documentation": "<p>A flag that indicates whether Cloudserver returned all of the results that satisfied the search criteria.</p>"
+              },
+              "NextMarker": {
+                "shape": "NextKeyMarker",
+                "documentation": "<p>When response is truncated (the IsTruncated element value in the response is true), you can use the key name in this field as key-marker in the subsequent request to get next set of objects.</p>"
+              },
+              "Contents": {
+                "shape": "ObjectLifecycleList",
+                "documentation": "<p>Metadata about each object returned.</p>"
+              },
+              "Name": {
+                "shape": "BucketName",
+                "documentation": "<p>The bucket name.</p>"
+              },
+              "Prefix": {
+                "shape": "Prefix",
+                "documentation": "<p>Keys that begin with the indicated prefix.</p>"
+              },
+              "MaxKeys": {
+                "shape": "MaxKeys",
+                "documentation": "<p>The maximum number of keys returned in the response body.</p>"
+              }
+            }
+        },
+        "ListType": {
+            "type": "string"
+        },
+        "MaxKeys": {
+            "type": "integer"
+        },
+        "NextKeyMarker": {
+            "type": "string"
+        },
+        "NextMarker": {
+            "type": "string"
+        },
+        "NextVersionIdMarker": {
+            "type": "string"
+        },
+        "ObjectLifecycle": {
+            "type": "structure",
+            "members": {
+              "Key": {
+                "shape": "ObjectKey",
+                "documentation": "<p>The name that you assign to an object. You use the object key to retrieve the object.</p>"
+              },
+              "LastModified": {
+                "shape": "LastModified",
+                "documentation": "<p>Creation date of the object.</p>"
+              },
+              "ETag": {
+                "shape": "ETag",
+                "documentation": "<p>The entity tag is a hash of the object. </p>"
+              },
+              "Owner": {
+                "shape": "Owner",
+                "documentation": "<p>The owner of the object</p>"
+              },
+              "Size": {
+                "shape": "Size",
+                "documentation": "<p>Size in bytes of the object</p>"
+              },
+              "StorageClass": {
+                "shape": "ObjectStorageClass",
+                "documentation": "<p>The class of storage used to store the object.</p>"
+              },
+              "TagSet": {
+                "shape": "TagSet",
+                "documentation": "<p>Contains the tag set.</p>"
+              },
+              "staleDate": {
+                "shape": "StaleDate",
+                "documentation": "<p>Contains the stale date</p>"
+              },
+              "VersionId": {
+                "shape": "ObjectVersionId",
+                "documentation": "<p>version id</p>"
+              },
+              "DataStoreName": {
+                "shape": "DataStoreName",
+                "documentation": "<p>The Data location name</p>"
+              },
+              "ListType": {
+                "shape": "ListType"
+              }
+            }
+        },
+        "ObjectLifecycleList": {
+            "type": "list",
+            "member": {
+              "shape": "ObjectLifecycle"
+            },
+            "flattened": true
+        },
+        "ObjectKey": {
+            "type": "string",
+            "min": 1
+        },
+        "ObjectStorageClass": {
+            "type": "string"
+        },
+        "ObjectVersionId": {
+            "type": "string"
+        },
+        "Owner": {
+            "type": "structure",
+            "members": {
+              "DisplayName": {
+                "shape": "DisplayName",
+                "documentation": "<p>Container for the display name of the owner.</p>"
+              },
+              "ID": {
+                "shape": "ID",
+                "documentation": "<p>Container for the ID of the owner.</p>"
+              }
+            },
+            "documentation": "<p>Container for the owner's display name and ID.</p>"
+        },
+        "Prefix": {
+            "type": "string"
+        },
+        "StaleDate": {
+            "type": "string"
+        },
+        "Size": {
+            "type": "integer"
+        },
+        "Tag": {
+            "type": "structure",
+            "required": [
+              "Key",
+              "Value"
+            ],
+            "members": {
+              "Key": {
+                "shape": "ObjectKey",
+                "documentation": "<p>Name of the object key.</p>"
+              },
+              "Value": {
+                "shape": "Value",
+                "documentation": "<p>Value of the tag.</p>"
+              }
+            },
+            "documentation": "<p>A container of a key value name pair.</p>"
+        },
+        "TagSet": {
+            "type": "list",
+            "member": {
+              "shape": "Tag",
+              "locationName": "Tag"
+            }
+        },
+        "Value": {
+            "type": "string"
+        },
+        "VersionIdMarker": {
+            "type": "string"
+        },
         "Sj": {
             "type": "string",
             "sensitive": true

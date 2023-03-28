@@ -40,6 +40,7 @@ const joiSchema = joi.object({
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
+        forceLegacyListing: joi.boolean().default(false),
         circuitBreaker: joi.object().optional(),
     },
     objectProcessor: {

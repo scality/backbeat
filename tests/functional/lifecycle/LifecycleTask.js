@@ -5,8 +5,6 @@ const AWS = require('aws-sdk');
 const Logger = require('werelogs').Logger;
 const LifecycleRule = require('arsenal').models.LifecycleRule;
 
-const ReplicationAPI =
-      require('../../../extensions/replication/ReplicationAPI');
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');
 const { objectMD } = require('../utils/MetadataMock');
@@ -331,7 +329,7 @@ class ProducerMock {
         } else if (topicName === 'object-tasks') {
             this.sendCount.object++;
             this.entries.object.push(entry.target.key);
-        } else if (topicName === 'data-mover') {
+        } else if (topicName === 'backbeat-data-mover') {
             this.sendCount.transitions++;
             this.entries.transitions.push(entry);
         }
@@ -397,9 +395,6 @@ class LifecycleBucketProcessorMock {
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
         this.ncvHeap = new Map();
-
-        // set test topic name
-        ReplicationAPI.setDataMoverTopic('data-mover');
     }
 
     getCount() {
