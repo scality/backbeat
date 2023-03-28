@@ -93,18 +93,19 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any entry if bucket is empty', done => {
-        const nbRetries = 0;
         const contents = [
             keyMock.current({ keyName: 'key1', daysEarlier: 0 }),
         ];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
@@ -113,7 +114,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any entry if rule disabled', done => {
-        const nbRetries = 0;
         const disabledRule = [
             {
                 Expiration: { Days: 1 },
@@ -128,7 +128,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(disabledRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(disabledRule, bucketData, s3,
             backbeatMetadataProxy, nbRetries, err => {
                 assert.ifError(err);
                 assert.strictEqual(kafkaEntries.length, 0);
@@ -140,18 +141,19 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any entry if object is not eligible', done => {
-        const nbRetries = 0;
         const contents = [
             keyMock.current({ keyName: 'key1', daysEarlier: 0 }),
         ];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
@@ -160,10 +162,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any entry if detail section is comming from the old lifecycle task', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
@@ -171,7 +171,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             marker: 'key0',
         } };
 
-        lifecycleTask.processBucketEntry(expirationRule, bd, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bd, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
@@ -183,10 +184,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any object entry if detail section is invalid', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
@@ -194,7 +193,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             listType: 'invalid',
         } };
 
-        lifecycleTask.processBucketEntry(expirationRule, bd, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bd, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
@@ -206,7 +206,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish any object entry if transition is already transitioned', done => {
-        const nbRetries = 0;
         const transitionRule = [
             {
                 Transitions: [{ Days: 1, StorageClass: destinationLocation }],
@@ -215,20 +214,22 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 Status: 'Enabled',
             }
         ];
+
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         key.StorageClass = destinationLocation;
         key.DataStoreName = destinationLocation;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
@@ -237,16 +238,14 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should publish one object with the bucketData details set', done => {
-        const nbRetries = 0;
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
-        const beforeDate = new Date().toISOString();
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         const { LastModified } = key;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
+        const beforeDate = new Date().toISOString();
         const bd = { ...bucketData, details: {
             marker: 'key0',
             listType: 'current',
@@ -254,11 +253,13 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             beforeDate,
         } };
 
-        lifecycleTask.processBucketEntry(expirationRule, bd, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bd, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             assert.strictEqual(listLifecycleParams.Bucket, bucketName);
@@ -266,42 +267,41 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
             assert.strictEqual(listLifecycleParams.Marker, 'key0');
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, lastModified: LastModified });
             return done();
         });
     });
 
     it('should publish one object entry if object is eligible', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         const { LastModified } = key;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, lastModified: LastModified });
             return done();
         });
     });
 
     it('should publish one object entry if tags and prefix match', done => {
-        const nbRetries = 0;
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
         const tagSet = [
@@ -326,11 +326,13 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(ruleWithTags, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(ruleWithTags, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             assert.strictEqual(listLifecycleParams.Bucket, bucketName);
@@ -338,22 +340,23 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             assert(!!listLifecycleParams.BeforeDate);
             assert.strictEqual(listLifecycleParams.Prefix, prefix);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, lastModified: LastModified });
             return done();
         });
     });
 
     it('should not publish one object entry if tags do not match', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const tagSet = [
             { Key: 'key', Value: 'val' },
             { Key: 'key2', Value: 'val2' },
         ];
         const key = keyMock.current({ keyName, daysEarlier: 1, tagSet });
+        const contents = [key];
+        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
         const ruleWithTags = [{
             Expiration: { Days: 1 },
@@ -365,16 +368,16 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 },
             },
         }];
-
-        const contents = [key];
-        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
-
-        lifecycleTask.processBucketEntry(ruleWithTags, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(ruleWithTags, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
+
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
+            // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
             return done();
@@ -382,7 +385,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should publish one object entry if object is eligible with Transitions rule', done => {
-        const nbRetries = 0;
         const transitionRule = [
             {
                 Transitions: [{ Days: 1, StorageClass: destinationLocation }],
@@ -391,22 +393,27 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 Status: 'Enabled',
             }
         ];
+
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         const { ETag, LastModified } = key;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
 
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            expectNominalListingParams(bucketName, listLifecycleParams);
+
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectTransitionEntry(firstEntry, {
                 keyName,
                 lastModified: LastModified,
@@ -420,24 +427,27 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should publish one bucket entry if listing is trucated', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse(
             { contents, isTruncated: true, markerInfo: { marker: keyName } }
         );
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
 
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            expectNominalListingParams(bucketName, listLifecycleParams);
+
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectBucketEntry(firstEntry, {
                 hasBeforeDate: true,
                 marker: keyName,
@@ -448,42 +458,48 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish bucket entry if listing is trucated but is retried', done => {
-        const nbRetries = 1;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse(
             { contents, isTruncated: true, markerInfo: { marker: keyName } }
         );
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 1;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            expectNominalListingParams(bucketName, listLifecycleParams);
             return done();
         });
     });
 
     it('should publish one bucket and one object entry if object is elligible and listing is trucated', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         const { LastModified } = key;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse(
             { contents, isTruncated: true, markerInfo: { marker: keyName } }
         );
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 2);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            expectNominalListingParams(bucketName, listLifecycleParams);
 
             // test that the entry is valid and pushed to kafka topic
             const firstEntry = kafkaEntries[0];
@@ -500,7 +516,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should publish one bucket entry if multiple rules', done => {
-        const nbRetries = 0;
         const multipleRules = [
             {
                 Expiration: { Days: 1 },
@@ -515,6 +530,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 Status: 'Enabled',
             }
         ];
+
         const keyName = 'pre1-key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
         const contents = [key];
@@ -522,15 +538,22 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             { contents, isTruncated: false, markerInfo: {} }
         );
 
-        lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
 
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, 'pre1');
+            assert(!!listLifecycleParams.BeforeDate);
+
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectBucketEntry(firstEntry, {
                 listType: 'current',
                 hasBeforeDate: true,
@@ -541,7 +564,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should not publish a bucket entry if multiple rules but listing is retried', done => {
-        const nbRetries = 1;
         const multipleRules = [
             {
                 Expiration: { Days: 1 },
@@ -556,6 +578,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 Status: 'Enabled',
             }
         ];
+
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
@@ -563,18 +586,24 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             { contents, isTruncated: false, markerInfo: {} }
         );
 
-        lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
+        const nbRetries = 1;
+        return lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, 'pre1');
+            assert(!!listLifecycleParams.BeforeDate);
             return done();
         });
     });
 
     it('should publish one mpu entry', done => {
-        const nbRetries = 0;
         const mpuRule = [
             {
                 AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
@@ -583,11 +612,10 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             },
         ];
 
-        const currentDate = Date.now();
-        const initiated = (new Date(currentDate - (1 * ONE_DAY_IN_SEC))).toISOString();
-
         const keyName = 'mpu0';
         const uploadId = '4808badd7b1043df8289e06db07009b3';
+        const currentDate = Date.now();
+        const initiated = (new Date(currentDate - (1 * ONE_DAY_IN_SEC))).toISOString();
         const mpuResponse = {
             Bucket: bucketName,
             MaxUploads: 1000,
@@ -603,10 +631,10 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 }
             ],
         };
-
         s3.setListMPUResponse(mpuResponse);
 
-        lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that listing has not been triggered.
@@ -622,7 +650,6 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     });
 
     it('should publish one bucket entry and one mpu entry if MPU listing is truncated', done => {
-        const nbRetries = 0;
         const mpuRule = [
             {
                 AbortIncompleteMultipartUpload: { DaysAfterInitiation: 1 },
@@ -631,12 +658,11 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             },
         ];
 
-        const currentDate = Date.now();
-        const initiated = (new Date(currentDate - (1 * ONE_DAY_IN_SEC))).toISOString();
-
         const keyName = 'mpu0';
         const uploadId = '4808badd7b1043df8289e06db07009b3';
         const uploadIdMarker = 'marker0';
+        const currentDate = Date.now();
+        const initiated = (new Date(currentDate - (1 * ONE_DAY_IN_SEC))).toISOString();
         const mpuResponse = {
             Bucket: bucketName,
             NextKeyMarker: keyName,
@@ -657,7 +683,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
         s3.setListMPUResponse(mpuResponse);
 
-        lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that listing has not been triggered.

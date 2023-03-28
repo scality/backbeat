@@ -92,24 +92,23 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     });
 
     it('should not publish any entry if object is not eligible', done => {
-        const nbRetries = 0;
         const contents = [
             keyMock.nonCurrent({ keyName: 'key1', versionId: 'versionid1', daysEarlier: 0 }),
         ];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
             return done();
         });
     });
 
     it('should not publish any object entry if transition is already transitioned', done => {
-        const nbRetries = 0;
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: destinationLocation }],
@@ -126,12 +125,14 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
@@ -139,17 +140,53 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should publish one object with the bucketData details set', done => {
-        const nbRetries = 0;
+    it('should not publish any object if the bucketData details set to an outdated listing', done => {
+        // When lifecycle rules get updated, listing might return objects that are not eligible anymore.
+        // For example, here, the kafka message tells the Bucket Processor to list current message
+        // whereas the lifecycle rules have been updated to expire non-current object.
+        // The current objects should not be expired anymore.
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
-        const versionId = 'versionid1';
-        const beforeDate = new Date().toISOString();
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
-
+        const key = keyMock.orphanDeleteMarker({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
+        const beforeDate = new Date().toISOString();
+        const bd = { ...bucketData, details: {
+            marker: 'key0',
+            listType: 'current',
+            prefix,
+            beforeDate,
+        } };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bd, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the current listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Marker, 'key0');
+            assert.strictEqual(listLifecycleParams.Prefix, prefix);
+            assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
+
+            assert.strictEqual(kafkaEntries.length, 0);
+            return done();
+        });
+    });
+
+    it('should publish one object with the bucketData details set', done => {
+        const prefix = 'pre1';
+        const keyName = `${prefix}key1`;
+        const versionId = 'versionid1';
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const contents = [key];
+        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
+
+        const beforeDate = new Date().toISOString();
         const bd = { ...bucketData, details: {
             keyMarker: 'key0',
             versionIdMarker: 'versionid0',
@@ -158,55 +195,103 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             beforeDate,
         } };
 
-        lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bd, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bd, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             assert.strictEqual(listLifecycleParams.Bucket, bucketName);
             assert.strictEqual(listLifecycleParams.KeyMarker, 'key0');
             assert.strictEqual(listLifecycleParams.VersionIdMarker, 'versionid0');
             assert.strictEqual(listLifecycleParams.Prefix, prefix);
-            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
+            testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
+            return done();
+        });
+    });
+
+    it('should publish one object with the bucketData details set for orphan', done => {
+        const expirationRule = [
+            {
+                Expiration: { Days: 1 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+
+        const prefix = 'pre1';
+        const keyName = `${prefix}key1`;
+        const versionId = 'versionid1';
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+        const contents = [key];
+        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
+
+        const beforeDate = new Date().toISOString();
+        const bd = { ...bucketData, details: {
+            marker: 'key0',
+            listType: 'orphan',
+            prefix,
+            beforeDate,
+        } };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bd, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the orphan listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'orphan');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Marker, 'key0');
+            assert.strictEqual(listLifecycleParams.Prefix, prefix);
+            assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
+
             // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 1);
+            const firstEntry = kafkaEntries[0];
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
             return done();
         });
     });
 
     it('should publish one object entry if object is eligible', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const versionId = 'versionid1';
         const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
             return done();
         });
     });
 
     it('should publish one object entry if object is eligible with NoncurrentVersionTransitions rule', done => {
-        const nbRetries = 0;
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: destinationLocation }],
@@ -219,22 +304,23 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const versionId = 'versionid1';
         const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
         const { ETag, LastModified } = key;
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectTransitionEntry(firstEntry, {
                 keyName,
                 versionId,
@@ -249,7 +335,6 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     });
 
     it('should publish one bucket entry to list orphan delete markers if Expiration rule is set', done => {
-        const nbRetries = 0;
         const expirationRule = [
             {
                 Expiration: { Days: 1 },
@@ -260,19 +345,21 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
             testKafkaEntry.expectBucketEntry(firstEntry, {
@@ -285,7 +372,6 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     });
 
     it('should publish one object entry if object is eligible with Transitions rule', done => {
-        const nbRetries = 0;
         const transitionRule = [
             {
                 Transitions: [{ Days: 1, StorageClass: destinationLocation }],
@@ -301,18 +387,20 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'current');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectObjectTransitionEntry(firstEntry, {
                 keyName,
                 lastModified: LastModified,
@@ -325,9 +413,99 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should publish one object entry if object is eligible with ExpiredObjectDeleteMarker', done => {
+    it('should not expire delete marker if not old enough to satisfy the age criteria', done => {
+        const expitationRule = [
+            {
+                Expiration: { Days: 10 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'deletemarker1';
+        const versionId = 'versionid1';
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+
+        const contents = [key];
+        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
+
+        const beforeDate = new Date().toISOString();
+        const bd = { ...bucketData, details: {
+            listType: 'orphan',
+            beforeDate,
+            prefix: '',
+        } };
+
         const nbRetries = 0;
-        const transitionRule = [
+        return lifecycleTask.processBucketEntry(expitationRule, bd, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the orphan listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'orphan');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
+
+            assert.strictEqual(kafkaEntries.length, 0);
+            return done();
+        });
+    });
+
+    it('should expire delete marker if not old enough but ExpiredObjectDeleteMarker is set to true', done => {
+        const expitationRule = [
+            {
+                Expiration: { Days: 10 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Expiration: { ExpiredObjectDeleteMarker: true },
+                ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'deletemarker1';
+        const versionId = 'versionid1';
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+
+        const contents = [key];
+        backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
+
+        const beforeDate = new Date().toISOString();
+        const bd = { ...bucketData, details: {
+            listType: 'orphan',
+            beforeDate,
+            prefix: '',
+        } };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expitationRule, bd, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the orphan listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'orphan');
+
+            // test parameters used to list lifecycle keys
+            const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
+
+            // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 1);
+            const firstEntry = kafkaEntries[0];
+            testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
+            return done();
+        });
+    });
+
+    it('should publish one object entry if object is eligible with ExpiredObjectDeleteMarker', done => {
+        const expitationRule = [
             {
                 Expiration: { ExpiredObjectDeleteMarker: true },
                 ID: '123',
@@ -342,48 +520,50 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse({ contents, isTruncated: false, markerInfo: {} });
 
-        lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(expitationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
-            // test that the current listing is triggered
+            // test that the orphan listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'orphan');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             assert.strictEqual(listLifecycleParams.Bucket, bucketName);
             assert.strictEqual(listLifecycleParams.Prefix, '');
             assert(!listLifecycleParams.BeforeDate);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-
             testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
             return done();
         });
     });
 
     it('should publish one bucket entry if listing is trucated', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const versionId = 'versionid1';
         const key = keyMock.nonCurrent({ keyName, daysEarlier: 0 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse(
             { contents, isTruncated: true, markerInfo: { keyMarker: keyName, versionIdMarker: versionId } }
         );
 
+        const nbRetries = 0;
         lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
-            // test that the current listing is triggered
+            // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectBucketEntry(firstEntry, {
                 hasBeforeDate: true,
                 keyMarker: keyName,
@@ -395,22 +575,22 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     });
 
     it('should publish one bucket and one object entry if object is elligible and listing is trucated', done => {
-        const nbRetries = 0;
         const keyName = 'key1';
         const versionId = 'versionid1';
         const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
-
         const contents = [key];
         backbeatMetadataProxy.setListLifecycleResponse(
             { contents, isTruncated: true, markerInfo: { marker: keyName } }
         );
 
-        lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 2);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.getListLifecycleType(), 'noncurrent');
+
             // test parameters used to list lifecycle keys
             const listLifecycleParams = backbeatMetadataProxy.getListLifecycleParams();
             expectNominalListingParams(bucketName, listLifecycleParams);
@@ -430,7 +610,6 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     });
 
     it('should publish one bucket entry if multiple rules', done => {
-        const nbRetries = 0;
         const multipleRules = [
             {
                 NoncurrentVersionExpiration: { NoncurrentDays: 1 },
@@ -453,7 +632,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             { contents, isTruncated: false, markerInfo: {} }
         );
 
-        lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
         backbeatMetadataProxy, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
@@ -463,9 +643,9 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             assert.strictEqual(listLifecycleParams.Prefix, 'pre1');
             assert(!!listLifecycleParams.BeforeDate);
 
+            // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
             const firstEntry = kafkaEntries[0];
-            // test that the entry is valid and pushed to kafka topic
             testKafkaEntry.expectBucketEntry(firstEntry, {
                 listType: 'noncurrent',
                 hasBeforeDate: true,

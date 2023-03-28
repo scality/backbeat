@@ -27,7 +27,7 @@ function isLifecycleUser(canonicalID) {
 class LifecycleTaskV2 extends LifecycleTask {
 
     /**
-     * Skip kafka entry if needed
+     * Skips kafka entry
      * @param {object} bucketData - bucket data from bucketTasksTopic
      * @param {Logger.newRequestLogger} log - logger object
      * @return {boolean} true if skipped, false otherwise.
@@ -135,7 +135,6 @@ class LifecycleTaskV2 extends LifecycleTask {
                     }
                 });
             }
-            // TODO: compare objects to Rules
             return this._compareRulesToList(bucketData, bucketLCRules,
                 contents, log, done);
         });
@@ -199,12 +198,27 @@ class LifecycleTaskV2 extends LifecycleTask {
                     }
                 });
             }
-            // TODO: compare objects to Rules
             return this._compareRulesToList(bucketData, bucketLCRules,
                 contents, log, done);
         });
     }
 
+    /**
+     * For each key, based on the lifecycle rules, evaluates if object is eligible.
+     * @param {object} bucketData - bucket data
+     * @param {object} bucketData.target - target bucket info
+     * @param {string} bucketData.target.bucket - bucket name
+     * @param {string} bucketData.target.owner - owner id
+     * @param {string} [bucketData.prefix] - prefix
+     * @param {string} [bucketData.details.keyMarker] - next key marker for versioned buckets
+     * @param {string} [bucketData.details.versionIdMarker] - next version id marker for versioned buckets
+     * @param {string} [bucketData.details.marker] - next marker for non-versioned buckets
+     * @param {array} lcRules - array of bucket lifecycle rules
+     * @param {array} contents - array of object or object version
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} done - callback(error)
+     * @return {undefined}
+     */
     _compareRulesToList(bucketData, lcRules, contents, log, done) {
         if (!contents.length) {
             return done();
@@ -216,6 +230,28 @@ class LifecycleTaskV2 extends LifecycleTask {
         }, done);
     }
 
+    /**
+     * For a given object, returns the rules that apply the earliest.
+     * @param {object} bucketData - bucket data
+     * @param {array} bucketLCRules - array of bucket lifecycle rules
+     * @param {object} object - object or object version
+     * @return {undefined}
+     */
+    _getRules(bucketData, bucketLCRules, object) {
+        const objTags = { TagSet: object.TagSet };
+        const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, objTags);
+        return this._lifecycleUtils.getApplicableRules(filteredRules, object);
+    }
+
+    /**
+     * Evaluates if object is eligible.
+     * @param {object} bucketData - bucket data
+     * @param {object} obj - object or object version
+     * @param {array} rules - array of bucket lifecycle rules
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - callback(error)
+     * @return {undefined}
+     */
     _compare(bucketData, obj, rules, log, cb) {
         if (obj.ListType === CURRENT_TYPE) {
             return this._compareCurrent(bucketData, obj, rules, log, cb);
@@ -249,7 +285,7 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @param {string} obj.LastModified - last modified date of object
      * @param {object} rules - most applicable rules from `_getApplicableRules`
      * @param {Logger.newRequestLogger} log - logger object
-     * @param {function} cb - callback(error, data)
+     * @param {function} cb - callback(error)
      * @return {undefined}
      */
     _compareCurrent(bucketData, obj, rules, log, cb) {
@@ -275,6 +311,16 @@ class LifecycleTaskV2 extends LifecycleTask {
         return process.nextTick(cb);
     }
 
+    /**
+     * Compare a non-current versioned object to most applicable rules
+     * @param {object} bucketData - bucket data
+     * @param {object} obj - single object from `listObjects`
+     * @param {string} obj.LastModified - last modified date of object
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} cb - callback(error)
+     * @return {undefined}
+     */
     _compareNonCurrent(bucketData, obj, rules, log, cb) {
         if (!obj.staleDate) {
             // NOTE: this should never happen. Logging here for debug purposes
@@ -326,18 +372,14 @@ class LifecycleTaskV2 extends LifecycleTask {
                 daysSinceInitiated >= rules.Expiration.Days) ||
             (rules.Expiration.Date !== undefined &&
                 rules.Expiration.Date < Date.now()) ||
-            eodm !== false
+            eodm === true
         );
-        // TODO: check why this check exists
+        // TODO: BB-376 check why this check exists
         const validLifecycleUserCase = (
             isLifecycleUser(deleteMarker.Owner.ID) &&
             eodm !== false
         );
 
-        // if there are no other versions with the same Key as this DM,
-        // if a valid Expiration rule exists or if the DM was created
-        // by a lifecycle service account and eodm rule is not
-        // explicitly set to false, apply and permanently delete this DM
         if (applicableExpRule || validLifecycleUserCase) {
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
@@ -362,12 +404,6 @@ class LifecycleTaskV2 extends LifecycleTask {
                 }
             });
         }
-    }
-
-    _getRules(bucketData, bucketLCRules, object) {
-        const objTags = { TagSet: object.TagSet };
-        const filteredRules = this._lifecycleUtils.filterRules(bucketLCRules, object, objTags);
-        return this._lifecycleUtils.getApplicableRules(filteredRules, object);
     }
 }
 

@@ -1080,8 +1080,11 @@ class LifecycleTask extends BackbeatTask {
                      daysSinceInitiated >= rules.Expiration.Days) ||
                     (rules.Expiration.Date !== undefined &&
                      rules.Expiration.Date < Date.now()) ||
+                    // TODO: BB-376 why do we check that eodm is "not explicitly set to false" instead
+                    // of "explicitly set to true"?
                     eodm !== false
                 );
+                // TODO: BB-376 check why this check exists
                 const validLifecycleUserCase = (
                     isLifecycleUser(deleteMarker.Owner.ID) &&
                     eodm !== false
@@ -1398,7 +1401,7 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
-     * Skip kafka entry if needed
+     * Skips kafka entry
      * @param {object} bucketData - bucket data from bucketTasksTopic
      * @param {Logger.newRequestLogger} log - logger object
      * @return {boolean} true if skipped, false otherwise.
