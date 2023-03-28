@@ -33,6 +33,7 @@ const joiSchema = {
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
+        forceLegacyListing: joi.boolean().default(false),
     },
     objectProcessor: {
         groupId: joi.string().required(),

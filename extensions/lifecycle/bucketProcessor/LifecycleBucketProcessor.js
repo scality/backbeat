@@ -15,6 +15,7 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const LifecycleTask = require('../tasks/LifecycleTask');
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const { createBackbeatClient, createS3Client } = require('../../../lib/clients/utils');
+const LifecycleTaskV2 = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 
@@ -342,14 +343,24 @@ class LifecycleBucketProcessor {
             if (!this._shouldProcessConfig(config)) {
                 return cb();
             }
+
+            let task;
+            // TODO: ZENKO-4501 Check if bucket is indexed before using new lifecycle improvement solution
+            if (this._lcConfig.bucketProcessor.forceLegacyListing) {
+                task = new LifecycleTask(this);
+            } else {
+                task = new LifecycleTaskV2(this);
+            }
+
             this._log.info('scheduling new task for bucket lifecycle', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
                 details: result.details,
+                taskName: task.constructor.name,
             });
             return this._internalTaskScheduler.push({
-                task: new LifecycleTask(this),
+                task,
                 rules: config.Rules,
                 value: result,
                 s3target: s3,
