@@ -99,6 +99,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
     _executeDelete(entry, log, done) {
         const { accountId } = entry.getAttribute('target');
+        const backbeatClient = this.getBackbeatClient(accountId);
+        if (!backbeatClient) {
+            log.error('failed to get backbeat client', { accountId });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain client'));
+        }
         const s3Client = this.getS3Client(accountId);
         if (!s3Client) {
             log.error('failed to get S3 client', { accountId });
@@ -117,13 +123,15 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         let reqMethod;
 
         const actionType = entry.getActionType();
+        let req = null;
         if (actionType === 'deleteObject') {
             reqMethod = 'deleteObject';
+            req = backbeatClient.deleteObjectFromExpiration(reqParams);
         } else if (actionType === 'deleteMPU') {
             reqParams.UploadId = entry.getAttribute('details.UploadId');
             reqMethod = 'abortMultipartUpload';
+            req = s3Client[reqMethod](reqParams);
         }
-        const req = s3Client[reqMethod](reqParams);
         attachReqUids(req, log);
         return req.send(err => {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
