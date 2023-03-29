@@ -184,6 +184,44 @@
                 }
             }
         },
+        "DeleteObjectFromExpiration": {
+            "http": {
+                "method": "DELETE",
+                "requestUri": "/_/backbeat/expiration/{Bucket}/{Key}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket",
+                    "Key"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Key": {
+                        "location": "uri",
+                        "locationName": "Key"
+                    },
+                    "VersionId": {
+                        "type": "string",
+                        "documentation": "VersionId used to reference a specific version of the object.",
+                        "location": "querystring",
+                        "locationName": "versionId"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "versionId": {
+                        "type": "string"
+                    }
+                }
+            }
+        },
         "MultipleBackendDeleteObject": {
             "http": {
                 "method": "DELETE",

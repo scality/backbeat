@@ -13,26 +13,29 @@ const {
     S3ClientMock,
     BackbeatMetadataProxyMock,
     ProcessorMock,
+    BackbeatClientMock,
 } = require('../mocks');
 
 describe('LifecycleDeleteObjectTask', () => {
     let s3Client;
-    let backbeatClient;
+    let backbeatMdProxyClient;
     let objectProcessor;
     let objMd;
     let task;
+    let backbeatClient;
 
     beforeEach(() => {
         s3Client = new S3ClientMock();
-        backbeatClient = new BackbeatMetadataProxyMock();
+        backbeatMdProxyClient = new BackbeatMetadataProxyMock();
+        backbeatClient = new BackbeatClientMock();
         objectProcessor = new ProcessorMock(
             s3Client,
-            null,
             backbeatClient,
+            backbeatMdProxyClient,
             null,
             new werelogs.Logger('test:LifecycleDeleteObjectTask'));
         objMd = new ObjectMD();
-        backbeatClient.setMdObj(objMd);
+        backbeatMdProxyClient.setMdObj(objMd);
         task = new LifecycleDeleteObjectTask(objectProcessor);
     });
 
@@ -75,8 +78,9 @@ describe('LifecycleDeleteObjectTask', () => {
             .setAttribute('target.key', 'testkey')
             .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
         s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
         task.processActionEntry(entry, err => {
-            assert.strictEqual(s3Client.calls.deleteObject, 1);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
             assert.ifError(err);
             done();
         });
@@ -132,8 +136,9 @@ describe('LifecycleDeleteObjectTask', () => {
                 .setAttribute('target.key', 'testkey')
                 .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
             s3Client.setResponse(null, {});
+            backbeatClient.setResponse(null, {});
             task.processActionEntry(entry, err => {
-                assert.strictEqual(s3Client.calls.deleteObject, 1);
+                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
                 assert.ifError(err);
                 done();
             });
@@ -168,8 +173,9 @@ describe('LifecycleDeleteObjectTask', () => {
                 .setAttribute('target.key', 'testkey')
                 .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
             s3Client.setResponse(null, {});
+            backbeatClient.setResponse(null, {});
             task.processActionEntry(entry, err => {
-                assert.strictEqual(s3Client.calls.deleteObject, 1);
+                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
                 assert.ifError(err);
                 done();
             });
@@ -186,8 +192,9 @@ describe('LifecycleDeleteObjectTask', () => {
             .setAttribute('target.version', 'testversion')
             .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
         s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
         task.processActionEntry(entry, err => {
-            assert.strictEqual(s3Client.calls.deleteObject, 1);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
             assert.ifError(err);
             done();
         });

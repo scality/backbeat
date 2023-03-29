@@ -7,6 +7,8 @@ const LifecycleObjectExpirationProcessor = require(
     '../../../extensions/lifecycle/objectProcessor/LifecycleObjectExpirationProcessor');
 
 const { S3ClientMock } = require('../../utils/S3ClientMock');
+const { BackbeatClientMock } = require('../../utils/BackbeatClientMock');
+
 
 const {
     zkConfig,
@@ -19,16 +21,20 @@ const {
 
 werelogs.configure({ level: 'warn', dump: 'error' });
 
+const backbeatRoutes = ['deleteObject'];
+
 describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
     this.timeout(testTimeout);
 
-    function generateRetryTest(failures, message) {
+    function generateRetryTest(name, failures, message) {
         return function testRetries(done) {
             const lop = new LifecycleObjectExpirationProcessor(
                 zkConfig, kafkaConfig, lcConfig, s3Config);
 
             const s3Client = new S3ClientMock(failures);
+            const backbeatClient = new BackbeatClientMock(failures);
             lop.clientManager.getS3Client = () => s3Client;
+            lop.clientManager.getBackbeatClient = () => backbeatClient;
             lop.clientManager.getBackbeatMetadataProxy = () => ({
                 getMetadata: (_a, _b, cb) =>
                     cb(null, { Body: new ObjectMD().getSerialized() }),
@@ -43,7 +49,11 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
                     lop._consumers.getConsumer(lcConfig.objectTasksTopic);
 
                 objectTaskConsumer.onEntryCommittable = () => {
-                    s3Client.verifyRetries();
+                    if (backbeatRoutes.includes(name)) {
+                        backbeatClient.verifyRetries();
+                    } else {
+                        s3Client.verifyRetries();
+                    }
                     done();
                 };
 
@@ -62,7 +72,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
         {
             name: 'deleteObject',
             failures: {
-                deleteObject: 2,
+                deleteObjectFromExpiration: 2,
             },
             message: {
                 key: '12345',
@@ -109,6 +119,6 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
         },
     ].forEach(testCase => {
         it(`should retry object entries when ${testCase.name} fails`,
-            generateRetryTest(testCase.failures, testCase.message));
+            generateRetryTest(testCase.name, testCase.failures, testCase.message));
     });
 });

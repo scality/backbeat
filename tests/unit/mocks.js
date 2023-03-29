@@ -41,10 +41,21 @@ class MockRequestAPI extends EventEmitter {
 
 class BackbeatClientMock {
     constructor() {
+        this.response = null;
         this.batchDeleteResponse = {};
         this.times = {
             batchDeleteResponse: 0,
+            deleteObjectFromExpiration: 0,
         };
+    }
+
+    deleteObjectFromExpiration() {
+        this.times.deleteObjectFromExpiration += 1;
+        return new MockRequestAPI(this.response.error, this.response.data);
+    }
+
+    setResponse(error, data) {
+        this.response = { error, data };
     }
 
     batchDelete(params, cb) {
