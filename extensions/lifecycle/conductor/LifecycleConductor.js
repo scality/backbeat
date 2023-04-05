@@ -21,7 +21,8 @@ const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 const {
-    updateCircuitBreakerConfigForImplicitOutputQueue
+    startCircuitBreakerMetricsExport,
+    updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
 
 const DEFAULT_CRON_RULE = '* * * * *';
@@ -636,6 +637,8 @@ class LifecycleConductor {
         }
 
         this._circuitBreaker.start();
+        startCircuitBreakerMetricsExport(this._circuitBreaker, 'lifecycle_conductor');
+
         this.vaultClientWrapper.init();
         return async.series([
             next => this._setupProducer(next),

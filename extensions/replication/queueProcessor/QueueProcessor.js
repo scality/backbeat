@@ -407,6 +407,9 @@ class QueueProcessor extends EventEmitter {
             queueProcessor: queueProcessorFunc,
             canary: true,
             circuitBreaker: this.circuitBreakerConfig,
+            circuitBreakerMetrics: {
+                type: 'replication_processor',
+            },
         });
         consumer.on('error', () => {
             if (!consumerReady) {
