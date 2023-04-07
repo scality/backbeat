@@ -15,8 +15,13 @@ function _makeListParams(listType, currentDate, listing) {
         prefix: listing.prefix,
         listType,
     };
+
     if (listing.days > 0) {
         p.beforeDate = _getBeforeDate(currentDate, listing.days);
+    }
+
+    if (listing.storageClass) {
+        p.storageClass = listing.storageClass;
     }
 
     return p;
@@ -57,7 +62,7 @@ function _getParamsFromListings(bucketName, currentDate, listings) {
 
     if (listingsParams.length > 0) {
         const firstParams = listingsParams[0];
-        const { prefix, beforeDate } = firstParams;
+        const { prefix, beforeDate, storageClass } = firstParams;
         listType = firstParams.listType;
         params = {
             Bucket: bucketName,
@@ -67,6 +72,10 @@ function _getParamsFromListings(bucketName, currentDate, listings) {
 
         if (beforeDate) {
             params.BeforeDate = beforeDate;
+        }
+
+        if (storageClass) {
+            params.ExcludedDataStoreName = storageClass;
         }
 
         listingsParams.shift(); // remove the first element
@@ -88,7 +97,7 @@ function _getParamsFromListings(bucketName, currentDate, listings) {
  * @return {Object} info - listing informations { params, listType, remainings }
  */
 function _getParamsFromDetails(bucketName, details) {
-    const { prefix, beforeDate, listType } = details;
+    const { prefix, beforeDate, listType, storageClass } = details;
     // if listType is invalid, do not list.
     if (![CURRENT_TYPE, NON_CURRENT_TYPE, ORPHAN_DM_TYPE].includes(listType)) {
         return {};
@@ -111,6 +120,10 @@ function _getParamsFromDetails(bucketName, details) {
 
     if (beforeDate) {
         params.BeforeDate = beforeDate;
+    }
+
+    if (storageClass) {
+        params.ExcludedDataStoreName = storageClass;
     }
 
     return { params, listType, remainings: [] };

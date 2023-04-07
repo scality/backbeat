@@ -137,10 +137,7 @@ class RulesReducer {
         const prefix = this._getRulePrefix(r);
         const isTransitions = r.Transitions && r.Transitions[0];
         let days;
-
-        // IMPROVEMENT: ZENKO-4541 If only one transition (no expiration) rule is set for a given prefix,
-        // we can add the filter "value.dataStoreName != destinationLocationName" to our listing query
-        // to only return keys that have not been transitioned yet.
+        let storageClass;
 
         if (r.Expiration) {
             // NOTE: Expiration Days cannot be 0.
@@ -168,9 +165,18 @@ class RulesReducer {
                     days = 0;
                 }
             }
+
+            // NOTE regarding the "r.Transitions.length === 1" check:
+            // Our implementation (AWS compatible) requires a distinct 'StorageClass' for
+            // 'Transition' actions within the same 'Rule'.
+            // This means that if a rule contains multiple actions,
+            // each action must have a different 'StorageClass'.
+            if (!r.Expiration && r.Transitions.length === 1) {
+                storageClass = r.Transitions[0].StorageClass;
+            }
         }
 
-        return this._aggregateByPrefix(currents, prefix, days);
+        return this._aggregateByPrefix(currents, prefix, days, storageClass);
     }
 
     /**
@@ -189,6 +195,7 @@ class RulesReducer {
         const prefix = this._getRulePrefix(r);
         const isTransitions = r.NoncurrentVersionTransitions && r.NoncurrentVersionTransitions.length > 0;
         let days;
+        let storageClass;
 
         if (r.NoncurrentVersionExpiration) {
             // 'NoncurrentDays' for NoncurrentVersionExpiration action is a positive integer
@@ -205,9 +212,17 @@ class RulesReducer {
                 lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
             }
+
+            // NOTE: Our implementation (AWS compatible) requires a distinct 'StorageClass' for
+            // 'NoncurrentVersionTransition' actions within the same 'Rule'.
+            // This means that if a rule contains multiple actions,
+            // each action must have a different 'StorageClass'.
+            if (r.NoncurrentVersionTransitions.length === 1) {
+                storageClass = r.NoncurrentVersionTransitions[0].StorageClass;
+            }
         }
 
-        return this._aggregateByPrefix(nonCurrents, prefix, days);
+        return this._aggregateByPrefix(nonCurrents, prefix, days, storageClass);
     }
 
     /**
@@ -240,7 +255,7 @@ class RulesReducer {
             }
         }
 
-        return this._aggregateByPrefix(orphans, prefix, days);
+        return this._aggregateByPrefix(orphans, prefix, days, null);
     }
 
     /**
@@ -250,11 +265,13 @@ class RulesReducer {
      * @param {array} listings - [listings] listings
      * @param {string} listings.prefix - rules' prefix
      * @param {string} listings.days - number of days after which action should apply
+     * @param {string} listings.storageClass - number of days after which action should apply
      * @param {string} prefix - prefix of the currently evaluated rule
      * @param {string} days - days of the currently evaluated rule
+     * @param {string} storageClass - data store name to which you want the object to transition
      * @return {array} aggregatedListings
      */
-    _aggregateByPrefix(listings, prefix, days) {
+    _aggregateByPrefix(listings, prefix, days, storageClass) {
         // NOTE: if days is undefined, no listing created.
         if (days === undefined) {
             return listings;
@@ -266,13 +283,21 @@ class RulesReducer {
             if (days < previousListing.days) {
                 previousListing.days = days;
             }
+            if (previousListing.storageClass !== storageClass) {
+                delete previousListing.storageClass;
+            }
         } else {
-            listings.push({
+            const listing = {
                 prefix,
                 days,
-            });
-        }
+            };
 
+            if (storageClass) {
+                listing.storageClass = storageClass;
+            }
+
+            listings.push(listing);
+        }
         return listings;
     }
 }

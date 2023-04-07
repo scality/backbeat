@@ -138,7 +138,10 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
             return done();
         });
     });
@@ -196,6 +199,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             listType: 'noncurrent',
             prefix,
             beforeDate,
+            storageClass: destinationLocation,
         } };
 
         const nbRetries = 0;
@@ -212,6 +216,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             assert.strictEqual(listLifecycleParams.VersionIdMarker, 'versionid0');
             assert.strictEqual(listLifecycleParams.Prefix, prefix);
             assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
@@ -319,7 +324,10 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
@@ -361,7 +369,10 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 0);
@@ -431,7 +442,10 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
@@ -609,6 +623,51 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
+    it('should publish one bucket entry if listing keys to be transitioned  is trucated', done => {
+        const transitionRule = [
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 0 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse =
+            { contents, isTruncated: true, markerInfo: { keyMarker: keyName, versionIdMarker: versionId } };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the non-current listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+            // test parameters used to list lifecycle keys
+            const { listLifecycleParams } = backbeatMetadataProxy;
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert(!!listLifecycleParams.BeforeDate);
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+
+            // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 1);
+            const firstEntry = kafkaEntries[0];
+            testKafkaEntry.expectBucketEntry(firstEntry, {
+                hasBeforeDate: true,
+                keyMarker: keyName,
+                versionIdMarker: versionId,
+                prefix: '',
+                listType: 'noncurrent',
+                storageClass: destinationLocation,
+            });
+            return done();
+        });
+    });
+
     it('should publish one bucket and one object entry if object is elligible and listing is trucated', done => {
         const keyName = 'key1';
         const versionId = 'versionid1';
@@ -683,6 +742,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 listType: 'noncurrent',
                 hasBeforeDate: true,
                 prefix: 'pre2',
+                storageClass: destinationLocation,
             });
             return done();
         });

@@ -232,6 +232,40 @@ describe('rulesToParams with versioning Disabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
+    it('with details and storageClass', () => {
+        const currentDate = Date.now();
+        const prefix = 'pre';
+        const details = {
+            listType: 'current',
+            prefix,
+            storageClass: locationName,
+            marker: 'key1'
+        };
+        const bd = { ...bucketData, details };
+        const bucketLCRules = [
+            {
+                Transition: [{ Days: 10, StorageClass: locationName }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bd, options);
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: prefix,
+               MaxKeys: MAX_KEYS,
+               Marker: 'key1',
+               ExcludedDataStoreName: locationName,
+            },
+            listType: 'current',
+            remainings: []
+        };
+        assert.deepStrictEqual(result, expected);
+    });
+
     it('with Expiration rule using Date', () => {
         const currentDate = Date.now();
         const bucketLCRules = [
@@ -386,6 +420,7 @@ describe('rulesToParams with versioning Disabled', () => {
                Bucket: bucketName,
                Prefix: prefix,
                MaxKeys: MAX_KEYS,
+               ExcludedDataStoreName: locationName,
             },
             listType: 'current',
             remainings: []
@@ -533,6 +568,72 @@ describe('rulesToParams with versioning Disabled', () => {
                Prefix: 'toto',
                MaxKeys: MAX_KEYS,
                BeforeDate: expectedBeforeDate,
+               ExcludedDataStoreName: locationName,
+            },
+            listType: 'current',
+            remainings: []
+         };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with multiple Transition rules that share prefix with one disabled', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - 2 * ONE_DAY_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '123',
+                Prefix: 'toto/titi',
+                Status: 'Disabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: 'toto',
+               MaxKeys: MAX_KEYS,
+               BeforeDate: expectedBeforeDate,
+               ExcludedDataStoreName: locationName2,
+            },
+            listType: 'current',
+            remainings: []
+         };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with multiple Transition rules that share prefix but not location', () => {
+        const currentDate = Date.now();
+        const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '123',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: 'p1',
+               MaxKeys: MAX_KEYS,
+               BeforeDate: expectedBeforeDate,
             },
             listType: 'current',
             remainings: []
@@ -602,11 +703,13 @@ describe('rulesToParams with versioning Disabled', () => {
                Prefix: 'titi',
                BeforeDate: expectedBeforeDate,
                MaxKeys: MAX_KEYS,
+               ExcludedDataStoreName: locationName,
             },
             listType: 'current',
             remainings: [{
                 listType: 'current',
                 prefix: 'toto',
+                storageClass: locationName2,
              }]
          };
 
@@ -614,7 +717,7 @@ describe('rulesToParams with versioning Disabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
-    it('with Expiration and Transitions rules that do share prefix', () => {
+    it('with Expiration and Transitions rules that share prefix', () => {
         const currentDate = Date.now();
         const bucketLCRules = [
             {
@@ -672,6 +775,7 @@ describe('rulesToParams with versioning Disabled', () => {
             remainings: [{
                 listType: 'current',
                 prefix: 'toto',
+                storageClass: locationName2,
              }]
          };
 
@@ -711,6 +815,7 @@ describe('rulesToParams with versioning Disabled', () => {
                 listType: 'current',
                 prefix: 'toto',
                 beforeDate: expectedBeforeDate,
+                storageClass: locationName2,
              }]
          };
 
@@ -751,6 +856,7 @@ describe('rulesToParams with versioning Disabled', () => {
             remainings: [{
                 listType: 'current',
                 prefix: 'toto',
+                storageClass: locationName2,
             }]
         };
 
@@ -789,6 +895,7 @@ describe('rulesToParams with versioning Disabled', () => {
             remainings: [{
                 listType: 'current',
                 prefix: 'toto',
+                storageClass: locationName2,
             }]
         };
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
