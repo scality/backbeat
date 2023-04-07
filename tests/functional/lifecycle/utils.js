@@ -99,7 +99,16 @@ class TestKafkaEntry {
         assert.strictEqual(message.resultsTopic, this.objectTopic);
     }
 
-    expectBucketEntry(e, { listType, hasBeforeDate, prefix, marker, keyMarker, versionIdMarker, uploadIdMarker }) {
+    expectBucketEntry(e, {
+        listType,
+        hasBeforeDate,
+        prefix,
+        marker,
+        keyMarker,
+        versionIdMarker,
+        uploadIdMarker,
+        storageClass,
+    }) {
         assert(e);
         assert.strictEqual(e.topicName, this.bucketTopic);
         assert.strictEqual(e.entry.length, 1);
@@ -120,6 +129,7 @@ class TestKafkaEntry {
         assert.strictEqual(details.versionIdMarker, versionIdMarker);
         assert.strictEqual(details.uploadIdMarker, uploadIdMarker);
         assert.strictEqual(details.listType, listType);
+        assert.strictEqual(details.storageClass, storageClass);
     }
 }
 
@@ -229,6 +239,7 @@ function expectNominalListingParams(bucketName, params) {
     assert.strictEqual(params.Bucket, bucketName);
     assert.strictEqual(params.Prefix, '');
     assert(!!params.BeforeDate);
+    assert(!params.ExcludedDataStoreName);
 }
 
 module.exports = {

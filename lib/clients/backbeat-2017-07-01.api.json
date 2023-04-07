@@ -1255,6 +1255,9 @@
         "ETag": {
             "type": "string"
         },
+        "ExcludedDataStoreName": {
+            "type": "string"
+        },
         "Marker": {
             "type": "string"
         },
@@ -1290,6 +1293,12 @@
                 "documentation": "<p>Limit the response to keys modified prior to before date.</p>",
                 "location": "querystring",
                 "locationName": "before-date"
+              },
+              "ExcludedDataStoreName": {
+                "shape": "ExcludedDataStoreName",
+                "documentation": "<p>Limit the response to only include keys that are stored outside of the ExcludedDataStoreName. Used for lifecycle transition rule.</p>",
+                "location": "querystring",
+                "locationName": "excluded-data-store-name"
               },
               "EncodingType": {
                 "shape": "EncodingType",
@@ -1387,6 +1396,12 @@
                 "documentation": "<p>Limit the response to keys modified prior to before date.</p>",
                 "location": "querystring",
                 "locationName": "before-date"
+              },
+              "ExcludedDataStoreName": {
+                "shape": "ExcludedDataStoreName",
+                "documentation": "<p>Limit the response to only include keys that are stored outside of the ExcludedDataStoreName. Used for lifecycle transition rule.</p>",
+                "location": "querystring",
+                "locationName": "excluded-data-store-name"
               },
               "EncodingType": {
                 "shape": "EncodingType",

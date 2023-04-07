@@ -233,6 +233,7 @@ describe('RulesReducer with versioning Disabled', () => {
             currents: [{
                 prefix: '',
                 days: 0,
+                storageClass: locationName,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
@@ -362,6 +363,35 @@ describe('RulesReducer with versioning Disabled', () => {
             currents: [{
                 prefix: 'toto',
                 days: 1,
+                storageClass: locationName,
+            }]
+        };
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with multiple Transition rules that share prefix but not the same StorageClass', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '123',
+                Prefix: 'toto/titi',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            currents: [{
+                prefix: 'toto',
+                days: 1,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
@@ -421,9 +451,11 @@ describe('RulesReducer with versioning Disabled', () => {
             currents: [{
                 prefix: 'titi',
                 days: 1,
+                storageClass: locationName,
             }, {
                 prefix: 'toto',
                 days: 0,
+                storageClass: locationName2,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
@@ -483,6 +515,7 @@ describe('RulesReducer with versioning Disabled', () => {
             }, {
                 prefix: 'toto',
                 days: 0,
+                storageClass: locationName2,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
@@ -558,7 +591,7 @@ describe('RulesReducer with versioning Disabled', () => {
         const expected = {
             currents: [
                 { prefix: 'a', days: 10 },
-                { prefix: 'b', days: 0 },
+                { prefix: 'b', days: 0, storageClass: locationName2 },
                 { prefix: 'c', days: 0 },
                 { prefix: 'd', days: 2 },
             ]
@@ -596,6 +629,7 @@ describe('RulesReducer with versioning Disabled', () => {
             }, {
                 prefix: 'toto',
                 days: 1,
+                storageClass: locationName2,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
@@ -631,6 +665,7 @@ describe('RulesReducer with versioning Disabled', () => {
             }, {
                 prefix: 'toto',
                 days: 0,
+                storageClass: locationName2,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
@@ -666,6 +701,7 @@ describe('RulesReducer with versioning Disabled', () => {
             }, {
                 prefix: 'toto',
                 days: 0,
+                storageClass: locationName2,
             }]
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
