@@ -20,6 +20,7 @@ const lcConfig = {
     },
     bucketProcessor: {
         groupId: `bucket-processor-test-${Math.random()}`,
+        forceLegacyListing: true,
     },
     objectProcessor: {
         groupId: `object-processor-test-${Math.random()}`,
