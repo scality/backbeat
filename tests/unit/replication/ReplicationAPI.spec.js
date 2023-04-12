@@ -4,6 +4,8 @@ const ReplicationAPI =
 const assert = require('assert');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
+const sinon = require('sinon');
+
 const fakeLogger = require('../../utils/fakeLogger');
 const bucketName = 'transition-to-dmf';
 const owner = '4f5a1a4bd769fd6e4ebca87b96c86a621ebb9c8be0c012f291757410c55a36f7';
@@ -29,8 +31,15 @@ describe('ReplicationAPI', () => {
         },
     };
 
+    let clock;
+
     beforeEach(() => {
         messages = [];
+        clock = sinon.useFakeTimers();
+    });
+
+    afterEach(() => {
+        clock.restore();
     });
 
     describe('::sendDataMoverAction ', () => {
@@ -65,6 +74,51 @@ describe('ReplicationAPI', () => {
                             objectVersion: versionId,
                             size: contentLength,
                             eTag,
+                        },
+                    },
+                ];
+                assert.deepStrictEqual(messages, expectedMessage);
+                done();
+                return;
+            });
+        });
+
+        it('should bypass archive topic for empty objects', done => {
+            const action = ActionQueueEntry.create('copyLocation');
+            action
+                .setAttribute('target', {
+                    accountId,
+                    owner,
+                    bucket: bucketName,
+                    key: objectKey,
+                    version: versionId,
+                    eTag,
+                    lastModified,
+                })
+                .setAttribute('toLocation', toLocation)
+                .setAttribute('metrics', {
+                    origin: originLabel,
+                    fromLocation,
+                    contentLength: 0,
+                })
+                .setResultsTopic(resultsTopic);
+            ReplicationAPI.sendDataMoverAction(mockProducer, action, fakeLogger, err => {
+                assert.ifError(err);
+                const expectedMessage = [
+                    {
+                        topic: 'cold-status-location-dmf-v1',
+                        entry: {
+                            op: 'archive',
+                            accountId,
+                            bucketName,
+                            objectKey,
+                            objectVersion: versionId,
+                            eTag,
+                            archiveInfo: {
+                                archiveId: 'EMPTY_OBJECT_NO_ARCHIVE_ID',
+                                archiveVersion: 0,
+                            },
+                            date: new Date().toJSON(),
                         },
                     },
                 ];
