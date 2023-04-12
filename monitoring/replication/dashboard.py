@@ -24,6 +24,11 @@ from scalgrafanalib import (
 )
 
 
+import os, sys
+sys.path.append(os.path.abspath(f'{__file__}/../../..'))
+from monitoring import s3_circuit_breaker
+
+
 class Metrics:
     QUEUE_LENGTH, QUEUE_SIZE = [
         metrics.CounterMetric(
@@ -695,6 +700,13 @@ queue_processor_stage_avg = [
     }.items()
 ]
 
+queue_processor_circuit_breaker = s3_circuit_breaker(
+    'Flow Control',
+    process='replication_queue_processor',
+    job='${job_data_processor}',
+)
+
+
 replay_processor_rate, replay_processor_attempts, replay_processor_success_attempts, replay_processor_failed_attempts = [
     TimeSeries(
         title='Replay ' + name + ' by location',
@@ -932,6 +944,7 @@ dashboard = (
                     *queue_processor_stage_time,
                     layout.column(queue_processor_stage_avg, width=3, height=3)
                 ], height=9),
+                layout.row([queue_processor_circuit_breaker], height=10),
             ])),
             RowPanel(title="Replay", collapsed=True, panels=layout.column([
                 layout.row([replay_processor_rate, replay_processor_attempts],
