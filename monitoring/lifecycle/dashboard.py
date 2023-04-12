@@ -14,6 +14,10 @@ from grafanalib.core import (
 from grafanalib import formatunits as UNITS
 from scalgrafanalib import layout, Tooltip, Target, TimeSeries, Dashboard
 
+import os, sys
+sys.path.append(os.path.abspath(f'{__file__}/../../..'))
+from monitoring import s3_circuit_breaker
+
 
 STATUS_CODE_2XX = '2..'
 STATUS_CODE_3XX = '3..'
@@ -224,6 +228,24 @@ lifecycle_expiration_processor_s3_error_rates = s3_request_error_rates(
     job='${job_lifecycle_object_processor}',
 )
 
+lifecycle_conductor_circuit_breaker = s3_circuit_breaker(
+    'Flow Control',
+    process='producer',
+    job='${job_lifecycle_producer}',
+)
+
+lifecycle_bucket_processor_circuit_breaker = s3_circuit_breaker(
+    'Flow Control',
+    process='bucket',
+    job='${job_lifecycle_bucket_processor}',
+)
+
+lifecycle_object_processor_circuit_breaker = s3_circuit_breaker(
+    'Flow Control',
+    process='expiration',
+    job='${job_lifecycle_object_processor}',
+)
+
 lifecycle_expiration_processor_s3_delete_object_ops = s3_deletion_request_time_series("deleteObject")
 lifecycle_expiration_processor_s3_delete_mpu_ops = s3_deletion_request_time_series("abortMultipartUpload")
 
@@ -267,20 +289,25 @@ dashboard = (
             ),
         ],
         panels=layout.column([
-            layout.row([lifecycle_batch, up], height=4),
+            layout.row([up], height=4),
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
             RowPanel(title="Kafka"),
             layout.row(kafka_row("Lifecycle Bucket Task", "BucketTopic"), height=10),
             layout.row(kafka_row("Expiration Object Task", "ObjectTopic"), height=10),
+            RowPanel(title="Lifecycle Conductor"),
+            layout.row([lifecycle_batch], height=4),
+            layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
             layout.row([lifecycle_bucket_processor_s3_requests], height=10),
             layout.row(lifecycle_bucket_processor_s3_error_rates, height=4),
+            layout.row([lifecycle_bucket_processor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Expiration Processors"),
             layout.row([lifecycle_expiration_processor_s3_requests], height=10),
             layout.row(lifecycle_expiration_processor_s3_error_rates, height=4),
             layout.row([lifecycle_expiration_processor_s3_delete_object_ops], height=10),
             layout.row([lifecycle_expiration_processor_s3_delete_mpu_ops], height=10),
+            layout.row([lifecycle_object_processor_circuit_breaker], height=10),
         ]),
     )
     .auto_panel_ids()
