@@ -1164,6 +1164,21 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
+
+    // TODO: remove once DMF supports 0 byte objects
+    // skips 0 byte transitions to DMF locations
+    _bb383SkipDMFTransition(objectInfo, site, log) {
+        if (objectInfo.Size === 0
+            && locationsConfig[site]
+            && locationsConfig[site].type === 'dmf') {
+            log.debug(`skipping transition task for 0 bytes objects to DMF location`, {
+                site,
+            });
+            return true;
+        }
+        return false;
+    }
+
     /**
      * Helper method for NoncurrentVersionTransition.NoncurrentDays rule
      * Check if Noncurrent Transition rule applies on the version
@@ -1182,7 +1197,9 @@ class LifecycleTask extends BackbeatTask {
         const ncd = 'NoncurrentDays';
         const doesNCVTransitionRuleApply = (rules[ncvt] &&
             rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]);
+            daysSinceInitiated >= rules[ncvt][ncd]) &&
+            !this._bb383SkipDMFTransition(version, rules[ncvt].StorageClass, log);
+
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({
                 owner: bucketData.target.owner,
@@ -1423,7 +1440,8 @@ class LifecycleTask extends BackbeatTask {
                     log);
                 return done();
             }
-            if (rules.Transition) {
+            if (rules.Transition
+                && !this._bb383SkipDMFTransition(obj, rules.Transition.StorageClass, log)) {
                 this._applyTransitionRule({
                     owner: bucketData.target.owner,
                     accountId: bucketData.target.accountId,
