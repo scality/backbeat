@@ -5,13 +5,8 @@ const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');
 
 let { dataMoverTopic } = config.extensions.replication;
-const {
-    coldStorageArchiveTopicPrefix,
-    coldStorageStatusTopicPrefix,
-} = config.extensions.lifecycle;
+const { coldStorageArchiveTopicPrefix } = config.extensions.lifecycle;
 const { LifecycleMetrics } = require('../lifecycle/LifecycleMetrics');
-
-const { emptyObjectArchiveId, emptyObjectArchiveVersion } = require('../../lib/constants');
 
 class ReplicationAPI {
     /**
@@ -89,39 +84,9 @@ class ReplicationAPI {
             log.error(errorMsg, { method: 'ReplicationAPI.sendDataMoverAction' });
             return cb(new Error(errorMsg));
         }
-
-        const { reqId } = action.getContext();
-
         if (locationConfig.isCold) {
-            // Temp special case: current tape implementation does not allow
-            // zero-byte objects yet. Bypass forwarder and send directly
-            // to status topic.
-            if (contentLength === 0 && locationConfig.type === 'dmf') {
-                topic = `${coldStorageStatusTopicPrefix}${toLocation}`;
-                const message = {
-                    op: 'archive',
-                    requestId: reqId,
-                    date: new Date(),
-
-                    accountId,
-                    bucketName: bucket,
-                    objectKey: key,
-                    objectVersion: version,
-                    eTag,
-
-                    archiveInfo: {
-                        archiveId: emptyObjectArchiveId,
-                        archiveVersion: emptyObjectArchiveVersion,
-                    },
-                };
-                kafkaEntry.message = JSON.stringify(message);
-                return producer.sendToTopic(topic, [kafkaEntry], err => {
-                    LifecycleMetrics.onKafkaPublish(log, 'ColdStorageStatusTopic', 'bucket', err, 1);
-                    return cb();
-                });
-            }
-
             topic = `${coldStorageArchiveTopicPrefix}${toLocation}`;
+            const { reqId } = action.getContext();
             const message = {
                 accountId,
                 bucketName: bucket,
