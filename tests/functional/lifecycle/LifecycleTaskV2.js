@@ -501,7 +501,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         });
     });
 
-    it('should publish one bucket entry if listing keys to be transitioned is trucated', done => {
+    it('should publish one bucket entry if listing keys to be transitioned is truncated', done => {
         const transitionRule = [
             {
                 Transitions: [{ Days: 2, StorageClass: destinationLocation }],
