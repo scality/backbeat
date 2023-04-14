@@ -1149,7 +1149,7 @@ class LifecycleTask extends BackbeatTask {
         if (objectInfo.Size === 0
             && locationsConfig[site]
             && locationsConfig[site].type === 'dmf') {
-            log.debug(`skipping transition task for 0 bytes objects to DMF location`, {
+            log.debug('skipping transition task for 0 bytes objects to DMF location', {
                 site,
             });
             return true;
@@ -1500,7 +1500,8 @@ class LifecycleTask extends BackbeatTask {
                 log);
             return done();
         }
-        if (rules.Transition) {
+        if (rules.Transition &&
+            !this._bb383SkipDMFTransition(version, rules.Transition.StorageClass, log)) {
             this._applyTransitionRule({
                 owner: bucketData.target.owner,
                 accountId: bucketData.target.accountId,
