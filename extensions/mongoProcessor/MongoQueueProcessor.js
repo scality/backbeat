@@ -138,6 +138,9 @@ class MongoQueueProcessor {
                 },
                 queueProcessor: this.processKafkaEntry.bind(this),
                 circuitBreaker: this.mongoProcessorConfig.circuitBreaker,
+                circuitBreakerMetrics: {
+                    type: 'mongo_queue_processor',
+                },
             });
             this._consumer.on('error', () => {
                 MongoProcessorMetrics.onIngestionKafkaConsume('error');

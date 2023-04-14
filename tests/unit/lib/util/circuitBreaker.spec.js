@@ -1,6 +1,9 @@
 const assert = require('assert');
-const { updateCircuitBreakerConfigForImplicitOutputQueue } =
-    require('../../../../lib/CircuitBreaker');
+const {
+    circuitBreakerGauge,
+    startCircuitBreakerMetricsExport,
+    updateCircuitBreakerConfigForImplicitOutputQueue
+} = require('../../../../lib/CircuitBreaker');
 
 describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
     it('should inject kafka conf if implicit flag', () => {
@@ -158,5 +161,18 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
         );
 
         assert.deepStrictEqual(res, {});
+    });
+});
+
+describe('startCircuitBreakerMetricsExport', () => {
+    it('should export circuit breaker state', done => {
+        const cb = { state: 1234 };
+        startCircuitBreakerMetricsExport(cb, 'test', 10);
+        setTimeout(async () => {
+            const { values: [{ value, labels }] } = await circuitBreakerGauge.get();
+            assert.deepStrictEqual(labels.type, 'test');
+            assert.deepStrictEqual(value, 1234);
+            done();
+        }, 20);
     });
 });
