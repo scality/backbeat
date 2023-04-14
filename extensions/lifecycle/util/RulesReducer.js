@@ -214,7 +214,7 @@ class RulesReducer {
             }
 
             // NOTE: Our implementation (AWS compatible) requires a distinct 'StorageClass' for
-            // 'NoncurrentVersionTransition' actions within the same 'Rule'.
+            // 'NoncurrentVersionTransitions' actions within the same 'Rule'.
             // This means that if a rule contains multiple actions,
             // each action must have a different 'StorageClass'.
             if (r.NoncurrentVersionTransitions.length === 1) {
