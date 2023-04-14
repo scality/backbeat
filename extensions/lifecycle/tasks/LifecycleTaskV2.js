@@ -52,12 +52,15 @@ class LifecycleTaskV2 extends LifecycleTask {
     _handleRemainingListings(remainings, bucketData, log) {
         if (remainings && remainings.length) {
             remainings.forEach(l => {
-                const prefix = l.prefix;
-                const listType = l.listType;
-                const beforeDate = l.beforeDate;
+                const {
+                    prefix,
+                    listType,
+                    beforeDate,
+                    storageClass,
+                } = l;
 
                 const entry = Object.assign({}, bucketData, {
-                    details: { beforeDate, prefix, listType },
+                    details: { beforeDate, prefix, listType, storageClass },
                 });
 
                 this._sendBucketEntry(entry, err => {
@@ -115,8 +118,9 @@ class LifecycleTaskV2 extends LifecycleTask {
                     details: {
                         beforeDate: params.BeforeDate,
                         prefix: params.Prefix,
+                        storageClass: params.ExcludedDataStoreName,
                         listType,
-                        ...markerInfo,
+                        ...markerInfo
                     },
                 });
 
@@ -178,6 +182,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                     details: {
                         beforeDate: params.BeforeDate,
                         prefix: params.Prefix,
+                        storageClass: params.ExcludedDataStoreName,
                         listType,
                         ...markerInfo,
                     },

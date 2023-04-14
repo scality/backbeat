@@ -233,7 +233,10 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+            assert(!!listLifecycleParams.BeforeDate);
             return done();
         });
     });
@@ -252,6 +255,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             listType: 'current',
             prefix,
             beforeDate,
+            storageClass: destinationLocation,
         } };
 
         const nbRetries = 0;
@@ -267,6 +271,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             assert.strictEqual(listLifecycleParams.Prefix, prefix);
             assert.strictEqual(listLifecycleParams.BeforeDate, beforeDate);
             assert.strictEqual(listLifecycleParams.Marker, 'key0');
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
@@ -410,7 +415,10 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+            assert(!!listLifecycleParams.BeforeDate);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 1);
@@ -451,7 +459,10 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
             // test parameters used to list lifecycle keys
             const { listLifecycleParams } = backbeatMetadataProxy;
-            expectNominalListingParams(bucketName, listLifecycleParams);
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+            assert(!!listLifecycleParams.BeforeDate);
 
             // test that the entry is valid and pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 0);
@@ -485,6 +496,49 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 marker: keyName,
                 prefix: '',
                 listType: 'current',
+            });
+            return done();
+        });
+    });
+
+    it('should publish one bucket entry if listing keys to be transitioned is truncated', done => {
+        const transitionRule = [
+            {
+                Transitions: [{ Days: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse =
+            { contents, isTruncated: true, markerInfo: { marker: keyName } };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the current listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+            // test parameters used to list lifecycle keys
+            const { listLifecycleParams } = backbeatMetadataProxy;
+            assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+            assert.strictEqual(listLifecycleParams.Prefix, '');
+            assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+            assert(!!listLifecycleParams.BeforeDate);
+
+            // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 1);
+            const firstEntry = kafkaEntries[0];
+            testKafkaEntry.expectBucketEntry(firstEntry, {
+                hasBeforeDate: true,
+                marker: keyName,
+                prefix: '',
+                listType: 'current',
+                storageClass: destinationLocation,
             });
             return done();
         });
@@ -588,6 +642,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 listType: 'current',
                 hasBeforeDate: true,
                 prefix: 'pre2',
+                storageClass: destinationLocation,
             });
             return done();
         });

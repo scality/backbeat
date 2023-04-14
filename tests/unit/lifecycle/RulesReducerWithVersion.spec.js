@@ -155,7 +155,7 @@ describe('RulesReducer with versioning Enabled', () => {
             }
         ];
         const expected = {
-            currents: [{ prefix: '', days: 0 }],
+            currents: [{ prefix: '', days: 0, storageClass: locationName }],
             nonCurrents: [],
             orphans: [],
         };
@@ -279,6 +279,33 @@ describe('RulesReducer with versioning Enabled', () => {
             }
         ];
         const expected = {
+            currents: [{ prefix: 'toto', days: 1, storageClass: locationName }],
+            nonCurrents: [],
+            orphans: [],
+        };
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with multiple Transition rules that share prefix but not the same StorageClass', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '123',
+                Prefix: 'toto/titi',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
             currents: [{ prefix: 'toto', days: 1 }],
             nonCurrents: [],
             orphans: [],
@@ -340,8 +367,8 @@ describe('RulesReducer with versioning Enabled', () => {
         ];
         const expected = {
             currents: [
-                { prefix: 'titi', days: 1 },
-                { prefix: 'toto', days: 0 }
+                { prefix: 'titi', days: 1, storageClass: locationName },
+                { prefix: 'toto', days: 0, storageClass: locationName2 }
             ],
             nonCurrents: [],
             orphans: [],
@@ -398,7 +425,7 @@ describe('RulesReducer with versioning Enabled', () => {
         const expected = {
             currents: [
                 { prefix: 'titi', days: 1 },
-                { prefix: 'toto', days: 0, },
+                { prefix: 'toto', days: 0, storageClass: locationName2 },
             ],
             nonCurrents: [],
             orphans: [{ prefix: 'titi', days: 1 }],
@@ -451,13 +478,14 @@ describe('RulesReducer with versioning Enabled', () => {
             nonCurrents: [{
                 prefix: '',
                 days: 2,
+                storageClass: locationName,
             }],
             orphans: [],
         };
         assert.deepStrictEqual(result, expected);
     });
 
-    it('with NoncurrentVersionExpiration and NoncurrentVersionTransitions rule that do not share prefix', () => {
+    it('with NoncurrentVersionExpiration and NoncurrentVersionTransitions rule that share prefix', () => {
         const currentDate = Date.now();
         const bucketLCRules = [
             {
@@ -510,8 +538,43 @@ describe('RulesReducer with versioning Enabled', () => {
             currents: [],
             nonCurrents: [
                 { prefix: 'p1', days: 1 },
-                { prefix: 'p2', days: 2 },
+                { prefix: 'p2', days: 2, storageClass: locationName },
             ],
+            orphans: [],
+        };
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with Transitions and NoncurrentVersionTransitions rule that share prefix', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName }],
+                ID: '0',
+                Prefix: 'p1',
+                Status: 'Enabled',
+            },
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: locationName }],
+                ID: '1',
+                Prefix: 'p1/p2',
+                Status: 'Enabled',
+            },
+        ];
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        const expected = {
+            currents: [{
+                prefix: 'p1',
+                days: 1,
+                storageClass: locationName,
+            }],
+            nonCurrents: [{
+                prefix: 'p1/p2',
+                days: 2,
+                storageClass: locationName,
+            }],
             orphans: [],
         };
         assert.deepStrictEqual(result, expected);
@@ -579,44 +642,6 @@ describe('RulesReducer with versioning Enabled', () => {
                 Status: 'Enabled',
             },
             {
-                Expiration: { Days: 4 },
-                ID: '3',
-                Filter: {
-                    Prefix: 'ca',
-                },
-                Status: 'Enabled',
-            },
-            {
-                Expiration: { Days: 10 },
-                ID: '5',
-                Filter: {
-                    And: {
-                        Prefix: 'c',
-                    }
-                },
-                Status: 'Enabled',
-            },
-            {
-                Expiration: { Days: 6 },
-                ID: '8',
-                Filter: {
-                    Prefix: 'db',
-                },
-                Status: 'Enabled',
-            },
-            {
-                Transitions: [{ Date: currentDate, StorageClass: locationName2 }],
-                ID: '2',
-                Prefix: 'caa',
-                Status: 'Enabled',
-            },
-            {
-                Transitions: [{ Days: 2, StorageClass: locationName2 }],
-                ID: '6',
-                Prefix: 'daa',
-                Status: 'Enabled',
-            },
-            {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 1, StorageClass: locationName2 }],
                 ID: '1',
                 Filter: {
@@ -632,6 +657,44 @@ describe('RulesReducer with versioning Enabled', () => {
                     And: {
                         Prefix: 'cb',
                     }
+                },
+                Status: 'Enabled',
+            },
+            {
+                Expiration: { Days: 4 },
+                ID: '3',
+                Filter: {
+                    Prefix: 'ca',
+                },
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Date: currentDate, StorageClass: locationName2 }],
+                ID: '2',
+                Prefix: 'caa',
+                Status: 'Enabled',
+            },
+            {
+                Expiration: { Days: 10 },
+                ID: '5',
+                Filter: {
+                    And: {
+                        Prefix: 'c',
+                    }
+                },
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: locationName2 }],
+                ID: '6',
+                Prefix: 'daa',
+                Status: 'Enabled',
+            },
+            {
+                Expiration: { Days: 6 },
+                ID: '8',
+                Filter: {
+                    Prefix: 'db',
                 },
                 Status: 'Enabled',
             },
@@ -656,12 +719,12 @@ describe('RulesReducer with versioning Enabled', () => {
             currents: [
                 { prefix: 'a', days: 10 },
                 { prefix: 'c', days: 0 },
-                { prefix: 'daa', days: 2 },
+                { prefix: 'daa', days: 2, storageClass: locationName2 },
                 { prefix: 'db', days: 6 },
             ],
             nonCurrents: [
-                { prefix: 'b', days: 1 },
-                { prefix: 'cb', days: 8 },
+                { prefix: 'b', days: 1, storageClass: locationName2 },
+                { prefix: 'cb', days: 8, storageClass: locationName2 },
                 { prefix: 'd', days: 4 },
             ],
             orphans: [
@@ -711,11 +774,11 @@ describe('RulesReducer with versioning Enabled', () => {
         const expected = {
             currents: [
                 { prefix: 'p1', days: 0 },
-                { prefix: 'p2', days: 1 },
+                { prefix: 'p2', days: 1, storageClass: locationName2 },
             ],
             nonCurrents: [
                 { prefix: 'p3', days: 0 },
-                { prefix: 'p4', days: 1 }],
+                { prefix: 'p4', days: 1, storageClass: locationName }],
             orphans: [
                 { prefix: 'p1', days: 0, },
             ],
@@ -761,11 +824,11 @@ describe('RulesReducer with versioning Enabled', () => {
         const expected = {
             currents: [
                 { prefix: 'p1', days: 1 },
-                { prefix: 'p2', days: 0 },
+                { prefix: 'p2', days: 0, storageClass: locationName2 },
             ],
             nonCurrents: [
                 { prefix: 'p3', days: 1 },
-                { prefix: 'p4', days: 0 }],
+                { prefix: 'p4', days: 0, storageClass: locationName }],
             orphans: [
                 { prefix: 'p1', days: 1, },
             ],
@@ -777,7 +840,7 @@ describe('RulesReducer with versioning Enabled', () => {
     });
 
 
-    it('with transitionOneDayEarlier', () => {
+    it('with expireOneDayEarlier and transitionOneDayEarlier', () => {
         const currentDate = Date.now();
         const customOptions = {
             expireOneDayEarlier: true,
@@ -812,13 +875,13 @@ describe('RulesReducer with versioning Enabled', () => {
         const expected = {
             currents: [
                 { prefix: 'p1', days: 0 },
-                { prefix: 'p2', days: 0 },
+                { prefix: 'p2', days: 0, storageClass: locationName2 },
             ],
             nonCurrents: [
                 { prefix: 'p3', days: 0 },
-                { prefix: 'p4', days: 0 }],
+                { prefix: 'p4', days: 0, storageClass: locationName }],
             orphans: [
-                { prefix: 'p1', days: 0, },
+                { prefix: 'p1', days: 0 },
             ],
         };
         const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, customOptions);
