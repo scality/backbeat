@@ -29,20 +29,26 @@ const kafkaConfig = {
 const repConfig = {
     dataMoverTopic: 'backbeat-data-mover-spec',
 };
+
+const s3Config = {
+    host: '127.0.0.1',
+    port: 8000,
+};
+
 const bucketTasksTopic = 'backbeat-lifecycle-bucket-tasks-spec';
 
 const expected2Messages = [
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket1', owner: 'owner1' },
+            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
     },
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket1-2', owner: 'owner1' },
+            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
     },
@@ -52,28 +58,28 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket1', owner: 'owner1' },
+            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
     },
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket1-2', owner: 'owner1' },
+            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
     },
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket3', owner: 'owner3' },
+            target: { bucket: 'bucket3', owner: 'owner3', taskVersion: 'v1' },
             details: {},
         },
     },
     {
         value: {
             action: 'processObjects',
-            target: { bucket: 'bucket4', owner: 'owner4' },
+            target: { bucket: 'bucket4', owner: 'owner4', taskVersion: 'v1' },
             details: {},
         },
     },
@@ -91,6 +97,7 @@ const baseLCConfig = {
         probeServer: {
             port: 8552,
         },
+        concurrentIndexesBuildLimit: 10,
     },
     auth: {
         type: 'account',
@@ -186,7 +193,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
 
             const lc = new LifecycleConductor(zkConfig.zookeeper,
-                localKafkaConfig, lcConfig, repConfig);
+                localKafkaConfig, lcConfig, repConfig, s3Config);
 
             async.series([
                 next => lc.start(next),
@@ -286,7 +293,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
 
             const lc = new LifecycleConductor(zkConfig.zookeeper,
-                localKafkaConfig, lcConfig, repConfig);
+                localKafkaConfig, lcConfig, repConfig, s3Config);
 
             async.series([
                 next => lc.start(next),
@@ -414,7 +421,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 bucketdListing = [];
 
                 lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-                    kafkaConfig, validatedLifecycleConfig, repConfig);
+                    kafkaConfig, validatedLifecycleConfig, repConfig, s3Config);
 
                 async.series([
                     next => lcConductor.init(next),

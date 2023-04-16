@@ -19,9 +19,10 @@ const zkConfig = config.zookeeper;
 const kafkaConfig = config.kafka;
 const lcConfig = config.extensions.lifecycle;
 const repConfig = config.extensions.replication;
+const s3Config = config.s3;
 
 
-const lcConductor = new LifecycleConductor(zkConfig, kafkaConfig, lcConfig, repConfig);
+const lcConductor = new LifecycleConductor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config);
 
 werelogs.configure({
     level: config.log.logLevel,

@@ -223,6 +223,18 @@ class BackbeatMetadataProxyMock {
     putMetadata(params, log, cb) {
         return cb();
     }
+
+    getBucketIndexes(bucket, log, cb) {
+        return cb(null, []);
+    }
+
+    putBucketIndexes(bucket, indexes, log, cb) {
+        return cb();
+    }
+
+    deleteBucketIndexes(bucket, indexes, log, cb) {
+        return cb();
+    }
 }
 
 function expectNominalListingParams(bucketName, params) {

@@ -76,6 +76,9 @@ class BackbeatMetadataProxyMock {
     constructor() {
         this.mdObj = null;
         this.receivedMd = null;
+        this.indexesObj = null;
+        this.receivedIdxObj = null;
+        this.error = null;
     }
 
     setMdObj(mdObj) {
@@ -89,6 +92,21 @@ class BackbeatMetadataProxyMock {
     putMetadata(params, log, cb) {
         this.receivedMd = JSON.parse(params.mdBlob);
         this.mdObj = ObjectMD.createFromBlob(params.mdBlob).result;
+        return cb();
+    }
+
+    getBucketIndexes(bucket, log, cb) {
+        if (this.error) {
+            return cb(this.error);
+        }
+        return cb(null, this.indexesObj);
+    }
+
+    putBucketIndexes(bucket, indexes, log, cb) {
+        if (this.error) {
+            return cb(this.error);
+        }
+        this.receivedIdxObj = indexes;
         return cb();
     }
 

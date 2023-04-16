@@ -1,11 +1,13 @@
 {
     "Version": "2012-10-17",
-    "Statement": [{
-        "Sid": "ReadAccounts",
-        "Effect": "Allow",
-        "Action": [
-            "vaultadmin:GetAccountInfo"
-        ],
-        "Resource": "arn:aws:iam::*:root"
-    }]
+    "Statement": [
+        {
+            "Sid": "ReadAccounts",
+            "Effect": "Allow",
+            "Action": [
+                "vaultadmin:GetAccountInfo"
+            ],
+            "Resource": "arn:aws:iam::*:root"
+        }
+    ]
 }

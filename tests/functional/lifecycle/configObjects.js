@@ -18,6 +18,11 @@ const lcConfig = {
         roleName: 'role',
         sts: {},
     },
+    conductor: {
+        cronRule: '*/5 * * * * *',
+        concurrentIndexesBuildLimit: 2,
+        bucketSource: 'mongodb',
+    },
     bucketProcessor: {
         groupId: `bucket-processor-test-${Math.random()}`,
         forceLegacyListing: true,
