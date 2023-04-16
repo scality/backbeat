@@ -1269,6 +1269,106 @@
             "output": {
               "shape": "ListLifecycleOutput"
             }
+        },
+        "PutBucketIndexes": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/index/{Bucket}?operation=add"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
+        },
+        "GetBucketIndexes": {
+            "http": {
+                "method": "GET",
+                "requestUri": "/_/backbeat/index/{Bucket}"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    }
+                }
+            },
+            "output": {
+                "type": "structure",
+                "members": {
+                    "Indexes": {
+                        "type": "list",
+                        "member": {
+                            "type": "structure",
+                            "members": {
+                                "name": {
+                                    "type": "string"
+                                },
+                                "keys": {
+                                    "type": "list",
+                                    "member": {
+                                        "type": "structure",
+                                        "members": {
+                                            "order": {
+                                                "type": "integer"
+                                            },
+                                            "key": {
+                                                "type": "string"
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        },
+        "DeleteBucketIndexes": {
+            "http": {
+                "method": "POST",
+                "requestUri": "/_/backbeat/index/{Bucket}?operation=delete"
+            },
+            "input": {
+                "type": "structure",
+                "required": [
+                    "Bucket"
+                ],
+                "members": {
+                    "Bucket": {
+                        "location": "uri",
+                        "locationName": "Bucket"
+                    },
+                    "Body": {
+                        "type": "blob"
+                    }
+                },
+                "payload": "Body"
+            },
+            "output": {
+                "type": "structure",
+                "members": {}
+            }
         }
     },
     "shapes": {
