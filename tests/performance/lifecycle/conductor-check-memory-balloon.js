@@ -4,6 +4,7 @@ const async = require('async');
 const baseConfig = require('../../../lib/Config');
 const mongoConfig = baseConfig.queuePopulator.mongo;
 const LifecycleConductor = require('../../../extensions/lifecycle/conductor/LifecycleConductor');
+const { BackbeatMetadataProxyMock } = require('../../functional/lifecycle/utils');
 
 const nBuckets = 200000;
 
@@ -27,6 +28,7 @@ describe('Lifecycle Conductor', function testBackpressure() {
                 backlogControl: {
                     enabled: true,
                 },
+                concurrentIndexesBuildLimit: 1,
             },
         };
 
@@ -34,7 +36,8 @@ describe('Lifecycle Conductor', function testBackpressure() {
             baseConfig.zookeeper,
             baseConfig.kafka,
             lcConfig,
-            baseConfig.extensions.replication
+            baseConfig.extensions.replication,
+            baseConfig.s3,
         );
 
         it('should apply backpressure on bucket queue instead of ballooning', done => {
@@ -70,6 +73,7 @@ describe('Lifecycle Conductor', function testBackpressure() {
                 backlogControl: {
                     enabled: false,
                 },
+                concurrentIndexesBuildLimit: 1,
             },
         };
 
@@ -82,7 +86,8 @@ describe('Lifecycle Conductor', function testBackpressure() {
             zookeeperConfig,
             baseConfig.kafka,
             lcConfig,
-            baseConfig.extensions.replication
+            baseConfig.extensions.replication,
+            baseConfig.s3,
         );
 
         const injectAccounts = client => {
@@ -110,7 +115,9 @@ describe('Lifecycle Conductor', function testBackpressure() {
                                     value: bucketMD,
                                 };
                             }
-                            c.insertMany(batch, next);
+                            c.insertMany(batch)
+                                .then(() => next())
+                                .catch(next);
                         },
                         err => {
                             if (err) {
@@ -123,6 +130,7 @@ describe('Lifecycle Conductor', function testBackpressure() {
         };
 
         it('should apply backpressure on bucket queue instead of ballooning', done => {
+            lc.clientManager.getBackbeatMetadataProxy = () => new BackbeatMetadataProxyMock();
             lc.init(err => {
                 if (err) {
                     return done(err);

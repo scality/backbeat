@@ -24,6 +24,7 @@ const joiSchema = joi.object({
             when('bucketSource', { is: 'mongodb', then: joi.required() }),
         cronRule: joi.string().required(),
         concurrency: joi.number().greater(0).default(10),
+        concurrentIndexesBuildLimit: joi.number().greater(0).default(10),
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),

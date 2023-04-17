@@ -18,6 +18,7 @@ const LocationStatusStream = require('../../utils/LocationStatusStream');
 const {
     updateCircuitBreakerConfigForImplicitOutputQueue
 } = require('../../../lib/CircuitBreaker');
+const { lifecycleTaskVersions } = require('../../../lib/constants');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
@@ -249,7 +250,7 @@ class LifecycleBucketProcessor {
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
-        const { bucket, owner, accountId } = result.target;
+        const { bucket, owner, accountId, taskVersion } = result.target;
         if (!bucket || !owner || (!accountId && this._authConfig.type === authTypeAssumeRole)) {
             this._log.error('kafka bucket entry missing required fields', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
@@ -305,8 +306,10 @@ class LifecycleBucketProcessor {
             }
 
             let task;
-            // TODO: ZENKO-4501 Check if bucket is indexed before using new lifecycle improvement solution
-            if (this._lcConfig.bucketProcessor.forceLegacyListing) {
+
+            if (this._lcConfig.bucketProcessor.forceLegacyListing ||
+                taskVersion === lifecycleTaskVersions.v1 ||
+                !taskVersion) {
                 task = new LifecycleTask(this);
             } else {
                 task = new LifecycleTaskV2(this);

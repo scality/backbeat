@@ -17,6 +17,11 @@ const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const safeJsonParse = require('../util/safeJsonParse');
 const { AccountIdCache } = require('../util/AccountIdCache');
 const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
+const ClientManager = require('../../../lib/clients/ClientManager');
+const {
+    indexesForFeature,
+    lifecycleTaskVersions,
+} = require('../../../lib/constants');
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
@@ -70,15 +75,17 @@ class LifecycleConductor {
      * @param {Number} [lcConfig.conductor.concurrency=10] - maximum
      *   number of concurrent bucket-to-kafka operations allowed
      * @param {Object} repConfig - replication configuration object
+     * @param {Object} s3Config - s3 configuration object
      * @param {String} [transport="http"] - transport method ("http"
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, transport = 'http') {
+    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, transport = 'http') {
         this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.lcConfig = lcConfig;
         this._authConfig = lcConfig.conductor.auth || lcConfig.auth;
         this._transport = transport;
         this.repConfig = repConfig;
+        this.s3Config = s3Config;
         this._cronRule = this.lcConfig.conductor.cronRule || DEFAULT_CRON_RULE;
         this._concurrency =
             this.lcConfig.conductor.concurrency || DEFAULT_CONCURRENCY;
@@ -115,6 +122,16 @@ class LifecycleConductor {
             this._authConfig,
             this.logger,
         );
+
+        this.clientManager = new ClientManager({
+            id: 'lifecycle',
+            authConfig: this._authConfig,
+            s3Config: this.s3Config,
+            transport,
+        }, this.logger);
+
+        this.activeIndexingJobsRetrieved = false;
+        this.activeIndexingJobs = [];
 
         const circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
             lcConfig.conductor.circuitBreaker,
@@ -153,6 +170,144 @@ class LifecycleConductor {
         );
     }
 
+    _indexesGetInProgressJobs(log, cb) {
+        if (this._bucketSource !== 'mongodb') {
+            return process.nextTick(cb, null);
+        }
+
+        log.debug('retrieving mongodb in progress indexing jobs');
+        return this._mongodbClient.getIndexingJobs(log, (err, jobs) => {
+            if (err) {
+                log.debug('failed to retrive mongodb in progress indexing jobs', {
+                    method: '_indexesGetInProgressJobs',
+                    error: err,
+                });
+                this.activeIndexingJobsRetrieved = false;
+                return cb(err);
+            }
+            this.activeIndexingJobsRetrieved = true;
+            this.activeIndexingJobs = jobs;
+            return cb(null);
+        });
+    }
+
+    _indexesGetOrCreate(task, log, cb) {
+        if (this._bucketSource !== 'mongodb') {
+            return process.nextTick(cb, null, lifecycleTaskVersions.v1);
+        }
+
+        const backbeatMetadataProxy = this.clientManager.getBackbeatMetadataProxy(
+            this._accountIdCache.get(task.canonicalId));
+        if (!backbeatMetadataProxy) {
+            log.error('failed to obtain a backbeat client; skipping index check');
+            return process.nextTick(cb, null, lifecycleTaskVersions.v1);
+        }
+
+        return backbeatMetadataProxy.getBucketIndexes(task.bucketName, log, (err, bucketIndexes) => {
+            if (err) {
+                log.warn('unable to retrieve indexing info', {
+                    bucket: task.bucketName,
+                    error: err,
+                });
+
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
+            const isV2 = indexesForFeature.lifecycle.v2.every(
+                idx => bucketIndexes.some(bidx => bidx.name === idx.name)
+            );
+
+            if (isV2) {
+                return cb(null, lifecycleTaskVersions.v2);
+            }
+
+            if (this.activeIndexingJobs.length >= this.lcConfig.conductor.concurrentIndexesBuildLimit ||
+                this.activeIndexingJobs.some(j => (j.bucket === task.bucketName))) {
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
+            this.activeIndexingJobs.push({
+                bucket: task.bucketName,
+                indexes: indexesForFeature.lifecycle.v2,
+            });
+
+            return backbeatMetadataProxy.putBucketIndexes(
+                task.bucketName,
+                indexesForFeature.lifecycle.v2,
+                log,
+                err => {
+                    if (err) {
+                        log.warn('unable to create lifecycle indexes', {
+                            bucket: task.bucketName,
+                            error: err,
+                        });
+                    }
+                    return cb(null, lifecycleTaskVersions.v1);
+                });
+        });
+    }
+
+    _taskToMessage(task, taskVersion) {
+        return {
+            message: JSON.stringify({
+                action: 'processObjects',
+                target: {
+                    bucket: task.bucketName,
+                    owner: task.canonicalId,
+                    accountId: this._accountIdCache.get(task.canonicalId),
+                    taskVersion,
+                },
+                details: {},
+            }),
+        };
+    }
+
+    _getAccountIds(unknownCanonicalIds, log, cb) {
+        async.eachLimit(
+            unknownCanonicalIds,
+            10,
+            (canonicalId, done) => {
+                this.vaultClientWrapper.getAccountIds([canonicalId], (err, accountIds) => {
+                    // TODO: BB-344 fixes me
+                    // LifecycleMetrics.onVaultRequest(this.logger, 'getAccountIds', err);
+                    if (err) {
+                        if (err.NoSuchEntity) {
+                            log.error('canonical id does not exist', { error: err, canonicalId });
+                            this._accountIdCache.miss(canonicalId);
+                        } else {
+                            log.error('could not get account id', { error: err, canonicalId });
+                        }
+
+                        // don't propagate the error, to avoid interrupting the whole cargo
+                        return done();
+                    }
+
+                    this._accountIdCache.set(canonicalId, accountIds[canonicalId]);
+
+                    return done();
+                });
+            },
+            cb);
+    }
+
+    _createBucketTaskMessages(tasks, log, cb) {
+        async.mapLimit(tasks, 10, (t, taskDone) => {
+            if (!this.activeIndexingJobsRetrieved) {
+                return process.nextTick(taskDone, null, this._taskToMessage(t, lifecycleTaskVersions.v1));
+            }
+
+            return this._indexesGetOrCreate(t, log, (err, taskVersion) => {
+                if (err) {
+                    // should not happen as indexes methods would
+                    // ignore the errors and fallback to v1 listing
+                    return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1));
+                }
+                return taskDone(null, this._taskToMessage(t, taskVersion));
+            });
+        },
+        cb);
+    }
+
     processBuckets(cb) {
         const log = this.logger.newRequestLogger();
         const start = new Date();
@@ -172,75 +327,44 @@ class LifecycleConductor {
                     .filter(c => !this._accountIdCache.isKnown(c))
             );
 
-            return async.eachLimit(
-                unknownCanonicalIds,
-                10,
-                (canonicalId, done) => {
-                    this.vaultClientWrapper.getAccountIds([canonicalId], (err, accountIds) => {
-                        // TODO: BB-344 fixes me
-                        // LifecycleMetrics.onVaultRequest(this.logger, 'getAccountIds', err);
-                        if (err) {
-                            if (err.NoSuchEntity) {
-                                log.error('canonical id does not exist', { error: err, canonicalId });
-                                this._accountIdCache.miss(canonicalId);
-                            } else {
-                                log.error('could not get account id', { error: err, canonicalId });
-                            }
-
-                            // don't propagate the error, to avoid interrupting the whole cargo
-                            return done();
+            return async.waterfall([
+                // ignore error, it has been reported before and should not stop the whole cargo
+                next => this._getAccountIds(unknownCanonicalIds, log,
+                    () => next(null, tasks.filter(t => {
+                        if (!this._accountIdCache.has(t.canonicalId)) {
+                            log.warn('skipping bucket, unknown canonical id', {
+                                bucketName: t.bucketName,
+                                canonicalId: t.canonicalId,
+                            });
+                            return false;
                         }
+                        return true;
+                    }))),
+                (tasksWithAccountId, next) => this._createBucketTaskMessages(tasksWithAccountId, log, next),
+            ],
+            (err, messages) => {
+                log.info('bucket push progress', {
+                    nBucketsQueued,
+                    bucketsInCargo: tasks.length,
+                    kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
+                    kafkaEnqueueRateHz: Math.round(nBucketsQueued * 1000 / (new Date() - start)),
+                });
 
-                        this._accountIdCache.set(canonicalId, accountIds[canonicalId]);
+                this._accountIdCache.expireOldest();
 
-                        return done();
-                    });
-                },
-                () => {
-                    // ignore error, it has been reported before and should not stop the whole cargo
-                    const messages = tasks
-                        .filter(t => {
-                            if (!this._accountIdCache.has(t.canonicalId)) {
-                                log.warn('skipping bucket, unknown canonical id', {
-                                    bucketName: t.bucketName,
-                                    canonicalId: t.canonicalId,
-                                });
-                                return false;
-                            }
-                            return true;
-                        })
-                        .map(t => ({
-                            message: JSON.stringify({
-                                action: 'processObjects',
-                                target: {
-                                    bucket: t.bucketName,
-                                    owner: t.canonicalId,
-                                    accountId: this._accountIdCache.get(t.canonicalId),
-                                },
-                                details: {},
-                            }),
-                        }));
-
-                    log.info('bucket push progress', {
-                        nBucketsQueued,
-                        bucketsInCargo: tasks.length,
-                        kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
-                        kafkaEnqueueRateHz: Math.round(nBucketsQueued * 1000 / (new Date() - start)),
-                    });
-
-                    this._accountIdCache.expireOldest();
-
-                    return this._producer.send(messages, (err, res) => {
-                        messageDeliveryReports += messages.length;
-                        LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, messages.length);
-                        done(err, res);
-                    });
-                }
-            );
+                return this._producer.send(messages, (err, res) => {
+                    messageDeliveryReports += messages.length;
+                    LifecycleMetrics.onKafkaPublish(log, 'BucketTopic', 'conductor', err, messages.length);
+                    done(err, res);
+                });
+            });
         });
 
         async.waterfall([
             next => this._controlBacklog(next),
+            // error retrieving in progress jobs should not stop the current batch
+            // fallback to V1 listings
+            next => this._indexesGetInProgressJobs(log, () => next(null)),
             next => {
                 this._batchInProgress = true;
                 log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
@@ -264,6 +388,8 @@ class LifecycleConductor {
                 return;
             }
 
+            this.activeIndexingJobsRetrieved = false;
+            this.activeIndexingJobs = [];
             this._batchInProgress = false;
             const unknownCanonicalIds = this._accountIdCache.getMisses();
 
@@ -432,7 +558,10 @@ class LifecycleConductor {
             },
             (cursor, done) => {
                 async.during(
-                    test => process.nextTick(() => cursor.hasNext(test)),
+                    test => process.nextTick(
+                        () => cursor.hasNext()
+                            .then(res => test(null, res))
+                            .catch(test)),
                     next => {
                         const breakerState = this._circuitBreaker.state;
                         const queueInfo = {
@@ -451,34 +580,34 @@ class LifecycleConductor {
                             });
                         }
 
-                        return cursor.next((err, doc) => {
-                            if (err) {
+                        return cursor.next()
+                            .then(doc => {
+                                // reverse-lookup the name in case it is special and has been
+                                // rewritten by the client
+                                const name = this._mongodbClient.getCollection(doc._id).collectionName;
+                                if (!this._mongodbClient._isSpecialCollection(name)) {
+                                    queue.push({
+                                        bucketName: name,
+                                        canonicalId: doc.value.owner,
+                                    });
+                                    nEnqueued += 1;
+                                    lastSentId = doc._id;
+
+                                    if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER === 0) {
+                                        return checkpointBucket(doc._id, next);
+                                    }
+                                    // fallthrough
+                                }
+                                return next();
+                            })
+                            .catch(err => {
                                 log.info('error listing next bucket', {
                                     ...queueInfo,
                                     error: err,
                                 });
 
                                 return setTimeout(next, 500);
-                            }
-
-                            // reverse-lookup the name in case it is special and has been
-                            // rewritten by the client
-                            const name = this._mongodbClient.getCollection(doc._id).collectionName;
-                            if (!this._mongodbClient._isSpecialCollection(name)) {
-                                queue.push({
-                                    bucketName: name,
-                                    canonicalId: doc.value.owner,
-                                });
-                                nEnqueued += 1;
-                                lastSentId = doc._id;
-
-                                if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER === 0) {
-                                    return checkpointBucket(doc._id, next);
-                                }
-                                // fallthrough
-                            }
-                            return next();
-                        });
+                            });
                     },
                     err => {
                         if (!err) {
@@ -640,6 +769,8 @@ class LifecycleConductor {
         startCircuitBreakerMetricsExport(this._circuitBreaker, 'lifecycle_conductor');
 
         this.vaultClientWrapper.init();
+        this.clientManager.initSTSConfig();
+        this.clientManager.initCredentialsManager();
         return async.series([
             next => this._setupProducer(next),
             next => this._setupZookeeperClient(next),
