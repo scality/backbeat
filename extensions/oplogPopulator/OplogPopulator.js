@@ -1,4 +1,5 @@
 const joi = require('joi');
+const semver = require('semver');
 const { errors } = require('arsenal');
 const { MongoClient } = require('mongodb');
 const constants = require('./constants');
@@ -31,7 +32,7 @@ class OplogPopulator {
      * @param {Object} params.config - oplog populator config
      * @param {Object} params.mongoConfig - mongo connection config
      * @param {Object} params.mongoConfig.authCredentials - mongo auth credentials
-     * @param {Object} params.mongoConfig.replicaSetHosts - mongo creplication hosts
+     * @param {Object} params.mongoConfig.replicaSetHosts - mongo replication hosts
      * @param {Object} params.mongoConfig.writeConcern - mongo write concern
      * @param {Object} params.mongoConfig.replicaSet - mongo replica set
      * @param {Object} params.mongoConfig.readPreference - mongo read preference
@@ -78,6 +79,12 @@ class OplogPopulator {
                  useNewUrlParser: true,
                  useUnifiedTopology: true,
             });
+            // get mongodb version
+            const res = await client.admin().command({
+                getParameter: 1,
+                featureCompatibilityVersion: 1,
+            });
+            this._mongoVersion = res.featureCompatibilityVersion.version;
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
                 ignoreUndefined: true,
@@ -231,6 +238,7 @@ class OplogPopulator {
             pipeline: changeStreamPipeline,
             handler: this._handleChangeStreamChangeEvent.bind(this),
             throwOnError: false,
+            useStartAfter: semver.gte(!this._mongoVersion, '4.2.0'),
         });
         // start watching metastore
         this._changeStreamWrapper.start();
