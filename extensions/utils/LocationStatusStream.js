@@ -1,8 +1,9 @@
 const { MongoClient } = require('mongodb');
 const async = require('async');
+const semver = require('semver');
 
 const { locationStatusCollection } = require('../../lib/constants');
-const { constructConnectionString } = require('./MongoUtils');
+const { constructConnectionString, getMongoVersion } = require('./MongoUtils');
 const ChangeStream = require('../../lib/wrappers/ChangeStream');
 
 /**
@@ -34,6 +35,7 @@ class LocationStatusStream {
         this._serviceName = serviceName;
         this._mongoConfig = mongoConfig;
         this._mongoClient = null;
+        this._mongoVersion = null;
         this._locationStatusColl = null;
         this._pauseServiceForLocation = pauseFn;
         this._resumeServiceForLocation = resumeFn;
@@ -81,7 +83,19 @@ class LocationStatusStream {
             this._log.info('Connected to MongoDB', {
                 method: 'ServiceStatusManager._setupMongoClient',
             });
-            return cb();
+            // get mongodb version
+            getMongoVersion(this._mongoClient, (err, version) => {
+                if (err) {
+                    this._log.error('Could not get MongoDB version', {
+                        method: 'ServiceStatusManager._setupMongoClient',
+                        error: err.message,
+                    });
+                    return cb(err);
+                }
+                this._mongoVersion = version;
+                return cb();
+            });
+            return undefined;
         });
     }
 
@@ -131,6 +145,7 @@ class LocationStatusStream {
             pipeline: changeStreamPipeline,
             handler: this._handleChangeStreamChangeEvent.bind(this),
             throwOnError: false,
+            useStartAfter: semver.gte(this._mongoVersion, '4.2.0'),
         });
         // start watching metastore
         this._changeStreamWrapper.start();
