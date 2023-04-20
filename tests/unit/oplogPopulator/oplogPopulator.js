@@ -115,23 +115,35 @@ describe('OplogPopulator', () => {
             const dbStub = sinon.stub().returns({
                 collection: collectionStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect')
-                .resolves({ db: dbStub });
+            const adminCommandStub = sinon.stub().returns({
+                featureCompatibilityVersion: {
+                    version: '4.3.17',
+                }
+            });
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({
+                db: dbStub,
+                admin: sinon.stub().returns({ command: adminCommandStub }),
+            });
             await oplogPopulator._setupMongoClient()
-            .then(() => {
-                const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
-                    'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true,
-                        useUnifiedTopology: true,
-                    }
-                ));
-                assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
-                assert(collectionStub.calledOnceWith('__metastore'));
-            }).catch(err => assert.ifError(err));
+                .then(() => {
+                    const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
+                        'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
+                    assert(mongoConnectStub.calledOnceWith(
+                        mongoUrl,
+                        {
+                            replicaSet: 'rs0',
+                            useNewUrlParser: true,
+                            useUnifiedTopology: true,
+                        }
+                    ));
+                    assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
+                    assert(collectionStub.calledOnceWith('__metastore'));
+                    assert(adminCommandStub.calledOnceWith({
+                        getParameter: 1,
+                        featureCompatibilityVersion: 1,
+                    }));
+                    assert.equal(oplogPopulator._mongoVersion, '4.3.17');
+                }).catch(err => assert.ifError(err));
         });
 
         it('should fail when mongo connection fails', async () => {
