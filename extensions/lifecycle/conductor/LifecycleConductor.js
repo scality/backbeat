@@ -192,7 +192,7 @@ class LifecycleConductor {
     }
 
     _indexesGetOrCreate(task, log, cb) {
-        if (this._bucketSource !== 'mongodb') {
+        if (this._bucketSource !== 'mongodb' || !task.isLifecycled) {
             return process.nextTick(cb, null, lifecycleTaskVersions.v1);
         }
 
@@ -552,7 +552,7 @@ class LifecycleConductor {
                     .find(
                         entry ? { _id: { $gt: entry } } : {}
                     )
-                    .project({ '_id': 1, 'value.owner': 1 });
+                    .project({ '_id': 1, 'value.owner': 1, 'value.lifecycleConfiguration': 1 });
 
                 return done(null, cursor);
             },
@@ -589,6 +589,7 @@ class LifecycleConductor {
                                     queue.push({
                                         bucketName: name,
                                         canonicalId: doc.value.owner,
+                                        isLifecycled: !!doc.value.lifecycleConfiguration,
                                     });
                                     nEnqueued += 1;
                                     lastSentId = doc._id;
