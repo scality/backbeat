@@ -238,7 +238,7 @@ class OplogPopulator {
             pipeline: changeStreamPipeline,
             handler: this._handleChangeStreamChangeEvent.bind(this),
             throwOnError: false,
-            useStartAfter: semver.gte(!this._mongoVersion, '4.2.0'),
+            useStartAfter: semver.gte(this._mongoVersion, '4.2.0'),
         });
         // start watching metastore
         this._changeStreamWrapper.start();
