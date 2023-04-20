@@ -21,6 +21,7 @@ describe('ChangeStream', () => {
             handler: () => {},
             pipeline: [],
             throwOnError: false,
+            useStartAfter: false,
         });
     });
 
@@ -172,15 +173,41 @@ describe('ChangeStream', () => {
             });
         });
 
-        it('Should resume change stream using resumeToken', done => {
+        it('should use startAfter to resume change stream', done => {
             const watchStub = sinon.stub().returns(new events.EventEmitter());
-            wrapper._collection = {
-                watch: watchStub,
-            };
+            const wrapper = new ChangeStream({
+                logger,
+                collection: {
+                    watch: watchStub,
+                },
+                handler: () => { },
+                pipeline: [],
+                throwOnError: false,
+                useStartAfter: true,
+            });
+            assert.equal(wrapper._resumeField, 'startAfter');
             wrapper._resumeToken = '1234';
             const changeStreamParams = {
                 fullDocument: 'updateLookup',
                 startAfter: '1234',
+            };
+            assert.doesNotThrow(() => {
+                wrapper.start();
+                assert(watchStub.calledOnceWith([], changeStreamParams));
+                return done();
+            });
+        });
+
+        it('should resume change stream using resumeToken', done => {
+            const watchStub = sinon.stub().returns(new events.EventEmitter());
+            wrapper._collection = {
+                watch: watchStub,
+            };
+            assert.equal(wrapper._resumeField, 'resumeAfter');
+            wrapper._resumeToken = '1234';
+            const changeStreamParams = {
+                fullDocument: 'updateLookup',
+                resumeAfter: '1234',
             };
             assert.doesNotThrow(() => {
                 wrapper.start();
