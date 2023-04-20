@@ -79,12 +79,6 @@ class OplogPopulator {
                  useNewUrlParser: true,
                  useUnifiedTopology: true,
             });
-            // get mongodb version
-            const res = await client.admin().command({
-                getParameter: 1,
-                featureCompatibilityVersion: 1,
-            });
-            this._mongoVersion = res.featureCompatibilityVersion.version;
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
                 ignoreUndefined: true,
@@ -94,6 +88,12 @@ class OplogPopulator {
             this._logger.info('Connected to MongoDB', {
                 method: 'OplogPopulator._setupMongoClient',
             });
+            // get mongodb version
+            const res = await client.admin().command({
+                getParameter: 1,
+                featureCompatibilityVersion: 1,
+            });
+            this._mongoVersion = res.featureCompatibilityVersion.version;
             return undefined;
         } catch (err) {
             this._logger.error('Could not connect to MongoDB', {
