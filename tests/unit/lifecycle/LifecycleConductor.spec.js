@@ -22,6 +22,7 @@ const { BackbeatMetadataProxyMock } = require('../mocks');
 const testTask = {
     bucketName: 'testbucket',
     canonicalId: 'testid',
+    isLifecycled: true,
 };
 
 describe('Lifecycle Conductor', () => {
@@ -54,6 +55,15 @@ describe('Lifecycle Conductor', () => {
         it('should return v1 for zookeeper bucket sources', () => {
             conductor._bucketSource = 'zookeeper';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+            });
+        });
+
+        it('should return v1 for non-lifecyled buckets', () => {
+            conductor._bucketSource = 'zookeeper';
+            const task = Object.assign({}, testTask, { isLifecyled: false });
+            conductor._indexesGetOrCreate(task, log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
             });
