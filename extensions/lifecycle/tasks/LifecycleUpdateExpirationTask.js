@@ -151,6 +151,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 objMD.setArchive({
                     archiveInfo: archive.archiveInfo,
                 });
+                objMD.setAmzRestore();
                 objMD.setOriginOp('s3:ObjectRestore:Delete');
                 this._putMetadata(entry, objMD, log, err => next(err, objMD));
             },
