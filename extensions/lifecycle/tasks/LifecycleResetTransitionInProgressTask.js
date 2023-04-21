@@ -2,7 +2,7 @@
 
 const async = require('async');
 
-const errors = require('arsenal');
+const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
