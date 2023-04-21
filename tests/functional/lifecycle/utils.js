@@ -144,7 +144,7 @@ class KeyMock {
         this.sourceLocation = sourceLocation;
     }
 
-    nonCurrent({ keyName, versionId, daysEarlier }) {
+    nonCurrent({ keyName, versionId, daysEarlier, size }) {
         const currentDate = Date.now();
         const staleDate = (new Date(currentDate - (daysEarlier * ONE_DAY_IN_SEC))).toISOString();
         return {
@@ -152,7 +152,7 @@ class KeyMock {
             LastModified: '2023-03-13T16:43:59.200Z',
             ETag: 'd41d8cd98f00b204e9800998ecf8427e',
             Owner: this.owner,
-            Size: 64,
+            Size: size !== undefined ? size : 64,
             StorageClass: 'STANDARD',
             staleDate,
             VersionId: versionId,
@@ -162,7 +162,7 @@ class KeyMock {
         };
     }
 
-    current({ keyName, daysEarlier, tagSet }) {
+    current({ keyName, daysEarlier, tagSet, size }) {
         const currentDate = Date.now();
         const lastModified = (new Date(currentDate - (daysEarlier * ONE_DAY_IN_SEC))).toISOString();
         return {
@@ -170,7 +170,7 @@ class KeyMock {
             LastModified: lastModified,
             ETag: 'd41d8cd98f00b204e9800998ecf8427e',
             Owner: this.owner,
-            Size: 64,
+            Size: size !== undefined ? size : 64,
             StorageClass: 'STANDARD',
             TagSet: tagSet,
             DataStoreName: this.sourceLocation,
