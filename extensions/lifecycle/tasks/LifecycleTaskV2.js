@@ -292,7 +292,8 @@ class LifecycleTaskV2 extends LifecycleTask {
             this._checkAndApplyExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
-        if (rules.Transition) {
+        if (rules.Transition &&
+            !this._bb383SkipDMFTransition(obj, rules.Transition.StorageClass, log)) {
             return this._applyTransitionRule({
                 owner: bucketData.target.owner,
                 accountId: bucketData.target.accountId,
