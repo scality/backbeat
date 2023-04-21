@@ -32,6 +32,8 @@ describe('Lifecycle Conductor', () => {
 
     beforeEach(() => {
         lcc = JSON.parse(JSON.stringify(lcConfig));
+        lcc.forceLegacyListing = false;
+        lcc.autoCreateIndexes = true;
 
         conductor = new LifecycleConductor(
             zkConfig, kafkaConfig, lcc, repConfig, s3Config);

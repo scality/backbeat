@@ -14,6 +14,8 @@ const joiSchema = joi.object({
     objectTasksTopic: joi.string().required(),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
+    forceLegacyListing: joi.boolean().default(true),
+    autoCreateIndexes: joi.boolean().default(false),
     conductor: {
         auth: inheritedAuthJoi,
         bucketSource: joi.string().
@@ -41,7 +43,6 @@ const joiSchema = joi.object({
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
-        forceLegacyListing: joi.boolean().default(false),
         circuitBreaker: joi.object().optional(),
     },
     objectProcessor: {

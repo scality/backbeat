@@ -222,7 +222,8 @@ class LifecycleConductor {
             }
 
             if (this.activeIndexingJobs.length >= this.lcConfig.conductor.concurrentIndexesBuildLimit ||
-                this.activeIndexingJobs.some(j => (j.bucket === task.bucketName))) {
+                this.activeIndexingJobs.some(j => (j.bucket === task.bucketName)) ||
+                !this.lcConfig.autoCreateIndexes) {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
@@ -291,21 +292,19 @@ class LifecycleConductor {
     }
 
     _createBucketTaskMessages(tasks, log, cb) {
-        async.mapLimit(tasks, 10, (t, taskDone) => {
-            if (!this.activeIndexingJobsRetrieved) {
-                return process.nextTick(taskDone, null, this._taskToMessage(t, lifecycleTaskVersions.v1));
-            }
+        if (!this.lcConfig.forceLegacyListing || !this.activeIndexingJobsRetrieved) {
+            return process.nextTick(cb, null, tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1)));
+        }
 
-            return this._indexesGetOrCreate(t, log, (err, taskVersion) => {
+        return async.mapLimit(tasks, 10, (t, taskDone) =>
+            this._indexesGetOrCreate(t, log, (err, taskVersion) => {
                 if (err) {
                     // should not happen as indexes methods would
                     // ignore the errors and fallback to v1 listing
                     return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1));
                 }
                 return taskDone(null, this._taskToMessage(t, taskVersion));
-            });
-        },
-        cb);
+            }), cb);
     }
 
     processBuckets(cb) {
