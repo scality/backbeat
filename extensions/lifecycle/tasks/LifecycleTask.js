@@ -893,8 +893,8 @@ class LifecycleTask extends BackbeatTask {
         );
         const currentDate = this._lifecycleDateTime.getCurrentDate();
 
-        if (rules.Expiration.Date
-            && rules.Expiration.Date < currentDate) {
+        if (rules.Expiration.Date &&
+            rules.Expiration.Date < currentDate) {
             // expiration date passed for this object
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
@@ -918,7 +918,7 @@ class LifecycleTask extends BackbeatTask {
             return true;
         }
         if (rules.Expiration.Days !== undefined &&
-        daysSinceInitiated >= rules.Expiration.Days) {
+            daysSinceInitiated >= rules.Expiration.Days) {
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
                     origin: 'lifecycle',
@@ -1328,7 +1328,9 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} version.LastModified - last modified date of version
      * @param {object} rules - most applicable rules from `_getApplicableRules`
      * @param {Logger.newRequestLogger} log - logger object
-     * @return {undefined}
+     * @return {boolean} used to know if a rule has been applied already.
+     *   If this rule has been applied to the object or version, other rules
+     *   (i.e. transition) should not apply.
      */
     _checkAndApplyNCVExpirationRule(bucketData, version, rules, log) {
         const staleDate = version.staleDate;
@@ -1350,7 +1352,7 @@ class LifecycleTask extends BackbeatTask {
                 });
                 verToExpire = this._ncvHeapAdd(bucketData.target.bucket, rules, version);
                 if (verToExpire === null) {
-                    return;
+                    return false;
                 }
             }
 
@@ -1373,8 +1375,9 @@ class LifecycleTask extends BackbeatTask {
                     }, entry.getLogInfo()));
                 }
             });
-            return;
+            return true;
         }
+        return false;
     }
 
     _headLocation(params, locations, log, cb) {
@@ -1435,9 +1438,8 @@ class LifecycleTask extends BackbeatTask {
             // Expiration and NoncurrentVersionExpiration should be priority
             // AbortIncompleteMultipartUpload should run regardless since
             // it's in its own category
-            if (rules.Expiration) {
-                this._checkAndApplyExpirationRule(bucketData, object, rules,
-                    log);
+            if (rules.Expiration &&
+                this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
                 return done();
             }
             if (rules.Transition
@@ -1489,8 +1491,8 @@ class LifecycleTask extends BackbeatTask {
             return done(errors.InternalError.customizeDescription(errMsg));
         }
 
-        if (rules.NoncurrentVersionExpiration) {
-            this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log);
+        if (rules.NoncurrentVersionExpiration &&
+            this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log)) {
             return done();
         }
 
@@ -1529,9 +1531,8 @@ class LifecycleTask extends BackbeatTask {
                 listOfVersions, rules, log, done);
         }
         // if Expiration rule exists, apply it here to a Version
-        if (rules.Expiration) {
-            this._checkAndApplyExpirationRule(bucketData, version, rules,
-                log);
+        if (rules.Expiration &&
+            this._checkAndApplyExpirationRule(bucketData, version, rules, log)) {
             return done();
         }
         if (rules.Transition &&

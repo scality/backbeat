@@ -288,10 +288,8 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @return {undefined}
      */
     _compareCurrent(bucketData, obj, rules, log, cb) {
-        if (rules.Expiration) {
-            this._checkAndApplyExpirationRule(bucketData, obj, rules,
-                log);
-
+        if (rules.Expiration &&
+            this._checkAndApplyExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
         if (rules.Transition) {
@@ -333,8 +331,8 @@ class LifecycleTaskV2 extends LifecycleTask {
             return process.nextTick(() => cb(errors.InternalError.customizeDescription(errMsg)));
         }
 
-        if (rules.NoncurrentVersionExpiration) {
-            this._checkAndApplyNCVExpirationRule(bucketData, obj, rules, log);
+        if (rules.NoncurrentVersionExpiration &&
+            this._checkAndApplyNCVExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
 
