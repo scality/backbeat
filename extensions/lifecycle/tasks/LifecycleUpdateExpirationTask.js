@@ -4,6 +4,7 @@ const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const locations = require('../../../conf/locationConfig.json') || {};
 
 class LifecycleUpdateExpirationTask extends BackbeatTask {
     /**
@@ -145,6 +146,11 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
         async.waterfall([
             next => this._getMetadata(entry, log, next),
             (objMD, next) => {
+                const coldLocation = entry.getAttribute('target.location') ||
+                    // If location not specified, use the first (and only) location
+                    // This is a temporary fix, until Sorbet is fixed to provide the information
+                    Object.keys(locations).find(name => locations[name].isCold);
+
                 const archive = objMD.getArchive();
                 // Reset archive flags to no longer
                 // show it as restored
@@ -152,6 +158,9 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     archiveInfo: archive.archiveInfo,
                 });
                 objMD.setAmzRestore();
+                objMD.setDataStoreName(coldLocation);
+                objMD.setAmzStorageClass(coldLocation);
+                objMD.setTransitionInProgress(false);
                 objMD.setOriginOp('s3:ObjectRestore:Delete');
                 this._putMetadata(entry, objMD, log, err => next(err, objMD));
             },
