@@ -435,6 +435,103 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         });
     });
 
+    it('should publish one transition object entry if object is eligible with later expiration', done => {
+        const rules = [
+            {
+                Expiration: { Days: 3 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const { ETag, LastModified } = key;
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(rules, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(listLifecycleParams.ExcludedDataStoreName === undefined);
+                assert(!!listLifecycleParams.BeforeDate);
+
+                // test that the entry is valid and pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 1);
+                const firstEntry = kafkaEntries[0];
+                testKafkaEntry.expectObjectTransitionEntry(firstEntry, {
+                    keyName,
+                    lastModified: LastModified,
+                    eTag: ETag,
+                    contentLength,
+                    sourceLocation,
+                    destinationLocation,
+                });
+                return done();
+            });
+    });
+
+    it('should publish one expiration object entry if object is eligible with later transition', done => {
+        const rules = [
+            {
+                Expiration: { Days: 2 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 3, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const { LastModified } = key;
+
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(rules, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert(listLifecycleParams.ExcludedDataStoreName === undefined);
+
+                // test that the entry is valid and pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 1);
+                const firstEntry = kafkaEntries[0];
+                testKafkaEntry.expectObjectExpirationEntry(firstEntry, {
+                    keyName,
+                    lastModified: LastModified,
+                });
+                return done();
+            });
+    });
+
     it('should not publish any object entry if object is not eligible with Transitions rule', done => {
         const transitionRule = [
             {

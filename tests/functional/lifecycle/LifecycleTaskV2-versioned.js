@@ -462,6 +462,116 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
+    it('should publish one transition object entry if object is eligible with later expiration', done => {
+        const rules = [
+            {
+                Expiration: { Days: 3 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const { ETag, LastModified } = key;
+
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(rules, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert(listLifecycleParams.ExcludedDataStoreName === undefined);
+
+                // test that the entry is valid and pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 2);
+                const transitionEntry = kafkaEntries.find(entry => entry.topicName === dataMoverTopic);
+                testKafkaEntry.expectObjectTransitionEntry(transitionEntry, {
+                    keyName,
+                    lastModified: LastModified,
+                    eTag: ETag,
+                    contentLength,
+                    sourceLocation,
+                    destinationLocation,
+                });
+                const bucketEntry = kafkaEntries.find(entry => entry.topicName === bucketTopic);
+                testKafkaEntry.expectBucketEntry(bucketEntry, {
+                    hasBeforeDate: true,
+                    prefix: '',
+                    listType: 'orphan',
+                });
+                return done();
+            });
+    });
+
+    it('should publish one expiration object entry if object is eligible with later transition', done => {
+        const rules = [
+            {
+                Expiration: { Days: 2 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 3, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const { LastModified } = key;
+
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(rules, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert(listLifecycleParams.ExcludedDataStoreName === undefined);
+
+                // test that the entry is valid and pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 2);
+                const expirationEntry = kafkaEntries.find(entry => entry.topicName === objectTopic);
+                testKafkaEntry.expectObjectExpirationEntry(expirationEntry, {
+                    keyName,
+                    lastModified: LastModified,
+                });
+                const bucketEntry = kafkaEntries.find(entry => entry.topicName === bucketTopic);
+                testKafkaEntry.expectBucketEntry(bucketEntry, {
+                    hasBeforeDate: true,
+                    prefix: '',
+                    listType: 'orphan',
+                });
+                return done();
+            });
+    });
+
     it('should not expire delete marker if not old enough to satisfy the age criteria', done => {
         const expitationRule = [
             {
