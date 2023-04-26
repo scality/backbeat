@@ -4,6 +4,7 @@ const sinon = require('sinon');
 const events = require('events');
 const MongoClient = require('mongodb').MongoClient;
 
+const ChangeStream = require('../../../lib/wrappers/ChangeStream');
 const NotificationConfigManager
     = require('../../../extensions/notification/NotificationConfigManager');
 const { errors } = require('arsenal');
@@ -100,9 +101,13 @@ describe('NotificationConfigManager ::', () => {
         it('Should setup the mongo client and get metastore collection', () => {
             const manager = new NotificationConfigManager(params);
             const getCollectionStub = sinon.stub();
+            const mongoCommandStub = sinon.stub().returns({
+                version: '4.3.17',
+            });
             const getDbStub = sinon.stub().returns({
                 collection: getCollectionStub,
-                });
+                command: mongoCommandStub,
+            });
             const mongoConnectStub = sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
                 db: getDbStub,
             });
@@ -111,6 +116,10 @@ describe('NotificationConfigManager ::', () => {
                 assert(mongoConnectStub.calledOnce);
                 assert(getDbStub.calledOnce);
                 assert(getCollectionStub.calledOnce);
+                assert(mongoCommandStub.calledOnceWith({
+                    buildInfo: 1,
+                }));
+                assert.equal(manager._mongoVersion, '4.3.17');
             });
         });
 
@@ -271,87 +280,37 @@ describe('NotificationConfigManager ::', () => {
     });
 
     describe('_setMetastoreChangeStream ::', () =>  {
-        it('Should create and listen to the metastore change stream', done => {
+         it('should use resumeAfter with mongo 3.6', () => {
             const manager = new NotificationConfigManager(params);
+            manager._mongoVersion = '3.6.2';
             manager._metastore = {
-                watch: () => new events.EventEmitter(),
-                findOne: () => (
-                    {
-                        value: {
-                            notificationConfiguration,
-                        }
-                    }),
+                watch: sinon.stub().returns(new events.EventEmitter()),
             };
-            try {
-                manager._setMetastoreChangeStream();
-                assert(manager._metastoreChangeStream instanceof events.EventEmitter);
-                const changeHandlers = events.getEventListeners(manager._metastoreChangeStream, 'change');
-                const errorHandlers = events.getEventListeners(manager._metastoreChangeStream, 'error');
-                assert.strictEqual(changeHandlers.length, 1);
-                assert.strictEqual(errorHandlers.length, 1);
-            } catch (error) {
-                assert.ifError(error);
-            }
-            return done();
+            manager._setMetastoreChangeStream();
+            assert(manager._metastoreChangeStream instanceof ChangeStream);
+            assert.equal(manager._metastoreChangeStream._resumeField, 'resumeAfter');
         });
 
-        it('Should fail if it fails to create change stream', done => {
+        it('should use resumeAfter with mongo 4.0', () => {
             const manager = new NotificationConfigManager(params);
+            manager._mongoVersion = '4.0.7';
             manager._metastore = {
-                watch: sinon.stub().throws(errors.InternalError),
-                findOne: () => (
-                    {
-                        value: {
-                            notificationConfiguration,
-                        }
-                    }),
+                watch: sinon.stub().returns(new events.EventEmitter()),
             };
-            assert.throws(() => manager._setMetastoreChangeStream());
-            return done();
-        });
-    });
-
-    describe('_handleChangeStreamErrorEvent ::', () =>  {
-        it('Should reset change steam on error without closing it (already closed)', async () => {
-            const manager = new NotificationConfigManager(params);
-            const removeEventListenerStub = sinon.stub();
-            const closeStub = sinon.stub();
-            const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
-            manager._metastoreChangeStream = {
-                removeListener: removeEventListenerStub,
-                isClosed: () => true,
-                close: closeStub,
-            };
-            await manager._handleChangeStreamErrorEvent(err => {
-                assert.ifError(err);
-                assert(setMetastoreChangeStreamStub.calledOnce);
-                assert(closeStub.notCalled);
-                assert(removeEventListenerStub.calledWith('change',
-                    manager._handleChangeStreamChangeEvent.bind(manager)));
-                assert(removeEventListenerStub.calledWith('error',
-                    manager._handleChangeStreamErrorEvent.bind(manager)));
-            });
+            manager._setMetastoreChangeStream();
+            assert(manager._metastoreChangeStream instanceof ChangeStream);
+            assert.equal(manager._metastoreChangeStream._resumeField, 'resumeAfter');
         });
 
-        it('Should close then reset the change steam on error', async () => {
+        it('should use startAfter with mongo 4.2', () => {
             const manager = new NotificationConfigManager(params);
-            const removeEventListenerStub = sinon.stub();
-            const closeStub = sinon.stub();
-            const setMetastoreChangeStreamStub = sinon.stub(manager, '_setMetastoreChangeStream');
-            manager._metastoreChangeStream = {
-                removeListener: removeEventListenerStub,
-                isClosed: () => false,
-                close: closeStub,
+            manager._mongoVersion = '4.2.3';
+            manager._metastore = {
+                watch: sinon.stub().returns(new events.EventEmitter()),
             };
-            await manager._handleChangeStreamErrorEvent(err => {
-                assert.ifError(err);
-                assert(setMetastoreChangeStreamStub.calledOnce);
-                assert(closeStub.called);
-                assert(removeEventListenerStub.calledWith('change',
-                    manager._handleChangeStreamChangeEvent.bind(manager)));
-                assert(removeEventListenerStub.calledWith('error',
-                    manager._handleChangeStreamErrorEvent.bind(manager)));
-            });
+            manager._setMetastoreChangeStream();
+            assert(manager._metastoreChangeStream instanceof ChangeStream);
+            assert.equal(manager._metastoreChangeStream._resumeField, 'startAfter');
         });
     });
 
