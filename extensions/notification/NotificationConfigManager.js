@@ -1,10 +1,13 @@
 const joi = require('joi');
+const semver = require('semver');
 
 const { ZenkoMetrics } = require('arsenal').metrics;
 const LRUCache = require('arsenal').algorithms
     .cache.LRUCache;
 const MongoClient = require('mongodb').MongoClient;
+const ChangeStream = require('../../lib/wrappers/ChangeStream');
 const constants = require('./constants');
+const { constructConnectionString, getMongoVersion } = require('../utils/MongoUtils');
 
 const paramsJoi = joi.object({
     mongoConfig: joi.object().required(),
@@ -69,7 +72,7 @@ class NotificationConfigManager {
     /**
      * @constructor
      * @param {Object} params - constructor params
-     * @param {String} params.mongoConfig - config for connecting to mongo
+     * @param {Object} params.mongoConfig - mongoDB config
      * @param {Logger} params.logger - logger object
      */
     constructor(params) {
@@ -80,7 +83,6 @@ class NotificationConfigManager {
         this._mongoClient = null;
         this._metastore = null;
         this._metastoreChangeStream = null;
-        this._changeStreamResumeToken = null;
     }
 
     /**
@@ -90,22 +92,9 @@ class NotificationConfigManager {
      * @returns {undefined}
      */
     _setupMongoClient(cb) {
-        const { authCredentials, replicaSetHosts, replicaSet, database }
-            = this._mongoConfig;
-
-        let cred = '';
-        if (authCredentials &&
-            authCredentials.username &&
-            authCredentials.password) {
-            const username = encodeURIComponent(authCredentials.username);
-            const password = encodeURIComponent(authCredentials.password);
-            cred = `${username}:${password}@`;
-        }
-
-        this._mongoUrl = `mongodb://${cred}${replicaSetHosts}/`;
-        this._replicaSet = replicaSet;
-        MongoClient.connect(this._mongoUrl, {
-            replicaSet: this._replicaSet,
+        const mongoUrl = constructConnectionString(this._mongoConfig);
+        MongoClient.connect(mongoUrl, {
+            replicaSet: this._mongoConfig.replicaSet,
             useNewUrlParser: true,
         },
         (err, client) => {
@@ -120,11 +109,23 @@ class NotificationConfigManager {
                 method: 'NotificationConfigManager._setupMongoClient',
             });
             try {
-                this._mongoClient = client.db(database, {
+                this._mongoClient = client.db(this._mongoConfig.database, {
                     ignoreUndefined: true,
                 });
                 this._metastore = this._mongoClient.collection(constants.bucketMetastore);
-                return cb();
+                // get mongodb version
+                getMongoVersion(this._mongoClient, (err, version) => {
+                    if (err) {
+                        this._logger.error('Could not get MongoDB version', {
+                            method: 'NotificationConfigManager._setupMongoClient',
+                            error: err.message,
+                        });
+                        return cb(err);
+                    }
+                    this._mongoVersion = version;
+                    return cb();
+                });
+                return undefined;
             } catch (error) {
                 return cb(error);
             }
@@ -138,8 +139,6 @@ class NotificationConfigManager {
      * @returns {undefined}
      */
     _handleChangeStreamChangeEvent(change) {
-        // caching change stream resume token
-        this._changeStreamResumeToken = change._id;
         // invalidating cached notification configs
         const cachedConfig = this._cachedConfigs.get(change.documentKey._id);
         const bucketNotificationConfiguration = change.fullDocument ? change.fullDocument.value.
@@ -168,24 +167,6 @@ class NotificationConfigManager {
         this._logger.debug('Change stream event processed', {
             method: 'NotificationConfigManager._handleChangeStreamChange',
         });
-    }
-
-    /**
-     * Handler for change stream the error event
-     * it reestablishes the change stream when an error occurs
-     * @returns {undefined}
-     */
-    async _handleChangeStreamErrorEvent() {
-        this._logger.error('An error occured when listening to the change stream', {
-            method: 'NotificationConfigManager._setMetastoreChangeStream',
-        });
-        this._metastoreChangeStream.removeListener('change', this._handleChangeStreamChangeEvent.bind(this));
-        this._metastoreChangeStream.removeListener('error', this._handleChangeStreamErrorEvent.bind(this));
-        // closing and restarting the change stream
-        if (!this._metastoreChangeStream.isClosed()) {
-            await this._metastoreChangeStream.close();
-        }
-        this._setMetastoreChangeStream();
     }
 
     /**
@@ -223,20 +204,16 @@ class NotificationConfigManager {
                 },
             },
         ];
-        const changeStreamParams = { fullDocument: 'updateLookup' };
-        if (this._changeStreamResumeToken) {
-            /**
-             * using "startAfter" instead of "resumeAfter" to resume
-             * even after an invalid event
-             */
-            changeStreamParams.startAfter = this._changeStreamResumeToken;
-        }
-        this._metastoreChangeStream = this._metastore.watch(changeStreamPipeline, changeStreamParams);
-        this._metastoreChangeStream.on('change', this._handleChangeStreamChangeEvent.bind(this));
-        this._metastoreChangeStream.on('error', this._handleChangeStreamErrorEvent.bind(this));
-        this._logger.debug('Change stream set', {
-            method: 'NotificationConfigManager._setMetastoreChangeStream',
+        this._metastoreChangeStream = new ChangeStream({
+            logger: this._logger,
+            collection: this._metastore,
+            pipeline: changeStreamPipeline,
+            handler: this._handleChangeStreamChangeEvent.bind(this),
+            throwOnError: false,
+            useStartAfter: semver.gte(this._mongoVersion, '4.2.0'),
         });
+        // start watching metastore
+        this._metastoreChangeStream.start();
     }
 
     /**

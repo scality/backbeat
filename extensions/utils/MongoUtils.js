@@ -1,3 +1,5 @@
+const util = require('util');
+
 /**
  * Constructs mongo connection config
  * @param {Object} mongoConfig mongo connection config
@@ -29,6 +31,28 @@ function constructConnectionString(mongoConfig) {
     return url;
 }
 
+
+/**
+ * returns mongo version
+ * @param {MongoClient} client mongo client
+ * @param {Function} [callback] callback function
+ * @returns {string|undefined} mongo version or
+ * undefined if using the callback function
+ */
+async function getMongoVersion(client, callback) {
+    async function getVersion() {
+        const res = await client.command({
+            buildInfo: 1,
+        });
+        return res.version;
+    }
+    if (callback) {
+        return util.callbackify(getVersion)(callback);
+    }
+    return getVersion();
+}
+
 module.exports = {
-    constructConnectionString
+    constructConnectionString,
+    getMongoVersion,
 };

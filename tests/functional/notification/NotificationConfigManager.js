@@ -51,9 +51,13 @@ describe('NotificationConfigManager ::', () => {
                     }
                 }),
         });
+        const mongoCommandStub = sinon.stub().returns({
+            version: '4.3.17',
+        });
         const getDbStub = sinon.stub().returns({
             collection: getCollectionStub,
-            });
+            command: mongoCommandStub,
+        });
         sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
             db: getDbStub,
         });
@@ -100,13 +104,11 @@ describe('NotificationConfigManager ::', () => {
                 _id: 'example-bucket-1',
             },
         };
-        manager._metastoreChangeStream.emit('change', changeStreamEvent);
+        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
         assert.strictEqual(manager._cachedConfigs.count(), 1);
         assert.strictEqual(manager._cachedConfigs.get('example-bucket-1'), undefined);
         assert(manager._cachedConfigs.get('example-bucket-2'));
-        // resume token should be cached
-        assert.strictEqual(manager._changeStreamResumeToken, 'resumeToken');
     });
 
     it('Cache should be invalidated when change stream event occurs (replace/update events)',
@@ -128,7 +130,7 @@ describe('NotificationConfigManager ::', () => {
                 }
             }
         };
-        manager._metastoreChangeStream.emit('change', changeStreamEvent);
+        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
         assert.strictEqual(manager._cachedConfigs.count(), 2);
         assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
@@ -136,38 +138,9 @@ describe('NotificationConfigManager ::', () => {
         // update event should yield the same results
         changeStreamEvent.operationType = 'update';
         changeStreamEvent.fullDocument._id = 'example-bucket-2';
-        manager._metastoreChangeStream.emit('change', changeStreamEvent);
+        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         assert.strictEqual(manager._cachedConfigs.count(), 2);
         assert.deepEqual(manager._cachedConfigs.get('example-bucket-2'),
             notificationConfiguration);
-    });
-
-    it('Change stream should resume from cached resumeToken', async () => {
-        const setChangeStreamSpy = sinon.spy(manager, '_setMetastoreChangeStream');
-        const watchMetastoreSpy = sinon.spy(manager._metastore, 'watch');
-        // adding config to cache
-        await manager.getConfig('example-bucket-1');
-        // pushing a new update event to the change stream
-        const changeStreamEvent = {
-            _id: 'resumeToken',
-            operationType: 'update',
-            documentKey: {
-                _id: 'example-bucket-1',
-            },
-            fullDocument: {
-                _id: 'example-bucket-1',
-                value: {
-                    notificationConfiguration: notificationConfigurationVariant,
-                }
-            }
-        };
-        manager._metastoreChangeStream.emit('change', changeStreamEvent);
-        manager._metastoreChangeStream.emit('error');
-        // change stream error handler is async
-        setTimeout(() => {
-            assert(setChangeStreamSpy.calledOnce);
-            assert(watchMetastoreSpy.args[0][1].startAfter);
-            assert.strictEqual(watchMetastoreSpy.args[0][1].startAfter, 'resumeToken');
-        }, 1000);
     });
 });

@@ -2,8 +2,11 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
+const events = require('events');
+const { MongoClient } = require('mongodb');
 
 const LocationStatusStream = require('../../../extensions/utils/LocationStatusStream');
+const ChangeStream = require('../../../lib/wrappers/ChangeStream');
 const FakeLogger = require('../../utils/fakeLogger');
 
 const {
@@ -15,6 +18,42 @@ describe('LocationStatusStream', () => {
 
     afterEach(() => {
         sinon.restore();
+    });
+
+    describe('_setupMongoClient', () => {
+        it('should connect to mongo and setup client', async () => {
+            const collectionStub = sinon.stub();
+            const mongoCommandStub = sinon.stub().returns({
+                version: '4.3.17',
+            });
+            const dbStub = sinon.stub().returns({
+                collection: collectionStub,
+                command: mongoCommandStub,
+            });
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({
+                db: dbStub,
+            });
+            const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
+            lss._setupMongoClient(err => {
+                assert.ifError(err);
+                const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
+                'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
+                assert(mongoConnectStub.calledOnceWith(
+                    mongoUrl,
+                    {
+                        replicaSet: 'rs0',
+                        useNewUrlParser: true,
+                        useUnifiedTopology: true,
+                    }
+                ));
+                assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
+                assert(collectionStub.calledOnceWith('__locationStatusStore'));
+                assert(mongoCommandStub.calledOnceWith({
+                    buildInfo: 1,
+                }));
+                assert.equal(lss._mongoVersion, '4.3.17');
+            });
+        });
     });
 
     it('_initializeLocationStatuses:: should initialize paused locations', done => {
@@ -119,6 +158,45 @@ describe('LocationStatusStream', () => {
             lss._handleChangeStreamChangeEvent(params.event);
             const fn = params.expectedFunctionCall === 'pause' ? pauseStub : resumeStub;
             assert(fn.calledOnceWith(params.event.documentKey._id));
+        });
+    });
+
+    it('should use resumeAfter with mongo 3.6', done => {
+        const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
+        lss._mongoVersion = '3.6.2';
+        lss._locationStatusColl = {
+            watch: sinon.stub().returns(new events.EventEmitter()),
+        };
+        lss._setChangeStream(() => {
+            assert(lss._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(lss._changeStreamWrapper._resumeField, 'resumeAfter');
+            done();
+        });
+    });
+
+    it('should use resumeAfter with mongo 4.0', done => {
+        const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
+        lss._mongoVersion = '4.0.7';
+        lss._locationStatusColl = {
+            watch: sinon.stub().returns(new events.EventEmitter()),
+        };
+        lss._setChangeStream(() => {
+            assert(lss._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(lss._changeStreamWrapper._resumeField, 'resumeAfter');
+            done();
+        });
+    });
+
+    it('should use startAfter with mongo 4.2', done => {
+        const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
+        lss._mongoVersion = '4.2.3';
+        lss._locationStatusColl = {
+            watch: sinon.stub().returns(new events.EventEmitter()),
+        };
+        lss._setChangeStream(() => {
+            assert(lss._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(lss._changeStreamWrapper._resumeField, 'startAfter');
+            done();
         });
     });
 });

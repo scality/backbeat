@@ -44,6 +44,7 @@ describe('OplogPopulator', () => {
             enableMetrics: false,
             logger,
         });
+        oplogPopulator._mongoVersion = '4.0.0';
     });
 
     afterEach(() => {
@@ -111,26 +112,35 @@ describe('OplogPopulator', () => {
     describe('_setupMongoClient', () => {
         it('should connect to mongo and setup client', async () => {
             const collectionStub = sinon.stub();
+            const mongoCommandStub = sinon.stub().returns({
+                version: '4.3.17',
+            });
             const dbStub = sinon.stub().returns({
                 collection: collectionStub,
+                command: mongoCommandStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect')
-                .resolves({ db: dbStub });
+            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({
+                db: dbStub,
+            });
             await oplogPopulator._setupMongoClient()
-            .then(() => {
-                const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
-                    'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true,
-                        useUnifiedTopology: true,
-                    }
-                ));
-                assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
-                assert(collectionStub.calledOnceWith('__metastore'));
-            }).catch(err => assert.ifError(err));
+                .then(() => {
+                    const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
+                        'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
+                    assert(mongoConnectStub.calledOnceWith(
+                        mongoUrl,
+                        {
+                            replicaSet: 'rs0',
+                            useNewUrlParser: true,
+                            useUnifiedTopology: true,
+                        }
+                    ));
+                    assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
+                    assert(collectionStub.calledOnceWith('__metastore'));
+                    assert(mongoCommandStub.calledOnceWith({
+                        buildInfo: 1,
+                    }));
+                    assert.equal(oplogPopulator._mongoVersion, '4.3.17');
+                }).catch(err => assert.ifError(err));
         });
 
         it('should fail when mongo connection fails', async () => {
@@ -484,31 +494,62 @@ describe('OplogPopulator', () => {
         });
     });
 
-    describe('_setMetastoreChangeStream ::', () =>  {
-        it('Should create and listen to the metastore change stream', () => {
-            const changeStreamPipeline = [
-                {
-                    $project: {
-                        '_id': 1,
-                        'operationType': 1,
-                        'documentKey._id': 1,
-                        'fullDocument.value': 1,
-                        'clusterTime': {
-                            $toDate: {
-                                $dateToString: {
-                                    date: '$clusterTime'
-                                }
+    describe('_setMetastoreChangeStream ::', () => {
+        const changeStreamPipeline = [
+            {
+                $project: {
+                    '_id': 1,
+                    'operationType': 1,
+                    'documentKey._id': 1,
+                    'fullDocument.value': 1,
+                    'clusterTime': {
+                        $toDate: {
+                            $dateToString: {
+                                date: '$clusterTime'
                             }
-                        },
+                        }
                     },
                 },
-            ];
+            },
+        ];
+
+        it('should create and listen to the metastore change stream', () => {
             oplogPopulator._metastore = {
                 watch: sinon.stub().returns(new events.EventEmitter()),
             };
             oplogPopulator._setMetastoreChangeStream();
             assert(oplogPopulator._changeStreamWrapper instanceof ChangeStream);
             assert.deepEqual(oplogPopulator._changeStreamWrapper._pipeline, changeStreamPipeline);
+        });
+
+        it('should use resumeAfter with mongo 3.6', () => {
+            oplogPopulator._mongoVersion = '3.6.2';
+            oplogPopulator._metastore = {
+                watch: sinon.stub().returns(new events.EventEmitter()),
+            };
+            oplogPopulator._setMetastoreChangeStream();
+            assert(oplogPopulator._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(oplogPopulator._changeStreamWrapper._resumeField, 'resumeAfter');
+        });
+
+        it('should use resumeAfter with mongo 4.0', () => {
+            oplogPopulator._mongoVersion = '4.0.7';
+            oplogPopulator._metastore = {
+                watch: sinon.stub().returns(new events.EventEmitter()),
+            };
+            oplogPopulator._setMetastoreChangeStream();
+            assert(oplogPopulator._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(oplogPopulator._changeStreamWrapper._resumeField, 'resumeAfter');
+        });
+
+        it('should use startAfter with mongo 4.2', () => {
+            oplogPopulator._mongoVersion = '4.2.3';
+            oplogPopulator._metastore = {
+                watch: sinon.stub().returns(new events.EventEmitter()),
+            };
+            oplogPopulator._setMetastoreChangeStream();
+            assert(oplogPopulator._changeStreamWrapper instanceof ChangeStream);
+            assert.equal(oplogPopulator._changeStreamWrapper._resumeField, 'startAfter');
         });
     });
 

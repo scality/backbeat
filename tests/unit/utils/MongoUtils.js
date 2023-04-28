@@ -41,3 +41,24 @@ describe('constructConnectionString', () => {
         return done();
     });
 });
+
+describe('getMongoVersion', () => {
+    const client = {
+        command: () => ({
+            version: '4.2.0',
+        }),
+    };
+
+    it('Should return mongo version in the passed callback', done => {
+        MongoUtils.getMongoVersion(client, (err, version) => {
+            assert.ifError(err);
+            assert.strictEqual(version, '4.2.0');
+            done();
+        });
+    });
+
+    it('Should return mongo version as a return value', async () => {
+        const version = await MongoUtils.getMongoVersion(client);
+        assert.strictEqual(version, '4.2.0');
+    });
+});
