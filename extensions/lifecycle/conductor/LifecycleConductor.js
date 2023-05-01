@@ -171,7 +171,7 @@ class LifecycleConductor {
     }
 
     _indexesGetInProgressJobs(log, cb) {
-        if (this._bucketSource !== 'mongodb') {
+        if (this._bucketSource !== 'mongodb' || this.lcConfig.forceLegacyListing) {
             return process.nextTick(cb, null);
         }
 
@@ -221,9 +221,23 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v2);
             }
 
-            if (this.activeIndexingJobs.length >= this.lcConfig.conductor.concurrentIndexesBuildLimit ||
-                this.activeIndexingJobs.some(j => (j.bucket === task.bucketName)) ||
-                !this.lcConfig.autoCreateIndexes) {
+            if (!this.lcConfig.autoCreateIndexes) {
+                log.trace('skipping index creation: auto creation of indexes disabled');
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
+            if (!this.activeIndexingJobsRetrieved) {
+                log.debug('skipping index creation: unable to retrieve in progress indexing jobs');
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
+            if (this.activeIndexingJobs.some(j => (j.bucket === task.bucketName))) {
+                log.debug(`skipping index creation: indexing job for ${task.bucketName} in progress`);
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
+            if (this.activeIndexingJobs.length >= this.lcConfig.conductor.concurrentIndexesBuildLimit) {
+                log.debug('skipping index creation: at maximum number of concurrent indexing jobs');
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
@@ -292,7 +306,7 @@ class LifecycleConductor {
     }
 
     _createBucketTaskMessages(tasks, log, cb) {
-        if (!this.lcConfig.forceLegacyListing || !this.activeIndexingJobsRetrieved) {
+        if (this.lcConfig.forceLegacyListing) {
             return process.nextTick(cb, null, tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1)));
         }
 

@@ -86,6 +86,7 @@ describe('Lifecycle Conductor', () => {
                     [], // job state
                     indexesForFeature.lifecycle.v2, // getIndex response
                     null, // metadata proxy error
+                    true, // flag for status ofin progress job retrieval
                 ],
                 [
                     [], // updated job state
@@ -99,6 +100,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     [],
                     null,
+                    true,
                 ],
                 [
                     [
@@ -116,6 +118,7 @@ describe('Lifecycle Conductor', () => {
                     ],
                     [],
                     null,
+                    true,
                 ],
                 [
                     [
@@ -134,6 +137,7 @@ describe('Lifecycle Conductor', () => {
                     ],
                     [],
                     null,
+                    true,
                 ],
                 [
                     [
@@ -145,11 +149,26 @@ describe('Lifecycle Conductor', () => {
                 ],
             ],
             [
+                'should return v1: missing indexes + skip put indexes when in progress index request fails',
+                [
+                    [],
+                    [],
+                    null,
+                    false,
+                ],
+                [
+                    [],
+                    null,
+                    lifecycleTaskVersions.v1,
+                ],
+            ],
+            [
                 'should return v1: index request fails',
                 [
                     [],
                     [],
                     new Error('test error'),
+                    true,
                 ],
                 [
                     [],
@@ -161,11 +180,12 @@ describe('Lifecycle Conductor', () => {
 
         tests.forEach(([msg, input, expected]) =>
             it(msg, done => {
-                const [inJobs, getIndexes, mockError] = input;
+                const [inJobs, getIndexes, mockError, getInProgressSucceeded] = input;
                 const [expectedJobs, putIndexes, expectedVersion] = expected;
 
                 const client = new BackbeatMetadataProxyMock();
                 conductor.clientManager.getBackbeatMetadataProxy = () => client;
+                conductor.activeIndexingJobsRetrieved = getInProgressSucceeded;
                 conductor.activeIndexingJobs = inJobs;
                 client.indexesObj = getIndexes;
                 client.error = mockError;
