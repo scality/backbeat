@@ -508,9 +508,9 @@ describe('lifecycle task functional tests', function dF() {
 
     // Perform the bucket setup as defined in the parameters, and call the
     // lifecycle task bucket processor method.
-    function testTransition(params, cb) {
+    function setupRunLifecycleTask(params, cb) {
         const bucketName = 'test-bucket';
-        const { rules, scenarioNumber, hasVersioning, expectedKeys } = params;
+        const { rules, scenarioNumber, hasVersioning } = params;
         async.waterfall([
             next => s3Helper.setAndCreateBucket(bucketName, next),
             next => {
@@ -542,11 +542,7 @@ describe('lifecycle task functional tests', function dF() {
                 };
                 wrapProcessBucketEntry(data.Rules, entry, s3, params, next);
             },
-        ], (err, data) => {
-            assert.ifError(err);
-            assertTransitionResult({ data, expectedKeys });
-            return cb();
-        });
+        ], cb);
     }
 
     // Example lifecycle configs
@@ -596,9 +592,15 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: [],
             };
-            testTransition(params, done);
+
+            const expectedKeys = [];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('transition rules: matching prefix', done => {
@@ -614,13 +616,19 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: [
-                    'test/obj-1',
-                    'test/obj-3',
-                    'test/obj-6',
-                ],
             };
-            testTransition(params, done);
+
+            const expectedKeys = [
+                'test/obj-1',
+                'test/obj-3',
+                'test/obj-6',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('transition rules: matching tag', done => {
@@ -636,14 +644,20 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: [
-                    'test/obj-1',
-                    'obj-2',
-                    'test/obj-3',
-                    'test/obj-6',
-                ],
             };
-            testTransition(params, done);
+
+            const expectedKeys = [
+                'test/obj-1',
+                'obj-2',
+                'test/obj-3',
+                'test/obj-6',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('should verify changes in lifecycle rules will apply to the ' +
@@ -712,6 +726,68 @@ describe('lifecycle task functional tests', function dF() {
             ], err => {
                 assert.ifError(err);
                 done();
+            });
+        });
+
+        it('should transition object if object is eligible for later expiration', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('test/')
+                        .addExpiration('Date', FUTURE)
+                        .build(),
+                    new LifecycleRule()
+                        .addPrefix('test/')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+            const expectedKeys = [
+                'test/obj-1',
+                'test/obj-3',
+                'test/obj-6',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
+        });
+
+        it('should expire object if object is eligible for later transition', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('test/')
+                        .addExpiration('Date', CURRENT)
+                        .build(),
+                    new LifecycleRule()
+                        .addPrefix('test/')
+                        .addTransitions([{
+                            Days: 5,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+
+            const expectedKeys = [
+                'test/obj-1',
+                'test/obj-3',
+                'test/obj-6',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.strictEqual(data.count.object, expectedKeys.length);
+                assert.deepStrictEqual(data.entries.object.sort(), expectedKeys.sort());
+                return done();
             });
         });
 
@@ -879,9 +955,15 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: [],
             };
-            testTransition(params, done);
+
+            const expectedKeys = [];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('transition rules: matching prefix', done => {
@@ -897,9 +979,15 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: ['version-1'],
             };
-            testTransition(params, done);
+
+            const expectedKeys = ['version-1'];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('transition rules: matching tag', done => {
@@ -915,9 +1003,15 @@ describe('lifecycle task functional tests', function dF() {
                         }])
                         .build(),
                 ],
-                expectedKeys: ['version-1'],
             };
-            testTransition(params, done);
+
+            const expectedKeys = ['version-1'];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
         });
 
         it('should verify changes in lifecycle rules will apply to ' +
@@ -1078,6 +1172,65 @@ describe('lifecycle task functional tests', function dF() {
             ], err => {
                 assert.ifError(err);
                 done();
+            });
+        });
+
+
+        it('should transition object if object is eligible for later expiration', done => {
+            const params = {
+                scenarioNumber: 2,
+                hasVersioning: true,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('version-1')
+                        .addExpiration('Date', FUTURE)
+                        .build(),
+                    new LifecycleRule()
+                        .addPrefix('version-1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+            const expectedKeys = [
+                'version-1',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
+        });
+
+        it('should expire object if object is eligible for later transition', done => {
+            const params = {
+                scenarioNumber: 2,
+                hasVersioning: true,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('version-1')
+                        .addExpiration('Date', CURRENT)
+                        .build(),
+                    new LifecycleRule()
+                        .addPrefix('version-1')
+                        .addTransitions([{
+                            Days: 5,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+
+            const expectedKeys = [
+                'version-1',
+            ];
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.strictEqual(data.count.object, expectedKeys.length);
+                assert.deepStrictEqual(data.entries.object.sort(), expectedKeys.sort());
+                return done();
             });
         });
 
