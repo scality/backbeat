@@ -1,6 +1,8 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
+const sinon = require('sinon');
+const errors = require('arsenal').errors;
 const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
@@ -272,6 +274,77 @@ describe('Ingestion Populator', () => {
 
             assert.strictEqual(updated.length, 1);
             assert.strictEqual(updated[0], EXISTING_BUCKET);
+        });
+    });
+
+    describe('_processLogReaderEntries', () => {
+        it('should skip when previous batch currently in progress', () => {
+            const logReaderMock = {
+                isBatchInProgress: () => true,
+                getLocationConstraint: () => 'ring-location',
+                getTargetZenkoBucketName: () => 'ring-bucket',
+                processLogEntries: sinon.stub().yields(null, false),
+            };
+            ip._processLogReaderEntries(logReaderMock, {}, err => {
+                assert.ifError(err);
+                assert(logReaderMock.processLogEntries.notCalled);
+            });
+        });
+
+        it('should skip when location is paused', () => {
+            const logReaderMock = {
+                isBatchInProgress: () => false,
+                getLocationConstraint: () => 'ring-location',
+                getTargetZenkoBucketName: () => 'ring-bucket',
+                processLogEntries: sinon.stub().yields(null, false),
+            };
+            ip.setPausedLocationState('ring-location');
+            ip._processLogReaderEntries(logReaderMock, {}, err => {
+                assert.ifError(err);
+                assert(logReaderMock.processLogEntries.notCalled);
+            });
+        });
+
+        it('should process log entries', () => {
+            const logReaderMock = {
+                isBatchInProgress: () => false,
+                getLocationConstraint: () => 'ring-location',
+                getTargetZenkoBucketName: () => 'ring-bucket',
+                processLogEntries: sinon.stub().yields(null, false),
+            };
+            ip._processLogReaderEntries(logReaderMock, {}, err => {
+                assert.ifError(err);
+                assert(logReaderMock.processLogEntries.calledOnce);
+            });
+        });
+
+        it('should skip processing when having more logs but the location is paused', () => {
+            const logReaderMock = {
+                isBatchInProgress: () => false,
+                getLocationConstraint: () => 'ring-location',
+                getTargetZenkoBucketName: () => 'ring-bucket',
+                processLogEntries: sinon.stub().callsFake((params, cb) => {
+                    ip.setPausedLocationState('ring-location');
+                    return cb(null, true);
+                }),
+            };
+            ip._processLogReaderEntries(logReaderMock, {}, err => {
+                assert.ifError(err);
+                assert(logReaderMock.processLogEntries.calledOnce);
+            });
+        });
+
+        it('should not throw error when processLogEntries fails', () => {
+            const logReaderMock = {
+                isBatchInProgress: () => false,
+                getLocationConstraint: () => 'ring-location',
+                getTargetZenkoBucketName: () => 'ring-bucket',
+                processLogEntries: sinon.stub().yields(errors.InternalError, false),
+            };
+            ip._processLogReaderEntries(logReaderMock, {}, err => {
+                assert.ifError(err);
+                assert(logReaderMock.processLogEntries.calledOnce);
+            });
         });
     });
 });
