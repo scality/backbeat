@@ -345,6 +345,41 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
+    it('should not publish 0byte version transition to DMF with NoncurrentVersionTransitions rule - bb383', done => {
+        const transitionRule = [
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: 'location-dmf-v1' }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1, size: 0 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the non-current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
+
+                // test that no entry is pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 0);
+                return done();
+            });
+    });
+
     it('should not publish any object entry if object is not eligible with NoncurrentVersionTransitions rule', done => {
         const transitionRule = [
             {
@@ -571,6 +606,41 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 return done();
             });
     });
+
+    it('should not publish 0byte object version transition to DMF - bb383', done => {
+        const transitionRule = [
+            {
+                Transitions: [{ Days: 2, StorageClass: 'location-dmf-v1' }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1, size: 0 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
+
+                // test that no entry is pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 0);
+                return done();
+            });
+    });
+
 
     it('should not expire delete marker if not old enough to satisfy the age criteria', done => {
         const expitationRule = [

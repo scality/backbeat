@@ -532,6 +532,41 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             });
     });
 
+    it('should not publish 0-byte object transition to DMF - bb383', done => {
+        const transitionRule = [
+            {
+                Transitions: [{ Days: 2, StorageClass: 'location-dmf-v1' }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+
+        const keyName = 'key1';
+        const key = keyMock.current({ keyName, daysEarlier: 1, size: 0 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
+                assert(!!listLifecycleParams.BeforeDate);
+
+                // test that no entry is pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 0);
+                return done();
+            });
+    });
+
     it('should not publish any object entry if object is not eligible with Transitions rule', done => {
         const transitionRule = [
             {
@@ -561,13 +596,13 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
             assert(!!listLifecycleParams.BeforeDate);
 
-            // test that the entry is valid and pushed to kafka topic
+            // test that no entry is pushed to kafka topic
             assert.strictEqual(kafkaEntries.length, 0);
             return done();
         });
     });
 
-    it('should publish one bucket entry if listing is trucated', done => {
+    it('should publish one bucket entry if listing is truncated', done => {
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
         const contents = [key];
