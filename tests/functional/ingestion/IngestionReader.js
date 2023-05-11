@@ -347,21 +347,39 @@ describe('ingestion reader tests with mock', function fD() {
                 ], done);
             });
 
-        [{}, { maxRead: 2 }].forEach(params => {
+        [
+            {
+                params: {},
+                hasMoreLog: false,
+            },
+            {
+                params: {
+                    maxRead: 2,
+                },
+                hasMoreLog: true,
+             },
+        ].forEach(p => {
             it('should successfully generate entries from raft logs ' +
-                `with processLogEntries params ${JSON.stringify(params)}`,
+                `with processLogEntries params ${JSON.stringify(p.params)}`,
                 done => {
                     async.waterfall([
-                        next => this.ingestionReader.processLogEntries(params, err => {
+                        next => this.ingestionReader.processLogEntries(p.params, (err, hasMoreLog) => {
                             assert.ifError(err);
-                            setTimeout(next, CONSUMER_TIMEOUT);
+                            setTimeout(() => {
+                                next(null, hasMoreLog);
+                            }, CONSUMER_TIMEOUT);
                         }),
-                        next => {
+                        (hasMoreLog, next) => {
                             consumer.consume(10, (err, entries) => {
                                 assert.ifError(err);
                                 // the mockLogs have 9 entries, but only 3 entries
-                                // pertain to the test so the expected length is 3
-                                assert.strictEqual(entries.length, 3);
+                                // pertain to the test
+                                if (!hasMoreLog) {
+                                    assert.strictEqual(entries.length, 3);
+                                } else {
+                                    assert(entries.length <= p.params.maxRead);
+                                }
+                                assert.strictEqual(hasMoreLog, p.hasMoreLog);
                                 entries.forEach(entry => {
                                     const receivedEntry =
                                         JSON.parse(entry.value.toString());
