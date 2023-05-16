@@ -25,7 +25,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                   reqId: log.getSerializedUids(),
                   bucketName: bucket,
                   objectKey: key,
-                  versionId: version,
+                  versionId: version === 'null' ? null : version,
               })
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.oldLocation', oldLocation)
