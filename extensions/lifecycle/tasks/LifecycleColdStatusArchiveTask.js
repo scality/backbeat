@@ -25,14 +25,14 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                   reqId: log.getSerializedUids(),
                   bucketName: bucket,
                   objectKey: key,
-                  versionId: version === 'null' ? null : version,
+                  versionId: version === 'null' ? undefined : version,
               })
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.oldLocation', oldLocation)
               .setAttribute('target.newLocation', newLocation)
               .setAttribute('target.bucket', bucket)
               .setAttribute('target.key', key)
-              .setAttribute('target.version', version)
+              .setAttribute('target.version', version === 'null' ? undefined : version)
               .setAttribute('target.accountId', accountId)
               .setAttribute('target.owner', owner);
         this.gcProducer.publishActionEntry(gcEntry, err => {

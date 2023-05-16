@@ -89,7 +89,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         return backbeatClient.putMetadata({
             bucket,
             objectKey: key,
-            versionId: version === 'null' ? null : version,
+            versionId: version === 'null' ? undefined : version,
             mdBlob: objMD.getSerialized(),
         }, log, err => {
             LifecycleMetrics.onS3Request(log, 'putMetadata', 'transition', err);
