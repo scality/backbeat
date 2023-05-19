@@ -6,11 +6,54 @@ const QueuePopulatorExtension =
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 
+const { authTypeAssumeRole } = require('../../lib/constants');
+// const { AccountIdCache } = require('../utils/AccountIdCache');
+const VaultClientWrapper = require('../utils/VaultClientWrapper');
+
+const REPLICATION_POPULATOR_CLIENT_ID = 'replication-populator';
+
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
         super(params);
         this.repConfig = params.config;
         this.metricsHandler = params.metricsHandler;
+
+        this._authConfig = params.authConfig;
+
+        this.vaultClientWrapper = new VaultClientWrapper(
+            REPLICATION_POPULATOR_CLIENT_ID,
+            params.vaultAdmin,
+            this._authConfig,
+            this.log,
+        );
+
+        if (this._authConfig.type === authTypeAssumeRole) {
+            this.vaultClientWrapper.init();
+        }
+
+        // this._accountIdCache = new AccountIdCache(1000);
+    }
+
+    _getAccountId(ownerId, cb) {
+        // if (this._accountIdCache.has(ownerId)) {
+        //     return process.nextTick(cb, null, this._accountIdCache.get(ownerId));
+        // }
+
+        this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                if (err.NoSuchEntity) {
+                    this.log.error('canonical id does not exist', { error: err, ownerId });
+                    // this._accountIdCache.miss(ownerId);
+                } else {
+                    this.log.error('could not get account id', { error: err, ownerId });
+                }
+                return cb(err);
+            }
+
+            // this._accountIdCache.set(ownerId, accountId);
+            // this._accountIdCache.expireOldest();
+            return cb(null, accountId);
+        });
     }
 
     filter(entry) {
@@ -90,11 +133,22 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
 
-        this.log.trace('publishing object replication entry',
-                       { entry: queueEntry.getLogInfo() });
-        this.publish(this.repConfig.topic,
-                     `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(publishedEntry));
+        const ownerId = value['owner-id'];
+        this._getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                this.log.error('unable to get account', { ownerId, err });
+                return;
+            }
+
+            this.log.trace('publishing object replication entry',
+                { entry: queueEntry.getLogInfo() });
+
+            publishedEntry.accountId = accountId;
+
+            this.publish(this.repConfig.topic,
+                        `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
+                        JSON.stringify(publishedEntry));
+        });
     }
 
     /**

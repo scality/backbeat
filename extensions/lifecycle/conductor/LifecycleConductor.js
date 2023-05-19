@@ -15,7 +15,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const safeJsonParse = require('../util/safeJsonParse');
-const { AccountIdCache } = require('../util/AccountIdCache');
+const { AccountIdCache } = require('../../utils/AccountIdCache');
 const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const {

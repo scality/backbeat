@@ -148,6 +148,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
             const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
                 sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+                refreshedEntry.setAccountId(sourceEntry.getAccountId());
             return cb(null, refreshedEntry);
         });
     }
