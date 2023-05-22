@@ -25,12 +25,6 @@ const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true
 // moves lifecycle expiration deadlines 1 day earlier, mostly for testing
 const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
 
-function isLifecycleUser(canonicalID) {
-    const canonicalIDArray = canonicalID.split('/');
-    const serviceName = canonicalIDArray[canonicalIDArray.length - 1];
-    return serviceName === 'lifecycle';
-}
-
 /**
  * compare 2 version by their stale dates returning:
  * - LT (-1) if v1 is less than v2
@@ -1074,24 +1068,21 @@ class LifecycleTask extends BackbeatTask {
                 const eodm = rules.Expiration
                     && rules.Expiration.ExpiredObjectDeleteMarker;
 
+                // Backbeat performs automatic ExpiredObjectDeleteMarker cleanup
+                // for compatibility with Amazon S3,
+                // - either when the delete markers meet the age criteria
+                // - or when the ExpiredObjectDeleteMarker tag is set to true.
                 const applicableExpRule = rules.Expiration && (
                     (rules.Expiration.Days !== undefined
                      && daysSinceInitiated >= rules.Expiration.Days)
                     || (rules.Expiration.Date !== undefined
                      && rules.Expiration.Date < Date.now())
-                    || eodm !== false
-                );
-                const validLifecycleUserCase = (
-                    isLifecycleUser(deleteMarker.Owner.ID)
-                    && eodm !== false
+                    || eodm === true
                 );
 
-                // if there are no other versions with the same Key as this DM,
-                // if a valid Expiration rule exists or if the DM was created
-                // by a lifecycle service account and eodm rule is not
-                // explicitly set to false, apply and permanently delete this DM
-                if (matchingNoncurrentKeys.length === 0 && (applicableExpRule
-                || validLifecycleUserCase)) {
+                // if there are no other versions with the same Key as this DM and
+                // if a valid Expiration rule exists, apply and permanently delete this DM
+                if (matchingNoncurrentKeys.length === 0 && applicableExpRule) {
                     const entry = ActionQueueEntry.create('deleteObject')
                         .addContext({
                             origin: 'lifecycle',
