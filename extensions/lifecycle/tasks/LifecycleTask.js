@@ -12,7 +12,6 @@ const { CompareResult, MinHeap } = require('arsenal').algorithms.Heap;
 
 const config = require('../../../lib/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
-const { isLifecycleUser } = require('../util/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
@@ -1271,27 +1270,21 @@ class LifecycleTask extends BackbeatTask {
                 const eodm = rules.Expiration &&
                     rules.Expiration.ExpiredObjectDeleteMarker;
 
+                // Backbeat performs automatic ExpiredObjectDeleteMarker cleanup
+                // for compatibility with Amazon S3,
+                // - either when the delete markers meet the age criteria
+                // - or when the ExpiredObjectDeleteMarker tag is set to true.
                 const applicableExpRule = rules.Expiration && (
-                    (rules.Expiration.Days !== undefined &&
-                     daysSinceInitiated >= rules.Expiration.Days) ||
-                    (rules.Expiration.Date !== undefined &&
-                     rules.Expiration.Date < Date.now()) ||
-                    // TODO: BB-376 why do we check that eodm is "not explicitly set to false" instead
-                    // of "explicitly set to true"?
-                    eodm !== false
-                );
-                const validLifecycleUserCase = (
-                    isLifecycleUser(deleteMarker.Owner.ID) &&
-                    // TODO: BB-376 check why this check exists
-                    eodm !== false
+                    (rules.Expiration.Days !== undefined
+                     && daysSinceInitiated >= rules.Expiration.Days)
+                    || (rules.Expiration.Date !== undefined
+                     && rules.Expiration.Date < Date.now())
+                    || eodm === true
                 );
 
-                // if there are no other versions with the same Key as this DM,
-                // if a valid Expiration rule exists or if the DM was created
-                // by a lifecycle service account and eodm rule is not
-                // explicitly set to false, apply and permanently delete this DM
-                if (matchingNoncurrentKeys.length === 0 && (applicableExpRule ||
-                validLifecycleUserCase)) {
+                // if there are no other versions with the same Key as this DM and
+                // if a valid Expiration rule exists, apply and permanently delete this DM
+                if (matchingNoncurrentKeys.length === 0 && applicableExpRule) {
                     const entry = ActionQueueEntry.create('deleteObject')
                         .addContext({
                             origin: 'lifecycle',

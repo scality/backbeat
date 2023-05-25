@@ -7,7 +7,6 @@ const LifecycleTask = require('./LifecycleTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const { rulesToParams } = require('../util/rules');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
-const { isLifecycleUser } = require('../util/utils');
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
@@ -372,13 +371,8 @@ class LifecycleTaskV2 extends LifecycleTask {
                 rules.Expiration.Date < Date.now()) ||
             eodm === true
         );
-        // TODO: BB-376 check why this check exists
-        const validLifecycleUserCase = (
-            isLifecycleUser(deleteMarker.Owner.ID) &&
-            eodm !== false
-        );
 
-        if (applicableExpRule || validLifecycleUserCase) {
+        if (applicableExpRule) {
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
                     origin: 'lifecycle',
