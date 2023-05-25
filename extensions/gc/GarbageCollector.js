@@ -91,10 +91,8 @@ class GarbageCollector extends EventEmitter {
 
     getAccountId(ownerId, log, cb) {
         if (this._gcConfig.auth.type !== authTypeAssumeRole) {
-            log.error('unable to retrieve account id: invalid auth type', {
-                ownerId,
-            });
-            return process.nextTick(cb, new Error('NotAssumeRoleAuthType'));
+            log.debug('skipping: not assume role auth type');
+            return process.nextTick(cb);
         }
 
         if (this._accountIdCache.isKnown(ownerId)) {

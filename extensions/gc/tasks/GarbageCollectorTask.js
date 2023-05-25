@@ -29,11 +29,18 @@ class GarbageCollectorTask extends BackbeatTask {
             return process.nextTick(cb, null, accountId);
         }
 
+        log.debug('unable to find account id in entry; performing vault request', {
+            ownerId,
+        });
         return this.getAccountId(ownerId, log, cb);
     }
 
     _getMetadata(entry, log, done) {
         this._getAccountId(entry, log, (err, accountId) => {
+            if (err) {
+                return done(err);
+            }
+
             const backbeatClient = this.getBackbeatMetadataProxy(accountId);
 
             if (!backbeatClient) {
@@ -73,6 +80,10 @@ class GarbageCollectorTask extends BackbeatTask {
 
     _putMetadata(entry, objMD, log, done) {
         this._getAccountId(entry, log, (err, accountId) => {
+            if (err) {
+                return done(err);
+            }
+
             const backbeatClient = this.getBackbeatMetadataProxy(accountId);
             if (!backbeatClient) {
                 log.error('failed to get backbeat client', { accountId });
@@ -105,6 +116,10 @@ class GarbageCollectorTask extends BackbeatTask {
     _batchDeleteData(params, entry, log, done) {
         log.debug('action execution starts', entry.getLogInfo());
         this._getAccountId(entry, log, (err, accountId) => {
+            if (err) {
+                return done(err);
+            }
+
             const backbeatClient = this.getBackbeatClient(accountId);
 
             if (!backbeatClient) {
