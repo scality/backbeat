@@ -70,7 +70,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
-            versionId: sourceEntry.getEncodedVersionId(),
+            versionId: sourceEntry.getEncodedVersionId() || 'null',
         };
         return this.backbeatSourceClient
         .getMetadata(params, log, (err, blob) => {
@@ -273,15 +273,13 @@ class UpdateReplicationStatus extends BackbeatTask {
 
     _putMetadata(updatedSourceEntry, log, cb) {
         const client = this.backbeatSourceClient;
-        // must set versionId to undefined in the case of
-        // versioning suspended objects, to avoid creating
-        // a version object
-        const versionId = updatedSourceEntry.getIsNull() ?
-            undefined : updatedSourceEntry.getEncodedVersionId();
         return client.putMetadata({
             bucket: updatedSourceEntry.getBucket(),
             objectKey: updatedSourceEntry.getObjectKey(),
-            versionId,
+            // non versioned object are also considered a null version
+            // in a versioned bucket, we should set the version id to 'null'
+            // for it to be handled correctly in cloudserver
+            versionId: updatedSourceEntry.getEncodedVersionId() || 'null',
             mdBlob: updatedSourceEntry.getSerialized(),
         }, log, err => {
             const replicationStatus = updatedSourceEntry.getReplicationStatus();
