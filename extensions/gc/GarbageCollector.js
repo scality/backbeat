@@ -10,6 +10,12 @@ const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ClientManager = require('../../lib/clients/ClientManager');
 const GarbageCollectorTask = require('./tasks/GarbageCollectorTask');
 
+const { authTypeAssumeRole } = require('../../lib/constants');
+
+const { AccountIdCache } = require('../utils/AccountIdCache');
+const VaultClientWrapper = require('../utils/VaultClientWrapper');
+const GC_CLIENT_ID = 'garbage-collector';
+
 /**
  * @class GarbageCollector
  *
@@ -72,6 +78,46 @@ class GarbageCollector extends EventEmitter {
             s3Config: params.s3Config,
             transport: params.transport,
         }, this._logger);
+
+        this.vaultClientWrapper = new VaultClientWrapper(
+            GC_CLIENT_ID,
+            this._gcConfig.vaultAdmin,
+            this._gcConfig.auth,
+            this._logger,
+        );
+
+        this._accountIdCache = new AccountIdCache(this._gcConfig.consumer.concurrency);
+    }
+
+    getAccountId(ownerId, log, cb) {
+        if (this._gcConfig.auth.type !== authTypeAssumeRole) {
+            log.error('unable to retrieve account id: invalid auth type', {
+                ownerId,
+            });
+            return process.nextTick(cb, new Error('NotAssumeRoleAuthType'));
+        }
+
+        if (this._accountIdCache.isKnown(ownerId)) {
+            return process.nextTick(cb, null, this._accountIdCache.get(ownerId));
+        }
+
+        return this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            if (err) {
+                if (err.NoSuchEntity) {
+                    log.error('canonical id does not exist', { error: err, ownerId });
+                    this._accountIdCache.miss(ownerId);
+                } else {
+                    log.error('could not get account id', { error: err, ownerId });
+                }
+
+                return cb(err);
+            }
+
+            this._accountIdCache.set(ownerId, accountId);
+            this._accountIdCache.expireOldest();
+
+            return cb(null, accountId);
+        });
     }
 
     /**
@@ -108,6 +154,10 @@ class GarbageCollector extends EventEmitter {
 
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
+
+        if (this._gcConfig.auth.type === authTypeAssumeRole) {
+            this.vaultClientWrapper.init();
+        }
     }
 
     /**
@@ -144,11 +194,13 @@ class GarbageCollector extends EventEmitter {
                 this.clientManager.getBackbeatClient.bind(this.clientManager),
             getBackbeatMetadataProxy:
                 this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
+            getAccountId: this.getAccountId.bind(this),
         };
     }
 
     isReady() {
-        return this._consumer && this._consumer.isReady();
+        return this._consumer && this._consumer.isReady()
+            && this.vaultClientWrapper.tempCredentialsReady();
     }
 }
 

@@ -19,87 +19,104 @@ class GarbageCollectorTask extends BackbeatTask {
         Object.assign(this, gcState);
     }
 
-    _getMetadata(entry, log, done) {
-        const { accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatMetadataProxy(accountId);
-        if (!backbeatClient) {
-            log.error('failed to get backbeat client', { accountId });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
+    // helper method needed for replication generated entries in which the
+    // account id information is missing.
+    // TODO BB-367: replace once replication services uses assume role
+    _getAccountId(entry, log, cb) {
+        const { accountId, ownerId } = entry.getAttribute('target');
+
+        if (accountId) {
+            return process.nextTick(cb, null, accountId);
         }
 
-        const { bucket, key, version } = entry.getAttribute('target');
-        return backbeatClient.getMetadata({
-            bucket,
-            objectKey: key,
-            versionId: version,
-        }, log, (err, blob) => {
-            if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
-                    method: 'GarbageCollectorTask._getMetadata',
-                    error: err.message,
-                }, entry.getLogInfo()));
-                return done(err);
+        return this.getAccountId(ownerId, log, cb);
+    }
+
+    _getMetadata(entry, log, done) {
+        this._getAccountId(entry, log, (err, accountId) => {
+            const backbeatClient = this.getBackbeatMetadataProxy(accountId);
+
+            if (!backbeatClient) {
+                log.error('failed to get backbeat client', { accountId });
+                return done(errors.InternalError
+                    .customizeDescription('Unable to obtain client'));
             }
 
-            const res = ObjectMD.createFromBlob(blob.Body);
-            if (res.error) {
-                log.error('error parsing metadata blob', Object.assign({
-                    error: res.error,
-                    method: 'GarbageCollectorTask._getMetadata',
-                }, entry.getLogInfo()));
-                return done(
-                    errors.InternalError.
+            const { bucket, key, version } = entry.getAttribute('target');
+            return backbeatClient.getMetadata({
+                bucket,
+                objectKey: key,
+                versionId: version,
+            }, log, (err, blob) => {
+                if (err) {
+                    log.error('error getting metadata blob from S3', Object.assign({
+                        method: 'GarbageCollectorTask._getMetadata',
+                        error: err.message,
+                    }, entry.getLogInfo()));
+                    return done(err);
+                }
+
+                const res = ObjectMD.createFromBlob(blob.Body);
+                if (res.error) {
+                    log.error('error parsing metadata blob', Object.assign({
+                        error: res.error,
+                        method: 'GarbageCollectorTask._getMetadata',
+                    }, entry.getLogInfo()));
+                    return done(
+                        errors.InternalError.
                         customizeDescription('error parsing metadata blob'));
-            }
-            return done(null, res.result);
+                }
+                return done(null, res.result);
+            });
         });
     }
 
     _putMetadata(entry, objMD, log, done) {
-        const { accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatMetadataProxy(accountId);
-        if (!backbeatClient) {
-            log.error('failed to get backbeat client', { accountId });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
-        }
-
-        const { bucket, key, version } = entry.getAttribute('target');
-        return backbeatClient.putMetadata({
-            bucket,
-            objectKey: key,
-            versionId: version,
-            mdBlob: objMD.getSerialized(),
-        }, log, err => {
-            if (err) {
-                log.error(
-                    'an error occurred when updating metadata for transition',
-                    Object.assign({
-                        method: 'GarbageCollectorTask._putMetadata',
-                        error: err.message,
-                    }, entry.getLogInfo()));
-                return done(err);
+        this._getAccountId(entry, log, (err, accountId) => {
+            const backbeatClient = this.getBackbeatMetadataProxy(accountId);
+            if (!backbeatClient) {
+                log.error('failed to get backbeat client', { accountId });
+                return done(errors.InternalError
+                    .customizeDescription('Unable to obtain client'));
             }
 
-            return done();
+            const { bucket, key, version } = entry.getAttribute('target');
+            return backbeatClient.putMetadata({
+                bucket,
+                objectKey: key,
+                versionId: version,
+                mdBlob: objMD.getSerialized(),
+            }, log, err => {
+                if (err) {
+                    log.error(
+                        'an error occurred when updating metadata for transition',
+                        Object.assign({
+                            method: 'GarbageCollectorTask._putMetadata',
+                            error: err.message,
+                        }, entry.getLogInfo()));
+                    return done(err);
+                }
+
+                return done();
+            });
         });
     }
 
     _batchDeleteData(params, entry, log, done) {
         log.debug('action execution starts', entry.getLogInfo());
-        const { accountId } = entry.getAttribute('target');
-        const backbeatClient = this.getBackbeatClient(accountId);
+        this._getAccountId(entry, log, (err, accountId) => {
+            const backbeatClient = this.getBackbeatClient(accountId);
 
-        if (!backbeatClient) {
-            log.error('failed to get backbeat client', { accountId });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain client'));
-        }
+            if (!backbeatClient) {
+                log.error('failed to get backbeat client', { accountId });
+                return done(errors.InternalError
+                    .customizeDescription('Unable to obtain client'));
+            }
 
-        const req = backbeatClient.batchDelete(params);
-        attachReqUids(req, log);
-        return req.send(done);
+            const req = backbeatClient.batchDelete(params);
+            attachReqUids(req, log);
+            return req.send(done);
+        });
     }
 
     _executeDeleteData(entry, log, done) {

@@ -265,7 +265,9 @@ class UpdateReplicationStatus extends BackbeatTask {
                       reqId: log.getSerializedUids(),
                   })
                   .addContext(entry.getLogInfo())
-                  .setAttribute('target.locations', locations);
+                  .setAttribute('target.locations', locations)
+                  .setAttribute('target.accountId', entry.getAccountId())
+                  .setAttribute('target.ownerId', entry.getOwnerId());
             this.gcProducer.publishActionEntry(gcEntry);
         }
         return cb();
