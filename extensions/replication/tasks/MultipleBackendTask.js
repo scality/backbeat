@@ -200,7 +200,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        this.retry({
+        return this.retry({
             actionDesc: 'stream part data',
             logFields: { entry: sourceEntry.getLogInfo(), range },
             actionFunc: done => this._getRangeAndPutMPUPartOnce(sourceEntry,
@@ -949,7 +949,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        this.retry({
+        return this.retry({
             actionDesc: 'send object tagging XML data',
             entry: sourceEntry,
             logFields: { entry: sourceEntry.getLogInfo() },
@@ -1004,7 +1004,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        this.retry({
+        return this.retry({
             actionDesc: 'delete object tagging',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._deleteObjectTaggingOnce(sourceEntry,
@@ -1057,7 +1057,7 @@ class MultipleBackendTask extends ReplicateObject {
             }
         }
 
-        this.retry({
+        return this.retry({
             actionDesc: 'put delete marker',
             logFields: { entry: sourceEntry.getLogInfo() },
             actionFunc: done => this._putDeleteMarkerOnce(
