@@ -5,6 +5,8 @@ env:
   GINKGO_VERSION: v1.15.2
 
 on:
+  workflow_dispatch:
+
   push:
     branches-ignore:
     - development/**
