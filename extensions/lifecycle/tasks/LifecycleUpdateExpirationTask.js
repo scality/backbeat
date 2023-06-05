@@ -1,7 +1,7 @@
 const async = require('async');
 
 const { errors } = require('arsenal');
-const ObjectMD = require('arsenal').models.ObjectMD;
+const { ObjectMD, ObjectMDArchive } = require('arsenal').models;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const locations = require('../../../conf/locationConfig.json') || {};
@@ -151,9 +151,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     // This is a temporary fix, until Sorbet is fixed to provide the information
                     Object.keys(locations).find(name => locations[name].isCold);
 
-                const archive = objMD.getArchive();
-                // eslint-disable-next-line
-                console.log(Object.getOwnPropertyNames(archive).filter(item => typeof archive[item] === 'function'));
+                const archive = new ObjectMDArchive(objMD.getArchive());
 
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
