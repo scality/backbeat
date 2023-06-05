@@ -156,7 +156,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
                 // queued for expiry but not yet expired)
-                if (new Date(archive.getRestoreWillExpireAt()) > new Date()) {
+                if (new Date(archive.restoreWillExpireAt) > new Date()) {
                     return process.nextTick(done);
                 }
 
