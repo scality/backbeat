@@ -153,7 +153,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
 
                 const archive = objMD.getArchive();
                 // eslint-disable-next-line
-                console.log(objMD, archive);
+                console.log(Object.getOwnPropertyNames(archive).filter(item => typeof archive[item] === 'function'));
 
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
