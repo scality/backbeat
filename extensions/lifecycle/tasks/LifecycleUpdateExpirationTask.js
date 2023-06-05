@@ -151,10 +151,9 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     // This is a temporary fix, until Sorbet is fixed to provide the information
                     Object.keys(locations).find(name => locations[name].isCold);
 
+                const archive = objMD.getArchive();
                 // eslint-disable-next-line
                 console.log(objMD, archive);
-
-                const archive = objMD.getArchive();
 
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
