@@ -1,23 +1,31 @@
 const { RulesReducer } = require('./RulesReducer');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
+const { s3middleware } = require('arsenal');
+const { scaleMsPerDay } = s3middleware.objectUtils;
+
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 
-function _getBeforeDate(currentDate, days) {
+function _getBeforeDate(currentDate, days, options) {
+    const { timeProgressionFactor } = options;
     const beforeDate = new Date(currentDate);
-    beforeDate.setDate(beforeDate.getDate() - days);
+
+    const scaledMsPerDay = scaleMsPerDay(timeProgressionFactor);
+    const daysMS = days * scaledMsPerDay;
+
+    beforeDate.setTime(beforeDate.getTime() - daysMS);
     return beforeDate.toISOString();
 }
 
-function _makeListParams(listType, currentDate, listing) {
+function _makeListParams(listType, currentDate, listing, options) {
     const p = {
         prefix: listing.prefix,
         listType,
     };
 
     if (listing.days > 0) {
-        p.beforeDate = _getBeforeDate(currentDate, listing.days);
+        p.beforeDate = _getBeforeDate(currentDate, listing.days, options);
     }
 
     if (listing.storageClass) {
@@ -34,13 +42,18 @@ function _makeListParams(listType, currentDate, listing) {
  * @param {array} listings.currents    - array of listing: { prefix, days }
  * @param {array} listings.nonCurrents - array of listing: { prefix, days }
  * @param {array} listings.orphans     - array of listing: { prefix, days }
+ * @param {Object} options - lifecycle options
+ * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
+ * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
+ * @param {number} options.timeProgressionFactor - decrease the weight attributed to a day in order to
+ * expedite the lifecycle of objects.
  * @return {array} mergedListings      - listing informations, array of { prefix, listType, [beforeDate] }
  */
-function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = [] }) {
+function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = [] }, options) {
     return [
-      ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing)),
-      ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing)),
-      ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing)),
+      ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing, options)),
+      ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing, options)),
+      ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing, options)),
     ];
   }
 
@@ -53,10 +66,15 @@ function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = 
  * @param {array} listings.currents    - array of listing { prefix, days }
  * @param {array} listings.nonCurrents - array of listing { prefix, days }
  * @param {array} listings.orphans     - array of listing { prefix, days }
+ * @param {Object} options - lifecycle options
+ * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
+ * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
+ * @param {number} options.timeProgressionFactor - decrease the weight attributed to a day in order to
+ * expedite the lifecycle of objects.
  * @return {Object} info               - listing informations { params, listType, remainings }
  */
-function _getParamsFromListings(bucketName, currentDate, listings) {
-    const listingsParams = _mergeParams(currentDate, listings);
+function _getParamsFromListings(bucketName, currentDate, listings, options) {
+    const listingsParams = _mergeParams(currentDate, listings, options);
     let params;
     let listType;
 
@@ -148,6 +166,8 @@ function _getParamsFromDetails(bucketName, details) {
  * @param {Object} options - lifecycle options
  * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
  * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
+ * @param {number} options.timeProgressionFactor - decreases the weight attributed to a day in order to
+ * expedite the lifecycle of objects.
  *
  * @return {Object} info - listings informations { params, listingDetails, remainings }
  * @return {Object} info.params - params of the first lifecycle listing
@@ -170,7 +190,7 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
     const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
     const listings = rulesReducer.toListings();
 
-    return _getParamsFromListings(bucketName, currentDate, listings);
+    return _getParamsFromListings(bucketName, currentDate, listings, options);
 }
 
 module.exports = {

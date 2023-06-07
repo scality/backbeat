@@ -10,13 +10,6 @@ const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } =
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
-const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
-const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
-const ruleOptions = {
-    expireOneDayEarlier,
-    transitionOneDayEarlier,
-};
-
 class LifecycleTaskV2 extends LifecycleTask {
     /**
      * NOTE: Among other methods, LifecycleTaskV2 inherits the processBucketEntry method from LifecycleTask.
@@ -86,6 +79,13 @@ class LifecycleTaskV2 extends LifecycleTask {
     _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
         const currentDate = new Date();
 
+        const { transitionOneDayEarlier, expireOneDayEarlier, timeProgressionFactor } = this.lcOptions;
+        const ruleOptions = {
+            transitionOneDayEarlier,
+            expireOneDayEarlier,
+            timeProgressionFactor,
+        };
+
         const { params, listType, remainings } =
             rulesToParams('Disabled', currentDate, bucketLCRules, bucketData, ruleOptions);
         // If params is undefined listings can be skipped.
@@ -149,6 +149,13 @@ class LifecycleTaskV2 extends LifecycleTask {
      */
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
         const currentDate = new Date();
+
+        const { transitionOneDayEarlier, expireOneDayEarlier, timeProgressionFactor } = this.lcOptions;
+        const ruleOptions = {
+            transitionOneDayEarlier,
+            expireOneDayEarlier,
+            timeProgressionFactor,
+        };
 
         const { params, listType, remainings } =
             rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, ruleOptions);

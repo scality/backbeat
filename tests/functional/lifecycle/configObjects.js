@@ -60,6 +60,12 @@ const mongoConfig = {
 
 const testTimeout = 30000;
 
+const timeOptions = {
+    expireOneDayEarlier: false,
+    transitionOneDayEarlier: false,
+    timeProgressionFactor: 1,
+};
+
 module.exports = {
     bucketTasksTopic,
     objectTasksTopic,
@@ -70,4 +76,5 @@ module.exports = {
     s3Config,
     testTimeout,
     mongoConfig,
+    timeOptions,
 };

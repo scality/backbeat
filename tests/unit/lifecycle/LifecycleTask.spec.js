@@ -5,6 +5,7 @@ const assert = require('assert');
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
 const fakeLogger = require('../../utils/fakeLogger');
+const { timeOptions } = require('../../functional/lifecycle/configObjects');
 
 const HOUR = 1000 * 60 * 60;
 const DAY = 24 * HOUR;
@@ -84,6 +85,7 @@ const lp = {
                 abortIncompleteMultipartUpload: { enabled: true },
             },
             ncvHeap: new Map(),
+            lcOptions: timeOptions,
         }
     ),
 };

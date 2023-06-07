@@ -11,6 +11,8 @@ class RulesReducer {
      * @param {Object} options - rule lifecycle options
      * @param {boolean} options.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
      * @param {boolean} options.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
+     * @param {number} options.timeProgressionFactor - decreases the weight attributed to a day in order to
+     * expedite the lifecycle of objects.
     */
     constructor(versioningStatus, currentDate, bucketLCRules, options) {
         this._isVersioning = versioningStatus === 'Enabled' || versioningStatus === 'Suspended';

@@ -63,14 +63,21 @@ class LifecycleBucketProcessor {
      * @param {String} s3Config.port - port
      * @param {Object} mongoConfig - MongoDb Connection Config
      * @param {String} transport - http or https
+     * @param {Object} lcOptions - lifecycle options
+     * @param {boolean} lcOptions.expireOneDayEarlier - moves lifecycle expiration deadlines 1 day earlier
+     * @param {boolean} lcOptions.transitionOneDayEarlier - moves lifecycle transition deadlines 1 day earlier
+     * @param {Number} lcOptions.timeProgressionFactor - decrease the weight attributed to a day in order to
+     * expedite the lifecycle of objects.
      */
-    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, transport = 'http') {
+
+    constructor(zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, transport = 'http', lcOptions) {
         this._log = new Logger('Backbeat:Lifecycle:BucketProcessor');
         this._zkConfig = zkConfig;
         this._kafkaConfig = kafkaConfig;
         this._lcConfig = lcConfig;
         this._repConfig = repConfig;
         this._mongoConfig = mongoConfig;
+        this._lcOptions = lcOptions;
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
@@ -169,6 +176,7 @@ class LifecycleBucketProcessor {
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             ncvHeap: this.ncvHeap,
             pausedLocations: this._pausedLocations,
+            lcOptions: this._lcOptions,
             log: this._log,
         };
     }

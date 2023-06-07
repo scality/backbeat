@@ -2,6 +2,7 @@ const assert = require('assert');
 const Logger = require('werelogs').Logger;
 const { ObjectMD } = require('arsenal').models;
 const { S3ClientMock } = require('../../utils/S3ClientMock');
+const { timeOptions } = require('./configObjects');
 
 const { BackbeatMetadataProxyMock, expectNominalListingParams, KeyMock, TestKafkaEntry } = require('./utils');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
@@ -74,6 +75,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 kafkaBacklogMetrics: { snapshotTopicOffsets: () => {} },
                 pausedLocations: new Set(),
                 log,
+                lcOptions: timeOptions,
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);
@@ -96,7 +98,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
     it('should not publish any entry if object is not eligible', done => {
         const contents = [
-            keyMock.nonCurrent({ keyName: 'key1', versionId: 'versionid1', daysEarlier: 0 }),
+            keyMock.nonCurrent({ keyName: 'key1', versionId: 'versionid1', daysEarlier: 1 }),
         ];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -122,7 +124,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         key.StorageClass = destinationLocation;
         key.DataStoreName = destinationLocation;
         const contents = [key];
@@ -153,7 +155,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         // The current objects should not be expired anymore.
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
-        const key = keyMock.orphanDeleteMarker({ keyName, daysEarlier: 1 });
+        const key = keyMock.orphanDeleteMarker({ keyName, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -188,7 +190,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -239,7 +241,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
         const versionId = 'versionid1';
-        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -276,7 +278,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     it('should publish one object entry if object is eligible', done => {
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -310,7 +312,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         const { ETag, LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -356,7 +358,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1, size: 0 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2, size: 0 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -391,7 +393,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 0 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -425,7 +427,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -462,7 +464,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { ETag, LastModified } = key;
 
         const contents = [key];
@@ -513,7 +515,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { ETag, LastModified } = key;
 
         const contents = [key];
@@ -570,7 +572,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { LastModified } = key;
 
         const contents = [key];
@@ -617,7 +619,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1, size: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 2, size: 0 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -653,7 +655,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
-        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 2 });
 
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -700,7 +702,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
-        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 2 });
 
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -744,7 +746,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
-        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.orphanDeleteMarker({ keyName, versionId, daysEarlier: 2 });
 
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -773,7 +775,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     it('should publish one bucket entry if listing is trucated', done => {
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, daysEarlier: 0 });
+        const key = keyMock.nonCurrent({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { keyMarker: keyName, versionIdMarker: versionId } };
@@ -814,7 +816,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 0 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { keyMarker: keyName, versionIdMarker: versionId } };
@@ -851,7 +853,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     it('should publish one bucket and one object entry if object is elligible and listing is trucated', done => {
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { marker: keyName } };
@@ -900,7 +902,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         ];
         const keyName = 'pre1-key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 0 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 

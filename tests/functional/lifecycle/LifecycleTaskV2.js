@@ -5,6 +5,7 @@ const { ObjectMD } = require('arsenal').models;
 const { S3ClientMock } = require('../../utils/S3ClientMock');
 const { BackbeatMetadataProxyMock, expectNominalListingParams, KeyMock, TestKafkaEntry } = require('./utils');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
+const { timeOptions } = require('./configObjects');
 
 const log = new Logger('LifecycleTaskV2:test');
 const ONE_DAY_IN_SEC = 60 * 60 * 24 * 1000;
@@ -75,6 +76,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 kafkaBacklogMetrics: { snapshotTopicOffsets: () => {} },
                 pausedLocations: new Set(),
                 log,
+                lcOptions: timeOptions,
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);
@@ -125,7 +127,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const contents = [
-            keyMock.current({ keyName: 'key1', daysEarlier: 1 }),
+            keyMock.current({ keyName: 'key1', daysEarlier: 3 }),
         ];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -143,7 +145,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should not publish any entry if object is not eligible', done => {
         const contents = [
-            keyMock.current({ keyName: 'key1', daysEarlier: 0 }),
+            keyMock.current({ keyName: 'key1', daysEarlier: 1 }),
         ];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -164,7 +166,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should not publish any entry if detail section is comming from the old lifecycle task', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -186,7 +188,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should not publish any object entry if detail section is invalid', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -217,7 +219,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         key.StorageClass = destinationLocation;
         key.DataStoreName = destinationLocation;
         const contents = [key];
@@ -244,7 +246,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
     it('should publish one object with the bucketData details set', done => {
         const prefix = 'pre1';
         const keyName = `${prefix}key1`;
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -283,7 +285,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should publish one object entry if object is eligible', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -314,7 +316,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             { Key: 'key', Value: 'val' },
             { Key: 'key2', Value: 'val2' },
         ];
-        const key = keyMock.current({ keyName, daysEarlier: 1, tagSet });
+        const key = keyMock.current({ keyName, daysEarlier: 2, tagSet });
         const { LastModified } = key;
 
         const ruleWithTags = [{
@@ -360,7 +362,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             { Key: 'key', Value: 'val' },
             { Key: 'key2', Value: 'val2' },
         ];
-        const key = keyMock.current({ keyName, daysEarlier: 1, tagSet });
+        const key = keyMock.current({ keyName, daysEarlier: 2, tagSet });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -401,7 +403,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { ETag, LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -451,7 +453,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { ETag, LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
@@ -501,7 +503,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { LastModified } = key;
 
         const contents = [key];
@@ -543,7 +545,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1, size: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 2, size: 0 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -578,7 +580,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -604,7 +606,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should publish one bucket entry if listing is truncated', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { marker: keyName } };
@@ -643,7 +645,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             }
         ];
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { marker: keyName } };
@@ -678,7 +680,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should not publish bucket entry if listing is trucated but is retried', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
             { contents, isTruncated: true, markerInfo: { marker: keyName } };
@@ -700,7 +702,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
 
     it('should publish one bucket and one object entry if object is elligible and listing is trucated', done => {
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const { LastModified } = key;
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse =
@@ -750,7 +752,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'pre1-key1';
-        const key = keyMock.current({ keyName, daysEarlier: 0 });
+        const key = keyMock.current({ keyName, daysEarlier: 1 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -797,7 +799,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         ];
 
         const keyName = 'key1';
-        const key = keyMock.current({ keyName, daysEarlier: 1 });
+        const key = keyMock.current({ keyName, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 

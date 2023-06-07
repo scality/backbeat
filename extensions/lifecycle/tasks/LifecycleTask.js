@@ -34,10 +34,6 @@ const errorLocationPaused = errors.InternalError.
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
-// moves lifecycle transition deadlines 1 day earlier, mostly for testing
-const transitionOneDayEarlier = process.env.TRANSITION_ONE_DAY_EARLIER === 'true';
-// moves lifecycle expiration deadlines 1 day earlier, mostly for testing
-const expireOneDayEarlier = process.env.EXPIRE_ONE_DAY_EARLIER === 'true';
 
 /**
  * compare 2 version by their stale dates returning:
@@ -76,9 +72,11 @@ class LifecycleTask extends BackbeatTask {
         super();
         Object.assign(this, lpState);
 
+        const { transitionOneDayEarlier, expireOneDayEarlier, timeProgressionFactor } = this.lcOptions;
         this._lifecycleDateTime = new LifecycleDateTime({
             transitionOneDayEarlier,
             expireOneDayEarlier,
+            timeProgressionFactor,
         });
 
         this._lifecycleUtils = new LifecycleUtils(

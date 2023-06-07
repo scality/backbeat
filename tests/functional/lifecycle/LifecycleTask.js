@@ -8,6 +8,11 @@ const LifecycleRule = require('arsenal').models.LifecycleRule;
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');
 const { objectMD } = require('../utils/MetadataMock');
+const timeOptions = {
+    expireOneDayEarlier: true,
+    transitionOneDayEarlier: true,
+    timeProgressionFactor: 1,
+};
 
 const S3 = AWS.S3;
 const s3config = {
@@ -395,6 +400,7 @@ class LifecycleBucketProcessorMock {
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
         this.ncvHeap = new Map();
+        this.lcOptions = timeOptions;
     }
 
     getCount() {
@@ -421,6 +427,7 @@ class LifecycleBucketProcessorMock {
             pausedLocations: new Set(),
             log: this._log,
             ncvHeap: this.ncvHeap,
+            lcOptions: timeOptions,
         };
     }
 

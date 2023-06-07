@@ -13,6 +13,7 @@ const {
     repConfig,
     s3Config,
     mongoConfig,
+    timeOptions,
 } = require('../../functional/lifecycle/configObjects');
 
 
@@ -20,7 +21,7 @@ describe('Lifecycle Bucket Processor', () => {
     let lbp;
     beforeEach(() => {
         lbp = new LifecycleBucketProcessor(
-            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig);
+            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, timeOptions);
     });
 
     afterEach(() => {

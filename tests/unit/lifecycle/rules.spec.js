@@ -2,7 +2,8 @@ const assert = require('assert');
 
 const { rulesToParams } = require('../../../extensions/lifecycle/util/rules');
 
-const ONE_DAY_IN_SEC = 60 * 60 * 24 * 1000;
+const ONE_MINUTE_IN_SEC = 60 * 1000;
+const ONE_DAY_IN_SEC = 24 * 60 * ONE_MINUTE_IN_SEC;
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 
 const bucketName = 'bucket1';
@@ -788,6 +789,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const customOptions = {
             expireOneDayEarlier: true,
             transitionOneDayEarlier: false,
+            timeProgressionFactor: 1,
         };
         const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
         const bucketLCRules = [
@@ -828,6 +830,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const customOptions = {
             expireOneDayEarlier: false,
             transitionOneDayEarlier: true,
+            timeProgressionFactor: 1,
         };
         const expectedBeforeDate = (new Date(currentDate - ONE_DAY_IN_SEC)).toISOString();
         const bucketLCRules = [
@@ -869,6 +872,7 @@ describe('rulesToParams with versioning Disabled', () => {
         const customOptions = {
             expireOneDayEarlier: true,
             transitionOneDayEarlier: true,
+            timeProgressionFactor: 1,
         };
         const bucketLCRules = [
             {
@@ -898,6 +902,90 @@ describe('rulesToParams with versioning Disabled', () => {
                 storageClass: locationName2,
             }]
         };
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with timeProgressionFactor set to 2', () => {
+        const currentDate = Date.now();
+        const customOptions = {
+            expireOneDayEarlier: false,
+            transitionOneDayEarlier: false,
+            timeProgressionFactor: 2,
+        };
+        const expectedBeforeDate = (new Date(currentDate -  (ONE_DAY_IN_SEC / 2))).toISOString();
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '123',
+                Prefix: 'titi',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: 'titi',
+               MaxKeys: MAX_KEYS,
+               BeforeDate: expectedBeforeDate,
+            },
+            listType: 'current',
+            remainings: [{
+                listType: 'current',
+                prefix: 'toto',
+                beforeDate: expectedBeforeDate,
+                storageClass: locationName2,
+             }]
+         };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with timeProgressionFactor set to one day in minutes (24 * 60)', () => {
+        const currentDate = Date.now();
+        const customOptions = {
+            expireOneDayEarlier: false,
+            transitionOneDayEarlier: false,
+            timeProgressionFactor: 24 * 60,
+        };
+        const expectedBeforeDate = (new Date(currentDate -  ONE_MINUTE_IN_SEC)).toISOString();
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 1 },
+                ID: '123',
+                Prefix: 'titi',
+                Status: 'Enabled',
+            },
+            {
+                Transitions: [{ Days: 1, StorageClass: locationName2 }],
+                ID: '456',
+                Prefix: 'toto',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: 'titi',
+               MaxKeys: MAX_KEYS,
+               BeforeDate: expectedBeforeDate,
+            },
+            listType: 'current',
+            remainings: [{
+                listType: 'current',
+                prefix: 'toto',
+                beforeDate: expectedBeforeDate,
+                storageClass: locationName2,
+             }]
+         };
+
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
     });

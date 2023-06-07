@@ -27,11 +27,22 @@ werelogs.configure({
     dump: log.dumpLevel,
 });
 
-
 const logger = new werelogs.Logger('Backbeat:Lifecycle:Producer');
 
+const {
+    expireOneDayEarlier,
+    transitionOneDayEarlier,
+    timeProgressionFactor,
+} = config.getTimeOptions();
+
+const lcOptions = {
+    expireOneDayEarlier,
+    transitionOneDayEarlier,
+    timeProgressionFactor,
+};
+
 const bucketProcessor = new LifecycleBucketProcessor(
-    zookeeper, kafka, lcConfig, repConfig, s3, mongoConfig, lcConfig.transport,
+    zookeeper, kafka, lcConfig, repConfig, s3, mongoConfig, lcConfig.transport, lcOptions,
 );
 
 function livenessCheck(res, log) {
