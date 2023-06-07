@@ -146,7 +146,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
         async.waterfall([
             next => this._getMetadata(entry, log, next),
             (objMD, next) => {
-                const coldLocation = entry.getAttribute('target.location') ||
+                const coldLocation = entry.getAttribute('target.newLocation') ||
                     // If location not specified, use the first (and only) location
                     // This is a temporary fix, until Sorbet is fixed to provide the information
                     Object.keys(locations).find(name => locations[name].isCold);

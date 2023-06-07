@@ -42,5 +42,12 @@
     "legacyAwsBehavior": false,
     "isCold": true,
     "details": {}
+  },
+  "location-dmf-v2": {
+    "type": "dmf",
+    "objectId": "location-dmf-v2",
+    "legacyAwsBehavior": false,
+    "isCold": true,
+    "details": {}
   }
 }
