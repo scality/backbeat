@@ -228,7 +228,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // supporting both 's3:ObjectRestore' and 's3:ObjectRestore:Post' to keep
         // compatibility with older cloudserver versions, the switch to 's3:ObjectRestore:Post'
         // was made to have the correct event type for bucket notifications
-        if (!['s3:ObjectRestore', 's3:ObjectRestore:Post'].includes(operation)) {
+        if (!['s3:ObjectRestore', 's3:ObjectRestore:Post', 's3:ObjectRestore:Retry'].includes(operation)) {
             return;
         }
 

@@ -10,6 +10,7 @@ const LifecycleColdStatusArchiveTask =
 const { LifecycleResetTransitionInProgressTask } =
       require('../tasks/LifecycleResetTransitionInProgressTask');
 const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
+const { LifecycleRetriggerRestoreTask } = require('../tasks/LifecycleRetriggerRestoreTask');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -104,6 +105,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
         if (actionType === 'requeueTransition') {
             return new LifecycleResetTransitionInProgressTask(this);
+        } else if (actionType === 'requeueRestore') {
+            return new LifecycleRetriggerRestoreTask(this);
         }
 
         if (actionType !== 'copyLocation' ||

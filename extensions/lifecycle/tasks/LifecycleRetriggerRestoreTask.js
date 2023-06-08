@@ -8,7 +8,7 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { LifecycleRequeueTask } = require('./LifecycleRequeueTask');
 
-class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
+class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
     /**
      * Process a lifecycle object entry
      *
@@ -48,7 +48,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         });
 
         return client.getMetadata(params, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
+            LifecycleMetrics.onS3Request(log, 'getMetadata', 'requeueRestore', err);
             if (err) {
                 return cb(err);
             }
@@ -58,18 +58,18 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
                 return cb(error);
             }
 
-            if (this.shouldSkipObject(md, etag, log)) {
+            if (this.shouldSkipObject(md, log)) {
                 return cb(null, 0);
             }
 
-            md.setTransitionInProgress(false);
             md.setUserMetadata({
-                'x-amz-meta-scal-s3-transition-attempt': try_,
+                'x-amz-meta-scal-s3-restore-attempt': try_,
             });
+            md.setOriginOp('s3:ObjectRestore:Retry')
 
             return client.putMetadata({ ...params, mdBlob: md.getSerialized() }, log,
                 err => {
-                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'transition', err);
+                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'requeueRestore', err);
                     if (err) {
                         return cb(err);
                     }
@@ -80,30 +80,16 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         });
     }
 
-    shouldSkipObject(md, expectedEtag, log) {
-        try {
-            const etag = JSON.parse(expectedEtag);
-            if (etag !== md.getContentMd5()) {
-                log.debug('different etag, skipping object', {
-                    currentETag: md.getContentMd5(),
-                    requeueEtag: etag,
-                });
-                return true;
-            }
-        } catch (error) {
-            log.error('unparseable etag, skipping object', { errorMessage: error.message });
+    shouldSkipObject(md, log) {
+        if (md.getArchive()?.archiveInfo?.archiveId === undefined) {
+            log.error('object is not archived, skipping');
             return true;
         }
-
-        if (!md.getTransitionInProgress()) {
-            log.debug('not transitioning, skipping object');
-            return true;
-        }
-
+        
         return false;
     }
 }
 
 module.exports = {
-    LifecycleResetTransitionInProgressTask
+    LifecycleRetriggerRestoreTask
 };
