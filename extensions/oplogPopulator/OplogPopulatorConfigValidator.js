@@ -9,6 +9,7 @@ const joiSchema = joi.object({
     prefix: joi.string().optional(),
     probeServer: probeServerJoi.default(),
     connectorsUpdateCronRule: joi.string().default('*/1 * * * * *'),
+    heartbeatIntervalMs: joi.number().default(10000),
 });
 
 function configValidator(backbeatConfig, extConfig) {

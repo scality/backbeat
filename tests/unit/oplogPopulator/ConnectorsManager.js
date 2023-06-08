@@ -55,6 +55,7 @@ const connectorConfig = {
             }, 'null'],
         }],
     }),
+    'heartbeat.interval.ms': 10000,
 };
 
 const connector1 = new Connector({
@@ -75,6 +76,7 @@ describe('ConnectorsManager', () => {
             mongoUrl: 'mongodb://localhost:27017/?w=majority&readPreference=primary',
             oplogTopic: 'oplog',
             cronRule: '*/5 * * * * *',
+            heartbeatIntervalMs: 10000,
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
             metricsHandler: new OplogPopulatorMetrics(logger),
