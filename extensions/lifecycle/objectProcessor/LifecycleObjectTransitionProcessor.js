@@ -80,6 +80,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 groupId: this._processConfig.groupId,
                 concurrency: this._processConfig.concurrency,
                 queueProcessor: this.processColdStorageStatusEntry.bind(this),
+                canary: true,
                 circuitBreaker,
             };
         });
