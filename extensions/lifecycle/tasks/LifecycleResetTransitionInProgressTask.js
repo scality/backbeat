@@ -1,11 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
-
-const { errors } = require('arsenal');
-const ObjectMD = require('arsenal').models.ObjectMD;
-
-const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { LifecycleRequeueTask } = require('./LifecycleRequeueTask');
 
 class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
@@ -16,68 +10,19 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
      * @param {LifecycleObjectProcessor} proc - object processor instance
      */
      constructor(proc) {
-        const procState = proc.getStateVars();
-        super();
-        Object.assign(this, procState);
+        super(proc);
+        this.processName = 'transition';
     }
 
-    requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, bucketLogger, cb) {
-        const client = this.getBackbeatMetadataProxy(accountId);
-        if (!client) {
-            return cb(errors.InternalError.customizeDescription(
-                `Unable to obtain client for account ${accountId}`,
-            ));
+    updateObjectMD(md, try_, log, etag) {
+        if (this.shouldSkipObject(md, etag, log)) {
+            return false;
         }
-
-        const params = {
-            bucket: bucketName,
-            objectKey,
-        };
-        if (objectVersion) {
-            params.versionId = objectVersion;
-        }
-
-        const log = this.logger.newRequestLogger(bucketLogger.getUids());
-        log.addDefaultFields({
-            accountId,
-            bucketName,
-            objectKey,
-            objectVersion,
-            etag,
-            try: try_,
-        });
-
-        return client.getMetadata(params, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
-            if (err) {
-                return cb(err);
-            }
-
-            const { result: md, error } = ObjectMD.createFromBlob(blob.Body);
-            if (error) {
-                return cb(error);
-            }
-
-            if (this.shouldSkipObject(md, etag, log)) {
-                return cb(null, 0);
-            }
-
-            md.setTransitionInProgress(false);
-            md.setUserMetadata({
+        md.setTransitionInProgress(false);
+        md.setUserMetadata({
                 'x-amz-meta-scal-s3-transition-attempt': try_,
-            });
-
-            return client.putMetadata({ ...params, mdBlob: md.getSerialized() }, log,
-                err => {
-                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'transition', err);
-                    if (err) {
-                        return cb(err);
-                    }
-
-                    return cb(null, 1);
-                }
-            );
         });
+        return true;
     }
 
     shouldSkipObject(md, expectedEtag, log) {

@@ -103,10 +103,12 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
     getTask(actionEntry) {
         const actionType = actionEntry.getActionType();
 
-        if (actionType === 'requeueTransition') {
-            return new LifecycleResetTransitionInProgressTask(this);
-        } else if (actionType === 'requeueRestore') {
-            return new LifecycleRetriggerRestoreTask(this);
+        switch (actionType) {
+            case 'requeueTransition':
+                return new LifecycleResetTransitionInProgressTask(this);
+            case 'requeueRestore':
+                return new LifecycleRetriggerRestoreTask(this);
+            default:
         }
 
         if (actionType !== 'copyLocation' ||

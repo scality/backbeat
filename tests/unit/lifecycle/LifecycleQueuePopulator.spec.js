@@ -147,7 +147,11 @@ describe('LifecycleQueuePopulator', () => {
                 ignore: false,
             },
             {
-                event: 's3:ObjectRestore',
+                event: 's3:ObjectRestore:Post',
+                ignore: false,
+            },
+            {
+                event: 's3:ObjectRestore:Retry',
                 ignore: false,
             },
             {

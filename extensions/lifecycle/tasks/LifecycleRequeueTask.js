@@ -11,6 +11,72 @@ const { LifecycleMetrics } = require('../LifecycleMetrics');
 class LifecycleRequeueTask extends BackbeatTask {
 
     /**
+     * Process a lifecycle object entry
+     *
+     * @constructor
+     * @param {LifecycleObjectProcessor} proc - object processor instance
+     */
+    constructor(proc) {
+        const procState = proc.getStateVars();
+        super();
+        Object.assign(this, procState);
+    }
+
+    requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, bucketLogger, cb) {
+        const client = this.getBackbeatMetadataProxy(accountId);
+        if (!client) {
+            return cb(errors.InternalError.customizeDescription(
+                `Unable to obtain client for account ${accountId}`,
+            ));
+        }
+
+        const params = {
+            bucket: bucketName,
+            objectKey,
+        };
+        if (objectVersion) {
+            params.versionId = objectVersion;
+        }
+
+        const log = this.logger.newRequestLogger(bucketLogger.getUids());
+        log.addDefaultFields({
+            accountId,
+            bucketName,
+            objectKey,
+            objectVersion,
+            etag,
+            try: try_,
+        });
+
+        return client.getMetadata(params, log, (err, blob) => {
+            LifecycleMetrics.onS3Request(log, 'getMetadata', this.processName, err);
+            if (err) {
+                return cb(err);
+            }
+
+            const { result: md, error } = ObjectMD.createFromBlob(blob.Body);
+            if (error) {
+                return cb(error);
+            }
+
+            if (!this.updateObjectMD(md, try_, log, etag)) {
+                return cb(null, 0);
+            }
+
+            return client.putMetadata({ ...params, mdBlob: md.getSerialized() }, log,
+                err => {
+                    LifecycleMetrics.onS3Request(log, 'putMetadata', this.processName, err);
+                    if (err) {
+                        return cb(err);
+                    }
+
+                    return cb(null, 1);
+                }
+            );
+        });
+    }
+
+    /**
      * Execute the action specified in action entry
      *
      * @param {ActionQueueEntry} entry - action entry to execute
