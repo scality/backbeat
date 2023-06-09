@@ -11,7 +11,7 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
      */
      constructor(proc) {
         super(proc);
-        this.processName = 'retriggerRestore';
+        this.processName = 'restore';
     }
 
     updateObjectMD(md, try_, log) {
