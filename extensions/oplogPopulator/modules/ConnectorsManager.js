@@ -17,6 +17,7 @@ const paramsJoi = joi.object({
     oplogTopic: joi.string().required(),
     cronRule: joi.string().required(),
     prefix: joi.string(),
+    heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
     metricsHandler: joi.object()
@@ -52,6 +53,7 @@ class ConnectorsManager {
         joi.attempt(params, paramsJoi);
         this._nbConnectors = params.nbConnectors;
         this._cronRule = params.cronRule;
+        this._heartbeatIntervalMs = params.heartbeatIntervalMs;
         this._logger = params.logger;
         this._kafkaConnectHost = params.kafkaConnectHost;
         this._kafkaConnectPort = params.kafkaConnectPort;
@@ -82,7 +84,10 @@ class ConnectorsManager {
             'connection.uri': this._mongoUrl,
             'topic.namespace.map': JSON.stringify({
                 '*': this._oplogTopic,
-            })
+            }),
+            // hearbeat prevents having an outdated resume token in the connectors
+            // by constantly updating the offset to the last object in the oplog
+            'heartbeat.interval.ms': this._heartbeatIntervalMs,
         };
         return {
             ...constants.defaultConnectorConfig,
