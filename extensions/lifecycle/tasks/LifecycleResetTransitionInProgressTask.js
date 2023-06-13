@@ -10,8 +10,7 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
      * @param {LifecycleObjectProcessor} proc - object processor instance
      */
      constructor(proc) {
-        super(proc);
-        this.processName = 'transition';
+        super(proc, 'transition');
     }
 
     updateObjectMD(md, try_, log, etag) {

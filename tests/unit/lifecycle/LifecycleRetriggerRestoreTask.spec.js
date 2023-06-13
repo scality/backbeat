@@ -11,7 +11,7 @@ const {
     ProcessorMock,
 } = require('../mocks');
 
-describe('LifecycleResetTransitionInProgressTask', () => {
+describe.only('LifecycleResetTransitionInProgressTask', () => {
     let backbeatMetadataProxyClient;
     let objectProcessor;
     let task;
@@ -30,6 +30,18 @@ describe('LifecycleResetTransitionInProgressTask', () => {
         });
 
     const objectNotArchived = new ObjectMD();
+    const objectAlreadyRestored = new ObjectMD().setArchive(
+        new ObjectMDArchive({
+            archiveId: '123456789',
+            }, Date.now(), 1, Date.now(), undefined));
+    const objectRestoreNotRequested = new ObjectMD().setArchive(
+                new ObjectMDArchive({
+                    archiveId: '123456789',
+                    }));
+    const objectRestoreExpired = new ObjectMD().setArchive(
+        new ObjectMDArchive({
+            archiveId: '123456789',
+            }, Date.now() - 1000, 1, Date.now() - 999, Date.now() - 10));
     const archiveInfo = new ObjectMDArchive({
         archiveId: '123456789'
     }, Date.now(), 1, undefined, undefined);
@@ -54,6 +66,36 @@ describe('LifecycleResetTransitionInProgressTask', () => {
 
     it('should skip object not archived', done => {
         backbeatMetadataProxyClient.setMdObj(objectNotArchived);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            assert.ok(backbeatMetadataProxyClient.receivedMd === null);
+
+            done();
+        });
+    });
+
+    it('should skip object when restore is expired', done => {
+        backbeatMetadataProxyClient.setMdObj(objectRestoreExpired);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            assert.ok(backbeatMetadataProxyClient.receivedMd === null);
+
+            done();
+        });
+    });
+
+    it('should skip object already restored', done => {
+        backbeatMetadataProxyClient.setMdObj(objectAlreadyRestored);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            assert.ok(backbeatMetadataProxyClient.receivedMd === null);
+
+            done();
+        });
+    });
+
+    it('should skip object not requested to restore', done => {
+        backbeatMetadataProxyClient.setMdObj(objectRestoreNotRequested);
         task.processActionEntry(actionEntry, err => {
             assert.ifError(err);
             assert.ok(backbeatMetadataProxyClient.receivedMd === null);

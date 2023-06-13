@@ -15,11 +15,13 @@ class LifecycleRequeueTask extends BackbeatTask {
      *
      * @constructor
      * @param {LifecycleObjectProcessor} proc - object processor instance
+     * @param {string} processName - name of the process
      */
-    constructor(proc) {
+    constructor(proc, processName) {
         const procState = proc.getStateVars();
         super();
         Object.assign(this, procState);
+        this.processName = processName;
     }
 
     requeueObjectVersion(accountId, bucketName, objectKey, objectVersion, etag, try_, bucketLogger, cb) {
