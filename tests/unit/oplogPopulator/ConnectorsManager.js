@@ -138,13 +138,17 @@ describe('ConnectorsManager', () => {
     });
 
     describe('_getOldConnectors', () => {
-        it('Should return old connector', async () => {
+        it('Should update connector config while keeping the extra fields', async () => {
+            const config = { ...connectorConfig };
+            config['topic.namespace.map'] = 'outdated-topic';
+            config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
-                .resolves(connectorConfig);
-            sinon.stub(connectorsManager, '_extractBucketsFromConfig').returns([]);
+                .resolves(config);
             const connectors = await connectorsManager._getOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 1);
             assert.strictEqual(connectors[0].name, 'source-connector');
+            assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
+            assert.strictEqual(connectors[0].config['topic.namespace.map'], '{"*":"oplog"}');
         });
     });
 

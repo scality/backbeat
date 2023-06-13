@@ -173,7 +173,9 @@ class ConnectorsManager {
                 // initializing connector
                 const connector = new Connector({
                     name: connectorName,
-                    config,
+                    // update existing connector config while leaving in fields that were
+                    // added manually like 'offset.topic.name'
+                    config: { ...oldConfig, ...config },
                     buckets,
                     logger: this._logger,
                     kafkaConnectHost: this._kafkaConnectHost,
