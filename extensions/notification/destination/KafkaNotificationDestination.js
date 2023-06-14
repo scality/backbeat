@@ -15,10 +15,11 @@ class KafkaNotificationDestination extends NotificationDestination {
     }
 
     _setupProducer(done) {
-        const { host, topic, auth } = this._destinationConfig;
+        const { host, topic, pollIntervalMs, auth } = this._destinationConfig;
         const producer = new KafkaProducer({
             kafka: { hosts: host },
             topic,
+            pollIntervalMs,
             auth,
         });
         producer.once('error', done);
