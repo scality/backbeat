@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
+const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
@@ -169,7 +170,16 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
-        const sourceEntry = JSON.parse(kafkaEntry.value);
+        let sourceEntry;
+        try {
+            sourceEntry = JSON.parse(kafkaEntry.value);
+        } catch (error) {
+            this.logger.error('error parsing JSON entry', {
+                error: error.message,
+                errorStack: error.stack,
+            });
+            return done(errors.InternalError);
+        }
         const { bucket, key, eventType } = sourceEntry;
         try {
             const config = this.bnConfigManager.getConfig(bucket);
@@ -227,10 +237,11 @@ class QueueProcessor extends EventEmitter {
             return done();
         } catch (error) {
             if (error) {
-                this.logger.err('error processing entry', {
+                this.logger.error('error processing entry', {
                     bucket,
                     key,
-                    error,
+                    error: error.message,
+                    errorStack: error.stack,
                 });
             }
             return done();
