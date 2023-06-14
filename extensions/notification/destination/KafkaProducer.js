@@ -16,6 +16,7 @@ const ACK_TIMEOUT = 5000;
 const FLUSH_TIMEOUT = 5000;
 
 const PRODUCER_MESSAGE_MAX_BYTES = 5000020;
+const PRODUCER_POLL_INTERVAL_MS = 2000;
 
 const CLIENT_ID = 'KafkaNotificationProducer';
 
@@ -28,6 +29,10 @@ class KafkaProducer extends EventEmitter {
     * @param {string} config.auth - kafka auth configuration
     * @param {Object} config.kafka - kafka connection config
     * @param {string} config.kafka.hosts - kafka hosts list
+    * @param {number} [config.messageMaxBytes] - maximum size of a single message
+    * @param {number} [config.pollIntervalMs] - producer poll interval
+    * between delivery report fetches, in milliseconds
+    * @param {object} [config.auth] - authentication info to access Kafka
     */
     constructor(config) {
         super();
@@ -37,7 +42,7 @@ class KafkaProducer extends EventEmitter {
                 hosts: joi.string().required(),
             }).required(),
             topic: joi.string().required(),
-            pollIntervalMs: joi.number().default(2000),
+            pollIntervalMs: joi.number().default(PRODUCER_POLL_INTERVAL_MS),
             messageMaxBytes: joi.number().default(PRODUCER_MESSAGE_MAX_BYTES),
             auth: joi.object().optional(),
         };
