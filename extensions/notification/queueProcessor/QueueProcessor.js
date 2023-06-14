@@ -219,7 +219,7 @@ class QueueProcessor extends EventEmitter {
                         eventTime: eventRecord.eventTime,
                         destination: this.destinationId,
                     });
-                    return this._destination.send([msg], done);
+                    this._destination.send([msg], () => {});
                 }
                 return done();
             }
@@ -227,10 +227,11 @@ class QueueProcessor extends EventEmitter {
             return done();
         } catch (error) {
             if (error) {
-                this.logger.err('error processing entry', {
+                this.logger.error('error processing entry', {
                     bucket,
                     key,
-                    error,
+                    error: error.message,
+                    errorStack: error.stack,
                 });
             }
             return done();

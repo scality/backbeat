@@ -364,7 +364,7 @@ class NotificationConfigManager {
                 = 'error setting bucket notification configuration';
             this.log.error(errMsg, {
                 method: 'BucketNotificationConfigManager.setConfig',
-                error: err,
+                error: err.message,
                 bucket,
                 config,
             });
