@@ -332,8 +332,6 @@ class LifecycleConductor {
                 return done();
             }
 
-            nBucketsQueued += tasks.length;
-
             const unknownCanonicalIds = new Set(
                 tasks
                     .map(t => t.canonicalId)
@@ -356,6 +354,8 @@ class LifecycleConductor {
                 (tasksWithAccountId, next) => this._createBucketTaskMessages(tasksWithAccountId, log, next),
             ],
             (err, messages) => {
+                nBucketsQueued += tasks.length;
+
                 log.info('bucket push progress', {
                     nBucketsQueued,
                     bucketsInCargo: tasks.length,

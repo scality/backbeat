@@ -45,6 +45,62 @@ describe('Lifecycle Conductor', () => {
         sinon.restore();
     });
 
+    describe('processBuckets', function test() {
+        // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
+        this.timeout(4000);
+        // tests that `activeIndexingJobRetrieved` is not reset until the e
+        it('should not reset `activeIndexingJobsRetrieved` while async operations are in progress', done => {
+            let order = [];
+
+            conductor._mongodbClient = { getIndexingJobs: () => {} };
+            conductor._producer = { send: (msg, cb) => cb() };
+
+            sinon.stub(conductor, '_controlBacklog')
+                .callsFake(cb => cb(null));
+            sinon.stub(conductor._mongodbClient, 'getIndexingJobs')
+                .callsFake((_, cb) => cb(null, ['job1', 'job2']));
+            sinon.stub(conductor, 'listBuckets')
+                .callsFake((mQueue, log, cb) => {
+                    mQueue.push({
+                        bucketName: 'testbucket',
+                        canonicalId: 'testId',
+                        isLifecycle: true,
+                    });
+                    cb(null, 1);
+                });
+            sinon.stub(conductor, '_getAccountIds')
+                .callsFake((_a, _b, cb) => {
+                    order.push(1);
+                    // assert that activeIndexingJobRetrieved is set to
+                    // true while async operations are in progress
+                    assert(conductor.activeIndexingJobsRetrieved);
+                    setTimeout(() => cb(null, []), 1000);
+                });
+            sinon.stub(conductor, '_createBucketTaskMessages')
+                .callsFake((_a, _b, cb) => {
+                    order.push(2);
+                    assert(conductor.activeIndexingJobsRetrieved);
+                    setTimeout(() => cb(null, []), 1000);
+                });
+
+            conductor.processBuckets(() => {
+                order.push(3);
+
+                // assert that all async operation are completed in order.
+                // this check is used to ensure that all async operations are
+                // executed and that processBuckets is not terminated before the
+                // completion of all necessary async operations.
+                assert.deepStrictEqual(order, [1, 2, 3]);
+
+                // assert that activeIndexinJobRetrieved is reset after async
+                // operations have completed
+                assert(!conductor.activeIndexingJobsRetrieved);
+
+                done();
+            });
+        });
+    });
+
     describe('_indexesGetOrCreate', () => {
         it('should return v1 for bucketd bucket sources', () => {
             conductor._bucketSource = 'bucketd';
