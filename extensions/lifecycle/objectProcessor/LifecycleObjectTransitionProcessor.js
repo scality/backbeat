@@ -108,17 +108,16 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 return new LifecycleResetTransitionInProgressTask(this);
             case 'requeueRestore':
                 return new LifecycleRetriggerRestoreTask(this);
+            case 'copyLocation':
+                if (actionEntry.getContextAttribute('ruleType') === 'transition') {
+                    return new LifecycleUpdateTransitionTask(this);
+                }
+                // fall through
             default:
+                this._log.warn(`skipped unsupported  action ${actionType}`,
+                            actionEntry.getLogInfo());
+                return null;
         }
-
-        if (actionType !== 'copyLocation' ||
-            actionEntry.getContextAttribute('ruleType') !== 'transition') {
-            this._log.warn(`skipped unsupported  action ${actionType}`,
-                             actionEntry.getLogInfo());
-            return null;
-        }
-
-        return new LifecycleUpdateTransitionTask(this);
     }
 
     processColdStorageStatusEntry(kafkaEntry, done) {

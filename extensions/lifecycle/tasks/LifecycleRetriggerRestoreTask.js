@@ -25,25 +25,24 @@ class LifecycleRetriggerRestoreTask extends LifecycleRequeueTask {
     }
 
     shouldSkipObject(md, log) {
-        const isObjectAlreadyRestored = md.getArchive()
-            && md.getArchive().restoreCompletedAt;
-
-        if (!md.getArchive()?.archiveInfo?.archiveId) {
+        const archive = md.getArchive();
+        if (!archive?.archiveInfo?.archiveId) {
             log.error('object is not archived, skipping');
             return true;
         }
 
+        const isObjectAlreadyRestored = archive.restoreCompletedAt;
         if (isObjectAlreadyRestored) {
                 log.error('object is already restored, skipping');
                 return true;
         }
 
-        if (new Date(md.getArchive().restoreWillExpireAt) < new Date()) {
+        if (new Date(archive.restoreWillExpireAt) < new Date()) {
             log.error('object restore has expired, skipping');
             return true;
         }
 
-        if (!md.getArchive()?.restoreRequestedAt || !md.getArchive()?.restoreRequestedDays) {
+        if (!archive.restoreRequestedAt || !archive.restoreRequestedDays) {
             log.error('object restore was not requested, skipping');
             return true;
         }
