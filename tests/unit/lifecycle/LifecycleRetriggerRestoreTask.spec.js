@@ -11,7 +11,7 @@ const {
     ProcessorMock,
 } = require('../mocks');
 
-describe.only('LifecycleResetTransitionInProgressTask', () => {
+describe('LifecycleResetTransitionInProgressTask', () => {
     let backbeatMetadataProxyClient;
     let objectProcessor;
     let task;

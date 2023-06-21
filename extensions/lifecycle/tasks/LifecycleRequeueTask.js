@@ -146,21 +146,9 @@ class LifecycleRequeueTask extends BackbeatTask {
                                 return nextObject(null, res + objsPerBucket);
                             }
                         ),
-                    (err, res) => {
-                        if (err) {
-                            return next(err);
-                        }
-
-                        return next(null, res);
-                    }
+                    (err, res) => next(err, res)
                 ),
-            (err, res) => {
-                if (err) {
-                    return cb(err);
-                }
-
-                return cb(null, res);
-            }
+            (err, res) => cb(err, res)
         );
     }
 }
