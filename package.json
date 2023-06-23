@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "8.6.22",
+  "version": "8.6.24",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
