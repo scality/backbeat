@@ -7,6 +7,11 @@ COPY ./package.json ./yarn.lock ${HOME_DIR}/backbeat
 # Remove when gitcache is sorted out
 RUN rm /root/.gitconfig
 
+RUN  \
+    apt-get install net-tools netcat tcpdump -y --no-install-recommends && \
+    apt-get autoremove -y && \
+    apt-get clean
+
 RUN yarn install --production --frozen-lockfile --network-concurrency 1
 
 COPY . ${HOME_DIR}/backbeat
