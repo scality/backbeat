@@ -123,7 +123,6 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
             probes: [
                 {
                     type: 'kafkaConsumerLag',
-                    implicitSingleOutputTopic: false,
                 }
             ],
         });
