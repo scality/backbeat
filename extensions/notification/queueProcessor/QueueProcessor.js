@@ -219,7 +219,8 @@ class QueueProcessor extends EventEmitter {
                         eventTime: eventRecord.eventTime,
                         destination: this.destinationId,
                     });
-                    return this._destination.send([msg], done);
+                    this._destination.send([msg], () => {});
+                    return done();
                 }
                 return done();
             }
