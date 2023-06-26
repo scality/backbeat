@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
-const { AccountIdCache } = require('../../../extensions/lifecycle/util/AccountIdCache');
+const { AccountIdCache } = require('../../../extensions/utils/AccountIdCache');
 
 describe('accound id cache', () => {
     it('should store values', () => {

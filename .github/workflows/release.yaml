@@ -67,7 +67,8 @@ jobs:
             extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
             extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
             extensions/gc/policy.json:application/vnd.iam-policy+json \
-            policies/queue_populator_policy.json:application/vnd.iam-policy+json
+            policies/queue_populator_policy.json:application/vnd.iam-policy+json \
+            policies/read_accounts.json:application/vnd.iam-policy+json
 
       - name: Build and push
         uses: docker/build-push-action@v4
