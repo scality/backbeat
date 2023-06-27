@@ -206,6 +206,43 @@ describe('lifecycle task helper methods', () => {
 
             assert.deepStrictEqual(expected, res);
         });
+
+        it('should merge and sort arrays that include a short version id ' +
+        'version', () => {
+            const versions = [
+                {
+                    Key: 'beluga-projets-d/db/202303081330/belugaprojets.log',
+                    VersionId: 'aJoN7z7tnjtR00000000001I4kqeIS4g',
+                    IsLatest: false,
+                    LastModified: '2023-03-08T12:30:23.137000+00:00',
+                },
+                {
+                    Key: 'beluga-projets-d/db/202304131430/mysql.sql.gz',
+                    VersionId: 'aJnucN9uvwQv00000000001I4kqeIS4g',
+                    IsLatest: false,
+                    LastModified: '2023-04-13T12:30:21.389000+00:00',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'beluga-projets-d/db/202303081330/belugaprojets.log',
+                    VersionId: 'aJoflc8UewLd00000000001I4kqeIS4g',
+                    IsLatest: true,
+                    LastModified: '2023-03-23T13:12:11.812000+00:00',
+                },
+                {
+                    Key: 'beluga-projets-d/db/202304131430/mysql.sql.gz',
+                    VersionId: 'aJl0my3xBGJF00000000001I4kqeIS4g',
+                    IsLatest: true,
+                    LastModified: '2023-06-20T23:12:16.753000+00:00',
+                },
+            ];
+
+            const expected = [dms[0], versions[0], dms[1], versions[1]];
+            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
+
+            assert.deepStrictEqual(expected, res);
+        });
     });
 
     describe('_addStaleDateToVersions', () => {
