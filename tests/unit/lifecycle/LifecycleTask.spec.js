@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
+const { errors } = require('arsenal');
 
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
@@ -110,7 +111,7 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363030',
+                    '39383331323130353631303036363939393939395247303031202038363935392e3131',
                     IsLatest: true,
                     LastModified: '2018-04-04T23:16:46.000Z',
                 },
@@ -118,21 +119,21 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363035',
+                    '39383331323130353632373431383939393939395247303031202038363935392e39',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363040',
+                    '39383331323130353632393030393939393939395247303031202038363935392e38',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:41.000Z',
                 },
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363045',
+                    '39383331323130353634393037323939393939395247303031202038363935392e36',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:32.000Z',
                 },
@@ -142,14 +143,14 @@ describe('lifecycle task helper methods', () => {
                     Key: 'obj-1',
                     IsLatest: false,
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363036',
+                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
                     LastModified: '2018-04-04T23:16:44.000Z',
                 },
                 {
                     Key: 'obj-1',
                     IsLatest: false,
                     VersionId:
-                    '834373636323233323831333639393939393952473030312020363042',
+                    '39383331323130353633303731373939393939395247303031202038363935392e37',
                     LastModified: '2018-04-04T23:16:34.000Z',
                 },
             ];
@@ -162,18 +163,70 @@ describe('lifecycle task helper methods', () => {
                 if (a.VersionId > b.VersionId) return 1;
                 return 0;
             });
-            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
-
-            assert.deepStrictEqual(expected, res);
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
         });
 
-        it('should merge and sort arrays that include a null version id ' +
-        'version', () => {
+        it('should merge and sort the arrays if the modified dates match and the dm has the newest version ID', () => {
             const versions = [
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831343639393939393952473030312020363030',
+                    '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    IsLatest: false,
+                    VersionId:
+                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
+
+            const expected = [dms[0], versions[0]];
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
+        });
+
+        it('should merge and sort the arrays ' +
+        'if the modified dates match and the version has the newest versionId', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '39383331323130353631353130353939393939395247303031202038363935392e3130',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    IsLatest: false,
+                    VersionId:
+                    '39383331323130353632373431383939393939395247303031202038363935392e39',
+                    LastModified: '2018-04-04T23:16:44.000Z',
+                },
+            ];
+
+            const expected = [versions[0], dms[0]];
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
+        });
+
+        it('should merge and sort arrays that include a null version id version', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '39383331323130353632373431383939393939395247303031202038363935392e39',
                     IsLatest: true,
                     LastModified: '2018-04-04T23:16:47.000Z',
                 },
@@ -188,39 +241,46 @@ describe('lifecycle task helper methods', () => {
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831343639393939393952473030312020363035',
+                    '39383331323130353632393030393939393939395247303031202038363935392e38',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:47.000Z',
                 },
                 {
                     Key: 'obj-1',
                     VersionId:
-                    '834373636323233323831343639393939393952473030312020363040',
+                    '39383331323130353633303731373939393939395247303031202038363935392e37',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:46.000Z',
+                },
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '39383331323130353634393037323939393939395247303031202038363935392e36',
                     IsLatest: false,
                     LastModified: '2018-04-04T23:16:40.000Z',
                 },
             ];
 
-            const expected = [versions[0], dms[0], versions[1], dms[1]];
-            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
+            const expected = [versions[0], dms[0], versions[1], dms[1], dms[2]];
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
 
-            assert.deepStrictEqual(expected, res);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
         });
 
-        it('should merge and sort arrays that include a short version id ' +
-        'version', () => {
+        it('should merge and sort arrays that include a short version id version', () => {
             const versions = [
                 {
                     Key: 'beluga-projets-d/db/202303081330/belugaprojets.log',
                     VersionId: 'aJoN7z7tnjtR00000000001I4kqeIS4g',
                     IsLatest: false,
-                    LastModified: '2023-03-08T12:30:23.137000+00:00',
+                    LastModified: '2023-03-08T12:30:23.000Z',
                 },
                 {
                     Key: 'beluga-projets-d/db/202304131430/mysql.sql.gz',
                     VersionId: 'aJnucN9uvwQv00000000001I4kqeIS4g',
                     IsLatest: false,
-                    LastModified: '2023-04-13T12:30:21.389000+00:00',
+                    LastModified: '2023-04-13T12:30:21.000Z',
                 },
             ];
             const dms = [
@@ -228,20 +288,70 @@ describe('lifecycle task helper methods', () => {
                     Key: 'beluga-projets-d/db/202303081330/belugaprojets.log',
                     VersionId: 'aJoflc8UewLd00000000001I4kqeIS4g',
                     IsLatest: true,
-                    LastModified: '2023-03-23T13:12:11.812000+00:00',
+                    LastModified: '2023-03-23T13:12:11.000Z',
                 },
                 {
                     Key: 'beluga-projets-d/db/202304131430/mysql.sql.gz',
                     VersionId: 'aJl0my3xBGJF00000000001I4kqeIS4g',
                     IsLatest: true,
-                    LastModified: '2023-06-20T23:12:16.753000+00:00',
+                    LastModified: '2023-06-20T23:12:16.000Z',
                 },
             ];
 
             const expected = [dms[0], versions[0], dms[1], versions[1]];
-            const res = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms);
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
 
-            assert.deepStrictEqual(expected, res);
+            assert.ifError(error);
+            assert.deepStrictEqual(sortedList, expected);
+        });
+
+        it('should return an error if invalid version id', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId: 'invalid',
+                    IsLatest: true,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    VersionId:
+                    '39383331323130353632393030393939393939395247303031202038363935392e38',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+            ];
+
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+
+            assert.deepStrictEqual(error, errors.InternalError);
+            assert.deepStrictEqual(sortedList, null);
+        });
+
+        it('should return an error if invalid delete marker version id', () => {
+            const versions = [
+                {
+                    Key: 'obj-1',
+                    VersionId: '39383331323130353632393030393939393939395247303031202038363935392e38',
+                    IsLatest: true,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+            ];
+            const dms = [
+                {
+                    Key: 'obj-1',
+                    VersionId: 'invalid',
+                    IsLatest: false,
+                    LastModified: '2018-04-04T23:16:47.000Z',
+                },
+            ];
+
+            const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);
+
+            assert.deepStrictEqual(error, errors.InternalError);
+            assert.deepStrictEqual(sortedList, null);
         });
     });
 
@@ -1906,6 +2016,33 @@ describe('lifecycle task helper methods', () => {
                     assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj1'));
                     assert(lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj2'));
                     assert(!lct2.objectsClearCalledWith.uniqueObjectKeys.has('obj3'));
+                    done();
+                });
+        });
+
+        it('should return an error if version id is invalid', done => {
+            lct2.listResponse = {
+                IsTruncated: false,
+                Versions: [
+                    {
+                        Key: 'obj-1',
+                        VersionId: '39383331323130353632393030393939393939395247303031202038363935392e38',
+                        IsLatest: true,
+                        LastModified: '2018-04-04T23:16:47.000Z',
+                    },
+                ],
+                DeleteMarkers: [
+                    {
+                        Key: 'obj-1',
+                        VersionId: 'invalid',
+                        IsLatest: false,
+                        LastModified: '2018-04-04T23:16:47.000Z',
+                    },
+                ],
+            };
+            lct2._getObjectVersions(bucketData, {}, 'Enabled', 0, fakeLogger,
+                err => {
+                    assert.deepStrictEqual(err, errors.InternalError);
                     done();
                 });
         });
