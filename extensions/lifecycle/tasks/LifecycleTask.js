@@ -1,7 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
-const { errors } = require('arsenal');
+const { errors, versioning } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
 const { supportedLifecycleRules } = require('arsenal').constants;
 const {
@@ -15,6 +15,7 @@ const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
+const { decode } = versioning.VersionID;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -319,9 +320,13 @@ class LifecycleTask extends BackbeatTask {
                 return done(err);
             }
             // all versions including delete markers
-            const allVersions = this._mergeSortedVersionsAndDeleteMarkers(
-                data.Versions, data.DeleteMarkers
+            const { error, sortedList: allVersions } = this._mergeSortedVersionsAndDeleteMarkers(
+                data.Versions, data.DeleteMarkers, log,
             );
+            if (error) {
+                return done(error);
+            }
+
             // for all versions and delete markers, add stale date property
             const allVersionsWithStaleDate = this._addStaleDateToVersions(
                 bucketData.details, allVersions
@@ -453,13 +458,42 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
+    /** _decodeVID - decode the version id
+     * @param {string} versionId - version ID
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {Object} result - { error, versionId }
+     * @return {Error} result.error - if decoding failed
+     * @return {String} result.versionId - decoded version id
+     */
+    _decodeVID(versionId, log) {
+        if (versionId === 'null') {
+            return { error: null, versionId };
+        }
+
+        const decoded = decode(versionId);
+        if (decoded instanceof Error) {
+            const invalidErr = errors.InternalError.customizeDescription('Invalid version id');
+            log.error('error decoding version id', {
+                method: 'LifecycleTask._decodeVID',
+                error: invalidErr,
+                versionId,
+            });
+            return { error: invalidErr, versionId: null };
+        }
+
+        return { error: null, decodedVersionId: decoded };
+    }
+
     /**
      * Helper method to merge and sort Versions and DeleteMarkers lists
      * @param {array} versions - versions list
      * @param {array} deleteMarkers - delete markers list
-     * @return {array} merge sorted array
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {object} result - { error, sortedList }
+     * @return {Error} result.error - if decoding failed
+     * @return {array} result.sortedList - merge sorted array
      */
-    _mergeSortedVersionsAndDeleteMarkers(versions, deleteMarkers) {
+    _mergeSortedVersionsAndDeleteMarkers(versions, deleteMarkers, log) {
         const sortedList = [];
         // Version index counter
         let vIdx = 0;
@@ -483,18 +517,57 @@ class LifecycleTask extends BackbeatTask {
                     sortedList.push(deleteMarkers[dmIdx++]);
                 }
             } else {
-                const isVersionLastModifiedNewer = (new Date(versions[vIdx].LastModified)
-                    >= new Date(deleteMarkers[dmIdx].LastModified));
-                // 2. by LastModified, find newer
+                // The `Key` names of the versions and delete markers are the same.
+                // Compare the `LastModified` timestamps of the versions and delete markers.
+                const versionLastModified = new Date(versions[vIdx].LastModified);
+                const deleteMarkerLastModified = new Date(deleteMarkers[dmIdx].LastModified);
+                const isVersionLastModifiedNewer = versionLastModified > deleteMarkerLastModified;
+                const isDMLastModifiedNewer = deleteMarkerLastModified > versionLastModified;
+
                 if (isVersionLastModifiedNewer) {
                     sortedList.push(versions[vIdx++]);
-                } else {
+                } else if (isDMLastModifiedNewer) {
                     sortedList.push(deleteMarkers[dmIdx++]);
+                } else {
+                    // If the version and the delete marker have the same last modified date
+                    const nullVersion = (versions[vIdx].VersionId === 'null'
+                    || deleteMarkers[dmIdx].VersionId === 'null');
+                    // and either of them is a null version, we cannot decode the version ID,
+                    // so we push the version object onto the sorted list first.
+                    if (nullVersion) {
+                        sortedList.push(versions[vIdx++]);
+                    } else {
+                        // and neither of them are null, we decode the version IDs and compare them.
+                        // A lower version ID indicates a more recent version.
+                        // What is the purpose of decoding the version ID?
+                        // The version ID string is a combination of the current time in milliseconds
+                        // and the position of the request in that millisecond.
+                        // This means that two version IDs with the same last modified date can be sorted,
+                        // because the position of the request is also included in the version ID.
+                        const { error: decodeVidError, decodedVersionId } =
+                            this._decodeVID(versions[vIdx].VersionId, log);
+                        if (decodeVidError) {
+                            return { error: decodeVidError, sortedList: null };
+                        }
+
+                        const { error: decodedDMError, decodedVersionId: decodedDMId } =
+                            this._decodeVID(deleteMarkers[dmIdx].VersionId, log);
+                        if (decodedDMError) {
+                            return { error: decodedDMError, sortedList: null };
+                        }
+
+                        const isVersionVidNewer = decodedVersionId < decodedDMId;
+                        if (isVersionVidNewer) {
+                            sortedList.push(versions[vIdx++]);
+                        } else {
+                            sortedList.push(deleteMarkers[dmIdx++]);
+                        }
+                    }
                 }
             }
         }
 
-        return sortedList;
+        return { error: null, sortedList };
     }
 
     /**
