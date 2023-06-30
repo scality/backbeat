@@ -1,4 +1,4 @@
-FROM registry.scality.com/federation/nodesvc-base:7.10.5.0
+FROM registry.scality.com/federation/nodesvc-base:7.10.6.8
 
 WORKDIR ${HOME_DIR}/backbeat
 
@@ -8,11 +8,10 @@ COPY ./package.json ./yarn.lock ${HOME_DIR}/backbeat
 RUN rm /root/.gitconfig
 
 RUN  \
-    apt-get install net-tools netcat tcpdump -y --no-install-recommends && \
-    apt-get autoremove -y && \
-    apt-get clean
-
-RUN yarn install --production --frozen-lockfile --network-concurrency 1
+    apt-get update && \
+    apt-get install -yq libssl-dev && \
+    yarn install --production --frozen-lockfile --network-concurrency 1 && \
+    yarn cache clean
 
 COPY . ${HOME_DIR}/backbeat
 
