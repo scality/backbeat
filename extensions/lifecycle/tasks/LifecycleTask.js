@@ -327,8 +327,7 @@ class LifecycleTask extends BackbeatTask {
             }
             // all versions including delete markers
             const { error, sortedList: allVersions } = this._mergeSortedVersionsAndDeleteMarkers(
-                data.Versions, data.DeleteMarkers, log,
-            );
+                data.Versions, data.DeleteMarkers, log);
             if (error) {
                 return done(error);
             }
