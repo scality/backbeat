@@ -467,13 +467,13 @@ class LifecycleTask extends BackbeatTask {
     /** _decodeVID - decode the version id
      * @param {string} versionId - version ID
      * @param {Logger.newRequestLogger} log - logger object
-     * @return {Object} result - { error, versionId }
+     * @return {Object} result - { error, decodedVersionId }
      * @return {Error} result.error - if decoding failed
-     * @return {String} result.versionId - decoded version id
+     * @return {String} result.decodedVersionId - decoded version id
      */
     _decodeVID(versionId, log) {
         if (versionId === 'null') {
-            return { error: null, versionId };
+            return { error: null, decodedVersionId: versionId };
         }
 
         const decoded = decode(versionId);
@@ -484,7 +484,7 @@ class LifecycleTask extends BackbeatTask {
                 error: invalidErr,
                 versionId,
             });
-            return { error: invalidErr, versionId: null };
+            return { error: invalidErr, decodedVersionId: null };
         }
 
         return { error: null, decodedVersionId: decoded };
