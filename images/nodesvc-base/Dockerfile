@@ -14,3 +14,5 @@ RUN  \
     yarn cache clean
 
 COPY . ${HOME_DIR}/backbeat
+
+CMD bash -c "source ${CONF_DIR}/env && export && supervisord -c ${CONF_DIR}/${SUPERVISORD_CONF}"
