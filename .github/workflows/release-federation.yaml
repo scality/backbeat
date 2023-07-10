@@ -15,8 +15,8 @@ jobs:
     with:
       push: true
       registry: registry.scality.com
-      namespace: ${{ github.event.repository.name }}
-      name: ${{ github.event.repository.name }}
+      namespace: backbeat-dev
+      name: backbeat-dev
       context: .
       file: images/nodesvc-base/Dockerfile
       tag: ${{ github.event.inputs.tag }}-nodesvc-base
