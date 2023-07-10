@@ -5,7 +5,7 @@ WORKDIR ${HOME_DIR}/backbeat
 COPY . ${HOME_DIR}/backbeat
 
 RUN yarn cache clean \
-    && yarn install --production --frozen-lockfile --ignore-optional --ignore-engines --network-concurrency 1 \
+    && yarn install --production --frozen-lockfile --network-concurrency 1 \
     && yarn cache clean
 
 RUN chown -R ${USER} ${HOME_DIR}/backbeat
