@@ -15,21 +15,8 @@ jobs:
     with:
       push: true
       registry: registry.scality.com
-      namespace: ${{ github.event.repository.name }}
-      name: ${{ github.event.repository.name }}
+      namespace: backbeat-dev
+      name: backbeat-dev
       context: .
       file: images/nodesvc-base/Dockerfile
-      tag: ${{ github.event.inputs.tag }}-nodesvc-base
-
-  github-release:
-    runs-on: ubuntu-latest
-    steps:
-      - name: Create Release
-        uses: softprops/action-gh-release@v1
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-        with:
-          name: Release ${{ github.event.inputs.tag }}
-          tag_name: ${{ github.event.inputs.tag }}
-          generate_release_notes: true
-          target_commitish: ${{ github.sha }}
+      tag: ${{ github.event.inputs.tag }}
