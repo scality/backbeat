@@ -9,22 +9,25 @@ describe('notification QueueProcessor', () => {
     let qp;
 
     before(done => {
-        qp = new QueueProcessor(null, null, null, {
-            host: 'external-kafka-host',
-        }, 'destId');
-        qp.bnConfigManager = {
-            getConfig: () => ({
-                notificationConfiguration: {
-                    queueConfig: [
-                        {
-                            queueArn: 'arn:scality:bucketnotif:::destId',
-                            events: [
-                                's3:ObjectCreated:*',
-                            ],
-                        },
+        qp = new QueueProcessor(null, null, {
+            destinations: [
+                {
+                    resource: 'destId',
+                    host: 'external-kafka-host',
+                },
+            ],
+        }, 'destId', null);
+        qp._getConfig = (bucket, cb) => cb(null, {
+            queueConfig: [
+                {
+                    queueArn: 'arn:scality:bucketnotif:::destId',
+                    events: [
+                        's3:ObjectCreated:*',
                     ],
                 },
-            }),
+            ],
+        });
+        qp.bnConfigManager = {
             setConfig: () => {},
         };
         qp.bnConfigManager.setConfig('mybucket', {
@@ -53,11 +56,12 @@ describe('notification QueueProcessor', () => {
             assert(sendCb.calledOnce);
             assert(Array.isArray(send.args[0][0]));
             assert(send.args[0][0][0].key === 'mybucket/key');
-            assert(typeof send.args[0][0][0].message === 'object');
-            assert(Array.isArray(send.args[0][0][0].message.Records));
-            assert.strictEqual(send.args[0][0][0].message.Records.length, 1);
-            assert.strictEqual(
-                send.args[0][0][0].message.Records[0].eventName,
+            assert(typeof send.args[0][0][0].message === 'string');
+            const message = JSON.parse(send.args[0][0][0].message);
+            assert(typeof message === 'object');
+            assert(Array.isArray(message.Records));
+            assert.strictEqual(message.Records.length, 1);
+            assert.strictEqual(message.Records[0].eventName,
                 's3:ObjectCreated:Put'
             );
             done();
@@ -82,6 +86,7 @@ describe('notification QueueProcessor', () => {
         const flushDeliveryReportsInterval = setInterval(() => {
             const _pendingDeliveryReports = pendingDeliveryReports;
             pendingDeliveryReports = [];
+            // eslint-disable-next-line no-restricted-syntax
             for (const deliveryReportCb of _pendingDeliveryReports) {
                 deliveryReportCb();
             }
