@@ -3,6 +3,7 @@
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
+const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
@@ -27,12 +28,26 @@ class QueueProcessor extends EventEmitter {
      *   specific to queue processor
      * @param {String} notifConfig.queueProcessor.groupId - kafka
      *   consumer group ID
+     * @param {String} [notifConfig.queueProcessor.concurrency=1000] -
+     * how many notifications can be processed concurrently, between
+     * the time they are consumed from the internal Kafka queue and
+     * the time a delivery report is received from the external Kafka
+     * broker (see also {@link destinationConfig.pollIntervalMs})
      * @param {String} notifConfig.queueProcessor.retryTimeoutS -
      *   number of seconds before giving up retries of an entry
      * @param {Object} destinationConfig - destination configuration object
      * @param {String} destinationConfig.type - destination type
      * @param {String} destinationConfig.host - destination host
      * @param {String} destinationConfig.auth - destination auth configuration
+     * @param {number} [destinationConfig.pollIntervalMs=2000] - for
+     * Kafka destinations: producer poll interval between delivery
+     * report fetches, in milliseconds. Reducing the delay could
+     * reduce latency in message delivery under high load and/or slow
+     * external Kafka cluster, at the expense of more polling overhead
+     * IMPORTANT: make sure {@link notifConfig.queueProcessor.concurrency}
+     * is set to a value high enough so that "concurrency / poll_interval_seconds"
+     * which is the maximum notifications per second per notification
+     * processor, is not below the required throughput
      * @param {String} destinationId - resource name/id of destination
      */
     constructor(zkConfig, kafkaConfig, notifConfig, destinationConfig,
@@ -169,7 +184,16 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     processKafkaEntry(kafkaEntry, done) {
-        const sourceEntry = JSON.parse(kafkaEntry.value);
+        let sourceEntry;
+        try {
+            sourceEntry = JSON.parse(kafkaEntry.value);
+        } catch (error) {
+            this.logger.error('error parsing JSON entry', {
+                error: error.message,
+                errorStack: error.stack,
+            });
+            return done(errors.InternalError);
+        }
         const { bucket, key, eventType } = sourceEntry;
         try {
             const config = this.bnConfigManager.getConfig(bucket);
@@ -227,10 +251,11 @@ class QueueProcessor extends EventEmitter {
             return done();
         } catch (error) {
             if (error) {
-                this.logger.err('error processing entry', {
+                this.logger.error('error processing entry', {
                     bucket,
                     key,
-                    error,
+                    error: error.message,
+                    errorStack: error.stack,
                 });
             }
             return done();
