@@ -46,10 +46,11 @@ class KafkaNotificationDestination extends NotificationDestination {
     }
 
     _setupProducer(done) {
-        const { host, port, topic, auth } = this._destinationConfig;
+        const { host, port, topic, pollIntervalMs, auth } = this._destinationConfig;
         const producer = new KafkaProducer({
             kafka: { hosts: `${host}:${port}` },
             topic,
+            pollIntervalMs,
             auth,
         });
         producer.once('error', done);
@@ -87,16 +88,19 @@ class KafkaNotificationDestination extends NotificationDestination {
      * Process entry in the sub-class and send it
      *
      * @param {Object[]} messages - message to be sent
-     * @param {function} done - callback
+     * @param {function} done - callback when delivery report has been received
      * @return {undefined}
      */
     send(messages, done) {
         const starTime = Date.now();
         this._notificationProducer.send(messages, error => {
             if (error) {
-                this._log.error('error publishing message', {
+                const { host, topic } = this._destinationConfig;
+                this._log.error('error in message delivery to external Kafka destination', {
                     method: 'KafkaNotificationDestination.send',
-                    error,
+                    host,
+                    topic,
+                    error: error.message,
                 });
                 onNotificationSent(
                     this._destinationConfig.resource,
