@@ -15,7 +15,7 @@ const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
 const config = require('../../lib/Config');
-const { coldStorageRestoreTopicPrefix } = config.extensions.lifecycle;
+const { coldStorageRestoreTopicPrefix, coldStorageGCTopicPrefix } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
 
@@ -84,9 +84,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         // eslint-disable-next-line no-unused-vars
         const coldLocations = Object.entries(locConfigs).filter(([key, val]) => val.isCold).map(([key]) => key);
         if (coldLocations.length > 0) {
-            return async.each(coldLocations, (location, done) => {
-                const topic = `${coldStorageRestoreTopicPrefix}${location}`;
-                return this._setupProducer(topic, done);
+            return async.eachLimit(coldLocations, 10, (location, done) => {
+                async.series([
+                    next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
+                    next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
+                ], done);
             }, cb);
         } else {
             this.log.info('No cold locations found to setup producers', {
@@ -320,6 +322,75 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         });
     }
 
+    _handleDeleteOp(entry) {
+        const value = JSON.parse(entry.value);
+
+        const locationName = value['x-amz-storage-class'];
+        const locationConfig = this.locationConfigs[locationName];
+        if (!locationConfig) {
+            this.log.error('could not get location configuration', {
+                method: 'LifecycleQueuePopulator._handleDeleteOp',
+                location: locationName,
+                bucket: entry.bucket,
+                key: entry.key,
+            });
+            return;
+        }
+
+        // cold delete only supported for archived objects in DMF backend
+        if (locationConfig.type !== 'dmf' || !value.archive) {
+            return;
+        }
+
+        const isMaster = isMasterKey(entry.key);
+        const isVersionedMaster = isMaster && !!value.versionId && !value.isNull;
+        const isNullVersion = !isMaster && value.isNull;
+        const isDeleteMarker = value.isDeleteMarker;
+        if (isVersionedMaster || isNullVersion || isDeleteMarker) {
+            this.log.trace('skip processing of object master entry');
+            return;
+        }
+
+        this.log.trace(
+            'publishing object delete entry',
+            { bucket: entry.bucket, key: entry.key, version: value.versionId },
+        );
+
+        const topic = `${coldStorageGCTopicPrefix}${locationName}`;
+        const key = `${entry.bucket}/${entry.key}`;
+
+        let version;
+        if (value.versionId) {
+            version = encode(value.versionId);
+        }
+
+        const message = JSON.stringify({
+            bucketName: entry.bucket,
+            objectKey: value.key,
+            objectVersion: version,
+            archiveInfo: value.archive.archiveInfo,
+            requestId: uuid(),
+        });
+
+        const producer = this._producers[topic];
+        if (producer) {
+            const kafkaEntry = { key: encodeURIComponent(key), message };
+            producer.send([kafkaEntry], err => {
+                LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageGCTopic', 'queuePopulator', err, 1);
+                if (err) {
+                    this.log.error('error publishing object delete request entry', {
+                        error: err,
+                        method: 'LifecycleQueuePopulator._handleDeleteOp',
+                    });
+                }
+            });
+        } else {
+            this.log.error(`producer not available for location ${locationName}`, {
+                method: 'LifecycleQueuePopulator._handleDeleteOp',
+            });
+        }
+    }
+
     /**
      * Filter record log entries for those that are potentially relevant to
      * lifecycle.
@@ -327,6 +398,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
+        if (entry.type === 'delete') {
+            this._handleDeleteOp(entry);
+            return undefined;
+        }
+
         if (entry.type !== 'put') {
             return undefined;
         }
