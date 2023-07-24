@@ -534,7 +534,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             });
     });
 
-    it('should not publish 0-byte object transition to DMF - bb383', done => {
+    it('should publish 0-byte object transition to DMF', done => {
         const transitionRule = [
             {
                 Transitions: [{ Days: 2, StorageClass: 'location-dmf-v1' }],
@@ -563,8 +563,8 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
                 assert(!!listLifecycleParams.BeforeDate);
 
-                // test that no entry is pushed to kafka topic
-                assert.strictEqual(kafkaEntries.length, 0);
+                // test that the entry got pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 1);
                 return done();
             });
     });

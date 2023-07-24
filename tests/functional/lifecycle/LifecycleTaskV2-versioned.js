@@ -347,7 +347,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should not publish 0byte version transition to DMF with NoncurrentVersionTransitions rule - bb383', done => {
+    it('should publish 0byte version transition to DMF with NoncurrentVersionTransitions rule', done => {
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: 'location-dmf-v1' }],
@@ -376,8 +376,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 assert(!!listLifecycleParams.BeforeDate);
                 assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
 
-                // test that no entry is pushed to kafka topic
-                assert.strictEqual(kafkaEntries.length, 0);
+                // test that the entry got pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 1);
                 return done();
             });
     });
@@ -609,7 +609,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             });
     });
 
-    it('should not publish 0byte object version transition to DMF - bb383', done => {
+    it('should publish 0byte object version transition to DMF', done => {
         const transitionRule = [
             {
                 Transitions: [{ Days: 2, StorageClass: 'location-dmf-v1' }],
@@ -637,8 +637,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 assert(!!listLifecycleParams.BeforeDate);
                 assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, 'location-dmf-v1');
 
-                // test that no entry is pushed to kafka topic
-                assert.strictEqual(kafkaEntries.length, 0);
+                // test that the entry got pushed to kafka topic
+                assert.strictEqual(kafkaEntries.length, 1);
                 return done();
             });
     });
