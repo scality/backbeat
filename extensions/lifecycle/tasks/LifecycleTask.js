@@ -1209,21 +1209,6 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
-
-    // TODO: remove once DMF supports 0 byte objects
-    // skips 0 byte transitions to DMF locations
-    _bb383SkipDMFTransition(objectInfo, site, log) {
-        if (objectInfo.Size === 0
-            && locationsConfig[site]
-            && locationsConfig[site].type === 'dmf') {
-            log.debug('skipping transition task for 0 bytes objects to DMF location', {
-                site,
-            });
-            return true;
-        }
-        return false;
-    }
-
     /**
      * Helper method for NoncurrentVersionTransition.NoncurrentDays rule
      * Check if Noncurrent Transition rule applies on the version
@@ -1242,8 +1227,7 @@ class LifecycleTask extends BackbeatTask {
         const ncd = 'NoncurrentDays';
         const doesNCVTransitionRuleApply = (rules[ncvt] &&
             rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]) &&
-            !this._bb383SkipDMFTransition(version, rules[ncvt].StorageClass, log);
+            daysSinceInitiated >= rules[ncvt][ncd]);
 
         if (doesNCVTransitionRuleApply) {
             this._applyTransitionRule({
@@ -1481,8 +1465,7 @@ class LifecycleTask extends BackbeatTask {
                 this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
                 return done();
             }
-            if (rules.Transition
-                && !this._bb383SkipDMFTransition(obj, rules.Transition.StorageClass, log)) {
+            if (rules.Transition) {
                 this._applyTransitionRule({
                     owner: bucketData.target.owner,
                     accountId: bucketData.target.accountId,
@@ -1574,8 +1557,7 @@ class LifecycleTask extends BackbeatTask {
             this._checkAndApplyExpirationRule(bucketData, version, rules, log)) {
             return done();
         }
-        if (rules.Transition &&
-            !this._bb383SkipDMFTransition(version, rules.Transition.StorageClass, log)) {
+        if (rules.Transition) {
             this._applyTransitionRule({
                 owner: bucketData.target.owner,
                 accountId: bucketData.target.accountId,
