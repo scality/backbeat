@@ -1,9 +1,10 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
+const { encode } = require('arsenal').versioning.VersionID;
 
 const config = require('../../../lib/Config');
-const { coldStorageRestoreTopicPrefix } = config.extensions.lifecycle;
+const { coldStorageRestoreTopicPrefix, coldStorageGCTopicPrefix } = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
 
@@ -117,15 +118,15 @@ describe('LifecycleQueuePopulator', () => {
                 done();
             });
         });
-        it('should have one producer per cold location', done => {
+        it('should have two producers per cold location', done => {
             lcqp.locationConfigs = Object.assign({}, locationConfigs, coldLocationConfigs);
             lcqp.setupProducers(() => {
                 const producers = Object.keys(lcqp._producers);
                 const coldLocations = Object.keys(coldLocationConfigs);
-                assert.strictEqual(producers.length, coldLocations.length);
+                assert.strictEqual(producers.length, coldLocations.length * 2);
                 coldLocations.forEach(loc => {
-                    const topic = `${coldStorageRestoreTopicPrefix}${loc}`;
-                    assert(producers.includes(topic));
+                    assert(producers.includes(`${coldStorageRestoreTopicPrefix}${loc}`));
+                    assert(producers.includes(`${coldStorageGCTopicPrefix}${loc}`));
                 });
                 done();
             });
@@ -169,6 +170,176 @@ describe('LifecycleQueuePopulator', () => {
                 const entry = getKafkaEntry(params.event);
                 lcqp._handleRestoreOp(entry);
                 assert.strictEqual(getAccountIdStub.calledOnce, !params.ignore);
+            });
+        });
+    });
+
+    describe(':filter', () => {
+        let lcqp;
+        beforeEach(() => {
+            lcqp = new LifecycleQueuePopulator(params);
+            lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
+        });
+        it('it should call _handleDeleteOp on delete message', () => {
+            const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
+            lcqp.filter({
+                type: 'delete',
+                bucket: 'lc-queue-populator-test-bucket',
+                key: 'hosts\x0098500086134471999999RG001  0',
+                value: JSON.stringify(templateEntry),
+            });
+            assert(handleDeleteStub.calledOnce);
+        });
+    });
+
+
+    describe(':_handleDeleteOp', () => {
+        const kafkaSendStub = sinon.stub().yields();
+        const objMd = {
+            'md-model-version': 2,
+            'owner-display-name': 'Bart',
+            'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+            'x-amz-storage-class': 'dmf-v1',
+            'content-length': 542,
+            'content-type': 'text/plain',
+            'last-modified': '2017-07-13T02:44:25.519Z',
+            'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+            'key': 'object',
+            'location': [],
+            'isDeleteMarker': false,
+            'isNull': false,
+            'archive': {
+                archiveInfo: {
+                    archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                    archiveVersion: 7504504064263669
+                },
+            },
+            'dataStoreName': 'dmf-v1',
+        };
+        let lcqp;
+        beforeEach(() => {
+            lcqp = new LifecycleQueuePopulator(params);
+            lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
+            lcqp._producers[`${coldStorageGCTopicPrefix}us-east-1`] = {
+                send: kafkaSendStub,
+            };
+            lcqp._producers[`${coldStorageGCTopicPrefix}dmf-v1`] = {
+                send: kafkaSendStub,
+            };
+        });
+        afterEach(() => {
+            kafkaSendStub.reset();
+        });
+        [
+            {
+                it: 'should skip non dmf archived/restored objects',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    'archive': {},
+                    'x-amz-storage-class': 'STANDARD',
+                    'dataStoreName': 'us-east-1',
+                },
+                called: false,
+            },
+            {
+                it: 'should skip versioned masters',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                },
+                called: false,
+            },
+            {
+                it: 'should skip null versioned version',
+                type: 'delete',
+                key: 'object\x0098500086134471999999RG001  0',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                    isNull: true,
+                },
+                called: false,
+            },
+            {
+                it: 'should skip delete marker',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    isDeleteMarker: true,
+                },
+                called: false,
+            },
+            {
+                it: 'should skip if location config is not found',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    'archive': {},
+                    'x-amz-storage-class': 'azure-archive',
+                    'dataStoreName': 'azure-archive',
+                },
+                called: false,
+            },
+            {
+                it: 'should process version',
+                type: 'delete',
+                key: 'object\x0098500086134471999999RG001  0',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                },
+                called: true,
+            },
+            {
+                it: 'should process non versioned master',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                },
+                called: true,
+            },
+            {
+                it: 'should process null versioned master',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                    isNull: true,
+                },
+                called: true,
+            },
+        ].forEach(params => {
+            it(params.it, () => {
+                const entry = {
+                    type: params.type,
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: params.key,
+                    value: JSON.stringify(params.md),
+                };
+                lcqp._handleDeleteOp(entry);
+                assert.strictEqual(kafkaSendStub.calledOnce, params.called);
+                if (!params.called) {
+                    return;
+                }
+                const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                const expectedMessage = {
+                    bucketName: 'lc-queue-populator-test-bucket',
+                    objectKey: params.md.key,
+                    archiveInfo: params.md.archive.archiveInfo,
+                    requestId: message.requestId,
+                };
+                if (params.md.versionId) {
+                    expectedMessage.objectVersion = encode(params.md.versionId);
+                }
+                assert.deepStrictEqual(message, expectedMessage);
             });
         });
     });
