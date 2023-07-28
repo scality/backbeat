@@ -58,34 +58,26 @@ describe('ListRecordStream', () => {
         [
             {
                 opType: 'insert',
+                md: {},
+                expected: 'put'
+            },
+            {
+                opType: 'update',
                 md: {
-                    value: {}
+                    deleted: false,
                 },
                 expected: 'put'
             },
             {
                 opType: 'update',
                 md: {
-                    value: {
-                        deleted: false,
-                    }
-                },
-                expected: 'put'
-            },
-            {
-                opType: 'update',
-                md: {
-                    value: {
-                        deleted: true,
-                    }
+                    deleted: true,
                 },
                 expected: 'delete'
             },
             {
                 opType: 'replace',
-                md: {
-                    value: {}
-                },
+                md: {},
                 expected: 'put'
             },
             {
@@ -168,7 +160,7 @@ describe('ListRecordStream', () => {
             },
         ].forEach(params => {
             it(`Should return correct object metadata (${params.it})`, () => {
-                const md = JSON.parse(listRecordStream._getObjectMd(params.doc));
+                const md = listRecordStream._getObjectMd(params.doc);
                 assert.deepEqual(md, params.exp);
             });
         });
