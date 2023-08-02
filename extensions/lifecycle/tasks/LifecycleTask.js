@@ -12,7 +12,6 @@ const { CompareResult, MinHeap } = require('arsenal').algorithms.Heap;
 
 const config = require('../../../conf/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
-const { isLifecycleUser } = require('../util/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');

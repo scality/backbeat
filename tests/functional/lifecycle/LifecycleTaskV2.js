@@ -27,11 +27,11 @@ const accountId = '345320934593';
 const bucketData = {
     action: 'processObjects',
     target: {
-      bucket: bucketName,
-      owner: ownerId,
-      accountId,
+        bucket: bucketName,
+        owner: ownerId,
+        accountId,
     },
-    details: {}
+    details: {},
 };
 const contentLength = 1000;
 const sourceLocation = 'us-east-1';
@@ -121,7 +121,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Disabled',
-            }
+            },
         ];
 
         const contents = [
@@ -213,7 +213,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const keyName = 'key1';
@@ -397,7 +397,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const keyName = 'key1';
@@ -442,7 +442,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const keyName = 'key1';
@@ -508,7 +508,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
@@ -614,7 +614,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '1',
                 Prefix: 'pre2',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const keyName = 'pre1-key1';
@@ -661,7 +661,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 ID: '1',
                 Prefix: 'pre2',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const keyName = 'key1';
@@ -711,7 +711,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                     StorageClass: 'STANDARD',
                     Owner: owner,
                     Initiator: owner,
-                }
+                },
             ],
         };
         s3.stubMethod('listMultipartUploads', mpuResponse);
@@ -760,7 +760,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                     StorageClass: 'STANDARD',
                     Owner: owner,
                     Initiator: owner,
-                }
+                },
             ],
         };
 

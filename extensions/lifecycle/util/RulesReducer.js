@@ -157,7 +157,6 @@ class RulesReducer {
                 let lowestTransitionDays = r.Transitions.map(t => t.Days).reduce(lowest);
                 lowestTransitionDays = this._decrementTransitionDay(lowestTransitionDays);
                 days = days === undefined ? lowestTransitionDays : Math.min(days, lowestTransitionDays);
-
             } else if (r.Transitions[0].Date) {
                 const lowestDate = r.Transitions.map(t => t.Date).reduce(lowest);
 

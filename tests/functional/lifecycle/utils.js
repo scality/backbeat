@@ -174,7 +174,7 @@ class KeyMock {
             StorageClass: 'STANDARD',
             TagSet: tagSet,
             DataStoreName: this.sourceLocation,
-            ListType: 'current'
+            ListType: 'current',
         };
     }
 

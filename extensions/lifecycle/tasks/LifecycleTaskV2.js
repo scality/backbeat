@@ -120,7 +120,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                         prefix: params.Prefix,
                         storageClass: params.ExcludedDataStoreName,
                         listType,
-                        ...markerInfo
+                        ...markerInfo,
                     },
                 });
 

@@ -26,11 +26,11 @@ const accountId = '345320934593';
 const bucketData = {
     action: 'processObjects',
     target: {
-      bucket: bucketName,
-      owner: ownerId,
-      accountId,
+        bucket: bucketName,
+        owner: ownerId,
+        accountId,
     },
-    details: {}
+    details: {},
 };
 const contentLength = 64;
 const sourceLocation = 'us-east-1';
@@ -118,7 +118,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
@@ -233,7 +233,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
 
         const prefix = 'pre1';
@@ -306,7 +306,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
@@ -352,7 +352,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
@@ -387,7 +387,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 0 });
@@ -424,7 +424,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const key = keyMock.current({ keyName, daysEarlier: 1 });
@@ -469,7 +469,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
@@ -516,7 +516,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '456',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
@@ -560,7 +560,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'deletemarker1';
         const versionId = 'versionid1';
@@ -630,7 +630,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'key1';
         const versionId = 'versionid1';
@@ -716,7 +716,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 ID: '1',
                 Prefix: 'pre2',
                 Status: 'Enabled',
-            }
+            },
         ];
         const keyName = 'pre1-key1';
         const versionId = 'versionid1';

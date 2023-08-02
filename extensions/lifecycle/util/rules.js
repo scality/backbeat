@@ -38,11 +38,11 @@ function _makeListParams(listType, currentDate, listing) {
  */
 function _mergeParams(currentDate, { currents = [], nonCurrents = [], orphans = [] }) {
     return [
-      ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing)),
-      ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing)),
-      ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing)),
+        ...currents.map(listing => _makeListParams(CURRENT_TYPE, currentDate, listing)),
+        ...nonCurrents.map(listing => _makeListParams(NON_CURRENT_TYPE, currentDate, listing)),
+        ...orphans.map(listing => _makeListParams(ORPHAN_DM_TYPE, currentDate, listing)),
     ];
-  }
+}
 
 /**
  * _getParamsFromListings: retrieves the lifecycle listing informations from listings gathered
