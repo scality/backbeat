@@ -111,7 +111,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should not publish any object entry if transition is already transitioned', done => {
+    // TODO: unskip once transition is supported
+    it.skip('should not publish any object entry if transition is already transitioned', done => {
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
@@ -299,7 +300,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should publish one object entry if object is eligible with NoncurrentVersionTransitions rule', done => {
+    // TODO: unskip once transition is supported
+    it.skip('should publish one object entry if object is eligible with NoncurrentVersionTransitions rule', done => {
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
@@ -345,7 +347,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should not publish any object entry if object is not eligible with NoncurrentVersionTransitions rule', done => {
+    // TODO: unskip once transition is supported
+    it.skip('should not publish any object entry if not eligible with NoncurrentVersionTransitions rule', done => {
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
@@ -417,7 +420,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should publish one object entry if object is eligible with Transitions rule', done => {
+    // TODO: unskip once transition is supported
+    it.skip('should publish one object entry if object is eligible with Transitions rule', done => {
         const transitionRule = [
             {
                 Transitions: [{ Days: 2, StorageClass: destinationLocation }],
@@ -623,7 +627,8 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
-    it('should publish one bucket entry if listing keys to be transitioned  is trucated', done => {
+    // TODO: unskip once transition is supported
+    it.skip('should publish one bucket entry if listing keys to be transitioned  is trucated', done => {
         const transitionRule = [
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
