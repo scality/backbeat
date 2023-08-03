@@ -3,7 +3,7 @@ const OplogPopulatorUtils = require('../../lib/util/OplogPopulatorUtils');
 class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
     /**
      * Get extension specific MongoDB filter
-     * to get buckets with that have the lifecycle
+     * to get buckets that have the lifecycle
      * extension enabled
      * @returns {Object} MongoDB filter
      */
@@ -14,6 +14,14 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
             'value.lifecycleConfiguration.rules': {
                 $elemMatch: {
                     ruleStatus: 'Enabled',
+                    actions: {
+                        $elemMatch: {
+                            $or: [
+                                { actionName: 'Transition' },
+                                { actionName: 'NoncurrentVersionTransition' },
+                            ],
+                        },
+                    },
                 },
             }
         };
@@ -35,7 +43,11 @@ class LifecycleOplogPopulatorUtils extends OplogPopulatorUtils {
             // return true if at least one lifecycle
             // rule is enabled
             return rules.some(rule =>
-                rule.ruleStatus === 'Enabled');
+                rule.ruleStatus === 'Enabled' &&
+                rule.actions.some(
+                    action => ['Transition', 'NoncurrentVersionTransition'].includes(action.actionName)
+                )
+            );
         }
     }
 }
