@@ -210,10 +210,10 @@ class LifecycleBucketProcessor {
     }
 
     /**
-     * Return an backbeat client instance
+     * Return metadata proxy with backbeat client
      * @param {String} canonicalId - The canonical ID of the bucket owner.
      * @param {String} accountId - The account ID of the bucket owner .
-     * @return {BackbeatClient} The S3 client instance to make requests with
+     * @return {BackbeatMetadataProxy} backbeatMetadataProxy - The metadata proxy with backbeat client
      */
     _getBackbeatClient(canonicalId, accountId) {
         const credentials = this.credentialsManager.getCredentials({
@@ -228,22 +228,21 @@ class LifecycleBucketProcessor {
         }
 
         const clientId = canonicalId;
-        const client = this.backbeatClients[clientId];
+        let client = this.backbeatClients[clientId];
 
-        if (client) {
-            return client;
+        if (!client) {
+            client = createBackbeatClient({
+                transport: this._transport,
+                port: this._s3Config.port,
+                host: this._s3Config.host,
+                credentials,
+                agent: this.s3Agent,
+            });
+
+            this.backbeatClients[clientId] = client;
         }
 
-        this.backbeatClients[clientId] = createBackbeatClient({
-            transport: this._transport,
-            port: this._s3Config.port,
-            host: this._s3Config.host,
-            credentials,
-            agent: this.s3Agent,
-        });
-
-        return new BackbeatMetadataProxy(this._lcConfig)
-            .setBackbeatClient(this.backbeatClients[clientId]);
+        return new BackbeatMetadataProxy(this._lcConfig).setBackbeatClient(client);
     }
 
     /**
