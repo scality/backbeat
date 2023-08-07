@@ -7,6 +7,7 @@ const joiSchema = {
     bucketTasksTopic: joi.string().required(),
     objectTasksTopic: joi.string().required(),
     auth: authJoi.required(),
+    forceLegacyListing: joi.boolean().default(false),
     conductor: {
         bucketSource: joi.string().
             valid('bucketd', 'zookeeper').default('zookeeper'),
@@ -33,7 +34,6 @@ const joiSchema = {
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
-        forceLegacyListing: joi.boolean().default(false),
     },
     objectProcessor: {
         groupId: joi.string().required(),

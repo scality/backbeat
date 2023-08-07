@@ -345,8 +345,7 @@ class LifecycleBucketProcessor {
             }
 
             let task;
-            // TODO: ZENKO-4501 Check if bucket is indexed before using new lifecycle improvement solution
-            if (this._lcConfig.bucketProcessor.forceLegacyListing) {
+            if (this._lcConfig.forceLegacyListing) {
                 task = new LifecycleTask(this);
             } else {
                 task = new LifecycleTaskV2(this);
