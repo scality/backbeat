@@ -13,6 +13,7 @@ const kafkaConfig = {
 };
 
 const lcConfig = {
+    forceLegacyListing: true,
     auth: {
         type: 'assumeRole',
         roleName: 'role',

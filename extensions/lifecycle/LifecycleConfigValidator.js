@@ -14,6 +14,7 @@ const joiSchema = joi.object({
     objectTasksTopic: joi.string().required(),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
+    forceLegacyListing: joi.boolean().default(false),
     conductor: {
         auth: inheritedAuthJoi,
         bucketSource: joi.string().

@@ -1090,6 +1090,49 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
+    /*
+     * Helper method for NoncurrentVersionTransition.NoncurrentDays rule
+     * Check if Noncurrent Transition rule applies on the version
+     * @param {object} bucketData - bucket data
+     * @param {object} version - single non-current version
+     * @param {string} version.LastModified - last modified date of version
+     * @param {object} rules - most applicable rules from `_getApplicableRules`
+     * @param {Logger.newRequestLogger} log - logger object
+     * @param {Function} cb - The callback to call
+     * @return {undefined}
+     */
+    _checkAndApplyNCVTransitionRule(bucketData, version, rules, log, cb) {
+        const staleDate = version.staleDate;
+        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
+        const ncvt = 'NoncurrentVersionTransition';
+        const ncd = 'NoncurrentDays';
+        const doesNCVTransitionRuleApply = (rules[ncvt] &&
+            rules[ncvt][ncd] !== undefined &&
+            daysSinceInitiated >= rules[ncvt][ncd]) &&
+            !this._bb383SkipDMFTransition(version, rules[ncvt].StorageClass, log);
+
+        if (doesNCVTransitionRuleApply) {
+            this._applyTransitionRule({
+                owner: bucketData.target.owner,
+                accountId: bucketData.target.accountId,
+                bucket: bucketData.target.bucket,
+                objectKey: version.Key,
+                versionId: version.VersionId,
+                eTag: version.ETag,
+                lastModified: version.LastModified,
+                site: rules[ncvt].StorageClass,
+            }, log, cb);
+            return;
+        }
+
+        if (cb) {
+            // NOTE: The purpose of introducing asynchronous logic here is to improve the flow control
+            // of LifecycleTaskV2.
+            process.nextTick(cb);
+        }
+        return;
+    }
+
     /**
      * Gets the transition entry and sends it to the data mover topic,
      * then gathers the result in the object tasks topic for execution
@@ -1103,9 +1146,10 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} params.lastModified - The last modified date of object
      * @param {string} params.site - The site name to transition the object to
      * @param {Werelogs.Logger} log - Logger object
+     * @param {Function} [cb] - The callback to call
      * @return {undefined}
      */
-    _applyTransitionRule(params, log) {
+    _applyTransitionRule(params, log, cb) {
         async.waterfall([
             next =>
                 this._getObjectMD(params, log, (err, objectMD) => {
@@ -1187,6 +1231,16 @@ class LifecycleTask extends BackbeatTask {
                     site: params.site,
                 });
             }
+            if (cb) {
+                // NOTE: The purpose of introducing asynchronous logic here is to improve
+                // the flow control of LifecycleTaskV2.
+                // Additionally, to maintain consistency with the flow logic of LifecycleTask,
+                // no errors will be returned from the callback.
+                // This ensures that any failures during the looping process through the keys
+                // (as seen in _compareRulesToList()) will not cause a break in the loop.
+                cb();
+            }
+            return;
         });
     }
 
@@ -1203,40 +1257,6 @@ class LifecycleTask extends BackbeatTask {
             return true;
         }
         return false;
-    }
-
-    /**
-     * Helper method for NoncurrentVersionTransition.NoncurrentDays rule
-     * Check if Noncurrent Transition rule applies on the version
-     * @param {object} bucketData - bucket data
-     * @param {object} version - single non-current version
-     * @param {string} version.LastModified - last modified date of version
-     * @param {object} rules - most applicable rules from `_getApplicableRules`
-     * @param {Logger.newRequestLogger} log - logger object
-     * @return {undefined}
-     */
-    _checkAndApplyNCVTransitionRule(bucketData, version, rules, log) {
-        const staleDate = version.staleDate;
-        const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
-        const ncvt = 'NoncurrentVersionTransition';
-        const ncd = 'NoncurrentDays';
-        const doesNCVTransitionRuleApply = (rules[ncvt] &&
-            rules[ncvt][ncd] !== undefined &&
-            daysSinceInitiated >= rules[ncvt][ncd]) &&
-            !this._bb383SkipDMFTransition(version, rules[ncvt].StorageClass, log);
-
-        if (doesNCVTransitionRuleApply) {
-            this._applyTransitionRule({
-                owner: bucketData.target.owner,
-                accountId: bucketData.target.accountId,
-                bucket: bucketData.target.bucket,
-                objectKey: version.Key,
-                versionId: version.VersionId,
-                eTag: version.ETag,
-                lastModified: version.LastModified,
-                site: rules[ncvt].StorageClass,
-            }, log);
-        }
     }
 
     /**
@@ -1626,6 +1646,23 @@ class LifecycleTask extends BackbeatTask {
     }
 
     /**
+     * Skips kafka entry
+     * @param {object} bucketData - bucket data from bucketTasksTopic
+     * @param {Logger.newRequestLogger} log - logger object
+     * @return {boolean} true if skipped, false otherwise.
+     */
+    _skipEntry(bucketData, log) {
+        if (bucketData.details.listType) {
+            log.debug('skip entry generated by the new lifecycle task', {
+                method: 'LifecycleTask._skipEntry',
+                bucketData,
+            });
+            return true;
+        }
+        return false;
+    }
+
+    /**
      * Process a single bucket entry with lifecycle configurations enabled
      * @param {array} bucketLCRules - array of bucket lifecycle rules
      * @param {object} bucketData - bucket data from zookeeper bucketTasksTopic
@@ -1667,6 +1704,10 @@ class LifecycleTask extends BackbeatTask {
             typeof bucketData.details !== 'object') {
             log.error('wrong format for bucket entry',
                       { entry: bucketData });
+            return process.nextTick(done);
+        }
+
+        if (this._skipEntry(bucketData, log)) {
             return process.nextTick(done);
         }
 
