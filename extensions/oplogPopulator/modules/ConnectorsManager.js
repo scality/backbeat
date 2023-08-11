@@ -27,7 +27,6 @@ const paramsJoi = joi.object({
 
 // Promisify async functions
 const eachLimit = util.promisify(async.eachLimit);
-const timesLimit = util.promisify(async.timesLimit);
 
 /**
  * @class ConnectorsManager
@@ -105,40 +104,24 @@ class ConnectorsManager {
 
     /**
      * Creates a connector
-     * @param {boolean} spawn should connector be spawned
-     * @returns {Promise|Connector} created connector
-     * @throws {InternalError}
+     * @returns {Connector} created connector
      */
-    async addConnector(spawn = true) {
-        try {
-            // generate connector name
-            const connectorName = this._generateConnectorName();
-            // get connector config
-            const config = this._getDefaultConnectorConfiguration(connectorName);
-            // initialize connector
-            const connector = new Connector({
-                name: connectorName,
-                config,
-                buckets: [],
-                logger: this._logger,
-                kafkaConnectHost: this._kafkaConnectHost,
-                kafkaConnectPort: this._kafkaConnectPort,
-            });
-            if (spawn) {
-                await connector.spawn();
-            }
-            this._logger.debug('Successfully created connector', {
-                method: 'ConnectorsManager.addConnector',
-                connector: connector.name
-            });
-            return connector;
-        } catch (err) {
-            this._logger.error('An error occurred while creating connector', {
-                method: 'ConnectorsManager.addConnector',
-                error: err.description || err.message,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
+    addConnector() {
+        // generate connector name
+        const connectorName = this._generateConnectorName();
+        // get connector config
+        const config = this._getDefaultConnectorConfiguration(connectorName);
+        // initialize connector
+        const connector = new Connector({
+            name: connectorName,
+            config,
+            buckets: [],
+            isRunning: false,
+            logger: this._logger,
+            kafkaConnectHost: this._kafkaConnectHost,
+            kafkaConnectPort: this._kafkaConnectPort,
+        });
+        return connector;
     }
 
     /**
@@ -220,11 +203,10 @@ class ConnectorsManager {
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
-            await timesLimit(nbConnectorsToAdd, 10, async () => {
-                const newConnector = await this.addConnector();
+            for (let i = 0; i < nbConnectorsToAdd; i++) {
+                const newConnector = this.addConnector();
                 this._connectors.push(newConnector);
-                this._metricsHandler.onConnectorsInstantiated(false);
-            });
+            }
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
                 numberOfActiveConnectors: this._connectors.length

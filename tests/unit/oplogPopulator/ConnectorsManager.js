@@ -115,9 +115,10 @@ describe('ConnectorsManager', () => {
                 .returns('source-connector');
             sinon.stub(connectorsManager, '_getDefaultConnectorConfiguration')
                 .returns(connectorConfig);
-            const connector = await connectorsManager.addConnector(false);
+            const connector = await connectorsManager.addConnector();
             assert(connector instanceof Connector);
             assert.strictEqual(connector.name, 'source-connector');
+            assert.strictEqual(connector.isRunning, false);
         });
     });
 
