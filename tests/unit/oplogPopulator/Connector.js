@@ -26,6 +26,7 @@ describe('Connector', () => {
             name: 'example-connector',
             config: connectorConfig,
             buckets: [],
+            isRunning: false,
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
             logger,
@@ -40,11 +41,13 @@ describe('Connector', () => {
         it('Should spawn connector with correct pipeline', async () => {
             const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
+            assert.strictEqual(connector.isRunning, false);
             await connector.spawn();
             assert(createStub.calledOnceWith({
                 name: 'example-connector',
                 config: connectorConfig
             }));
+            assert.strictEqual(connector.isRunning, true);
         });
     });
 
@@ -52,8 +55,11 @@ describe('Connector', () => {
         it('Should destroy connector', async () => {
             const deleteStub = sinon.stub(connector._kafkaConnect, 'deleteConnector')
                 .resolves();
+            connector._isRunning = true;
+            assert.strictEqual(connector.isRunning, true);
             await connector.destroy();
             assert(deleteStub.calledOnceWith('example-connector'));
+            assert.strictEqual(connector.isRunning, false);
         });
     });
 
