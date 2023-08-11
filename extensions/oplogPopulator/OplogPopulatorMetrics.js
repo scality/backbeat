@@ -133,6 +133,22 @@ class OplogPopulatorMetrics {
     }
 
     /**
+     * updates s3_oplog_populator_connectors metric
+     * when a connector is destroyed
+     * @returns {undefined}
+     */
+    onConnectorDestroyed() {
+        try {
+            this.connectors.dec({ isOld: false }, 1);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onConnectorDestroyed',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
      * updates s3_oplog_populator_reconfiguration_lag_seconds metric
      * @param {Connector} connector connector instance
      * @param {Boolean} success true if reconfiguration was successful

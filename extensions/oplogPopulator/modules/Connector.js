@@ -6,6 +6,7 @@ const connectorParams = joi.object({
     name: joi.string().required(),
     config: joi.object().required(),
     buckets: joi.array().required(),
+    isRunning: joi.boolean().required(),
     logger: joi.object().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
@@ -25,6 +26,7 @@ class Connector {
      * @constructor
      * @param {Object} params connector config
      * @param {string} params.name connector name
+     * @param {Boolean} params.isRunning true if connector is running
      * @param {Object} params.config Kafka-connect MongoDB source
      * connector config
      * @param {string[]} params.buckets buckets assigned to this connector
@@ -37,6 +39,7 @@ class Connector {
         this._name = params.name;
         this._config = params.config;
         this._buckets = new Set(params.buckets);
+        this._isRunning = params.isRunning;
         this._state = {
             // Used to check if buckets assigned to this connector
             // got modified from the last connector update
@@ -83,6 +86,12 @@ class Connector {
     get config() { return this._config; }
 
     /**
+     * Getter for connector running state
+     * @returns {Boolean} connector running state
+     */
+    get isRunning() { return this._isRunning; }
+
+    /**
      * Calculate config size in bytes
      * @returns {number} config size
      */
@@ -111,6 +120,7 @@ class Connector {
                 name: this._name,
                 config: this._config,
             });
+            this._isRunning = true;
         } catch (err) {
             this._logger.error('Error while spawning connector', {
                 method: 'Connector.spawn',
@@ -129,6 +139,7 @@ class Connector {
     async destroy() {
         try {
             await this._kafkaConnect.deleteConnector(this._name);
+            this._isRunning = false;
         } catch (err) {
             this._logger.error('Error while destroying connector', {
                 method: 'Connector.destroy',
