@@ -232,6 +232,14 @@ describe('OplogPopulator', () => {
                         'value.lifecycleConfiguration.rules': {
                             $elemMatch: {
                                 ruleStatus: 'Enabled',
+                                actions: {
+                                    $elemMatch: {
+                                        $or: [
+                                            { actionName: 'Transition' },
+                                            { actionName: 'NoncurrentVersionTransition' },
+                                        ],
+                                    },
+                                },
                             },
                         },
                     },
@@ -252,6 +260,14 @@ describe('OplogPopulator', () => {
                         'value.lifecycleConfiguration.rules': {
                             $elemMatch: {
                                 ruleStatus: 'Enabled',
+                                actions: {
+                                    $elemMatch: {
+                                        $or: [
+                                            { actionName: 'Transition' },
+                                            { actionName: 'NoncurrentVersionTransition' },
+                                        ],
+                                    },
+                                },
                             },
                         },
                     },
@@ -351,6 +367,17 @@ describe('OplogPopulator', () => {
                         rules: [
                             {
                                 ruleStatus: 'Enabled',
+                                actions: [
+                                    {
+                                        actionName: 'Transition',
+                                        transition: [
+                                            {
+                                                days: 0,
+                                                storageClass: 'dmf',
+                                            },
+                                        ],
+                                    },
+                                ],
                             }
                         ]
                     },
@@ -365,6 +392,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
+                desc: 'notification active',
                 exts: ['notification'],
                 metadata: {
                     notificationConfiguration: {},
@@ -375,6 +403,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
+                desc: 'replication mixed rules',
                 exts: ['replication'],
                 metadata: {
                     notificationConfiguration: null,
@@ -394,6 +423,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
+                desc: 'single replication rule',
                 exts: [],
                 metadata: {
                     notificationConfiguration: null,
@@ -410,6 +440,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
+                desc: 'no replication rules',
                 exts: [],
                 metadata: {
                     notificationConfiguration: null,
@@ -422,6 +453,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
+                desc: 'lifecycle mixed rules',
                 exts: ['lifecycle'],
                 metadata: {
                     notificationConfiguration: null,
@@ -431,9 +463,31 @@ describe('OplogPopulator', () => {
                         rules: [
                             {
                                 ruleStatus: 'Disabled',
+                                actions: [
+                                    {
+                                        actionName: 'Transition',
+                                        transition: [
+                                            {
+                                                days: 0,
+                                                storageClass: 'dmf1',
+                                            },
+                                        ],
+                                    },
+                                ],
                             },
                             {
                                 ruleStatus: 'Enabled',
+                                actions: [
+                                    {
+                                        actionName: 'Transition',
+                                        transition: [
+                                            {
+                                                days: 0,
+                                                storageClass: 'dmf2',
+                                            },
+                                        ],
+                                    },
+                                ],
                             }
                         ]
                     },
@@ -441,6 +495,7 @@ describe('OplogPopulator', () => {
                 result: true,
             },
             {
+                desc: 'no lifecycle rules',
                 exts: [],
                 metadata: {
                     notificationConfiguration: null,
@@ -453,6 +508,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
+                desc: 'lifecycle rule disabled',
                 exts: [],
                 metadata: {
                     notificationConfiguration: null,
@@ -462,6 +518,17 @@ describe('OplogPopulator', () => {
                         rules: [
                             {
                                 ruleStatus: 'Disabled',
+                                actions: [
+                                    {
+                                        actionName: 'Transition',
+                                        transition: [
+                                            {
+                                                days: 0,
+                                                storageClass: 'dmf',
+                                            },
+                                        ],
+                                    },
+                                ],
                             },
                         ]
                     },
@@ -469,6 +536,7 @@ describe('OplogPopulator', () => {
                 result: false,
             },
             {
+                desc: 'no extension active',
                 exts: [],
                 metadata: {
                     notificationConfiguration: null,
