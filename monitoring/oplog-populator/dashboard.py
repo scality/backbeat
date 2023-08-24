@@ -51,7 +51,7 @@ class Metrics:
     ]
 
     CONNECTORS = metrics.CounterMetric(
-        's3_oplog_populator_connectors', 'isOld',
+        's3_oplog_populator_connectors',
         job="${oplog_populator_job}", namespace="${namespace}"
     )
 
