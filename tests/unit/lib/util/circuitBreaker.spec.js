@@ -9,7 +9,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                 {
                     type: 'kafkaConsumerLag',
                     implicitSingleOutputTopic: true,
-                }
+                },
             ],
         };
 
@@ -23,7 +23,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                     type: 'kafkaConsumerLag',
                     consumerGroupName: 'group',
                     topicName: 'topic',
-                }
+                },
             ],
         });
     });
@@ -35,7 +35,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                     type: 'kafkaConsumerLag',
                     implicitSingleOutputTopic: true,
                     consumerGroupName: 'group',
-                }
+                },
             ],
         };
 
@@ -49,7 +49,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                     type: 'kafkaConsumerLag',
                     consumerGroupName: 'group',
                     topicName: 'topic',
-                }
+                },
             ],
         });
     });
@@ -61,7 +61,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                     type: 'kafkaConsumerLag',
                     implicitSingleOutputTopic: true,
                     topicName: 'topic',
-                }
+                },
             ],
         };
 
@@ -75,7 +75,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                     type: 'kafkaConsumerLag',
                     consumerGroupName: 'group',
                     topicName: 'topic',
-                }
+                },
             ],
         });
     });
@@ -85,7 +85,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
             probes: [
                 {
                     type: 'kafkaConsumerLag',
-                }
+                },
             ],
         };
 
@@ -97,7 +97,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
             probes: [
                 {
                     type: 'kafkaConsumerLag',
-                }
+                },
             ],
         });
     });
@@ -108,7 +108,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                 {
                     type: 'kafkaConsumerLag',
                     implicitSingleOutputTopic: false,
-                }
+                },
             ],
         };
 
@@ -120,7 +120,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
             probes: [
                 {
                     type: 'kafkaConsumerLag',
-                }
+                },
             ],
         });
     });
@@ -131,7 +131,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                 {
                     type: 'noop',
                     implicitSingleOutputTopic: true,
-                }
+                },
             ],
         };
 
@@ -144,7 +144,7 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
                 {
                     type: 'noop',
                     implicitSingleOutputTopic: true,
-                }
+                },
             ],
         });
     });

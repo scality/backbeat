@@ -19,7 +19,7 @@ const LifecycleTaskV2 = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const {
-    updateCircuitBreakerConfigForImplicitOutputQueue
+    updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';

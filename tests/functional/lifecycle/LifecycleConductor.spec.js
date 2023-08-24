@@ -91,7 +91,7 @@ const baseLCConfig = {
         groupId: 'a',
         probeServer: {
             port: 8553,
-        }
+        },
     },
 };
 
