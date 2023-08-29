@@ -46,7 +46,6 @@ class OplogPopulatorMetrics {
         this.connectors = ZenkoMetrics.createGauge({
             name: 's3_oplog_populator_connectors',
             help: 'Total number of configured connectors',
-            labelNames: ['isOld'],
         });
         this.reconfigurationLag = ZenkoMetrics.createHistogram({
             name: 's3_oplog_populator_reconfiguration_lag_seconds',
@@ -121,12 +120,26 @@ class OplogPopulatorMetrics {
      */
     onConnectorsInstantiated(isOld, count = 1) {
         try {
-            this.connectors.inc({
-                isOld,
-            }, count);
+            this.connectors.inc(count);
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onConnectorsInstantiated',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connectors metric
+     * when a connector is destroyed
+     * @returns {undefined}
+     */
+    onConnectorDestroyed() {
+        try {
+            this.connectors.dec(1);
+        } catch (error) {
+            this._logger.error('An error occurred while pushing metrics', {
+                method: 'OplogPopulatorMetrics.onConnectorDestroyed',
                 error: error.message,
             });
         }

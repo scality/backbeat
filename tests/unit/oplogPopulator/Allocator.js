@@ -13,6 +13,7 @@ const logger = new werelogs.Logger('Allocator');
 
 const defaultConnectorParams = {
     config: {},
+    isRunning: false,
     logger,
     kafkaConnectHost: '127.0.0.1',
     kafkaConnectPort: 8083,

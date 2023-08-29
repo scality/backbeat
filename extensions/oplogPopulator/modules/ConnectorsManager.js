@@ -27,7 +27,6 @@ const paramsJoi = joi.object({
 
 // Promisify async functions
 const eachLimit = util.promisify(async.eachLimit);
-const timesLimit = util.promisify(async.timesLimit);
 
 /**
  * @class ConnectorsManager
@@ -105,40 +104,24 @@ class ConnectorsManager {
 
     /**
      * Creates a connector
-     * @param {boolean} spawn should connector be spawned
-     * @returns {Promise|Connector} created connector
-     * @throws {InternalError}
+     * @returns {Connector} created connector
      */
-    async addConnector(spawn = true) {
-        try {
-            // generate connector name
-            const connectorName = this._generateConnectorName();
-            // get connector config
-            const config = this._getDefaultConnectorConfiguration(connectorName);
-            // initialize connector
-            const connector = new Connector({
-                name: connectorName,
-                config,
-                buckets: [],
-                logger: this._logger,
-                kafkaConnectHost: this._kafkaConnectHost,
-                kafkaConnectPort: this._kafkaConnectPort,
-            });
-            if (spawn) {
-                await connector.spawn();
-            }
-            this._logger.debug('Successfully created connector', {
-                method: 'ConnectorsManager.addConnector',
-                connector: connector.name
-            });
-            return connector;
-        } catch (err) {
-            this._logger.error('An error occurred while creating connector', {
-                method: 'ConnectorsManager.addConnector',
-                error: err.description || err.message,
-            });
-            throw errors.InternalError.customizeDescription(err.description);
-        }
+    addConnector() {
+        // generate connector name
+        const connectorName = this._generateConnectorName();
+        // get connector config
+        const config = this._getDefaultConnectorConfiguration(connectorName);
+        // initialize connector
+        const connector = new Connector({
+            name: connectorName,
+            config,
+            buckets: [],
+            isRunning: false,
+            logger: this._logger,
+            kafkaConnectHost: this._kafkaConnectHost,
+            kafkaConnectPort: this._kafkaConnectPort,
+        });
+        return connector;
     }
 
     /**
@@ -177,6 +160,7 @@ class ConnectorsManager {
                     // added manually like 'offset.topic.name'
                     config: { ...oldConfig, ...config },
                     buckets,
+                    isRunning: true,
                     logger: this._logger,
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
@@ -219,11 +203,10 @@ class ConnectorsManager {
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
-            await timesLimit(nbConnectorsToAdd, 10, async () => {
-                const newConnector = await this.addConnector();
+            for (let i = 0; i < nbConnectorsToAdd; i++) {
+                const newConnector = this.addConnector();
                 this._connectors.push(newConnector);
-                this._metricsHandler.onConnectorsInstantiated(false);
-            });
+            }
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
                 numberOfActiveConnectors: this._connectors.length
@@ -239,46 +222,97 @@ class ConnectorsManager {
     }
 
     /**
+     * Spawns a connector when buckets are configured for it and is not running,
+     * or destroys connector with no buckets configured
+     * @param {Connector} connector connector instance
+     * @returns {Promise<Boolean>} true if connector state changed
+     * @throws {InternalError}
+     */
+    async _spawnOrDestroyConnector(connector) {
+        try {
+            if (connector.isRunning && connector.bucketCount === 0) {
+                await connector.destroy();
+                this._metricsHandler.onConnectorDestroyed();
+                this._logger.info('Successfully destroyed a connector', {
+                    method: 'ConnectorsManager._spawnOrDestroyConnector',
+                    connector: connector.name
+                });
+                return true;
+            } else if (!connector.isRunning && connector.bucketCount > 0) {
+                await connector.spawn();
+                this._metricsHandler.onConnectorsInstantiated(false);
+                this._logger.info('Successfully destroyed a connector', {
+                    method: 'ConnectorsManager._spawnOrDestroyConnector',
+                    connector: connector.name
+                });
+                return true;
+            } else if (connector.isRunning) {
+                return connector.updatePipeline(true);
+            }
+            return false;
+        } catch (err) {
+            this._logger.error('Error while spawning or destorying connector', {
+                method: 'ConnectorsManager._spawnOrDestroyConnector',
+                connector: this._name,
+                error: err.description || err.message,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
+    }
+
+    /**
+     * Updates the connectors if their configuration changed
+     * @returns {undefined}
+     */
+    async _updateConnectors() {
+        const connectorsStatus = {};
+        let connectorUpdateFailed = false;
+        await eachLimit(this._connectors, 10, async connector => {
+            const startTime = Date.now();
+            connectorsStatus[connector.name] = {
+                numberOfBuckets: connector.bucketCount,
+                updated: null,
+            };
+            try {
+                // check if we need to spawn/despawn the connector
+                // - connector is destroyed if no buckets are configured
+                // - connector is spawned when buckets are configured on it
+                // or update the connector when buckets configuration changed
+                const updated = await this._spawnOrDestroyConnector(connector);
+                connectorsStatus[connector.name].updated = updated;
+                if (updated) {
+                    const delta = (Date.now() - startTime) / 1000;
+                    this._metricsHandler.onConnectorReconfiguration(connector, true, delta);
+                }
+            } catch (err) {
+                connectorUpdateFailed = true;
+                connectorsStatus[connector.name].updated = false;
+                this._metricsHandler.onConnectorReconfiguration(connector, false);
+                this._logger.error('Failed to updated connector', {
+                    method: 'ConnectorsManager._updateConnectors',
+                    connector: connector.name,
+                    bucketCount: connector.bucketCount,
+                    error: err.description || err.message,
+                });
+            }
+        });
+        const logMessage = connectorUpdateFailed ? 'Failed to update some or all the connectors' :
+            'Successfully updated all the connectors';
+        const logFunction = connectorUpdateFailed ? this._logger.error.bind(this._logger) :
+            this._logger.info.bind(this._logger);
+        logFunction(logMessage, {
+            method: 'ConnectorsManager._updateConnectors',
+            connectorsStatus,
+        });
+    }
+
+    /**
      * Schedules connector updates
      * @returns {undefined}
      */
     scheduleConnectorUpdates() {
         schedule.scheduleJob(this._cronRule, async () => {
-            const connectorsStatus = {};
-            let connectorUpdateFailed = false;
-            await eachLimit(this._connectors, 10, async connector => {
-                const startTime = Date.now();
-                connectorsStatus[connector.name] = {
-                    numberOfBuckets: connector.bucketCount,
-                    updated: null,
-                };
-                try {
-                    const updated = await connector.updatePipeline(true);
-                    connectorsStatus[connector.name].updated = updated;
-                    if (updated) {
-                        const delta = (Date.now() - startTime) / 1000;
-                        this._metricsHandler.onConnectorReconfiguration(connector, true, delta);
-                    }
-                } catch (err) {
-                    connectorUpdateFailed = true;
-                    connectorsStatus[connector.name].updated = false;
-                    this._metricsHandler.onConnectorReconfiguration(connector, false);
-                    this._logger.error('Failed to updated connector', {
-                        method: 'ConnectorsManager.scheduleConnectorUpdates',
-                        connector: connector.name,
-                        bucketCount: connector.bucketCount,
-                        error: err.description || err.message,
-                    });
-                }
-            });
-            const logMessage = connectorUpdateFailed ? 'Failed to update some or all the connectors' :
-                'Successfully updated all the connectors';
-            const logFunction = connectorUpdateFailed ? this._logger.error.bind(this._logger) :
-                this._logger.info.bind(this._logger);
-            logFunction(logMessage, {
-                method: 'ConnectorsManager.scheduleConnectorUpdates',
-                connectorsStatus,
-            });
+            await this._updateConnectors();
         });
     }
 

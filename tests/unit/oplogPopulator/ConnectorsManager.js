@@ -58,18 +58,30 @@ const connectorConfig = {
     'heartbeat.interval.ms': 10000,
 };
 
-const connector1 = new Connector({
-    name: 'source-connector',
-    buckets: [],
-    config: connectorConfig,
-    logger,
-    kafkaConnectHost: '127.0.0.1',
-    kafkaConnectPort: 8083,
-});
-
 describe('ConnectorsManager', () => {
     let connectorsManager;
+    let connector1;
+
+    let connectorCreateStub;
+    let connectorDeleteStub;
+    let connectorUpdateStub;
+
     beforeEach(() => {
+        connector1 = new Connector({
+            name: 'source-connector',
+            buckets: [],
+            config: connectorConfig,
+            isRunning: true,
+            logger,
+            kafkaConnectHost: '127.0.0.1',
+            kafkaConnectPort: 8083,
+        });
+        connectorCreateStub = sinon.stub(connector1._kafkaConnect, 'createConnector')
+            .resolves();
+        connectorDeleteStub = sinon.stub(connector1._kafkaConnect, 'deleteConnector')
+            .resolves();
+        connectorUpdateStub = sinon.stub(connector1._kafkaConnect, 'updateConnectorConfig')
+            .resolves();
         connectorsManager = new ConnectorsManager({
             nbConnectors: 1,
             database: 'metadata',
@@ -85,7 +97,7 @@ describe('ConnectorsManager', () => {
     });
 
     afterEach(() => {
-        sinon.restore();
+        sinon.reset();
     });
 
     describe('_getDefaultConnectorConfiguration', () => {
@@ -115,9 +127,10 @@ describe('ConnectorsManager', () => {
                 .returns('source-connector');
             sinon.stub(connectorsManager, '_getDefaultConnectorConfiguration')
                 .returns(connectorConfig);
-            const connector = await connectorsManager.addConnector(false);
+            const connector = connectorsManager.addConnector();
             assert(connector instanceof Connector);
             assert.strictEqual(connector.name, 'source-connector');
+            assert.strictEqual(connector.isRunning, false);
         });
     });
 
@@ -149,6 +162,7 @@ describe('ConnectorsManager', () => {
             assert.strictEqual(connectors[0].name, 'source-connector');
             assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
             assert.strictEqual(connectors[0].config['topic.namespace.map'], '{"*":"oplog"}');
+            assert.strictEqual(connectors[0].isRunning, true);
         });
     });
 
@@ -170,11 +184,118 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves([]);
             sinon.stub(connectorsManager, 'addConnector')
-                .resolves(connector1);
+                .returns(connector1);
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
             assert.deepEqual(connectorsManager._oldConnectors, []);
+        });
+    });
+
+    describe('_spawnOrDestroyConnector', () => {
+        it('should destroy running connector when no buckets are configured', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set();
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, true);
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.calledOnceWith(connector1.name));
+        });
+
+        it('should spawn a non running connector when buckets are configured', async () => {
+            connector1._isRunning = false;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set(['bucket1']);
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, true);
+            assert(connectorCreateStub.calledOnceWith({
+                name: connector1.name,
+                config: connector1.config
+            }));
+            assert(connectorDeleteStub.notCalled);
+        });
+
+        it('should do nothing when a running connector has buckets', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set(['bucket1']);
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, false);
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+        });
+
+        it('should do nothing when a non running connector still has no buckets', async () => {
+            connector1._isRunning = false;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set();
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, false);
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+        });
+    });
+
+    describe('_updateConnectors', () => {
+        it('should update a running connector when its buckets changed', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set(['bucket1']);
+            connectorsManager._connectors = [connector1];
+            connector1._buckets = new Set(['bucket1']);
+            connector1.addBucket('bucket2', false);
+            await connectorsManager._updateConnectors();
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+            assert(connectorUpdateStub.calledOnceWith(
+                connector1.name,
+                connector1.config
+            ));
+        });
+        it('should not update a running connector when its buckets didn\'t change', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set(['bucket1']);
+            connectorsManager._connectors = [connector1];
+            await connectorsManager._updateConnectors();
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+            assert(connectorUpdateStub.notCalled);
+        });
+        it('should destroy a running connector if no buckets are assigned to it', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set([]);
+            connectorsManager._connectors = [connector1];
+            await connectorsManager._updateConnectors();
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.calledOnceWith(connector1.name));
+            assert(connectorUpdateStub.notCalled);
+        });
+        it('should spawn a non running connector when buckets are assigned to it', async () => {
+            connector1._isRunning = false;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set([]);
+            connectorsManager._connectors = [connector1];
+            connector1._buckets = new Set(['bucket1']);
+            await connectorsManager._updateConnectors();
+            assert(connectorCreateStub.calledOnceWith({
+                name: connector1.name,
+                config: connector1.config
+            }));
+            assert(connectorDeleteStub.notCalled);
+            assert(connectorUpdateStub.notCalled);
+        });
+        it('should do nothing when a non running connector has not buckets', async () => {
+            connector1._isRunning = false;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set([]);
+            connectorsManager._connectors = [connector1];
+            await connectorsManager._updateConnectors();
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+            assert(connectorUpdateStub.notCalled);
         });
     });
 });
