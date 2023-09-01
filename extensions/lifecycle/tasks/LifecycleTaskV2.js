@@ -182,6 +182,18 @@ class LifecycleTaskV2 extends LifecycleTask {
                 return done(err);
             }
 
+            // create Set of unique keys not matching the next marker to
+            // indicate the object level entries to be cleared at the end
+            // of the processing step
+            const uniqueObjectKeysNotNextMarker = new Set();
+            if (markerInfo.keyMarker) {
+                contents.forEach(v => {
+                    if (v.Key !== markerInfo.keyMarker) {
+                        uniqueObjectKeysNotNextMarker.add(v.Key);
+                    }
+                });
+            }
+
             // re-queue truncated listing only once.
             if (isTruncated && nbRetries === 0) {
                 const entry = Object.assign({}, bucketData, {
@@ -204,7 +216,25 @@ class LifecycleTaskV2 extends LifecycleTask {
                 });
             }
             return this._compareRulesToList(bucketData, bucketLCRules,
-                contents, log, done);
+                contents, log, err => {
+                    if (err) {
+                        return done(err);
+                    }
+
+                    if (!isTruncated) {
+                        // end of bucket listing
+                        // clear bucket level entry and all object entries
+                        this._ncvHeapBucketClear(bucketData.target.bucket);
+                    } else {
+                        // clear object level entries that have been processed
+                        this._ncvHeapObjectsClear(
+                            bucketData.target.bucket,
+                            uniqueObjectKeysNotNextMarker
+                        );
+                    }
+
+                    return done();
+                });
         });
     }
 
