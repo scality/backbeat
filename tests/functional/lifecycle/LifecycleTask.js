@@ -397,9 +397,6 @@ class LifecycleBucketProcessorMock {
         this._kafkaBacklogMetrics = new KafkaBacklogMetricsMock();
         this._kafkaBacklogMetrics.setProducer(this._producer);
         this.ncvHeap = new Map();
-
-        // set test topic name
-        ReplicationAPI.setDataMoverTopic('data-mover');
     }
 
     getCount() {
@@ -476,8 +473,12 @@ describe('lifecycle task functional tests', function dF() {
     let lcTask;
     let s3;
     let s3Helper;
+    let dataMoverTopic;
 
     before(() => {
+        // set test topic name
+        dataMoverTopic = ReplicationAPI.getDataMoverTopic();
+        ReplicationAPI.setDataMoverTopic('data-mover');
         lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
@@ -488,6 +489,10 @@ describe('lifecycle task functional tests', function dF() {
             'transitions',
         ]);
         s3Helper = new S3Helper(s3);
+    });
+
+    after(() => {
+        ReplicationAPI.setDataMoverTopic(dataMoverTopic);
     });
 
     // Assert that the results from the bucket processor have the expected data.
