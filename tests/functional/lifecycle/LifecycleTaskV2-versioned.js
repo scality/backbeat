@@ -74,6 +74,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 kafkaBacklogMetrics: { snapshotTopicOffsets: () => {} },
                 pausedLocations: new Set(),
                 log,
+                ncvHeap: new Map(),
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);
@@ -745,6 +746,146 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 storageClass: destinationLocation,
             });
             return done();
+        });
+    });
+
+    it('should not publish any entry because version is retain by NewerNoncurrentVersions', done => {
+        const nonCurrentExpirationRule = [{
+            NoncurrentVersionExpiration: {
+                NoncurrentDays: 2,
+                NewerNoncurrentVersions: 1,
+            },
+            ID: '123',
+            Prefix: '',
+            Status: 'Enabled',
+        }];
+
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const contents = [key];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the non-current listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+            // test parameters used to list lifecycle keys
+            const { listLifecycleParams } = backbeatMetadataProxy;
+            expectNominalListingParams(bucketName, listLifecycleParams);
+
+            // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 0);
+            return done();
+        });
+    });
+
+    it('should retain the first non current version but publish the second one', done => {
+        const nonCurrentExpirationRule = [{
+            NoncurrentVersionExpiration: {
+                NoncurrentDays: 2,
+                NewerNoncurrentVersions: 1,
+            },
+            ID: '123',
+            Prefix: '',
+            Status: 'Enabled',
+        }];
+
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
+        const versionId2 = 'versionid2';
+        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 1 });
+        const contents = [version1, version2];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+            // test that the non-current listing is triggered
+            assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+            // test parameters used to list lifecycle keys
+            const { listLifecycleParams } = backbeatMetadataProxy;
+            expectNominalListingParams(bucketName, listLifecycleParams);
+
+            // test that the entry is valid and pushed to kafka topic
+            assert.strictEqual(kafkaEntries.length, 1);
+            const firstEntry = kafkaEntries[0];
+            testKafkaEntry.expectObjectExpirationEntry(firstEntry, { keyName, versionId });
+            return done();
+        });
+    });
+
+    it('should retain the correct number of versions when the rule changes', done => {
+        const nonCurrentExpirationRule = [{
+            NoncurrentVersionExpiration: {
+                NoncurrentDays: 2,
+                NewerNoncurrentVersions: 2,
+            },
+            ID: '123',
+            Prefix: '',
+            Status: 'Enabled',
+        }];
+
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
+        const versionId2 = 'versionid2';
+        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 1 });
+        const contents = [version1, version2];
+        backbeatMetadataProxy.listLifecycleResponse = {
+            contents,
+            isTruncated: true,
+            markerInfo: { keyMarker: 'key1', versionIdMarker: 'versionid2' },
+        };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
+        backbeatMetadataProxy, nbRetries, err => {
+            assert.ifError(err);
+
+            kafkaEntries = [];
+            const nonCurrentExpirationRule2 = [{
+                NoncurrentVersionExpiration: {
+                    NoncurrentDays: 2,
+                    NewerNoncurrentVersions: 1,
+                },
+                ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            }];
+
+            return lifecycleTask.processBucketEntry(nonCurrentExpirationRule2, bucketData, s3,
+                backbeatMetadataProxy, nbRetries, err => {
+                    assert.ifError(err);
+                    // test that the non-current listing is triggered
+                    assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+                    // test parameters used to list lifecycle keys
+                    const { listLifecycleParams } = backbeatMetadataProxy;
+                    expectNominalListingParams(bucketName, listLifecycleParams);
+
+                    // test that the entry is valid and pushed to kafka topic
+                    assert.strictEqual(kafkaEntries.length, 2);
+
+                    const firstEntry = kafkaEntries[0];
+                    testKafkaEntry.expectBucketEntry(firstEntry, {
+                        hasBeforeDate: true,
+                        keyMarker: keyName,
+                        versionIdMarker: versionId2,
+                        prefix: '',
+                        listType: 'noncurrent',
+                    });
+
+                    const secondEntry = kafkaEntries[1];
+                    testKafkaEntry.expectObjectExpirationEntry(secondEntry, { keyName, versionId });
+                    return done();
+                });
         });
     });
 });

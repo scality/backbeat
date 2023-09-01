@@ -1730,9 +1730,10 @@ describe('lifecycle task helper methods', () => {
         });
 
         it('should clear the ncvHeap object of the listed bucket/keys', () => {
+            const ruleId = 'rule_name';
             const rules = {
-                Id: 'rule_name',
                 NoncurrentVersionExpiration: {
+                    ID: ruleId,
                     NoncurrentDays: 1,
                     NewerNoncurrentVersions: 10,
                 },
@@ -1773,16 +1774,16 @@ describe('lifecycle task helper methods', () => {
             assert(lct2.ncvHeap.has(b1));
             assert(!lct2.ncvHeap.get(b1).has(version1.Key));
             assert(!lct2.ncvHeap.get(b1).has(version2.Key));
-            assert(lct2.ncvHeap.get(b1).get(version3.Key).has(rules.Id));
-            assert.strictEqual(lct2.ncvHeap.get(b1).get(version3.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b1).get(version3.Key).has(ruleId));
+            assert.strictEqual(lct2.ncvHeap.get(b1).get(version3.Key).get(ruleId).size, 1);
 
             assert(lct2.ncvHeap.has(b2));
             assert(lct2.ncvHeap.get(b2).has(version1.Key));
-            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(rules.Id));
-            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(ruleId));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(ruleId).size, 1);
             assert(lct2.ncvHeap.get(b2).has(version2.Key));
-            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(rules.Id));
-            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(ruleId));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(ruleId).size, 1);
         });
     });
 
@@ -1813,9 +1814,10 @@ describe('lifecycle task helper methods', () => {
         });
 
         it('should clear the ncvHeap object of the listed bucket/keys', () => {
+            const ruleId = 'rule_name';
             const rules = {
-                Id: 'rule_name',
                 NoncurrentVersionExpiration: {
+                    ID: ruleId,
                     NoncurrentDays: 1,
                     NewerNoncurrentVersions: 10,
                 },
@@ -1854,11 +1856,11 @@ describe('lifecycle task helper methods', () => {
             assert(!lct2.ncvHeap.has(b1));
             assert(lct2.ncvHeap.has(b2));
             assert(lct2.ncvHeap.get(b2).has(version1.Key));
-            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(rules.Id));
-            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).get(version1.Key).has(ruleId));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version1.Key).get(ruleId).size, 1);
             assert(lct2.ncvHeap.get(b2).has(version2.Key));
-            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(rules.Id));
-            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(rules.Id).size, 1);
+            assert(lct2.ncvHeap.get(b2).get(version2.Key).has(ruleId));
+            assert.strictEqual(lct2.ncvHeap.get(b2).get(version2.Key).get(ruleId).size, 1);
         });
     });
 
@@ -2049,4 +2051,3 @@ describe('lifecycle task helper methods', () => {
         });
     });
 });
-

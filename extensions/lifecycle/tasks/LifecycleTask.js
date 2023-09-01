@@ -251,11 +251,14 @@ class LifecycleTask extends BackbeatTask {
         const ncvHeapObject = this.ncvHeap.get(bucketName).get(version.Key);
 
         const nncvSize = parseInt(rule[ncve][nncv], 10);
-        if (!ncvHeapObject.get(rule.Id)) {
-            ncvHeapObject.set(rule.Id, new MinHeap(nncvSize, noncurrentVersionCompare));
+
+        const ruleId = rule[ncve].ID;
+
+        if (!ncvHeapObject.get(ruleId)) {
+            ncvHeapObject.set(ruleId, new MinHeap(nncvSize, noncurrentVersionCompare));
         }
 
-        const heap = ncvHeapObject.get(rule.Id);
+        const heap = ncvHeapObject.get(ruleId);
 
         if (heap.size < nncvSize) {
             heap.add(version);
