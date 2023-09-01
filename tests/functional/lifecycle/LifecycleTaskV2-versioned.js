@@ -944,7 +944,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 1 });
+        const key = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
         const contents = [key];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -978,9 +978,9 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
+        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 3 });
         const versionId2 = 'versionid2';
-        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 1 });
+        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 2 });
         const contents = [version1, version2];
         backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
 
@@ -1016,9 +1016,9 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const keyName = 'key1';
         const versionId = 'versionid1';
-        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
+        const version1 = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 3 });
         const versionId2 = 'versionid2';
-        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 1 });
+        const version2 = keyMock.nonCurrent({ keyName, versionId: versionId2, daysEarlier: 2 });
         const contents = [version1, version2];
         backbeatMetadataProxy.listLifecycleResponse = {
             contents,
