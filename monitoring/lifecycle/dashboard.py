@@ -35,7 +35,7 @@ def s3_request_timeseries_expr(process, job, code):
     if process is not None:
         labelSelector += f',origin="{process}"'
 
-    return f'sum(increase(s3_lifecycle_s3_operations_total{{{labelSelector}}}[$__interval]))'
+    return f'sum(increase(s3_lifecycle_s3_operations_total{{{labelSelector}}}[$__rate_interval]))'
 
 
 def s3_request_timeseries(title, process=None, job=None):
@@ -157,11 +157,11 @@ def kafka_row(topic, op):
     return [
         kafka_messages_time_series(
             f'{topic} Messages in Queue',
-            f'sum(increase(s3_lifecycle_kafka_publish_success_total{{{label}}}[$__interval]))',
+            f'sum(increase(s3_lifecycle_kafka_publish_success_total{{{label}}}[$__rate_interval]))',
         ),
         kafka_messages_time_series(
             f'{topic} Failed Messages',
-            f'sum(increase(s3_lifecycle_kafka_publish_error_total{{{label}}}[$__interval]))',
+            f'sum(increase(s3_lifecycle_kafka_publish_error_total{{{label}}}[$__rate_interval]))',
         ),
     ]
 
