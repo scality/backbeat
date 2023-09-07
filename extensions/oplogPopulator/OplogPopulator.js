@@ -259,6 +259,7 @@ class OplogPopulator {
                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
+               kafkaMaxRequestSize: this._config.kafka.maxRequestSize,
                metricsHandler: this._metricsHandler,
                logger: this._logger,
             });

@@ -371,6 +371,7 @@ class QueueProcessor extends EventEmitter {
     _setupProducer(done) {
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
+            maxRequestSize: this.kafkaConfig.maxRequestSize,
             topic: this.repConfig.replicationStatusTopic,
         });
         producer.once('error', done);
