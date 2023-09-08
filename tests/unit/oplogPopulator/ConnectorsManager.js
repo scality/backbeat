@@ -56,7 +56,6 @@ const connectorConfig = {
         }],
     }),
     'heartbeat.interval.ms': 10000,
-    'producer.override.max.request.size': 5000020,
 };
 
 describe('ConnectorsManager', () => {
@@ -92,7 +91,6 @@ describe('ConnectorsManager', () => {
             heartbeatIntervalMs: 10000,
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
-            kafkaMaxRequestSize: 5000020,
             metricsHandler: new OplogPopulatorMetrics(logger),
             logger,
         });

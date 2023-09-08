@@ -18,7 +18,6 @@ const oplogPopulatorConfig = {
     kafkaConnectPort: 8083,
     numberOfConnectors: 1,
     probeServer: { port: 8552 },
-    maxRequestSize: 5000020,
 };
 
 const mongoConfig = {
@@ -91,19 +90,6 @@ describe('OplogPopulator', () => {
             }));
             assert.throws(() => new OplogPopulator({
                 activeExtensions,
-                logger,
-            }));
-            assert.throws(() => new OplogPopulator({
-                config: {
-                    topic: 'oplog',
-                    kafkaConnectHost: '127.0.0.1',
-                    kafkaConnectPort: 8083,
-                    numberOfConnectors: 1,
-                    probeServer: { port: 8552 },
-                },
-                mongoConfig,
-                activeExtensions,
-                enableMetrics: false,
                 logger,
             }));
             const op = new OplogPopulator({

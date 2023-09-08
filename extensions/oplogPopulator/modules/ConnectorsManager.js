@@ -20,7 +20,6 @@ const paramsJoi = joi.object({
     heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
-    kafkaMaxRequestSize: joi.number().required(),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
@@ -62,7 +61,6 @@ class ConnectorsManager {
             kafkaConnectPort: this._kafkaConnectPort,
             logger: this._logger,
         });
-        this._kafkaMaxRequestSize = params.kafkaMaxRequestSize;
         this._metricsHandler = params.metricsHandler;
         this._database = params.database;
         this._mongoUrl = params.mongoUrl;
@@ -89,7 +87,6 @@ class ConnectorsManager {
             // hearbeat prevents having an outdated resume token in the connectors
             // by constantly updating the offset to the last object in the oplog
             'heartbeat.interval.ms': this._heartbeatIntervalMs,
-            'producer.override.max.request.size': this._kafkaMaxRequestSize,
         };
         return {
             ...constants.defaultConnectorConfig,

@@ -28,10 +28,7 @@ const activeExtensions = [
 ].filter(ext => config.extensions[ext]);
 
 const oplogPopulator = new OplogPopulator({
-    config: {
-        ...oplogPopulatorConfig,
-        maxRequestSize: config.kafka.maxRequestSize,
-    },
+    config: oplogPopulatorConfig,
     mongoConfig,
     activeExtensions,
     logger,

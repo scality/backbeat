@@ -13,9 +13,7 @@ const { OplogPopulatorConfigJoiSchema } = require('./OplogPopulatorConfigValidat
 const { mongoJoi } = require('../../lib/config/configItems.joi');
 
 const paramsJoi = joi.object({
-    config: OplogPopulatorConfigJoiSchema.keys({
-        maxRequestSize: joi.number().required(),
-    }).required(),
+    config: OplogPopulatorConfigJoiSchema.required(),
     mongoConfig: mongoJoi.required(),
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
@@ -34,7 +32,6 @@ class OplogPopulator {
      * @constructor
      * @param {Object} params - constructor params
      * @param {Object} params.config - oplog populator config
-     * @param {Object} params.config.maxRequestSize - kafka producer's max request size
      * @param {Object} params.mongoConfig - mongo connection config
      * @param {Object} params.mongoConfig.authCredentials - mongo auth credentials
      * @param {Object} params.mongoConfig.replicaSetHosts - mongo replication hosts
@@ -264,7 +261,6 @@ class OplogPopulator {
                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
-               kafkaMaxRequestSize: this._maxRequestSize,
                metricsHandler: this._metricsHandler,
                logger: this._logger,
             });
