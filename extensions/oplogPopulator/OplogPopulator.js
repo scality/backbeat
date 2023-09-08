@@ -9,10 +9,14 @@ const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
+const { OplogPopulatorConfigJoiSchema } = require('./OplogPopulatorConfigValidator');
+const { mongoJoi } = require('../../lib/config/configItems.joi');
 
 const paramsJoi = joi.object({
-    config: joi.object().required(),
-    mongoConfig: joi.object().required(),
+    config: OplogPopulatorConfigJoiSchema.keys({
+        maxRequestSize: joi.number().required(),
+    }).required(),
+    mongoConfig: mongoJoi.required(),
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
     enableMetrics: joi.boolean().default(true),
@@ -30,6 +34,7 @@ class OplogPopulator {
      * @constructor
      * @param {Object} params - constructor params
      * @param {Object} params.config - oplog populator config
+     * @param {Object} params.config.maxRequestSize - kafka producer's max request size
      * @param {Object} params.mongoConfig - mongo connection config
      * @param {Object} params.mongoConfig.authCredentials - mongo auth credentials
      * @param {Object} params.mongoConfig.replicaSetHosts - mongo replication hosts
@@ -259,7 +264,7 @@ class OplogPopulator {
                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
                kafkaConnectHost: this._config.kafkaConnectHost,
                kafkaConnectPort: this._config.kafkaConnectPort,
-               kafkaMaxRequestSize: this._config.kafka.maxRequestSize,
+               kafkaMaxRequestSize: this._maxRequestSize,
                metricsHandler: this._metricsHandler,
                logger: this._logger,
             });
