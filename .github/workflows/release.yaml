@@ -18,7 +18,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
-        uses: actions/checkout@v3
+        uses: actions/checkout@v4
 
       # TODO: remove the following step once Oras CLI 0.13.0 bug https://github.com/oras-project/oras/issues/447 is fixed.
       - name: Downgrade Oras to 0.12.0
