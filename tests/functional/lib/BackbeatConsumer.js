@@ -410,3 +410,114 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
         });
     });
 });
+
+describe('BackbeatConsumer with circuit breaker', () => {
+    const nMessages = 0;
+
+    const testCases = [
+        {
+            description: 'should consume if breaker state nominal',
+            startDelayMs: 0,
+            expectedMessages: nMessages,
+            breakerConf: {
+                probes: [
+                    {
+                        type: 'noop',
+                        returnConstantValue: true,
+                    },
+                ],
+            },
+        },
+        {
+            description: 'should not consume if breaker state not nominal',
+            startDelayMs: 50,
+            expectedMessages: 0,
+            breakerConf: {
+                nominalEvaluateIntervalMs: 1,
+                probes: [
+                    {
+                        type: 'noop',
+                        returnConstantValue: false,
+                    },
+                ],
+            },
+        },
+    ];
+
+    testCases.forEach(t => {
+        const topicBreaker = 'backbeat-consumer-spec-breaker';
+        const groupIdBreaker = `replication-group-breaker-${Math.random()}`;
+        let producer;
+        let consumer;
+        let consumedMessages = [];
+
+        function queueProcessor(message, cb) {
+            if (message.value.toString() !== 'taskStuck') {
+                consumedMessages.push(message.value);
+                process.nextTick(cb);
+            }
+        }
+        before(function before(done) {
+            this.timeout(60000);
+
+            producer = new BackbeatProducer({
+                kafka: producerKafkaConf,
+                topic: topicBreaker,
+                pollIntervalMs: 100,
+            });
+            consumer = new BackbeatConsumer({
+                zookeeper: zookeeperConf,
+                kafka: consumerKafkaConf, groupId: groupIdBreaker, topic: topicBreaker,
+                queueProcessor,
+                concurrency: 10,
+                bootstrap: true,
+                circuitBreaker: t.breakerConf,
+            });
+            async.parallel([
+                innerDone => producer.on('ready', innerDone),
+                innerDone => consumer.on('ready', innerDone),
+            ], (err, res) => {
+                setTimeout(() => done(err, res), t.startDelayMs);
+            });
+        });
+        afterEach(() => {
+            consumedMessages = [];
+            consumer.removeAllListeners('consumed');
+        });
+        after(done => {
+            async.parallel([
+                innerDone => producer.close(innerDone),
+                innerDone => consumer.close(innerDone),
+            ], done);
+        });
+
+        it(t.description, done => {
+            const boatloadOfMessages = [];
+            for (let i = 0; i < nMessages; ++i) {
+                boatloadOfMessages.push({
+                    key: `message-${i}`,
+                    message: `{"message_index":"${i}"}`,
+                });
+            }
+
+            let totalConsumed = 0;
+
+            async.series([
+                next => {
+                    setTimeout(() => producer.send(boatloadOfMessages, err => {
+                        assert.ifError(err);
+                    }), 1000);
+                    consumer.subscribe();
+                    setTimeout(next, 5000);
+                    consumer.on('consumed', messagesConsumed => {
+                        totalConsumed += messagesConsumed;
+                    });
+                },
+                next => {
+                    assert.strictEqual(totalConsumed, t.expectedMessages);
+                    next();
+                },
+            ], done);
+        });
+    });
+});

@@ -20,8 +20,14 @@ const VaultClientWrapper = require('../../../extensions/utils/VaultClientWrapper
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 
+const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const {
+    updateCircuitBreakerConfigForImplicitOutputQueue,
+} = require('../../../lib/CircuitBreaker');
+
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
+const BUCKET_CHECKPOINT_PUSH_NUMBER_BUCKETD = 50;
 
 const LIFEYCLE_CONDUCTOR_CLIENT_ID = 'lifecycle-conductor';
 
@@ -109,15 +115,42 @@ class LifecycleConductor {
             this._authConfig,
             this.logger,
         );
+
+        const circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
+            lcConfig.conductor.circuitBreaker,
+            lcConfig.bucketProcessor.groupId,
+            lcConfig.bucketTasksTopic,
+        );
+
+        this._circuitBreaker = this.buildCircuitBreaker(circuitBreakerConfig);
+    }
+
+    buildCircuitBreaker(conf) {
+        try {
+            return new CircuitBreaker(conf);
+        } catch (e) {
+            this.logger.error('invalid circuit breaker configuration');
+            throw e;
+        }
     }
 
     getBucketsZkPath() {
         return `${this.lcConfig.zookeeperPath}/data/buckets`;
     }
 
+    getBucketProgressZkPath() {
+        return `${this.lcConfig.zookeeperPath}/data/bucket-send-progress`;
+    }
+
     initZkPaths(cb) {
-        async.each([this.getBucketsZkPath()],
-                   (path, done) => this._zkClient.mkdirp(path, done), cb);
+        async.each(
+            [
+                this.getBucketsZkPath(),
+                this.getBucketProgressZkPath(),
+            ],
+            (path, done) => this._zkClient.mkdirp(path, done),
+            cb,
+        );
     }
 
     processBuckets(cb) {
@@ -259,7 +292,13 @@ class LifecycleConductor {
             return this.listMongodbBuckets(queue, log, cb);
         }
 
-        return this.listBucketdBuckets(queue, log, cb);
+        return this.restoreBucketCheckpoint((err, marker) => {
+            if (err) {
+                return cb(err);
+            }
+
+            return this.listBucketdBuckets(queue, marker || null, log, cb);
+        });
     }
 
     listZookeeperBuckets(queue, log, cb) {
@@ -293,24 +332,73 @@ class LifecycleConductor {
             });
     }
 
-    listBucketdBuckets(queue, log, cb) {
-        let isTruncated = false;
-        let marker = null;
+    checkpointBucket(bucketEntry, cb) {
+        if (bucketEntry === null) {
+            return process.nextTick(cb);
+        }
+
+        return this._zkClient.setData(
+            this.getBucketProgressZkPath(),
+            Buffer.from(bucketEntry),
+            this.lastSentVersion,
+            (err, stat) => {
+                if (err) {
+                    return cb(err);
+                }
+
+                if (stat) {
+                    this.lastSentVersion = stat.version;
+                }
+
+                this.lastSentId = null;
+
+                return cb();
+            },
+        );
+    }
+
+    restoreBucketCheckpoint(cb) {
+        this._zkClient.getData(this.getBucketProgressZkPath(), (err, data, stat) => {
+            if (err) {
+                return cb(err);
+            }
+
+            const entry = data ? data.toString('ascii') : null;
+            if (stat) {
+                this.lastSentVersion = stat.version;
+            }
+
+            return cb(null, entry);
+        });
+    }
+
+    listBucketdBuckets(queue, initMarker, log, cb) {
+        let isTruncated = true;
+        let marker = initMarker;
         let nEnqueued = 0;
         const start = new Date();
         const retryWrapper = new BackbeatTask();
 
+        this.lastSentId = null;
+        this.lastSentVersion = -1;
+
         async.doWhilst(
             next => {
-                if (queue.length() > this._maxInFlightBatchSize) {
-                    log.info('delaying bucket pull', {
-                        nEnqueuedToDownstream: nEnqueued,
-                        inFlight: queue.length(),
-                        maxInFlight: this._maxInFlightBatchSize,
-                        bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
-                    });
+                const breakerState = this._circuitBreaker.state;
+                const queueInfo = {
+                    nEnqueuedToDownstream: nEnqueued,
+                    inFlight: queue.length(),
+                    maxInFlight: this._maxInFlightBatchSize,
+                    bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                    breakerState,
+                };
 
-                    return setTimeout(next, 10000);
+                if (queue.length() > this._maxInFlightBatchSize ||
+                    breakerState !== BreakerState.Nominal) {
+                    log.info('delaying bucket pull', queueInfo);
+                    return this.checkpointBucket(this.lastSentId, () => {
+                        setTimeout(next, 10000);
+                    });
                 }
 
                 return retryWrapper.retry({
@@ -332,13 +420,23 @@ class LifecycleConductor {
                                 }
 
                                 isTruncated = result.IsTruncated;
-                                nEnqueued += result.Contents.length;
+                                let needCheckpoint = false;
 
                                 result.Contents.forEach(o => {
                                     marker = o.key;
                                     const [canonicalId, bucketName] = marker.split(constants.splitter);
+                                    nEnqueued += 1;
                                     queue.push({ canonicalId, bucketName });
+
+                                    this.lastSentId = o.key;
+                                    if (nEnqueued % BUCKET_CHECKPOINT_PUSH_NUMBER_BUCKETD === 0) {
+                                        needCheckpoint = true;
+                                    }
                                 });
+
+                                if (needCheckpoint) {
+                                    return this.checkpointBucket(marker, done);
+                                }
 
                                 return done();
                             }
@@ -348,7 +446,21 @@ class LifecycleConductor {
                 }, next);
             },
             () => isTruncated,
-            err => cb(err, nEnqueued));
+            err => {
+                if (err) {
+                    return cb(err, nEnqueued);
+                }
+
+                // clear last seen bucket from zk
+                return this.checkpointBucket('', err => {
+                    if (err) {
+                        return cb(err);
+                    }
+
+                    return cb(null, nEnqueued);
+                });
+            }
+        );
     }
 
     listMongodbBuckets(queue, log, cb) {
@@ -509,7 +621,7 @@ class LifecycleConductor {
             return;
         }
         this._zkClient = zookeeperHelper.createClient(
-            this.zkConfig.connectionString);
+            this.zkConfig.connectionString, this.zkConfig);
         this._zkClient.connect();
         this._zkClient.once('error', cb);
         this._zkClient.once('ready', () => {
@@ -521,12 +633,14 @@ class LifecycleConductor {
                     'error from lifecycle conductor zookeeper client',
                     { error: err });
             });
-            cb();
+            this.initZkPaths(cb);
         });
     }
 
     needsZookeeper() {
-        return this._bucketSource === 'zookeeper';
+        return this._bucketSource === 'zookeeper' || // bucket list stored in zk
+            this._bucketSource === 'mongodb' || // bucket stream checkpoints in zk
+            this._bucketSource === 'bucketd'; // bucket stream checkpoints in zk
     }
 
     /**
@@ -542,6 +656,7 @@ class LifecycleConductor {
         }
 
         this.vaultClientWrapper.init();
+        this._circuitBreaker.start();
         return async.series([
             next => this._setupProducer(next),
             next => this._setupZookeeperClient(next),
@@ -630,6 +745,7 @@ class LifecycleConductor {
                 });
             },
         ], err => {
+            this._circuitBreaker.stop();
             this._started = false;
             return done(err);
         });

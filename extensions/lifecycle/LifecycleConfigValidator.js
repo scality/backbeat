@@ -30,6 +30,7 @@ const joiSchema = joi.object({
         }).default({ enabled: true }),
         probeServer: probeServerJoi.default(),
         vaultAdmin: hostPortJoi,
+        circuitBreaker: joi.object().optional(),
     },
     bucketProcessor: {
         auth: inheritedAuthJoi,
@@ -40,6 +41,7 @@ const joiSchema = joi.object({
         // overloading the system
         concurrency: joi.number().greater(0).default(1),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     },
     objectProcessor: {
         auth: inheritedAuthJoi,
@@ -47,6 +49,7 @@ const joiSchema = joi.object({
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
+        circuitBreaker: joi.object().optional(),
     },
     transitionProcessor: {
         auth: inheritedAuthJoi,

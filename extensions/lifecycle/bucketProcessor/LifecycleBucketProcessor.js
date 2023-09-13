@@ -14,6 +14,9 @@ const LifecycleTaskV2 = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
+const {
+    updateCircuitBreakerConfigForImplicitOutputQueue,
+} = require('../../../lib/CircuitBreaker');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
@@ -137,6 +140,12 @@ class LifecycleBucketProcessor {
                 });
             }
         });
+
+        this._circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
+            this._lcConfig.bucketProcessor.circuitBreaker,
+            this._lcConfig.objectProcessor.groupId,
+            this._lcConfig.objectTasksTopic,
+        );
     }
 
     /**
@@ -347,6 +356,7 @@ class LifecycleBucketProcessor {
             groupId: this._lcConfig.bucketProcessor.groupId,
             concurrency: this._lcConfig.bucketProcessor.concurrency,
             queueProcessor: this._processBucketEntry.bind(this),
+            circuitBreaker: this._circuitBreakerConfig,
         });
         this._consumer.on('error', err => {
             if (!this._consumerReady) {

@@ -199,13 +199,14 @@ class QueueProcessor extends EventEmitter {
      * @param {String} [internalHttpsConfig.ca] - alternate CA bundle
      *   in PEM format
      * @param {String} site - site name
+     * @param {Object} circuitBreakerConfig - breakbeat configuration
      * @param {Object} notificationConfig - notification configuration object
      * @param {Object} notificationConfig.topic - notification topic name
      */
     constructor(topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig,
                 redisConfig, mConfig, httpsConfig, internalHttpsConfig,
-                site) {
+                site, circuitBreakerConfig) {
         super();
         this.topic = topic;
         this.isReplayTopic = repConfig.replayTopics &&
@@ -230,6 +231,7 @@ class QueueProcessor extends EventEmitter {
         this.serviceName = this.isReplayTopic ?
             libConstants.services.replicationReplayProcessor :
             libConstants.services.replicationQueueProcessor;
+        this.circuitBreakerConfig = circuitBreakerConfig;
         this.echoMode = false;
         this.scheduledResume = null;
 
@@ -388,7 +390,7 @@ class QueueProcessor extends EventEmitter {
         });
     }
 
-    _createConsumer(topic, queueProcessorFunc, options) {
+    _createConsumer(topic, queueProcessorFunc, options, circuitBreaker) {
         let consumerReady = false;
         const groupId =
               `${this.repConfig.queueProcessor.groupId}-${this.site}`;
@@ -407,6 +409,7 @@ class QueueProcessor extends EventEmitter {
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
             canary: true,
+            circuitBreaker,
         });
         consumer.on('error', () => {
             if (!consumerReady) {
@@ -742,7 +745,8 @@ class QueueProcessor extends EventEmitter {
                 }
                 this._consumer = this._createConsumer(
                     this.topic,
-                    this.processReplicationEntry.bind(this), options);
+                    this.processReplicationEntry.bind(this), options,
+                    this.circuitBreakerConfig);
                 return this._consumer.once('canary', done);
             },
             done  => {
@@ -756,7 +760,8 @@ class QueueProcessor extends EventEmitter {
                 this._dataMoverConsumer = this._createConsumer(
                     this.repConfig.dataMoverTopic,
                     this.processDataMoverEntry.bind(this),
-                    Object.assign({ enableBacklogMetrics: true }, options));
+                    Object.assign({ enableBacklogMetrics: true }, options),
+                    this.circuitBreakerConfig);
                 return this._dataMoverConsumer.once('canary', done);
             },
         ], () => {

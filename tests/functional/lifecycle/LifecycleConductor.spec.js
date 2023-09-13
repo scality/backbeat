@@ -97,6 +97,12 @@ const baseLCConfig = {
         account: 'lifecycle',
     },
     coldStorageArchiveTopicPrefix: 'cold-archive-req-',
+    bucketProcessor: {
+        groupId: 'a',
+        probeServer: {
+            port: 8553,
+        },
+    },
 };
 
 function withAccountIds(messages) {

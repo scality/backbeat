@@ -188,7 +188,7 @@ function initAndStart(zkClient) {
                             sourceConfig, destConfig,
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
-                            site);
+                            site, repConfig.queueProcessor.circuitBreaker);
                         activeQProcessors[site] = qp;
                         setupZkSiteNode(qp, zkClient, site, (err, data) => {
                             if (err) {
@@ -223,7 +223,7 @@ function initAndStart(zkClient) {
                 topic, zkConfig, zkClient, kafkaConfig,
                 sourceConfig, destConfig, repConfig, redisConfig,
                 mConfig, httpsConfig, internalHttpsConfig,
-                site);
+                site, repConfig.queueProcessor.circuitBreaker);
             activeQProcessors[site] = qp;
             return setupZkSiteNode(qp, zkClient, site, (err, data) => {
                 if (err) {
