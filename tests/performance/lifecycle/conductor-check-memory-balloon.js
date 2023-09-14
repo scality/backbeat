@@ -2,6 +2,7 @@ const assert = require('assert');
 const async = require('async');
 
 const baseConfig = require('../../../lib/Config');
+baseConfig.zookeeper.autoCreateNamespace = true;
 const mongoConfig = baseConfig.queuePopulator.mongo;
 const LifecycleConductor = require('../../../extensions/lifecycle/conductor/LifecycleConductor');
 const { BackbeatMetadataProxyMock } = require('../../functional/lifecycle/utils');
@@ -41,8 +42,12 @@ describe('Lifecycle Conductor', function testBackpressure() {
         );
 
         it('should apply backpressure on bucket queue instead of ballooning', done => {
-            lc.init(() => {
-                lc.processBuckets((err, nEnqueued) => {
+            lc.init(err => {
+                if (err) {
+                    return done(err);
+                }
+
+                return lc.processBuckets((err, nEnqueued) => {
                     if (err) {
                         return done(err);
                     }
