@@ -25,7 +25,7 @@ describe('Lifecycle Conductor', function testBackpressure() {
                     port: 9001,
                 },
                 backlogControl: {
-                    enabled: true,
+                    enabled: false,
                 },
             },
         };
