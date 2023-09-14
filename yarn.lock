@@ -237,9 +237,9 @@
   integrity sha512-yN7kbciD87WzLGc5539Tn0sApjyiGHAJgKvG9W8C7O+6c7qmoQMfVs0W4bX17eqz6C78QJqqFrtgdK5EWf6Qow==
 
 "@hapi/hoek@^9.0.0":
-  version "9.3.0"
-  resolved "https://registry.yarnpkg.com/@hapi/hoek/-/hoek-9.3.0.tgz#8368869dcb735be2e7f5cb7647de78e167a251fb"
-  integrity sha512-/c6rf4UJlmHlC9b5BaNvzAcFv7HZ2QHaV0D4/HNlBdvFnvQq8RI4kYdhyPCl7Xj+oWvTWQ8ujhqS53LIgAe6KQ==
+  version "9.2.1"
+  resolved "https://registry.yarnpkg.com/@hapi/hoek/-/hoek-9.2.1.tgz#9551142a1980503752536b5050fd99f4a7f13b17"
+  integrity sha512-gfta+H8aziZsm8pZa0vj04KO6biEiisppNgA1kbJvFrrWu9Vm7eaUEy76DIxsuTaWvti5fkJVhllWc6ZTE+Mdw==
 
 "@hapi/joi@^17.1.0", "@hapi/joi@^17.1.1":
   version "17.1.1"
@@ -434,9 +434,9 @@
     "@types/node" "*"
 
 "@types/hapi__joi@*":
-  version "17.1.9"
-  resolved "https://registry.yarnpkg.com/@types/hapi__joi/-/hapi__joi-17.1.9.tgz#fb4001df38aba1cd2406ce4b17d4e6fc3b0bd036"
-  integrity sha512-oOMFT8vmCTFncsF1engrs04jatz8/Anwx3De9uxnOK4chgSEgWBvFtpSoJo8u3784JNO+ql5tzRR6phHoRnscQ==
+  version "17.1.10"
+  resolved "https://registry.yarnpkg.com/@types/hapi__joi/-/hapi__joi-17.1.10.tgz#d45dcd8fdf01ac72d259c460e14ea97036d56655"
+  integrity sha512-+We0kOukfhPcQv9yKvgJn3SFbCUvRir4Uvu1WuuFpysQlXGAH9lp675GHs9l8MxuhapYIq0dKLNVf/nEbe+G9A==
 
 "@types/hapi__joi@~15":
   version "15.0.4"
@@ -469,9 +469,9 @@
   integrity sha512-JJulVEQXmiY9Px5axXHeYGLSjhkZEnD+MDPDGbCbIAbMslkKwmygtZFy1X6s/075Yo94sf8GuSlFfPzysQrWZQ==
 
 "@types/node@^18.11.11":
-  version "18.11.19"
-  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.11.19.tgz#35e26df9ec441ab99d73e99e9aca82935eea216d"
-  integrity sha512-YUgMWAQBWLObABqrvx8qKO1enAvBUdjZOAWQ5grBAkp5LQv45jBvYKZ3oFS9iKRCQyFjqw6iuEa1vmFqtxYLZw==
+  version "18.17.9"
+  resolved "https://registry.yarnpkg.com/@types/node/-/node-18.17.9.tgz#b219fa0da3c574399f4a44455ea4b388029afd56"
+  integrity sha512-fxaKquqYcPOGwE7tC1anJaPJ0GHyOVzfA2oUoXECjBjrtsIz4YJvtNYsq8LUcjEUehEF+jGpx8Z+lFrtT6z0tg==
 
 "@types/tunnel@^0.0.3":
   version "0.0.3"
@@ -4553,9 +4553,9 @@ prom-client@^14.0.1:
     tdigest "^0.1.1"
 
 prometheus-query@^3.3.0:
-  version "3.3.0"
-  resolved "https://registry.yarnpkg.com/prometheus-query/-/prometheus-query-3.3.0.tgz#5267e2ba8b24d5f80838f82c4ec08c3862d49f1b"
-  integrity sha512-jsS95vcu1an0+M1IR9sDTPFvuKzezoiLnWDSIgam2S3rBB2Yk45HteBfsHXpo9Vxn+rASQgGUtnWbsjRILXHlA==
+  version "3.3.2"
+  resolved "https://registry.yarnpkg.com/prometheus-query/-/prometheus-query-3.3.2.tgz#b1f605fad7d771b8992d77c61087bd6fbbf180cc"
+  integrity sha512-xNgDjDdueiTkA3sY9CJPLa4OgGGoH1ug+TPq3aYY6hnhN7nq1ykP9UmciWnMTYCc178eQ3yesG4HFsRg72CgOg==
   dependencies:
     axios "^0.26.1"
 
@@ -5834,9 +5834,16 @@ webidl-conversions@^7.0.0:
   dependencies:
     safe-json-stringify "1.0.3"
 
-"werelogs@github:scality/werelogs#8.1.2", werelogs@scality/werelogs, werelogs@scality/werelogs#8.1.2:
+"werelogs@github:scality/werelogs#8.1.2", werelogs@scality/werelogs#8.1.2:
   version "8.1.2"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/c9952528699978e4b09164c67922b4fbcfd4654f"
+  dependencies:
+    fast-safe-stringify "^2.1.1"
+    safe-json-stringify "^1.2.0"
+
+werelogs@scality/werelogs:
+  version "8.1.3"
+  resolved "https://codeload.github.com/scality/werelogs/tar.gz/e1574238a607a5421e7872d53355c6a0c8cec9b3"
   dependencies:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
