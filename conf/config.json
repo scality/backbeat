@@ -8,7 +8,8 @@
         "backlogMetrics": {
             "zkPath": "/backbeat/run/kafka-backlog-metrics",
             "intervalS": 60
-        }
+        },
+        "maxRequestSize": 5000020
     },
     "s3": {
         "host": "127.0.0.1",

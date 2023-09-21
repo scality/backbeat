@@ -17,4 +17,7 @@ function configValidator(backbeatConfig, extConfig) {
     return validatedConfig;
 }
 
-module.exports = configValidator;
+module.exports = {
+    OplogPopulatorConfigJoiSchema: joiSchema,
+    OplogPopulatorConfigValidator: configValidator
+};

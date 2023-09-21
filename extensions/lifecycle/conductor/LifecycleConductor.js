@@ -779,6 +779,7 @@ class LifecycleConductor {
     _setupProducer(cb) {
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
+            maxRequestSize: this.kafkaConfig.maxRequestSize,
             topic: this.lcConfig.bucketTasksTopic,
         });
         producer.once('error', cb);

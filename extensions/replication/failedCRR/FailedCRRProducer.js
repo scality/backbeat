@@ -27,6 +27,7 @@ class FailedCRRProducer {
     setupProducer(cb) {
         this._producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
+            maxRequestSize: this._kafkaConfig.maxRequestSize,
             topic: this._topic,
         });
         this._producer.once('error', () => {});

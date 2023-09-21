@@ -9,10 +9,12 @@ const Allocator = require('./modules/Allocator');
 const ConnectorsManager = require('./modules/ConnectorsManager');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
+const { OplogPopulatorConfigJoiSchema } = require('./OplogPopulatorConfigValidator');
+const { mongoJoi } = require('../../lib/config/configItems.joi');
 
 const paramsJoi = joi.object({
-    config: joi.object().required(),
-    mongoConfig: joi.object().required(),
+    config: OplogPopulatorConfigJoiSchema.required(),
+    mongoConfig: mongoJoi.required(),
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
     enableMetrics: joi.boolean().default(true),
