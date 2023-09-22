@@ -747,11 +747,17 @@ class LifecycleConductor {
                 this.lcConfig.bucketTasksTopic,
                 this.lcConfig.bucketProcessor.groupId, 0, next),
 
-            // check that object tasks topic consumer lag is 0
-            objectTasksCheck:
+            // check that object tasks topic consumer lag for expirations is 0
+            objectTasksExpirationCheck:
             next => this._kafkaBacklogMetrics.checkConsumerLag(
                 this.lcConfig.objectTasksTopic,
                 this.lcConfig.objectProcessor.groupId, 0, next),
+
+            // check that object tasks topic consumer lag for transitions is 0
+            objectTasksTransitionCheck:
+                next => this._kafkaBacklogMetrics.checkConsumerLag(
+                    this.lcConfig.objectTasksTopic,
+                    this.lcConfig.transitionProcessor.groupId, 0, next),
 
             // check that data mover topic consumer has progressed
             // beyond the latest lifecycle snapshot of topic offsets,
