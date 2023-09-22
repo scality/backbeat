@@ -1284,7 +1284,7 @@ class LifecycleTask extends BackbeatTask {
                     (err, data) => {
                         if (err) {
                             // error already logged at source
-                            return done(err);
+                            return next(err);
                         }
                         const allVersions = [...data.Versions,
                             ...data.DeleteMarkers];
@@ -1469,7 +1469,7 @@ class LifecycleTask extends BackbeatTask {
                 return done();
             }
             if (rules.Transition) {
-                this._applyTransitionRule({
+                return this._applyTransitionRule({
                     owner: bucketData.target.owner,
                     accountId: bucketData.target.accountId,
                     bucket: bucketData.target.bucket,
@@ -1477,8 +1477,7 @@ class LifecycleTask extends BackbeatTask {
                     eTag: obj.ETag,
                     lastModified: obj.LastModified,
                     site: rules.Transition.StorageClass,
-                }, log);
-                return done();
+                }, log, done);
             }
 
             return done();
@@ -1522,8 +1521,7 @@ class LifecycleTask extends BackbeatTask {
         }
 
         if (rules.NoncurrentVersionTransition) {
-            this._checkAndApplyNCVTransitionRule(bucketData, version, rules, log);
-            return done();
+            return this._checkAndApplyNCVTransitionRule(bucketData, version, rules, log, done);
         }
 
         log.debug('no action taken on versioned object', {
@@ -1561,7 +1559,7 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
         if (rules.Transition) {
-            this._applyTransitionRule({
+            return this._applyTransitionRule({
                 owner: bucketData.target.owner,
                 accountId: bucketData.target.accountId,
                 bucket: bucketData.target.bucket,
@@ -1571,8 +1569,7 @@ class LifecycleTask extends BackbeatTask {
                 lastModified: version.LastModified,
                 site: rules.Transition.StorageClass,
                 encodedVersionId: undefined,
-            }, log);
-            return done();
+            }, log, done);
         }
 
         log.debug('no action taken on IsLatest version', {
