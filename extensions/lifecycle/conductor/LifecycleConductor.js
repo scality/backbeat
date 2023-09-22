@@ -738,8 +738,13 @@ class LifecycleConductor {
             return process.nextTick(done, errors.Throttling.customizeDescription('Batch in progress'));
         }
 
-        // check that previous lifecycle batch has completely been
-        // processed from all topics before starting a new one
+        // Check that previous lifecycle batch has completely been
+        // processed from all topics before starting a new one.
+        //
+        // We want to ensure that the _listing_ is complete, and that
+        // all object states have been updated accordingly, to avoid
+        // duplicated work - even though the triggered transition or
+        // expiration may not have terminated.
         return async.series({
             // check that bucket tasks topic consumer lag is 0 (no
             // need to allow any lag because the conductor expects
@@ -750,16 +755,22 @@ class LifecycleConductor {
                 this.lcConfig.bucketTasksTopic,
                 this.lcConfig.bucketProcessor.groupId, 0, next),
 
-            // check that object tasks topic consumer lag is 0
-            objectTasksCheck:
+            // check that object tasks topic consumer lag for
+            // expirations is 0. We don't need to check the
+            // transition processor, which is used to process
+            // events which are not related to the listing.
+            objectTasksExpirationCheck:
             next => this._kafkaBacklogMetrics.checkConsumerLag(
                 this.lcConfig.objectTasksTopic,
                 this.lcConfig.objectProcessor.groupId, 0, next),
 
-            // check that data mover topic consumer has progressed
+            // Check that data mover topic consumer has progressed
             // beyond the latest lifecycle snapshot of topic offsets,
             // which means everything from the latest lifecycle batch
-            // has been consumed
+            // has been consumed.
+            // We don't need to check the cold-archive topics, since
+            // the bucket-processor marks the objects as transition
+            // in-progress immediately.
             dataMoverCheck:
             next => this._kafkaBacklogMetrics.checkConsumerProgress(
                 this.repConfig.dataMoverTopic, null, 'lifecycle', next),

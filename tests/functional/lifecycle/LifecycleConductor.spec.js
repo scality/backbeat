@@ -185,6 +185,9 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 objectProcessor: {
                     groupId: 'b',
                 },
+                transitionProcessor: {
+                    groupId: 'c',
+                },
             };
 
             // make topic unique so that different tests' bootstrap messages don't interfere
@@ -284,6 +287,9 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 },
                 objectProcessor: {
                     groupId: 'b',
+                },
+                transitionProcessor: {
+                    groupId: 'c',
                 },
             };
 

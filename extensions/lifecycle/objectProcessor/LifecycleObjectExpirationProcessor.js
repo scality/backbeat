@@ -2,8 +2,7 @@
 
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleDeleteObjectTask =
-      require('../tasks/LifecycleDeleteObjectTask');
-const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
+    require('../tasks/LifecycleDeleteObjectTask');
 
 class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
 
@@ -61,8 +60,6 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
             case 'deleteObject':
             case 'deleteMPU':
                 return new LifecycleDeleteObjectTask(this);
-            case 'gc':
-                return new LifecycleUpdateExpirationTask(this);
             default:
                 this._log.warn(
                     `skipped unsupported action ${actionType}`,
