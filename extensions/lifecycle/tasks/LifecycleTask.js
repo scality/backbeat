@@ -894,18 +894,32 @@ class LifecycleTask extends BackbeatTask {
                 return process.nextTick(cb);
             }
 
-            return async.waterfall([
-                next => this._getRules(bucketData, lcRules, obj, log, next),
-                (applicableRules, next) => {
-                    if (versioningStatus === 'Enabled'
-                    || versioningStatus === 'Suspended') {
-                        return this._compareVersion(bucketData, obj, contents,
-                            applicableRules, versioningStatus, log, next);
-                    }
-                    return this._compareObject(bucketData, obj, applicableRules, log,
-                        next);
+            // We don't want to retry the _whole_ list if only a single entry fails,
+            // so we possibly retry each individual entry here, and ignore errors.
+            // Ignoring error is not too bad, the entry will be picked up again on
+            // next lifecycle run
+            return this.retry({
+                actionDesc: 'compare rules lifecycle entry',
+                logFields: {
+                    key: obj.Key,
+                    versionId: obj.VersionId,
+                    staleDate: obj.staleDate,
+                    versioningStatus,
                 },
-            ], cb);
+                actionFunc: done => async.waterfall([
+                    next => this._getRules(bucketData, lcRules, obj, log, next),
+                    (applicableRules, next) => {
+                        if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                            return this._compareVersion(bucketData, obj, contents,
+                                applicableRules, versioningStatus, log, next);
+                        }
+                        return this._compareObject(bucketData, obj, applicableRules, log,
+                            next);
+                    },
+                ], done),
+                shouldRetryFunc: err => err.retryable,
+                log,
+            }, () => cb());
         }, done);
     }
 
