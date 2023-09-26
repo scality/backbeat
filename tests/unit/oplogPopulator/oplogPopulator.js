@@ -15,7 +15,9 @@ const ChangeStream =
 const oplogPopulatorConfig = {
     topic: 'oplog',
     kafkaConnectHost: '127.0.0.1',
-    kafkaConnectPort: 8083
+    kafkaConnectPort: 8083,
+    numberOfConnectors: 1,
+    probeServer: { port: 8552 },
 };
 
 const mongoConfig = {

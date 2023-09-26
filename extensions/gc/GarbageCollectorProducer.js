@@ -25,6 +25,7 @@ class GarbageCollectorProducer {
     setupProducer(cb) {
         const producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
+            maxRequestSize: this._kafkaConfig.maxRequestSize,
             topic: this._topic,
         });
         producer.once('error', () => {});

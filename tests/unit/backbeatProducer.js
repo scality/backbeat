@@ -22,6 +22,23 @@ describe('backbeatProducer', () => {
         assert.strictEqual(backbeatProducer._topic, 'testing.my-test-topic');
     });
 
+    it('should use default value if maxRequestSize not provided', () => {
+        const backbeatProducer = new BackbeatProducer({
+            kafka,
+            topic: 'my-test-topic',
+        });
+        assert.strictEqual(backbeatProducer._maxRequestSize, 5000020);
+    });
+
+    it('should use the explicitely provided maxRequestSize', () => {
+        const backbeatProducer = new BackbeatProducer({
+            kafka,
+            topic: 'my-test-topic',
+            maxRequestSize: 1234567,
+        });
+        assert.strictEqual(backbeatProducer._maxRequestSize, 1234567);
+    });
+
     it('should return an error if send() called on producer with no default ' +
     'topic', done => {
         const backbeatProducer = new BackbeatProducer({

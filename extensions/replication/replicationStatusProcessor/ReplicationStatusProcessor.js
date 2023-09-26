@@ -386,6 +386,7 @@ class ReplicationStatusProcessor {
                     this.bucketNotificationConfig.topic;
                 const producer = new BackbeatProducer({
                     kafka: { hosts: this.kafkaConfig.hosts },
+                    maxRequestSize: this.kafkaConfig.maxRequestSize,
                     topic: internalTopic,
                 });
                 producer.once('error', done);
