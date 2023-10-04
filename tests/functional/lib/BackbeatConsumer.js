@@ -345,11 +345,14 @@ describe('BackbeatConsumer concurrency tests', () => {
     let producer;
     let consumer;
     let consumedMessages = [];
+    let taskStuckCallbacks = [];
 
     function queueProcessor(message, cb) {
         if (message.value.toString() !== 'taskStuck') {
             consumedMessages.push(message.value);
             process.nextTick(cb);
+        } else {
+            taskStuckCallbacks.push(cb);
         }
     }
     before(function before(done) {
@@ -375,6 +378,9 @@ describe('BackbeatConsumer concurrency tests', () => {
     afterEach(() => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
+
+        taskStuckCallbacks.map(cb => cb());
+        taskStuckCallbacks = [];
     });
     after(done => {
         async.parallel([
@@ -591,11 +597,14 @@ describe('BackbeatConsumer with circuit breaker', () => {
         let producer;
         let consumer;
         let consumedMessages = [];
+        let taskStuckCallbacks = [];
 
         function queueProcessor(message, cb) {
             if (message.value.toString() !== 'taskStuck') {
                 consumedMessages.push(message.value);
                 process.nextTick(cb);
+            } else {
+                taskStuckCallbacks.push(cb);
             }
         }
         before(function before(done) {
@@ -624,6 +633,9 @@ describe('BackbeatConsumer with circuit breaker', () => {
         afterEach(() => {
             consumedMessages = [];
             consumer.removeAllListeners('consumed');
+
+            taskStuckCallbacks.map(cb => cb());
+            taskStuckCallbacks = [];
         });
         after(done => {
             async.parallel([
