@@ -156,6 +156,14 @@ class LifecycleBucketProcessor {
             }
         });
 
+        setInterval(() => {
+            const tasks = this._internalTaskScheduler.workersList().map(task => JSON.stringify(task.data.value));
+            this._log.debug('current tasks in queue', {
+                method: 'LifecycleBucketProcessor',
+                tasks,
+            });
+        }, (process.env.WORKERS_LOG_DELAY || 20000));
+
         this._circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
             this._lcConfig.bucketProcessor.circuitBreaker,
             this._lcConfig.objectProcessor.groupId,
