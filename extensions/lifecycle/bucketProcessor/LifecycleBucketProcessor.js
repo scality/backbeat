@@ -3,6 +3,7 @@
 const async = require('async');
 const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
+const uuid = require('uuid/v4');
 const { supportedLifecycleRules } = require('arsenal').constants;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
@@ -268,11 +269,17 @@ class LifecycleBucketProcessor {
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
+
+        result.uuid = uuid();
+        const oldUid = result.uuid;
+
         this._log.debug('processing bucket entry', {
             method: 'LifecycleBucketProcessor._processBucketEntry',
             bucket,
             owner,
             accountId,
+            result,
+            oldUid,
         });
 
         const s3 = this.clientManager.getS3Client(accountId);
