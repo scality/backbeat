@@ -70,6 +70,9 @@
     "vaultclient": "scality/vaultclient#8.3.11",
     "werelogs": "scality/werelogs#8.1.2"
   },
+  "resolutions": {
+    "node-rdkafka-prometheus/prom-client": "14.2.0"
+  },
   "devDependencies": {
     "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
     "eslint": "^8.14.0",
