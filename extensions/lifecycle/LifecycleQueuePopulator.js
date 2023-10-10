@@ -326,6 +326,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     _handleDeleteOp(entry) {
         const value = JSON.parse(entry.value);
 
+        // if object is not archived there is nothing to do here
+        if (!value.archive) {
+            return;
+        }
+
         const locationName = value['x-amz-storage-class'];
         const locationConfig = this.locationConfigs[locationName];
         if (!locationConfig) {
@@ -339,7 +344,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         // cold delete only supported for archived objects in DMF backend
-        if (locationConfig.type !== 'dmf' || !value.archive) {
+        if (locationConfig.type !== 'dmf') {
             return;
         }
 
