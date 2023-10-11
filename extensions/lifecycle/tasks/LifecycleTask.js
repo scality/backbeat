@@ -35,6 +35,20 @@ const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
 // concurrency mainly used in async calls
 const CONCURRENCY_DEFAULT = 10;
 
+// Max number of retries (with exp. backoff) that can be be performed for a single
+// entry. We don't use the default, to avoid retrying for a long time (5 minutes)
+// which could make Kafka timeout. 4 retries (e.g. 5 attempts) should be around 8
+// seconds.
+const MAX_RETRIES = 4;
+
+// Maximum number of retries when processing entries in the rang
+// We will retry a few times, but limit the total number of retries to ensure the
+// range is processed timely. Not retrying is not too bad, as the next run will.
+// We are processing 10 entries at a time, so a range should take around 1 second.
+// Since entries get processed in parallel, they will get distributed accross the
+// parallel tasks, so the total delay of retries should about 1m30s.
+const MAX_RETRIES_TOTAL = CONCURRENCY_DEFAULT * MAX_RETRIES * 10;
+
 /**
  * compare 2 version by their stale dates returning:
  * - LT (-1) if v1 is less than v2
@@ -84,6 +98,7 @@ class LifecycleTask extends BackbeatTask {
             this._lifecycleDateTime
         );
         this._supportedRules = supportedLifecycleRules;
+        this._totalRetries = 0;
     }
 
     setSupportedRules(supportedRules) {
@@ -898,14 +913,14 @@ class LifecycleTask extends BackbeatTask {
             // so we possibly retry each individual entry here, and ignore errors.
             // Ignoring error is not too bad, the entry will be picked up again on
             // next lifecycle run
-            return this.retry({
-                actionDesc: 'compare rules lifecycle entry',
+            return this._retryEntry({
                 logFields: {
                     key: obj.Key,
                     versionId: obj.VersionId,
                     staleDate: obj.staleDate,
                     versioningStatus,
                 },
+                log,
                 actionFunc: done => async.waterfall([
                     next => this._getRules(bucketData, lcRules, obj, log, next),
                     (applicableRules, next) => {
@@ -917,10 +932,39 @@ class LifecycleTask extends BackbeatTask {
                             next);
                     },
                 ], done),
-                shouldRetryFunc: err => err.retryable,
-                log,
-            }, () => cb());
+            }, cb);
         }, done);
+    }
+
+    /**
+     * Retries processing an entry, respecting both individual and global retry
+     * limits to avoid stalling the whole process.
+     *
+     * @param {Object} params - The parameters object.
+     * @param {Function} params.actionFunc - The action function to retry.
+     * @param {Object} params.log - The logger object.
+     * @param {Object} params.logFields - The logger fields object.
+     * @param {Function} cb - The callback function to execute after the retries.
+     * @returns {void}
+     */
+    _retryEntry(params, cb) {
+        const { actionFunc, log, logFields } = params;
+        this.retry({
+            actionDesc: 'compare rules lifecycle entry',
+            logFields,
+            log,
+            actionFunc,
+            maxRetries: MAX_RETRIES, // override maximum number of retries
+            shouldRetryFunc: err => err.retryable && this._totalRetries < MAX_RETRIES_TOTAL,
+            onRetryFunc: () => this._totalRetries++,
+        }, () => {
+            // To maintain consistency with the flow logic of LifecycleTask, no
+            // errors will be returned from the callback.
+            // This ensures that any failures during the looping process through
+            // the keys (as seen in _compareRulesToList()) will not cause a
+            // break in the loop.
+            cb();
+        });
     }
 
     /**
@@ -1216,11 +1260,7 @@ class LifecycleTask extends BackbeatTask {
             if (cb) {
                 // NOTE: The purpose of introducing asynchronous logic here is to improve
                 // the flow control of LifecycleTaskV2.
-                // Additionally, to maintain consistency with the flow logic of LifecycleTask,
-                // no errors will be returned from the callback.
-                // This ensures that any failures during the looping process through the keys
-                // (as seen in _compareRulesToList()) will not cause a break in the loop.
-                cb();
+                cb(err);
             }
             return;
         });
