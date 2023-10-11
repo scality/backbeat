@@ -260,8 +260,15 @@ class LifecycleTaskV2 extends LifecycleTask {
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
             const applicableRules = this._getRules(bucketData, lcRules, obj);
-            return this._compare(bucketData, obj,
-                    applicableRules, log, cb);
+            return this._retryEntry({
+                logFields: {
+                    key: obj.Key,
+                    versionId: obj.VersionId,
+                    staleDate: obj.staleDate,
+                },
+                log,
+                actionFunc: done => this._compare(bucketData, obj, applicableRules, log, done),
+            }, cb);
         }, done);
     }
 
