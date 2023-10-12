@@ -263,10 +263,13 @@ class LifecycleConductor {
         });
     }
 
-    _taskToMessage(task, taskVersion) {
+    _taskToMessage(task, taskVersion, log) {
         return {
             message: JSON.stringify({
                 action: 'processObjects',
+                contextInfo: {
+                    reqId: log.getSerializedUids(),
+                },
                 target: {
                     bucket: task.bucketName,
                     owner: task.canonicalId,
@@ -308,7 +311,7 @@ class LifecycleConductor {
 
     _createBucketTaskMessages(tasks, log, cb) {
         if (this.lcConfig.forceLegacyListing) {
-            return process.nextTick(cb, null, tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1)));
+            return process.nextTick(cb, null, tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1, log)));
         }
 
         return async.mapLimit(tasks, 10, (t, taskDone) =>
@@ -316,9 +319,9 @@ class LifecycleConductor {
                 if (err) {
                     // should not happen as indexes methods would
                     // ignore the errors and fallback to v1 listing
-                    return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1));
+                    return taskDone(null, this._taskToMessage(t, lifecycleTaskVersions.v1, log));
                 }
-                return taskDone(null, this._taskToMessage(t, taskVersion));
+                return taskDone(null, this._taskToMessage(t, taskVersion, log));
             }), cb);
     }
 

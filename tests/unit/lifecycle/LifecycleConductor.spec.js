@@ -50,7 +50,7 @@ describe('Lifecycle Conductor', () => {
         this.timeout(4000);
         // tests that `activeIndexingJobRetrieved` is not reset until the e
         it('should not reset `activeIndexingJobsRetrieved` while async operations are in progress', done => {
-            let order = [];
+            const order = [];
 
             conductor._mongodbClient = { getIndexingJobs: () => {} };
             conductor._producer = { send: (msg, cb) => cb() };
