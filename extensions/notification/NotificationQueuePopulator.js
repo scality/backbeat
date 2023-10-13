@@ -126,9 +126,11 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @param {String} key - object key
      * @param {Object} value - log entry object
      * @param {String} type - entry type
+     * @param {String} commitTimestamp - when the entry was written, used as a fallback
+     *   if no last-modified MD attribute available
      * @return {undefined}
      */
-    _processObjectEntry(bucket, key, value, type) {
+    _processObjectEntry(bucket, key, value, type, commitTimestamp) {
         const versionId = value.versionId || null;
         if (!isMasterKey(key)) {
             return undefined;
@@ -139,14 +141,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 = notifConstants;
             let eventType
                 = value[eventMessageProperty.eventType];
+            let dateTime
+                = value[eventMessageProperty.dateTime];
             if (eventType === undefined && type === 'del') {
                 eventType = notifConstants.deleteEvent;
+                dateTime = commitTimestamp;
             }
             const ent = {
                 bucket,
                 key,
                 eventType,
                 versionId,
+                dateTime,
             };
             this.log.debug('validating entry', {
                 method: 'NotificationQueuePopulator._processObjectEntry',
@@ -181,7 +187,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        const { bucket, key, type } = entry;
+        const { bucket, key, type, timestamp } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -200,7 +206,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntry(bucket, key, result, type);
+            return this._processObjectEntry(bucket, key, result, type, timestamp);
         }
         return undefined;
     }

@@ -76,6 +76,7 @@ describe('LogReader', () => {
                 key: testCase.processedKey,
                 value: '{}',
                 logReader,
+                timestamp: undefined,
             });
         });
     });
