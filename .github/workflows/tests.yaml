@@ -111,42 +111,66 @@ jobs:
       run: yarn run --silent lint_md
     - name: Lint Javascript
       run: yarn run --silent lint
+
     - name: Run unit tests
       run: yarn run cover:test
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
+    - uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        directory: ./coverage/test
+        flags: unit
+
     - name: Run bucket scanner unit tests
       run: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
+
     - name: Run backbeat routes test
-      run: .github/scripts/run_server_tests.bash ft_test:api:routes
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: api:routes
+        token: ${{ secrets.CODECOV_TOKEN }}
+        runner: run_server_tests.bash
       env:
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
         MANAGEMENT_BACKEND: operator
+
     - name: Run backbeat retry tests with account authentication
-      run: .github/scripts/run_server_tests.bash ft_test:api:retry
-      env:
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: api:retry
+        token: ${{ secrets.CODECOV_TOKEN }}
+        runner: run_server_tests.bash
+
     - name: run feature replication tests
-      run: .github/scripts/run_ft_tests.bash ft_test:replication
-      env:
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: replication
+        token: ${{ secrets.CODECOV_TOKEN }}
+
     - name: run feature lifecycle tests
-      run: .github/scripts/run_ft_tests.bash ft_test:lifecycle
-      env:
-        EXPIRE_ONE_DAY_EARLIER: "true"
-        TRANSITION_ONE_DAY_EARLIER: "true"
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: lifecycle
+        token: ${{ secrets.CODECOV_TOKEN }}
+
     - name: run feature ingestion tests
-      run: .github/scripts/run_ft_tests.bash ft_test:ingestion
-      env:
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: ingestion
+        token: ${{ secrets.CODECOV_TOKEN }}
+
     - name: run misc functional tests
-      run: .github/scripts/run_ft_tests.bash ft_test:lib
-      env:
-        BACKBEAT_CONFIG_FILE: "tests/config.json"
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: lib
+        token: ${{ secrets.CODECOV_TOKEN }}
+
     - name: run backbeat notification feature tests
-      run: yarn run ft_test:notification
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: notification
+        token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: run ballooning tests for lifecycle conductor
       run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js
@@ -155,8 +179,3 @@ jobs:
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
         NODE_OPTIONS: '--max-old-space-size=150'
-
-    - uses: codecov/codecov-action@v3
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        directory: ./coverage/

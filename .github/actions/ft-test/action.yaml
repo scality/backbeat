@@ -1,0 +1,34 @@
+---
+name: "run functional tests"
+description: "Run specified functional test with coverage"
+
+inputs:
+  testsuite:
+    description: name of the test suite to run
+    required: true
+  token:
+    description: codecov token
+    required: true
+  config:
+    description: path to the config file
+    required: false
+    default: "tests/config.json"
+  runner:
+    description: name to the runner script
+    required: false
+    default: run_ft_tests.bash
+
+runs:
+  using: composite
+  steps:
+    - name: run ${{ inputs.testsuite }} tests
+      shell: bash
+      run: .github/scripts/${{ inputs.runner }} ft_test:${{ inputs.testsuite }}
+      env:
+        BACKBEAT_CONFIG_FILE: ${{ inputs.config }}
+
+    - uses: codecov/codecov-action@v3
+      with:
+        token: ${{ inputs.token }}
+        directory: ./coverage/ft_test:${{ inputs.testsuite }}
+        flags: ${{ inputs.testsuite }}
