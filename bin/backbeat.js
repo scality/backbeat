@@ -40,6 +40,11 @@ function initAndStart() {
     });
 }
 
+// Add SIGINT and SIGTERM handlers to exit gracefully, needed to get coverage
+// c.f. https://github.com/nodejs/node/issues/35212
+process.on('SIGINT', () => process.exit());
+process.on('SIGTERM', () => process.exit());
+
 if (process.env.CI === 'true') {
     // skip initManagement
     // set mock config ingestion site on start-up

@@ -112,7 +112,7 @@ jobs:
     - name: Lint Javascript
       run: yarn run --silent lint
     - name: Run unit tests
-      run: yarn test
+      run: yarn run cover:test
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
     - name: Run bucket scanner unit tests
@@ -155,3 +155,8 @@ jobs:
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
         NODE_OPTIONS: '--max-old-space-size=150'
+
+    - uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        directory: ./coverage/
