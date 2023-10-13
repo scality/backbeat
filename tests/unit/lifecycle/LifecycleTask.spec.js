@@ -1,6 +1,8 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
+const async = require('async');
+const sinon = require('sinon');
 const { errors } = require('arsenal');
 
 const LifecycleTask = require(
@@ -2050,6 +2052,82 @@ describe('lifecycle task helper methods', () => {
                     assert.deepStrictEqual(err, errors.InternalError);
                     done();
                 });
+        });
+    });
+
+    describe('_retryEntry', () => {
+        it('should not retry on success', done => {
+            const lct = new LifecycleTask(lp);
+            const action = sinon.stub();
+            action.callsArg(0);
+
+            lct._retryEntry({
+                logFields: {},
+                log: fakeLogger,
+                actionFunc: action,
+            }, err => {
+                assert.ifError(err);
+                assert(action.calledOnce);
+                done();
+            });
+        });
+
+        it('should not retry if error is not retryable', done => {
+            const lct = new LifecycleTask(lp);
+            const action = sinon.stub();
+            action.callsArgWith(0, { code: 'NotRetryable', message: 'test' });
+
+            lct._retryEntry({
+                logFields: {},
+                log: fakeLogger,
+                actionFunc: action,
+            }, err => {
+                assert.ifError(err);
+                assert(action.calledOnce);
+                done();
+            });
+        });
+
+        it('should retry retryable errors up to 5 times', done => {
+            const lct = new LifecycleTask(lp);
+            lct.retryParams.backoff.min = 10;
+
+            const action = sinon.stub();
+            action.callsArgWith(0, { code: 'NotRetryable', message: 'test', retryable: true });
+
+            lct._retryEntry({
+                logFields: {},
+                log: fakeLogger,
+                actionFunc: action,
+            }, err => {
+                assert.ifError(err);
+                assert.equal(action.callCount, 5);
+                done();
+            });
+        });
+
+        it('should stop retrying after reaching 400 total retries', done => {
+            const lct = new LifecycleTask(lp);
+            lct.retryParams.backoff.min = 1;
+
+            const action = sinon.stub();
+            action.callsArgWith(0, { code: 'NotRetryable', message: 'test', retryable: true });
+
+            let count = 0;
+            async.whilst(
+                () => count++ < 102,
+                cb => lct._retryEntry({
+                    logFields: { count, totalRetries: lct._totalRetries },
+                    log: fakeLogger,
+                    actionFunc: action,
+                }, cb),
+                err => {
+                    assert.ifError(err);
+                    // 5 attempts x 100, last 2 calls will not be retried (reached max)
+                    assert.equal(action.callCount, 502);
+                    done();
+                }
+            );
         });
     });
 });
