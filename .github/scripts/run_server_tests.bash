@@ -13,5 +13,6 @@ killandsleep () {
   sleep 10
 }
 
-yarn start & bash tests/utils/wait_for_local_port.bash $PORT 40
+./node_modules/.bin/c8 --report-dir "./coverage/$1" --reporter lcov yarn start &
+bash tests/utils/wait_for_local_port.bash $PORT 40
 yarn run $1
