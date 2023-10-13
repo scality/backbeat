@@ -52,6 +52,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                 } = l;
 
                 const entry = Object.assign({}, bucketData, {
+                    contextInfo: { requestId: log.getSerializedUids() },
                     details: { beforeDate, prefix, listType, storageClass },
                 });
 
@@ -114,6 +115,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             // re-queue truncated listing only once.
             if (isTruncated && nbRetries === 0) {
                 const entry = Object.assign({}, bucketData, {
+                    contextInfo: { requestId: log.getSerializedUids() },
                     details: {
                         beforeDate: params.BeforeDate,
                         prefix: params.Prefix,
@@ -197,6 +199,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             // re-queue truncated listing only once.
             if (isTruncated && nbRetries === 0) {
                 const entry = Object.assign({}, bucketData, {
+                    contextInfo: { requestId: log.getSerializedUids() },
                     details: {
                         beforeDate: params.BeforeDate,
                         prefix: params.Prefix,
