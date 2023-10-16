@@ -213,6 +213,7 @@ class LifecycleTask extends BackbeatTask {
                     }
 
                     const entry = Object.assign({}, bucketData, {
+                        contextInfo: { reqId: log.getSerializedUids() },
                         details: { marker },
                     });
                     this._sendBucketEntry(entry, err => {
@@ -385,6 +386,9 @@ class LifecycleTask extends BackbeatTask {
                 // Uses last version whether Version or DeleteMarker
                 const last = allVersions[allVersions.length - 1];
                 const entry = Object.assign({}, bucketData, {
+                    contextInfo: {
+                        reqId: log.getSerializedUids(),
+                    },
                     details: {
                         keyMarker: data.NextKeyMarker,
                         versionIdMarker: data.NextVersionIdMarker,
@@ -468,6 +472,9 @@ class LifecycleTask extends BackbeatTask {
                     // re-queue to kafka with `NextUploadIdMarker` &
                     // `NextKeyMarker` only once.
                     const entry = Object.assign({}, bucketData, {
+                        contextInfo: {
+                            reqId: log.getSerializedUids(),
+                        },
                         details: {
                             keyMarker: data.NextKeyMarker,
                             uploadIdMarker: data.NextUploadIdMarker,
@@ -1759,6 +1766,8 @@ class LifecycleTask extends BackbeatTask {
         log.debug('processing bucket entry', {
             bucket: bucketData.target.bucket,
             owner: bucketData.target.owner,
+            contextInfo: bucketData.contextInfo,
+            details: bucketData.details,
         });
 
         // Initially, processing a Bucket entry should check mpu AND
@@ -1826,10 +1835,12 @@ class LifecycleTask extends BackbeatTask {
                 ], cb);
             },
         ], err => {
-            this.log.info('finished processing task for bucket lifecycle', {
+            log.info('finished processing task for bucket lifecycle', {
                 method: 'LifecycleTask.processBucketEntry',
                 bucket: bucketData.target.bucket,
                 owner: bucketData.target.owner,
+                contextInfo: bucketData.contextInfo,
+                details: bucketData.details,
             });
             // An optimization is possible by only publishing when
             // finishing a complete bucket listing, let it aside for

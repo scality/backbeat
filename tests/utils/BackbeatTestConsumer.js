@@ -26,6 +26,13 @@ class BackbeatTestConsumer extends BackbeatConsumer {
                 const parsedMsg = typeof expectedMsg.value === 'object' ?
                           JSON.parse(message.value) :
                           message.value.toString();
+                if (typeof expectedMsg.value === 'object' &&
+                    expectedMsg.value.contextInfo?.reqId === 'test-request-id') {
+                    // RequestId is generated randomly, we can't compare it: just check that it is
+                    // present
+                    assert(parsedMsg.contextInfo?.reqId, 'expected contextInfo.reqId field');
+                    parsedMsg.contextInfo.reqId = expectedMsg.value.contextInfo?.reqId;
+                }
                 assert.deepStrictEqual(
                     parsedMsg, expectedMsg.value,
                     `unexpected message value ${parsedMsg}, ` +
