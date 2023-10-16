@@ -3,6 +3,7 @@ const werelogs = require('werelogs');
 
 const config = require('../../lib/Config');
 const management = require('../../lib/management/index');
+const { TIMEOUT_MS } = require('../../lib/clients/utils');
 
 const logger = new werelogs.Logger('mdManagement:lifecycle');
 
@@ -18,7 +19,7 @@ function getS3Client(endpoint) {
         credentials,
         s3ForcePathStyle: true,
         signatureVersion: 'v4',
-        httpOptions: { timeout: 0 },
+        httpOptions: { timeout: TIMEOUT_MS },
         maxRetries: 3,
     });
     return s3Client;
