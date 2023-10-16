@@ -41,6 +41,7 @@ const expected2Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
@@ -48,6 +49,7 @@ const expected2Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
@@ -58,6 +60,7 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
@@ -65,6 +68,7 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
             details: {},
         },
@@ -72,6 +76,7 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket3', owner: 'owner3', taskVersion: 'v1' },
             details: {},
         },
@@ -79,6 +84,7 @@ const expected4Messages = [
     {
         value: {
             action: 'processObjects',
+            contextInfo: { reqId: 'test-request-id' },
             target: { bucket: 'bucket4', owner: 'owner4', taskVersion: 'v1' },
             details: {},
         },
