@@ -120,21 +120,80 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Returns the correct versionId
+     * to display according to the
+     * versioning state of the object
+     * @param {Object} value log entry object
+     * @param {Object} overheadFields - extra fields missing from the log entry
+     * @return {String} versionId
+     */
+    _getVersionId(value, overheadFields) {
+        const versionId = value.versionId || (overheadFields && overheadFields.versionId);
+        const isNullVersion = value.isNull;
+        const isVersioned = !!versionId;
+        // Versioning suspended objects have
+        // a versionId, however it is internal
+        // and should not be used to get the object
+        if (isNullVersion || !isVersioned) {
+            return null;
+        }
+        return versionId;
+    }
+
+    /**
+     * Decides if we should process the entry.
+     * Since we get both master and version events,
+     * we need to avoid pushing two notifications for
+     * the same event.
+     * - For non-versioned buckets, we process the master
+     * objects' events.
+     * - For versioned buckets, we process version events
+     * and ignore all master events.
+     * - For versioning suspended buckets, we need to process
+     * both master and version events, as the master is considered
+     * a separate version.
+     * @param {String} key object key
+     * @param {Object} value object metadata
+     * @return {boolean} - true if entry is valid
+     */
+    _shouldProcessEntry(key, value) {
+        const isMaster = isMasterKey(key);
+        const hasVersionId = !!value.versionId;
+
+        if (!isMaster) {
+            // versioned keys do generate a notifications. FIXME: in some cases
+            // they may duplicate the notification with a master update of the
+            // same null version.
+            return true;
+        }
+        // generate a notification for non-versioned or null-versioned master
+        // keys, but not for regular versions as then the versioned key triggers
+        // the notification.
+        return !hasVersionId || value.isNull;
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
      * @param {String} key - object key
      * @param {Object} value - log entry object
      * @param {String} type - entry type
-     * @param {String} commitTimestamp - when the entry was written, used as a fallback
+     * @param {Object} overheadFields - extra context fields missing from the log entry
+     * @param {String} overheadFields.commitTimestamp - when the entry was written, used as a fallback
      *   if no last-modified MD attribute available
+     * @param {String} overheadFields.versionId - version id involved in this operation, if the log entry
+     *   does not contain it
      * @return {undefined}
      */
-    _processObjectEntry(bucket, key, value, type, commitTimestamp) {
-        const versionId = value.versionId || null;
-        if (!isMasterKey(key)) {
+    _processObjectEntry(bucket, key, value, type, overheadFields) {
+        if (!this._shouldProcessEntry(key, value)) {
             return undefined;
         }
+
+        const versionId = this._getVersionId(value, overheadFields);
+        const baseKey = this._extractVersionedBaseKey(key);
+
         const config = this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
             const { eventMessageProperty }
@@ -145,11 +204,13 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 = value[eventMessageProperty.dateTime];
             if (eventType === undefined && type === 'del') {
                 eventType = notifConstants.deleteEvent;
-                dateTime = commitTimestamp;
+                if (!dateTime) {
+                    dateTime = (overheadFields && overheadFields.commitTimestamp) || null;
+                }
             }
             const ent = {
                 bucket,
-                key,
+                key: baseKey,
                 eventType,
                 versionId,
                 dateTime,
@@ -171,7 +232,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     eventTime: message.dateTime,
                 });
                 this.publish(this.notificationConfig.topic,
-                    `${bucket}/${key}`,
+                    `${bucket}/${baseKey}`,
                     JSON.stringify(message));
             }
             return undefined;
@@ -187,7 +248,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
-        const { bucket, key, type, timestamp } = entry;
+        const { bucket, key, type, overheadFields } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -206,7 +267,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntry(bucket, key, result, type, timestamp);
+            return this._processObjectEntry(bucket, key, result, type, overheadFields);
         }
         return undefined;
     }

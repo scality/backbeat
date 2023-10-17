@@ -76,8 +76,63 @@ describe('LogReader', () => {
                 key: testCase.processedKey,
                 value: '{}',
                 logReader,
-                timestamp: undefined,
+                overheadFields: {
+                    versionId: undefined,
+                    commitTimestamp: undefined,
+                },
             });
+        });
+    });
+
+    it('should pass through overhead.versionId if available in record', () => {
+        const record = {
+            db: 'db',
+        };
+        const versionId = 'v1';
+        const entry = {
+            type: 'put',
+            key: 'k1',
+            value: '{}',
+            overhead: {
+                versionId,
+            },
+        };
+        logReader._processLogEntry(null, record, entry);
+        assert.deepStrictEqual(filteredEntry, {
+            type: 'put',
+            bucket: 'db',
+            key: 'k1',
+            value: '{}',
+            logReader,
+            overheadFields: {
+                versionId,
+                commitTimestamp: undefined,
+            },
+        });
+    });
+
+    it('should pass through timestamp if available in record', () => {
+        const timestamp = 't1';
+        const record = {
+            db: 'db',
+            timestamp,
+        };
+        const entry = {
+            type: 'put',
+            key: 'k1',
+            value: '{}',
+        };
+        logReader._processLogEntry(null, record, entry);
+        assert.deepStrictEqual(filteredEntry, {
+            type: 'put',
+            bucket: 'db',
+            key: 'k1',
+            value: '{}',
+            logReader,
+            overheadFields: {
+                versionId: undefined,
+                commitTimestamp: timestamp,
+            },
         });
     });
 
