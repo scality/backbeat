@@ -196,7 +196,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 return done(err);
             }
             const replicationStatus = objMD.getReplicationStatus();
-            if (['PENDING', 'PROCESSING', 'FAILED'].includes(replicationStatus)) {
+            if (replicationStatus && replicationStatus !== 'COMPLETED') {
                 const error = new PendingReplicationError('object has a pending replication status');
                 return done(error);
             }
