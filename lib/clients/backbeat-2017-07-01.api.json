@@ -611,8 +611,7 @@
                 "type": "structure",
                 "required": [
                     "Bucket",
-                    "Key",
-                    "VersionId"
+                    "Key"
                 ],
                 "members": {
                     "Bucket": {
