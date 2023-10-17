@@ -137,6 +137,9 @@ describe('BackbeatConsumer main tests', () => {
         producer.send(messages, err => {
             assert.ifError(err);
         });
+
+        // Check that rdkafka metrics are indeed exported
+        assert(metrics.ZenkoMetrics.getMetric('rdkafka_cgrp_assignment_size') !== undefined);
     }).timeout(30000);
 
     it('should not consume messages when paused and when resumed, consume ' +
