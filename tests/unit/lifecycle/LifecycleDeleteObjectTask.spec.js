@@ -117,8 +117,9 @@ describe('LifecycleDeleteObjectTask', () => {
                 .setAttribute('target.version', 'testversion')
                 .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
             s3Client.setResponse(null, {});
+            backbeatClient.setResponse(null, {});
             task.processActionEntry(entry, err => {
-                assert.strictEqual(s3Client.calls.deleteObject, 1);
+                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
                 assert.ifError(err);
                 done();
             });
@@ -140,8 +141,9 @@ describe('LifecycleDeleteObjectTask', () => {
                 .setAttribute('target.version', 'testversion')
                 .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
             s3Client.setResponse(null, {});
+            backbeatClient.setResponse(null, {});
             task.processActionEntry(entry, err => {
-                assert.strictEqual(s3Client.calls.deleteObject, 0);
+                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 0);
                 assert.ifError(err);
                 done();
             });
