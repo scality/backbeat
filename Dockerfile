@@ -52,6 +52,6 @@ COPY . /usr/src/app
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
-ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "/usr/src/app/docker-entrypoint.sh"]
+ENTRYPOINT ["dumb-init", "--", "/usr/src/app/docker-entrypoint.sh"]
 
 EXPOSE 8900
