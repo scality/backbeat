@@ -39,8 +39,11 @@ FROM node:${NODE_VERSION}
 
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
-        jq \
+        jq  \
+        dumb-init \
     && rm -rf /var/lib/apt/lists/*
+
+    RUN apt-get install 
 
 WORKDIR /usr/src/app
 
@@ -49,6 +52,6 @@ COPY . /usr/src/app
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
-ENTRYPOINT ["/usr/src/app/docker-entrypoint.sh"]
+ENTRYPOINT ["/usr/local/bin/dumb-init", "--", "/usr/src/app/docker-entrypoint.sh"]
 
 EXPOSE 8900
