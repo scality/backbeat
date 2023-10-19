@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
+const os = require('os');
 const { errors, versioning } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
 const { supportedLifecycleRules } = require('arsenal').constants;
@@ -198,7 +199,7 @@ class LifecycleTask extends BackbeatTask {
                     }
 
                     const entry = Object.assign({}, bucketData, {
-                        details: { marker },
+                        details: { marker }, origin: os.hostname(),
                     });
                     this._sendBucketEntry(entry, err => {
                         if (!err) {
