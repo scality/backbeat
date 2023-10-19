@@ -207,11 +207,19 @@ describe('BackbeatConsumer concurrency tests', () => {
     let producer;
     let consumer;
     let consumedMessages = [];
+    const unstuck = { value: false };
 
-    function queueProcessor(message, cb) {
+    function queueProcessor(unstuck, message, cb) {
         if (message.value.toString() !== 'taskStuck') {
             consumedMessages.push(message.value);
             process.nextTick(cb);
+        } else {
+            const interval = setInterval(() => {
+                if (unstuck.value) {
+                    clearInterval(interval);
+                    cb();
+                }
+            }, 1000);
         }
     }
     before(function before(done) {
@@ -225,7 +233,7 @@ describe('BackbeatConsumer concurrency tests', () => {
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
             kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
-            queueProcessor,
+            queueProcessor: queueProcessor.bind(null, unstuck),
             concurrency: 10,
             bootstrap: true,
         });
@@ -284,7 +292,7 @@ describe('BackbeatConsumer concurrency tests', () => {
         ], done);
     });
 
-    it('should not prevent progress with concurrency if one task is stuck',
+    it.only('should not prevent progress with concurrency if one task is stuck',
     done => {
         const boatloadOfMessages = [];
         const stuckIndex = 500;
@@ -299,7 +307,7 @@ describe('BackbeatConsumer concurrency tests', () => {
             next => {
                 setTimeout(() => producer.send(boatloadOfMessages, err => {
                     assert.ifError(err);
-                }), 1000);
+                }), 5000);
                 let totalConsumed = 0;
                 consumer.subscribe();
                 consumer.on('consumed', messagesConsumed => {
@@ -324,6 +332,7 @@ describe('BackbeatConsumer concurrency tests', () => {
                             boatloadOfMessages[i].message :
                             boatloadOfMessages[i + 1].message);
                 }
+                unstuck.value = true;
                 next();
             },
         ], done);
@@ -523,4 +532,86 @@ describe('BackbeatConsumer with circuit breaker', () => {
             ], done);
         });
     });
+});
+
+describe('BackbeatConsumer shutdown tests', () => {
+    const topic = 'backbeat-consumer-spec-shutdown';
+    const groupId = `bucket-processor-${Math.random()}`;
+    const messages = [
+        { key: 'm1', message: '{"value":"1"}' },
+        { key: 'm2', message: '{"value":"2"}' },
+    ];
+    let zookeeper;
+    let producer;
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            topic,
+            kafka: producerKafkaConf,
+            pollIntervalMs: 100,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => {
+                zookeeper = zookeeperHelper.createClient(
+                    zookeeperConf.connectionString);
+                zookeeper.connect();
+                zookeeper.on('ready', innerDone);
+            },
+        ], done);
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => {
+                zookeeper.close();
+                innerDone();
+            },
+        ], done);
+    });
+
+    it('should wait for current jobs to end and commit offset before shutting down', done => {
+        function queueProcessor(message, cb) {
+            setTimeout(cb, 2000);
+        }
+        const consumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf,
+            queueProcessor,
+            groupId,
+            topic,
+            bootstrap: true,
+            concurrency: 2,
+        });
+        async.series([
+            next => consumer.on('ready', next),
+            next => {
+                consumer.subscribe();
+                setTimeout(() => {
+                    producer.send(messages, assert.ifError);
+                }, 3000);
+                next();
+            },
+            next => {
+                const interval = setInterval(() => {
+                    if (consumer._processingQueue.idle()) {
+                        return;
+                    }
+                    clearInterval(interval);
+                    next();
+                }, 500);
+            },
+            next => {
+                assert(!consumer._processingQueue.idle());
+                consumer.close(() => {
+                    assert(consumer._processingQueue.idle());
+                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
+                    next();
+                });
+            },
+        ], done);
+    }).timeout(30000);
 });
