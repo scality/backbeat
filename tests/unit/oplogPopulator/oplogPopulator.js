@@ -7,6 +7,8 @@ const { MongoClient } = require('mongodb');
 
 const logger = new werelogs.Logger('connect-wrapper-logger');
 
+const locations = require('../../../conf/locationConfig.json');
+
 const OplogPopulator =
     require('../../../extensions/oplogPopulator/OplogPopulator');
 const ChangeStream =
@@ -208,71 +210,93 @@ describe('OplogPopulator', () => {
     });
 
     describe('_getBackbeatEnabledBuckets', () => {
+        const coldLocations = Object.keys(locations).filter(loc => locations[loc].isCold);
+        const replicationFilter = {
+            'value.replicationConfiguration.rules': {
+                $elemMatch: {
+                    enabled: true,
+                },
+            },
+        };
+        const notificationFilter = {
+            'value.notificationConfiguration': {
+                $type: 3,
+            },
+        };
+        const lifecycleFilter = {
+            'value.lifecycleConfiguration.rules': {
+                $elemMatch: {
+                    $and: [
+                        {
+                            actions: {
+                                $elemMatch: {
+                                    actionName: {
+                                        $in: ['Transition', 'NoncurrentVersionTransition'],
+                                    },
+                                },
+                            },
+                        }, {
+                            $or: [
+                                {
+                                    ruleStatus: 'Enabled'
+                                },
+                                {
+                                    actions: {
+                                        $elemMatch: {
+                                            transition: {
+                                                $elemMatch: {
+                                                    storageClass: {
+                                                        $in: coldLocations
+                                                    }
+                                                },
+                                            },
+                                        },
+                                    },
+                                },
+                                {
+                                    actions: {
+                                        $elemMatch: {
+                                            nonCurrentVersionTransition: {
+                                                $elemMatch: {
+                                                    storageClass: {
+                                                        $in: coldLocations
+                                                    }
+                                                },
+                                            },
+                                        },
+                                    }
+                                },
+                            ],
+                        },
+                    ],
+                },
+            },
+        };
         [
             {
                 extensions: ['notification'],
                 filter: [
-                    { 'value.notificationConfiguration': { $type: 3 } },
+                    notificationFilter,
                 ],
             },
             {
                 extensions: ['replication'],
                 filter: [
-                    {
-                        'value.replicationConfiguration.rules': {
-                            $elemMatch: {
-                                enabled: true,
-                            },
-                        },
-                    },
+                    replicationFilter
                 ],
             },
             {
                 extensions: ['lifecycle'],
                 filter: [
-                    {
-                        'value.lifecycleConfiguration.rules': {
-                            $elemMatch: {
-                                ruleStatus: 'Enabled',
-                                actions: {
-                                    $elemMatch: {
-                                        $or: [
-                                            { actionName: 'Transition' },
-                                            { actionName: 'NoncurrentVersionTransition' },
-                                        ],
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    lifecycleFilter,
                 ],
             },
             {
                 extensions: ['notification', 'replication', 'lifecycle'],
                 filter: [
-                    { 'value.notificationConfiguration': { $type: 3 } },
-                    {
-                        'value.replicationConfiguration.rules': {
-                            $elemMatch: {
-                                enabled: true,
-                            },
-                        },
-                    },
-                    {
-                        'value.lifecycleConfiguration.rules': {
-                            $elemMatch: {
-                                ruleStatus: 'Enabled',
-                                actions: {
-                                    $elemMatch: {
-                                        $or: [
-                                            { actionName: 'Transition' },
-                                            { actionName: 'NoncurrentVersionTransition' },
-                                        ],
-                                    },
-                                },
-                            },
-                        },
-                    },
+                    notificationFilter,
+                    replicationFilter,
+                    lifecycleFilter,
                 ],
             }
         ].forEach(scenario => {
