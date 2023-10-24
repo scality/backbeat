@@ -6,7 +6,17 @@ const currentTransitionRule = {
     transition: [
         {
             days: 0,
-            storageClass: 'dmf',
+            storageClass: 'some-location',
+        },
+    ],
+};
+
+const currentTransitionRuleCold = {
+    actionName: 'Transition',
+    transition: [
+        {
+            days: 0,
+            storageClass: 'location-dmf-v1',
         },
     ],
 };
@@ -16,7 +26,17 @@ const nonCurrentTransitionRule = {
     nonCurrentVersionTransition: [
         {
             noncurrentDays: 0,
-            storageClass: 'dmf',
+            storageClass: 'some-location',
+        },
+    ],
+};
+
+const nonCurrentTransitionRuleCold = {
+    actionName: 'NoncurrentVersionTransition',
+    nonCurrentVersionTransition: [
+        {
+            noncurrentDays: 0,
+            storageClass: 'location-dmf-v1',
         },
     ],
 };
@@ -151,6 +171,40 @@ describe('LifecycleOplogPopulatorUtils', () => {
                     },
                 },
                 expectedReturn: false,
+            },
+            {
+                it: 'should return true when transition rule is disabled for a cold location (current)',
+                bucketMd: {
+                    lifecycleConfiguration: {
+                        rules: [
+                            buildLifecycleRule([
+                                currentTransitionRuleCold,
+                            ], false),
+                            buildLifecycleRule([
+                                currentTransitionRule,
+                                nonCurrentTransitionRule,
+                            ], false),
+                        ],
+                    },
+                },
+                expectedReturn: true,
+            },
+            {
+                it: 'should return true when transition rule is disabled for a cold location (non current)',
+                bucketMd: {
+                    lifecycleConfiguration: {
+                        rules: [
+                            buildLifecycleRule([
+                                nonCurrentTransitionRuleCold,
+                            ], false),
+                            buildLifecycleRule([
+                                currentTransitionRule,
+                                nonCurrentTransitionRule,
+                            ], false),
+                        ],
+                    },
+                },
+                expectedReturn: true,
             },
         ].forEach(params => {
             it(params.it, () => {
