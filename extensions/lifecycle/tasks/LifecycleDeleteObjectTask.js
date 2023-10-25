@@ -46,7 +46,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             encodedVersionId: version,
         }, log, (err, blob) => {
             if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
+                // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned.
+                // In this case, instead of logging an error, it should be logged as a debug message,
+                // to avoid causing unnecessary concern to the customer.
+                // TODO: After the implementation of CLDSRV-461, we could remove this check.
+                const logLevel = err.code === 'InvalidBucketState' ? 'debug' : 'error';
+                log[logLevel]('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleDeleteObjectTask._getMetadata',
                     error: err.message,
                 }, entry.getLogInfo()));
@@ -187,6 +192,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         }
         return this._getMetadata(entry, log, (err, objMD) => {
             if (err) {
+                // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned,
+                // so we can skip checking object replication for non-versioned buckets.
+                // TODO: After the implementation of CLDSRV-461, we could remove this check.
+                if (err.code === 'InvalidBucketState') {
+                    return done();
+                }
                 return done(err);
             }
             const replicationStatus = objMD.getReplicationStatus();
