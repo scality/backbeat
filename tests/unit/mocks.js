@@ -79,6 +79,7 @@ class BackbeatClientMock {
         this.response = { error, data };
     }
 
+
     batchDelete(params, cb) {
         this.times.batchDeleteResponse += 1;
 
@@ -124,6 +125,10 @@ class BackbeatMetadataProxyMock {
             return cb(this.error);
         }
         return cb(null, this.indexesObj);
+    }
+
+    setError(error) {
+        this.error = error;
     }
 
     putBucketIndexes(bucket, indexes, log, cb) {
