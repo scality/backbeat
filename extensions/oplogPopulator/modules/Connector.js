@@ -115,6 +115,13 @@ class Connector {
      * @throws {InternalError}
      */
     async spawn() {
+        if (this._isRunning) {
+            this._logger.error('tried spawning an already created connector', {
+                method: 'Connector.spawn',
+                connector: this._name,
+            });
+            return;
+        }
         try {
             await this._kafkaConnect.createConnector({
                 name: this._name,
@@ -137,6 +144,13 @@ class Connector {
      * @throws {InternalError}
      */
     async destroy() {
+        if (!this._isRunning) {
+            this._logger.error('tried destroying an already destroyed connector', {
+                method: 'Connector.destroy',
+                connector: this._name,
+            });
+            return;
+        }
         try {
             await this._kafkaConnect.deleteConnector(this._name);
             this._isRunning = false;
@@ -262,7 +276,7 @@ class Connector {
         }
         this._config.pipeline = this._generateConnectorPipeline([...this._buckets]);
         try {
-            if (doUpdate) {
+            if (doUpdate && this._isRunning) {
                 const timeBeforeUpdate = Date.now();
                 this._state.isUpdating = true;
                 await this._kafkaConnect.updateConnectorConfig(this._name, this._config);
