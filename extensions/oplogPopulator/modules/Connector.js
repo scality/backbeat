@@ -1,4 +1,5 @@
 const joi = require('joi');
+const uuid = require('uuid');
 const { errors } = require('arsenal');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 
@@ -110,6 +111,14 @@ class Connector {
     }
 
     /**
+     * Updates partition name in connector config
+     * @returns {undefined}
+     */
+    updatePartitionName() {
+        this._config['offset.partition.name'] = `partition-${uuid.v4()}`;
+    }
+
+    /**
      * Creates the Kafka-connect mongo connector
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
@@ -122,6 +131,8 @@ class Connector {
             });
             return;
         }
+        // reset resume token to avoid getting outdated token
+        this.updatePartitionName();
         try {
             await this._kafkaConnect.createConnector({
                 name: this._name,

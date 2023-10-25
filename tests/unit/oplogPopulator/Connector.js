@@ -49,6 +49,15 @@ describe('Connector', () => {
             }));
             assert.strictEqual(connector.isRunning, true);
         });
+        it('Should change partition name on creation', async () => {
+            sinon.stub(connector._kafkaConnect, 'createConnector')
+                .resolves();
+            await connector.spawn();
+            const partitionName = connector.config['offset.partition.name'];
+            connector._isRunning = false;
+            await connector.spawn();
+            assert.notStrictEqual(partitionName, connector.config['offset.partition.name']);
+        });
         it('Should not try spawning a new connector when on is already existent', async () => {
             const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
@@ -237,6 +246,14 @@ describe('Connector', () => {
             connector._config = { key: 'value' };
             const size = connector.getConfigSizeInBytes();
             assert.strictEqual(size, 15);
+        });
+    });
+
+    describe('updatePartitionName', () => {
+        it('Should update partition name in config', () => {
+            connector._config['offset.partition.name'] = 'partition-name';
+            connector.updatePartitionName();
+            assert.notStrictEqual(connector._config['offset.partition.name'], 'partition-name');
         });
     });
 });
