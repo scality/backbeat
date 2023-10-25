@@ -19,6 +19,11 @@ class BackbeatClientMock {
     constructor() {
         this.mdObj = null;
         this.receivedMd = null;
+        this.error = null;
+    }
+
+    setError(error) {
+        this.error = error;
     }
 
     setMdObj(mdObj) {
@@ -26,10 +31,18 @@ class BackbeatClientMock {
     }
 
     getMetadata(params, log, cb) {
+        if (this.error) {
+            return cb(this.error);
+        }
+
         return cb(null, { Body: this.mdObj.getSerialized() });
     }
 
     putMetadata(params, log, cb) {
+        if (this.error) {
+            return cb(this.error);
+        }
+
         this.receivedMd = JSON.parse(params.mdBlob);
         return cb();
     }
