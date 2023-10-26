@@ -59,6 +59,33 @@ jobs:
         cache-from: type=gha,scope=ci-mongodb
         cache-to: type=gha,mode=max,scope=ci-mongodb
 
+  bucket-scanner:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - uses: actions/setup-go@v4
+      with:
+        go-version: '1.16.2'
+        cache-dependency-path: bucket-scanner/go.sum
+
+    - name: Install ginkgo
+      run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
+
+    - name: Run bucket scanner unit tests
+      run: >-
+        ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --progress   \
+               --cover --trace --race --covermode=atomic --coverprofile=coverage.out \
+               -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
+      working-directory: bucket-scanner
+
+    - uses: codecov/codecov-action@v3
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        directory: bucket-scanner
+        flags: unit
+
   tests:
     needs: build
     runs-on: ubuntu-latest
@@ -91,22 +118,12 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - name: Install build dependencies
-      run: |
-        sudo apt-get update
-        sudo apt-get install -y build-essential libzstd-dev
-    - uses: actions/setup-go@v4
-      with:
-        go-version: '1.16.2'
-        cache-dependency-path: bucket-scanner/go.sum
     - uses: actions/setup-node@v3
       with:
         node-version: '16'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
-    - name: Install ginkgo
-      run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
     - name: Lint markdown
       run: yarn run --silent lint_md
     - name: Lint Javascript
@@ -121,10 +138,6 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: ./coverage/test
         flags: unit
-
-    - name: Run bucket scanner unit tests
-      run: ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --cover --trace --race --progress -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
-      working-directory: bucket-scanner
 
     - name: Run backbeat routes test
       uses: ./.github/actions/ft-test
