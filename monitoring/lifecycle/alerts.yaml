@@ -181,3 +181,28 @@ groups:
       description: "More than 5% of Kafka messages failed to publish to the lifecycle object topic"
       summary: "High rate of failed messages to the object topic"
 
+  - alert: KafkaConsumerSlowTask
+    Expr: |
+      sum(s3_zenko_queue_slowTasks_count{namespace="${namespace}"}) by(job) > 0
+    For: "5m"
+    Labels:
+     severity: warning
+    Annotations:
+      description: >-
+        Some tasks are taking too long to process in {{ $labels.job }}. This is not expected, and
+        may be a sign that other components are not behaving nominally or may need to be scaled.
+
+        If this alert lasts, it may mean the task is blocked, and that the consumer should be
+        restarted.
+      summary: "Some Kafka messages are taking too long to process"
+
+  - alert: KafkaConsumerRebalanceTimeout
+    Expr: |
+      sum(s3_zenko_queue_rebalance_total_count{namespace="${namespace}", status="timeout"}) by(pod) > 0
+    Labels:
+     severity: critical
+    Annotations:
+      description: >-
+        Kafka rebalance has timed out for pod `{{ $labels.pod }}`, which indicates that the consumer
+        is not working anymore, and should be restarted.
+      summary: "Kafka consumer has stopped consuming messages"
