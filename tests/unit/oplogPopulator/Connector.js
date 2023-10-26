@@ -49,6 +49,22 @@ describe('Connector', () => {
             }));
             assert.strictEqual(connector.isRunning, true);
         });
+        it('Should change partition name on creation', async () => {
+            sinon.stub(connector._kafkaConnect, 'createConnector')
+                .resolves();
+            await connector.spawn();
+            const partitionName = connector.config['offset.partition.name'];
+            connector._isRunning = false;
+            await connector.spawn();
+            assert.notStrictEqual(partitionName, connector.config['offset.partition.name']);
+        });
+        it('Should not try spawning a new connector when on is already existent', async () => {
+            const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
+                .resolves();
+            connector._isRunning = true;
+            await connector.spawn();
+            assert(createStub.notCalled);
+        });
     });
 
     describe('destroy', () => {
@@ -60,6 +76,13 @@ describe('Connector', () => {
             await connector.destroy();
             assert(deleteStub.calledOnceWith('example-connector'));
             assert.strictEqual(connector.isRunning, false);
+        });
+        it('Should not try destroying a new connector when connector is already destroyed', async () => {
+            const deleteStub = sinon.stub(connector._kafkaConnect, 'deleteConnector')
+                .resolves();
+            connector._isRunning = false;
+            await connector.destroy();
+            assert(deleteStub.notCalled);
         });
     });
 
@@ -166,6 +189,7 @@ describe('Connector', () => {
         it('Should update connector', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
+            connector._isRunning = true;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
@@ -201,6 +225,20 @@ describe('Connector', () => {
             assert(pipelineStub.notCalled);
             assert(updateStub.notCalled);
         });
+
+        it('Should not update destroyed connector', async () => {
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            connector._isRunning = false;
+            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+                .returns('example-pipeline');
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true);
+            assert.strictEqual(didUpdate, false);
+            assert(pipelineStub.calledOnceWith([]));
+            assert(updateStub.notCalled);
+        });
     });
 
     describe('getConfigSizeInBytes', () => {
@@ -208,6 +246,14 @@ describe('Connector', () => {
             connector._config = { key: 'value' };
             const size = connector.getConfigSizeInBytes();
             assert.strictEqual(size, 15);
+        });
+    });
+
+    describe('updatePartitionName', () => {
+        it('Should update partition name in config', () => {
+            connector._config['offset.partition.name'] = 'partition-name';
+            connector.updatePartitionName();
+            assert.notStrictEqual(connector._config['offset.partition.name'], 'partition-name');
         });
     });
 });
