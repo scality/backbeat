@@ -2,6 +2,48 @@ parsers:
   javascript:
     enable_partials: yes
 
+comment:
+  layout: "header, diff, flags, components"  # show component info in the PR comment
+
+component_management:
+  default_rules:  # default rules that will be inherited by all components
+    statuses:
+      - type: project
+        target: auto
+  individual_components:
+    - component_id: backbeat-notification
+      name: Bucket Notification
+      paths:
+        - extensions/notification/**
+    - component_id: backbeat-core
+      name: Core Library
+      paths:
+        - extensions/utils/**
+        - lib/**
+    - component_id: backbeat-ingestion
+      name: Ingestion
+      paths:
+        - extensions/ingestion/**
+        - extensions/mongoProcessor/**
+        - lib/queuePopulator/Ingestion.*
+    - component_id: backbeat-lifecycle
+      name: Lifecycle
+      paths:
+        - extensions/gc/**
+        - extensions/lifecycle/**
+    - component_id: backbeat-oplogpopulator
+      name: Oplog Populator
+      paths:
+        - extensions/oplogPopulator/**
+    - component_id: backbeat-replication
+      name: Replication
+      paths:
+        - extensions/replication/**
+    - component_id: bucket-scanner
+      name: Bucket Scanner
+      paths:
+        - bucket-scanner/**
+
 flag_management:
   default_rules: # the rules that will be followed for any flag added, generally
     carryforward: true
