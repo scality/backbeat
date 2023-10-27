@@ -215,11 +215,17 @@ describe('BackbeatConsumer rebalance tests', () => {
     let consumer2;
     let processedMessages;
     let consumedMessages;
+    let timer;
 
     function queueProcessor(message, cb) {
         assert(processedMessages.length < messages.length);
 
-        consumer.emit('consumed.message', message.value.toString());
+        const res = consumer.emit('consumed.message', message.value.toString());
+
+        if (res && message.value.toString() === 'taskStuck') {
+            consumer._log.info('processing message...');
+            return;
+        }
 
         // Shorter delay for first message, to ensure there is something being processed during the
         // rebalance
@@ -265,8 +271,10 @@ describe('BackbeatConsumer rebalance tests', () => {
             pollIntervalMs: 100
         });
         consumer = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-1',
             zookeeper: zookeeperConf,
-            kafka: consumerKafkaConf, groupId, topic,
+            kafka: { ...consumerKafkaConf, maxPollIntervalMs: 45000 },
+            groupId, topic,
             queueProcessor,
             concurrency: 2,
         });
@@ -277,6 +285,7 @@ describe('BackbeatConsumer rebalance tests', () => {
                 cb => consumer.on('ready', cb),
                 cb => {
                     consumer2 = new BackbeatConsumer({
+                        clientId: 'BackbeatConsumer-2',
                         zookeeper: zookeeperConf,
                         kafka: consumerKafkaConf, groupId, topic,
                         queueProcessor,
@@ -289,6 +298,10 @@ describe('BackbeatConsumer rebalance tests', () => {
 
     afterEach(function after(done) {
         this.timeout(10000);
+        if (timer) {
+            clearInterval(timer);
+            timer = null;
+        }
         async.parallel([
             innerDone => producer.close(innerDone),
             innerDone => consumer.close(innerDone),
@@ -337,6 +350,33 @@ describe('BackbeatConsumer rebalance tests', () => {
             assert.ifError(err);
         });
     }).timeout(40000);
+
+    it('should fail healthcheck on rebalance timeout', done => {
+        assert(consumer.isReady());
+        assert(consumer2.isReady());
+
+        consumer.on('consumed.message', () => {
+            if (consumedMessages === 0) {
+                // trigger rebalance during processing of first message
+                consumer2.subscribe();
+            }
+
+            return true;
+        });
+
+        consumer.subscribe();
+        producer.send([{ key: 'msg', message: 'taskStuck' }], err => {
+            assert.ifError(err);
+        });
+
+        // The consumer should become unhealthy eventually
+        timer = setInterval(() => {
+            if (!consumer.isReady()) {
+                assert(consumer2.isReady());
+                done();
+            }
+        }, 1000);
+    }).timeout(60000);
 });
 
 describe('BackbeatConsumer concurrency tests', () => {
