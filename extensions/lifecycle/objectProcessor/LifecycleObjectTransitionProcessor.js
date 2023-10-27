@@ -3,10 +3,9 @@ const assert = require('assert');
 
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
-const LifecycleUpdateTransitionTask =
-      require('../tasks/LifecycleUpdateTransitionTask');
-const LifecycleColdStatusArchiveTask =
-      require('../tasks/LifecycleColdStatusArchiveTask');
+const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
+const LifecycleUpdateTransitionTask = require('../tasks/LifecycleUpdateTransitionTask');
+const LifecycleColdStatusArchiveTask = require('../tasks/LifecycleColdStatusArchiveTask');
 const { LifecycleResetTransitionInProgressTask } =
       require('../tasks/LifecycleResetTransitionInProgressTask');
 const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
@@ -108,6 +107,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 return new LifecycleResetTransitionInProgressTask(this);
             case 'requeueRestore':
                 return new LifecycleRetriggerRestoreTask(this);
+            case 'gc':
+                return new LifecycleUpdateExpirationTask(this);
             case 'copyLocation':
                 if (actionEntry.getContextAttribute('ruleType') === 'transition') {
                     return new LifecycleUpdateTransitionTask(this);
