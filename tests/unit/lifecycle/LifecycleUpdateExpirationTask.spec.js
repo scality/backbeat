@@ -124,4 +124,28 @@ describe('LifecycleUpdateExpirationTask', () => {
             done();
         });
     });
+
+    it('should throw an error when location is not specified', done => {
+        const mdObj = new ObjectMD();
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+        const invalidActionEntry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target', {
+                owner: 'eab6642741045d0ae7cb3333962ad56f847ce0d9bb73de98eb4959428fc28108',
+                bucket: 'somebucket',
+                key: 'somekey',
+                accountId: '871467171849',
+            })
+            .setAttribute('details', {
+                lastModified: '2023-06-02T12:50:57.016Z',
+            })
+            .addContext('details', {
+                origin: 'lifecycle',
+                ruleType: 'expiration',
+                reqId: '8b902aef7346801d99fc',
+            });
+        task.processActionEntry(invalidActionEntry, err => {
+            assert(err.is.MissingParameter);
+            done();
+        });
+    });
 });

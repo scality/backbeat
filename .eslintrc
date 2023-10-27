@@ -3,6 +3,9 @@
     "parserOptions": {
         "ecmaVersion": 2020
     },
+    "plugins": [
+        "mocha"
+    ],
     "rules": {
         "object-curly-newline": "off",
         "import/newline-after-import": "off",
@@ -33,7 +36,8 @@
         "space-unary-ops": "off",
         "no-undef-init": "off",
         "newline-per-chained-call": "off",
-        "no-useless-escape": "off"
+        "no-useless-escape": "off",
+        "mocha/no-exclusive-tests": "error"
     },
     "settings": {
         "import/resolver": {
