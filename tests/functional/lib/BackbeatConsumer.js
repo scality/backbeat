@@ -6,6 +6,7 @@ const { metrics } = require('arsenal');
 const zookeeperHelper = require('../../../lib/clients/zookeeper');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const { CircuitBreaker } = require('breakbeat').CircuitBreaker;
 const { promMetricNames } =
       require('../../../lib/constants').kafkaBacklogMetrics;
 const zookeeperConf = { connectionString: 'localhost:2181' };
@@ -637,6 +638,11 @@ describe('BackbeatConsumer with circuit breaker', () => {
     afterEach(done => {
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
+        // resetting the circuit breaker to avoid having
+        // a timeout when closing the consumer, as it depends
+        // on a revoke rebalance event that only gets triggered
+        // by polling (calling consumer.consume())
+        consumer._circuitBreaker = new CircuitBreaker();
 
         async.parallel([
             innerDone => producer.close(innerDone),
@@ -707,4 +713,166 @@ describe('BackbeatConsumer with circuit breaker', () => {
         // Attach breakerConf to the test, so it can be used from the hooks
         test.breakerConf = t.breakerConf;
     });
+});
+
+describe('BackbeatConsumer shutdown tests', () => {
+    const topic = 'backbeat-consumer-spec-shutdown';
+    const groupId = `bucket-processor-${Math.random()}`;
+    const messages = [
+        { key: 'm1', message: '{"value":"1"}' },
+        { key: 'm2', message: '{"value":"2"}' },
+    ];
+    let zookeeper;
+    let producer;
+    let consumer;
+
+    function queueProcessor(message, cb) {
+        if (message.value.toString() !== 'taskStuck') {
+            setTimeout(cb, 1000);
+        }
+    }
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            topic,
+            kafka: producerKafkaConf,
+            pollIntervalMs: 100,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => {
+                zookeeper = zookeeperHelper.createClient(
+                    zookeeperConf.connectionString);
+                zookeeper.connect();
+                zookeeper.on('ready', innerDone);
+            },
+        ], done);
+    });
+
+    beforeEach(function beforeEach(done) {
+        this.timeout(60000);
+        consumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: {
+                maxPollIntervalMs: 45000,
+                ...consumerKafkaConf,
+            },
+            queueProcessor,
+            groupId,
+            topic,
+            bootstrap: true,
+            concurrency: 2,
+        });
+        consumer.on('ready', () => {
+            consumer.subscribe();
+            done();
+        });
+    });
+
+    afterEach(() => {
+        consumer.removeAllListeners('consumed');
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => {
+                zookeeper.close();
+                innerDone();
+            },
+        ], done);
+    });
+
+    it('should stop consuming and wait for current jobs to end before shutting down', done => {
+        setTimeout(() => {
+            producer.send(messages, assert.ifError);
+        }, 3000);
+        let totalConsumed = 0;
+        consumer.on('consumed', messagesConsumed => {
+            totalConsumed += messagesConsumed;
+        });
+        async.series([
+            next => {
+                const interval = setInterval(() => {
+                    if (consumer._processingQueue.idle()) {
+                        return;
+                    }
+                    clearInterval(interval);
+                    next();
+                }, 500);
+            },
+            next => {
+                assert(!consumer._processingQueue.idle());
+                consumer.close(() => {
+                    assert(consumer._processingQueue.idle());
+                    // concurrency set to 2, so should only consume the first two
+                    // initial messages before shutting down
+                    assert(totalConsumed <= 2);
+                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
+                    next();
+                });
+            },
+        ], done);
+    }).timeout(30000);
+
+    it('should immediatly shuttdown when no in progress tasks', done => {
+        setTimeout(() => {
+            producer.send([messages[0]], assert.ifError);
+        }, 3000);
+        async.series([
+            next => {
+                const interval = setInterval(() => {
+                    if (!consumer._processingQueue.idle()) {
+                        return;
+                    }
+                    clearInterval(interval);
+                    next();
+                }, 500);
+            },
+            next => {
+                assert(consumer._processingQueue.idle());
+                consumer.close(() => {
+                    assert(consumer._processingQueue.idle());
+                    assert.strictEqual(consumer.getOffsetLedger().getProcessingCount(topic), 0);
+                    next();
+                });
+            },
+        ], done);
+    }).timeout(30000);
+
+    it('should shuttdown when consumer has been disconnected', done => {
+        async.series([
+            next => {
+                consumer._consumer.disconnect();
+                consumer._consumer.on('disconnected', () => next());
+            },
+            next => consumer.close(next),
+        ], done);
+    }).timeout(30000);
+
+    it('should close even when a job is stuck', done => {
+        setTimeout(() => {
+            producer.send([{ key: 'key', message: 'taskStuck' }], assert.ifError);
+        }, 3000);
+        async.series([
+            next => {
+                const interval = setInterval(() => {
+                    if (consumer._processingQueue.idle()) {
+                        return;
+                    }
+                    clearInterval(interval);
+                    next();
+                }, 500);
+            },
+            next => {
+                assert(!consumer._processingQueue.idle());
+                consumer.close(() => {
+                    assert(!consumer._processingQueue.idle());
+                    next();
+                });
+            },
+        ], done);
+    }).timeout(60000);
 });
