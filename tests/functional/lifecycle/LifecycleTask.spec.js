@@ -798,7 +798,7 @@ describe('lifecycle task functional tests', () => {
             });
         });
 
-        [
+        it.each([
             // expire: pagination, prefix
             {
                 message: 'should verify that EXPIRED objects are sent to ' +
@@ -901,40 +901,38 @@ describe('lifecycle task functional tests', () => {
                     objectCount: 2,
                 },
             },
-        ].forEach(item => {
-            it(item.message, done => {
-                const params = {
-                    lcTask,
-                    lcp,
-                    counter: 0,
-                };
-                const bucket = item.bucketEntry.target.bucket;
-                async.waterfall([
-                    next => s3Helper.setAndCreateBucket(bucket, next),
-                    next => s3Helper.setBucketLifecycleConfigurations(
-                        item.bucketLCRules, next),
-                    (data, next) => s3Helper.createObjects(item.scenario, next),
-                    next => s3.getBucketLifecycleConfiguration({
-                        Bucket: bucket,
-                    }, next),
-                    (data, next) => {
-                        wrapProcessBucketEntry(data.Rules, item.bucketEntry, s3,
+        ])('$message', (item, done) => {
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            const bucket = item.bucketEntry.target.bucket;
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations(
+                    item.bucketLCRules, next),
+                (data, next) => s3Helper.createObjects(item.scenario, next),
+                next => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, item.bucketEntry, s3,
                         params, (err, data) => {
                             assert.ifError(err);
 
-                            assert.equal(data.count.bucket,
-                                item.expected.bucketCount);
-                            assert.equal(data.count.object,
-                                item.expected.objectCount);
-                            assert.deepStrictEqual(data.entries.object.sort(),
-                                item.expected.objects.sort());
-                            next();
-                        });
-                    },
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+                        assert.equal(data.count.bucket,
+                            item.expected.bucketCount);
+                        assert.equal(data.count.object,
+                            item.expected.objectCount);
+                        assert.deepStrictEqual(data.entries.object.sort(),
+                            item.expected.objects.sort());
+                        next();
+                    });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
             });
         });
     }); // end non-versioned describe block
@@ -1242,7 +1240,7 @@ describe('lifecycle task functional tests', () => {
         });
 
         // 1 Day Expiration rule - handling the IsLatest versions
-        [
+        it.each([
             {
                 message: 'should expire a version in a versioning enabled ' +
                     'bucket with 0 non-current versions using basic ' +
@@ -1331,83 +1329,81 @@ describe('lifecycle task functional tests', () => {
                     objectCount: 0,
                 },
             },
-        ].forEach(item => {
-            it(item.message, done => {
-                const Bucket = 'test-bucket';
-                const Key = 'test-key1';
-                const bucketEntry = {
-                    action: 'testing-islatest',
-                    target: {
-                        bucket: Bucket,
-                        owner: OWNER,
-                    },
-                    details: {},
-                };
-                const params = {
-                    lcTask,
-                    lcp,
-                    counter: 0,
-                };
+        ])('$message', (item, done) => {
+            const Bucket = 'test-bucket';
+            const Key = 'test-key1';
+            const bucketEntry = {
+                action: 'testing-islatest',
+                target: {
+                    bucket: Bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
 
-                async.waterfall([
-                    next => s3Helper.setAndCreateBucket(Bucket, next),
-                    next => s3Helper.setBucketVersioning('Enabled', next),
-                    (data, next) => s3.putObject({ Bucket, Key, Body: '' },
-                        next),
-                    (data, next) => {
-                        if (item.isDeleteMarker) {
-                            return async.series([
-                                cb => s3.deleteObject({ Bucket, Key },
-                                    err => {
-                                        if (err) {
-                                            return cb(err);
-                                        }
-                                        return cb();
-                                    }),
-                                cb => {
-                                    if (!item.hasNonCurrentVersions) {
-                                        return s3.deleteObject({
-                                            Bucket, Key,
-                                            VersionId: data.VersionId,
-                                        }, cb);
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(Bucket, next),
+                next => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3.putObject({ Bucket, Key, Body: '' },
+                    next),
+                (data, next) => {
+                    if (item.isDeleteMarker) {
+                        return async.series([
+                            cb => s3.deleteObject({ Bucket, Key },
+                                err => {
+                                    if (err) {
+                                        return cb(err);
                                     }
                                     return cb();
-                                },
-                            ], next);
-                        }
-                        if (item.hasNonCurrentVersions) {
-                            return s3.putObject({ Bucket, Key, Body: '' },
-                                next);
-                        }
-                        return next(null, null);
-                    },
-                    (data, next) => s3Helper.setBucketVersioning(
-                        item.versionStatus, next),
-                    (data, next) => {
-                        s3Helper.setBucketLifecycleConfigurations([
-                            new LifecycleRule().addID('task-1')
-                                .addExpiration('Date', PAST).build(),
+                                }),
+                            cb => {
+                                if (!item.hasNonCurrentVersions) {
+                                    return s3.deleteObject({
+                                        Bucket, Key,
+                                        VersionId: data.VersionId,
+                                    }, cb);
+                                }
+                                return cb();
+                            },
                         ], next);
-                    },
-                    (data, next) => s3.getBucketLifecycleConfiguration(
-                        { Bucket }, next),
-                    (data, next) => {
-                        wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+                    }
+                    if (item.hasNonCurrentVersions) {
+                        return s3.putObject({ Bucket, Key, Body: '' },
+                            next);
+                    }
+                    return next(null, null);
+                },
+                (data, next) => s3Helper.setBucketVersioning(
+                    item.versionStatus, next),
+                (data, next) => {
+                    s3Helper.setBucketLifecycleConfigurations([
+                        new LifecycleRule().addID('task-1')
+                            .addExpiration('Date', PAST).build(),
+                    ], next);
+                },
+                (data, next) => s3.getBucketLifecycleConfiguration(
+                    { Bucket }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
                         params, (err, data) => {
                             assert.ifError(err);
                             assert.equal(data.count.object,
                                 item.expected.objectCount);
                             next();
                         });
-                    },
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
             });
         });
 
-        [
+        it.each([
             {
                 message: 'should apply ExpiredObjectDeleteMarker rule on ' +
                     'only a delete marker in a versioning enabled bucket ' +
@@ -1450,32 +1446,31 @@ describe('lifecycle task functional tests', () => {
                     objectCount: 1,
                 },
             },
-        ].forEach(item => {
-            it(item.message, done => {
-                const bucket = 'test-bucket';
-                const keyName = 'test-key';
-                const bucketEntry = {
-                    action: 'testing-eodm',
-                    target: {
-                        bucket,
-                        owner: item.owner,
-                    },
-                    details: {},
-                };
-                const params = {
-                    lcTask,
-                    lcp,
-                    counter: 0,
-                };
-                async.waterfall([
-                    next => s3Helper.setupEODM(bucket, keyName, next),
-                    (data, next) => s3Helper.setBucketLifecycleConfigurations(
-                        item.bucketLCRules, next),
-                    (data, next) => s3.getBucketLifecycleConfiguration({
-                        Bucket: bucket,
-                    }, next),
-                    (data, next) => {
-                        wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
+        ])('$message', (item, done) => {
+            const bucket = 'test-bucket';
+            const keyName = 'test-key';
+            const bucketEntry = {
+                action: 'testing-eodm',
+                target: {
+                    bucket,
+                    owner: item.owner,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setupEODM(bucket, keyName, next),
+                (data, next) => s3Helper.setBucketLifecycleConfigurations(
+                    item.bucketLCRules, next),
+                (data, next) => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, bucketEntry, s3,
                         params, (err, data) => {
                             assert.ifError(err);
 
@@ -1483,15 +1478,14 @@ describe('lifecycle task functional tests', () => {
                                 item.expected.objectCount);
                             next();
                         });
-                    },
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
             });
         });
 
-        [
+        it.each([
             // ncve: basic 1 day rule should expire, no pagination
             {
                 message: 'should verify that NoncurrentVersionExpiration rule' +
@@ -1715,26 +1709,25 @@ describe('lifecycle task functional tests', () => {
                     objectCount: 0,
                 },
             },
-        ].forEach(item => {
-            it(item.message, done => {
-                const params = {
-                    lcTask,
-                    lcp,
-                    counter: 0,
-                    queuedEntries: [],
-                };
-                const bucket = item.bucketEntry.target.bucket;
-                async.waterfall([
-                    next => s3Helper.setAndCreateBucket(bucket, next),
-                    next => s3Helper.setBucketLifecycleConfigurations(
-                        item.bucketLCRules, next),
-                    (data, next) => s3Helper[item.scenarioFxn](item.scenario,
-                        next),
-                    next => s3.getBucketLifecycleConfiguration({
-                        Bucket: bucket,
-                    }, next),
-                    (data, next) => {
-                        wrapProcessBucketEntry(data.Rules, item.bucketEntry, s3,
+        ])('$message', (item, done) => {
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+                queuedEntries: [],
+            };
+            const bucket = item.bucketEntry.target.bucket;
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketLifecycleConfigurations(
+                    item.bucketLCRules, next),
+                (data, next) => s3Helper[item.scenarioFxn](item.scenario,
+                    next),
+                next => s3.getBucketLifecycleConfiguration({
+                    Bucket: bucket,
+                }, next),
+                (data, next) => {
+                    wrapProcessBucketEntry(data.Rules, item.bucketEntry, s3,
                         params, (err, data) => {
                             assert.ifError(err);
 
@@ -1747,11 +1740,10 @@ describe('lifecycle task functional tests', () => {
 
                             next();
                         });
-                    },
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
             });
         });
     }); // end versioned describe block

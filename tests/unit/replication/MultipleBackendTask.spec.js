@@ -80,7 +80,7 @@ describe('MultipleBackendTask', () => {
     });
 
     describe('::initiateMultipartUpload', () => {
-        it('should use exponential backoff if retryable error ', done => {
+        it('should use exponential backoff if retryable error', done => {
             const doneOnce = jsutil.once(done);
             setTimeout(() => {
                 // inhibits further retries
@@ -90,7 +90,7 @@ describe('MultipleBackendTask', () => {
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
-        it('should not use exponential backoff if non-retryable error ', done =>
+        it('should not use exponential backoff if non-retryable error', done =>
            requestInitiateMPU({ retryable: false }, err => {
                assert(err);
                done();

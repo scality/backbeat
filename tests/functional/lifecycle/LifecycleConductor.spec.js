@@ -327,7 +327,8 @@ describe('lifecycle conductor', () => {
         } = opts;
 
         if (skip) {
-            it.skip('should populate queue : ' + `${skip}`, () => { });
+            it.skip('should populate queue : ' +
+                `${skip}`, () => { assert.fail(skip); });
             return;
         }
 
@@ -533,63 +534,56 @@ describe('lifecycle conductor', () => {
     describe.each([
         {
             description: 'with auth `account` and buckets from bucketd',
-            options: {
-                lifecycleConfig: {
-                    ...baseLCConfig,
-                    conductor: {
-                        ...baseLCConfig.conductor,
-                        bucketSource: 'bucketd',
-                        bucketd: {
-                            host: '127.0.0.1',
-                        },
+            lifecycleConfig: {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: '127.0.0.1',
                     },
                 },
-                mockBucketd: true,
-                transformExpectedMessages: identity,
-            }
+            },
+            mockBucketd: true,
+            transformExpectedMessages: identity,
         },
         {
             description: 'with auth `account` and buckets from zookeeper (compat mode)',
-            options: {
-                lifecycleConfig: baseLCConfig,
-                setupZookeeper: true,
-                transformExpectedMessages: identity,
-            }
+            lifecycleConfig: baseLCConfig,
+            setupZookeeper: true,
+            transformExpectedMessages: identity,
         },
         {
             description: 'with auth `assumeRole` and buckets from bucketd',
-            options: {
-                lifecycleConfig: {
-                    ...baseLCConfig,
-                    conductor: {
-                        ...baseLCConfig.conductor,
-                        bucketSource: 'bucketd',
-                        bucketd: {
-                            host: '127.0.0.1',
-                        },
-                    },
-                    auth: {
-                        type: 'assumeRole',
-                        roleName: 'lc',
-                        sts: {
-                            host: '127.0.0.1',
-                            port: 8650,
-                            accessKey: 'ak',
-                            secretKey: 'sk',
-                        },
-                        vault: {
-                            host: '127.0.0.1',
-                        },
+            lifecycleConfig: {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: '127.0.0.1',
                     },
                 },
-                mockBucketd: true,
-                mockVault: true,
-                transformExpectedMessages: withAccountIds,
-                skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
-            }
+                auth: {
+                    type: 'assumeRole',
+                    roleName: 'lc',
+                    sts: {
+                        host: '127.0.0.1',
+                        port: 8650,
+                        accessKey: 'ak',
+                        secretKey: 'sk',
+                    },
+                    vault: {
+                        host: '127.0.0.1',
+                    },
+                },
+            },
+            mockBucketd: true,
+            mockVault: true,
+            transformExpectedMessages: withAccountIds,
+            skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
         }
-    ]).each('$description', ({
-        description,
-        options,
-    }) => describeConductorSpec(options));
+    ])('$description', options => {
+        describeConductorSpec(options);
+    });
 });

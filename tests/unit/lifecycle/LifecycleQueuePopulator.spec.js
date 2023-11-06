@@ -180,7 +180,7 @@ describe('LifecycleQueuePopulator', () => {
             lcqp = new LifecycleQueuePopulator(params);
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
         });
-        it('it should call _handleDeleteOp on delete message', () => {
+        it('should call _handleDeleteOp on delete message', () => {
             const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
             lcqp.filter({
                 type: 'delete',
@@ -230,7 +230,7 @@ describe('LifecycleQueuePopulator', () => {
         afterEach(() => {
             kafkaSendStub.reset();
         });
-        [
+        it.each([
             {
                 it: 'should skip non dmf archived/restored objects',
                 type: 'delete',
@@ -316,31 +316,29 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 called: true,
             },
-        ].forEach(params => {
-            it(params.it, () => {
-                const entry = {
-                    type: params.type,
-                    bucket: 'lc-queue-populator-test-bucket',
-                    key: params.key,
-                    value: JSON.stringify(params.md),
-                };
-                lcqp._handleDeleteOp(entry);
-                assert.strictEqual(kafkaSendStub.calledOnce, params.called);
-                if (!params.called) {
-                    return;
-                }
-                const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
-                const expectedMessage = {
-                    bucketName: 'lc-queue-populator-test-bucket',
-                    objectKey: params.md.key,
-                    archiveInfo: params.md.archive.archiveInfo,
-                    requestId: message.requestId,
-                };
-                if (params.md.versionId) {
-                    expectedMessage.objectVersion = encode(params.md.versionId);
-                }
-                assert.deepStrictEqual(message, expectedMessage);
-            });
+        ])('$it', params => {
+            const entry = {
+                type: params.type,
+                bucket: 'lc-queue-populator-test-bucket',
+                key: params.key,
+                value: JSON.stringify(params.md),
+            };
+            lcqp._handleDeleteOp(entry);
+            assert.strictEqual(kafkaSendStub.calledOnce, params.called);
+            if (!params.called) {
+                return;
+            }
+            const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+            const expectedMessage = {
+                bucketName: 'lc-queue-populator-test-bucket',
+                objectKey: params.md.key,
+                archiveInfo: params.md.archive.archiveInfo,
+                requestId: message.requestId,
+            };
+            if (params.md.versionId) {
+                expectedMessage.objectVersion = encode(params.md.versionId);
+            }
+            assert.deepStrictEqual(message, expectedMessage);
         });
     });
 });

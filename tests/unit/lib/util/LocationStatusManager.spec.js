@@ -208,7 +208,7 @@ describe('LocationStatusManager', () => {
     });
 
     describe('_setupLocationStatusStore', () => {
-        [
+        it.each([
             {
                 case: 'should add missing locations',
                 mongoLocations: [
@@ -246,25 +246,23 @@ describe('LocationStatusManager', () => {
                     },
                 ],
             }
-        ].forEach(params => {
-            it(params.case, done => {
-                lsm._mongoClient = {
-                    createCollection: sinon.stub().yields(),
-                    collection: () => ({
-                        find: sinon.stub().yields(null, {
-                            toArray: sinon.stub().yields(null, params.mongoLocations),
-                        }),
-                        insert: sinon.stub().yields(),
-                        deleteMany: sinon.stub().yields(),
+        ])('$case', (params, done) => {
+            lsm._mongoClient = {
+                createCollection: sinon.stub().yields(),
+                collection: () => ({
+                    find: sinon.stub().yields(null, {
+                        toArray: sinon.stub().yields(null, params.mongoLocations),
                     }),
-                };
-                lsm._setupLocationStatusStore(err => {
-                    assert.ifError(err);
-                    const finalLocations = Object.keys(lsm._locationStatusStore);
-                    const validLocations = Object.keys(locationConfig);
-                    assert.deepStrictEqual(finalLocations, validLocations);
-                    return done();
-                });
+                    insert: sinon.stub().yields(),
+                    deleteMany: sinon.stub().yields(),
+                }),
+            };
+            lsm._setupLocationStatusStore(err => {
+                assert.ifError(err);
+                const finalLocations = Object.keys(lsm._locationStatusStore);
+                const validLocations = Object.keys(locationConfig);
+                assert.deepStrictEqual(finalLocations, validLocations);
+                return done();
             });
         });
     });
