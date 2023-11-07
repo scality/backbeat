@@ -50,8 +50,7 @@ describe('BackbeatClient unit tests with mock server', () => {
 
     afterAll(() => httpServer.close());
 
-    // skipping this test because ingestion does not need list bucket per raft
-    it.skip('should get list of buckets managed by raft session', done => {
+    it('should get list of buckets managed by raft session', done => {
         const destReq = backbeatClient.getRaftBuckets({
             LogId: '1',
         });

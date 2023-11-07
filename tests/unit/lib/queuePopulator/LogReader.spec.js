@@ -53,10 +53,10 @@ describe('LogReader', () => {
         });
     });
 
-    // TODO there is currently no initialization of log offset with
-    // mongodb backend, re-enable when implementing initial log offset
-    // fetching with mongodb backend.
-    it.skip('should start from offset 1 on log consumer readRecords error', done => {
+    // NOTE: there is currently no initialization of log offset with
+    // mongodb backend (i.e. it i hard-coded to 1): should be updated
+    // when implementing initial log offset fetching with mongodb backend.
+    it('should start from offset 1 on log consumer readRecords error', done => {
         const errorLogReader = new LogReader({
             logId: 'test-log-reader',
             zkClient: zkMock.createClient('localhost:2181'),
@@ -72,7 +72,7 @@ describe('LogReader', () => {
         });
     });
 
-    it('Should strip metadata v1 prefixes from object entries', done => {
+    it('should strip metadata v1 prefixes from object entries', done => {
         const mockExtension = {
             filter: sinon.spy(),
         };

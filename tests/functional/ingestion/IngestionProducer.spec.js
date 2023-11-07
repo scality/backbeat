@@ -48,8 +48,7 @@ describe('ingestion producer tests with mock', () => {
         emptyAndDeleteVersionedBucket(sourceConfig, done);
     });
 
-    // skipping because functionality currently not needed
-    it.skip('should be able to grab list of buckets for each raft session',
+    it('should be able to grab list of buckets for each raft session',
         done => {
         this.iProducer._getBuckets('1', (err, res) => {
             assert.ifError(err);
