@@ -10,7 +10,7 @@ const BucketClient = require('bucketclient').RESTClient;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const zookeeperHelper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
@@ -493,9 +493,7 @@ class LifecycleConductor {
             process.nextTick(cb);
             return;
         }
-        this._zkClient = zookeeperHelper.createClient(
-            this.zkConfig.connectionString);
-        this._zkClient.connect();
+        this._zkClient = new ZookeeperManager(this.zkConfig.connectionString, null, this.logger);
         this._zkClient.once('error', cb);
         this._zkClient.once('ready', () => {
             // just in case there would be more 'error' events
@@ -552,7 +550,7 @@ class LifecycleConductor {
             // just in case there would be more 'error' events emitted
             this._kafkaBacklogMetrics.removeAllListeners('error');
             this._kafkaBacklogMetrics.on('error', err => {
-                this._log.error('error from kafka topic metrics', {
+                this.logger.error('error from kafka topic metrics', {
                     error: err.message,
                     method: 'LifecycleConductor._initKafkaBacklogMetrics',
                 });

@@ -2,39 +2,34 @@
 
 const assert = require('assert');
 const async = require('async');
-const ZookeeperMock = require('zookeeper-mock');
 
 const jsutil = require('arsenal').jsutil;
 const ProvisionDispatcher =
           require('../../lib/provisioning/ProvisionDispatcher');
+const mockZookeeperClient = require('../functional/utils/mockZookeeperClient');
 
-const ZK_TEST_PATH = '/tests/prov-test';
+const sinon = require('sinon');
 
 describe('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
-    const zkConf = { connectionString: `localhost:2181${ZK_TEST_PATH}` };
+    const endpoint = 'fake.endpoint:2181';
+    const zkConf = { connectionString: endpoint };
     const provisionList = ['0', '1', '2', '3', '4', '5', '6', '7'];
     let clients = [];
 
     this.timeout(60000);
 
-    const zk = new ZookeeperMock({
-        doLog: false,
-        maxRandomDelay: 100,
+    before(done => {
+        mockZookeeperClient({ doLog: false, maxRandomDelay: 100 });
+        const prov = new ProvisionDispatcher(
+            zkConf);
+        prov.addProvisions(provisionList, done);
     });
 
-    before(done => {
-        const zkClient = zk.createClient('localhost:2181');
-        zkClient.connect();
-        zkClient.on('connected', () => {
-            zkClient.mkdirp(ZK_TEST_PATH, err => {
-                assert.ifError(err);
-                const prov = new ProvisionDispatcher(
-                    zkConf, zk);
-                prov.addProvisions(provisionList, done);
-            });
-        });
+    after(() => {
+        sinon.restore();
     });
+
     afterEach(done => {
         async.each(clients, (client, cb) => {
             if (client !== undefined) {
@@ -52,7 +47,7 @@ function testDispatch() {
     it('should be given all provisions when alone', done => {
         const cbOnce = jsutil.once(done);
         clients[0] = new ProvisionDispatcher(
-            zkConf, zk);
+            zkConf);
         clients[0].subscribe((err, items) => {
             assert.ifError(err);
             assert.deepStrictEqual(items, provisionList);
@@ -63,7 +58,7 @@ function testDispatch() {
     it('should recheck if missing a watcher event', done => {
         const cbOnce = jsutil.once(done);
         clients[0] = new ProvisionDispatcher(
-            zkConf, zk);
+            zkConf);
         let times = 0;
         clients[0].subscribe((err, items) => {
             assert.ifError(err);
@@ -72,14 +67,14 @@ function testDispatch() {
                 assert(items.length === 8);
                 // simulate a watcher event loss
                 const myPath =
-                      clients[0]._client._basePath +
+                      clients[0]._client.client._basePath +
                       clients[0]._getMyPath();
-                const result = clients[0]._client._getZNode(myPath);
+                const result = clients[0]._client.client._getZNode(myPath);
                 assert.ifError(result.err);
                 result.parent.children[result.baseName].emitter.removeAllListeners();
                 // introduce a new client
                 clients[1] = new ProvisionDispatcher(
-                    zkConf, zk);
+                    zkConf);
                 clients[1].subscribe(err => {
                     assert.ifError(err);
                 }, false);
@@ -100,7 +95,7 @@ function testDispatch() {
 
     it('should not notify if provisions have not changed', done => {
         clients[0] = new ProvisionDispatcher(
-            zkConf, zk);
+            zkConf);
         let times = 0;
         clients[0].subscribe((err, items) => {
             assert.ifError(err);
@@ -109,9 +104,9 @@ function testDispatch() {
                 assert(items.length === 8);
                 // simulate a watcher event loss
                 const myPath =
-                      clients[0]._client._basePath +
+                      clients[0]._client.client._basePath +
                       clients[0]._getMyPath();
-                const result = clients[0]._client._getZNode(myPath);
+                const result = clients[0]._client.client._getZNode(myPath);
                 assert.ifError(result.err);
                 result.parent.children[result.baseName].emitter.removeAllListeners();
                 // leave enough time for the checker to trigger and make sure it does not notify
@@ -160,7 +155,7 @@ function testDispatch() {
             }, false);
         }
         for (let i = 0; i < 10; ++i) {
-            clients[i] = new ProvisionDispatcher(zkConf, zk);
+            clients[i] = new ProvisionDispatcher(zkConf);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {
@@ -209,7 +204,7 @@ function testDispatch() {
             }, false);
         }
         for (let i = 0; i < 10; ++i) {
-            clients[i] = new ProvisionDispatcher(zkConf, zk);
+            clients[i] = new ProvisionDispatcher(zkConf);
         }
         // register clients with a random wait time for each
         for (let i = 0; i < 10; ++i) {
