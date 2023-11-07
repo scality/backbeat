@@ -323,14 +323,7 @@ describe('lifecycle conductor', () => {
             mockBucketd,
             mockVault,
             setupZookeeper,
-            skip,
         } = opts;
-
-        if (skip) {
-            it.skip('should populate queue : ' +
-                `${skip}`, () => { assert.fail(skip); });
-            return;
-        }
 
         const bucketdPort = 14345;
         const vaultPort = 14346;
@@ -581,7 +574,6 @@ describe('lifecycle conductor', () => {
             mockBucketd: true,
             mockVault: true,
             transformExpectedMessages: withAccountIds,
-            skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
         }
     ])('$description', options => {
         describeConductorSpec(options);
