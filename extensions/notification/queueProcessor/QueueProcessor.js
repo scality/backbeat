@@ -7,7 +7,7 @@ const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const NotificationDestination = require('../destination');
-const zookeeper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
@@ -72,10 +72,10 @@ class QueueProcessor extends EventEmitter {
             `${this.zkConfig.connectionString}${populatorZkPath}`;
         this.logger.info('opening zookeeper connection for reading ' +
             'bucket notification configuration', { zookeeperUrl });
-        this.zkClient = zookeeper.createClient(zookeeperUrl, {
+        this.zkClient = new ZookeeperManager(zookeeperUrl, {
             autoCreateNamespace: this.zkConfig.autoCreateNamespace,
-        });
-        this.zkClient.connect();
+        }, this.logger);
+
         this.zkClient.once('error', done);
         this.zkClient.once('ready', () => {
             // just in case there would be more 'error' events emitted
