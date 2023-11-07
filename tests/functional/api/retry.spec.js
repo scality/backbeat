@@ -574,7 +574,7 @@ describe('CRR Retry feature', () => {
             });
         }, 10000);
 
-    it.skip('should get correct data for POST route: /_/crr/failed ' +
+    it('should get correct data for POST route: /_/crr/failed ' +
         'when there are multiple matching keys', done => {
             const member = getMember(`test-bucket:test-key:${testVersionId}`);
             async.series([
