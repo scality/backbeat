@@ -41,8 +41,7 @@ class LifecycleObjectProcessor extends EventEmitter {
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
-     * consumer group id
-     *  of max allowed concurrent operations
+     * @param {String} lcConfig.transitionTasksTopic - lifecycle transition topic name
      * @param {Object} s3Config - S3 configuration
      * @param {Object} s3Config.host - s3 endpoint host
      * @param {Number} s3Config.port - s3 endpoint port
@@ -73,7 +72,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         return 'object-processor';
     }
 
-    _getObjecTaskConsumerParams() {
+    _getTopicConsumerParams(topic) {
         return {
             zookeeper: {
                 connectionString: this._zkConfig.connectionString,
@@ -83,7 +82,7 @@ class LifecycleObjectProcessor extends EventEmitter {
                 site: this._kafkaConfig.site,
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
             },
-            topic: this._lcConfig.objectTasksTopic,
+            topic,
             groupId: this._processConfig.groupId,
             concurrency: this._processConfig.concurrency,
             queueProcessor: this.processObjectTaskEntry.bind(this),
@@ -94,9 +93,9 @@ class LifecycleObjectProcessor extends EventEmitter {
         };
     }
 
-    getConsumerParams() {
+    getConsumerParams(topic = this._lcConfig.objectTasksTopic) {
         return {
-            [this._lcConfig.objectTasksTopic]: this._getObjecTaskConsumerParams(),
+            [topic]: this._getTopicConsumerParams(topic),
         };
     }
 

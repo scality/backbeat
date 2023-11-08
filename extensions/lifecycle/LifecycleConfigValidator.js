@@ -12,6 +12,7 @@ const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
     objectTasksTopic: joi.string().required(),
+    transitionTasksTopic: joi.string().default(parent => parent.objectTasksTopic),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
     forceLegacyListing: joi.boolean().default(true),
