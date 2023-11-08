@@ -1,5 +1,6 @@
 const bucketTasksTopic = 'bucket-tasks';
 const objectTasksTopic = 'object-tasks';
+const transitionTasksTopic = 'transition-tasks';
 
 const zkConfig = {
     connectionString: 'localhost:2181',
@@ -35,6 +36,7 @@ const lcConfig = {
     },
     bucketTasksTopic,
     objectTasksTopic,
+    transitionTasksTopic,
     rules: {
         expiration: {
             enabled: true,
@@ -69,6 +71,7 @@ const timeOptions = {
 module.exports = {
     bucketTasksTopic,
     objectTasksTopic,
+    transitionTasksTopic,
     zkConfig,
     kafkaConfig,
     lcConfig,

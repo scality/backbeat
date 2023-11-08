@@ -40,9 +40,11 @@ const destinationLocation = 'us-east-2';
 
 const bucketTopic = 'bucket-topic';
 const objectTopic = 'object-topic';
+const transitionTopic = 'transition-topic';
 const dataMoverTopic = 'backbeat-data-mover';
 const testKafkaEntry = new TestKafkaEntry({
     objectTopic,
+    transitionTopic,
     bucketTopic,
     dataMoverTopic,
     ownerId,
@@ -73,6 +75,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 producer,
                 bucketTasksTopic: bucketTopic,
                 objectTasksTopic: objectTopic,
+                transitionTasksTopic: transitionTopic,
                 kafkaBacklogMetrics: { snapshotTopicOffsets: () => {} },
                 pausedLocations: new Set(),
                 log,

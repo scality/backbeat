@@ -6,6 +6,7 @@ class TestKafkaEntry {
     constructor(state) {
         const {
             objectTopic,
+            transitionTopic,
             bucketTopic,
             dataMoverTopic,
             ownerId,
@@ -14,6 +15,7 @@ class TestKafkaEntry {
         } = state;
 
         this.objectTopic = objectTopic;
+        this.transitionTopic = transitionTopic;
         this.bucketTopic = bucketTopic;
         this.dataMoverTopic = dataMoverTopic;
         this.ownerId = ownerId;
@@ -96,7 +98,7 @@ class TestKafkaEntry {
         assert.strictEqual(metrics.contentLength, contentLength);
 
         assert.strictEqual(message.toLocation, destinationLocation);
-        assert.strictEqual(message.resultsTopic, this.objectTopic);
+        assert.strictEqual(message.resultsTopic, this.transitionTopic);
     }
 
     expectBucketEntry(e, {

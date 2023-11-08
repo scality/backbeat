@@ -8,6 +8,12 @@ const LifecycleRule = require('arsenal').models.LifecycleRule;
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');
 const { objectMD } = require('../utils/MetadataMock');
+const {
+    bucketTasksTopic,
+    objectTasksTopic,
+    transitionTasksTopic,
+} = require('./configObjects');
+
 const timeOptions = {
     expireOneDayEarlier: true,
     transitionOneDayEarlier: true,
@@ -328,10 +334,10 @@ class ProducerMock {
 
     sendToTopic(topicName, entries, cb) {
         const entry = JSON.parse(entries[0].message);
-        if (topicName === 'bucket-tasks') {
+        if (topicName === bucketTasksTopic) {
             this.sendCount.bucket++;
             this.entries.bucket.push(entry);
-        } else if (topicName === 'object-tasks') {
+        } else if (topicName === objectTasksTopic) {
             this.sendCount.object++;
             this.entries.object.push(entry.target.key);
         } else if (topicName === 'backbeat-data-mover') {
@@ -421,8 +427,9 @@ class LifecycleBucketProcessorMock {
             bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
             s3Endpoint: s3config.endpoint,
             s3Auth: lifecycle.auth,
-            bucketTasksTopic: 'bucket-tasks',
-            objectTasksTopic: 'object-tasks',
+            bucketTasksTopic,
+            objectTasksTopic,
+            transitionTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             pausedLocations: new Set(),
             log: this._log,
@@ -510,6 +517,7 @@ describe('lifecycle task functional tests', function dF() {
         entries.transitions.forEach(transition => {
             assert.strictEqual(transition.target.bucket, 'test-bucket');
             assert.strictEqual(transition.toLocation, 'us-east-2');
+            assert.strictEqual(transition.resultsTopic, transitionTasksTopic);
         });
     }
 

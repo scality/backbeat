@@ -156,6 +156,7 @@
             "zookeeperPath": "/lifecycletest",
             "bucketTasksTopic": "backbeat-test-dummy-bucket-task",
             "objectTasksTopic": "backbeat-test-dummy-object-task",
+            "transitionTasksTopic": "backbeat-test-dummy-transition-task",
             "conductor": {
                 "cronRule": "0 */5 * * * *",
                 "probeServer": {
@@ -196,11 +197,29 @@
                     "port": 8554
                 }
             },
+            "transitionProcessor": {
+                "groupId": "backbeat-lifecycle-transition-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "port": 8554
+                }
+            },
             "auth": {
                 "type": "account",
                 "account": "bart"
             },
-            "coldStorageArchiveTopicPrefix": "cold-archive-req-"
+            "coldStorageArchiveTopicPrefix": "cold-archive-req-",
+            "coldStorageTopics": []
         },
         "gc": {
             "topic": "backbeat-test-gc",
