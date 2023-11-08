@@ -16,7 +16,7 @@ describe('BackbeatAPI', () => {
     const coldSite = Object.keys(locationConfig)
         .filter(site => locationConfig[site].isCold)[0];
 
-    before(() => {
+    beforeAll(() => {
         setupIngestionSiteMock();
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
     });
@@ -209,5 +209,11 @@ describe('BackbeatAPI', () => {
             const sites = bbapi.getRequestedSites(params.details);
             assert.deepStrictEqual(sites, params.expected);
         });
+    });
+
+    afterAll(() => {
+        bbapi._redisPublisher.quit();
+        bbapi._redisClient.disconnect();
+        bbapi._metrics.disconnect();
     });
 });

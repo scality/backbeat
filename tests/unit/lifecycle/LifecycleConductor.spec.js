@@ -45,9 +45,7 @@ describe('Lifecycle Conductor', () => {
         sinon.restore();
     });
 
-    describe('processBuckets', function test() {
-        // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
-        this.timeout(4000);
+    describe('processBuckets', () => {
         // tests that `activeIndexingJobRetrieved` is not reset until the e
         it('should not reset `activeIndexingJobsRetrieved` while async operations are in progress', done => {
             const order = [];
@@ -98,7 +96,7 @@ describe('Lifecycle Conductor', () => {
 
                 done();
             });
-        });
+        }, 4000); // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
     });
 
     describe('_indexesGetOrCreate', () => {
@@ -135,40 +133,40 @@ describe('Lifecycle Conductor', () => {
             });
         });
 
-        const tests = [
-            [
-                'should return v2',
-                [
+        it.each([
+            {
+                msg: 'should return v2',
+                input: [
                     [], // job state
                     indexesForFeature.lifecycle.v2, // getIndex response
                     null, // metadata proxy error
                     true, // flag for status ofin progress job retrieval
                 ],
-                [
+                expected: [
                     [], // updated job state
                     null, // expected putIndex object
                     lifecycleTaskVersions.v2, // expected version
                 ],
-            ],
-            [
-                'should return v1: missing indexes + put indexes',
-                [
+            },
+            {
+                msg: 'should return v1: missing indexes + put indexes',
+                input: [
                     [],
                     [],
                     null,
                     true,
                 ],
-                [
+                expected: [
                     [
                         { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
                     ],
                     indexesForFeature.lifecycle.v2,
                     lifecycleTaskVersions.v1,
                 ],
-            ],
-            [
-                'should return v1: missing indexes + skip put indexes when bucket is in job list',
-                [
+            },
+            {
+                msg: 'should return v1: missing indexes + skip put indexes when bucket is in job list',
+                input: [
                     [
                         { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
                     ],
@@ -176,17 +174,17 @@ describe('Lifecycle Conductor', () => {
                     null,
                     true,
                 ],
-                [
+                expected: [
                     [
                         { bucket: 'testbucket', indexes: indexesForFeature.lifecycle.v2 },
                     ],
                     null,
                     lifecycleTaskVersions.v1,
                 ],
-            ],
-            [
-                'should return v1: missing indexes + skip put indexes when job list is at limit',
-                [
+            },
+            {
+                msg: 'should return v1: missing indexes + skip put indexes when job list is at limit',
+                input: [
                     [
                         { bucket: 'testbucket2', indexes: indexesForFeature.lifecycle.v2 },
                         { bucket: 'testbucket3', indexes: indexesForFeature.lifecycle.v2 },
@@ -195,7 +193,7 @@ describe('Lifecycle Conductor', () => {
                     null,
                     true,
                 ],
-                [
+                expected: [
                     [
                         { bucket: 'testbucket2', indexes: indexesForFeature.lifecycle.v2 },
                         { bucket: 'testbucket3', indexes: indexesForFeature.lifecycle.v2 },
@@ -203,56 +201,53 @@ describe('Lifecycle Conductor', () => {
                     null,
                     lifecycleTaskVersions.v1,
                 ],
-            ],
-            [
-                'should return v1: missing indexes + skip put indexes when in progress index request fails',
-                [
+            },
+            {
+                msg: 'should return v1: missing indexes + skip put indexes when in progress index request fails',
+                input: [
                     [],
                     [],
                     null,
                     false,
                 ],
-                [
+                expected: [
                     [],
                     null,
                     lifecycleTaskVersions.v1,
                 ],
-            ],
-            [
-                'should return v1: index request fails',
-                [
+            },
+            {
+                msg: 'should return v1: index request fails',
+                input: [
                     [],
                     [],
                     new Error('test error'),
                     true,
                 ],
-                [
+                expected: [
                     [],
                     null,
                     lifecycleTaskVersions.v1,
                 ],
-            ],
-        ];
+            },
+        ])('$msg', ({ input, expected }, done) => {
+            const [inJobs, getIndexes, mockError, getInProgressSucceeded] = input;
+            const [expectedJobs, putIndexes, expectedVersion] = expected;
 
-        tests.forEach(([msg, input, expected]) =>
-            it(msg, done => {
-                const [inJobs, getIndexes, mockError, getInProgressSucceeded] = input;
-                const [expectedJobs, putIndexes, expectedVersion] = expected;
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = getInProgressSucceeded;
+            conductor.activeIndexingJobs = inJobs;
+            client.indexesObj = getIndexes;
+            client.error = mockError;
 
-                const client = new BackbeatMetadataProxyMock();
-                conductor.clientManager.getBackbeatMetadataProxy = () => client;
-                conductor.activeIndexingJobsRetrieved = getInProgressSucceeded;
-                conductor.activeIndexingJobs = inJobs;
-                client.indexesObj = getIndexes;
-                client.error = mockError;
-
-                conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
-                    assert.ifError(err);
-                    assert.deepStrictEqual(client.receivedIdxObj, putIndexes);
-                    assert.deepStrictEqual(conductor.activeIndexingJobs, expectedJobs);
-                    assert.deepStrictEqual(taskVersion, expectedVersion);
-                    done();
-                });
-            }));
+            conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, putIndexes);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, expectedJobs);
+                assert.deepStrictEqual(taskVersion, expectedVersion);
+                done();
+            });
+        });
     });
 });

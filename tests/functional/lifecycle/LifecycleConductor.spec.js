@@ -137,8 +137,8 @@ const CONSUMER_TIMEOUT = 60000;
 
 werelogs.configure({ level: 'info', dump: 'error' });
 
-describe('lifecycle conductor', function lifecycleConductor() {
-    this.timeout(TIMEOUT);
+describe('lifecycle conductor', () => {
+    jest.setTimeout(TIMEOUT);
 
     describe('backlog control', () => {
         const bucketdPort = 14344;
@@ -318,19 +318,12 @@ describe('lifecycle conductor', function lifecycleConductor() {
 
     function describeConductorSpec(opts) {
         const {
-            description,
             lifecycleConfig,
             transformExpectedMessages,
             mockBucketd,
             mockVault,
             setupZookeeper,
-            skip,
         } = opts;
-
-        if (skip) {
-            return describe.skip(`skipped: ${description} ${skip}`, () => {
-            });
-        }
 
         const bucketdPort = 14345;
         const vaultPort = 14346;
@@ -400,6 +393,7 @@ describe('lifecycle conductor', function lifecycleConductor() {
 
         if (mockVault) {
             lifecycleConfig.auth.vault.port = vaultPort;
+            lifecycleConfig.conductor.vaultAdmin = lifecycleConfig.auth.vault;
         }
 
         lifecycleConfig.conductor.concurrency = maxKeys;
@@ -428,162 +422,161 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
         }
 
-        return describe(description, () => {
-            beforeEach(done => {
-                bucketdListing = [];
+        beforeEach(done => {
+            bucketdListing = [];
 
-                lcConductor = new LifecycleConductor(zkConfig.zookeeper,
-                    kafkaConfig, validatedLifecycleConfig, repConfig, s3Config);
+            lcConductor = new LifecycleConductor(zkConfig.zookeeper,
+                kafkaConfig, validatedLifecycleConfig, repConfig, s3Config);
 
-                async.series([
-                    next => lcConductor.init(next),
-                    next => {
-                        consumer = new BackbeatTestConsumer({
-                            kafka: { hosts: kafkaConfig.hosts },
-                            topic: validatedLifecycleConfig.bucketTasksTopic,
-                            groupId: 'test-consumer-group',
+            async.series([
+                next => lcConductor.init(next),
+                next => {
+                    consumer = new BackbeatTestConsumer({
+                        kafka: { hosts: kafkaConfig.hosts },
+                        topic: validatedLifecycleConfig.bucketTasksTopic,
+                        groupId: 'test-consumer-group',
+                    });
+                    consumer.on('ready', next);
+                },
+                next => {
+                    consumer.subscribe();
+                    // it seems the consumer needs some extra time to
+                    // start consuming the first messages
+                    setTimeout(next, 2000);
+                },
+                next => {
+                    if (mockBucketd) {
+                        bucketd = http.createServer(bucketdHandler);
+                        bucketd.listen(bucketdPort, next);
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+                next => {
+                    if (mockVault) {
+                        vault = http.createServer(vaultHandler);
+                        vault.listen(vaultPort, next);
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+                next => {
+                    if (setupZookeeper) {
+                        zkClient = zookeeper.createClient(
+                            zkConfig.zookeeper.connectionString,
+                            zkConfig.zookeeper);
+                        zkClient.connect();
+                        zkClient.once('ready', () => {
+                            lcConductor.initZkPaths(next);
                         });
-                        consumer.on('ready', next);
-                    },
-                    next => {
-                        consumer.subscribe();
-                        // it seems the consumer needs some extra time to
-                        // start consuming the first messages
-                        setTimeout(next, 2000);
-                    },
-                    next => {
-                        if (mockBucketd) {
-                            bucketd = http.createServer(bucketdHandler);
-                            bucketd.listen(bucketdPort, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (mockVault) {
-                            vault = http.createServer(vaultHandler);
-                            vault.listen(vaultPort, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (setupZookeeper) {
-                            zkClient = zookeeper.createClient(
-                                zkConfig.zookeeper.connectionString,
-                                zkConfig.zookeeper);
-                            zkClient.connect();
-                            zkClient.once('ready', () => {
-                                lcConductor.initZkPaths(next);
-                            });
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                ], done);
-            });
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+            ], done);
+        });
 
-            afterEach(done => {
-                async.series([
-                    next => {
-                        if (mockBucketd) {
-                            bucketd.close(next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (mockVault) {
-                            vault.close(next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => {
-                        if (setupZookeeper) {
-                            zkClient.removeRecur(validatedLifecycleConfig.zookeeperPath, next);
-                        } else {
-                            process.nextTick(next);
-                        }
-                    },
-                    next => consumer.close(next),
-                    next => lcConductor.stop(next),
-                ], done);
-            });
+        afterEach(done => {
+            async.series([
+                next => {
+                    if (mockBucketd && bucketd) {
+                        bucketd.close(next);
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+                next => {
+                    if (mockVault) {
+                        vault.close(next);
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+                next => {
+                    if (setupZookeeper) {
+                        zkClient.removeRecur(validatedLifecycleConfig.zookeeperPath, next);
+                    } else {
+                        process.nextTick(next);
+                    }
+                },
+                next => consumer.close(next),
+                next => lcConductor.stop(next),
+            ], done);
+        });
 
-            it('should populate queue', done => {
-                async.waterfall([
-                    bucketPopulatorStep1,
-                    next => {
-                        lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(transformExpectedMessages(expected2Messages),
-                            CONSUMER_TIMEOUT, next);
-                    },
-                    bucketPopulatorStep2,
-                    next => {
-                        lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(transformExpectedMessages(expected4Messages),
-                            CONSUMER_TIMEOUT, next);
-                    },
-                ], err => {
-                    assert.ifError(err);
-                    done();
-                });
+        it('should populate queue', done => {
+            async.waterfall([
+                bucketPopulatorStep1,
+                next => {
+                    lcConductor.processBuckets();
+                    consumer.expectUnorderedMessages(transformExpectedMessages(expected2Messages),
+                        CONSUMER_TIMEOUT, next);
+                },
+                bucketPopulatorStep2,
+                next => {
+                    lcConductor.processBuckets();
+                    consumer.expectUnorderedMessages(transformExpectedMessages(expected4Messages),
+                        CONSUMER_TIMEOUT, next);
+                },
+            ], err => {
+                assert.ifError(err);
+                done();
             });
         });
     }
 
-    describeConductorSpec({
-        description: 'with auth `account` and buckets from bucketd',
-        lifecycleConfig: {
-            ...baseLCConfig,
-            conductor: {
-                ...baseLCConfig.conductor,
-                bucketSource: 'bucketd',
-                bucketd: {
-                    host: '127.0.0.1',
+    describe.each([
+        {
+            description: 'with auth `account` and buckets from bucketd',
+            lifecycleConfig: {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: '127.0.0.1',
+                    },
                 },
             },
+            mockBucketd: true,
+            transformExpectedMessages: identity,
         },
-        mockBucketd: true,
-        transformExpectedMessages: identity,
-    });
-
-    describeConductorSpec({
-        description: 'with auth `account` and buckets from zookeeper (compat mode)',
-        lifecycleConfig: baseLCConfig,
-        setupZookeeper: true,
-        transformExpectedMessages: identity,
-    });
-
-    describeConductorSpec({
-        description: 'with auth `assumeRole` and buckets from bucketd',
-        lifecycleConfig: {
-            ...baseLCConfig,
-            conductor: {
-                ...baseLCConfig.conductor,
-                bucketSource: 'bucketd',
-                bucketd: {
-                    host: '127.0.0.1',
-                },
-            },
-            auth: {
-                type: 'assumeRole',
-                roleName: 'lc',
-                sts: {
-                    host: '127.0.0.1',
-                    port: 8650,
-                    accessKey: 'ak',
-                    secretKey: 'sk',
-                },
-                vault: {
-                    host: '127.0.0.1',
-                },
-            },
+        {
+            description: 'with auth `account` and buckets from zookeeper (compat mode)',
+            lifecycleConfig: baseLCConfig,
+            setupZookeeper: true,
+            transformExpectedMessages: identity,
         },
-        mockBucketd: true,
-        mockVault: true,
-        transformExpectedMessages: withAccountIds,
-        skip: 'to be reintroduced with https://scality.atlassian.net/browse/BB-126',
+        {
+            description: 'with auth `assumeRole` and buckets from bucketd',
+            lifecycleConfig: {
+                ...baseLCConfig,
+                conductor: {
+                    ...baseLCConfig.conductor,
+                    bucketSource: 'bucketd',
+                    bucketd: {
+                        host: '127.0.0.1',
+                    },
+                },
+                auth: {
+                    type: 'assumeRole',
+                    roleName: 'lc',
+                    sts: {
+                        host: '127.0.0.1',
+                        port: 8650,
+                        accessKey: 'ak',
+                        secretKey: 'sk',
+                    },
+                    vault: {
+                        host: '127.0.0.1',
+                    },
+                },
+            },
+            mockBucketd: true,
+            mockVault: true,
+            transformExpectedMessages: withAccountIds,
+        }
+    ])('$description', options => {
+        describeConductorSpec(options);
     });
 });

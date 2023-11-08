@@ -42,8 +42,8 @@ const bucketEntryMessage = {
 
 werelogs.configure({ level: 'warn', dump: 'error' });
 
-describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
-    this.timeout(testTimeout);
+describe('Lifecycle Bucket Processor', () => {
+    jest.setTimeout(testTimeout);
 
     function generateRetryTest(s3Client, shouldRetry = true) {
         const lbp = new LifecycleBucketProcessor(

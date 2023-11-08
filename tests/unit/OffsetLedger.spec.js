@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const OffsetLedger = require('../../lib/OffsetLedger');
+const OffsetLedger = require('../../lib/OffsetLedger').default;
 
 describe('OffsetLedger', () => {
     it('should get no committable offset if no offset registered yet', () => {

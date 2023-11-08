@@ -33,7 +33,7 @@ describe('ReplicationAPI', () => {
         messages = [];
     });
 
-    describe('::sendDataMoverAction ', () => {
+    describe('::sendDataMoverAction', () => {
         it('should publish to archive topic', done => {
             const action = ActionQueueEntry.create('copyLocation');
             action

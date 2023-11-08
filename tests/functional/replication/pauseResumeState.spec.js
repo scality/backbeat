@@ -44,8 +44,8 @@ function isConsumerActive(consumer) {
     return consumer.getServiceStatus();
 }
 
-describe('CRR Pause/Resume status updates', function d() {
-    this.timeout(10000);
+describe('CRR Pause/Resume status updates', () => {
+    jest.setTimeout(10000);
     let zkHelper;
     let mockAPI;
     const firstSite = destConfig.bootstrapList[0].site;
@@ -61,7 +61,7 @@ describe('CRR Pause/Resume status updates', function d() {
     let replayProcessor2;
     let zkReplayHelper;
 
-    before(done => {
+    beforeAll(done => {
         mockAPI = new MockAPI(repConfig);
         zkHelper = new ZKStateHelper(config.zookeeper, ZK_TEST_CRR_STATE_PATH,
             firstSite, secondSite, futureDate);
@@ -97,7 +97,7 @@ describe('CRR Pause/Resume status updates', function d() {
         });
     });
 
-    before(done => {
+    beforeAll(done => {
         zkReplayHelper = new ZKStateHelper(config.zookeeper, ZK_TEST_CRR_REPLAY_STATE_PATH,
             firstSite, secondSite, futureDate);
         zkReplayHelper.init(err => {
@@ -165,7 +165,7 @@ describe('CRR Pause/Resume status updates', function d() {
         });
     });
 
-    after(() => {
+    afterAll(() => {
         zkHelper.close();
         zkReplayHelper.close();
     });

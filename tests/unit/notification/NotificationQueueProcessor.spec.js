@@ -76,7 +76,7 @@ const sentEntry = JSON.stringify({
     ],
 });
 
-describe('NotificationQueueProcessor:: ', () => {
+describe('NotificationQueueProcessor::', () => {
     let notificationQueueProcessor;
 
     beforeEach(() => {

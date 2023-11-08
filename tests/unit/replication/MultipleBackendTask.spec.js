@@ -16,8 +16,7 @@ const MAX_AWS_PART_SIZE = (1024 * 1024 * 1024) * 5; // 5GB
 const MAX_AWS_OBJECT_SIZE = (1024 * 1024 * 1024 * 1024) * 5; // 5TB
 const retryConfig = { scality: { timeoutS: 300 } };
 
-describe('MultipleBackendTask', function test() {
-    this.timeout(5000);
+describe('MultipleBackendTask', () => {
     let task;
 
     function checkPartLength(contentLength, expectedPartSize) {
@@ -81,7 +80,7 @@ describe('MultipleBackendTask', function test() {
     });
 
     describe('::initiateMultipartUpload', () => {
-        it('should use exponential backoff if retryable error ', done => {
+        it('should use exponential backoff if retryable error', done => {
             const doneOnce = jsutil.once(done);
             setTimeout(() => {
                 // inhibits further retries
@@ -91,7 +90,7 @@ describe('MultipleBackendTask', function test() {
             requestInitiateMPU({ retryable: true }, doneOnce);
         });
 
-        it('should not use exponential backoff if non-retryable error ', done =>
+        it('should not use exponential backoff if non-retryable error', done =>
            requestInitiateMPU({ retryable: false }, err => {
                assert(err);
                done();
@@ -225,8 +224,7 @@ describe('MultipleBackendTask', function test() {
         });
 
         it('should ensure all parts of the original object are intact',
-        function test() {
-            this.timeout(10000);
+        () => {
             const minMPUObjectSize = MIN_AWS_PART_SIZE + 1;
             const contentLengths = [MAX_AWS_OBJECT_SIZE];
             Array.from(Array(1024).keys()).forEach(n => {
@@ -253,7 +251,7 @@ describe('MultipleBackendTask', function test() {
                 }
                 assert(sum === contentLength);
             });
-        });
+        }, 10000);
 
         it('should get single part count for GCP', () => {
             const contentLength = (1024 * 1024) * 5;
@@ -438,4 +436,4 @@ describe('MultipleBackendTask', function test() {
             });
         });
     });
-});
+}, 5000);

@@ -4,7 +4,6 @@ const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const locations = require('../../../conf/locationConfig.json') || {};
 
 class LifecycleUpdateExpirationTask extends BackbeatTask {
     /**
@@ -144,13 +143,20 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
         });
 
         async.waterfall([
-            next => this._getMetadata(entry, log, next),
-            (objMD, next) => {
-                const coldLocation = entry.getAttribute('target.location') ||
-                    // If location not specified, use the first (and only) location
-                    // This is a temporary fix, until Sorbet is fixed to provide the information
-                    Object.keys(locations).find(name => locations[name].isCold);
-
+            next => {
+                const coldLocation = entry.getAttribute('target.location');
+                if (!coldLocation) {
+                    // this should never happen as sorbet always sets the location attribute
+                    log.error('missing target location', {
+                        entry: entry.getLogInfo(),
+                        method: 'LifecycleUpdateExpirationTask.processActionEntry',
+                    });
+                    return next(errors.MissingParameter.customizeDescription('missing target location'));
+                }
+                return next(null, coldLocation);
+            },
+            (coldLocation, next) => this._getMetadata(entry, log, (err, objMD) => next(err, coldLocation, objMD)),
+            (coldLocation, objMD, next) => {
                 const archive = objMD.getArchive();
 
                 // Confirm the object has indeed expired: it can happen that the

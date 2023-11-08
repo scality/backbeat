@@ -71,7 +71,7 @@ function buildLifecycleRule(actions, enabled = true) {
 
 describe('LifecycleOplogPopulatorUtils', () => {
     describe('isBucketExtensionEnabled', () => {
-        [
+        it.each([
             {
                 it: 'should return false when there are only expiration rules',
                 bucketMd: {
@@ -206,11 +206,9 @@ describe('LifecycleOplogPopulatorUtils', () => {
                 },
                 expectedReturn: true,
             },
-        ].forEach(params => {
-            it(params.it, () => {
-                const enabled = LifecycleOplogPopulatorUtils.isBucketExtensionEnabled(params.bucketMd);
-                assert.strictEqual(enabled, params.expectedReturn);
-            });
+        ])('$it', ({ bucketMd, expectedReturn }) => {
+            const enabled = LifecycleOplogPopulatorUtils.isBucketExtensionEnabled(bucketMd);
+            assert.strictEqual(enabled, expectedReturn);
         });
     });
 });

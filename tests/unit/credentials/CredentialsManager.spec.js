@@ -48,80 +48,79 @@ describe('CredentialsManager', () => {
     const log = new Logger('test:CredentialsManager');
 
     describe('::getCredentials', () => {
-        [
-            // [msg, extensionConfig, expected]
-            [
-                'should return client for assumeRole type',
-                {
-                    id: id1, accountId: accountId2,
-                    authConfig: assumeRoleAuth,
-                    stsConfig,
-                }, AWS.ChainableTemporaryCredentials,
-            ],
-        ].forEach(([msg, params, expected]) => it(msg, () => {
+        it('should return client for assumeRole type', () => {
             const mgr = new CredentialsManager(extension, log);
             const creds2 = mgr.getCredentials({
                 id: id2, accountId: accountId2,
                 authConfig: assumeRoleAuth,
                 stsConfig,
             });
-            const creds = mgr.getCredentials(params);
-            assert(creds instanceof expected);
-            assert(mgr._accountCredsCache[id1] instanceof expected);
+            const creds = mgr.getCredentials({
+                id: id1, accountId: accountId2,
+                authConfig: assumeRoleAuth,
+                stsConfig,
+            });
+            assert(creds instanceof AWS.ChainableTemporaryCredentials);
+            assert(mgr._accountCredsCache[id1] instanceof AWS.ChainableTemporaryCredentials);
             assert.notEqual(creds, creds2);
             assert.notEqual(mgr._accountCredsCache[id1], mgr._accountCredsCache[id2]);
-        }));
+        });
 
-        [
-            [
-                'should return null when id is missing',
-                {
+        it.each([
+            {
+                msg: 'should return null when id is missing',
+                params: {
                     id: id1, accountId: accountId1,
                     authConfig: assumeRoleAuth,
-                }, null,
-            ],
-            [
-                'should return null when authConfig is missing',
-                {
+                },
+                expected: null,
+            },
+            {
+                msg: 'should return null when authConfig is missing',
+                params: {
                     id: id1, accountId: accountId1,
                     authConfig: null,
-                }, null,
-            ],
-            [
-                'should return null when stsConfig is missing for assumeRole type',
-                {
+                },
+                expected: null,
+            },
+            {
+                msg: 'should return null when stsConfig is missing for assumeRole type',
+                params: {
                     id: id1, accountId: accountId1,
                     authConfig: assumeRoleAuth,
                     stsConfig: null,
-                }, null,
-            ],
-            [
-                'should return null when accountId is missing for assumeRole type',
-                {
+                },
+                expected: null,
+            },
+            {
+                msg: 'should return null when accountId is missing for assumeRole type',
+                params: {
                     id: id1,
                     authConfig: assumeRoleAuth,
                     stsConfig,
-                }, null,
-            ],
-            [
-                'should return null for unsupported auth types',
-                {
+                },
+                expected: null,
+            },
+            {
+                msg: 'should return null for unsupported auth types',
+                params: {
                     id: id1, accountId: accountId1,
                     authConfig: invalidAuth,
-                }, null,
-            ],
-        ].forEach(([msg, params, expected]) => it(msg, () => {
+                },
+                expected: null,
+            },
+        ])('$msg', ({ params, expected }) => {
             const mgr = new CredentialsManager(extension, log);
             const creds = mgr.getCredentials(params);
             assert.strictEqual(creds, expected);
-        }));
+        });
     });
 
     describe('::removeInactiveCredentials', () => {
         const stsResponses = sinon.stub();
         let stsServer = null;
 
-        before(done => {
+        beforeAll(done => {
             const server = http.createServer();
             server.on('request', (req, res) => {
                 const payload = stsResponseToXML(stsResponses());
@@ -146,7 +145,7 @@ describe('CredentialsManager', () => {
             stsResponses.reset();
         });
 
-        after(() => {
+        afterAll(() => {
             stsServer.close();
         });
 

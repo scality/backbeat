@@ -9,8 +9,8 @@ const { BackbeatMetadataProxyMock } = require('../../functional/lifecycle/utils'
 
 const nBuckets = 200000;
 
-describe('Lifecycle Conductor', function testBackpressure() {
-    this.timeout(10 * 60 * 1000);
+describe('Lifecycle Conductor', () => {
+    jest.setTimeout(10 * 60 * 1000);
 
     describe('with bucketd', () => {
         const lcConfig = {

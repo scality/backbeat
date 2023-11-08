@@ -21,7 +21,7 @@ describe('ingestion producer tests with mock', () => {
     let metadataMock;
     const bucket = sourceConfig.bucket;
 
-    before(done => {
+    beforeAll(done => {
         metadataMock = new MetadataMock();
         httpServer = http.createServer(
             (req, res) => metadataMock.onRequest(req, res)).listen(7998);
@@ -42,14 +42,13 @@ describe('ingestion producer tests with mock', () => {
         setupS3Mock(sourceConfig, done);
     });
 
-    after(done => {
+    afterAll(done => {
         httpServer.close();
 
         emptyAndDeleteVersionedBucket(sourceConfig, done);
     });
 
-    // skipping because functionality currently not needed
-    it.skip('should be able to grab list of buckets for each raft session',
+    it('should be able to grab list of buckets for each raft session',
         done => {
         this.iProducer._getBuckets('1', (err, res) => {
             assert.ifError(err);

@@ -151,7 +151,7 @@ describe('CRR Retry routes', () => {
 });
 
 describe('CRR Retry feature', () => {
-    before(done => {
+    beforeAll(done => {
         const S3Mock = require('../utils/S3Mock');
         const VaultMock = require('../utils/VaultMock');
         const s3Mock = new S3Mock();
@@ -372,8 +372,7 @@ describe('CRR Retry feature', () => {
 
     it('should get correct data at scale for GET route: ' +
         '/_/crr/failed when failures occur across hours',
-        function f(done) {
-            this.timeout(300000);
+        done => {
             const hours = Array.from(Array(24).keys());
             async.eachLimit(hours, 10, (hour, callback) => {
                 const delta = (60 * 60 * 1000) * hour;
@@ -418,12 +417,11 @@ describe('CRR Retry feature', () => {
                             return next();
                         }), done);
             });
-        });
+        }, 300000);
 
     it('should get correct data at scale for GET route: ' +
         '/_/crr/failed when failures occur in the same hour',
-        function f(done) {
-            this.timeout(30000);
+        done => {
             const statsClient = new StatsModel(redisClient);
             const epoch = Date.now();
             let twelveHoursAgo = epoch - (60 * 60 * 1000) * 12;
@@ -465,7 +463,7 @@ describe('CRR Retry feature', () => {
                             return next();
                         }), done);
             });
-        });
+        }, 30000);
 
     it('should get correct data for GET route: ' +
         '/_/crr/failed/<bucket>/<key>/<versionId> when there is no key',
@@ -574,9 +572,9 @@ describe('CRR Retry feature', () => {
                     done();
                 });
             });
-        }).timeout(10000);
+        }, 10000);
 
-    it.skip('should get correct data for POST route: /_/crr/failed ' +
+    it('should get correct data for POST route: /_/crr/failed ' +
         'when there are multiple matching keys', done => {
             const member = getMember(`test-bucket:test-key:${testVersionId}`);
             async.series([
@@ -646,8 +644,7 @@ describe('CRR Retry feature', () => {
         });
 
     it('should get correct data at scale for POST route: /_/crr/failed',
-        function f(done) {
-            this.timeout(30000);
+        done => {
             const reqBody = [];
             async.timesLimit(10, 10, (i, next) => {
                 const Versions = addRoleProp([{
@@ -699,5 +696,5 @@ describe('CRR Retry feature', () => {
                     });
                 });
             });
-        });
+        }, 30000);
 });

@@ -11,14 +11,14 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
 const ownerId = '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be';
 
-describe('garbage collector', function garbageCollector() {
-    this.timeout(10000);
+describe('garbage collector', () => {
+    jest.setTimeout(10000);
     let gc;
     let gcTask;
     let httpServer;
     let expectBatchDeleteLocations;
 
-    before(() => {
+    beforeAll(() => {
         gc = new GarbageCollector({
             kafkaConfig: {},
             s3Config: {
@@ -59,7 +59,7 @@ describe('garbage collector', function garbageCollector() {
             });
         httpServer.listen(7777);
     });
-    after(() => {
+    afterAll(() => {
         httpServer.close();
     });
     it('should skip unsupported action type', done => {

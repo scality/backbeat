@@ -21,15 +21,13 @@ const oneBigMessage = [{ key: 'large-foo',
         config: { kafka: kafkaConf, topic, pollIntervalMs: 100 },
     },
 ].forEach(item => {
-    describe(`BackbeatProducer - ${item.type}`, function backbeatProducer() {
-        this.timeout(10000);
-
+    describe(`BackbeatProducer - ${item.type}`, () => {
         let producer;
-        before(done => {
+        beforeAll(done => {
             producer = new BackbeatProducer(item.config);
             producer.on('ready', () => done());
         });
-        after(() => { producer = null; });
+        afterAll(() => { producer = null; });
 
         it('should be able to send one message and get delivery reports back',
         done => {
@@ -49,7 +47,7 @@ const oneBigMessage = [{ key: 'large-foo',
                     latestPublishedMetricValues[0].value >= beforeSend / 1000);
                 done();
             });
-        }).timeout(30000);
+        }, 30000);
 
         it('should be able to send a batch of messages and get delivery ' +
         'reports back', done => {
@@ -59,7 +57,7 @@ const oneBigMessage = [{ key: 'large-foo',
                 assert.strictEqual(reports.length, 3);
                 done();
             });
-        }).timeout(30000);
+        }, 30000);
 
         it('should be able to send a big ' +
         `${oneBigMessage[0].message.length / 1000000}MB message`, done => {
@@ -67,28 +65,26 @@ const oneBigMessage = [{ key: 'large-foo',
                 assert.ifError(err);
                 done();
             });
-        }).timeout(30000);
-    });
+        }, 30000);
+    }, 10000);
 });
 
 
-describe('BackbeatProducer - Error case', function backbeatProducerErrors() {
-    this.timeout(10000);
-
+describe('BackbeatProducer - Error case', () => {
     let producer;
-    before(done => {
+    beforeAll(done => {
         producer = new BackbeatProducer({ kafka: kafkaConf, topic });
         producer
             .on('ready', () => producer.close(done))
             .on('error', done);
     });
 
-    after(() => { producer = null; });
+    afterAll(() => { producer = null; });
 
     it('should get an error if producer is not ready', done => {
         producer.send(oneMessage, err => {
             assert.deepStrictEqual(errors.InternalError, err);
             done();
         });
-    }).timeout(30000);
-});
+    }, 30000);
+}, 10000);

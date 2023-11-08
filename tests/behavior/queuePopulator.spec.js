@@ -74,10 +74,7 @@ describe('queuePopulator', () => {
     let s3;
     let zkClient;
 
-    beforeEach(function setup(done) {
-        this.timeout(30000); // may take some time to keep up with the
-                             // log entries
-
+    beforeEach(done => {
         s3 = new S3(s3config);
         async.waterfall([
             next => {
@@ -141,7 +138,7 @@ describe('queuePopulator', () => {
             assert.ifError(err);
             done();
         });
-    });
+    }, 30000);
 
     afterEach(done =>
         s3.listObjectVersions({ Bucket: testBucket }, (err, data) => {
@@ -237,9 +234,7 @@ describe('queuePopulator', () => {
             done();
         });
     });
-    it('processLogEntries with 100 objects to replicate in 20 batches',
-    function test100objects(done) {
-        this.timeout(10000);
+    it('processLogEntries with 100 objects to replicate in 20 batches', done => {
         async.waterfall([
             next => {
                 let nbDone = 0;
@@ -274,7 +269,7 @@ describe('queuePopulator', () => {
             assert.ifError(err);
             done();
         });
-    });
+    }, 10000);
 
     describe('lifecycle extension', () => {
         const { zookeeperPath } = testConfig.extensions.lifecycle;

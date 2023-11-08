@@ -188,13 +188,13 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
     }
 }
 
-describe('MongoQueueProcessor', function mqp() {
-    this.timeout(5000);
+describe('MongoQueueProcessor', () => {
+    jest.setTimeout(5000);
 
     let mqp;
     let mongoClient;
 
-    before(() => {
+    beforeAll(() => {
         mqp = new MongoQueueProcessorMock(kafkaConfig, mongoProcessorConfig,
             mongoClientConfig, mConfig);
         mqp.start();

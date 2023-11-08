@@ -58,7 +58,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
     let backbeatMetadataProxy;
     let s3;
 
-    before(() => {
+    beforeAll(() => {
         const producer = {
             sendToTopic: (topicName, entry, cb) => {
                 kafkaEntries.push({ topicName, entry });

@@ -749,7 +749,7 @@ function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
     });
 }
 
-/* eslint-enable max-len */
+jest.setTimeout(60000);
 
 describe('queue processor functional tests with mocking', () => {
     let queueProcessorSF;
@@ -763,8 +763,7 @@ describe('queue processor functional tests with mocking', () => {
     const ReplicationStatusProcessor = require('../../../extensions/replication' +
                   '/replicationStatusProcessor/ReplicationStatusProcessor');
 
-    before(function before(done) {
-        this.timeout(60000);
+    beforeAll(done => {
         const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
 
@@ -877,9 +876,9 @@ describe('queue processor functional tests with mocking', () => {
         httpServer.listen(7777);
     });
 
-    after(done => {
+    afterAll(done => {
         httpServer.close();
-        async.parallel([
+        async.series([
             done => queueProcessorSF.stop(done),
             done => queueProcessorAzure.stop(done),
             done => replicationStatusProcessor.stop(done),
@@ -891,10 +890,9 @@ describe('queue processor functional tests with mocking', () => {
         s3mock.resetTest();
     });
 
-    describe('success path tests', function successPath() {
-        this.timeout(30000);
-
-        [{ caption: 'object with single part',
+    describe('success path tests', () => {
+        describe.each([
+        { caption: 'object with single part',
             nbParts: 1 },
         { caption: 'encrypted object with single part',
             nbParts: 1,
@@ -905,45 +903,46 @@ describe('queue processor functional tests with mocking', () => {
             nbParts: 2,
             encrypted: true },
         { caption: 'empty object',
-            nbParts: 0 }].forEach(testCase => describe(testCase.caption, () => {
-                before(() => {
-                    s3mock.setParam('nbParts', testCase.nbParts);
-                    if (testCase.encrypted) {
-                        s3mock.setParam('target.bucketIsEncrypted', true);
-                    }
-                });
-                it('should complete a replication end-to-end', done => {
-                    async.parallel([
-                        done => {
-                            s3mock.onPutSourceMd = done;
-                        },
-                        done => queueProcessorSF.processReplicationEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert.strictEqual(s3mock.hasPutTargetData,
-                                                   testCase.nbParts > 0);
-                                assert(s3mock.hasPutTargetMd);
-                                assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                done();
-                            }),
-                    ], done);
-                });
-
-                it('should complete a "copy location" action', done => {
-                    sendCopyLocationAction(
-                        s3mock, queueProcessorSF, response => {
-                            assert.strictEqual(response.getError(), undefined);
-                            assert.strictEqual(response.getStatus(), 'success');
-                            const results = response.getResults();
-                            assert.strictEqual(
-                                Array.isArray(results.location), true);
-                            assert.strictEqual(results.location.length, 1);
-                            // 0-byte objects must also be copied
-                            assert.strictEqual(s3mock.hasPutTargetData, true);
+            nbParts: 0 },
+        ])('$caption', testCase => {
+            beforeAll(() => {
+                s3mock.setParam('nbParts', testCase.nbParts);
+                if (testCase.encrypted) {
+                    s3mock.setParam('target.bucketIsEncrypted', true);
+                }
+            });
+            it('should complete a replication end-to-end', done => {
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert.strictEqual(s3mock.hasPutTargetData,
+                                testCase.nbParts > 0);
+                            assert(s3mock.hasPutTargetMd);
+                            assert.strictEqual(s3mock.partsDeleted.length, 0);
                             done();
-                        });
-                });
-            }));
+                        }),
+                ], done);
+            });
+
+            it('should complete a "copy location" action', done => {
+                sendCopyLocationAction(
+                    s3mock, queueProcessorSF, response => {
+                        assert.strictEqual(response.getError(), undefined);
+                        assert.strictEqual(response.getStatus(), 'success');
+                        const results = response.getResults();
+                        assert.strictEqual(
+                            Array.isArray(results.location), true);
+                        assert.strictEqual(results.location.length, 1);
+                        // 0-byte objects must also be copied
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        done();
+                    });
+            });
+        });
 
         it('should replicate metadata in metadata-only mode', done => {
             s3mock.setParam('nbParts', 2);
@@ -984,38 +983,33 @@ describe('queue processor functional tests with mocking', () => {
                     }),
             ], done);
         });
-    });
+    }, 30000);
 
-    describe('error paths', function errorPaths() {
-        this.timeout(20000); // give more time to leave room for retry
-                             // delays and timeout
-
+    describe('error paths', () => {
         describe('source Vault errors', () => {
-            ['assumeRoleBackbeat'].forEach(action => {
-                [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
-                    it(`should skip processing on ${error.code} ` +
-                    `(${error.message}) from source Vault on ${action}`,
-                    done => {
-                        s3mock.installVaultErrorResponder(
-                            `source.vault.${action}`, error);
+            it.each([
+                { action: 'assumeRoleBackbeat', error: errors.NoSuchEntity },
+                { action: 'assumeRoleBackbeat', error: errors.AccessDenied },
+            ])('should skip processing on $error from source Vault on $action',
+                ({ action, error }, done) => {
+                    s3mock.installVaultErrorResponder(
+                        `source.vault.${action}`, error);
 
-                        queueProcessorSF.processReplicationEntry(
-                            s3mock.getParam('kafkaEntry'), err => {
-                                assert.ifError(err);
-                                assert(!s3mock.hasPutTargetData);
-                                assert(!s3mock.hasPutTargetMd);
-                                assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                done();
-                            });
-                    });
+                    queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetData);
+                            assert(!s3mock.hasPutTargetMd);
+                            assert.strictEqual(s3mock.partsDeleted.length, 0);
+                            done();
+                        });
                 });
-            });
         });
 
         describe('source S3 errors', () => {
-            [errors.AccessDenied, errors.ObjNotFound].forEach(error => {
-                it(`replication should skip on ${error.code} ` +
-                `(${error.message}) from source S3 on getObject`, done => {
+            it.each([errors.AccessDenied, errors.ObjNotFound])(
+                'replication should skip on $error from source S3 on getObject',
+                (error, done) => {
                     s3mock.installS3ErrorResponder('source.s3.getObject',
                                                    error);
                     queueProcessorSF.processReplicationEntry(
@@ -1028,8 +1022,9 @@ describe('queue processor functional tests with mocking', () => {
                         });
                 });
 
-                it(`copy location should skip on ${error.code} ` +
-                `(${error.message}) from source S3 on getObject`, done => {
+            it.each([errors.AccessDenied, errors.ObjNotFound])(
+                'copy location should skip on $error from source S3 on getObject',
+                (error, done) => {
                     s3mock.installS3ErrorResponder('source.s3.getObject',
                                                    error);
                     sendCopyLocationAction(
@@ -1052,7 +1047,6 @@ describe('queue processor functional tests with mocking', () => {
                             done();
                         });
                 });
-            });
 
             it('should fail if replication is disabled in bucket replication ' +
             'configuration', done => {
@@ -1115,29 +1109,28 @@ describe('queue processor functional tests with mocking', () => {
                 });
             });
 
-            ['getBucketReplication', 'getObject'].forEach(action => {
-                [errors.InternalError].forEach(error => {
-                    it(`replication should retry on ${error.code} ` +
-                    `(${error.message}) from source S3 on ${action}`, done => {
-                        s3mock.installS3ErrorResponder(
-                            `source.s3.${action}`, error, { once: true });
+            it.each([
+                { error: errors.InternalError, action: 'getBucketReplication' },
+                { error: errors.InternalError, action: 'getObject' },
+            ])('replication should retry on $error from source S3 on $action',
+                ({ error, action }, done) => {
+                    s3mock.installS3ErrorResponder(
+                        `source.s3.${action}`, error, { once: true });
 
-                        async.parallel([
-                            done => {
-                                s3mock.onPutSourceMd = done;
-                            },
-                            done => queueProcessorSF.processReplicationEntry(
-                                s3mock.getParam('kafkaEntry'), err => {
-                                    assert.ifError(err);
-                                    assert(s3mock.hasPutTargetData);
-                                    assert(s3mock.hasPutTargetMd);
-                                    assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                    done();
-                                }),
-                        ], done);
-                    });
+                    async.parallel([
+                        done => {
+                            s3mock.onPutSourceMd = done;
+                        },
+                        done => queueProcessorSF.processReplicationEntry(
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.ifError(err);
+                                assert(s3mock.hasPutTargetData);
+                                assert(s3mock.hasPutTargetMd);
+                                assert.strictEqual(s3mock.partsDeleted.length, 0);
+                                done();
+                            }),
+                    ], done);
                 });
-            });
 
             it('copy location should retry on 500 (InternalError) ' +
             'from source S3 on getObject', done => {
@@ -1197,123 +1190,115 @@ describe('queue processor functional tests with mocking', () => {
         });
 
         describe('target Vault errors', () => {
-            ['getAccountsCanonicalIds',
-                'assumeRoleBackbeat'].forEach(action => {
-                    [errors.AccessDenied, errors.NoSuchEntity].forEach(err => {
-                        it(`should fail on ${err.code} (${err.message}) ` +
-                        `from target Vault on ${action}`, done => {
-                            s3mock.installVaultErrorResponder(
-                             `target.${action}`, err);
-                            s3mock.setExpectedReplicationStatus('FAILED');
+            it.each([
+                { err: errors.AccessDenied, action: 'getAccountsCanonicalIds' },
+                { err: errors.NoSuchEntity, action: 'getAccountsCanonicalIds' },
+                { err: errors.AccessDenied, action: 'assumeRoleBackbeat' },
+                { err: errors.NoSuchEntity, action: 'assumeRoleBackbeat' },
+            ])('should fail on $err from target Vault on $action', ({ err, action }, done) => {
+                s3mock.installVaultErrorResponder(
+                    `target.${action}`, err);
+                s3mock.setExpectedReplicationStatus('FAILED');
 
-                            async.parallel([
-                                done => {
-                                    s3mock.onPutSourceMd = done;
-                                },
-                                done =>
-                                    queueProcessorSF.processReplicationEntry(
-                                        s3mock.getParam('kafkaEntry'),
-                                        error => {
-                                            assert.ifError(error);
-                                            assert(!s3mock.hasPutTargetData);
-                                            assert(!s3mock.hasPutTargetMd);
-                                            assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                            done();
-                                        }),
-                            ], done);
-                        });
-                    });
-                });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done =>
+                        queueProcessorSF.processReplicationEntry(
+                            s3mock.getParam('kafkaEntry'),
+                            error => {
+                                assert.ifError(error);
+                                assert(!s3mock.hasPutTargetData);
+                                assert(!s3mock.hasPutTargetMd);
+                                assert.strictEqual(s3mock.partsDeleted.length, 0);
+                                done();
+                            }),
+                ], done);
+            });
 
-            ['getAccountsCanonicalIds',
-            'assumeRoleBackbeat'].forEach(action => {
-                [errors.InternalError].forEach(error => {
-                    it(`should retry on ${error.code} (${error.message}) ` +
-                    `from target Vault on ${action}`, done => {
-                        s3mock.installVaultErrorResponder(
-                            `target.${action}`, error, { once: true });
+            it.each([
+                { error: errors.InternalError, action: 'getAccountsCanonicalIds' },
+                { error: errors.InternalError, action: 'assumeRoleBackbeat' },
+            ])('should retry on $error from target Vault on $action', ({ error, action }, done) => {
+                s3mock.installVaultErrorResponder(
+                    `target.${action}`, error, { once: true });
 
-                        async.parallel([
-                            done => {
-                                s3mock.onPutSourceMd = done;
-                            },
-                            done => queueProcessorSF.processReplicationEntry(
-                                s3mock.getParam('kafkaEntry'), err => {
-                                    assert.ifError(err);
-                                    assert(s3mock.hasPutTargetData);
-                                    assert(s3mock.hasPutTargetMd);
-                                    assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                    // should have retried on other host
-                                    assert(s3mock.requestsPerHost['127.0.0.3']
-                                           > 0);
-                                    assert(s3mock.requestsPerHost['127.0.0.4']
-                                           > 0);
-                                    done();
-                                }),
-                        ], done);
-                    });
-                });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(s3mock.hasPutTargetData);
+                            assert(s3mock.hasPutTargetMd);
+                            assert.strictEqual(s3mock.partsDeleted.length, 0);
+                            // should have retried on other host
+                            assert(s3mock.requestsPerHost['127.0.0.3']
+                                > 0);
+                            assert(s3mock.requestsPerHost['127.0.0.4']
+                                > 0);
+                            done();
+                        }),
+                ], done);
             });
         });
 
         describe('target S3 errors', () => {
-            ['putData', 'putMetadata'].forEach(action => {
-                [errors.AccessDenied].forEach(error => {
-                    it(`should fail on ${error.code} (${error.message}) ` +
-                    `from target S3 on ${action}`, done => {
-                        s3mock.installS3ErrorResponder(`target.${action}`,
-                                                       error);
-                        s3mock.setExpectedReplicationStatus('FAILED');
+            it.each([
+                { error: errors.AccessDenied, action: 'putData' },
+                { error: errors.AccessDenied, action: 'putMetadata' },
+            ])('should fail on $error from target S3 on $action', ({ error, action }, done) => {
+                s3mock.installS3ErrorResponder(`target.${action}`,
+                    error);
+                s3mock.setExpectedReplicationStatus('FAILED');
 
-                        async.parallel([
-                            done => {
-                                s3mock.onPutSourceMd = done;
-                            },
-                            done => queueProcessorSF.processReplicationEntry(
-                                s3mock.getParam('kafkaEntry'), err => {
-                                    assert.ifError(err);
-                                    assert(!s3mock.hasPutTargetMd);
-                                    if (action === 'putMetadata') {
-                                        assert.deepStrictEqual(s3mock.partsDeleted, [{
-                                            key: constants.target.dataPartsKeys[0],
-                                            dataStoreName: 'file',
-                                        }]);
-                                    } else {
-                                        assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                    }
-                                    done();
-                                }),
-                        ], done);
-                    });
-                });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(!s3mock.hasPutTargetMd);
+                            if (action === 'putMetadata') {
+                                assert.deepStrictEqual(s3mock.partsDeleted, [{
+                                    key: constants.target.dataPartsKeys[0],
+                                    dataStoreName: 'file',
+                                }]);
+                            } else {
+                                assert.strictEqual(s3mock.partsDeleted.length, 0);
+                            }
+                            done();
+                        }),
+                ], done);
             });
 
-            ['putData', 'putMetadata'].forEach(action => {
-                [errors.InternalError].forEach(error => {
-                    it(`should retry on ${error.code} (${error.message}) ` +
-                    `from target S3 on ${action}`, done => {
-                        s3mock.installS3ErrorResponder(`target.${action}`,
-                                                       error, { once: true });
-                        async.parallel([
-                            done => {
-                                s3mock.onPutSourceMd = done;
-                            },
-                            done => queueProcessorSF.processReplicationEntry(
-                                s3mock.getParam('kafkaEntry'), err => {
-                                    assert.ifError(err);
-                                    assert(s3mock.hasPutTargetData);
-                                    assert(s3mock.hasPutTargetMd);
-                                    assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                    // should have retried on other host
-                                    assert(s3mock.requestsPerHost['127.0.0.3']
-                                           > 0);
-                                    assert(s3mock.requestsPerHost['127.0.0.4']
-                                           > 0);
-                                    done();
-                                }),
-                        ], done);
-                    });
-                });
+            it.each([
+                { error: errors.InternalError, action: 'putData' },
+                { error: errors.InternalError, action: 'putMetadata' },
+            ])('should retry on $error from target S3 on $action', ({ error, action }, done) => {
+                s3mock.installS3ErrorResponder(`target.${action}`,
+                    error, { once: true });
+                async.parallel([
+                    done => {
+                        s3mock.onPutSourceMd = done;
+                    },
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), err => {
+                            assert.ifError(err);
+                            assert(s3mock.hasPutTargetData);
+                            assert(s3mock.hasPutTargetMd);
+                            assert.strictEqual(s3mock.partsDeleted.length, 0);
+                            // should have retried on other host
+                            assert(s3mock.requestsPerHost['127.0.0.3']
+                                > 0);
+                            assert(s3mock.requestsPerHost['127.0.0.4']
+                                > 0);
+                            done();
+                        }),
+                ], done);
             });
 
             it('copy location should retry on 500 (InternalError) ' +

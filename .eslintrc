@@ -1,8 +1,15 @@
 {
-    "extends": "scality",
+    "extends": [
+        "scality",
+        "plugin:jest/recommended"
+    ],
     "parserOptions": {
         "ecmaVersion": 2020
     },
+    "plugins": [
+        "jest",
+        "mocha"
+    ],
     "rules": {
         "object-curly-newline": "off",
         "import/newline-after-import": "off",
@@ -33,13 +40,40 @@
         "space-unary-ops": "off",
         "no-undef-init": "off",
         "newline-per-chained-call": "off",
-        "no-useless-escape": "off"
+        "no-useless-escape": "off",
+        "mocha/no-exclusive-tests": "error",
+        "jest/no-done-callback": "off",
+        "jest/expect-expect": [
+            "warn",
+            {
+                "assertFunctionNames": [
+                    "expect",
+                    "assert",
+                    "assert.*",
+                    "_assertCredentials"
+                ]
+            }
+        ],
+        "import/extensions": [
+            "error",
+            "ignorePackages",
+            {
+                "js": "never",
+                "jsx": "never",
+                "ts": "never",
+                "tsx": "never"
+            }
+        ]
+    },
+    "env": {
+        "jest/globals": true
     },
     "settings": {
         "import/resolver": {
-          "node": {
-            "paths": ["/backbeat/node_modules", "node_modules"]
-          }
+            "node": {
+                "paths": ["/backbeat/node_modules", "node_modules"],
+                "extensions": [".js", ".jsx", ".ts", ".tsx"]
+            }
         }
-      }
+    }
 }

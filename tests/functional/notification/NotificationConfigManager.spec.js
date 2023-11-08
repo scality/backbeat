@@ -31,6 +31,21 @@ const notificationConfigurationVariant = {
     ],
 };
 
+class MockChangeStream extends events.EventEmitter {
+    constructor() {
+        super();
+        this.closed = false;
+    }
+
+    isClosed() {
+        return this.closed;
+    }
+
+    close() {
+        this.closed = true;
+    }
+}
+
 describe('NotificationConfigManager ::', () => {
     const params = {
         mongoConfig,
@@ -42,7 +57,7 @@ describe('NotificationConfigManager ::', () => {
         manager = new NotificationConfigManager(params);
         const getCollectionStub = sinon.stub().returns({
             // mock change stream
-            watch: () => new events.EventEmitter(),
+            watch: () => new MockChangeStream(),
             // mock bucket notification configuration
             findOne: () => (
                 {

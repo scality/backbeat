@@ -305,7 +305,7 @@ describe('Notification configuration util', () => {
             };
         }
 
-        before(() => {
+        beforeAll(() => {
             configMap = notifConfUtil.configArrayToMap(testConfigs);
         });
 

@@ -8,7 +8,7 @@ const TIMEOUT = 60000;
 const TOPIC = 'backbeat-test-consumer-spec';
 const GROUP_ID = 'test-consumer-group';
 
-describe('BackbeatTestConsumer', function backbeatTestConsumer() {
+describe('BackbeatTestConsumer', () => {
     let consumer;
     let producer;
     const messages = [
@@ -17,9 +17,9 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
         { message: '{"value":"m3"}' },
     ];
 
-    this.timeout(TIMEOUT);
+    jest.setTimeout(TIMEOUT);
 
-    before(done => {
+    beforeAll(done => {
         async.series([
             next => {
                 producer = new BackbeatProducer({
@@ -49,7 +49,7 @@ describe('BackbeatTestConsumer', function backbeatTestConsumer() {
         ], done);
     });
 
-    after(done => {
+    afterAll(done => {
         async.waterfall([
             next => producer.close(next),
             next => consumer.close(next),

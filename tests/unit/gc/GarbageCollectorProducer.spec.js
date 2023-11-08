@@ -39,7 +39,7 @@ describe('garbage collector producer', () => {
     let gcProducer;
     const kafkaProducerMock = new KafkaProducerMock();
 
-    before(() => {
+    beforeAll(() => {
         gcProducer = new GarbageCollectorProducer();
         gcProducer._producer = kafkaProducerMock;
     });

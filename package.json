@@ -17,21 +17,23 @@
     "oplog_populator": "node extensions/oplogPopulator/OplogPopulatorTask.js",
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
-    "test": "mocha --recursive tests/unit",
-    "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
-    "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",
-    "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
-    "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000",
-    "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000",
-    "ft_test:ingestion": "mocha --recursive $(find tests/functional/ingestion -name '*.js') --timeout  30000",
-    "ft_test:api:routes": "mocha tests/functional/api/routes.js --timeout 30000",
-    "ft_test:api:retry": "mocha tests/functional/api/retry.js --timeout 30000",
-    "bh_test": "mocha --recursive tests/behavior",
+    "test": "jest /unit --forceExit",
+    "ft_test": "jest /functional --forceExit --testTimeout 30000",
+    "ft_test:notification": "jest /functional/notification --forceExit --testTimeout 30000",
+    "ft_test:replication": "jest /functional/replication --forceExit --testTimeout 30000",
+    "ft_test:lib": "jest /functional/lib --forceExit --testTimeout 30000",
+    "ft_test:lifecycle": "jest /functional/lifecycle --forceExit --testTimeout 30000",
+    "ft_test:ingestion": "jest /functional/ingestion --forceExit --testTimeout  30000",
+    "ft_test:api:routes": "jest /functional/api/routes.spec.js --forceExit --testTimeout 30000",
+    "ft_test:api:retry": "jest /functional/api/retry.spec.js --forceExit --testTimeout 30000",
+    "perf_test:lifecycle": "jest /performance/lifecycle/ --forceExit --testTimeout 30000",
+    "bh_test": "jest /behavior",
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node bin/backbeat.js",
     "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification BACKBEAT_QUEUEPOPULATOR_LOGSOURCE=kafka node bin/queuePopulator.js",
-    "notification_processor": "node extensions/notification/queueProcessor/task.js"
+    "notification_processor": "node extensions/notification/queueProcessor/task.js",
+    "build": "yarn tsc"
   },
   "repository": {
     "type": "git",
@@ -52,6 +54,7 @@
     "breakbeat": "scality/breakbeat#v1.0.1",
     "bucketclient": "scality/bucketclient#8.1.9",
     "commander": "^2.11.0",
+    "eslint-plugin-mocha": "^10.2.0",
     "fcntl": "github:scality/node-fcntl#0.2.1",
     "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
     "ioredis": "^4.9.5",
@@ -63,7 +66,6 @@
     "node-rdkafka-prometheus": "^1.0.0",
     "node-schedule": "^1.2.0",
     "node-zookeeper-client": "^1.1.3",
-    "prom-client": "14.2.0",
     "semver": "^5.6.0",
     "typescript": "^4.9.5",
     "uuid": "^3.1.0",
@@ -75,14 +77,34 @@
   },
   "devDependencies": {
     "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
-    "eslint": "^8.14.0",
+    "eslint": "^8.25.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#8.2.0",
     "eslint-plugin-import": "^2.14.0",
+    "eslint-plugin-jest": "^27.1.1",
+    "jest": "^29.1.2",
     "lolex": "^2.7.5",
     "mocha": "^3.3.0",
     "sinon": "^10.0.0",
-    "zookeeper-mock": "^1.2.0"
+    "ts-jest": "^29.0.3",
+    "ts-node": "^10.9.1",
+    "zookeeper-mock": "^1.2.0",
+    "@types/node": "^18.11.9",
+    "@tsconfig/node16": "^1.0.3"
+  },
+  "jest": {
+    "maxWorkers": 1,
+    "testPathIgnorePatterns": [
+      "/node_modules/"
+    ],
+    "preset": "ts-jest",
+    "globals": {
+      "test-jest": {
+        "diagnostics": {
+          "warnOnly": true
+        }
+      }
+    }
   },
   "engines": {
     "node": ">=16"

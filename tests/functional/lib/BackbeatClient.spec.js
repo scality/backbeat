@@ -30,7 +30,7 @@ const serverMock = new MetadataMock();
 
 describe('BackbeatClient unit tests with mock server', () => {
     let httpServer;
-    before(done => {
+    beforeAll(done => {
         expectedLogs.log.forEach((log, i) => {
             log.entries.forEach((entry, j) => {
                 expectedLogs.log[i].entries[j].value.attributes =
@@ -48,10 +48,9 @@ describe('BackbeatClient unit tests with mock server', () => {
                 .listen(backbeatClientTestPort, done);
     });
 
-    after(() => httpServer.close());
+    afterAll(() => httpServer.close());
 
-    // skipping this test because ingestion does not need list bucket per raft
-    it.skip('should get list of buckets managed by raft session', done => {
+    it('should get list of buckets managed by raft session', done => {
         const destReq = backbeatClient.getRaftBuckets({
             LogId: '1',
         });
@@ -69,7 +68,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getRaftId({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.strictEqual(data[0], '1');
             return done();
@@ -80,7 +79,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getRaftLog({
             LogId: '1',
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.deepStrictEqual(data, expectedLogs);
             return done();
@@ -91,7 +90,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getBucketMetadata({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             const bucketMd = dummyBucketMD[bucketName];
             const expectedBucketMD = new BucketInfo(bucketMd.name,
@@ -119,7 +118,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getObjectList({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert.deepStrictEqual(data, expectedObjectList);
             return done();
@@ -131,7 +130,7 @@ describe('BackbeatClient unit tests with mock server', () => {
             Bucket: bucketName,
             Key: objectName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert(data.Body);
             const dataValue = JSON.parse(data.Body);
@@ -144,7 +143,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         const destReq = backbeatClient.getBucketCseq({
             Bucket: bucketName,
         });
-        return destReq.send((err, data) => {
+        destReq.send((err, data) => {
             assert.ifError(err);
             assert(data[0] && data[0].cseq);
             assert.strictEqual(data[0].cseq, 7);

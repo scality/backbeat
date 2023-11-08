@@ -102,11 +102,11 @@ function checkEntryInQueue(kafkaEntries, expectedEntries, done) {
 }
 
 describe('ingestion reader tests with mock', function fD() {
-    this.timeout(40000);
+    jest.setTimeout(40000);
     let httpServer;
     let producer;
 
-    before(done => {
+    beforeAll(done => {
         testConfig.s3.port = testPort;
         const mongoUrl =
             `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
@@ -195,7 +195,7 @@ describe('ingestion reader tests with mock', function fD() {
         ], done);
     });
 
-    after(done => {
+    afterAll(done => {
         async.waterfall([
             next => {
                 httpServer.close();
@@ -321,8 +321,7 @@ describe('ingestion reader tests with mock', function fD() {
             done();
         });
 
-        // TODO: ZENKO-3420
-        it.skip('should successfully ingest new bucket with existing object',
+        it('should successfully ingest new bucket with existing object',
             done => {
                 // update zookeeper status to indicate snapshot phase
                 const path =

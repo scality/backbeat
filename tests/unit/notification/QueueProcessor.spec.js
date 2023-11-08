@@ -8,7 +8,7 @@ const QueueProcessor = require(
 describe('notification QueueProcessor', () => {
     let qp;
 
-    before(done => {
+    beforeAll(done => {
         qp = new QueueProcessor(null, null, {
             destinations: [
                 {
@@ -72,10 +72,7 @@ describe('notification QueueProcessor', () => {
     // also test the resilience of the producer, but at the time this
     // test was written Bucket Notification tests are not yet running
     // in Integration (refs: BB-419, INTGR-895)
-    it('should process 10K notifications with 1K concurrency to send to external destination',
-    function test10KNotif(done) {
-        this.timeout(5000);
-
+    it('should process 10K notifications with 1K concurrency to send to external destination', done => {
         const origLogger = qp.logger;
         qp.logger = {
             debug: () => {},
@@ -112,7 +109,7 @@ describe('notification QueueProcessor', () => {
             clearInterval(flushDeliveryReportsInterval);
             done();
         });
-    });
+    }, 5000);
 
     it('should send notification to external destination with delivery error', done => {
         const send = sinon.stub().callsFake((messages, cb) => cb(new Error('delivery error')));

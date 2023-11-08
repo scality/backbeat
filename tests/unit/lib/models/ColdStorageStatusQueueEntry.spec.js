@@ -38,7 +38,7 @@ const malformed = Buffer.from(`
 }`);
 
 describe('ColdStorageStatusQueueEntry', () => {
-    [
+    it.each([
         {
             msg: 'should parse non-versioned object status entry',
             input: nonVersioned,
@@ -59,7 +59,7 @@ describe('ColdStorageStatusQueueEntry', () => {
             input: malformed,
             error: { message: 'malformed JSON in kafka entry' },
         },
-    ].forEach(({ msg, input, error }) => it(msg, () => {
+    ])('$msg', ({ input, error }) => {
         const res = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: input });
 
         if (error) {
@@ -67,5 +67,5 @@ describe('ColdStorageStatusQueueEntry', () => {
         } else {
             assert.ifError(res.error);
         }
-    }));
+    });
 });
