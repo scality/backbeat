@@ -3,7 +3,8 @@ parsers:
     enable_partials: yes
 
 comment:
-  layout: "header, diff, flags, components"  # show component info in the PR comment
+  layout: "newheader, reach, files, components, diff, flags"  # show component info in the PR comment
+  hide_comment_details: true  # hide the comment details (e.g. coverage targets) in the PR comment
 
 # Setting coverage targets
 coverage:
