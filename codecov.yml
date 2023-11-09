@@ -5,11 +5,31 @@ parsers:
 comment:
   layout: "header, diff, flags, components"  # show component info in the PR comment
 
+# Setting coverage targets
+coverage:
+  status:
+    # "global" coverage target for the backbeat service (core + all extensions)
+    # bucket-scanner is excluded, as it is tracked separately in the component
+    project:
+      default: false
+      Backbeat:
+        target: auto
+        threshold: 1%
+        removed_code_behavior: adjust_base
+        paths:
+          - bin
+          - extensions
+          - lib
+    patch:
+      default: false
+      Backbeat:
+        target: 80%
+
 component_management:
   default_rules:  # default rules that will be inherited by all components
-    statuses:
-      - type: project
-        target: auto
+    flag_regexes:
+      - "^(?!bucket-scanner)$" # do not consider `bucket-scanner` for most components
+    statuses: []
   individual_components:
     - component_id: backbeat-notification
       name: Bucket Notification
@@ -41,15 +61,20 @@ component_management:
         - extensions/replication/**
     - component_id: bucket-scanner
       name: Bucket Scanner
+      flag_regexes:
+        - "^bucket-scanner$" # only consider bucket-scanner for this component
       paths:
         - bucket-scanner/**
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+          removed_code_behavior: adjust_base
+        - type: patch
+          target: 100%
+          threshold: 5%
 
 flag_management:
   default_rules: # the rules that will be followed for any flag added, generally
     carryforward: true
-    statuses:
-      - type: project
-        target: auto
-        threshold: 1%
-      - type: patch
-        target: 80%
+    statuses: []

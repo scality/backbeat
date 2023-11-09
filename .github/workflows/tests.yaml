@@ -84,7 +84,7 @@ jobs:
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: bucket-scanner
-        flags: unit
+        flags: bucket-scanner
 
   tests:
     needs: build
