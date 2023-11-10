@@ -4,6 +4,7 @@ const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 const locations = require('../../../conf/locationConfig.json') || {};
 
 class LifecycleUpdateExpirationTask extends BackbeatTask {
@@ -41,6 +42,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         }, log, (err, blob) => {
+            LifecycleMetrics.onS3Request(log, 'getMetadata', 'restore:delete', err);
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleUpdateExpirationTask._getMetadata',
@@ -88,6 +90,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             versionId: version,
             mdBlob: objMD.getSerialized(),
         }, log, err => {
+            LifecycleMetrics.onS3Request(log, 'putMetadata', 'restore:delete', err);
             if (err) {
                 log.error(
                     'an error occurred when updating metadata for transition',

@@ -9,6 +9,7 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ClientManager = require('../../lib/clients/ClientManager');
 const GarbageCollectorTask = require('./tasks/GarbageCollectorTask');
+const { GarbageCollectorMetrics } = require('./GarbageCollectorMetrics');
 
 const { authTypeAssumeRole } = require('../../lib/constants');
 
@@ -100,6 +101,7 @@ class GarbageCollector extends EventEmitter {
         }
 
         return this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            GarbageCollectorMetrics.onS3Request(log, 'getAccountId', null, err);
             if (err) {
                 if (err.NoSuchEntity) {
                     log.error('canonical id does not exist', { error: err, ownerId });

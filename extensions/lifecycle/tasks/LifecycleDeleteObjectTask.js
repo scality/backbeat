@@ -45,6 +45,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         }, log, (err, blob) => {
+            LifecycleMetrics.onS3Request(log, 'getMetadata', 'expiration', err);
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleDeleteObjectTask._getMetadata',

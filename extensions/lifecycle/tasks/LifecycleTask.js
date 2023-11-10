@@ -190,7 +190,7 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'ListObjects', 'bucket', err);
+                LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
 
                 if (err) {
                     log.error('error listing bucket objects', {
@@ -454,7 +454,7 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'ListMultipartUploads', 'bucket', err);
+                LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
 
                 if (err) {
                     log.error('error checking buckets MPUs', {
@@ -673,7 +673,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.listObjectVersions(params);
         attachReqUids(req, log);
         req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'ListObjectVersions', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', err);
 
             if (err) {
                 log.error('error listing versioned bucket objects', {
@@ -725,7 +725,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.getObjectTagging(tagParams);
         attachReqUids(req, log);
         return req.send((err, tags) => {
-            LifecycleMetrics.onS3Request(log, 'GetObjectTagging', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', err);
             if (err) {
                 log.error('failed to get tags', {
                     method: 'LifecycleTask._getObjectTagging',
@@ -1506,7 +1506,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.headObject(params);
         attachReqUids(req, log);
         return req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'HeadObject', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', err);
 
             if (err) {
                 log.error('failed to get object', {
@@ -1807,7 +1807,7 @@ class LifecycleTask extends BackbeatTask {
                         req.send((err, data) => {
                             LifecycleMetrics.onS3Request(
                                 log,
-                                'GetBucketVersioning',
+                                'getBucketVersioning',
                                 'bucket',
                                 err
                             );
