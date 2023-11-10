@@ -89,6 +89,7 @@ class MongoQueueProcessor {
         // Metrics Producer
         this._mProducer = new MetricsProducer(this.kafkaConfig, this._mConfig);
         this._mProducer.setupProducer(cb);
+        this.logger.verbose('.....test log....');
     }
 
     /**
@@ -98,6 +99,7 @@ class MongoQueueProcessor {
      */
     start() {
         this.logger.info('starting mongo queue processor');
+        this.logger.verbose('.....test log....');
         async.series([
             next => this._setupMetricsClients(err => {
                 if (err) {
@@ -115,6 +117,7 @@ class MongoQueueProcessor {
                         error: err.message,
                     });
                 }
+                this.logger.verbose('.....test log....');
                 return next(err);
             }),
         ], error => {
@@ -122,6 +125,7 @@ class MongoQueueProcessor {
                 this.logger.fatal('error starting mongo queue processor');
                 process.exit(1);
             }
+            this.logger.verbose('.....test log....');
 
             this._bootstrapList = Config.getBootstrapList();
             Config.on('bootstrap-list-update', () => {
