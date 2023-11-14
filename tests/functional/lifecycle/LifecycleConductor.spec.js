@@ -95,6 +95,7 @@ const baseLCConfig = {
     zookeeperPath: '/test/lifecycle',
     bucketTasksTopic,
     objectTasksTopic: 'backbeat-lifecycle-object-tasks-spec',
+    transitionTasksTopic: 'backbeat-lifecycle-transition-tasks-spec',
     conductor: {
         cronRule: '*/5 * * * * *',
         backlogControl: {

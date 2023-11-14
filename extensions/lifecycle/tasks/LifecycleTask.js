@@ -1129,7 +1129,7 @@ class LifecycleTask extends BackbeatTask {
             originLabel: 'lifecycle',
             fromLocation: objectMD.getDataStoreName(),
             contentLength: objectMD.getContentLength(),
-            resultsTopic: this.objectTasksTopic,
+            resultsTopic: this.transitionTasksTopic,
             accountId: params.accountId,
             attempt,
         });

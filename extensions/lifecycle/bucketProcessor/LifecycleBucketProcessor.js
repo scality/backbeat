@@ -173,6 +173,7 @@ class LifecycleBucketProcessor {
             enabledRules: this._supportedRulesObject,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
+            transitionTasksTopic: this._lcConfig.transitionTasksTopic,
             kafkaBacklogMetrics: this._kafkaBacklogMetrics,
             ncvHeap: this.ncvHeap,
             pausedLocations: this._pausedLocations,

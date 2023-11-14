@@ -224,6 +224,7 @@
             "zookeeperPath": "/lifecycle",
             "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
             "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+            "transitionTasksTopic": "backbeat-lifecycle-transition-tasks",
             "conductor": {
                 "cronRule": "0 */5 * * * *",
                 "concurrency": 10,

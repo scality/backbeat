@@ -22,6 +22,7 @@ class LifecycleObjectExpirationProcessor extends LifecycleObjectProcessor {
      * @param {Object} lcConfig - lifecycle configuration object
      * @param {String} lcConfig.auth - authentication info
      * @param {String} lcConfig.objectTasksTopic - lifecycle object topic name
+     * @param {String} lcConfig.transitionTasksTopic - lifecycle transition topic name
      * @param {Object} lcConfig.objectProcessor - kafka consumer object
      * @param {String} lcConfig.objectProcessor.groupId - kafka
      * consumer group id
