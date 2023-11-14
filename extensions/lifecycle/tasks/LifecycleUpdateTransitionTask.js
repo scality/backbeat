@@ -40,8 +40,6 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         }, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
-
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleUpdateTransitionTask._getMetadata',
@@ -167,7 +165,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         if (entry.getStatus() === 'success') {
             let locationToGC;
             return async.waterfall([
-                next => this._getMetadata(entry, log, next),
+                next => this._getMetadata(entry, log, (err, objMD) => {
+                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
+                    next(err, objMD);
+                }),
                 (objMD, next) => {
                     const oldLocation = objMD.getLocation();
                     const newLocation = entry.getAttribute('results.location');
