@@ -119,6 +119,27 @@ class Connector {
     }
 
     /**
+     * Sets the resume point of the change stream
+     * to the first event of the first bucket added
+     * to the connector.
+     * @param {Date} eventDate oplog event date
+     * @returns {undefined}
+    */
+    setResumePoint(eventDate) {
+        if (this._config['startup.mode.timestamp.start.at.operation.time']) {
+            return;
+        }
+
+        this._config['startup.mode.timestamp.start.at.operation.time'] = eventDate.toISOString();
+
+        this._logger.info('Updating resume date', {
+            method: 'Connector.updateResumeDate',
+            date: eventDate.toISOString(),
+            connector: this._name,
+        });
+    }
+
+    /**
      * Creates the Kafka-connect mongo connector
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
@@ -165,6 +186,8 @@ class Connector {
         try {
             await this._kafkaConnect.deleteConnector(this._name);
             this._isRunning = false;
+            // resetting the resume point to set a new one on creation of the connector
+            delete this._config['startup.mode.timestamp.start.at.operation.time'];
         } catch (err) {
             this._logger.error('Error while destroying connector', {
                 method: 'Connector.destroy',

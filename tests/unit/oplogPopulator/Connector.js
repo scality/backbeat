@@ -84,6 +84,13 @@ describe('Connector', () => {
             await connector.destroy();
             assert(deleteStub.notCalled);
         });
+        it('Should reset resume point', async () => {
+            sinon.stub(connector._kafkaConnect, 'deleteConnector')
+                .resolves();
+            connector._isRunning = true;
+            await connector.destroy();
+            assert.strictEqual(connector.config['startup.mode.timestamp.start.at.operation.time'], undefined);
+        });
     });
 
     describe('addBucket', () => {
@@ -254,6 +261,29 @@ describe('Connector', () => {
             connector._config['offset.partition.name'] = 'partition-name';
             connector.updatePartitionName();
             assert.notStrictEqual(connector._config['offset.partition.name'], 'partition-name');
+        });
+    });
+
+    describe('setResumePoint', () => {
+        it('Should not set the resume point when resume point already set', () => {
+            connector._isRunning = false;
+            connector._config['startup.mode.timestamp.start.at.operation.time'] = '2023-11-15T16:18:53.000Z';
+            connector.setResumePoint(new Date('2023-11-16T16:18:53.000Z'));
+            assert.strictEqual(
+                connector.config['startup.mode.timestamp.start.at.operation.time'],
+                '2023-11-15T16:18:53.000Z',
+            );
+        });
+
+        it('Should set the resume point when not present and connector is stopped', () => {
+            connector._isRunning = false;
+            delete connector._config['startup.mode.timestamp.start.at.operation.time'];
+
+            connector.setResumePoint(new Date('2023-11-16T16:18:53.000Z'));
+            assert.strictEqual(
+                connector.config['startup.mode.timestamp.start.at.operation.time'],
+                '2023-11-16T16:18:53.000Z',
+            );
         });
     });
 });
