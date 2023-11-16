@@ -3,6 +3,8 @@ const { ZenkoMetrics } = require('arsenal').metrics;
 const LIFECYCLE_LABEL_ORIGIN =  'origin';
 const LIFECYCLE_LABEL_OP = 'op';
 const LIFECYCLE_LABEL_STATUS = 'status';
+const LIFECYCLE_LABEL_LOCATION = 'location';
+const LIFECYCLE_LABEL_TYPE = 'type';
 
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
@@ -37,6 +39,14 @@ const lifecycleS3Operations = ZenkoMetrics.createCounter({
         LIFECYCLE_LABEL_OP,
         LIFECYCLE_LABEL_STATUS,
     ],
+});
+
+const lifecycleTriggerLatency = ZenkoMetrics.createHistogram({
+    name: 's3_lifecycle_trigger_latency_seconds',
+    help: 'Delay between the theoretical date and identification of the object as eligible for ' +
+        'lifecycle operation',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
+    buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
 });
 
 const lifecycleKafkaPublish = {
@@ -85,6 +95,18 @@ class LifecycleMetrics {
             conductorBucketListings[err ? 'error' : 'success'].inc({});
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onBucketListing');
+        }
+    }
+
+    static onLifecycleTriggered(log, process, type, location, latencyMs) {
+        try {
+            lifecycleTriggerLatency.observe({
+                [LIFECYCLE_LABEL_ORIGIN]: process,
+                [LIFECYCLE_LABEL_TYPE]: type,
+                [LIFECYCLE_LABEL_LOCATION]: location,
+            }, latencyMs / 1000);
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered');
         }
     }
 

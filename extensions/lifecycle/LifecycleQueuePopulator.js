@@ -317,6 +317,9 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             const producer = this._producers[topic];
             if (producer) {
+                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'restore',
+                    locationName, Date.now() - Date.parse(value.archive.restoreRequestedAt));
+
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
                     LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageRestoreTopic', 'queuePopulator', err, 1);
@@ -428,6 +431,9 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
         const producer = this._producers[topic];
         if (producer) {
+            LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive:gc',
+                locationName, Date.now() - entry.timestamp);
+
             const kafkaEntry = { key: encodeURIComponent(key), message };
             producer.send([kafkaEntry], err => {
                 LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageGCTopic', 'queuePopulator', err, 1);
