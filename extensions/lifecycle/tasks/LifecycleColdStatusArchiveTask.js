@@ -103,6 +103,8 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 return next();
             }),
             next => {
+                const transitionTime = objectMD.getTransitionTime();
+
                 // set new ObjectMDArchive to ObjectMD
                 objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
 
@@ -113,10 +115,12 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                         .setUserMetadata({
                             'x-amz-meta-scal-s3-transition-attempt': undefined,
                         });
-                    }
+                }
 
                 this._putMetadata(entry, objectMD, log, err => {
                     LifecycleMetrics.onS3Request(log, 'putMetadata', 'archive', err);
+                    LifecycleMetrics.onLifecycleCompleted(log, 'archive',
+                        coldLocation, Date.now() - Date.parse(transitionTime));
                     return next(err);
                 });
             },

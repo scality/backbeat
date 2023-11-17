@@ -136,6 +136,10 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         attachReqUids(req, log);
         return req.send(err => {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
+            LifecycleMetrics.onLifecycleCompleted(log,
+                actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
+                entry.getAttribute('details.dataStoreName'),
+                Date.now() - entry.getAttribute('transitionTime'));
 
             if (err) {
                 log.error(

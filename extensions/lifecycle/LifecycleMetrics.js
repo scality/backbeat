@@ -49,6 +49,14 @@ const lifecycleTriggerLatency = ZenkoMetrics.createHistogram({
     buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
 });
 
+const lifecycleDuration = ZenkoMetrics.createHistogram({
+    name: 's3_lifecycle_duration_seconds',
+    help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end ' +
+        'of the operation',
+    labelNames: [LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
+    buckets: [0.2, 1, 5, 30, 120, 600, 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600],
+});
+
 const lifecycleKafkaPublish = {
     success: ZenkoMetrics.createCounter({
         name: 's3_lifecycle_kafka_publish_success_total',
@@ -107,6 +115,17 @@ class LifecycleMetrics {
             }, latencyMs / 1000);
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered');
+        }
+    }
+
+    static onLifecycleCompleted(log, type, location, durationMs) {
+        try {
+            lifecycleDuration.observe({
+                [LIFECYCLE_LABEL_TYPE]: type,
+                [LIFECYCLE_LABEL_LOCATION]: location,
+            }, durationMs / 1000);
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleCompleted');
         }
     }
 

@@ -159,7 +159,8 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
                 // queued for expiry but not yet expired)
-                if (new Date(archive.restoreWillExpireAt) > new Date()) {
+                const restoreExpirationDate = new Date(archive.restoreWillExpireAt);
+                if (restoreExpirationDate > new Date()) {
                     return process.nextTick(done);
                 }
 
@@ -172,7 +173,11 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 objMD.setAmzStorageClass(coldLocation);
                 objMD.setTransitionInProgress(false);
                 objMD.setOriginOp('s3:ObjectRestore:Delete');
-                return this._putMetadata(entry, objMD, log, err => next(err, objMD));
+                return this._putMetadata(entry, objMD, log, err => {
+                    LifecycleMetrics.onLifecycleCompleted(log, 'restore:delete',
+                        coldLocation, Date.now() - restoreExpirationDate);
+                    next(err, objMD);
+                });
             },
             (objMD, next) => this._garbageCollectLocation(
                 entry, objMD.getLocation(), log, next,

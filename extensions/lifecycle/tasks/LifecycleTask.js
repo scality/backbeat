@@ -1249,17 +1249,17 @@ class LifecycleTask extends BackbeatTask {
                 const toLocation = entry.getAttribute('toLocation');
                 const locationConfig = locationsConfig[toLocation];
                 if (locationConfig && locationConfig.isCold) {
-                        objectMD.setTransitionInProgress(true);
-                        const putParams = {
-                            bucket: params.bucket,
-                            objectKey: params.objectKey,
-                            versionId: params.versionId,
-                            mdBlob: objectMD.getSerialized(),
-                        };
-                        return this._putObjectMD(putParams, log, err => {
-                            LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
-                            return next(err);
-                        });
+                    objectMD.setTransitionInProgress(true, params.transitionDate);
+                    const putParams = {
+                        bucket: params.bucket,
+                        objectKey: params.objectKey,
+                        versionId: params.versionId,
+                        mdBlob: objectMD.getSerialized(),
+                    };
+                    return this._putObjectMD(putParams, log, err => {
+                        LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
+                        return next(err);
+                    });
                 }
 
                 return process.nextTick(next);
