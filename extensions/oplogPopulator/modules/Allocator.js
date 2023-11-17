@@ -67,14 +67,21 @@ class Allocator {
      * Starts listening to bucket by
      * adding and assigning a connector to it
      * @param {string} bucket bucket name
+     * @param {Date|null} eventDate oplog event date
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
      */
-    async listenToBucket(bucket) {
+    async listenToBucket(bucket, eventDate = null) {
         try {
             if (!this._bucketsToConnectors.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
                 const connector = this._allocationStrategy.getConnector(connectors);
+                // In the initial startup of the oplog populator
+                // we fetch the buckets directly from mongo.
+                // We don't have an event date in this case.
+                if (eventDate) {
+                    connector.setResumePoint(eventDate);
+                }
                 await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
                 this._metricsHandler.onConnectorConfigured(connector, 'add');

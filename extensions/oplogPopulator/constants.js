@@ -5,6 +5,9 @@ const constants = {
         'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
         'pipeline': '[]',
         'collection': '',
+        // If no timestamp is provided, the startup mode will be equivalent
+        // to 'latest' which will pick up from the latest event in the oplog
+        'startup.mode': 'timestamp',
         // JSON output converter config
         // Using a string converter to avoid getting an over-stringified
         // JSON that is returned by default

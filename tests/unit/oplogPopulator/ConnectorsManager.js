@@ -19,6 +19,7 @@ const connectorConfig = {
     'connector.class': 'com.mongodb.kafka.connect.MongoSourceConnector',
     'pipeline': '[]',
     'collection': '',
+    'startup.mode': 'timestamp',
     'output.format.value': 'json',
     'value.converter.schemas.enable': false,
     'value.converter': 'org.apache.kafka.connect.storage.StringConverter',
