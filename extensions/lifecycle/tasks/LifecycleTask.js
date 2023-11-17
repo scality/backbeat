@@ -1245,24 +1245,17 @@ class LifecycleTask extends BackbeatTask {
             (entry, objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
-                // Only implemented for transitions to cold location.
-                const toLocation = entry.getAttribute('toLocation');
-                const locationConfig = locationsConfig[toLocation];
-                if (locationConfig && locationConfig.isCold) {
-                    objectMD.setTransitionInProgress(true, params.transitionDate);
-                    const putParams = {
-                        bucket: params.bucket,
-                        objectKey: params.objectKey,
-                        versionId: params.versionId,
-                        mdBlob: objectMD.getSerialized(),
-                    };
-                    return this._putObjectMD(putParams, log, err => {
-                        LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
-                        return next(err);
-                    });
-                }
-
-                return process.nextTick(next);
+                objectMD.setTransitionInProgress(true, params.transitionDate);
+                const putParams = {
+                    bucket: params.bucket,
+                    objectKey: params.objectKey,
+                    versionId: params.versionId,
+                    mdBlob: objectMD.getSerialized(),
+                };
+                return this._putObjectMD(putParams, log, err => {
+                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
+                    return next(err);
+                });
             }
         ], err => {
             if (err) {

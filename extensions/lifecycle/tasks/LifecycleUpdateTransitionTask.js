@@ -70,7 +70,8 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         objMD.setLocation(location)
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
-            .setOriginOp('s3:LifecycleTransition');
+            .setOriginOp('s3:LifecycleTransition')
+            .setTransitionInProgress(false);
     }
 
     _putMetadata(entry, objMD, log, done) {
