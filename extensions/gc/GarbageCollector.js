@@ -174,6 +174,7 @@ class GarbageCollector extends EventEmitter {
         this._logger.debug('processing kafka entry');
 
         const actionEntry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+        actionEntry.setAttribute('timestamp', kafkaEntry.timestamp);
         if (actionEntry.error) {
             this._logger.error(
                 'malformed kafka entry from garbage collector topic',
