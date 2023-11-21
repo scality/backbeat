@@ -1,10 +1,13 @@
 const assert = require('assert');
 const async = require('async');
 const werelogs = require('werelogs');
-const ZookeeperMock = require('zookeeper-mock');
+const sinon = require('sinon');
 
 const NotificationConfigManager
     = require('../../../extensions/notification/NotificationConfigManager');
+
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
+const mockZookeeperClient = require('../utils/mockZookeeperClient');
 
 const logger = new werelogs.Logger('NotificationConfigManager:test');
 const zkConfigParentNode = 'config';
@@ -63,15 +66,9 @@ function deleteTestConfigs(zkClient, cb) {
 }
 
 describe('NotificationConfigManager multiple managers functional tests', () => {
-    const zk = new ZookeeperMock({ doLog: false });
-    const zkClient = zk.createClient();
-    const params = {
-        zkClient,
-        parentNode: zkConfigParentNode,
-        logger,
-    };
     let configManager1 = null;
     let configManager2 = null;
+    let zkClient;
 
     function checkCount() {
         const buckets1 = configManager1.getBucketsWithConfigs();
@@ -86,6 +83,14 @@ describe('NotificationConfigManager multiple managers functional tests', () => {
     }
 
     beforeEach(done => {
+        mockZookeeperClient({ doLog: false });
+        const fakeEndpoint = 'fake.endpoint:2181';
+        zkClient = new ZookeeperManager(fakeEndpoint, {}, logger);
+        const params = {
+            zkClient,
+            parentNode: zkConfigParentNode,
+            logger,
+        };
         configManager1 = new NotificationConfigManager(params);
         configManager2 = new NotificationConfigManager(params);
         populateTestConfigs(zkClient, 5, () => {
@@ -97,7 +102,7 @@ describe('NotificationConfigManager multiple managers functional tests', () => {
     });
 
     afterEach(() => {
-        zk._resetState();
+        sinon.restore();
     });
 
     it('managers should have the same config values after init', done => {
