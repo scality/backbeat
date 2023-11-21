@@ -17,9 +17,10 @@ class LifecycleResetTransitionInProgressTask extends LifecycleRequeueTask {
         if (this.shouldSkipObject(md, etag, log)) {
             return false;
         }
+        md.setOriginOp('s3:LifecycleTransition:Retry');
         md.setTransitionInProgress(false);
         md.setUserMetadata({
-                'x-amz-meta-scal-s3-transition-attempt': try_,
+            'x-amz-meta-scal-s3-transition-attempt': try_,
         });
         return true;
     }

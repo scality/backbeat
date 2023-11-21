@@ -248,6 +248,7 @@ class GarbageCollectorTask extends BackbeatTask {
                 objMD.setLocation()
                     .setDataStoreName(newLocation)
                     .setAmzStorageClass(newLocation)
+                    .setOriginOp('s3:LifecycleTransition')
                     .setTransitionInProgress(false)
                     .setUserMetadata({
                         'x-amz-meta-scal-s3-transition-attempt': undefined,

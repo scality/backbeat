@@ -1248,7 +1248,8 @@ class LifecycleTask extends BackbeatTask {
             (entry, objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
-                objectMD.setTransitionInProgress(true, params.transitionDate);
+                objectMD.setTransitionInProgress(true, params.transitionTime);
+                objectMD.setOriginOp('s3:LifecycleTransition:Start');
                 const putParams = {
                     bucket: params.bucket,
                     objectKey: params.objectKey,
