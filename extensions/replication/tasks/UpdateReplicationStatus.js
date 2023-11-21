@@ -234,6 +234,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             updatedSourceEntry.setSite(site);
             updatedSourceEntry.setReplicationSiteDataStoreVersionId(site,
                 sourceEntry.getReplicationSiteDataStoreVersionId(site));
+            updatedSourceEntry.setOriginOp('');
             return this.backbeatSourceClient
             .putMetadata(updatedSourceEntry, log, err => {
                 if (err) {
