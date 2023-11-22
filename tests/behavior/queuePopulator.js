@@ -1,6 +1,6 @@
 const assert = require('assert');
 const async = require('async');
-const zookeeper = require('../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../lib/clients/ZookeeperManager');
 
 const AWS = require('aws-sdk');
 const S3 = AWS.S3;
@@ -9,6 +9,8 @@ const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 
 const testConfig = require('../config.json');
 const testBucket = 'queue-populator-test-bucket';
+const Logger = require('werelogs').Logger;
+const log = new Logger('Backbeat:QueuePopulator');
 
 const s3config = {
     endpoint: `${testConfig.s3.transport}://` +
@@ -126,10 +128,9 @@ describe('queuePopulator', () => {
             },
             (data, next) => {
                 const { connectionString } = testConfig.zookeeper;
-                zkClient = zookeeper.createClient(connectionString, {
+                const zkClient = new ZookeeperManager(connectionString, {
                     autoCreateNamespace: false,
-                });
-                zkClient.connect();
+                }, log);
                 zkClient.once('error', next);
                 zkClient.once('ready', () => {
                     // just in case there would be more 'error' events emitted

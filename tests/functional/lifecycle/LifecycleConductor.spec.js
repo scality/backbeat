@@ -6,7 +6,7 @@ const http = require('http');
 const url = require('url');
 const werelogs = require('werelogs');
 
-const zookeeper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatTestConsumer = require('../../utils/BackbeatTestConsumer');
 const LifecycleConductor = require(
     '../../../extensions/lifecycle/conductor/LifecycleConductor');
@@ -137,6 +137,7 @@ const TIMEOUT = 120000;
 const CONSUMER_TIMEOUT = 60000;
 
 werelogs.configure({ level: 'info', dump: 'error' });
+const log = new werelogs.Logger('LifecycleConductor:test');
 
 describe('lifecycle conductor', function lifecycleConductor() {
     this.timeout(TIMEOUT);
@@ -470,10 +471,11 @@ describe('lifecycle conductor', function lifecycleConductor() {
                     },
                     next => {
                         if (setupZookeeper) {
-                            zkClient = zookeeper.createClient(
+                            zkClient = new ZookeeperManager(
                                 zkConfig.zookeeper.connectionString,
-                                zkConfig.zookeeper);
-                            zkClient.connect();
+                                zkConfig.zookeeper,
+                                log
+                            );
                             zkClient.once('ready', () => {
                                 lcConductor.initZkPaths(next);
                             });
