@@ -103,7 +103,7 @@ describe('ingestion reader tests with mock', function fD() {
     let httpServer;
     let producer;
     let zkClient;
-    
+
     before(done => {
         testConfig.s3.port = testPort;
         const mongoUrl =
