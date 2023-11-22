@@ -742,9 +742,7 @@ describe('BackbeatConsumer shutdown tests', () => {
         async.parallel([
             innerDone => producer.on('ready', innerDone),
             innerDone => {
-                zookeeper = zookeeperHelper.createClient(
-                    zookeeperConf.connectionString);
-                zookeeper.connect();
+                zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
                 zookeeper.on('ready', innerDone);
             },
         ], done);
