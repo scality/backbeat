@@ -5,7 +5,7 @@ const async = require('async');
 
 const werelogs = require('werelogs');
 
-const zookeeper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTestConsumer = require('../../utils/BackbeatTestConsumer');
 const KafkaBacklogMetrics = require('../../../lib/KafkaBacklogMetrics');
@@ -21,6 +21,7 @@ const kafkaConfig = {
         intervalS: 5,
     },
 };
+const log = new werelogs.Logger('KafkaBacklogMetrics:test');
 
 const TOPIC = 'kafka-backlog-metrics-test-topic';
 const GROUP_ID = 'kafka-backlog-metrics-test-consumer-group';
@@ -49,10 +50,7 @@ describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
                 kafkaBacklogMetrics.once('ready', next);
             },
             next => {
-                zkClient = zookeeper.createClient(
-                    zkConfig.connectionString,
-                    zkConfig);
-                zkClient.connect();
+                zkClient = new ZookeeperManager(zkConfig.connectionString, zkConfig, log);
                 zkClient.once('ready', next);
             },
             next => {

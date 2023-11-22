@@ -8,7 +8,7 @@ const config = require('../../../lib/Config');
 const { initManagement } = require('../../../lib/management/index');
 const { applyBucketReplicationWorkflows } = require('../management');
 const { reshapeExceptionError } = require('arsenal').errorUtils;
-const zookeeper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const { zookeeperNamespace, zkStatePath, zkReplayStatePath } =
     require('../constants');
 
@@ -284,10 +284,10 @@ function initAndStart(zkClient) {
     });
 }
 
-const zkClient = zookeeper.createClient(connectionString, {
+const zkClient = new ZookeeperManager(connectionString, {
     autoCreateNamespace,
-});
-zkClient.connect();
+}, log);
+
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {
         error: err.message,

@@ -17,7 +17,7 @@ const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
 const { initManagement } = require('../../../lib/management/index');
 const testConfig = require('../../config.json');
 const { setupS3Mock, emptyAndDeleteVersionedBucket } = require('./S3Mock');
-const zookeeper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 
 const testPort = testConfig.extensions.ingestion.sources[0].port;
@@ -33,9 +33,6 @@ oobEntries.forEach(bucketEntry => {
     bucketEntry.entries.forEach(entry => {
         expectedOOBEntries.push(JSON.stringify(entry.value));
     });
-});
-const zkClient = zookeeper.createClient('localhost:2181', {
-    autoCreateNamespace: true,
 });
 
 const Kafka = require('node-rdkafka');
@@ -60,7 +57,7 @@ const consumerParams = {
 };
 const consumer = new kafka.KafkaConsumer(consumerParams, {});
 
-function setZookeeperInitState(ingestionReader, cb) {
+function setZookeeperInitState(ingestionReader, zkClient, cb) {
     const path = `${ingestionReader.bucketInitPath}/isStatusComplete`;
     async.series([
         next => zkClient.mkdirp(path, next),
@@ -105,6 +102,7 @@ describe('ingestion reader tests with mock', function fD() {
     this.timeout(40000);
     let httpServer;
     let producer;
+    let zkClient;
 
     before(done => {
         testConfig.s3.port = testPort;
@@ -177,7 +175,7 @@ describe('ingestion reader tests with mock', function fD() {
             },
             next => {
                 const cbOnce = jsutil.once(next);
-                zkClient.connect();
+                zkClient = new ZookeeperManager('localhost:2181', { autoCreateNamespace: true }, dummyLogger);
                 zkClient.once('error', cbOnce);
                 zkClient.once('ready', () => {
                     zkClient.removeAllListeners('error');
@@ -246,7 +244,7 @@ describe('ingestion reader tests with mock', function fD() {
             });
             this.ingestionReader.setup(() => {
                 async.series([
-                    next => setZookeeperInitState(this.ingestionReader, next),
+                    next => setZookeeperInitState(this.ingestionReader, zkClient, next),
                     next => zkClient.setData(
                         this.ingestionReader.pathToLogOffset,
                         Buffer.from(mockLogOffset.toString()), -1, err => {
@@ -412,7 +410,7 @@ describe('ingestion reader tests with mock', function fD() {
             });
             this.ingestionReader.setup(() => {
                 async.series([
-                    next => setZookeeperInitState(this.ingestionReader, next),
+                    next => setZookeeperInitState(this.ingestionReader, zkClient, next),
                     next => setupS3Mock(sourceConfig, next),
                 ], err => {
                     assert.ifError(err);
