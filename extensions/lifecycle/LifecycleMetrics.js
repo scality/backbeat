@@ -49,6 +49,13 @@ const lifecycleTriggerLatency = ZenkoMetrics.createHistogram({
     buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
 });
 
+const lifecycleLatency = ZenkoMetrics.createHistogram({
+    name: 's3_lifecycle_latency_seconds',
+    help: 'Delay between the theoretical date and start of the lifecycle operation processing',
+    labelNames: [LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
+    buckets: [60, 600, 3600, 2 * 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600, 48 * 3600],
+});
+
 const lifecycleDuration = ZenkoMetrics.createHistogram({
     name: 's3_lifecycle_duration_seconds',
     help: 'Duration of the lifecycle operation, calculated from the theoretical date to the end ' +
@@ -115,6 +122,17 @@ class LifecycleMetrics {
             }, latencyMs / 1000);
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered');
+        }
+    }
+
+    static onLifecycleStarted(log, type, location, durationMs) {
+        try {
+            lifecycleLatency.observe({
+                [LIFECYCLE_LABEL_TYPE]: type,
+                [LIFECYCLE_LABEL_LOCATION]: location,
+            }, durationMs / 1000);
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleStarted');
         }
     }
 

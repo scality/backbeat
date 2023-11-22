@@ -60,6 +60,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             objectVersion: entry.target.objectVersion,
             archiveInfo: entry.archiveInfo,
             requestId: entry.requestId,
+            transitionTime: new Date().toISOString(),
         });
         this.coldProducer.sendToTopic(coldGcTopic, [{ message: gcMessage }], err => {
             if (err) {

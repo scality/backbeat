@@ -139,6 +139,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
      * @return {undefined}
      */
     processActionEntry(entry, done) {
+        const startTime = Date.now();
         const log = this.logger.newRequestLogger();
         entry.addLoggedAttributes({
             bucketName: 'target.bucket',
@@ -163,6 +164,9 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 if (restoreExpirationDate > new Date()) {
                     return process.nextTick(done);
                 }
+
+                LifecycleMetrics.onLifecycleStarted(log, 'restore:delete',
+                    coldLocation, startTime - restoreExpirationDate);
 
                 // Reset archive flags to no longer show it as restored
                 objMD.setArchive({

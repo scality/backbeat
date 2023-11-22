@@ -98,7 +98,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         return done();
     }
 
-    _executeDelete(entry, log, done) {
+    _executeDelete(entry, startTime, log, done) {
         const { accountId } = entry.getAttribute('target');
 
         const reqParams = {
@@ -112,6 +112,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         let reqMethod;
 
         const actionType = entry.getActionType();
+        const transitionTime = entry.getAttribute('transitionTime');
+        const location = this.objectMD?.dataStoreName || entry.getAttribute('details.dataStoreName');
         let req = null;
         if (actionType === 'deleteObject') {
             reqMethod = 'deleteObject';
@@ -121,6 +123,10 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 return done(errors.InternalError
                     .customizeDescription('Unable to obtain client'));
             }
+
+            LifecycleMetrics.onLifecycleStarted(log, 'expiration',
+                location, startTime - transitionTime);
+
             req = backbeatClient.deleteObjectFromExpiration(reqParams);
         } else if (actionType === 'deleteMPU') {
             reqParams.UploadId = entry.getAttribute('details.UploadId');
@@ -131,6 +137,10 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 return done(errors.InternalError
                     .customizeDescription('Unable to obtain client'));
             }
+
+            LifecycleMetrics.onLifecycleStarted(log, 'expiration:mpu',
+                location, startTime - transitionTime);
+
             req = s3Client[reqMethod](reqParams);
         }
         attachReqUids(req, log);
@@ -138,8 +148,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
             LifecycleMetrics.onLifecycleCompleted(log,
                 actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
-                entry.getAttribute('details.dataStoreName'),
-                Date.now() - entry.getAttribute('transitionTime'));
+                location, Date.now() - entry.getAttribute('transitionTime'));
 
             if (err) {
                 log.error(
@@ -226,6 +235,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
      */
 
     processActionEntry(entry, done) {
+        const startTime = Date.now();
         const log = this.logger.newRequestLogger();
         entry.addLoggedAttributes({
             bucketName: 'target.bucket',
@@ -237,7 +247,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             next => this._checkDate(entry, log, next),
             next => this._checkObjectLockState(entry, log, next),
             next => this._checkReplicationStatus(entry, log, next),
-            next => this._executeDelete(entry, log, next),
+            next => this._executeDelete(entry, startTime, log, next),
         ], err => {
             if (err && err instanceof ObjectLockedError) {
                 log.debug('Object is locked, skipping',
