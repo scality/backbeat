@@ -16,7 +16,7 @@ const { reshapeExceptionError } = require('arsenal').errorUtils;
 const IngestionPopulator = require('../lib/queuePopulator/IngestionPopulator');
 const config = require('../lib/Config');
 const { initManagement } = require('../lib/management/index');
-const zookeeperWrapper = require('../lib/clients/zookeeper');
+const ZookeeperManager = require('../lib/clients/ZookeeperManager');
 const { zookeeperNamespace, zkStatePath } =
     require('../extensions/ingestion/constants');
 const { startProbeServer } = require('../lib/util/probe');
@@ -314,10 +314,9 @@ function initAndStart(zkClient) {
     });
 }
 
-const zkClient = zookeeperWrapper.createClient(connectionString, {
+const zkClient = new ZookeeperManager(connectionString, {
     autoCreateNamespace,
-});
-zkClient.connect();
+}, log);
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {
         error: err.message,

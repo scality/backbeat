@@ -1,9 +1,10 @@
 const assert = require('assert');
 const async = require('async');
+const werelogs = require('werelogs');
 
 const { metrics } = require('arsenal');
 
-const zookeeperHelper = require('../../../lib/clients/zookeeper');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const { promMetricNames } =
@@ -19,6 +20,7 @@ const consumerKafkaConf = {
         intervalS: 1,
     },
 };
+const log = new werelogs.Logger('BackbeatConsumer:test');
 
 describe('BackbeatConsumer main tests', () => {
     const topic = 'backbeat-consumer-spec';
@@ -52,9 +54,7 @@ describe('BackbeatConsumer main tests', () => {
             innerDone => producer.on('ready', innerDone),
             innerDone => consumer.on('ready', innerDone),
             innerDone => {
-                zookeeper = zookeeperHelper.createClient(
-                    zookeeperConf.connectionString);
-                zookeeper.connect();
+                zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
                 zookeeper.on('ready', innerDone);
             },
         ], done);
