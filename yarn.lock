@@ -1136,9 +1136,9 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#8.1.103":
-  version "8.1.103"
-  resolved "git+https://github.com/scality/arsenal#96cbaeb821d8045cbe8eabd00092290e13e46784"
+"arsenal@git+https://github.com/scality/arsenal#8.1.115":
+  version "8.1.115"
+  resolved "git+https://github.com/scality/arsenal#d800179f86e81a9632b4e4b935ae106a6fdf1871"
   dependencies:
     "@azure/identity" "^3.1.1"
     "@azure/storage-blob" "^12.12.0"
@@ -1155,8 +1155,8 @@ arraybuffer.slice@~0.0.7:
     bson "4.0.0"
     debug "~4.1.0"
     diskusage "^1.1.1"
-    fcntl "github:scality/node-fcntl#0.2.0"
-    hdclient scality/hdclient#1.1.5
+    fcntl "github:scality/node-fcntl#0.2.2"
+    hdclient scality/hdclient#1.1.7
     httpagent scality/httpagent#1.0.6
     https-proxy-agent "^2.2.0"
     ioredis "^4.28.5"
@@ -1170,7 +1170,7 @@ arraybuffer.slice@~0.0.7:
     simple-glob "^0.2.0"
     socket.io "~4.6.1"
     socket.io-client "~4.6.1"
-    sproxydclient "git+https://github.com/scality/sproxydclient#8.0.9"
+    sproxydclient "git+https://github.com/scality/sproxydclient#8.0.10"
     utf8 "3.0.0"
     uuid "^3.0.1"
     werelogs scality/werelogs#8.1.2
@@ -2660,9 +2660,9 @@ fastq@^1.6.0:
     nan "^2.3.2"
     node-gyp "^8.0.0"
 
-"fcntl@github:scality/node-fcntl#0.2.1":
+"fcntl@github:scality/node-fcntl#0.2.2":
   version "0.2.1"
-  resolved "https://codeload.github.com/scality/node-fcntl/tar.gz/ed31a05368cf3c1d18fac426e010977ac44f6815"
+  resolved "https://codeload.github.com/scality/node-fcntl/tar.gz/b1335ca204c6265cedc50c26020c4d63aabe920e"
   dependencies:
     bindings "^1.1.1"
     nan "^2.3.2"
@@ -3164,6 +3164,13 @@ hdclient@scality/hdclient#1.1.5:
   dependencies:
     httpagent "github:scality/httpagent#1.0.6"
     werelogs "github:scality/werelogs#8.1.2"
+
+hdclient@scality/hdclient#1.1.7:
+  version "1.1.7"
+  resolved "https://codeload.github.com/scality/hdclient/tar.gz/dc079f9a5c0366d8b06e4ec4a58a755c10de9556"
+  dependencies:
+    httpagent "github:scality/httpagent#1.0.6"
+    werelogs "github:scality/werelogs#8.1.3"
 
 he@1.1.1:
   version "1.1.1"
@@ -5922,9 +5929,9 @@ sprintf-js@~1.0.2:
   resolved "https://registry.yarnpkg.com/sprintf-js/-/sprintf-js-1.0.3.tgz#04e6926f662895354f3dd015203633b857297e2c"
   integrity sha512-D9cPgkvLlV3t3IzL0D0YLvGA9Ahk4PcvVwUbN0dSGr1aP0Nrt4AEnTUbuGvquEC0mA64Gqt1fzirlRs5ibXx8g==
 
-"sproxydclient@git+https://github.com/scality/sproxydclient#8.0.9":
-  version "8.0.9"
-  resolved "git+https://github.com/scality/sproxydclient#117b53fb472fb95e06605a5f6872be068a659fda"
+"sproxydclient@git+https://github.com/scality/sproxydclient#8.0.10":
+  version "8.0.10"
+  resolved "git+https://github.com/scality/sproxydclient#dca287a1d50c2a38919710e44a58af2e8b4127e0"
   dependencies:
     async "^3.2.0"
     httpagent "github:scality/httpagent#1.0.6"
@@ -6585,7 +6592,7 @@ webidl-conversions@^7.0.0:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-werelogs@scality/werelogs:
+"werelogs@github:scality/werelogs#8.1.3", werelogs@scality/werelogs:
   version "8.1.3"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/e1574238a607a5421e7872d53355c6a0c8cec9b3"
   dependencies:
