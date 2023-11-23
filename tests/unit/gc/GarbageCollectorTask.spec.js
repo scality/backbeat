@@ -43,9 +43,11 @@ describe('GarbageCollectorTask', () => {
         gcProducer = new GarbageCollectorProducerMock();
         gcProcessor = new ProcessorMock(
             null,
+            null,
             backbeatClient,
             backbeatMetadataProxyClient,
             gcProducer,
+            null,
             new werelogs.Logger('test:GarbageCollectorTask'));
         gcTask = new GarbageCollectorTask(gcProcessor);
     });

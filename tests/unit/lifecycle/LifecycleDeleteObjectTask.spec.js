@@ -29,9 +29,11 @@ describe('LifecycleDeleteObjectTask', () => {
         backbeatMdProxyClient = new BackbeatMetadataProxyMock();
         backbeatClient = new BackbeatClientMock();
         objectProcessor = new ProcessorMock(
+            null,
             s3Client,
             backbeatClient,
             backbeatMdProxyClient,
+            null,
             null,
             new werelogs.Logger('test:LifecycleDeleteObjectTask'));
         objMd = new ObjectMD();

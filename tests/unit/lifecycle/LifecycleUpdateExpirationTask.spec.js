@@ -35,8 +35,10 @@ describe('LifecycleUpdateExpirationTask', () => {
         objectProcessor = new ProcessorMock(
             null,
             null,
+            null,
             backbeatMetadataProxyClient,
             gcProducer,
+            null,
             new werelogs.Logger('test:LifecycleUpdateExpirationTask'));
         actionEntry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target', {

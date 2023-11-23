@@ -46,8 +46,10 @@ describe('LifecycleUpdateTransitionTask', () => {
         objectProcessor = new ProcessorMock(
             null,
             null,
+            null,
             backbeatMetadataProxyClient,
             gcProducer,
+            null,
             new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
         mdObj = new ObjectMD();
         mdObj.setLocation(oldLocation)
