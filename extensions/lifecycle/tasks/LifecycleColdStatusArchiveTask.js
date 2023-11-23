@@ -5,6 +5,8 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateTransitionTask = require('./LifecycleUpdateTransitionTask');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 
+class SkipMdUpdateError extends Error {}
+
 class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
     getTargetAttribute(entry) {
         const {
@@ -40,6 +42,38 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
         });
     }
 
+    /**
+     * Requests the deletion of a cold object by pushing
+     * a message into the cold GC topic
+     * @param {string} coldLocation cold location name
+     * @param {ColdStorageStatusQueueEntry} entry entry received
+     * from the cold location status topic
+     * @param {Logger} log logger instance
+     * @param {function} cb callback
+     * @return {undefined}
+     */
+    _deleteColdObject(coldLocation, entry, log, cb) {
+        const coldGcTopic = `${this.lcConfig.coldStorageGCTopicPrefix}${coldLocation}`;
+        const gcMessage = JSON.stringify({
+            bucketName: entry.target.bucketName,
+            objectKey: entry.target.objectKey,
+            objectVersion: entry.target.objectVersion,
+            archiveInfo: entry.archiveInfo,
+            requestId: entry.requestId,
+        });
+        this.coldProducer.sendToTopic(coldGcTopic, [{ message: gcMessage }], err => {
+            if (err) {
+                log.error('error sending cold object deletion entry', {
+                    error: err,
+                    entry: entry.getLogInfo(),
+                    method: 'LifecycleColdStatusArchiveTask._deleteColdObject',
+                });
+                return cb(err);
+            }
+            return cb(new SkipMdUpdateError('cold object deleted'));
+        });
+    }
+
     processEntry(coldLocation, entry, done) {
         const log = this.logger.newRequestLogger();
         let objectMD;
@@ -50,6 +84,13 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             next => this._getMetadata(entry, log, (err, res) => {
                 LifecycleMetrics.onS3Request(log, 'getMetadata', 'archive', err);
                 if (err) {
+                    if (err.code === 'ObjNotFound') {
+                        log.info('object metadata not found, cleaning orphan cold object', {
+                            entry: entry.getLogInfo(),
+                            method: 'LifecycleColdStatusArchiveTask.processEntry',
+                        });
+                        return this._deleteColdObject(coldLocation, entry, log, next);
+                    }
                     return next(err);
                 }
 
@@ -87,7 +128,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
                 return process.nextTick(next);
             },
         ], err => {
-            if (err) {
+            if (err && !(err instanceof SkipMdUpdateError)) {
                 // if error occurs, do not commit offset
                 return done(err, { committable: false });
             }
