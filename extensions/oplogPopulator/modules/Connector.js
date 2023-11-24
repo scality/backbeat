@@ -132,7 +132,7 @@ class Connector {
 
         this._config['startup.mode.timestamp.start.at.operation.time'] = eventDate.toISOString();
 
-        this._logger.info('Updating resume date', {
+        this._logger.info('Connector resume point updated', {
             method: 'Connector.updateResumeDate',
             date: eventDate.toISOString(),
             connector: this._name,

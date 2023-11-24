@@ -233,7 +233,7 @@ class ConnectorsManager {
             if (connector.isRunning && connector.bucketCount === 0) {
                 await connector.destroy();
                 this._metricsHandler.onConnectorDestroyed();
-                this._logger.info('Successfully spawned a connector', {
+                this._logger.info('Successfully destroyed a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
                     connector: connector.name
                 });
@@ -241,7 +241,7 @@ class ConnectorsManager {
             } else if (!connector.isRunning && connector.bucketCount > 0) {
                 await connector.spawn();
                 this._metricsHandler.onConnectorsInstantiated(false);
-                this._logger.info('Successfully destroyed a connector', {
+                this._logger.info('Successfully spawned a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
                     connector: connector.name
                 });
