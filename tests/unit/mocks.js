@@ -16,6 +16,27 @@ class GarbageCollectorProducerMock {
     }
 }
 
+class BackbeatProducerMock {
+    constructor() {
+        this.receivedEntry = null;
+        this.topic = null;
+    }
+
+    sendToTopic(coldGcTopic, gcEntries, cb) {
+        this.receivedEntry = gcEntries;
+        this.topic = coldGcTopic;
+        cb();
+    }
+
+    getReceivedEntry() {
+        return this.receivedEntry;
+    }
+
+    getReceivedTopic() {
+        return this.topic;
+    }
+}
+
 class MockRequestAPI extends EventEmitter {
     /**
      * @param {object} args -
@@ -116,18 +137,22 @@ class BackbeatMetadataProxyMock {
 }
 
 class ProcessorMock {
-    constructor(s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, logger) {
+    constructor(lcConfig, s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, coldProducer, logger) {
+        this.lcConfig = lcConfig;
         this.s3Client = s3Client;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
         this.backbeatClient = backbeatClient;
         this.gcProducer = gcProducer;
+        this.coldProducer = coldProducer;
         this.logger = logger;
     }
 
     getStateVars() {
         return {
+            lcConfig: this.lcConfig,
             backbeatClient: this.backbeatMetadataProxy,
             gcProducer: this.gcProducer,
+            coldProducer: this.coldProducer,
             logger: this.logger,
             getBackbeatClient: () => this.backbeatClient,
             getBackbeatMetadataProxy: () => this.backbeatMetadataProxy,
@@ -195,4 +220,5 @@ module.exports = {
     BackbeatMetadataProxyMock,
     BackbeatClientMock,
     S3ClientMock,
+    BackbeatProducerMock,
 };

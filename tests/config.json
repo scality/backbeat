@@ -219,6 +219,9 @@
                 "account": "bart"
             },
             "coldStorageArchiveTopicPrefix": "cold-archive-req-",
+            "coldStorageRestoreTopicPrefix": "cold-restore-req-",
+            "coldStorageGCTopicPrefix": "cold-gc-req-",
+            "coldStorageStatusTopicPrefix": "cold-status-",
             "coldStorageTopics": []
         },
         "gc": {

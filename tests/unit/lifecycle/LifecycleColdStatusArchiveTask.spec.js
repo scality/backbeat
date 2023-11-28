@@ -1,6 +1,8 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
 const { ObjectMD } = require('arsenal').models;
+const sinon = require('sinon');
+const config = require('../../config.json');
 
 const LifecycleColdStatusArchiveTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
@@ -12,6 +14,7 @@ const {
     ProcessorMock,
     BackbeatClientMock,
     BackbeatMetadataProxyMock,
+    BackbeatProducerMock,
 } = require('../mocks');
 
 const message = Buffer.from(`{
@@ -41,6 +44,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
     let backbeatClient;
     let backbeatMetadataProxyClient;
     let gcProducer;
+    let coldProducer;
     let objectProcessor;
     let mdObj;
 
@@ -49,11 +53,14 @@ describe('LifecycleColdStatusArchiveTask', () => {
         backbeatClient = new BackbeatClientMock();
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
+        coldProducer = new BackbeatProducerMock();
         objectProcessor = new ProcessorMock(
+            config.extensions.lifecycle,
             null,
             backbeatClient,
             backbeatMetadataProxyClient,
             gcProducer,
+            coldProducer,
             new werelogs.Logger('test:LifecycleColdStatusArchiveTask'));
         archiveTask = new LifecycleColdStatusArchiveTask(objectProcessor);
     });
@@ -113,6 +120,37 @@ describe('LifecycleColdStatusArchiveTask', () => {
                 archiveId: 'da80b6dc-280d-4dce-83b5-d5b40276e321',
                 archiveVersion: 5166759712787974,
             });
+            done();
+        });
+    });
+
+    it('should send kafka entry to delete orphan cold object when source object was deleted', done => {
+        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+
+        sinon.stub(backbeatMetadataProxyClient, 'getMetadata').yields({ code: 'ObjNotFound' });
+
+        archiveTask.processEntry(coldLocation, entry, err => {
+            assert.ifError(err);
+
+            const gcColdEntry = coldProducer.getReceivedEntry()[0];
+            const message = JSON.parse(gcColdEntry.message);
+
+            const topic = coldProducer.getReceivedTopic();
+
+            assert.strictEqual(topic, 'cold-gc-req-cold');
+
+            assert.strictEqual(message.bucketName, entry.target.bucketName);
+            assert.strictEqual(message.objectKey, entry.target.objectKey);
+            assert.strictEqual(message.objectVersion, entry.target.objectVersion);
+            assert.deepStrictEqual(message.archiveInfo.archiveId, entry.archiveInfo.archiveId);
+            assert.strictEqual(message.archiveInfo.archiveVersion, entry.archiveInfo.archiveVersion);
+
+            const updatedMD = backbeatMetadataProxyClient.getReceivedMd();
+            assert.strictEqual(updatedMD, null);
+
+            const gcEntry = gcProducer.getReceivedEntry();
+            assert.strictEqual(gcEntry, null);
+
             done();
         });
     });

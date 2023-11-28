@@ -10,6 +10,7 @@ const { LifecycleResetTransitionInProgressTask } =
       require('../tasks/LifecycleResetTransitionInProgressTask');
 const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
 const { LifecycleRetriggerRestoreTask } = require('../tasks/LifecycleRetriggerRestoreTask');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -43,6 +44,45 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      */
     constructor(zkConfig, kafkaConfig, lcConfig, s3Config, transport = 'http') {
         super(zkConfig, kafkaConfig, lcConfig, s3Config, transport);
+    }
+
+    /**
+     * Start kafka consumer. Emits a 'ready' event when
+     * consumer is ready.
+     * @param {function} done - callback
+     * @return {undefined}
+     */
+    start(done) {
+        super.start(err => {
+            if (err) {
+                return done(err);
+            }
+            return this.setupProducer(done);
+        });
+    }
+
+    /**
+     * Set up Kafka producer
+     * @param {function} cb callback called when producer
+     * startup is complete
+     * @return {undefined}
+     */
+    setupProducer(cb) {
+        const producer = new BackbeatProducer({
+            kafka: { hosts: this._kafkaConfig.hosts },
+            maxRequestSize: this._kafkaConfig.maxRequestSize,
+        });
+        producer.once('error', cb);
+        producer.once('ready', () => {
+            producer.removeAllListeners('error');
+            producer.on('error', err =>
+                this._log.error('error from backbeat producer', {
+                    method: 'LifecycleObjectTransitionProcessor.setupProducer',
+                    error: err,
+                }));
+            this._coldProducer = producer;
+            return cb();
+        });
     }
 
     getProcessorType() {
@@ -152,6 +192,13 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
             shouldRetryFunc: err => err.retryable,
             log: this._log,
         }, done);
+    }
+
+    getStateVars() {
+        return {
+            ...super.getStateVars(),
+            coldProducer: this._coldProducer,
+        };
     }
 }
 

@@ -45,7 +45,9 @@ describe('LifecycleResetTransitionInProgressTask', () => {
         objectProcessor = new ProcessorMock(
             null,
             null,
+            null,
             backbeatMetadataProxyClient,
+            null,
             null,
             new werelogs.Logger('test:LifecycleResetTransitionInProgressTask'));
 
