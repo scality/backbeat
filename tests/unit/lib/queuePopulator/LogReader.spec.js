@@ -85,6 +85,7 @@ describe('LogReader', () => {
         });
         const record = {
             db: 'example-bucket',
+            timestamp: Date.now(),
         };
         const masterEntry = {
             type: 'example-type',
@@ -104,6 +105,7 @@ describe('LogReader', () => {
             key: 'example-key',
             value: 'example-value',
             logReader: logReaderWithExtension,
+            timestamp: record.timestamp,
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
         assert(mockExtension.filter.secondCall.calledWith(expectedArgs));
@@ -123,6 +125,7 @@ describe('LogReader', () => {
         });
         const record = {
             db: 'example-bucket',
+            timestamp: Date.now(),
         };
         const masterEntry = {
             type: 'example-type',
@@ -142,6 +145,7 @@ describe('LogReader', () => {
             key: 'fMexample-key',
             value: 'example-value',
             logReader: logReaderWithExtension,
+            timestamp: record.timestamp,
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
         expectedArgs.key = 'fVexample-key';

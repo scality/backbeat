@@ -227,6 +227,16 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             mdValue.isDeleteMarker;
     }
 
+    /**
+     * Parses a date object or string and returns a Date instance. Date in the oplog may be an
+     * ISODate from MongoDB, or a fully serialized date: allow both cases to be on the safe side.
+     * @param {Object|string} date - The date object or string to parse.
+     * @returns {Date} The parsed Date instance.
+     */
+    _parseDate(date) {
+        return new Date(date.$date || date);
+    }
+
     _handleRestoreOp(entry) {
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
@@ -305,12 +315,14 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             }
 
             const requestedDurationSecs = value.archive.restoreRequestedDays * nSecsPerDay();
+            const transitionTime = this._parseDate(value.archive.restoreRequestedAt);
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
+                transitionTime: transitionTime.toISOString(),
                 accountId,
                 requestedDurationSecs,
             });
@@ -318,7 +330,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             const producer = this._producers[topic];
             if (producer) {
                 LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'restore',
-                    locationName, Date.now() - Date.parse(value.archive.restoreRequestedAt));
+                    locationName, Date.now() - transitionTime.getTime());
 
                 const kafkaEntry = { key: encodeURIComponent(key), message };
                 producer.send([kafkaEntry], err => {
@@ -427,6 +439,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             objectVersion: version,
             archiveInfo: value.archive.archiveInfo,
             requestId: uuid(),
+            transitionTime: new Date(entry.timestamp).toISOString(),
         });
 
         const producer = this._producers[topic];

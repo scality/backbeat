@@ -1239,6 +1239,9 @@ class LifecycleTask extends BackbeatTask {
                 LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
                     isCold ? 'archive' : 'transition',
                     locationName, Date.now() - params.transitionTime);
+                if (isCold) {
+                    entry.setAttribute('metrics.transitionTime', params.transitionTime);
+                }
                 return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
                     err => next(err, entry, objectMD));
             },

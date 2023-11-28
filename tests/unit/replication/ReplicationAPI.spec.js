@@ -35,6 +35,7 @@ describe('ReplicationAPI', () => {
 
     describe('::sendDataMoverAction ', () => {
         it('should publish to archive topic', done => {
+            const transitionTime = Date.now();
             const action = ActionQueueEntry.create('copyLocation');
             action
                 .setAttribute('target', {
@@ -51,6 +52,7 @@ describe('ReplicationAPI', () => {
                     origin: originLabel,
                     fromLocation,
                     contentLength,
+                    transitionTime,
                 })
                 .setResultsTopic(resultsTopic);
             ReplicationAPI.sendDataMoverAction(mockProducer, action, fakeLogger, err => {
@@ -65,6 +67,7 @@ describe('ReplicationAPI', () => {
                             objectVersion: versionId,
                             size: contentLength,
                             eTag,
+                            transitionTime: new Date(transitionTime).toISOString(),
                         },
                     },
                 ];
