@@ -79,3 +79,10 @@ flag_management:
   default_rules: # the rules that will be followed for any flag added, generally
     carryforward: true
     statuses: []
+
+# Do not consider zenko integration builds in coverage comparisons
+flags:
+  zenko-end2end-sharded:
+    joined: false
+  zenko-ctst-end2end-sharded:
+    joined: false
