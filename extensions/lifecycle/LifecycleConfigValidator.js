@@ -64,6 +64,7 @@ const joiSchema = joi.object({
     },
     coldStorageArchiveTopicPrefix: joi.string().default('cold-archive-req-'),
     coldStorageRestoreTopicPrefix: joi.string().default('cold-restore-req-'),
+    coldStorageRestoreAdjustTopicPrefix: joi.string().default('cold-restore-adjust-req-'),
     coldStorageGCTopicPrefix: joi.string().default('cold-gc-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
 });

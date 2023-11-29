@@ -15,7 +15,11 @@ const METASTORE = '__metastore';
 const VaultClientWrapper = require('../utils/VaultClientWrapper');
 
 const config = require('../../lib/Config');
-const { coldStorageRestoreTopicPrefix, coldStorageGCTopicPrefix } = config.extensions.lifecycle;
+const {
+    coldStorageRestoreAdjustTopicPrefix,
+    coldStorageRestoreTopicPrefix,
+    coldStorageGCTopicPrefix,
+} = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
 
@@ -87,6 +91,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         if (coldLocations.length > 0) {
             return async.eachLimit(coldLocations, 10, (location, done) => {
                 async.series([
+                    next => this._setupProducer(`${coldStorageRestoreAdjustTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageRestoreTopicPrefix}${location}`, next),
                     next => this._setupProducer(`${coldStorageGCTopicPrefix}${location}`, next),
                 ], done);
@@ -247,13 +252,15 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        // if object already restore nothing to do, S3 has already updated object MD
-        const isObjectAlreadyRestored = value.archive
-            && value.archive.restoreCompletedAt
-            && new Date(value.archive.restoreWillExpireAt) >= new Date();
+        // If object already restored, adjust restore max age with the new value
+        const isObjectAlreadyRestored = !!value.archive && !!value.archive.restoreCompletedAt;
+        if (isObjectAlreadyRestored) {
+            this._adjustRestoreMaxAge(value);
+            return;
+        }
 
         if (!value.archive || !value.archive.restoreRequestedAt ||
-            !value.archive.restoreRequestedDays || isObjectAlreadyRestored) {
+            !value.archive.restoreRequestedDays) {
             return;
         }
 
@@ -321,6 +328,42 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 });
             }
         });
+    }
+
+    _adjustRestoreMaxAge(md) {
+        // We might be receiving this message with some delay, so ignore if already expired.
+        const objectExpired = new Date(md.archive.restoreWillExpireAt) < new Date();
+        if (objectExpired) {
+            return;
+        }
+
+        const message = JSON.stringify({
+            archiveInfo: md.archive.archiveInfo,
+            adjust: {
+                restoreWillExpireAt: md.archive.restoreWillExpireAt,
+            },
+            updatedAt: md['last-modified'],
+            requestId: uuid(),
+        });
+
+        const topic = `${coldStorageRestoreAdjustTopicPrefix}${md.dataStoreName}`;
+        const producer = this._producers[topic];
+        if (producer) {
+            const kafkaEntry = { message };
+            producer.send([kafkaEntry], err => {
+                LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageRestoreAdjustTopic', 'queuePopulator', err, 1);
+                if (err) {
+                    this.log.error('error publishing object restore request entry', {
+                        error: err,
+                        method: 'LifecycleQueuePopulator._adjustRestoreMaxAge',
+                    });
+                }
+            });
+        } else {
+            this.log.error(`producer not available for location ${md.dataStoreName}`, {
+                method: 'LifecycleQueuePopulator._adjustRestoreMaxAge',
+            });
+        }
     }
 
     _handleDeleteOp(entry) {
