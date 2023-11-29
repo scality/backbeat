@@ -4,7 +4,11 @@ const werelogs = require('werelogs');
 const { encode } = require('arsenal').versioning.VersionID;
 
 const config = require('../../../lib/Config');
-const { coldStorageRestoreTopicPrefix, coldStorageGCTopicPrefix } = config.extensions.lifecycle;
+const {
+    coldStorageRestoreAdjustTopicPrefix,
+    coldStorageRestoreTopicPrefix,
+    coldStorageGCTopicPrefix
+} = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
 
@@ -118,13 +122,14 @@ describe('LifecycleQueuePopulator', () => {
                 done();
             });
         });
-        it('should have two producers per cold location', done => {
+        it('should have three producers per cold location', done => {
             lcqp.locationConfigs = Object.assign({}, locationConfigs, coldLocationConfigs);
             lcqp.setupProducers(() => {
                 const producers = Object.keys(lcqp._producers);
                 const coldLocations = Object.keys(coldLocationConfigs);
-                assert.strictEqual(producers.length, coldLocations.length * 2);
+                assert.strictEqual(producers.length, coldLocations.length * 3);
                 coldLocations.forEach(loc => {
+                    assert(producers.includes(`${coldStorageRestoreAdjustTopicPrefix}${loc}`));
                     assert(producers.includes(`${coldStorageRestoreTopicPrefix}${loc}`));
                     assert(producers.includes(`${coldStorageGCTopicPrefix}${loc}`));
                 });
@@ -170,6 +175,115 @@ describe('LifecycleQueuePopulator', () => {
                 const entry = getKafkaEntry(params.event);
                 lcqp._handleRestoreOp(entry);
                 assert.strictEqual(getAccountIdStub.calledOnce, !params.ignore);
+            });
+        });
+
+        describe('restored objects', () => {
+            let kafkaSendStub;
+            let clock;
+
+            beforeEach(() => {
+                clock = sinon.useFakeTimers({
+                    now: 1499913865515,
+                  });
+
+                kafkaSendStub = sinon.stub().yields();
+                lcqp._producers[`${coldStorageRestoreAdjustTopicPrefix}dmf-v1`] = {
+                    send: kafkaSendStub,
+                };
+            });
+
+            afterEach(() => {
+                kafkaSendStub.reset();
+                clock.restore();
+            });
+
+            it('should send duration-adjust message for already restored objects', () => {
+                const objMd = {
+                    'md-model-version': 2,
+                    'owner-display-name': 'Bart',
+                    'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                    'x-amz-storage-class': 'dmf-v1',
+                    'content-length': 542,
+                    'content-type': 'text/plain',
+                    'last-modified': '2017-07-13T02:44:25.515Z',
+                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                    'key': 'object',
+                    'location': [],
+                    'isDeleteMarker': false,
+                    'isNull': false,
+                    'archive': {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669
+                        },
+                        restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                        restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                    },
+                    'dataStoreName': 'dmf-v1',
+                    'originOp': 's3:ObjectRestore:Post',
+                };
+                const entry = {
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: 'object',
+                    value: JSON.stringify(objMd),
+                };
+
+                lcqp._handleRestoreOp(entry);
+
+                assert(kafkaSendStub.calledOnce);
+
+                const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                const expectedMessage = {
+                    adjust: {
+                        restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
+                    },
+                    archiveInfo: {
+                        archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                        archiveVersion: 7504504064263669
+                    },
+                    requestId: message.requestId,
+                    updatedAt: '2017-07-13T02:44:25.515Z',
+                };
+                assert.deepStrictEqual(message, expectedMessage);
+            });
+
+            it('should not send duration-adjust message for already expired restored objects', () => {
+                const objMd = {
+                    'md-model-version': 2,
+                    'owner-display-name': 'Bart',
+                    'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                    'x-amz-storage-class': 'dmf-v1',
+                    'content-length': 542,
+                    'content-type': 'text/plain',
+                    'last-modified': '2017-07-13T02:44:25.515Z',
+                    'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                    'key': 'object',
+                    'location': [],
+                    'isDeleteMarker': false,
+                    'isNull': false,
+                    'archive': {
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669
+                        },
+                        restoreCompletedAt: '2017-07-13T02:44:25.519Z',
+                        restoreWillExpireAt: '2017-07-12T02:44:25.519Z',
+                    },
+                    'dataStoreName': 'dmf-v1',
+                    'originOp': 's3:ObjectRestore:Post',
+                };
+                const entry = {
+                    type: 'put',
+                    bucket: 'lc-queue-populator-test-bucket',
+                    key: 'object',
+                    value: JSON.stringify(objMd),
+                };
+
+                lcqp._handleRestoreOp(entry);
+
+                assert(!kafkaSendStub.calledOnce);
             });
         });
     });
