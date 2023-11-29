@@ -230,9 +230,16 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
 });
 
 describe('UpdateReplicationStatus._publishFailedReplicationStatusNotification', () => {
+    const date = new Date();
+    let clock;
+
+    beforeEach(() => {
+        clock = sinon.useFakeTimers(date.getTime());
+    });
 
     afterEach(() => {
         sinon.restore();
+        clock.restore();
     });
 
     it('should publish entry to notification destination topic in correct format', done => {
@@ -295,7 +302,6 @@ describe('UpdateReplicationStatus._publishFailedReplicationStatusNotification', 
             'versionId': '1234',
         });
         const message = {
-            dateTime: '0000',
             eventType: 's3:Replication:OperationFailedReplication',
             region: 'metastore',
             schemaVersion: '1',
@@ -303,6 +309,7 @@ describe('UpdateReplicationStatus._publishFailedReplicationStatusNotification', 
             versionId: '123456',
             bucket: 'example-bucket',
             key: 'example-key',
+            dateTime: date.toISOString(),
         };
         const entryPublished = {
             key: 'example-bucket',
