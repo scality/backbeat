@@ -439,13 +439,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             objectVersion: version,
             archiveInfo: value.archive.archiveInfo,
             requestId: uuid(),
-            transitionTime: new Date(entry.timestamp).toISOString(),
+            transitionTime: new Date(entry.overheadFields.commitTimestamp).toISOString(),
         });
 
         const producer = this._producers[topic];
         if (producer) {
             LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive:gc',
-                locationName, Date.now() - entry.timestamp);
+                locationName, Date.now() - entry.overheadFields.commitTimestamp);
 
             const kafkaEntry = { key: encodeURIComponent(key), message };
             producer.send([kafkaEntry], err => {

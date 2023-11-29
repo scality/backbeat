@@ -14,7 +14,6 @@ const constants = {
     deleteEvent: 's3:ObjectRemoved:Delete',
     replicationFailedEvent: 's3:Replication:OperationFailedReplication',
     eventMessageProperty: {
-        dateTime: 'last-modified',
         eventType: 'originOp',
         region: 'dataStoreName',
         schemaVersion: 'md-model-version',
