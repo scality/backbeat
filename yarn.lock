@@ -682,7 +682,6 @@ arraybuffer.slice@~0.0.7:
 
 "arsenal@git+https://github.com/scality/Arsenal#7.10.46":
   version "7.10.46"
-  uid bd76402586f1b5117ada9857a9e437727562d55a
   resolved "git+https://github.com/scality/Arsenal#bd76402586f1b5117ada9857a9e437727562d55a"
   dependencies:
     "@types/async" "^3.2.12"
@@ -801,9 +800,9 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#7.10.46":
-  version "7.10.46"
-  resolved "git+https://github.com/scality/arsenal#bd76402586f1b5117ada9857a9e437727562d55a"
+"arsenal@git+https://github.com/scality/arsenal#7.10.46-1":
+  version "7.10.46-1"
+  resolved "git+https://github.com/scality/arsenal#da3aecdbe1e2f8064b866b2eaba891be9c967256"
   dependencies:
     "@types/async" "^3.2.12"
     "@types/utf8" "^3.0.1"
@@ -4310,7 +4309,7 @@ oauth-sign@~0.9.0:
 object-assign@^4.0.1, object-assign@^4.1.0:
   version "4.1.1"
   resolved "https://registry.yarnpkg.com/object-assign/-/object-assign-4.1.1.tgz#2109adc7965887cfc05cbbd442cac8bfbb360863"
-  integrity sha1-IQmtx5ZYh8/AXLvUQsrIv7s2CGM=
+  integrity sha512-rJgTQnkUnH1sFw8yT6VSU3zD3sWmu6sZhIseY8VX+GRu3P6F7Fu+JNDoXfklElbLJSnc3FUQHVe4cU5hj+BcUg==
 
 object-component@0.0.3:
   version "0.0.3"

@@ -1,4 +1,5 @@
 const assert = require('assert');
+const promClient = require('prom-client');
 
 const { Logger } = require('werelogs');
 const sinon = require('sinon');
@@ -75,6 +76,7 @@ describe('QueuePopulator', () => {
             mockRes = sinon.spy();
             mockLog = sinon.spy();
             mockLog.debug = sinon.spy();
+            mockLog.error = sinon.spy();
             mockRes.writeHead = sinon.spy();
             mockRes.end = sinon.spy();
         });
@@ -89,10 +91,18 @@ describe('QueuePopulator', () => {
             };
             const response = qp.handleLiveness(mockRes, mockLog);
             assert.strictEqual(response, undefined);
-            sinon.assert.calledOnceWithExactly(
-                mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
-                { zookeeper: zookeeper.State.SYNC_CONNECTED.code }
+
+            sinon.assert.calledTwice(mockLog.debug);
+            // First call assertion
+            sinon.assert.calledWith(
+                mockLog.debug.getCall(0), // getCall(0) retrieves the first call
+                'verbose liveness',
+                { zookeeper: zookeeper.State.SYNC_CONNECTED.code },
+            );
+            // Second call assertion
+            sinon.assert.calledWith(
+                mockLog.debug.getCall(1), // getCall(1) retrieves the second call
+                'replying with success',
             );
             sinon.assert.calledOnceWithExactly(mockRes.writeHead, 200);
             sinon.assert.calledOnce(mockRes.end);
@@ -117,14 +127,21 @@ describe('QueuePopulator', () => {
             };
             const response = qp.handleLiveness(mockRes, mockLog);
             assert.strictEqual(response, undefined);
-            sinon.assert.calledOnceWithExactly(
-                mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
+            sinon.assert.calledTwice(mockLog.debug);
+            // First call assertion
+            sinon.assert.calledWith(
+                mockLog.debug.getCall(0), // getCall(0) retrieves the first call
+                'verbose liveness',
                 {
                     'zookeeper': zookeeper.State.SYNC_CONNECTED.code,
                     'producer-topicA': true,
                     'producer-topicB': true,
-                }
+                },
+            );
+            // Second call assertion
+            sinon.assert.calledWith(
+                mockLog.debug.getCall(1), // getCall(1) retrieves the second call
+                'replying with success',
             );
             sinon.assert.calledOnceWithExactly(mockRes.writeHead, 200);
             sinon.assert.calledOnce(mockRes.end);
@@ -148,27 +165,67 @@ describe('QueuePopulator', () => {
                 getState: () => zookeeper.State.SYNC_CONNECTED,
             };
             const response = qp.handleLiveness(mockRes, mockLog);
-            assert.deepStrictEqual(
-                JSON.parse(response),
-                [
-                    {
-                        component: 'log reader',
-                        status: constants.statusNotReady,
-                        topic: 'topicB',
-                    },
-                ]
-            );
+            assert.strictEqual(response, undefined);
             sinon.assert.calledOnceWithExactly(
                 mockLog.debug,
-                sinon.match.any, // we don't care about the debug label
+                'verbose liveness',
                 {
                     'zookeeper': zookeeper.State.SYNC_CONNECTED.code,
                     'producer-topicA': true,
                     'producer-topicB': false,
-                }
+                },
             );
-            sinon.assert.notCalled(mockRes.writeHead);
-            sinon.assert.notCalled(mockRes.end);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            const expectedRes = [
+                {
+                    component: 'log reader',
+                    status: constants.statusNotReady,
+                    topic: 'topicB',
+                },
+            ];
+            sinon.assert.calledOnceWithExactly(
+                mockLog.error,
+                'sending back error response',
+                {
+                    httpCode: 500,
+                    error: expectedRes,
+                },
+            );
+            sinon.assert.calledOnceWithExactly(mockRes.end, JSON.stringify(expectedRes));
+        });
+    });
+
+    describe('handle metrics', () => {
+        let response;
+        let logger;
+
+        beforeEach(() => {
+            response = {
+                writeHead: sinon.stub(),
+                end: sinon.stub(),
+            };
+            logger = {
+                debug: sinon.stub(),
+                error: sinon.stub(),
+            };
+            sinon.stub(promClient.register, 'metrics').resolves('metrics_data');
+        });
+
+        it('should handle metrics correctly', async () => {
+            const r = await qp.handleMetrics(response, logger);
+            assert.strictEqual(r, undefined);
+
+            sinon.assert.calledOnce(response.writeHead);
+            sinon.assert.calledOnceWithExactly(response.writeHead, 200, {
+                'Content-Type': promClient.register.contentType,
+            });
+
+            sinon.assert.calledOnce(response.end);
+            sinon.assert.calledWithExactly(response.end, 'metrics_data');
+
+            sinon.assert.calledOnce(logger.debug);
+            sinon.assert.calledWithExactly(logger.debug, 'metrics requested');
+            return;
         });
     });
 });

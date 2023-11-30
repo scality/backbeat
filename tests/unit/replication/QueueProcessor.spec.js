@@ -1,6 +1,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const constants = require('../../../lib/constants');
+const promClient = require('prom-client');
 
 const QueueProcessor =
     require('../../../extensions/replication/queueProcessor/QueueProcessor');
@@ -47,6 +48,10 @@ describe('Queue Processor', () => {
         );
     });
 
+    afterEach(() => {
+        sinon.restore();
+    });
+
     describe('handle liveness', () => {
         let mockRes;
         let mockLog;
@@ -54,12 +59,9 @@ describe('Queue Processor', () => {
             mockRes = sinon.spy();
             mockLog = sinon.spy();
             mockLog.debug = sinon.spy();
+            mockLog.error = sinon.spy();
             mockRes.writeHead = sinon.spy();
             mockRes.end = sinon.spy();
-        });
-
-        afterEach(() => {
-            sinon.restore();
         });
 
         it('with ready components', () => {
@@ -80,20 +82,21 @@ describe('Queue Processor', () => {
 
         it('with undefined components', () => {
             const response = qp.handleLiveness(mockRes, mockLog);
-            assert.deepStrictEqual(
-                JSON.parse(response),
-                [
-                    {
-                        component: 'Replication Status Producer',
-                        status: constants.statusUndefined,
-                        site: 'site',
-                    }, {
-                        component: 'Consumer',
-                        status: constants.statusUndefined,
-                        site: 'site',
-                    },
-                ]
-            );
+            assert.strictEqual(response, undefined);
+
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            const expectedRes = JSON.stringify([
+                {
+                    component: 'Replication Status Producer',
+                    status: constants.statusUndefined,
+                    site: 'site',
+                }, {
+                    component: 'Consumer',
+                    status: constants.statusUndefined,
+                    site: 'site',
+                },
+            ]);
+            sinon.assert.calledOnceWithExactly(mockRes.end, expectedRes);
             // only need to test this once as it matches the response anyway
             sinon.assert.calledOnceWithExactly(
                 mockLog.debug,
@@ -116,20 +119,64 @@ describe('Queue Processor', () => {
             qp.replicationStatusProducer = mockProducer;
             qp._consumer = mockConsumer;
             const response = qp.handleLiveness(mockRes, mockLog);
-            assert.deepStrictEqual(
-                JSON.parse(response),
-                [
-                    {
-                        component: 'Replication Status Producer',
-                        status: constants.statusNotReady,
-                        site: 'site',
-                    }, {
-                        component: 'Consumer',
-                        status: constants.statusNotReady,
-                        site: 'site',
-                    },
-                ]
+            assert.strictEqual(response, undefined);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            const expectedRes = [
+                {
+                    component: 'Replication Status Producer',
+                    status: constants.statusNotReady,
+                    site: 'site',
+                }, {
+                    component: 'Consumer',
+                    status: constants.statusNotReady,
+                    site: 'site',
+                },
+            ];
+            sinon.assert.calledOnceWithExactly(mockRes.end, JSON.stringify(expectedRes));
+
+            sinon.assert.calledOnceWithExactly(
+                mockLog.error,
+                'sending back error response',
+                {
+                    httpCode: 500,
+                    error: expectedRes,
+                },
             );
+        });
+    });
+
+    describe('handle metrics', () => {
+        let res;
+        let log;
+        let fakeMetrics;
+
+        beforeEach(() => {
+            res = { writeHead: sinon.spy(), end: sinon.spy() };
+            log = { debug: sinon.spy() };
+
+            fakeMetrics = 'test_metrics';
+            sinon.stub(promClient.register, 'metrics').resolves(fakeMetrics);
+
+            const mockConsumer = {
+                consumerStats: { lag: { partition1: 5, partition2: 10 } },
+            };
+
+            qp._consumer = mockConsumer;
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should handle metrics correctly', async () => {
+            const r = await qp.handleMetrics(res, log);
+            assert.strictEqual(r, undefined);
+
+            sinon.assert.calledOnce(log.debug);
+            sinon.assert.calledWithExactly(log.debug, 'metrics requested');
+            sinon.assert.calledOnceWithExactly(promClient.register.metrics);
+            sinon.assert.calledOnceWithExactly(res.writeHead, 200, { 'Content-Type': promClient.register.contentType });
+            sinon.assert.calledOnceWithExactly(res.end, fakeMetrics);
         });
     });
 });
