@@ -214,7 +214,7 @@ describe('LifecycleQueuePopulator', () => {
                 },
                 {
                     requestDays: 3,
-                    timeProgressionFactor: 17280, // 3 days in 15 seconds
+                    timeProgressionFactor: 17281, // 3 days in 15 seconds
                     sentDurationSecs: 15,
                 },
             ].forEach(params => {
