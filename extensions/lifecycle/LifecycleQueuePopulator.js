@@ -23,6 +23,8 @@ const {
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
 
+const nSecsPerDay = () => 24 * 60 * 60 / config.timeOptions.timeProgressionFactor;
+
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
     /**
@@ -301,13 +303,15 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 version = encode(value.versionId);
             }
 
+            const requestedDurationSecs = value.archive.restoreRequestedDays * nSecsPerDay();
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
-                accountId
+                accountId,
+                requestedDurationSecs,
             });
 
             const producer = this._producers[topic];
