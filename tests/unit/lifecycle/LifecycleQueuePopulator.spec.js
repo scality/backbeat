@@ -140,9 +140,14 @@ describe('LifecycleQueuePopulator', () => {
 
     describe(':_handleRestoreOp', () => {
         let lcqp;
+        const getAccountIdStub = sinon.stub().yields(null,
+            '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
         beforeEach(() => {
             lcqp = new LifecycleQueuePopulator(params);
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
+            lcqp.vaultClientWrapper = {
+                getAccountId: getAccountIdStub,
+            };
         });
         afterEach(() => {
             sinon.restore();
@@ -169,7 +174,7 @@ describe('LifecycleQueuePopulator', () => {
             it(`should ${outcome} ${params.event} event`, () => {
                 const getAccountIdStub = sinon.stub().yields(null,
                     '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be');
-                lcqp.vaultClientWrapper = {
+                        lcqp.vaultClientWrapper = {
                     getAccountId: getAccountIdStub,
                 };
                 const entry = getKafkaEntry(params.event);
@@ -178,24 +183,95 @@ describe('LifecycleQueuePopulator', () => {
             });
         });
 
-        describe('restored objects', () => {
-            let kafkaSendStub;
+        describe('restore requests', () => {
+            const kafkaSendStub = sinon.stub().yields();
+            const kafkaAdjustSendStub = sinon.stub().yields();
             let clock;
 
             beforeEach(() => {
                 clock = sinon.useFakeTimers({
                     now: 1499913865515,
-                  });
-
-                kafkaSendStub = sinon.stub().yields();
+                });
                 lcqp._producers[`${coldStorageRestoreAdjustTopicPrefix}dmf-v1`] = {
+                    send: kafkaAdjustSendStub,
+                };
+                lcqp._producers[`${coldStorageRestoreTopicPrefix}dmf-v1`] = {
                     send: kafkaSendStub,
                 };
             });
 
             afterEach(() => {
                 kafkaSendStub.reset();
+                kafkaAdjustSendStub.reset();
                 clock.restore();
+            });
+
+            [
+                {
+                    requestDays: 3,
+                    timeProgressionFactor: 1,
+                    sentDurationSecs: 259200,
+                },
+                {
+                    requestDays: 3,
+                    timeProgressionFactor: 17281, // 3 days in 15 seconds
+                    sentDurationSecs: 15,
+                },
+            ].forEach(params => {
+                const p = params.timeProgressionFactor;
+                it(`should send restore duration in initial restore request, with time factor ${p}`, () => {
+                    config.timeOptions.timeProgressionFactor = params.timeProgressionFactor;
+
+                    const objMd = {
+                        'md-model-version': 2,
+                        'owner-display-name': 'Bart',
+                        'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                        'x-amz-storage-class': 'dmf-v1',
+                        'content-length': 542,
+                        'content-type': 'text/plain',
+                        'last-modified': '2017-07-13T02:44:25.515Z',
+                        'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                        'key': 'object',
+                        'location': [],
+                        'isDeleteMarker': false,
+                        'isNull': false,
+                        'archive': {
+                            archiveInfo: {
+                                archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                                archiveVersion: 7504504064263669
+                            },
+                            restoreRequestedAt: '2017-07-11T02:44:25.515Z',
+                            restoreRequestedDays: params.requestDays,
+                        },
+                        'dataStoreName': 'dmf-v1',
+                        'originOp': 's3:ObjectRestore:Post',
+                    };
+                    const entry = {
+                        type: 'put',
+                        bucket: 'lc-queue-populator-test-bucket',
+                        key: 'object',
+                        value: JSON.stringify(objMd),
+                    };
+
+                    lcqp._handleRestoreOp(entry);
+
+                    assert(!kafkaAdjustSendStub.calledOnce);
+                    assert(kafkaSendStub.calledOnce);
+
+                    const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                    const expectedMessage = {
+                        accountId: '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                        bucketName: 'lc-queue-populator-test-bucket',
+                        objectKey: 'object',
+                        archiveInfo: {
+                            archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
+                            archiveVersion: 7504504064263669
+                        },
+                        requestedDurationSecs: params.sentDurationSecs,
+                        requestId: message.requestId,
+                    };
+                    assert.deepStrictEqual(message, expectedMessage);
+                });
             });
 
             it('should send duration-adjust message for already restored objects', () => {
@@ -232,9 +308,10 @@ describe('LifecycleQueuePopulator', () => {
 
                 lcqp._handleRestoreOp(entry);
 
-                assert(kafkaSendStub.calledOnce);
+                assert(kafkaAdjustSendStub.calledOnce);
+                assert(!kafkaSendStub.calledOnce);
 
-                const message = JSON.parse(kafkaSendStub.args[0][0][0].message);
+                const message = JSON.parse(kafkaAdjustSendStub.args[0][0][0].message);
                 const expectedMessage = {
                     adjust: {
                         restoreWillExpireAt: '2017-07-15T02:44:25.519Z',
@@ -283,6 +360,7 @@ describe('LifecycleQueuePopulator', () => {
 
                 lcqp._handleRestoreOp(entry);
 
+                assert(!kafkaAdjustSendStub.calledOnce);
                 assert(!kafkaSendStub.calledOnce);
             });
         });

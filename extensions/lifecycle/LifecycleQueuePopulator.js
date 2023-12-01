@@ -1,5 +1,6 @@
 const async = require('async');
 const { constants } = require('arsenal');
+const { scaleMsPerDay } = require('arsenal').s3middleware.objectUtils;
 const { encode } = require('arsenal').versioning.VersionID;
 const { isMasterKey } = require('arsenal').versioning;
 const { mpuBucketPrefix } = constants;
@@ -22,6 +23,8 @@ const {
 } = config.extensions.lifecycle;
 const BackbeatProducer = require('../../lib/BackbeatProducer');
 const locations = require('../../conf/locationConfig.json') || {};
+
+const nSecsPerDay = () => Math.ceil(scaleMsPerDay(config.timeOptions.timeProgressionFactor) / 1000);
 
 class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
@@ -301,13 +304,15 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 version = encode(value.versionId);
             }
 
+            const requestedDurationSecs = value.archive.restoreRequestedDays * nSecsPerDay();
             const message = JSON.stringify({
                 bucketName: entry.bucket,
                 objectKey: value.key,
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
-                accountId
+                accountId,
+                requestedDurationSecs,
             });
 
             const producer = this._producers[topic];
