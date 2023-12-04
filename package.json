@@ -18,6 +18,7 @@
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit",
+    "cover:test": "nyc --clean --silent yarn run test && nyc report --report-dir ./coverage/test --reporter=lcov",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000",
@@ -76,12 +77,14 @@
   },
   "devDependencies": {
     "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
+    "c8": "^8.0.1",
     "eslint": "^8.14.0",
     "eslint-config-airbnb-base": "^13.1.0",
     "eslint-config-scality": "scality/Guidelines#8.2.0",
     "eslint-plugin-import": "^2.14.0",
     "lolex": "^2.7.5",
     "mocha": "^3.3.0",
+    "nyc": "^15.1.0",
     "sinon": "^10.0.0",
     "zookeeper-mock": "^1.2.0"
   },

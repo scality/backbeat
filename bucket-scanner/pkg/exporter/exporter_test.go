@@ -2,6 +2,7 @@ package exporter_test
 
 import (
 	"context"
+	"net"
 	"net/http"
 	"strings"
 	"sync"
@@ -64,8 +65,8 @@ func collectStatuses(g *prometheus.GaugeVec, expectedMetrics int, expectDestinat
 
 var _ = Describe("Prometheus Exporter", func() {
 	interval := 200 * time.Millisecond
-	listenOn := "localhost:14444"
 
+	var listenOn string
 	var e *exporter.Exporter
 	var wg *sync.WaitGroup
 	var cs1, cs2, csExpectedSum *replication.CounterSet
@@ -76,6 +77,14 @@ var _ = Describe("Prometheus Exporter", func() {
 		cs1 = replication.New("")
 		cs2 = replication.New("")
 		csExpectedSum = replication.New("")
+
+		listenOn = func() string { // Listen a random port
+			l, err := net.Listen("tcp", "localhost:0")
+			Expect(err).NotTo(HaveOccurred())
+			defer l.Close()
+
+			return l.Addr().String()
+		}()
 	})
 
 	Describe("CopyCounterSetsToGauges", func() {
