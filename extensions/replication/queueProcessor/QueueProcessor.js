@@ -23,6 +23,7 @@ const ObjectQueueEntry = require('../utils/ObjectQueueEntry');
 const BucketQueueEntry = require('../utils/BucketQueueEntry');
 const constants = require('../../../lib/constants');
 const { wrapCounterInc, wrapGaugeSet, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { sendSuccess, sendMultipleErrors } = require('../../../lib/util/probe');
 
 const {
     proxyVaultPath,
@@ -504,7 +505,7 @@ class QueueProcessor extends EventEmitter {
      *
      * @param {http.HTTPServerResponse} res - HTTP Response to respond with
      * @param {Logger} log - Logger
-     * @returns {string} Error response string or undefined
+     * @returns {undefined}
      */
     handleLiveness(res, log) {
         const verboseLiveness = {};
@@ -550,11 +551,11 @@ class QueueProcessor extends EventEmitter {
         log.debug('verbose liveness', verboseLiveness);
 
         if (responses.length > 0) {
-            return JSON.stringify(responses);
+            sendMultipleErrors(res, log, responses);
+            return undefined;
         }
 
-        res.writeHead(200);
-        res.end();
+        sendSuccess(res, log);
         return undefined;
     }
 
@@ -563,7 +564,7 @@ class QueueProcessor extends EventEmitter {
      *
      * @param {http.HTTPServerResponse} res - HTTP Response to respond with
      * @param {Logger} log - Logger
-     * @returns {string} Error response string or undefined
+     * @return {undefined}
      */
     async handleMetrics(res, log) {
         log.debug('metrics requested');
