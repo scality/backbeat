@@ -20,4 +20,5 @@ killandsleep () {
 }
 
 cd ${NODE_PATH}/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
-yarn run $1
+./node_modules/.bin/nyc --clean --silent yarn run $1
+./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov

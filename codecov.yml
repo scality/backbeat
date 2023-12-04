@@ -1,0 +1,88 @@
+parsers:
+  javascript:
+    enable_partials: yes
+
+comment:
+  layout: newheader, reach, files, components, diff, flags # show component info in the PR comment
+  hide_comment_details: true  # hide the comment details (e.g. coverage targets) in the PR comment
+
+# Setting coverage targets
+coverage:
+  status:
+    # "global" coverage target for the backbeat service (core + all extensions)
+    # bucket-scanner is excluded, as it is tracked separately in the component
+    project:
+      default: false
+      Backbeat:
+        target: auto
+        threshold: 1%
+        removed_code_behavior: adjust_base
+        paths:
+          - bin
+          - extensions
+          - lib
+    patch:
+      default: false
+      Backbeat:
+        target: 80%
+
+component_management:
+  default_rules:  # default rules that will be inherited by all components
+    flag_regexes:
+      - "^(?!bucket-scanner)$" # do not consider `bucket-scanner` for most components
+    statuses: []
+  individual_components:
+    - component_id: backbeat-notification
+      name: Bucket Notification
+      paths:
+        - extensions/notification/**
+    - component_id: backbeat-core
+      name: Core Library
+      paths:
+        - extensions/utils/**
+        - lib/**
+    - component_id: backbeat-ingestion
+      name: Ingestion
+      paths:
+        - extensions/ingestion/**
+        - extensions/mongoProcessor/**
+        - lib/queuePopulator/Ingestion.*
+    - component_id: backbeat-lifecycle
+      name: Lifecycle
+      paths:
+        - extensions/gc/**
+        - extensions/lifecycle/**
+    - component_id: backbeat-oplogpopulator
+      name: Oplog Populator
+      paths:
+        - extensions/oplogPopulator/**
+    - component_id: backbeat-replication
+      name: Replication
+      paths:
+        - extensions/replication/**
+    - component_id: bucket-scanner
+      name: Bucket Scanner
+      flag_regexes:
+        - "^bucket-scanner$" # only consider bucket-scanner for this component
+      paths:
+        - bucket-scanner/**
+      statuses:
+        - type: project
+          target: auto
+          threshold: 1%
+          removed_code_behavior: adjust_base
+        - type: patch
+          target: 100%
+          threshold: 5%
+
+flag_management:
+  default_rules: # the rules that will be followed for any flag added, generally
+    carryforward: true
+    statuses: []
+
+# Do not consider zenko integration builds in coverage comparisons
+flags:
+  zenko-end2end-sharded:
+    joined: false
+  zenko-ctst-end2end-sharded:
+    joined: false
