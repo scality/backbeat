@@ -218,6 +218,40 @@ groups:
       description: "More than 5% of S3 requests by transition processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
+  - alert: LifecycleLatencyWarning
+    Expr: |
+      histogram_quantile(0.95,
+        sum(rate(
+          s3_lifecycle_latency_seconds_bucket{
+            namespace="${namespace}",job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
+          }[10m]
+        )) by(le, type, location)
+      ) / ${lifecycle_latency_warning_threshold} > 1
+    Labels:
+      severity: warning
+    Annotations:
+      description: >-
+        Lifecycle latency for `{{ $labels.type }}` is above the warning threshold on location
+        `{{ $labels.location }}`.
+      summary: "High lifecycle latency"
+
+  - alert: LifecycleLatencyCritical
+    Expr: |
+      histogram_quantile(0.95,
+        sum(rate(
+          s3_lifecycle_latency_seconds_bucket{
+            namespace="${namespace}", job=~"${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_sorbet_forwarder}.*"
+          }[10m]
+        )) by(le, type, location)
+      ) / ${lifecycle_latency_critical_threshold} > 1
+    Labels:
+      severity: critical
+    Annotations:
+      description: >-
+        Lifecycle latency for `{{ $labels.type }}` is above the critical threshold on location
+        `{{ $labels.location }}`.
+      summary: "Very high lifecycle latency"
+
 - name: Kafka Messages
   rules:
 

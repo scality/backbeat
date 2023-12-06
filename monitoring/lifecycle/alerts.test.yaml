@@ -244,6 +244,66 @@ tests:
         eval_time: 7m
         exp_alerts: []
 
+  - name: LifecycleLatency
+    interval: 10m
+    input_series:
+      - series: s3_lifecycle_latency_seconds_bucket{le="10", namespace="zenko", type="transition", location="us-east-1", job="artesca-data-backbeat-lifecycle-transition-processor-headless"}
+        values: 100 200 300 305 310 315 320 325 330 430
+      - series: s3_lifecycle_latency_seconds_bucket{le="50", namespace="zenko", type="transition", location="us-east-1", job="artesca-data-backbeat-lifecycle-transition-processor-headless"}
+        values: 100 200 300 305 310 315 320 325 330 430
+      - series: s3_lifecycle_latency_seconds_bucket{le="180", namespace="zenko", type="transition", location="us-east-1", job="artesca-data-backbeat-lifecycle-transition-processor-headless"}
+        values: 100 200 300 400 500 600 605 610 615 620
+      - series: s3_lifecycle_latency_seconds_bucket{le="240", namespace="zenko", type="transition", location="us-east-1", job="artesca-data-backbeat-lifecycle-transition-processor-headless"}
+        values: 100 200 300 400 500 600 700 800 900 1000
+      - series: s3_lifecycle_latency_seconds_bucket{le="+inf", namespace="zenko", type="transition", location="us-east-1", job="artesca-data-backbeat-lifecycle-transition-processor-headless"}
+        values: 100 200 300 400 500 600 700 800 900 1000
+    alert_rule_test:
+      - alertname: LifecycleLatencyWarning
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: LifecycleLatencyCritical
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: LifecycleLatencyWarning
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: LifecycleLatencyCritical
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: LifecycleLatencyWarning
+        eval_time: 30m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              type: transition
+              location: us-east-1
+            exp_annotations:
+              description: "Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`."
+              summary: "High lifecycle latency"
+      - alertname: LifecycleLatencyCritical
+        eval_time: 30m
+        exp_alerts: []
+      - alertname: LifecycleLatencyWarning
+        eval_time: 60m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              type: transition
+              location: us-east-1
+            exp_annotations:
+              description: "Lifecycle latency for `transition` is above the warning threshold on location `us-east-1`."
+              summary: "High lifecycle latency"
+      - alertname: LifecycleLatencyCritical
+        eval_time: 60m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              type: transition
+              location: us-east-1
+            exp_annotations:
+              description: "Lifecycle latency for `transition` is above the critical threshold on location `us-east-1`."
+              summary: "Very high lifecycle latency"
+
   - name: KafkaConsumerSlowTask
     interval: 1m
     input_series:
