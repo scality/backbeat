@@ -246,6 +246,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         }
         const versionId =
             sourceEntry.getReplicationSiteDataStoreVersionId(site);
+        entry.setOriginOp('');
         entry.setReplicationSiteDataStoreVersionId(site, versionId);
         entry.setSite(site);
         return entry;

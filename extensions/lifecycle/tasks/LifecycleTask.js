@@ -1243,12 +1243,20 @@ class LifecycleTask extends BackbeatTask {
                     entry.setAttribute('metrics.transitionTime', params.transitionTime);
                 }
                 return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
-                    err => next(err, entry, objectMD));
+                    err => next(err));
             },
-            (entry, objectMD, next) => {
+            (next) =>
+                // Refresh metadata to minimize risk of race condition on ObjectMD update
+                // c.f. https://scality.atlassian.net/browse/ARSN-341
+                this._getObjectMD(params, log, (err, objectMD) => {
+                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'bucket', err);
+                    return next(err, objectMD);
+                }),
+            (objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
-                objectMD.setTransitionInProgress(true, params.transitionDate);
+                objectMD.setTransitionInProgress(true, params.transitionTime);
+                objectMD.setOriginOp('s3:LifecycleTransition:Start');
                 const putParams = {
                     bucket: params.bucket,
                     objectKey: params.objectKey,

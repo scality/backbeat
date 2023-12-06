@@ -108,11 +108,13 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
 
                 // set new ObjectMDArchive to ObjectMD
                 objectMD.setArchive(new ObjectMDArchive(entry.archiveInfo));
+                objectMD.setOriginOp('s3:LifecycleTransition:SetArchive');
 
                 if (skipLocationDeletion) {
                     objectMD.setDataStoreName(coldLocation)
                         .setAmzStorageClass(coldLocation)
                         .setTransitionInProgress(false)
+                        .setOriginOp('s3:LifecycleTransition')
                         .setUserMetadata({
                             'x-amz-meta-scal-s3-transition-attempt': undefined,
                         });

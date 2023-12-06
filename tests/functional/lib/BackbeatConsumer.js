@@ -253,13 +253,13 @@ describe('BackbeatConsumer rebalance tests', () => {
         this.timeout(60000);
 
         // Bootstrap just once at the beginning of the test suite
-        consumer = new BackbeatConsumer({
+        const bootstrapConsumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
             kafka: { hosts: consumerKafkaConf.hosts }, groupId, topic,
             queueProcessor,
             bootstrap: true,
         });
-        consumer.on('ready', () => consumer.close(done));
+        bootstrapConsumer.on('ready', () => bootstrapConsumer.close(done));
     });
 
     beforeEach(function before(done) {
@@ -356,12 +356,11 @@ describe('BackbeatConsumer rebalance tests', () => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
-        consumer.on('consumed.message', () => {
-            if (consumedMessages === 0) {
-                // trigger rebalance during processing of first message
-                consumer2.subscribe();
-            }
+        consumer.once('consumed.message', () => {
+            // trigger rebalance during processing of first message
+            consumer2.subscribe();
 
+            // Return true to allow the consumer to "be stuck" on the message
             return true;
         });
 
