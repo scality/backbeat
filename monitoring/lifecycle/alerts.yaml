@@ -7,11 +7,17 @@ x-inputs:
   type: constant
 - name: job_lifecycle_bucket_processor
   type: constant
+- name: job_lifecycle_transition_processor
+  type: constant
+- name: job_sorbet_forwarder
+  type: constant
 - name: lifecycle_conductor_replicas
   type: constant
 - name: lifecycle_bucket_replicas
   type: constant
 - name: lifecycle_object_replicas
+  type: constant
+- name: lifecycle_transition_replicas
   type: constant
 
 groups:
@@ -124,6 +130,52 @@ groups:
     Annotations:
       zenko_service: backbeat-lifecycle-object-processor
       description: "More than 5% of S3 requests by object processors resulting in errors"
+      summary: "Very high rate of S3 request errors"
+
+  - alert: LifecycleTransitionProcessorDegraded
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) < ${lifecycle_transition_replicas}
+    For: "30s"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-transition-processor
+      description: "Less than 100% of lifecycle transition processors are up and healthy"
+      summary: "Degraded lifecycle transition processor"
+
+  - alert: LifecycleTransitionProcessorCritical
+    Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) * 2 < ${lifecycle_transition_replicas}
+    For: "30s"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-transition-processor
+      description: "Less than 50% of lifecycle transition processors are up and healthy"
+      summary: "Degraded lifecycle transition processor"
+
+  - alert: LifecycleTransitionProcessorRequestWarning
+    Expr: |
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
+        >= 0.03
+    For: "5m"
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-transition-processor
+      description: "More than 3% of S3 requests by transition processors resulting in errors"
+      summary: "High rate of S3 request errors"
+
+  - alert: LifecycleTransitionProcessorRequestCritical
+    Expr: |
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+        / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
+        >= 0.05
+    For: "5m"
+    Labels:
+     severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-transition-processor
+      description: "More than 5% of S3 requests by transition processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
 - name: Kafka Messages

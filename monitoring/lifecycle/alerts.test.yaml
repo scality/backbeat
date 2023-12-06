@@ -117,6 +117,53 @@ tests:
               description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
               summary: "Degraded lifecycle object processor"
 
+  - name: LifecycleTransitionProcessor Replicas
+    interval: 1m
+    input_series:
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-transition-processor-headless",pod="object-1"}
+        values: 1 1 1
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-transition-processor-headless",pod="object-2"}
+        values: 1 1 0
+      - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-transition-processor-headless",pod="object-3"}
+        values: 1 0 0
+    alert_rule_test:
+      - alertname: LifecycleTransitionProcessorDegraded
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorDegraded
+        eval_time: 2m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "Less than 100% of lifecycle transition processors are up and healthy"
+              summary: "Degraded lifecycle transition processor"
+      - alertname: LifecycleTransitionProcessorCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorDegraded
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "Less than 100% of lifecycle transition processors are up and healthy"
+              summary: "Degraded lifecycle transition processor"
+      - alertname: LifecycleTransitionProcessorCritical
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "Less than 50% of lifecycle transition processors are up and healthy"
+              summary: "Degraded lifecycle transition processor"
+
   - name: KafkaConsumerSlowTask
     interval: 1m
     input_series:
