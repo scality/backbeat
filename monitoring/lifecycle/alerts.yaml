@@ -19,6 +19,12 @@ x-inputs:
   type: constant
 - name: lifecycle_transition_replicas
   type: constant
+- name: lifecycle_latency_warning_threshold
+  type: config
+  value: 24*60*60 # 24h, in seconds
+- name: lifecycle_latency_critical_threshold
+  type: config
+  value: 36*60*60 # 36h, in seconds
 
 groups:
 - name: LifecycleProducer
@@ -33,6 +39,40 @@ groups:
       zenko_service: backbeat-lifecycle-producer
       description: "Lifecycle producer pod has been down for 30 seconds"
       summary: "Lifecycle producer service is down"
+
+  - alert: LifecycleLateScanWarning
+    Expr: |
+      (
+        time()
+        - max(s3_lifecycle_latest_batch_start_time{
+             namespace="${namespace}", job="${job_lifecycle_producer}"
+           }) / 1000
+      ) / ${lifecycle_latency_warning_threshold} > 1
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: >-
+        Last lifecycle scan was performed more than
+        {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
+      summary: "Lifecycle scan not executed in time"
+
+  - alert: LifecycleLateScanCritical
+    Expr: |
+      (
+        time()
+        - max(s3_lifecycle_latest_batch_start_time{
+             namespace="${namespace}", job="${job_lifecycle_producer}"
+           }) / 1000
+      ) / ${lifecycle_latency_critical_threshold} > 1
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: >-
+        Last lifecycle scan was performed more than
+        {{ ${lifecycle_latency_critical_threshold} | humanizeDuration }} ago.
+      summary: "Lifecycle scan not executed in time"
 
 - name: LifecycleBucketProcessor
   rules:

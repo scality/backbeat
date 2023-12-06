@@ -164,6 +164,86 @@ tests:
               description: "Less than 50% of lifecycle transition processors are up and healthy"
               summary: "Degraded lifecycle transition processor"
 
+  - name: LifecycleLateScanWarning
+    interval: 1m
+    input_series:
+      - series: s3_lifecycle_latest_batch_start_time{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless"}
+        values: 0 0 0 0 240000 299000 299000 299000
+    alert_rule_test:
+      - alertname: LifecycleLateScanWarning
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleLateScanWarning
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleLateScanWarning
+        eval_time: 3m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan was performed more than 2m 0s ago."
+              summary: "Lifecycle scan not executed in time"
+      - alertname: LifecycleLateScanWarning
+        eval_time: 4m
+        exp_alerts: []
+      - alertname: LifecycleLateScanWarning
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleLateScanWarning
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: LifecycleLateScanWarning
+        eval_time: 7m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan was performed more than 2m 0s ago."
+              summary: "Lifecycle scan not executed in time"
+
+  - name: LifecycleLateScanCritical
+    interval: 1m
+    input_series:
+      - series: s3_lifecycle_latest_batch_start_time{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless"}
+        values: 0 0 0 0 0 60000 180000 240000
+    alert_rule_test:
+      - alertname: LifecycleLateScanCritical
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleLateScanCritical
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleLateScanCritical
+        eval_time: 3m
+        exp_alerts: []
+      - alertname: LifecycleLateScanCritical
+        eval_time: 4m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan was performed more than 3m 0s ago."
+              summary: "Lifecycle scan not executed in time"
+      - alertname: LifecycleLateScanCritical
+        eval_time: 5m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan was performed more than 3m 0s ago."
+              summary: "Lifecycle scan not executed in time"
+      - alertname: LifecycleLateScanCritical
+        eval_time: 6m
+        exp_alerts: []
+      - alertname: LifecycleLateScanCritical
+        eval_time: 7m
+        exp_alerts: []
+
   - name: KafkaConsumerSlowTask
     interval: 1m
     input_series:
