@@ -7,6 +7,7 @@ const { ObjectMD } = models;
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const { LifecycleMetrics } = require('../../lifecycle/LifecycleMetrics');
 const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -87,6 +88,7 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     processQueueEntry(actionEntry, kafkaEntry, done) {
+        const startTime = Date.now();
         const log = this.logger.newRequestLogger();
         actionEntry.addLoggedAttributes({
             bucketName: 'target.bucket',
@@ -119,6 +121,11 @@ class CopyLocationTask extends BackbeatTask {
                 if (err) {
                     return next(err);
                 }
+
+                LifecycleMetrics.onLifecycleStarted(log, 'transition',
+                    actionEntry.getAttribute('toLocation'),
+                    startTime - Date.parse(objMD.getTransitionTime));
+
                 // Do a multipart upload when either the size is above
                 // a threshold or the source object is itself a MPU.
                 //

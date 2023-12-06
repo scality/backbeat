@@ -14,6 +14,14 @@ const gcS3Operations = ZenkoMetrics.createCounter({
     ],
 });
 
+const gcDuration = ZenkoMetrics.createHistogram({
+    name: 's3_gc_duration_seconds',
+    help: 'Duration of the garbage collector operation, calculated from the time when the GC is ' +
+        'requested to the end of the operation',
+    labelNames: [GC_LABEL_ORIGIN],
+    buckets: [0.2, 0.1, 0.5, 2.5, 10, 50],
+});
+
 class GarbageCollectorMetrics {
     static handleError(log, err, method) {
         if (log) {
@@ -31,6 +39,16 @@ class GarbageCollectorMetrics {
             });
         } catch (err) {
             GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onS3Request');
+        }
+    }
+
+    static onGcCompleted(log, process, duration) {
+        try {
+            gcDuration.observe({
+                [GC_LABEL_ORIGIN]: process,
+            }, duration / 1000);
+        } catch (err) {
+            GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onGcComplete');
         }
     }
 }

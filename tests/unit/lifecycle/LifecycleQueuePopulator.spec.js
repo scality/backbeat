@@ -269,6 +269,7 @@ describe('LifecycleQueuePopulator', () => {
                         },
                         requestedDurationSecs: params.sentDurationSecs,
                         requestId: message.requestId,
+                        transitionTime: '2017-07-11T02:44:25.515Z',
                     };
                     assert.deepStrictEqual(message, expectedMessage);
                 });
@@ -510,11 +511,13 @@ describe('LifecycleQueuePopulator', () => {
             },
         ].forEach(params => {
             it(params.it, () => {
+                const timestamp = new Date();
                 const entry = {
                     type: params.type,
                     bucket: 'lc-queue-populator-test-bucket',
                     key: params.key,
                     value: JSON.stringify(params.md),
+                    timestamp,
                 };
                 lcqp._handleDeleteOp(entry);
                 assert.strictEqual(kafkaSendStub.calledOnce, params.called);
@@ -527,6 +530,7 @@ describe('LifecycleQueuePopulator', () => {
                     objectKey: params.md.key,
                     archiveInfo: params.md.archive.archiveInfo,
                     requestId: message.requestId,
+                    transitionTime: timestamp.toISOString(),
                 };
                 if (params.md.versionId) {
                     expectedMessage.objectVersion = encode(params.md.versionId);

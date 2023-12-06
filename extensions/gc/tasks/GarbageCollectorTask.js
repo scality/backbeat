@@ -154,6 +154,8 @@ class GarbageCollectorTask extends BackbeatTask {
         };
 
         this._batchDeleteData(params, entry, log, err => {
+            // ruleType can be either `transition` or `restore` (for restore-expiration)
+            GarbageCollectorMetrics.onS3Request(log, 'batchdelete', entry.ruleType, err);
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
             if (err && err.statusCode === 412) {
@@ -174,6 +176,9 @@ class GarbageCollectorTask extends BackbeatTask {
                     }, entry.getLogInfo()));
                 return done(err);
             }
+
+            GarbageCollectorMetrics.onGcCompleted(log, entry.ruleType,
+                Date.now() - entry.getAttribute('timestamp'));
             return done();
         });
     }
@@ -252,6 +257,8 @@ class GarbageCollectorTask extends BackbeatTask {
                     if (!err) {
                         log.end().info('completed expiration of archived data',
                             entry.getLogInfo());
+                        GarbageCollectorMetrics.onGcCompleted(log, 'archive',
+                            Date.now() - entry.getAttribute('timestamp'));
                     }
 
                     next(err);

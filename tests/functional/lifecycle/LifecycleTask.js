@@ -38,6 +38,7 @@ const backbeatMetadataProxyMock = {
             Body: JSON.stringify(objectMD.object1),
         });
     },
+    putMetadata: (params, log, cb) => cb(null),
 };
 
 /*

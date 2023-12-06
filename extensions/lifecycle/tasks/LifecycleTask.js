@@ -161,6 +161,11 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _sendObjectAction(entry, cb) {
+        LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
+            entry.getActionType() === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
+            entry.getAttribute('details.dataStoreName'),
+            Date.now() - entry.getAttribute('transitionTime'));
+
         const entries = [{ message: entry.toKafkaMessage() }];
         this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
             LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
@@ -190,7 +195,7 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'ListObjects', 'bucket', err);
+                LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
 
                 if (err) {
                     log.error('error listing bucket objects', {
@@ -454,7 +459,7 @@ class LifecycleTask extends BackbeatTask {
         attachReqUids(req, log);
         async.waterfall([
             next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'ListMultipartUploads', 'bucket', err);
+                LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
 
                 if (err) {
                     log.error('error checking buckets MPUs', {
@@ -673,7 +678,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.listObjectVersions(params);
         attachReqUids(req, log);
         req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'ListObjectVersions', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', err);
 
             if (err) {
                 log.error('error listing versioned bucket objects', {
@@ -725,7 +730,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.getObjectTagging(tagParams);
         attachReqUids(req, log);
         return req.send((err, tags) => {
-            LifecycleMetrics.onS3Request(log, 'GetObjectTagging', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', err);
             if (err) {
                 log.error('failed to get tags', {
                     method: 'LifecycleTask._getObjectTagging',
@@ -1019,7 +1024,12 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', obj.Key)
-                .setAttribute('details.lastModified', obj.LastModified);
+                .setAttribute('details.lastModified', obj.LastModified)
+                .setAttribute('details.dataStoreName', obj.StorageClass || '')
+                .setAttribute('transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(
+                        rules.Expiration, obj.LastModified)
+                );
             this._sendObjectAction(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption',
@@ -1042,7 +1052,12 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', obj.Key)
-                .setAttribute('details.lastModified', obj.LastModified);
+                .setAttribute('details.lastModified', obj.LastModified)
+                .setAttribute('details.dataStoreName', obj.StorageClass || '')
+                .setAttribute('transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(
+                        rules.Expiration, obj.LastModified)
+                );
             this._sendObjectAction(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption',
@@ -1170,6 +1185,7 @@ class LifecycleTask extends BackbeatTask {
      * @param {string} params.eTag - The object data ETag
      * @param {string} params.lastModified - The last modified date of object
      * @param {string} params.site - The site name to transition the object to
+     * @param {number} params.transitionTime - Unix time at which the transition should have occurred
      * @param {Werelogs.Logger} log - Logger object
      * @param {Function} [cb] - The callback to call
      * @return {undefined}
@@ -1217,30 +1233,32 @@ class LifecycleTask extends BackbeatTask {
                 return this._getTransitionActionEntry(params, objectMD, log, (err, entry) =>
                     next(err, entry, objectMD));
             },
-            (entry, objectMD, next) =>
-                ReplicationAPI.sendDataMoverAction(this.producer, entry, log, err =>
-                    next(err, entry, objectMD)),
+            (entry, objectMD, next) => {
+                const locationName = params.site;
+                const isCold = locationsConfig[locationName]?.isCold;
+                LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
+                    isCold ? 'archive' : 'transition',
+                    locationName, Date.now() - params.transitionTime);
+                if (isCold) {
+                    entry.setAttribute('metrics.transitionTime', params.transitionTime);
+                }
+                return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
+                    err => next(err, entry, objectMD));
+            },
             (entry, objectMD, next) => {
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
-                // Only implemented for transitions to cold location.
-                const toLocation = entry.getAttribute('toLocation');
-                const locationConfig = locationsConfig[toLocation];
-                if (locationConfig && locationConfig.isCold) {
-                        objectMD.setTransitionInProgress(true);
-                        const putParams = {
-                            bucket: params.bucket,
-                            objectKey: params.objectKey,
-                            versionId: params.versionId,
-                            mdBlob: objectMD.getSerialized(),
-                        };
-                        return this._putObjectMD(putParams, log, err => {
-                            LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
-                            return next(err);
-                        });
-                }
-
-                return process.nextTick(next);
+                objectMD.setTransitionInProgress(true, params.transitionDate);
+                const putParams = {
+                    bucket: params.bucket,
+                    objectKey: params.objectKey,
+                    versionId: params.versionId,
+                    mdBlob: objectMD.getSerialized(),
+                };
+                return this._putObjectMD(putParams, log, err => {
+                    LifecycleMetrics.onS3Request(log, 'putMetadata', 'bucket', err);
+                    return next(err);
+                });
             }
         ], err => {
             if (err) {
@@ -1303,6 +1321,8 @@ class LifecycleTask extends BackbeatTask {
                 eTag: version.ETag,
                 lastModified: version.LastModified,
                 site: rules[ncvt].StorageClass,
+                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                    { Days: rules[ncvt][ncd] }, staleDate),
             }, log, cb);
             return;
         }
@@ -1386,13 +1406,14 @@ class LifecycleTask extends BackbeatTask {
                             reqId: log.getSerializedUids(),
                         })
                         .setAttribute('target.owner', bucketData.target.owner)
-                        .setAttribute('target.bucket',
-                            bucketData.target.bucket)
+                        .setAttribute('target.bucket', bucketData.target.bucket)
                         .setAttribute('target.key', deleteMarker.Key)
-                        .setAttribute('target.accountId',
-                            bucketData.target.accountId)
-                        .setAttribute('target.version',
-                            deleteMarker.VersionId);
+                        .setAttribute('target.accountId', bucketData.target.accountId)
+                        .setAttribute('target.version', deleteMarker.VersionId)
+                        .setAttribute('transitionTime',
+                            this._lifecycleDateTime.getTransitionTimestamp(
+                                rules.Expiration, deleteMarker.LastModified)
+                        );
                     this._sendObjectAction(entry, err => {
                         if (!err) {
                             log.debug('sent object entry for consumption',
@@ -1453,7 +1474,12 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', verToExpire.Key)
-                .setAttribute('target.version', verToExpire.VersionId);
+                .setAttribute('target.version', verToExpire.VersionId)
+                .setAttribute('details.dataStoreName', verToExpire.StorageClass || '')
+                .setAttribute('transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(
+                        { Days: rules[ncve][ncd] }, staleDate)
+                );
             this._sendObjectAction(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption',
@@ -1506,7 +1532,7 @@ class LifecycleTask extends BackbeatTask {
         const req = this.s3target.headObject(params);
         attachReqUids(req, log);
         return req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'HeadObject', 'bucket', err);
+            LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', err);
 
             if (err) {
                 log.error('failed to get object', {
@@ -1538,6 +1564,8 @@ class LifecycleTask extends BackbeatTask {
                     eTag: obj.ETag,
                     lastModified: obj.LastModified,
                     site: rules.Transition.StorageClass,
+                    transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                        rules.Transition, obj.LastModified),
                 }, log, done);
             }
 
@@ -1630,6 +1658,8 @@ class LifecycleTask extends BackbeatTask {
                 lastModified: version.LastModified,
                 site: rules.Transition.StorageClass,
                 encodedVersionId: undefined,
+                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                    rules.Transition, version.LastModified),
             }, log, done);
         }
 
@@ -1684,7 +1714,12 @@ class LifecycleTask extends BackbeatTask {
                     .setAttribute('target.bucket', bucketData.target.bucket)
                     .setAttribute('target.accountId', bucketData.target.accountId)
                     .setAttribute('target.key', upload.Key)
-                    .setAttribute('details.UploadId', upload.UploadId);
+                    .setAttribute('details.UploadId', upload.UploadId)
+                    .setAttribute('details.dataStoreName', upload.StorageClass || '')
+                    .setAttribute('transitionTime',
+                        this._lifecycleDateTime.getTransitionTimestamp(
+                            { Days: abortRule.DaysAfterInitiation }, upload.Initiated)
+                    );
                 this._sendObjectAction(entry, err => {
                     if (!err) {
                         log.debug('sent object entry for consumption',
@@ -1807,7 +1842,7 @@ class LifecycleTask extends BackbeatTask {
                         req.send((err, data) => {
                             LifecycleMetrics.onS3Request(
                                 log,
-                                'GetBucketVersioning',
+                                'getBucketVersioning',
                                 'bucket',
                                 err
                             );

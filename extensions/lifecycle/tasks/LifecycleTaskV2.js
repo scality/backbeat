@@ -348,6 +348,8 @@ class LifecycleTaskV2 extends LifecycleTask {
                 eTag: obj.ETag,
                 lastModified: obj.LastModified,
                 site: rules.Transition.StorageClass,
+                transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                    rules.Transition, obj.LastModified),
             }, log, cb);
         }
 
@@ -426,13 +428,14 @@ class LifecycleTaskV2 extends LifecycleTask {
                     reqId: log.getSerializedUids(),
                 })
                 .setAttribute('target.owner', bucketData.target.owner)
-                .setAttribute('target.bucket',
-                    bucketData.target.bucket)
+                .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.key', deleteMarker.Key)
-                .setAttribute('target.accountId',
-                    bucketData.target.accountId)
-                .setAttribute('target.version',
-                    deleteMarker.VersionId);
+                .setAttribute('target.accountId', bucketData.target.accountId)
+                .setAttribute('target.version', deleteMarker.VersionId)
+                .setAttribute('transitionTime',
+                    this._lifecycleDateTime.getTransitionTimestamp(
+                        applicableExpRule, deleteMarker.LastModified)
+                );
             this._sendObjectAction(entry, err => {
                 if (!err) {
                     log.debug('sent object entry for consumption',

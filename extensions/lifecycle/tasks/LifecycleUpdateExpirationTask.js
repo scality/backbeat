@@ -4,6 +4,7 @@ const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 
 class LifecycleUpdateExpirationTask extends BackbeatTask {
     /**
@@ -40,6 +41,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         }, log, (err, blob) => {
+            LifecycleMetrics.onS3Request(log, 'getMetadata', 'restore:delete', err);
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleUpdateExpirationTask._getMetadata',
@@ -87,6 +89,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             versionId: version,
             mdBlob: objMD.getSerialized(),
         }, log, err => {
+            LifecycleMetrics.onS3Request(log, 'putMetadata', 'restore:delete', err);
             if (err) {
                 log.error(
                     'an error occurred when updating metadata for transition',
@@ -135,6 +138,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
      * @return {undefined}
      */
     processActionEntry(entry, done) {
+        const startTime = Date.now();
         const log = this.logger.newRequestLogger();
         entry.addLoggedAttributes({
             bucketName: 'target.bucket',
@@ -162,9 +166,13 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 // Confirm the object has indeed expired: it can happen that the
                 // expiration date is updated while the expiry was "in-flight" (e.g.
                 // queued for expiry but not yet expired)
-                if (new Date(archive.restoreWillExpireAt) > new Date()) {
+                const restoreExpirationDate = new Date(archive.restoreWillExpireAt);
+                if (restoreExpirationDate > new Date()) {
                     return process.nextTick(done);
                 }
+
+                LifecycleMetrics.onLifecycleStarted(log, 'restore:delete',
+                    coldLocation, startTime - restoreExpirationDate);
 
                 // Reset archive flags to no longer show it as restored
                 objMD.setArchive({
@@ -175,7 +183,11 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 objMD.setAmzStorageClass(coldLocation);
                 objMD.setTransitionInProgress(false);
                 objMD.setOriginOp('s3:ObjectRestore:Delete');
-                return this._putMetadata(entry, objMD, log, err => next(err, objMD));
+                return this._putMetadata(entry, objMD, log, err => {
+                    LifecycleMetrics.onLifecycleCompleted(log, 'restore:delete',
+                        coldLocation, Date.now() - restoreExpirationDate);
+                    next(err, objMD);
+                });
             },
             (objMD, next) => this._garbageCollectLocation(
                 entry, objMD.getLocation(), log, next,

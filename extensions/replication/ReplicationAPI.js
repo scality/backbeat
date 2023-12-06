@@ -71,7 +71,7 @@ class ReplicationAPI {
      */
     static sendDataMoverAction(producer, action, log, cb) {
         const { accountId, bucket, key, version, eTag, attempt } = action.getAttribute('target');
-        const { origin, fromLocation, contentLength } = action.getAttribute('metrics');
+        const { origin, fromLocation, contentLength, transitionTime } = action.getAttribute('metrics');
         const kafkaEntry = {
             key: `${bucket}/${key}`,
             message: action.toKafkaMessage(),
@@ -97,13 +97,14 @@ class ReplicationAPI {
                 size: contentLength,
                 eTag,
                 try: attempt,
+                transitionTime: new Date(transitionTime).toISOString(),
             };
             kafkaEntry.message = JSON.stringify(message);
         }
         return producer.sendToTopic(topic, [kafkaEntry], (err, reports) => {
-            if (locationConfig.isCold) {
-                LifecycleMetrics.onKafkaPublish(log, 'ColdStorageArchiveTopic', 'bucket', err, 1);
-            }
+            LifecycleMetrics.onKafkaPublish(log,
+                locationConfig.isCold ? 'ColdStorageArchiveTopic' : 'DataMoverTopic',
+                'bucket', err, 1);
             if (err) {
                 log.error('could not send data mover action',
                     Object.assign({
@@ -117,7 +118,7 @@ class ReplicationAPI {
                     method: 'ReplicationAPI.sendDataMoverAction',
                 }, action.getLogInfo()));
             ReplicationMetrics.onReplicationQueued(
-                origin, fromLocation, action.getAttribute('toLocation'),
+                origin, fromLocation, toLocation,
                 contentLength, reports[0].partition);
             return cb();
         });

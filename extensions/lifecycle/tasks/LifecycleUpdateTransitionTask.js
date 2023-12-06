@@ -40,8 +40,6 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             objectKey: key,
             versionId: version,
         }, log, (err, blob) => {
-            LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
-
             if (err) {
                 log.error('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleUpdateTransitionTask._getMetadata',
@@ -72,7 +70,8 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         objMD.setLocation(location)
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
-            .setOriginOp('s3:LifecycleTransition');
+            .setOriginOp('s3:LifecycleTransition')
+            .setTransitionInProgress(false);
     }
 
     _putMetadata(entry, objMD, log, done) {
@@ -167,7 +166,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
         if (entry.getStatus() === 'success') {
             let locationToGC;
             return async.waterfall([
-                next => this._getMetadata(entry, log, next),
+                next => this._getMetadata(entry, log, (err, objMD) => {
+                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
+                    next(err, objMD);
+                }),
                 (objMD, next) => {
                     const oldLocation = objMD.getLocation();
                     const newLocation = entry.getAttribute('results.location');
@@ -200,8 +202,14 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                         return next();
                     }
                     locationToGC = oldLocation;
+
+                    const transitionTime = objMD.getTransitionTime();
                     this._updateMdWithTransition(entry, objMD);
-                    return this._putMetadata(entry, objMD, log, next);
+                    return this._putMetadata(entry, objMD, log, err => {
+                        LifecycleMetrics.onLifecycleCompleted(log, 'transition',
+                            newLocation, Date.now() - Date.parse(transitionTime));
+                        next(err);
+                    });
                 },
                 next => {
                     log.end().info('metadata updated for transition',
