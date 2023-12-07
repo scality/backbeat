@@ -21,11 +21,14 @@ function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)
         .toCompletedEntry('sf')
         .toCompletedEntry('replicationaws')
-        .setSite('sf');
+        .setSite('sf')
+        .setOriginOp('s3:ObjectCreated:Put');
 }
 
 function getRefreshedEntry() {
-    return QueueEntry.createFromKafkaEntry(replicationEntry).setSite('sf');
+    return QueueEntry.createFromKafkaEntry(replicationEntry)
+        .setSite('sf')
+        .setOriginOp('s3:ObjectCreated:Put');
 }
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {
@@ -62,6 +65,8 @@ describe('UpdateReplicationStatus._getUpdatedSourceEntry()', () => {
               ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
         checkReplicationInfo('sf', 'COMPLETED', updatedSourceEntry);
         checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
+        // originOp should have been reset before putting metadata
+        assert.strictEqual(updatedSourceEntry.getOriginOp(), '');
     });
 
     it('should return null when site status is COMPLETED and existing site ' +
