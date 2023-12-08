@@ -7,7 +7,7 @@ const { metrics } = require('arsenal');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
-const { CircuitBreaker } = require('breakbeat').CircuitBreaker;
+const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 const { promMetricNames } =
       require('../../../lib/constants').kafkaBacklogMetrics;
 const zookeeperConf = { connectionString: 'localhost:2181' };
@@ -712,6 +712,65 @@ describe('BackbeatConsumer with circuit breaker', () => {
         // Attach breakerConf to the test, so it can be used from the hooks
         test.breakerConf = t.breakerConf;
     });
+
+    it('should only resume consumption when breaker state is nominal', function test(done) {
+        this.test.breakerConf = {
+            probes: [
+                {
+                    type: 'noop',
+                    returnConstantValue: true, // nominal state
+                },
+            ],
+        };
+
+        const boatloadOfMessages = [];
+        for (let i = 0; i < nMessages; ++i) {
+            boatloadOfMessages.push({
+                key: `message-${i}`,
+                message: `{"message_index":"${i}"}`,
+            });
+        }
+
+        let totalConsumed = 0;
+
+        consumer.subscribe();
+
+        consumer.on('consumed', messagesConsumed => {
+            totalConsumed += messagesConsumed;
+        });
+
+        async.series([
+            next => {
+                const interval = setInterval(() => {
+                    if (consumer._consumer.assignments().length !== 0) {
+                        clearInterval(interval);
+                        next();
+                    }
+                }, 1000);
+            },
+            next => {
+                setTimeout(() => producer.send(boatloadOfMessages, err => {
+                    assert.ifError(err);
+                }), 1000);
+                consumer._circuitBreaker.emit('state-changed', BreakerState.Tripped);
+                setTimeout(next, 3000);
+            },
+            next => {
+                assert.strictEqual(totalConsumed, 0);
+                consumer._circuitBreaker.emit('state-changed', BreakerState.Stabilizing);
+                setTimeout(next, 3000);
+            },
+            next => {
+                assert.strictEqual(totalConsumed, 0);
+                consumer._circuitBreaker.emit('state-changed', BreakerState.Nominal);
+                setTimeout(next, 3000);
+            },
+            next => {
+                assert.strictEqual(totalConsumed, nMessages);
+                next();
+            }
+        ], done);
+    }).timeout(30000);
 });
 
 describe('BackbeatConsumer shutdown tests', () => {
