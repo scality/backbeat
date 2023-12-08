@@ -597,10 +597,8 @@ describe('OplogPopulator', () => {
                     'documentKey._id': 1,
                     'fullDocument.value': 1,
                     'clusterTime': {
-                        $toDate: {
-                            $dateToString: {
-                                date: '$clusterTime'
-                            }
+                        $dateToString: {
+                            date: '$clusterTime'
                         }
                     },
                 },

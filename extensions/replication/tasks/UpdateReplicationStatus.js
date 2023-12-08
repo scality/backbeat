@@ -494,6 +494,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                     key,
                     versionId,
                     eventType,
+                    dateTime: new Date().toISOString(),
                 };
                 log.debug('validating entry', {
                     method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',

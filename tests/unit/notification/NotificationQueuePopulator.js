@@ -120,6 +120,9 @@ describe('NotificationQueuePopulator ::', () => {
                 key: 'examlpe-key',
                 type: 'put',
                 value: '}{',
+                overheadFields: {
+                    opTimestamp: new Date().toISOString(),
+                },
             };
             notificationQueuePopulator.filterAsync(entry, err => {
                 assert.ifError(err);
@@ -135,6 +138,9 @@ describe('NotificationQueuePopulator ::', () => {
                 key: 'example-bucket',
                 type: 'put',
                 value: '{}',
+                overheadFields: {
+                    opTimestamp: new Date().toISOString(),
+                },
             };
             notificationQueuePopulator.filterAsync(entry, err => {
                 assert.ifError(err);
@@ -145,12 +151,15 @@ describe('NotificationQueuePopulator ::', () => {
 
         it('Should process the entry', done => {
             const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb')
-                .callsArg(3);
+                .yields();
             const entry = {
                 bucket: 'example-bucket',
                 key: 'example-key',
                 type: 'put',
                 value: '{}',
+                overheadFields: {
+                    opTimestamp: new Date().toISOString(),
+                },
             };
             notificationQueuePopulator.filterAsync(entry, err => {
                 assert.ifError(err);

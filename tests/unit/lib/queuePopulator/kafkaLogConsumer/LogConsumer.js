@@ -23,6 +23,12 @@ const changeStreamDocument = {
         _id: 'example-key',
     },
     operationType: 'insert',
+    clusterTime: {
+        $timestamp: {
+            t: 1701270357,
+            i: 1,
+        },
+    },
     fullDocument: {
         value: {
             field: 'value'
@@ -115,6 +121,7 @@ describe('LogConsumer', () => {
                             value: JSON.stringify({
                                 field: 'value'
                             }),
+                            timestamp: '2023-11-29T15:05:57.000Z',
                         }],
                     });
                     return done();

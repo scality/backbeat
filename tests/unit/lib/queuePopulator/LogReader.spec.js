@@ -90,12 +90,14 @@ describe('LogReader', () => {
         const masterEntry = {
             type: 'example-type',
             key: '\x7fMexample-key',
-            value: 'example-value'
+            value: 'example-value',
+            timestamp: '2023-11-29T15:05:57.065Z',
         };
         const versionEntry = {
             type: 'example-type',
             key: '\x7fVexample-key',
-            value: 'example-value'
+            value: 'example-value',
+            timestamp: '2023-11-29T15:05:57.065Z',
         };
         logReaderWithExtension._processLogEntry({}, record, masterEntry);
         logReaderWithExtension._processLogEntry({}, record, versionEntry);
@@ -105,7 +107,10 @@ describe('LogReader', () => {
             key: 'example-key',
             value: 'example-value',
             logReader: logReaderWithExtension,
-            timestamp: record.timestamp,
+            overheadFields: {
+                commitTimestamp: record.timestamp,
+                opTimestamp: '2023-11-29T15:05:57.065Z',
+            },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
         assert(mockExtension.filter.secondCall.calledWith(expectedArgs));
@@ -130,12 +135,14 @@ describe('LogReader', () => {
         const masterEntry = {
             type: 'example-type',
             key: 'fMexample-key',
-            value: 'example-value'
+            value: 'example-value',
+            timestamp: '2023-11-29T15:05:57.065Z',
         };
         const versionEntry = {
             type: 'example-type',
             key: 'fVexample-key',
-            value: 'example-value'
+            value: 'example-value',
+            timestamp: '2023-11-29T15:05:57.065Z',
         };
         logReaderWithExtension._processLogEntry({}, record, masterEntry);
         logReaderWithExtension._processLogEntry({}, record, versionEntry);
@@ -145,7 +152,10 @@ describe('LogReader', () => {
             key: 'fMexample-key',
             value: 'example-value',
             logReader: logReaderWithExtension,
-            timestamp: record.timestamp,
+            overheadFields: {
+                commitTimestamp: record.timestamp,
+                opTimestamp: '2023-11-29T15:05:57.065Z',
+            },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
         expectedArgs.key = 'fVexample-key';
