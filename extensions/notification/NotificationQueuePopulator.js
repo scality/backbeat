@@ -97,10 +97,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @param {String} bucket - bucket
      * @param {String} key - object key
      * @param {Object} value - log entry object
-     * @param {String} type - entry type
+     * @param {String} timestamp - operation timestamp
      * @return {undefined}
      */
-    async _processObjectEntry(bucket, key, value) {
+    async _processObjectEntry(bucket, key, value, timestamp) {
         if (!this._shouldProcessEntry(key, value)) {
             return undefined;
         }
@@ -117,6 +117,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 key: value.key,
                 eventType,
                 versionId,
+                dateTime: timestamp,
             };
             this.log.debug('validating entry', {
                 method: 'NotificationQueuePopulator._processObjectEntry',
@@ -176,7 +177,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined} Promise|undefined
      */
     filterAsync(entry, cb) {
-        const { bucket, key } = entry;
+        const { bucket, key, overheadFields } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -193,7 +194,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntryCb(bucket, key, result, cb);
+            return this._processObjectEntryCb(bucket, key, result, overheadFields.opTimestamp, cb);
         }
         return cb();
     }

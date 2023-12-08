@@ -221,12 +221,10 @@ class OplogPopulator {
                     'documentKey._id': 1,
                     'fullDocument.value': 1,
                     // transforming the BSON timestamp
-                    // into a usable date
+                    // into a usable date string
                     'clusterTime': {
-                        $toDate: {
-                            $dateToString: {
-                                date: '$clusterTime'
-                            }
+                        $dateToString: {
+                            date: '$clusterTime'
                         }
                     },
                 },

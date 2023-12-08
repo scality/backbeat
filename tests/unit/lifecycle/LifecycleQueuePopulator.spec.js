@@ -517,7 +517,9 @@ describe('LifecycleQueuePopulator', () => {
                     bucket: 'lc-queue-populator-test-bucket',
                     key: params.key,
                     value: JSON.stringify(params.md),
-                    timestamp,
+                    overheadFields: {
+                        commitTimestamp: timestamp,
+                    },
                 };
                 lcqp._handleDeleteOp(entry);
                 assert.strictEqual(kafkaSendStub.calledOnce, params.called);
