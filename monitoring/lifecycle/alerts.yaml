@@ -43,10 +43,14 @@ groups:
   - alert: LifecycleLateScanWarning
     Expr: |
       (
-        time()
-        - max(s3_lifecycle_latest_batch_start_time{
-             namespace="${namespace}", job="${job_lifecycle_producer}"
-           }) / 1000
+        time() - (
+          max(last_over_time(
+            s3_lifecycle_latest_batch_start_time{
+              namespace="${namespace}", job="${job_lifecycle_producer}"
+            }[${lifecycle_latency_warning_threshold}s]
+          ))
+          > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
+        ) / 1000
       ) / ${lifecycle_latency_warning_threshold} > 1
     Labels:
       severity: warning
@@ -60,10 +64,14 @@ groups:
   - alert: LifecycleLateScanCritical
     Expr: |
       (
-        time()
-        - max(s3_lifecycle_latest_batch_start_time{
-             namespace="${namespace}", job="${job_lifecycle_producer}"
-           }) / 1000
+        time() - (
+          max(last_over_time(
+            s3_lifecycle_latest_batch_start_time{
+              namespace="${namespace}", job="${job_lifecycle_producer}"
+            }[${lifecycle_latency_warning_threshold}s]
+          ))
+          > 0 or max(kube_service_created{namespace="${namespace}", service="${job_lifecycle_producer}"})
+        ) / 1000
       ) / ${lifecycle_latency_critical_threshold} > 1
     Labels:
       severity: critical
