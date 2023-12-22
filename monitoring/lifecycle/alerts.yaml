@@ -65,7 +65,7 @@ groups:
     Expr: |
       (
         time() - (
-          max(last_over_time(
+          max(max_over_time(
             s3_lifecycle_latest_batch_start_time{
               namespace="${namespace}", job="${job_lifecycle_producer}"
             }[${lifecycle_latency_warning_threshold}s]
