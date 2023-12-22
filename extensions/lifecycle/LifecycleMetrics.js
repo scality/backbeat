@@ -9,7 +9,7 @@ const LIFECYCLE_LABEL_TYPE = 'type';
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
     help: 'Timestamp of latest lifecycle batch start time',
-    labelNames: [],
+    labelNames: [LIFECYCLE_LABEL_ORIGIN],
 });
 
 // const lifecycleVaultOperations = ZenkoMetrics.createCounter({
@@ -22,12 +22,12 @@ const conductorBucketListings = {
     success: ZenkoMetrics.createCounter({
         name: 's3_lifecycle_conductor_bucket_list_success_total',
         help: 'Total number of successful bucket listings by lifecycle conductor',
-        labelNames: [],
+        labelNames: [LIFECYCLE_LABEL_ORIGIN],
     }),
     error: ZenkoMetrics.createCounter({
         name: 's3_lifecycle_conductor_bucket_list_error_total',
         help: 'Total number of failed bucket listings by lifecycle conductor',
-        labelNames: [],
+        labelNames: [LIFECYCLE_LABEL_ORIGIN],
     }),
 };
 
@@ -86,7 +86,7 @@ class LifecycleMetrics {
 
     static onProcessBuckets(log) {
         try {
-            conductorLatestBatchStartTime.set({}, Date.now());
+            conductorLatestBatchStartTime.set({ origin: 'conductor' }, Date.now());
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onProcessBuckets');
         }
@@ -107,7 +107,7 @@ class LifecycleMetrics {
 
     static onBucketListing(log, err) {
         try {
-            conductorBucketListings[err ? 'error' : 'success'].inc({});
+            conductorBucketListings[err ? 'error' : 'success'].inc({ origin: 'conductor' });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onBucketListing');
         }
