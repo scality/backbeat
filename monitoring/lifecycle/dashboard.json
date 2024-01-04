@@ -35,6 +35,55 @@
       "name": "job_lifecycle_object_processor",
       "type": "constant",
       "value": "artesca-data-backbeat-lifecycle-object-processor-headless"
+    },
+    {
+      "description": "Name of the lifecycle transition processor job, used to filter only lifecycle transition processor instances",
+      "label": "job lifecycle transition processor",
+      "name": "job_lifecycle_transition_processor",
+      "type": "constant",
+      "value": "artesca-data-backbeat-lifecycle-transition-headless"
+    },
+    {
+      "description": "Name of the lifecycle populator job, used to filter only lifecycle populator instances",
+      "label": "job lifecycle populator",
+      "name": "job_lifecycle_populator",
+      "type": "constant",
+      "value": "artesca-data-backbeat-lifecycle-populator-headless"
+    },
+    {
+      "description": "Name of the lifecycle gc processor job, used to filter only lifecycle gc processor instances",
+      "label": "job lifecycle gc processor",
+      "name": "job_lifecycle_gc_processor",
+      "type": "constant",
+      "value": "artesca-data-backbeat-gc-headless"
+    },
+    {
+      "description": "Number of bucket processor replicas",
+      "label": "bucket processor replicas",
+      "name": "bucket_processor_replicas",
+      "type": "constant",
+      "value": "1"
+    },
+    {
+      "description": "Number of object processor replicas",
+      "label": "object processor replicas",
+      "name": "object_processor_replicas",
+      "type": "constant",
+      "value": "1"
+    },
+    {
+      "description": "Number of transition processor replicas",
+      "label": "transition processor replicas",
+      "name": "transition_processor_replicas",
+      "type": "constant",
+      "value": "1"
+    },
+    {
+      "description": "Number of gc processor replicas",
+      "label": "gc processor replicas",
+      "name": "gc_processor_replicas",
+      "type": "constant",
+      "value": "1"
     }
   ],
   "annotations": {
@@ -43,7 +92,6 @@
   "description": "",
   "editable": true,
   "gnetId": null,
-  "graphTooltip": 0,
   "hideControls": false,
   "id": null,
   "links": [],
@@ -57,16 +105,34 @@
           "custom": {},
           "decimals": null,
           "mappings": [],
+          "max": "1",
+          "min": "0",
           "noValue": "0",
           "thresholds": {
-            "mode": "absolute",
+            "mode": "percentage",
             "steps": [
               {
-                "color": "green",
+                "color": "red",
                 "index": 0,
                 "line": true,
                 "op": "gt",
                 "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
                 "yaxis": "left"
               }
             ]
@@ -77,7 +143,7 @@
       },
       "gridPos": {
         "h": 4,
-        "w": 24,
+        "w": 4,
         "x": 0,
         "y": 0
       },
@@ -102,51 +168,470 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_producer}\"})",
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_producer}})",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "Conductor",
+          "legendFormat": "",
           "metric": "",
-          "query": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_producer}\"})",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Bucket Processor",
-          "metric": "",
-          "query": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\"})",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"})",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Expiration Processor",
-          "metric": "",
-          "query": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"})",
           "refId": "",
           "step": 10,
           "target": ""
         }
       ],
-      "title": "Up",
+      "title": "Conductor",
+      "transformations": [],
+      "transparent": false,
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "decimals": null,
+          "mappings": [],
+          "max": "${bucket_processor_replicas}",
+          "min": "0",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 4,
+        "y": 0
+      },
+      "hideTimeOverride": false,
+      "id": 2,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Bucket Processor",
+      "transformations": [],
+      "transparent": false,
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "decimals": null,
+          "mappings": [],
+          "max": "${object_processor_replicas}",
+          "min": "0",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 8,
+        "y": 0
+      },
+      "hideTimeOverride": false,
+      "id": 3,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Expiration Processor",
+      "transformations": [],
+      "transparent": false,
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "decimals": null,
+          "mappings": [],
+          "max": "${transition_processor_replicas}",
+          "min": "0",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 12,
+        "y": 0
+      },
+      "hideTimeOverride": false,
+      "id": 4,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_transition_processor}})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Transition Processor",
+      "transformations": [],
+      "transparent": false,
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "decimals": null,
+          "mappings": [],
+          "max": "${gc_processor_replicas}",
+          "min": "0",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 16,
+        "y": 0
+      },
+      "hideTimeOverride": false,
+      "id": 5,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_gc_processor}})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "GC Processor",
+      "transformations": [],
+      "transparent": false,
+      "type": "stat"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "custom": {},
+          "decimals": null,
+          "mappings": [],
+          "max": "1",
+          "min": "0",
+          "noValue": "0",
+          "thresholds": {
+            "mode": "percentage",
+            "steps": [
+              {
+                "color": "red",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "yellow",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 50.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "green",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 100.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "unit": "none"
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 4,
+        "w": 4,
+        "x": 20,
+        "y": 0
+      },
+      "hideTimeOverride": false,
+      "id": 6,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "colorMode": "value",
+        "graphMode": "area",
+        "justifyMode": "auto",
+        "orientation": "auto",
+        "reduceOptions": {
+          "calcs": [
+            "last"
+          ],
+          "fields": "",
+          "values": false
+        },
+        "textMode": "auto"
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(up{namespace=\"${namespace}\",job=\"${job_lifecycle_populator}})",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Populator",
       "transformations": [],
       "transparent": false,
       "type": "stat"
@@ -202,7 +687,7 @@
         "y": 4
       },
       "hideTimeOverride": false,
-      "id": 2,
+      "id": 7,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -226,7 +711,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 2xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -241,7 +725,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 3xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -256,7 +739,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 4xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -271,7 +753,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 5xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -324,7 +805,7 @@
         "y": 14
       },
       "hideTimeOverride": false,
-      "id": 3,
+      "id": 8,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -352,7 +833,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -405,7 +885,7 @@
         "y": 14
       },
       "hideTimeOverride": false,
-      "id": 4,
+      "id": 9,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -433,7 +913,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -486,7 +965,7 @@
         "y": 14
       },
       "hideTimeOverride": false,
-      "id": 5,
+      "id": 10,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -514,7 +993,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -567,7 +1045,7 @@
         "y": 14
       },
       "hideTimeOverride": false,
-      "id": 6,
+      "id": 11,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -595,7 +1073,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -625,7 +1102,7 @@
         "y": 18
       },
       "hideTimeOverride": false,
-      "id": 7,
+      "id": 12,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -686,7 +1163,7 @@
         "y": 19
       },
       "hideTimeOverride": false,
-      "id": 8,
+      "id": 13,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -710,7 +1187,6 @@
           "intervalFactor": 1,
           "legendFormat": "messages",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_kafka_publish_success_total{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -772,7 +1248,7 @@
         "y": 19
       },
       "hideTimeOverride": false,
-      "id": 9,
+      "id": 14,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -796,7 +1272,6 @@
           "intervalFactor": 1,
           "legendFormat": "messages",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_kafka_publish_error_total{op=\"BucketTopic\",namespace=\"${namespace}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -858,7 +1333,7 @@
         "y": 29
       },
       "hideTimeOverride": false,
-      "id": 10,
+      "id": 15,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -882,7 +1357,6 @@
           "intervalFactor": 1,
           "legendFormat": "messages",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_kafka_publish_success_total{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -944,7 +1418,7 @@
         "y": 29
       },
       "hideTimeOverride": false,
-      "id": 11,
+      "id": 16,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -968,7 +1442,6 @@
           "intervalFactor": 1,
           "legendFormat": "messages",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_kafka_publish_error_total{op=\"ObjectTopic\",namespace=\"${namespace}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -998,7 +1471,7 @@
         "y": 39
       },
       "hideTimeOverride": false,
-      "id": 12,
+      "id": 17,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -1033,7 +1506,7 @@
         "y": 40
       },
       "hideTimeOverride": false,
-      "id": 13,
+      "id": 18,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1061,7 +1534,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "s3_lifecycle_latest_batch_start_time{job=\"${job_lifecycle_producer}\",namespace=\"${namespace}\"}",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1168,7 +1640,7 @@
         "y": 44
       },
       "hideTimeOverride": false,
-      "id": 14,
+      "id": 19,
       "links": [],
       "maxDataPoints": 100,
       "targets": [
@@ -1182,7 +1654,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_producer}\"})*10",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1212,7 +1683,7 @@
         "y": 54
       },
       "hideTimeOverride": false,
-      "id": 15,
+      "id": 20,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -1273,7 +1744,7 @@
         "y": 55
       },
       "hideTimeOverride": false,
-      "id": 16,
+      "id": 21,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1297,7 +1768,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 2xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1312,7 +1782,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 3xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1327,7 +1796,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 4xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1342,7 +1810,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 5xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1395,7 +1862,7 @@
         "y": 65
       },
       "hideTimeOverride": false,
-      "id": 17,
+      "id": 22,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1423,7 +1890,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1476,7 +1942,7 @@
         "y": 65
       },
       "hideTimeOverride": false,
-      "id": 18,
+      "id": 23,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1504,7 +1970,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1557,7 +2022,7 @@
         "y": 65
       },
       "hideTimeOverride": false,
-      "id": 19,
+      "id": 24,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1585,7 +2050,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1638,7 +2102,7 @@
         "y": 65
       },
       "hideTimeOverride": false,
-      "id": 20,
+      "id": 25,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1666,7 +2130,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\",origin=\"bucket\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1773,7 +2236,7 @@
         "y": 69
       },
       "hideTimeOverride": false,
-      "id": 21,
+      "id": 26,
       "links": [],
       "maxDataPoints": 100,
       "targets": [
@@ -1787,7 +2250,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\"})*10",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1817,7 +2279,7 @@
         "y": 79
       },
       "hideTimeOverride": false,
-      "id": 22,
+      "id": 27,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -1878,7 +2340,7 @@
         "y": 80
       },
       "hideTimeOverride": false,
-      "id": 23,
+      "id": 28,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1902,7 +2364,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 2xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"2..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1917,7 +2378,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 3xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1932,7 +2392,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 4xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -1947,7 +2406,6 @@
           "intervalFactor": 1,
           "legendFormat": "HTTP 5xx",
           "metric": "",
-          "query": "sum(increase(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2000,7 +2458,7 @@
         "y": 90
       },
       "hideTimeOverride": false,
-      "id": 24,
+      "id": 29,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2028,7 +2486,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status!=\"200\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2081,7 +2538,7 @@
         "y": 90
       },
       "hideTimeOverride": false,
-      "id": 25,
+      "id": 30,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2109,7 +2566,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"3..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2162,7 +2618,7 @@
         "y": 90
       },
       "hideTimeOverride": false,
-      "id": 26,
+      "id": 31,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2190,7 +2646,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"4..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2243,7 +2698,7 @@
         "y": 90
       },
       "hideTimeOverride": false,
-      "id": 27,
+      "id": 32,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2271,7 +2726,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",status=~\"5..\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]))/sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\",origin=\"expiration\"}[$__rate_interval]) > 0)",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2333,7 +2787,7 @@
         "y": 94
       },
       "hideTimeOverride": false,
-      "id": 28,
+      "id": 33,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2357,7 +2811,6 @@
           "intervalFactor": 1,
           "legendFormat": "success",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{status=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2372,7 +2825,6 @@
           "intervalFactor": 1,
           "legendFormat": "error",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{status!=\"200\",op=\"deleteObject\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2434,7 +2886,7 @@
         "y": 104
       },
       "hideTimeOverride": false,
-      "id": 29,
+      "id": 34,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2458,7 +2910,6 @@
           "intervalFactor": 1,
           "legendFormat": "success",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{status=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2473,7 +2924,6 @@
           "intervalFactor": 1,
           "legendFormat": "error",
           "metric": "",
-          "query": "sum(rate(s3_lifecycle_s3_operations_total{status!=\"200\",op=\"abortMultipartUpload\",namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
           "refId": "",
           "step": 10,
           "target": ""
@@ -2580,7 +3030,7 @@
         "y": 114
       },
       "hideTimeOverride": false,
-      "id": 30,
+      "id": 35,
       "links": [],
       "maxDataPoints": 100,
       "targets": [
@@ -2594,7 +3044,6 @@
           "intervalFactor": 1,
           "legendFormat": "",
           "metric": "",
-          "query": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"})*10",
           "refId": "",
           "step": 10,
           "target": ""

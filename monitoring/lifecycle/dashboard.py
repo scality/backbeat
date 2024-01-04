@@ -6,13 +6,12 @@ from grafanalib.core import (
     Heatmap,
     HeatmapColor,
     RowPanel,
-    Stat,
     Threshold,
     YAxis,
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, Tooltip, Target, TimeSeries, Dashboard
+from scalgrafanalib import layout, Stat, Target, TimeSeries, Dashboard
 
 import os, sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
@@ -166,29 +165,35 @@ def kafka_row(topic, op):
     ]
 
 
-up = Stat(
-    title="Up",
-    dataSource="${DS_PROMETHEUS}",
-    reduceCalc="last",
-    noValue='0',
-    targets=[
-        Target(
-            expr='sum(up{namespace="${namespace}",job="${job_lifecycle_producer}"})',
-            legendFormat="Conductor",
-        ),
-        Target(
-            expr='sum(up{namespace="${namespace}",job="${job_lifecycle_bucket_processor}"})',
-            legendFormat="Bucket Processor",
-        ),
-        Target(
-            expr='sum(up{namespace="${namespace}",job="${job_lifecycle_object_processor}"})',
-            legendFormat="Expiration Processor",
-        ),
-    ],
-    thresholds=[
-        Threshold("green", 0, 0.0),
-    ],
-)
+up = [
+    Stat(
+        title=title,
+        dataSource="${DS_PROMETHEUS}",
+        reduceCalc="last",
+        minValue='0',
+        maxValue=replicas,
+        noValue='0',
+        targets=[
+            Target(
+                expr='sum(up{namespace="${namespace}",job="' + job + '})',
+            ),
+        ],
+        thresholdType='percentage',
+        thresholds=[
+            Threshold('red', 0, 0.0),
+            Threshold('yellow', 1, 50.),
+            Threshold('green', 2, 100.),
+        ],
+    )
+    for title, job, replicas in [
+        ('Conductor',            '${job_lifecycle_producer}',             '1'),
+        ('Bucket Processor',     '${job_lifecycle_bucket_processor}',     '${bucket_processor_replicas}'),
+        ('Expiration Processor', '${job_lifecycle_object_processor}',     '${object_processor_replicas}'),
+        ('Transition Processor', '${job_lifecycle_transition_processor}', '${transition_processor_replicas}'),
+        ('GC Processor',         '${job_lifecycle_gc_processor}',         '${gc_processor_replicas}'),
+        ('Populator',            '${job_lifecycle_populator}',            '1'),
+    ]
+]
 
 lifecycle_batch = Stat(
     title="Latest Batch Start Time",
@@ -287,9 +292,51 @@ dashboard = (
                 description="Name of the lifecycle object processor job, used to filter only lifecycle object processor instances",
                 value="artesca-data-backbeat-lifecycle-object-processor-headless",
             ),
+            ConstantInput(
+                name="job_lifecycle_transition_processor",
+                label="job lifecycle transition processor",
+                description="Name of the lifecycle transition processor job, used to filter only lifecycle transition processor instances",
+                value="artesca-data-backbeat-lifecycle-transition-headless",
+            ),
+            ConstantInput(
+                name="job_lifecycle_populator",
+                label="job lifecycle populator",
+                description="Name of the lifecycle populator job, used to filter only lifecycle populator instances",
+                value="artesca-data-backbeat-lifecycle-populator-headless",
+            ),
+            ConstantInput(
+                name="job_lifecycle_gc_processor",
+                label="job lifecycle gc processor",
+                description="Name of the lifecycle gc processor job, used to filter only lifecycle gc processor instances",
+                value="artesca-data-backbeat-gc-headless",
+            ),
+            ConstantInput(
+                name="bucket_processor_replicas",
+                label="bucket processor replicas",
+                description="Number of bucket processor replicas",
+                value="1",
+            ),
+            ConstantInput(
+                name="object_processor_replicas",
+                label="object processor replicas",
+                description="Number of object processor replicas",
+                value="1",
+            ),
+            ConstantInput(
+                name="transition_processor_replicas",
+                label="transition processor replicas",
+                description="Number of transition processor replicas",
+                value="1",
+            ),
+            ConstantInput(
+                name="gc_processor_replicas",
+                label="gc processor replicas",
+                description="Number of gc processor replicas",
+                value="1",
+            ),
         ],
         panels=layout.column([
-            layout.row([up], height=4),
+            layout.row(up, height=4),
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
             RowPanel(title="Kafka"),
