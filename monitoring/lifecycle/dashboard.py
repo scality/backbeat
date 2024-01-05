@@ -1,8 +1,6 @@
 from grafanalib.core import (
-    BarGauge,
     ConstantInput,
     DataSourceInput,
-    GaugePanel,
     Heatmap,
     HeatmapColor,
     RowPanel,
@@ -11,7 +9,7 @@ from grafanalib.core import (
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, metrics, GaugePanel, Stat, Target, TimeSeries, Dashboard
+from scalgrafanalib import layout, metrics, GaugePanel, PieChart, Stat, Target, TimeSeries, Tooltip, Dashboard
 
 import os, sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
@@ -272,6 +270,106 @@ ops_rate = [
     ]
 ]
 
+workflow_rate = TimeSeries(
+    title='Rate over time',
+    dataSource='${DS_PROMETHEUS}',
+    decimals=0,
+    fillOpacity=30,
+    legendCalcs=['mean'],
+    legendDisplayMode='table',
+    legendPlacement='right',
+    unit=UNITS.OPS_PER_SEC,
+    lineInterpolation='smooth',
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.DURATION.count() + ')) by (type)',
+            legendFormat="{{type}}",
+        ),
+        Target(
+            expr='sum(rate(' + GcMetrics.DURATION.count() + '))',
+            legendFormat="gc",
+        )
+    ],
+)
+
+trigger_latency, workflow_latency, workflow_duration_by_type, workflow_duration_by_location = [
+    TimeSeries(
+        title=title,
+        dataSource='${DS_PROMETHEUS}',
+        decimals=0,
+        fillOpacity=30,
+        legendCalcs=['max'],
+        legendDisplayMode='table',
+        legendPlacement='right',
+        unit=UNITS.SECONDS,
+        lineInterpolation='smooth',
+        targets=[
+            Target(
+                expr='histogram_quantile(0.95, sum(rate(' + metric.bucket() + ')) by (le, ' + label + '))',
+                legendFormat='{{' + label + '}}',
+            ),
+        ] + ([
+            Target(
+                expr='histogram_quantile(0.95, sum(rate(' + GcMetrics.DURATION.bucket() + ')) by (le))',
+                legendFormat="gc",
+            ),
+        ] if title == 'Duration by Type' else []),
+    )
+    for title, metric, label in [
+        ('Trigger Latency',      Metrics.TRIGGER_LATENCY, 'type'),
+        ('Latency over time',    Metrics.LATENCY,         'type'),
+        ('Duration by Type',     Metrics.DURATION,        'type'),
+        ('Duration by Location', Metrics.DURATION,        'location'),
+    ]
+]
+
+latency_distribution, expiration_distribution, transition_distribution, archive_distribution, restore_distribution = [
+    Heatmap(
+        title=title,
+        dataSource='${DS_PROMETHEUS}',
+        dataFormat='tsbuckets',
+        hideZeroBuckets=True,
+        maxDataPoints=25,
+        tooltip=Tooltip(show=True, showHistogram=True),
+        yAxis=YAxis(format=UNITS.SECONDS, decimals=0),
+        cards={'cardPadding': 1, 'cardRound': 2},
+        color=HeatmapColor(mode='opacity'),
+        targets=[Target(
+            expr='sum(increase(' + metric + ')) by(le)',
+            format="heatmap",
+            legendFormat="{{le}}",
+        )],
+    )
+    for title, metric in [
+        ('Latency Distribution',             Metrics.LATENCY.bucket()),
+        ('Expiration Duration Distribution', Metrics.DURATION.bucket(type='expiration')),
+        ('Transition Duration Distribution', Metrics.DURATION.bucket(type='transition')),
+        ('Archive Duration Distribution',    Metrics.DURATION.bucket(type='archive')),
+        ('Restore Duration Distribution',    Metrics.DURATION.bucket(type='restore')),
+    ]
+]
+
+workflow_by_location, workflow_by_type = [
+    PieChart(
+        title=title,
+        dataSource='${DS_PROMETHEUS}',
+        legendDisplayMode='hidden',
+        pieType='donut',
+        reduceOptionsCalcs=['mean'],
+        unit=UNITS.OPS_PER_SEC,
+        targets=[
+            Target(
+                expr='sum(rate(' + Metrics.DURATION.count() + ')) by ('+ label + ')',
+                legendFormat='{{' + label + '}}',
+            ),
+        ]
+    )
+    for title, label in [
+        ("By location", 'location'),
+        ("By type",     'type'),
+    ]
+]
+
 lifecycle_global_s3_requests = s3_request_timeseries("S3 Requests")
 lifecycle_global_s3_error_rates = s3_request_error_rates()
 
@@ -421,6 +519,13 @@ dashboard = (
             layout.row([
                 circuit_breaker, bucket_listing_success_rate, *ops_rate, s3_request_rate, s3_success_rate,
             ], height=4),
+            RowPanel(title="Lifecycle Workflows"),
+            layout.row([workflow_rate] + layout.resize([workflow_by_type, workflow_by_location], width=5), height=7),
+            layout.row([workflow_latency, latency_distribution], height=7),
+            layout.row([workflow_duration_by_type, workflow_duration_by_location], height=7),
+            layout.row([expiration_distribution, transition_distribution], height=7),
+            layout.row([archive_distribution, restore_distribution], height=7),
+            RowPanel(title="S3 Operations"),
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
             RowPanel(title="Kafka Message Produced"),
@@ -443,6 +548,7 @@ dashboard = (
             RowPanel(title="Lifecycle Conductor"),
             layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
+            layout.row([trigger_latency], height=7),
             layout.row([lifecycle_bucket_processor_s3_requests], height=10),
             layout.row(lifecycle_bucket_processor_s3_error_rates, height=4),
             layout.row([lifecycle_bucket_processor_circuit_breaker], height=10),
