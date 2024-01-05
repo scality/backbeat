@@ -16,7 +16,9 @@ CB_HIGH_RANGE_STALLED = 20
 def s3_circuit_breaker_expr(process, job):
     labelSelector = 'namespace="${namespace}"'
 
-    if job is not None:
+    if isinstance(job, list) and len(job) > 0:
+        labelSelector += f',job=~"{ "|".join(job) }"'
+    elif job is not None:
         labelSelector += f',job="{job}"'
 
     return f'avg(s3_circuit_breaker{{{labelSelector}}})'

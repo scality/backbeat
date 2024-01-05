@@ -11,7 +11,7 @@ from grafanalib.core import (
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, metrics, Stat, Target, TimeSeries, Dashboard
+from scalgrafanalib import layout, metrics, GaugePanel, Stat, Target, TimeSeries, Dashboard
 
 import os, sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
@@ -192,6 +192,86 @@ lifecycle_batch = Stat(
     ],
 )
 
+bucket_listing_success_rate, s3_success_rate = [
+    GaugePanel(
+        title=name,
+        dataSource='${DS_PROMETHEUS}',
+        calc='mean',
+        decimals=2,
+        format=UNITS.PERCENT_FORMAT,
+        min=0,
+        max=100,
+        noValue='-',
+        targets=[Target(
+            expr='\n'.join([
+                '100 / (1 + (sum(rate(' + failed + ')) or vector(0))',
+                '           /',
+                '           (sum(rate(' + succeeded + ')) > 0)',
+                '      )',
+            ]),
+        )],
+        thresholds=[
+            Threshold('#808080',            0,  0.0),
+            Threshold('red',                1,  0.0),
+            Threshold('orange',             2, 95.0),
+            Threshold('super-light-yellow', 3, 99.0),
+            Threshold('light-green',        4, 99.5),
+            Threshold('green',              5, 99.995),
+        ]
+    )
+    for name, failed, succeeded in [
+        ('Listings success rate', Metrics.BUCKET_LISTING_ERROR(),  Metrics.BUCKET_LISTING_SUCCESS()),
+        ('S3 success rate',       Metrics.S3_OPS('status!="200"'), Metrics.S3_OPS('status="200"')),
+    ]
+]
+
+s3_request_rate = Stat(
+    title="S3 Requests",
+    dataSource="${DS_PROMETHEUS}",
+    colorMode='background',
+    format=UNITS.REQUESTS_PER_SEC,
+    reduceCalc="mean",
+    targets=[
+        Target(expr='sum(rate(' + Metrics.S3_OPS() + '))'),
+    ],
+    thresholds=[Threshold('dark-purple', 0, 0.)],
+)
+
+circuit_breaker = s3_circuit_breaker(
+    'Flow Control',
+    job=[
+        '${job_lifecycle_producer}',
+        '${job_lifecycle_bucket_processor}',
+        '${job_lifecycle_object_processor}',
+        '${job_lifecycle_transition_processor}',
+        '${job_lifecycle_gc_processor}',
+        '${job_lifecycle_populator}',
+    ],
+)
+
+ops_rate = [
+    Stat(
+        title=title,
+        dataSource="${DS_PROMETHEUS}",
+        colorMode='background',
+        format=UNITS.OPS_PER_SEC,
+        noValue='-',
+        reduceCalc="mean",
+        targets=[
+            Target(
+                expr='sum(rate(' + Metrics.DURATION.count(f'type=~"{type}"') + '))',
+            ),
+        ],
+        thresholds=[Threshold('semi-dark-blue', 0, 0.)],
+    )
+    for title, type in [
+        ('Expiration', 'expiration|expiration:mpu'),
+        ('Transition', 'transition'),
+        ('Archive',    'archive|archive:gc'),
+        ('Restore',    'restore'),
+    ]
+]
+
 lifecycle_global_s3_requests = s3_request_timeseries("S3 Requests")
 lifecycle_global_s3_error_rates = s3_request_error_rates()
 
@@ -337,7 +417,10 @@ dashboard = (
             ),
         ],
         panels=layout.column([
-            layout.row(up, height=4),
+            layout.row(up + layout.resize([lifecycle_batch], width=6), height=4),
+            layout.row([
+                circuit_breaker, bucket_listing_success_rate, *ops_rate, s3_request_rate, s3_success_rate,
+            ], height=4),
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
             RowPanel(title="Kafka Message Produced"),
@@ -358,7 +441,6 @@ dashboard = (
                 kafka_message_produced("Cold Storage Restore Adjust", "ColdStorageRestoreAdjustTopic"),
             ], height=8),
             RowPanel(title="Lifecycle Conductor"),
-            layout.row([lifecycle_batch], height=4),
             layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
             layout.row([lifecycle_bucket_processor_s3_requests], height=10),
