@@ -11,7 +11,7 @@ from grafanalib.core import (
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, Stat, Target, TimeSeries, Dashboard
+from scalgrafanalib import layout, metrics, Stat, Target, TimeSeries, Dashboard
 
 import os, sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
@@ -23,146 +23,126 @@ STATUS_CODE_3XX = '3..'
 STATUS_CODE_4XX = '4..'
 STATUS_CODE_5XX = '5..'
 
+class Metrics:
+    LATEST_BATCH_START_TIME = metrics.Metric(
+        's3_lifecycle_latest_batch_start_time',
+        job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
 
-def s3_request_timeseries_expr(process, job, code):
-    labelSelector = 'namespace="${namespace}"'
-    labelSelector += f',status=~"{code}"'
+    BUCKET_LISTING_SUCCESS, BUCKET_LISTING_ERROR = [
+        metrics.CounterMetric(
+            name, job='${job_lifecycle_producer}', namespace='${namespace}',
+        )
+        for name in [
+            's3_lifecycle_conductor_bucket_list_success_total',
+            's3_lifecycle_conductor_bucket_list_error_total',
+        ]
+    ]
 
-    if job is not None:
-        labelSelector += f',job="{job}"'
+    S3_OPS = metrics.CounterMetric(
+       's3_lifecycle_s3_operations_total',
+       'origin', 'op', 'status', 'job', namespace='${namespace}',
+    )
 
-    if process is not None:
-        labelSelector += f',origin="{process}"'
+    TRIGGER_LATENCY, LATENCY, DURATION = [
+        metrics.BucketMetric(
+            name, 'location', 'type', 'job', namespace='${namespace}',
+        )
+        for name in [
+            's3_lifecycle_trigger_latency_seconds',
+            's3_lifecycle_latency_seconds',
+            's3_lifecycle_duration_seconds',
+        ]
+    ]
 
-    return f'sum(increase(s3_lifecycle_s3_operations_total{{{labelSelector}}}[$__rate_interval]))'
+    KAFKA_PUBLISH_SUCCESS, KAFKA_PUBLISH_ERROR = [
+        metrics.CounterMetric(
+            name, 'origin', 'op', 'job', namespace='${namespace}',
+        )
+        for name in [
+            's3_lifecycle_kafka_publish_success_total',
+            's3_lifecycle_kafka_publish_error_total',
+        ]
+    ]
 
 
-def s3_request_timeseries(title, process=None, job=None):
+class GcMetrics:
+    S3_OPS = metrics.CounterMetric(
+       's3_gc_s3_operations_total',
+       'origin', 'op', 'status', job='${job_lifecycle_gc_processor}', namespace='${namespace}',
+    )
+
+    DURATION = metrics.BucketMetric(
+       's3_gc_duration_seconds',
+       'origin', job='${job_lifecycle_gc_processor}', namespace='${namespace}'
+    )
+
+
+def s3_request_timeseries(title, **kwargs):
     return TimeSeries(
         title=title,
         dataSource="${DS_PROMETHEUS}",
         fillOpacity=5,
         legendDisplayMode='table',
+        unit=UNITS.REQUESTS_PER_SEC,
         targets=[
             Target(
-                expr=s3_request_timeseries_expr(process, job, STATUS_CODE_2XX),
-                legendFormat="HTTP 2xx",
-            ),
-            Target(
-                expr=s3_request_timeseries_expr(process, job, STATUS_CODE_3XX),
-                legendFormat="HTTP 3xx",
-            ),
-            Target(
-                expr=s3_request_timeseries_expr(process, job, STATUS_CODE_4XX),
-                legendFormat="HTTP 4xx",
-            ),
-            Target(
-                expr=s3_request_timeseries_expr(process, job, STATUS_CODE_5XX),
-                legendFormat="HTTP 5xx",
-            ),
+                expr='sum(rate(' + Metrics.S3_OPS(f'status=~"{status}"', **kwargs) + '))',
+                legendFormat=name,
+            )
+            for name, status in [
+                ("Success", STATUS_CODE_2XX),
+                ("User errors", STATUS_CODE_4XX),
+                ("System errors", STATUS_CODE_5XX),
+            ]
         ]
     )
 
 
-def s3_request_error_rate_expr(process, job, code):
-    divdLabel = 'namespace="${namespace}"'
-    divsLabel = 'namespace="${namespace}"'
-
-    if code is not None:
-        divdLabel += f',status=~"{code}"'
-    else:
-        divdLabel += ',status!="200"'
-
-    if job is not None:
-        divdLabel += f',job="{job}"'
-        divsLabel += f',job="{job}"'
-
-    if process is not None:
-        divdLabel += f',origin="{process}"'
-        divsLabel += f',origin="{process}"'
-
-    divd = f'sum(rate(s3_lifecycle_s3_operations_total{{{divdLabel}}}[$__rate_interval]))'
-    divs = f'sum(rate(s3_lifecycle_s3_operations_total{{{divsLabel}}}[$__rate_interval]) > 0)'
-
-    return f'{divd}/{divs}'
-
-
-def s3_request_error_rate(title, process=None, job=None, code=None):
-    return Stat(
-        title=title,
-        dataSource="${DS_PROMETHEUS}",
-        format=UNITS.PERCENT_UNIT,
-        reduceCalc="mean",
-        targets=[
-            Target(expr=s3_request_error_rate_expr(process, job, code)),
-        ],
-        thresholds=[
-            Threshold("green", 0, 0.0),
-            Threshold("red", 1, 0.05),
-        ],
-    )
-
-
-def s3_request_error_rates(process=None, job=None):
+def s3_request_error_rates(**kwargs):
     return [
-        s3_request_error_rate( "S3 All Errors", process=process, job=job),
-        s3_request_error_rate( "S3 3xx Errors", process=process, job=job, code=STATUS_CODE_3XX),
-        s3_request_error_rate( "S3 4xx Errors", process=process, job=job, code=STATUS_CODE_4XX),
-        s3_request_error_rate( "S3 5xx Errors", process=process, job=job, code=STATUS_CODE_5XX),
+        Stat(
+            title=title,
+            dataSource="${DS_PROMETHEUS}",
+            format=UNITS.PERCENT_UNIT,
+            reduceCalc="mean",
+            targets=[
+                Target(expr='\n'.join([
+                    'sum(rate(' + Metrics.S3_OPS(status, **kwargs) + '))',
+                    '/',
+                    'sum(rate('  + Metrics.S3_OPS(**kwargs) + ') > 0)',
+                ])),
+            ],
+            thresholds=[
+                Threshold("green", 0, 0.0),
+                Threshold("red", 1, 0.05),
+            ],
+        )
+        for title, status in [
+            ("Error rate", 'status!="200"'),
+            ("User Error rate", f'status=~"{STATUS_CODE_4XX}"'),
+            ("System Error rate", f'status=~"{STATUS_CODE_5XX}"'),
+        ]
     ]
 
 
-def s3_deletion_request_time_series(op):
-    successLabel = f'status="200",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
-    errorLabel = f'status!="200",op="{op}",namespace="{"${namespace}"}",job="{"${job_lifecycle_object_processor}"}"'
-
+def kafka_message_produced(title, op):
     return TimeSeries(
-        title=f'{op} Request Rate',
+        title=title,
         dataSource="${DS_PROMETHEUS}",
         fillOpacity=5,
         unit=UNITS.REQUESTS_PER_SEC,
         targets=[
             Target(
-                expr=f'sum(rate(s3_lifecycle_s3_operations_total{{{successLabel}}}[$__rate_interval]))',
-                legendFormat="success",
+                expr='sum(rate(' + Metrics.KAFKA_PUBLISH_SUCCESS(op=op) + '))',
+                legendFormat="Successful",
             ),
             Target(
-                expr=f'sum(rate(s3_lifecycle_s3_operations_total{{{errorLabel}}}[$__rate_interval]))',
-                legendFormat="error",
+                expr='sum(rate(' + Metrics.KAFKA_PUBLISH_ERROR(op=op) + '))',
+                legendFormat="Failed",
             ),
         ],
     )
-
-
-def kafka_messages_time_series(title, expr):
-    return TimeSeries(
-        title=title,
-        dataSource="${DS_PROMETHEUS}",
-        fillOpacity=5,
-        scaleDistributionType='log',
-        scaleDistributionLog=10,
-        legendDisplayMode='hidden',
-        targets=[
-            Target(
-                expr=expr,
-                legendFormat="messages",
-            ),
-        ],
-    )
-
-
-def kafka_row(topic, op):
-    label = f'op="{op}",namespace="{"${namespace}"}"'
-    return [
-        kafka_messages_time_series(
-            f'{topic} Messages in Queue',
-            f'sum(increase(s3_lifecycle_kafka_publish_success_total{{{label}}}[$__rate_interval]))',
-        ),
-        kafka_messages_time_series(
-            f'{topic} Failed Messages',
-            f'sum(increase(s3_lifecycle_kafka_publish_error_total{{{label}}}[$__rate_interval]))',
-        ),
-    ]
 
 
 up = [
@@ -175,7 +155,7 @@ up = [
         noValue='0',
         targets=[
             Target(
-                expr='sum(up{namespace="${namespace}",job="' + job + '})',
+                expr='sum(up{namespace="${namespace}", job="' + job + '"})',
             ),
         ],
         thresholdType='percentage',
@@ -199,12 +179,16 @@ lifecycle_batch = Stat(
     title="Latest Batch Start Time",
     dataSource="${DS_PROMETHEUS}",
     reduceCalc="lastNotNull",
-    format='dateTimeAsLocal',
+    format='dateTimeAsLocalNoDateIfToday',
     targets=[
         Target(
-            expr='s3_lifecycle_latest_batch_start_time{job="${job_lifecycle_producer}",namespace="${namespace}"}',
+            expr='max(max_over_time(' + Metrics.LATEST_BATCH_START_TIME() + '[24h]) > 0)',
             instant=True,
         ),
+    ],
+    thresholds=[
+        Threshold('#808080', 0, 0.0),
+        Threshold('blue', 1, 0.0),
     ],
 )
 
@@ -213,23 +197,23 @@ lifecycle_global_s3_error_rates = s3_request_error_rates()
 
 lifecycle_bucket_processor_s3_requests = s3_request_timeseries(
     "S3 Requests",
-    process="bucket",
+    origin="bucket",
     job='${job_lifecycle_bucket_processor}',
 )
 
 lifecycle_bucket_processor_s3_error_rates = s3_request_error_rates(
-    process="bucket",
+    origin="bucket",
     job='${job_lifecycle_bucket_processor}',
 )
 
 lifecycle_expiration_processor_s3_requests = s3_request_timeseries(
     "S3 Requests",
-    process="expiration",
+    origin="expiration",
     job='${job_lifecycle_object_processor}',
 )
 
 lifecycle_expiration_processor_s3_error_rates = s3_request_error_rates(
-    process="expiration",
+    origin="expiration",
     job='${job_lifecycle_object_processor}',
 )
 
@@ -251,8 +235,25 @@ lifecycle_object_processor_circuit_breaker = s3_circuit_breaker(
     job='${job_lifecycle_object_processor}',
 )
 
-lifecycle_expiration_processor_s3_delete_object_ops = s3_deletion_request_time_series("deleteObject")
-lifecycle_expiration_processor_s3_delete_mpu_ops = s3_deletion_request_time_series("abortMultipartUpload")
+lifecycle_expiration_processor_s3_delete_object_ops, lifecycle_expiration_processor_s3_delete_mpu_ops = [
+    TimeSeries(
+        title=f'{op} Request Rate',
+        dataSource="${DS_PROMETHEUS}",
+        fillOpacity=5,
+        unit=UNITS.REQUESTS_PER_SEC,
+        targets=[
+            Target(
+                expr='sum(rate(' + Metrics.S3_OPS(status=200, op=op, job="${job_lifecycle_object_processor}") + '))',
+                legendFormat="success",
+            ),
+            Target(
+                expr='sum(rate(' + Metrics.S3_OPS('status!="200"', op=op, job="${job_lifecycle_object_processor}") + '))',
+                legendFormat="error",
+            ),
+        ],
+    )
+    for op in ['deleteObject', 'abortMultipartUpload']
+]
 
 dashboard = (
     Dashboard(
@@ -339,9 +340,23 @@ dashboard = (
             layout.row(up, height=4),
             layout.row([lifecycle_global_s3_requests], height=10),
             layout.row(lifecycle_global_s3_error_rates, height=4),
-            RowPanel(title="Kafka"),
-            layout.row(kafka_row("Lifecycle Bucket Task", "BucketTopic"), height=10),
-            layout.row(kafka_row("Expiration Object Task", "ObjectTopic"), height=10),
+            RowPanel(title="Kafka Message Produced"),
+            layout.row([
+                kafka_message_produced("Bucket Task", "BucketTopic"),
+                kafka_message_produced("Expiration Task", "ObjectTopic"),
+            ], height=8),
+            layout.row([
+                kafka_message_produced("Data Mover Task", "DataMoverTopic"),
+                kafka_message_produced("Gc Task", "GcTopic"),
+            ], height=8),
+            layout.row([
+                kafka_message_produced("Cold Storage Archive", "ColdStorageArchiveTopic"),
+                kafka_message_produced("Cold Storage Gc", "ColdStorageGcTopic"),
+            ], height=8),
+            layout.row([
+                kafka_message_produced("Cold Storage Restore", "ColdStorageRestoreTopic"),
+                kafka_message_produced("Cold Storage Restore Adjust", "ColdStorageRestoreAdjustTopic"),
+            ], height=8),
             RowPanel(title="Lifecycle Conductor"),
             layout.row([lifecycle_batch], height=4),
             layout.row([lifecycle_conductor_circuit_breaker], height=10),
