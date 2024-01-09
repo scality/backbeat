@@ -66,6 +66,7 @@ describe('ConnectorsManager', () => {
     let connectorCreateStub;
     let connectorDeleteStub;
     let connectorUpdateStub;
+    let connectorRestartStub;
 
     beforeEach(() => {
         connector1 = new Connector({
@@ -82,6 +83,8 @@ describe('ConnectorsManager', () => {
         connectorDeleteStub = sinon.stub(connector1._kafkaConnect, 'deleteConnector')
             .resolves();
         connectorUpdateStub = sinon.stub(connector1._kafkaConnect, 'updateConnectorConfig')
+            .resolves();
+        connectorRestartStub = sinon.stub(connector1._kafkaConnect, 'restartConnector')
             .resolves();
         connectorsManager = new ConnectorsManager({
             nbConnectors: 1,
@@ -240,6 +243,7 @@ describe('ConnectorsManager', () => {
 
     describe('_updateConnectors', () => {
         it('should update a running connector when its buckets changed', async () => {
+            sinon.stub(connectorsManager, '_validateConnectorState').resolves();
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = false;
             connector1._buckets = new Set(['bucket1']);
@@ -265,6 +269,7 @@ describe('ConnectorsManager', () => {
             assert(connectorUpdateStub.notCalled);
         });
         it('should destroy a running connector if no buckets are assigned to it', async () => {
+            sinon.stub(connectorsManager, '_validateConnectorState').resolves();
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = false;
             connector1._buckets = new Set([]);
@@ -297,6 +302,78 @@ describe('ConnectorsManager', () => {
             assert(connectorCreateStub.notCalled);
             assert(connectorDeleteStub.notCalled);
             assert(connectorUpdateStub.notCalled);
+        });
+    });
+
+    describe('_validateConnectorState', () => {
+        it('should restart a connector when tasks are failed', async () => {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
+                .resolves({
+                    name: 'connector1',
+                    connector: {
+                        state: 'RUNNING',
+                    },
+                    tasks:
+                    [
+                        {
+                            id: 0,
+                            state: 'RUNNING',
+                        },
+                        {
+                            id: 1,
+                            state: 'FAILED',
+                            trace: 'org.apache.kafka.common.errors.RecordTooLargeException\n'
+                        }
+                    ]
+                });
+            connector1._isRunning = true;
+            await connectorsManager._validateConnectorState(connector1);
+            assert(getStatusStub.called);
+            assert(connectorRestartStub.called);
+        });
+
+        it('should restart a connector when the connector instance failed', async () => {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
+                .resolves({
+                    name: 'connector1',
+                    connector: {
+                        state: 'FAILED',
+                    },
+                    tasks: []
+                });
+            connector1._isRunning = true;
+            await connectorsManager._validateConnectorState(connector1);
+            assert(getStatusStub.called);
+            assert(connectorRestartStub.called);
+        });
+
+        it('should do nothing when connector and tasks are running', async () => {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
+                .resolves({
+                    name: 'connector1',
+                    connector: {
+                        state: 'RUNNING',
+                    },
+                    tasks: [
+                        {
+                            id: 0,
+                            state: 'RUNNING',
+                        },
+                    ]
+                });
+            connector1._isRunning = true;
+            await connectorsManager._validateConnectorState(connector1);
+            assert(getStatusStub.called);
+            assert(connectorRestartStub.notCalled);
+        });
+
+        it('should do nothing when connector is not spawned', async () => {
+            const getStatusStub = sinon.stub(connectorsManager._kafkaConnect, 'getConnectorStatus')
+                .resolves({});
+            connector1._isRunning = false;
+            await connectorsManager._validateConnectorState(connector1);
+            assert(getStatusStub.notCalled);
+            assert(connectorRestartStub.notCalled);
         });
     });
 });

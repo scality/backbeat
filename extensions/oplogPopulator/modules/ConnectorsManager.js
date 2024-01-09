@@ -274,6 +274,9 @@ class ConnectorsManager {
                 updated: null,
             };
             try {
+                // check if connector is in a failed state and restart it
+                await this._validateConnectorState(connector);
+
                 // check if we need to spawn/despawn the connector
                 // - connector is destroyed if no buckets are configured
                 // - connector is spawned when buckets are configured on it
@@ -304,6 +307,50 @@ class ConnectorsManager {
             method: 'ConnectorsManager._updateConnectors',
             connectorsStatus,
         });
+    }
+
+    /**
+     * Checks if connectors are in a failed state and restarts them
+     * @param {connector} connector connector instance
+     * @returns {Promise<undefined>} undefined
+     * @throws {InternalError}
+     */
+    async _validateConnectorState(connector) {
+        if (!connector.isRunning) {
+            return;
+        }
+
+        try {
+            const connectorStatus = await this._kafkaConnect.getConnectorStatus(connector.name);
+            const isConnectorFailed = connectorStatus?.connector?.state === 'FAILED';
+            const areTasksFailed = connectorStatus?.tasks?.some(task => {
+                if (task.state === 'FAILED') {
+                    this._logger.error('Connector task failed', {
+                        method: 'ConnectorsManager._validateConnectorState',
+                        connector: connector.name,
+                        taskId: task.id,
+                        error: task.trace,
+                    });
+                    return true;
+                }
+                return false;
+            });
+            if (isConnectorFailed || areTasksFailed) {
+                await connector.restart();
+                this._metricsHandler.onConnectorRestart(connector);
+                this._logger.info('Successfully restarted a connector', {
+                    method: 'ConnectorsManager._validateConnectorState',
+                    connector: connector.name,
+                });
+            }
+        } catch (err) {
+            this._logger.error('Could not check or reset connector state', {
+                method: 'ConnectorsManager._validateConnectorState',
+                connector: connector.name,
+                error: err.description,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
     }
 
     /**
