@@ -29,9 +29,9 @@ tests:
   - name: Connector Configuration Failure
     interval: 1m
     input_series:
-      - series: oplog_populator_reconfiguration{connector="example-connector",success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+      - series: s3_oplog_populator_reconfiguration{connector="example-connector",success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 0+0x4 0+40x4 160+50x6
-      - series: oplog_populator_reconfiguration{connector="example-connector",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+      - series: s3_oplog_populator_reconfiguration{connector="example-connector",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 100+100x16
     alert_rule_test:
       - alertname: KafkaConnectFailedConnectorConfiguration
@@ -50,3 +50,26 @@ tests:
               zenko_service: backbeat-oplog-populator
               description: "Oplog populator failed to configure connector"
               summary: "Oplog populator couldn't update kafka connect connector"
+
+  - name: Connector Failures
+    interval: 1m
+    input_series:
+      - series: s3_oplog_populator_connector_restarts{connector="example-connector",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
+        values: 0+0x9 0+10x9 90+20x11
+    alert_rule_test:
+      - alertname: KafkaConnectFailedConnectors
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: KafkaConnectFailedConnectors
+        eval_time: 20m
+        exp_alerts: []
+      - alertname: KafkaConnectFailedConnectors
+        eval_time: 31m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+              connector: example-connector
+            exp_annotations:
+              zenko_service: backbeat-oplog-populator
+              description: "Oplog populator restarted connectors too many times"
+              summary: "Oplog populator connectors keep failing after restarts"
