@@ -357,16 +357,18 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
+        const expiryDate = this._parseDate(md.archive.restoreWillExpireAt);
         const message = JSON.stringify({
             archiveInfo: md.archive.archiveInfo,
             adjust: {
-                restoreWillExpireAt: md.archive.restoreWillExpireAt,
+                restoreWillExpireAt: expiryDate.toISOString(),
             },
             updatedAt: md['last-modified'],
             requestId: uuid(),
         });
 
-        const topic = `${coldStorageRestoreAdjustTopicPrefix}${md.dataStoreName}`;
+        const coldLocation = md['x-amz-storage-class'];
+        const topic = `${coldStorageRestoreAdjustTopicPrefix}${coldLocation}`;
         const producer = this._producers[topic];
         if (producer) {
             const kafkaEntry = { message };
@@ -380,7 +382,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 }
             });
         } else {
-            this.log.error(`producer not available for location ${md.dataStoreName}`, {
+            this.log.error(`producer not available for location ${coldLocation}`, {
                 method: 'LifecycleQueuePopulator._adjustRestoreMaxAge',
             });
         }
