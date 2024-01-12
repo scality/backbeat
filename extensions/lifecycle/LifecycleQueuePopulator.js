@@ -357,10 +357,11 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
+        const expiryDate = this._parseDate(md.archive.restoreWillExpireAt);
         const message = JSON.stringify({
             archiveInfo: md.archive.archiveInfo,
             adjust: {
-                restoreWillExpireAt: md.archive.restoreWillExpireAt,
+                restoreWillExpireAt: expiryDate.toISOString(),
             },
             updatedAt: md['last-modified'],
             requestId: uuid(),
