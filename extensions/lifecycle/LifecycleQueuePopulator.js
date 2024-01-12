@@ -366,7 +366,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             requestId: uuid(),
         });
 
-        const topic = `${coldStorageRestoreAdjustTopicPrefix}${md.dataStoreName}`;
+        const coldLocation = md['x-amz-storage-class'];
+        const topic = `${coldStorageRestoreAdjustTopicPrefix}${coldLocation}`;
         const producer = this._producers[topic];
         if (producer) {
             const kafkaEntry = { message };
@@ -380,7 +381,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 }
             });
         } else {
-            this.log.error(`producer not available for location ${md.dataStoreName}`, {
+            this.log.error(`producer not available for location ${coldLocation}`, {
                 method: 'LifecycleQueuePopulator._adjustRestoreMaxAge',
             });
         }
