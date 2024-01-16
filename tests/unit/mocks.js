@@ -107,6 +107,9 @@ class BackbeatMetadataProxyMock {
     }
 
     getMetadata(params, log, cb) {
+        if (this.error) {
+            return cb(this.error);
+        }
         return cb(null, { Body: this.mdObj.getSerialized() });
     }
 

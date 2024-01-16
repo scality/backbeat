@@ -170,4 +170,33 @@ describe('GarbageCollectorTask', () => {
             done();
         });
     });
+
+    it('should send committable error when object is not found', done => {
+        backbeatMetadataProxyClient.error = { statusCode: 404, code: 'ObjNotFound' };
+
+        const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+              .addContext({
+                  origin: 'lifecycle',
+                  ruleType: 'archive',
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+              })
+              .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.oldLocation', 'old-location')
+              .setAttribute('target.newLocation', 'new-location')
+              .setAttribute('target.bucket', bucket)
+              .setAttribute('target.key', version)
+              .setAttribute('target.version', key)
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner);
+
+        backbeatMetadataProxyClient.setMdObj(undefined);
+
+        gcTask.processActionEntry(entry, (err, commitInfo) => {
+            assert.strictEqual(err.statusCode, 404);
+            assert.deepStrictEqual(commitInfo, { committable: true });
+            done();
+        });
+    });
 });
