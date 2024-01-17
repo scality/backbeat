@@ -11,9 +11,10 @@ from grafanalib.core import (
 from grafanalib import formatunits as UNITS
 from scalgrafanalib import layout, metrics, GaugePanel, PieChart, Stat, Target, TimeSeries, Tooltip, Dashboard
 
-import os, sys
+import os
+import sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
-from monitoring import s3_circuit_breaker
+from monitoring import s3_circuit_breaker # noqa: E402
 
 
 STATUS_CODE_2XX = '2..'
@@ -82,6 +83,7 @@ def s3_request_timeseries(title, **kwargs):
         dataSource="${DS_PROMETHEUS}",
         fillOpacity=5,
         legendDisplayMode='table',
+        lineInterpolation='smooth',
         unit=UNITS.REQUESTS_PER_SEC,
         targets=[
             Target(
@@ -129,6 +131,7 @@ def kafka_message_produced(title, op):
         title=title,
         dataSource="${DS_PROMETHEUS}",
         fillOpacity=5,
+        lineInterpolation='smooth',
         unit=UNITS.REQUESTS_PER_SEC,
         targets=[
             Target(
@@ -435,7 +438,7 @@ lifecycle_expiration_processor_s3_delete_object_ops, lifecycle_expiration_proces
 
 dashboard = (
     Dashboard(
-        title="Backbeat Lifecycle",
+        title="Lifecycle",
         editable=True,
         refresh="30s",
         tags=["backbeat", "lifecycle"],
@@ -451,7 +454,7 @@ dashboard = (
                 name="namespace",
                 label="namespace",
                 description="Namespace associated with the Zenko instance",
-                value="default",
+                value="zenko",
             ),
             ConstantInput(
                 name="job_lifecycle_producer",
