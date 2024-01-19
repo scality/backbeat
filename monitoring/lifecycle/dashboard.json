@@ -2425,7 +2425,7 @@
             "axisPlacement": "auto",
             "barAlignment": 0,
             "drawStyle": "line",
-            "fillOpacity": 5,
+            "fillOpacity": 30,
             "gradientMode": "none",
             "hideFrom": {
               "legend": false,
@@ -2451,13 +2451,13 @@
             "mode": "absolute",
             "steps": []
           },
-          "unit": "reqps"
+          "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 10,
-        "w": 24,
+        "h": 8,
+        "w": 11,
         "x": 0,
         "y": 45
       },
@@ -2468,11 +2468,145 @@
       "options": {
         "legend": {
           "calcs": [],
-          "displayMode": "table",
+          "displayMode": "list",
           "placement": "bottom"
         },
         "tooltip": {
           "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) by (status)",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "{{ status }}",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "S3 Requests status over time",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 39,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "log"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": "ops"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "System errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 11,
+        "x": 11,
+        "y": 45
+      },
+      "hideTimeOverride": false,
+      "id": 30,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "multi"
         }
       },
       "targets": [
@@ -2519,7 +2653,7 @@
           "target": ""
         }
       ],
-      "title": "S3 Requests",
+      "title": "S3 Requests Aggregated status over time",
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
@@ -2536,44 +2670,73 @@
           "noValue": "none",
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
+            "steps": ""
           },
           "unit": "percentunit"
         },
-        "overrides": []
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "All errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "dark-blue",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "User errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-orange",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "System errors"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "semi-dark-red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 55
+        "h": 8,
+        "w": 2,
+        "x": 22,
+        "y": 45
       },
       "hideTimeOverride": false,
-      "id": 30,
+      "id": 31,
       "links": [],
       "maxDataPoints": 100,
       "options": {
         "colorMode": "value",
         "graphMode": "area",
         "justifyMode": "auto",
-        "orientation": "auto",
+        "orientation": "horizontal",
         "reduceOptions": {
           "calcs": [
             "mean"
@@ -2586,13 +2749,41 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "",
+          "legendFormat": "All errors",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        },
+        {
+          "datasource": null,
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "User errors",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        },
+        {
+          "datasource": null,
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "System errors",
           "metric": "",
           "refId": "",
           "step": 10,
@@ -2610,79 +2801,88 @@
       "error": false,
       "fieldConfig": {
         "defaults": {
-          "custom": {},
-          "decimals": null,
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 0,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {},
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
           "mappings": [],
-          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
+            "steps": []
           },
-          "unit": "percentunit"
+          "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 55
+        "h": 8,
+        "w": 17,
+        "x": 0,
+        "y": 53
       },
       "hideTimeOverride": false,
-      "id": 31,
+      "id": 32,
       "links": [],
       "maxDataPoints": 100,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
+        "legend": {
           "calcs": [
-            "mean"
+            "min",
+            "mean",
+            "max"
           ],
-          "fields": "",
-          "values": false
+          "displayMode": "table",
+          "placement": "right"
         },
-        "textMode": "auto"
+        "tooltip": {
+          "mode": "single"
+        }
       },
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) by(origin)",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "",
+          "legendFormat": "{{ origin }}",
           "metric": "",
           "refId": "",
           "step": 10,
           "target": ""
         }
       ],
-      "title": "User Error rate",
+      "title": "S3 Request rate per workflow",
       "transformations": [],
       "transparent": false,
-      "type": "stat"
+      "type": "timeseries"
     },
     {
       "datasource": "${DS_PROMETHEUS}",
@@ -2690,50 +2890,38 @@
       "error": false,
       "fieldConfig": {
         "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
           "custom": {},
-          "decimals": null,
           "mappings": [],
-          "noValue": "none",
           "thresholds": {
             "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
+            "steps": []
           },
-          "unit": "percentunit"
+          "unit": "ops"
         },
         "overrides": []
       },
       "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 55
+        "h": 8,
+        "w": 7,
+        "x": 17,
+        "y": 53
       },
       "hideTimeOverride": false,
-      "id": 32,
+      "id": 33,
       "links": [],
       "maxDataPoints": 100,
       "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
+        "legend": {
+          "displayMode": "table",
+          "placement": "right",
+          "values": [
+            "percent"
+          ]
+        },
+        "pieType": "donut",
         "reduceOptions": {
           "calcs": [
             "mean"
@@ -2741,28 +2929,296 @@
           "fields": "",
           "values": false
         },
-        "textMode": "auto"
+        "tooltip": {
+          "mode": "single"
+        }
       },
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]) > 0)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) by(origin)",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "",
+          "legendFormat": "{{ origin }}",
           "metric": "",
           "refId": "",
           "step": 10,
           "target": ""
         }
       ],
-      "title": "System Error rate",
+      "title": "S3 errors distribution",
       "transformations": [],
       "transparent": false,
-      "type": "stat"
+      "type": "piechart"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 0,
+        "y": 61
+      },
+      "hideTimeOverride": false,
+      "id": 34,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "Error",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        },
+        {
+          "datasource": null,
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "Success",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "deleteObject Request Rate",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "palette-classic"
+          },
+          "custom": {
+            "axisLabel": "",
+            "axisPlacement": "auto",
+            "barAlignment": 0,
+            "drawStyle": "line",
+            "fillOpacity": 5,
+            "gradientMode": "none",
+            "hideFrom": {
+              "legend": false,
+              "tooltip": false,
+              "viz": false
+            },
+            "lineInterpolation": "smooth",
+            "lineWidth": 1,
+            "pointSize": 5,
+            "scaleDistribution": {
+              "log": 2,
+              "type": "linear"
+            },
+            "showPoints": "auto",
+            "spanNulls": false,
+            "stacking": {
+              "group": "A",
+              "mode": "normal"
+            },
+            "thresholdsStyle": {
+              "mode": "off"
+            }
+          },
+          "mappings": [],
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          },
+          "unit": "reqps"
+        },
+        "overrides": [
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Error"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "red",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          },
+          {
+            "matcher": {
+              "id": "byName",
+              "options": "Success"
+            },
+            "properties": [
+              {
+                "id": "color",
+                "value": {
+                  "fixedColor": "green",
+                  "mode": "fixed"
+                }
+              }
+            ]
+          }
+        ]
+      },
+      "gridPos": {
+        "h": 8,
+        "w": 12,
+        "x": 12,
+        "y": 61
+      },
+      "hideTimeOverride": false,
+      "id": 35,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "legend": {
+          "calcs": [],
+          "displayMode": "list",
+          "placement": "bottom"
+        },
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "Error",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        },
+        {
+          "datasource": null,
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "Success",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "abortMultipartUpload Request Rate",
+      "transformations": [],
+      "transparent": false,
+      "type": "timeseries"
     },
     {
       "collapsed": false,
@@ -2780,10 +3236,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 59
+        "y": 69
       },
       "hideTimeOverride": false,
-      "id": 33,
+      "id": 36,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -2841,10 +3297,10 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 60
+        "y": 70
       },
       "hideTimeOverride": false,
-      "id": 34,
+      "id": 37,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2940,10 +3396,10 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 60
+        "y": 70
       },
       "hideTimeOverride": false,
-      "id": 35,
+      "id": 38,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3039,10 +3495,10 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 68
+        "y": 78
       },
       "hideTimeOverride": false,
-      "id": 36,
+      "id": 39,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3138,10 +3594,10 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 68
+        "y": 78
       },
       "hideTimeOverride": false,
-      "id": 37,
+      "id": 40,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3237,10 +3693,10 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 76
+        "y": 86
       },
       "hideTimeOverride": false,
-      "id": 38,
+      "id": 41,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3336,10 +3792,10 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 76
+        "y": 86
       },
       "hideTimeOverride": false,
-      "id": 39,
+      "id": 42,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3435,10 +3891,10 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 84
+        "y": 94
       },
       "hideTimeOverride": false,
-      "id": 40,
+      "id": 43,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3534,10 +3990,10 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 84
+        "y": 94
       },
       "hideTimeOverride": false,
-      "id": 41,
+      "id": 44,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3601,10 +4057,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 92
+        "y": 102
       },
       "hideTimeOverride": false,
-      "id": 42,
+      "id": 45,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -3707,10 +4163,10 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 93
+        "y": 103
       },
       "hideTimeOverride": false,
-      "id": 43,
+      "id": 46,
       "links": [],
       "maxDataPoints": 100,
       "targets": [
@@ -3750,10 +4206,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 103
+        "y": 113
       },
       "hideTimeOverride": false,
-      "id": 44,
+      "id": 47,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -3811,10 +4267,10 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 104
+        "y": 114
       },
       "hideTimeOverride": false,
-      "id": 45,
+      "id": 48,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3856,359 +4312,6 @@
       "error": false,
       "fieldConfig": {
         "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 5,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 111
-      },
-      "hideTimeOverride": false,
-      "id": 46,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"2..\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Success",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "User errors",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "System errors",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "S3 Requests",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 121
-      },
-      "hideTimeOverride": false,
-      "id": 47,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 121
-      },
-      "hideTimeOverride": false,
-      "id": 48,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "User Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 121
-      },
-      "hideTimeOverride": false,
-      "id": 49,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"bucket\", job=\"${job_lifecycle_bucket_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "System Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
           "calcs": [
             "mean"
           ],
@@ -4296,10 +4399,10 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 125
+        "y": 121
       },
       "hideTimeOverride": false,
-      "id": 50,
+      "id": 49,
       "links": [],
       "maxDataPoints": 100,
       "targets": [
@@ -4339,10 +4442,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 135
+        "y": 131
       },
       "hideTimeOverride": false,
-      "id": 51,
+      "id": 50,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -4351,557 +4454,6 @@
       "transformations": [],
       "transparent": false,
       "type": "row"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 5,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "smooth",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 136
-      },
-      "hideTimeOverride": false,
-      "id": 52,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "table",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"2..\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "Success",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "User errors",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "System errors",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "S3 Requests",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 0,
-        "y": 146
-      },
-      "hideTimeOverride": false,
-      "id": 53,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 8,
-        "y": 146
-      },
-      "hideTimeOverride": false,
-      "id": 54,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "User Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "custom": {},
-          "decimals": null,
-          "mappings": [],
-          "noValue": "none",
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 0.05,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "unit": "percentunit"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 4,
-        "w": 8,
-        "x": 16,
-        "y": 146
-      },
-      "hideTimeOverride": false,
-      "id": 55,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "colorMode": "value",
-        "graphMode": "area",
-        "justifyMode": "auto",
-        "orientation": "auto",
-        "reduceOptions": {
-          "calcs": [
-            "mean"
-          ],
-          "fields": "",
-          "values": false
-        },
-        "textMode": "auto"
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))\n/\nsum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", origin=\"expiration\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]) > 0)",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "System Error rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "stat"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 5,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 150
-      },
-      "hideTimeOverride": false,
-      "id": 56,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "success",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "error",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "deleteObject Request Rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "color": {
-            "mode": "palette-classic"
-          },
-          "custom": {
-            "axisLabel": "",
-            "axisPlacement": "auto",
-            "barAlignment": 0,
-            "drawStyle": "line",
-            "fillOpacity": 5,
-            "gradientMode": "none",
-            "hideFrom": {
-              "legend": false,
-              "tooltip": false,
-              "viz": false
-            },
-            "lineInterpolation": "linear",
-            "lineWidth": 1,
-            "pointSize": 5,
-            "scaleDistribution": {
-              "log": 2,
-              "type": "linear"
-            },
-            "showPoints": "auto",
-            "spanNulls": false,
-            "stacking": {},
-            "thresholdsStyle": {
-              "mode": "off"
-            }
-          },
-          "mappings": [],
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          },
-          "unit": "reqps"
-        },
-        "overrides": []
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 160
-      },
-      "hideTimeOverride": false,
-      "id": 57,
-      "links": [],
-      "maxDataPoints": 100,
-      "options": {
-        "legend": {
-          "calcs": [],
-          "displayMode": "list",
-          "placement": "bottom"
-        },
-        "tooltip": {
-          "mode": "single"
-        }
-      },
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "success",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        },
-        {
-          "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "error",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "abortMultipartUpload Request Rate",
-      "transformations": [],
-      "transparent": false,
-      "type": "timeseries"
     },
     {
       "datasource": "${DS_PROMETHEUS}",
@@ -4996,10 +4548,10 @@
         "h": 10,
         "w": 24,
         "x": 0,
-        "y": 170
+        "y": 132
       },
       "hideTimeOverride": false,
-      "id": 58,
+      "id": 51,
       "links": [],
       "maxDataPoints": 100,
       "targets": [

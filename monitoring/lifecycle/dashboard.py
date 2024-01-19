@@ -77,53 +77,15 @@ class GcMetrics:
     )
 
 
-def s3_request_timeseries(title, **kwargs):
-    return TimeSeries(
-        title=title,
-        dataSource="${DS_PROMETHEUS}",
-        fillOpacity=5,
-        legendDisplayMode='table',
-        lineInterpolation='smooth',
-        unit=UNITS.REQUESTS_PER_SEC,
-        targets=[
-            Target(
-                expr='sum(rate(' + Metrics.S3_OPS(f'status=~"{status}"', **kwargs) + '))',
-                legendFormat=name,
-            )
-            for name, status in [
-                ("Success", STATUS_CODE_2XX),
-                ("User errors", STATUS_CODE_4XX),
-                ("System errors", STATUS_CODE_5XX),
-            ]
-        ]
-    )
-
-
-def s3_request_error_rates(**kwargs):
-    return [
-        Stat(
-            title=title,
-            dataSource="${DS_PROMETHEUS}",
-            format=UNITS.PERCENT_UNIT,
-            reduceCalc="mean",
-            targets=[
-                Target(expr='\n'.join([
-                    'sum(rate(' + Metrics.S3_OPS(status, **kwargs) + '))',
-                    '/',
-                    'sum(rate('  + Metrics.S3_OPS(**kwargs) + ') > 0)',
-                ])),
-            ],
-            thresholds=[
-                Threshold("green", 0, 0.0),
-                Threshold("red", 1, 0.05),
-            ],
-        )
-        for title, status in [
-            ("Error rate", 'status!="200"'),
-            ("User Error rate", f'status=~"{STATUS_CODE_4XX}"'),
-            ("System Error rate", f'status=~"{STATUS_CODE_5XX}"'),
-        ]
-    ]
+def color_override(name, color):
+    # type: (str, str) -> dict
+    return {
+        "matcher": {"id": "byName", "options": name},
+        "properties": [{
+            "id": "color",
+            "value": {"fixedColor": color, "mode": "fixed"}
+        }],
+    }
 
 
 def kafka_message_produced(title, op):
@@ -373,31 +335,6 @@ workflow_by_location, workflow_by_type = [
     ]
 ]
 
-lifecycle_global_s3_requests = s3_request_timeseries("S3 Requests")
-lifecycle_global_s3_error_rates = s3_request_error_rates()
-
-lifecycle_bucket_processor_s3_requests = s3_request_timeseries(
-    "S3 Requests",
-    origin="bucket",
-    job='${job_lifecycle_bucket_processor}',
-)
-
-lifecycle_bucket_processor_s3_error_rates = s3_request_error_rates(
-    origin="bucket",
-    job='${job_lifecycle_bucket_processor}',
-)
-
-lifecycle_expiration_processor_s3_requests = s3_request_timeseries(
-    "S3 Requests",
-    origin="expiration",
-    job='${job_lifecycle_object_processor}',
-)
-
-lifecycle_expiration_processor_s3_error_rates = s3_request_error_rates(
-    origin="expiration",
-    job='${job_lifecycle_object_processor}',
-)
-
 lifecycle_conductor_circuit_breaker = s3_circuit_breaker(
     'Flow Control',
     process='producer',
@@ -416,25 +353,132 @@ lifecycle_object_processor_circuit_breaker = s3_circuit_breaker(
     job='${job_lifecycle_object_processor}',
 )
 
-lifecycle_expiration_processor_s3_delete_object_ops, lifecycle_expiration_processor_s3_delete_mpu_ops = [
+s3_delete_object_ops, s3_delete_mpu_ops = [
     TimeSeries(
         title=f'{op} Request Rate',
         dataSource="${DS_PROMETHEUS}",
         fillOpacity=5,
+        lineInterpolation='smooth',
         unit=UNITS.REQUESTS_PER_SEC,
+        stacking={"mode": "normal", "group": "A"},
         targets=[
             Target(
-                expr='sum(rate(' + Metrics.S3_OPS(status=200, op=op, job="${job_lifecycle_object_processor}") + '))',
-                legendFormat="success",
+                expr='sum(rate(' + Metrics.S3_OPS('status!="200"', op=op, job="${job_lifecycle_object_processor}") + '))',
+                legendFormat="Error",
             ),
             Target(
-                expr='sum(rate(' + Metrics.S3_OPS('status!="200"', op=op, job="${job_lifecycle_object_processor}") + '))',
-                legendFormat="error",
+                expr='sum(rate(' + Metrics.S3_OPS(status=200, op=op, job="${job_lifecycle_object_processor}") + '))',
+                legendFormat="Success",
             ),
+        ],
+        overrides=[
+            color_override("Error",   "red"),
+            color_override("Success", "green"),
         ],
     )
     for op in ['deleteObject', 'abortMultipartUpload']
 ]
+
+s3_requests_status = TimeSeries(
+    title='S3 Requests status over time',
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=30,
+    lineInterpolation="smooth",
+    unit=UNITS.OPS_PER_SEC,
+    targets=[Target(
+        expr='sum(rate(' + Metrics.S3_OPS() + ')) by (status)',
+        legendFormat="{{ status }}",
+    )],
+
+)
+
+s3_requests_aggregated_status = TimeSeries(
+    title='S3 Requests Aggregated status over time',
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=39,
+    lineInterpolation='smooth',
+    scaleDistributionType="log",
+    stacking={"mode": "normal", "group": "A"},
+    tooltipMode='multi',
+    unit=UNITS.OPS_PER_SEC,
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.S3_OPS(f'status=~"{status}"') + '))',
+            legendFormat=name,
+        )
+        for name, status in [
+            ("Success", STATUS_CODE_2XX),
+            ("User errors", STATUS_CODE_4XX),
+            ("System errors", STATUS_CODE_5XX),
+        ]
+    ],
+    overrides=[
+        color_override("Success", "dark-blue"),
+        color_override("User errors", "semi-dark-orange"),
+        color_override("System errors", "semi-dark-red"),
+    ],
+)
+
+s3_requests_error_rate = Stat(
+        title='Error rate',
+        dataSource="${DS_PROMETHEUS}",
+        format=UNITS.PERCENT_UNIT,
+        orientation='horizontal',
+        reduceCalc='mean',
+        targets=[
+            Target(
+                expr='\n'.join([
+                    '(sum(rate(' + Metrics.S3_OPS(status) + ')) or vector(0))',
+                    ' /',
+                    '(sum(rate('  + Metrics.S3_OPS() + ')) > 0)',
+                ]),
+                legendFormat=title,
+            )
+            for title, status in [
+                ("All errors", 'status!="200"'),
+                ("User errors", f'status=~"{STATUS_CODE_4XX}"'),
+                ("System errors", f'status=~"{STATUS_CODE_5XX}"'),
+            ]
+        ],
+        overrides=[
+            color_override("All errors", "dark-blue"),
+            color_override("User errors", "semi-dark-orange"),
+            color_override("System errors", "semi-dark-red"),
+        ],
+    )
+
+s3_requests_by_workflow = TimeSeries(
+    title="S3 Request rate per workflow",
+    dataSource="${DS_PROMETHEUS}",
+    legendDisplayMode="table",
+    legendPlacement="right",
+    legendValues=["min", "mean", "max"],
+    lineInterpolation="smooth",
+    unit=UNITS.OPS_PER_SEC,
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.S3_OPS() + ')) by(origin)',
+            legendFormat="{{ origin }}",
+        )
+    ]
+)
+
+s3_requests_errors_by_workflow = PieChart(
+    title="S3 errors distribution",
+    dataSource="${DS_PROMETHEUS}",
+    legendDisplayMode='table',
+    legendPlacement='right',
+    legendValues=['percent'],
+    pieType='donut',
+    reduceOptionsCalcs=['mean'],
+    unit=UNITS.OPS_PER_SEC,
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.S3_OPS('status!="200"') + ')) by(origin)',
+            legendFormat="{{ origin }}",
+        ),
+    ]
+)
 
 dashboard = (
     Dashboard(
@@ -523,14 +567,15 @@ dashboard = (
                 circuit_breaker, bucket_listing_success_rate, *ops_rate, s3_request_rate, s3_success_rate,
             ], height=4),
             RowPanel(title="Lifecycle Workflows"),
-            layout.row([workflow_rate] + layout.resize([workflow_by_type, workflow_by_location], width=5), height=7),
+            layout.row([workflow_rate, *layout.resize([workflow_by_type, workflow_by_location], width=5)], height=7),
             layout.row([workflow_latency, latency_distribution], height=7),
             layout.row([workflow_duration_by_type, workflow_duration_by_location], height=7),
             layout.row([expiration_distribution, transition_distribution], height=7),
             layout.row([archive_distribution, restore_distribution], height=7),
             RowPanel(title="S3 Operations"),
-            layout.row([lifecycle_global_s3_requests], height=10),
-            layout.row(lifecycle_global_s3_error_rates, height=4),
+            layout.row([s3_requests_status, s3_requests_aggregated_status, *layout.resize([s3_requests_error_rate], width=2)], height=8),
+            layout.row([s3_requests_by_workflow, *layout.resize([s3_requests_errors_by_workflow], width=7)], height=8),
+            layout.row([s3_delete_object_ops, s3_delete_mpu_ops], height=8),
             RowPanel(title="Kafka Message Produced"),
             layout.row([
                 kafka_message_produced("Bucket Task", "BucketTopic"),
@@ -552,14 +597,8 @@ dashboard = (
             layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
             layout.row([trigger_latency], height=7),
-            layout.row([lifecycle_bucket_processor_s3_requests], height=10),
-            layout.row(lifecycle_bucket_processor_s3_error_rates, height=4),
             layout.row([lifecycle_bucket_processor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Expiration Processors"),
-            layout.row([lifecycle_expiration_processor_s3_requests], height=10),
-            layout.row(lifecycle_expiration_processor_s3_error_rates, height=4),
-            layout.row([lifecycle_expiration_processor_s3_delete_object_ops], height=10),
-            layout.row([lifecycle_expiration_processor_s3_delete_mpu_ops], height=10),
             layout.row([lifecycle_object_processor_circuit_breaker], height=10),
         ]),
     )
