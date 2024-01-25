@@ -22,6 +22,15 @@ STATUS_CODE_3XX = '3..'
 STATUS_CODE_4XX = '4..'
 STATUS_CODE_5XX = '5..'
 
+ALL_JOBS=[
+    '${job_lifecycle_producer}',
+    '${job_lifecycle_bucket_processor}',
+    '${job_lifecycle_object_processor}',
+    '${job_lifecycle_transition_processor}',
+    '${job_lifecycle_gc_processor}',
+    '${job_lifecycle_populator}',
+]
+
 class Metrics:
     LATEST_BATCH_START_TIME = metrics.Metric(
         's3_lifecycle_latest_batch_start_time',
@@ -56,7 +65,7 @@ class Metrics:
 
     KAFKA_PUBLISH_SUCCESS, KAFKA_PUBLISH_ERROR = [
         metrics.CounterMetric(
-            name, 'origin', 'op', 'job', namespace='${namespace}',
+            name, 'origin', 'op', namespace='${namespace}', job=ALL_JOBS,
         )
         for name in [
             's3_lifecycle_kafka_publish_success_total',
@@ -77,6 +86,43 @@ class GcMetrics:
     )
 
 
+class BacklogMetrics:
+    LATEST_PUBLISHED_MESSAGE_TS = metrics.Metric(
+        's3_zenko_queue_latest_published_message_timestamp',
+        'topic', 'partition', job=ALL_JOBS, namespace='${namespace}',
+    )
+
+    DELIVERY_REPORTS_TOTAL = metrics.CounterMetric(
+        's3_zenko_queue_delivery_reports_total',
+        'status', job=ALL_JOBS, namespace='${namespace}',
+    )
+
+    LATEST_CONSUMED_MESSAGE_TS, LATEST_CONSUME_EVENT_TS = [
+        metrics.Metric(
+            name, 'topic', 'partition', 'consumergroup', job=ALL_JOBS, namespace='${namespace}',
+        )
+        for name in [
+            's3_zenko_queue_latest_consumed_message_timestamp',
+            's3_zenko_queue_latest_consume_event_timestamp',
+        ]
+    ]
+
+    REBALANCE_TOTAL = metrics.CounterMetric(
+        's3_zenko_queue_rebalance_total',
+        'topic', 'partition', 'status', job=ALL_JOBS, namespace='${namespace}',
+    )
+
+    SLOW_TASKS = metrics.Metric(
+        's3_zenko_queue_slowTasks_count',
+        'topic', 'partition', 'consumergroup', job=ALL_JOBS, namespace='${namespace}',
+    )
+
+    TASK_PROCESSING_TIME = metrics.BucketMetric(
+        's3_zenko_queue_task_processing_time_seconds',
+        'topic', 'partition', 'consumergroup', 'error', job=ALL_JOBS, namespace='${namespace}',
+    )
+
+
 def color_override(name, color):
     # type: (str, str) -> dict
     return {
@@ -86,26 +132,6 @@ def color_override(name, color):
             "value": {"fixedColor": color, "mode": "fixed"}
         }],
     }
-
-
-def kafka_message_produced(title, op):
-    return TimeSeries(
-        title=title,
-        dataSource="${DS_PROMETHEUS}",
-        fillOpacity=5,
-        lineInterpolation='smooth',
-        unit=UNITS.REQUESTS_PER_SEC,
-        targets=[
-            Target(
-                expr='sum(rate(' + Metrics.KAFKA_PUBLISH_SUCCESS(op=op) + '))',
-                legendFormat="Successful",
-            ),
-            Target(
-                expr='sum(rate(' + Metrics.KAFKA_PUBLISH_ERROR(op=op) + '))',
-                legendFormat="Failed",
-            ),
-        ],
-    )
 
 
 up = [
@@ -202,14 +228,7 @@ s3_request_rate = Stat(
 
 circuit_breaker = s3_circuit_breaker(
     'Flow Control',
-    job=[
-        '${job_lifecycle_producer}',
-        '${job_lifecycle_bucket_processor}',
-        '${job_lifecycle_object_processor}',
-        '${job_lifecycle_transition_processor}',
-        '${job_lifecycle_gc_processor}',
-        '${job_lifecycle_populator}',
-    ],
+    job=ALL_JOBS,
 )
 
 ops_rate = [
@@ -378,6 +397,166 @@ s3_delete_object_ops, s3_delete_mpu_ops = [
     )
     for op in ['deleteObject', 'abortMultipartUpload']
 ]
+
+messages_published_by_op = TimeSeries(
+    title='Message published',
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=5,
+    lineInterpolation='smooth',
+    unit=UNITS.REQUESTS_PER_SEC,
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.KAFKA_PUBLISH_SUCCESS() + ')) by(op)',
+            legendFormat="{{ op }}",
+        ),
+    ],
+)
+
+# Basically a wrapper for KAFKA_PUBLISH_ERROR' rate, but filling the gaps with 0,
+# while keeping the same labels.
+kafka_publish_error_rate_expr = '\n'.join([
+    '(sum(rate(' + Metrics.KAFKA_PUBLISH_ERROR() + ')) by(op)',
+    '  or 0 * group(' + Metrics.KAFKA_PUBLISH_SUCCESS.raw() + ') by(op))',
+])
+
+failed_publish_by_op = TimeSeries(
+    title='Publish errors',
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=5,
+    lineInterpolation='smooth',
+    unit=UNITS.REQUESTS_PER_SEC,
+    targets=[
+        Target(
+            expr=kafka_publish_error_rate_expr,
+            legendFormat="{{ op }}",
+        ),
+    ],
+)
+
+publish_success_rate = Stat(
+    title='Publish success rate',
+    dataSource="${DS_PROMETHEUS}",
+    decimals=2,
+    format=UNITS.PERCENT_FORMAT,
+    graphMode='none',
+    orientation='horizontal',
+    reduceCalc='mean',
+    textMode='value_and_name',
+    targets=[
+        Target(
+            expr='\n'.join([
+                '100 / (1 + ' + kafka_publish_error_rate_expr.replace('\n', '\n' +
+                '           '),
+                '           /',
+                '           (sum(rate(' + Metrics.KAFKA_PUBLISH_SUCCESS() + ')) by(op) > 0))'
+            ]),
+            legendFormat="{{ op }}",
+        )
+    ],
+    thresholdType='percentage',
+    thresholds=[
+        Threshold("green",  0, 0.0),
+        Threshold("yellow", 0, 0.1),
+        Threshold("orange", 0, 0.01),
+        Threshold("red",    1, 1.0),
+    ],
+)
+
+kafka_lag = TimeSeries(
+    title='Kafka Lag',
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation='smooth',
+    unit=UNITS.SHORT,
+    targets=[
+        Target(
+            expr='\n'.join([
+                'sum('
+                '   label_replace(kafka_consumergroup_group_max_lag,',
+                '                 "consumergroup", "$1", "group", "(.*)")',
+                '   * on(consumergroup) group_right',
+                '   group(' + BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS() + ') by(consumergroup, job)',
+                ') by(job)',
+            ]),
+            legendFormat="{{ job }}",
+        )
+    ],
+)
+
+tasks_latency = TimeSeries(
+    title='Tasks latency',
+    dataSource="${DS_PROMETHEUS}",
+    unit=UNITS.MILLI_SECONDS,
+    legendDisplayMode='table',
+    legendValues=['min', 'mean', 'max'],
+    legendPlacement='right',
+    lineInterpolation='smooth',
+    targets=[
+        Target(
+            expr=f'max({BacklogMetrics.LATEST_CONSUME_EVENT_TS()} - {BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS()}) by(service)',
+            legendFormat="{{ service }}",
+        )
+    ]
+)
+
+avg_task_processing_time = TimeSeries(
+    title='Average task processing time',
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation='smooth',
+    unit=UNITS.SECONDS,
+    targets=[
+        Target(
+            expr='\n'.join([
+                'sum(rate(' + BacklogMetrics.TASK_PROCESSING_TIME.sum() + ')) by (job)',
+                '/'
+                'sum(rate(' + BacklogMetrics.TASK_PROCESSING_TIME.count() + ')) by (job)',
+            ]),
+            legendFormat="{{ job }}",
+        )
+    ]
+)
+
+task_processing_time_distribution = Heatmap(
+    title='Task processing time',
+    dataSource="${DS_PROMETHEUS}",
+    dataFormat='tsbuckets',
+    hideZeroBuckets=True,
+    maxDataPoints=30,
+    tooltip=Tooltip(show=True, showHistogram=True),
+    yAxis=YAxis(format=UNITS.SECONDS, decimals=0),
+    cards={'cardPadding': 1, 'cardRound': 2},
+    color=HeatmapColor(mode='opacity'),
+    targets=[Target(
+        expr='sum(increase(' + BacklogMetrics.TASK_PROCESSING_TIME.bucket() + ')) by(le)',
+        format="heatmap",
+        legendFormat="{{ le }}",
+    )],
+)
+
+slow_tasks_over_time = TimeSeries(
+    title='Slow tasks',
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation='smooth',
+    unit=UNITS.SHORT,
+    targets=[
+        Target(
+            expr='sum(' + BacklogMetrics.SLOW_TASKS() + ') by (job)',
+            legendFormat="{{ job }}",
+        )
+    ]
+)
+
+rebalance_over_time = TimeSeries(
+    title='Rebalance',
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation='smooth',
+    unit=UNITS.SHORT,
+    targets=[
+        Target(
+            expr='sum(increase(' + BacklogMetrics.REBALANCE_TOTAL() + ')) by (job)',
+            legendFormat="{{ job }}",
+        )
+    ],
+)
 
 s3_requests_status = TimeSeries(
     title='S3 Requests status over time',
@@ -572,27 +751,15 @@ dashboard = (
             layout.row([workflow_duration_by_type, workflow_duration_by_location], height=7),
             layout.row([expiration_distribution, transition_distribution], height=7),
             layout.row([archive_distribution, restore_distribution], height=7),
+            RowPanel(title="Lifecycle Tasks"),
+            layout.row([messages_published_by_op, failed_publish_by_op, *layout.resize([publish_success_rate], width=4)], height=7),
+            layout.row([*layout.resize([kafka_lag], width=10), tasks_latency], height=7),
+            layout.row([avg_task_processing_time, task_processing_time_distribution], height=7),
+            layout.row([slow_tasks_over_time, rebalance_over_time], height=7),
             RowPanel(title="S3 Operations"),
             layout.row([s3_requests_status, s3_requests_aggregated_status, *layout.resize([s3_requests_error_rate], width=2)], height=8),
             layout.row([s3_requests_by_workflow, *layout.resize([s3_requests_errors_by_workflow], width=7)], height=8),
             layout.row([s3_delete_object_ops, s3_delete_mpu_ops], height=8),
-            RowPanel(title="Kafka Message Produced"),
-            layout.row([
-                kafka_message_produced("Bucket Task", "BucketTopic"),
-                kafka_message_produced("Expiration Task", "ObjectTopic"),
-            ], height=8),
-            layout.row([
-                kafka_message_produced("Data Mover Task", "DataMoverTopic"),
-                kafka_message_produced("Gc Task", "GcTopic"),
-            ], height=8),
-            layout.row([
-                kafka_message_produced("Cold Storage Archive", "ColdStorageArchiveTopic"),
-                kafka_message_produced("Cold Storage Gc", "ColdStorageGcTopic"),
-            ], height=8),
-            layout.row([
-                kafka_message_produced("Cold Storage Restore", "ColdStorageRestoreTopic"),
-                kafka_message_produced("Cold Storage Restore Adjust", "ColdStorageRestoreAdjustTopic"),
-            ], height=8),
             RowPanel(title="Lifecycle Conductor"),
             layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
