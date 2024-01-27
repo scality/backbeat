@@ -1,3 +1,6 @@
+import os
+import sys
+
 from grafanalib.core import (
     ConstantInput,
     DataSourceInput,
@@ -9,12 +12,20 @@ from grafanalib.core import (
 )
 
 from grafanalib import formatunits as UNITS
-from scalgrafanalib import layout, metrics, GaugePanel, PieChart, Stat, Target, TimeSeries, Tooltip, Dashboard
+from scalgrafanalib import (
+    layout,
+    metrics,
+    Dashboard,
+    GaugePanel,
+    PieChart,
+    Stat,
+    Target,
+    TimeSeries,
+    Tooltip,
+)
 
-import os
-import sys
 sys.path.append(os.path.abspath(f'{__file__}/../../..'))
-from monitoring import s3_circuit_breaker # noqa: E402
+from monitoring import s3_circuit_breaker, s3_circuit_breaker_over_time # noqa: E402, pylint: disable=C0413
 
 
 STATUS_CODE_2XX = '2..'
@@ -226,10 +237,8 @@ s3_request_rate = Stat(
     thresholds=[Threshold('dark-purple', 0, 0.)],
 )
 
-circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    job=ALL_JOBS,
-)
+circuit_breaker = s3_circuit_breaker(job=ALL_JOBS)
+circuit_breaker_over_time = s3_circuit_breaker_over_time(job=ALL_JOBS)
 
 ops_rate = [
     Stat(
@@ -353,24 +362,6 @@ workflow_by_location, workflow_by_type = [
         ("By type",     'type'),
     ]
 ]
-
-lifecycle_conductor_circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    process='producer',
-    job='${job_lifecycle_producer}',
-)
-
-lifecycle_bucket_processor_circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    process='bucket',
-    job='${job_lifecycle_bucket_processor}',
-)
-
-lifecycle_object_processor_circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    process='expiration',
-    job='${job_lifecycle_object_processor}',
-)
 
 s3_delete_object_ops, s3_delete_mpu_ops = [
     TimeSeries(
@@ -745,6 +736,7 @@ dashboard = (
             layout.row([
                 circuit_breaker, bucket_listing_success_rate, *ops_rate, s3_request_rate, s3_success_rate,
             ], height=4),
+            layout.row([circuit_breaker_over_time], height=5),
             RowPanel(title="Lifecycle Workflows"),
             layout.row([workflow_rate, *layout.resize([workflow_by_type, workflow_by_location], width=5)], height=7),
             layout.row([workflow_latency, latency_distribution], height=7),
@@ -761,12 +753,8 @@ dashboard = (
             layout.row([s3_requests_by_workflow, *layout.resize([s3_requests_errors_by_workflow], width=7)], height=8),
             layout.row([s3_delete_object_ops, s3_delete_mpu_ops], height=8),
             RowPanel(title="Lifecycle Conductor"),
-            layout.row([lifecycle_conductor_circuit_breaker], height=10),
             RowPanel(title="Lifecycle Bucket Processors"),
             layout.row([trigger_latency], height=7),
-            layout.row([lifecycle_bucket_processor_circuit_breaker], height=10),
-            RowPanel(title="Lifecycle Expiration Processors"),
-            layout.row([lifecycle_object_processor_circuit_breaker], height=10),
         ]),
     )
     .auto_panel_ids()

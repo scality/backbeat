@@ -1427,6 +1427,109 @@
       "type": "gauge"
     },
     {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "color": {
+            "mode": "continuous-GrYlRd"
+          },
+          "custom": {
+            "fillOpacity": 70,
+            "lineWidth": 0
+          },
+          "mappings": [
+            {
+              "options": {
+                "from": 0,
+                "result": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "OK"
+                },
+                "to": 2
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 2,
+                "result": {
+                  "color": "orange",
+                  "index": 1,
+                  "text": "Throttled"
+                },
+                "to": 10
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 10,
+                "result": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Stalled"
+                },
+                "to": 20
+              },
+              "type": "range"
+            }
+          ],
+          "max": 20,
+          "thresholds": {
+            "mode": "absolute",
+            "steps": []
+          }
+        },
+        "overrides": []
+      },
+      "gridPos": {
+        "h": 5,
+        "w": 24,
+        "x": 0,
+        "y": 8
+      },
+      "hideTimeOverride": false,
+      "id": 16,
+      "links": [],
+      "maxDataPoints": 100,
+      "options": {
+        "alignValue": "left",
+        "legend": {
+          "displayMode": "hidden",
+          "placement": "bottom"
+        },
+        "mergeValues": true,
+        "rowHeight": 0.9,
+        "showValue": "never",
+        "tooltip": {
+          "mode": "single"
+        }
+      },
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"})by(job) * 10",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Flow Control over time",
+      "transformations": [],
+      "transparent": false,
+      "type": "state-timeline"
+    },
+    {
       "collapsed": false,
       "editable": true,
       "error": false,
@@ -1442,10 +1545,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 8
+        "y": 13
       },
       "hideTimeOverride": false,
-      "id": 16,
+      "id": 17,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -1503,10 +1606,10 @@
         "h": 7,
         "w": 14,
         "x": 0,
-        "y": 9
+        "y": 14
       },
       "hideTimeOverride": false,
-      "id": 17,
+      "id": 18,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1579,10 +1682,10 @@
         "h": 7,
         "w": 5,
         "x": 14,
-        "y": 9
+        "y": 14
       },
       "hideTimeOverride": false,
-      "id": 18,
+      "id": 19,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1647,10 +1750,10 @@
         "h": 7,
         "w": 5,
         "x": 19,
-        "y": 9
+        "y": 14
       },
       "hideTimeOverride": false,
-      "id": 19,
+      "id": 20,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1740,10 +1843,10 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 16
+        "y": 21
       },
       "hideTimeOverride": false,
-      "id": 20,
+      "id": 21,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -1809,13 +1912,13 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 16
+        "y": 21
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 21,
+      "id": 22,
       "legend": {
         "show": false
       },
@@ -1910,10 +2013,10 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 23
+        "y": 28
       },
       "hideTimeOverride": false,
-      "id": 22,
+      "id": 23,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2011,10 +2114,10 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 23
+        "y": 28
       },
       "hideTimeOverride": false,
-      "id": 23,
+      "id": 24,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2080,13 +2183,13 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 30
+        "y": 35
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 24,
+      "id": 25,
       "legend": {
         "show": false
       },
@@ -2163,13 +2266,13 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 30
+        "y": 35
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 25,
+      "id": 26,
       "legend": {
         "show": false
       },
@@ -2246,13 +2349,13 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 37
+        "y": 42
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 26,
+      "id": 27,
       "legend": {
         "show": false
       },
@@ -2329,13 +2432,13 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 37
+        "y": 42
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 27,
+      "id": 28,
       "legend": {
         "show": false
       },
@@ -2398,10 +2501,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 44
+        "y": 49
       },
       "hideTimeOverride": false,
-      "id": 28,
+      "id": 29,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -2459,10 +2562,10 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 45
+        "y": 50
       },
       "hideTimeOverride": false,
-      "id": 29,
+      "id": 30,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2544,10 +2647,10 @@
         "h": 7,
         "w": 10,
         "x": 10,
-        "y": 45
+        "y": 50
       },
       "hideTimeOverride": false,
-      "id": 30,
+      "id": 31,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2636,10 +2739,10 @@
         "h": 7,
         "w": 4,
         "x": 20,
-        "y": 45
+        "y": 50
       },
       "hideTimeOverride": false,
-      "id": 31,
+      "id": 32,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2725,10 +2828,10 @@
         "h": 7,
         "w": 10,
         "x": 0,
-        "y": 52
+        "y": 57
       },
       "hideTimeOverride": false,
-      "id": 32,
+      "id": 33,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2810,10 +2913,10 @@
         "h": 7,
         "w": 14,
         "x": 10,
-        "y": 52
+        "y": 57
       },
       "hideTimeOverride": false,
-      "id": 33,
+      "id": 34,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2899,10 +3002,10 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 59
+        "y": 64
       },
       "hideTimeOverride": false,
-      "id": 34,
+      "id": 35,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2966,13 +3069,13 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 59
+        "y": 64
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 35,
+      "id": 36,
       "legend": {
         "show": false
       },
@@ -3067,10 +3170,10 @@
         "h": 7,
         "w": 12,
         "x": 0,
-        "y": 66
+        "y": 71
       },
       "hideTimeOverride": false,
-      "id": 36,
+      "id": 37,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3152,10 +3255,10 @@
         "h": 7,
         "w": 12,
         "x": 12,
-        "y": 66
+        "y": 71
       },
       "hideTimeOverride": false,
-      "id": 37,
+      "id": 38,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3205,10 +3308,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 73
+        "y": 78
       },
       "hideTimeOverride": false,
-      "id": 38,
+      "id": 39,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -3266,10 +3369,10 @@
         "h": 8,
         "w": 11,
         "x": 0,
-        "y": 74
+        "y": 79
       },
       "hideTimeOverride": false,
-      "id": 39,
+      "id": 40,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3400,10 +3503,10 @@
         "h": 8,
         "w": 11,
         "x": 11,
-        "y": 74
+        "y": 79
       },
       "hideTimeOverride": false,
-      "id": 40,
+      "id": 41,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3533,10 +3636,10 @@
         "h": 8,
         "w": 2,
         "x": 22,
-        "y": 74
+        "y": 79
       },
       "hideTimeOverride": false,
-      "id": 41,
+      "id": 42,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3650,10 +3753,10 @@
         "h": 8,
         "w": 17,
         "x": 0,
-        "y": 82
+        "y": 87
       },
       "hideTimeOverride": false,
-      "id": 42,
+      "id": 43,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3714,10 +3817,10 @@
         "h": 8,
         "w": 7,
         "x": 17,
-        "y": 82
+        "y": 87
       },
       "hideTimeOverride": false,
-      "id": 43,
+      "id": 44,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3843,10 +3946,10 @@
         "h": 8,
         "w": 12,
         "x": 0,
-        "y": 90
+        "y": 95
       },
       "hideTimeOverride": false,
-      "id": 44,
+      "id": 45,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3976,10 +4079,10 @@
         "h": 8,
         "w": 12,
         "x": 12,
-        "y": 90
+        "y": 95
       },
       "hideTimeOverride": false,
-      "id": 45,
+      "id": 46,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4043,10 +4146,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 98
+        "y": 103
       },
       "hideTimeOverride": false,
-      "id": 46,
+      "id": 47,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -4055,126 +4158,6 @@
       "transformations": [],
       "transparent": false,
       "type": "row"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
-                },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
-            }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 99
-      },
-      "hideTimeOverride": false,
-      "id": 47,
-      "links": [],
-      "maxDataPoints": 100,
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_producer}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
     },
     {
       "collapsed": false,
@@ -4192,7 +4175,7 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 109
+        "y": 104
       },
       "hideTimeOverride": false,
       "id": 48,
@@ -4253,7 +4236,7 @@
         "h": 7,
         "w": 24,
         "x": 0,
-        "y": 110
+        "y": 105
       },
       "hideTimeOverride": false,
       "id": 49,
@@ -4291,275 +4274,6 @@
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
-                },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
-            }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 117
-      },
-      "hideTimeOverride": false,
-      "id": 50,
-      "links": [],
-      "maxDataPoints": 100,
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_bucket_processor}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
-    },
-    {
-      "collapsed": false,
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "thresholds": {
-            "mode": "absolute",
-            "steps": []
-          }
-        }
-      },
-      "gridPos": {
-        "h": 1,
-        "w": 24,
-        "x": 0,
-        "y": 127
-      },
-      "hideTimeOverride": false,
-      "id": 51,
-      "links": [],
-      "maxDataPoints": 100,
-      "panels": [],
-      "targets": [],
-      "title": "Lifecycle Expiration Processors",
-      "transformations": [],
-      "transparent": false,
-      "type": "row"
-    },
-    {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
-                },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
-            }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 128
-      },
-      "hideTimeOverride": false,
-      "id": 52,
-      "links": [],
-      "maxDataPoints": 100,
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_lifecycle_object_processor}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
     }
   ],
   "refresh": "30s",
