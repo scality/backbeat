@@ -184,10 +184,12 @@ class LifecycleConductor {
                     error: err,
                 });
                 this.activeIndexingJobsRetrieved = false;
+                LifecycleMetrics.onActiveIndexingJobsFailed(log);
                 return cb(err);
             }
             this.activeIndexingJobsRetrieved = true;
             this.activeIndexingJobs = jobs;
+            LifecycleMetrics.onActiveIndexingJobs(log, jobs.length);
             return cb(null);
         });
     }
@@ -201,6 +203,7 @@ class LifecycleConductor {
             this._accountIdCache.get(task.canonicalId));
         if (!backbeatMetadataProxy) {
             log.error('failed to obtain a backbeat client; skipping index check');
+            LifecycleMetrics.onLegacyTask(log, 'getMetadataProxyFailed');
             return process.nextTick(cb, null, lifecycleTaskVersions.v1);
         }
 
@@ -211,6 +214,7 @@ class LifecycleConductor {
                     error: err,
                 });
 
+                LifecycleMetrics.onLegacyTask(log, 'getBucketIndexesFailed');
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
@@ -224,23 +228,29 @@ class LifecycleConductor {
 
             if (!this.lcConfig.autoCreateIndexes) {
                 log.trace('skipping index creation: auto creation of indexes disabled');
+                LifecycleMetrics.onLegacyTask(log, 'noIndex');
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
             if (!this.activeIndexingJobsRetrieved) {
                 log.debug('skipping index creation: unable to retrieve in progress indexing jobs');
+                LifecycleMetrics.onLegacyTask(log, 'getIndexingJobsFailed');
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
             if (this.activeIndexingJobs.some(j => (j.bucket === task.bucketName))) {
                 log.debug(`skipping index creation: indexing job for ${task.bucketName} in progress`);
+                LifecycleMetrics.onLegacyTask(log, 'indexingInProgress');
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
             if (this.activeIndexingJobs.length >= this.lcConfig.conductor.concurrentIndexesBuildLimit) {
                 log.debug('skipping index creation: at maximum number of concurrent indexing jobs');
+                LifecycleMetrics.onLegacyTask(log, 'maxConcurrentIndexingJobs');
                 return cb(null, lifecycleTaskVersions.v1);
             }
+
+            LifecycleMetrics.onLegacyTask(log, 'putBucketIndexes');
 
             this.activeIndexingJobs.push({
                 bucket: task.bucketName,

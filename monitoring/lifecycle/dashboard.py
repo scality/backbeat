@@ -48,15 +48,26 @@ class Metrics:
         job='${job_lifecycle_producer}', namespace='${namespace}',
     )
 
-    BUCKET_LISTING_SUCCESS, BUCKET_LISTING_ERROR = [
+    BUCKET_LISTING_SUCCESS, BUCKET_LISTING_ERROR, BUCKET_LISTING_THROTTLING = [
         metrics.CounterMetric(
             name, job='${job_lifecycle_producer}', namespace='${namespace}',
         )
         for name in [
             's3_lifecycle_conductor_bucket_list_success_total',
             's3_lifecycle_conductor_bucket_list_error_total',
+            's3_lifecycle_conductor_bucket_list_throttling_total',
         ]
     ]
+
+    ACTIVE_INDEXING_JOBS = metrics.Metric(
+        's3_lifecycle_active_indexing_jobs',
+        job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
+
+    LEGACY_TASKS = metrics.CounterMetric(
+        's3_lifecycle_legacy_tasks_total',
+        'status', job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
 
     S3_OPS = metrics.CounterMetric(
        's3_lifecycle_s3_operations_total',
@@ -650,6 +661,83 @@ s3_requests_errors_by_workflow = PieChart(
     ]
 )
 
+lifecycle_scans = TimeSeries(
+    title="Lifecycle Scan Period",
+    dataSource="${DS_PROMETHEUS}",
+    drawStyle='bars',
+    fillOpacity=50,
+    legendDisplayMode="hidden",
+    lineWidth=0,
+    lineInterpolation="smooth",
+    unit=UNITS.MILLI_SECONDS,
+    targets=[
+        Target(
+            expr='\n'.join([
+                'max(',
+                '  increase(' + Metrics.LATEST_BATCH_START_TIME() + '[$__rate_interval])',
+                '  /',
+                '  changes(' + Metrics.LATEST_BATCH_START_TIME() + '[$__rate_interval] offset 30s)',
+                ') > 0',
+            ]),
+            legendFormat='Scan',
+        ),
+    ],
+)
+
+lifecycle_scan_rate = TimeSeries(
+    title="Lifecycle Scan Rate",
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=50,
+    lineInterpolation="smooth",
+    stacking={"mode": "normal", "group": "A"},
+    unit=UNITS.OPS_PER_MIN,
+    targets=[
+        Target(
+            expr='sum(irate(' + metric() + ')) * 60',
+            legendFormat=label,
+        )
+        for metric, label in [
+            (Metrics.BUCKET_LISTING_ERROR,      'Error'),
+            (Metrics.BUCKET_LISTING_THROTTLING, 'Throttling'),
+            (Metrics.BUCKET_LISTING_SUCCESS,    'Success'),
+        ]
+    ],
+    overrides=[
+        color_override("Error",      "red"),
+        color_override("Throttling", "blue"),
+        color_override("Success",    "green"),
+    ]
+)
+
+active_indexing_jobs = TimeSeries(
+    title="Active Indexing jobs",
+    dataSource="${DS_PROMETHEUS}",
+    legendDisplayMode="hidden",
+    unit=UNITS.SHORT,
+    targets=[
+        Target(
+            expr='sum(' + Metrics.ACTIVE_INDEXING_JOBS() + ') or vector(0)',
+        ),
+    ],
+)
+
+legacy_tasks = TimeSeries(
+    title="Legacy Tasks",
+    dataSource="${DS_PROMETHEUS}",
+    fillOpacity=5,
+    legendDisplayMode="table",
+    legendPlacement="right",
+    lineInterpolation="smooth",
+    unit=UNITS.SHORT,
+    targets=[
+        Target(
+            expr='sum(increase(' + Metrics.LEGACY_TASKS() + ')) by(status)',
+            legendFormat="{{ status }}",
+        ),
+    ],
+)
+
+
 dashboard = (
     Dashboard(
         title="Lifecycle",
@@ -753,8 +841,8 @@ dashboard = (
             layout.row([s3_requests_by_workflow, *layout.resize([s3_requests_errors_by_workflow], width=7)], height=8),
             layout.row([s3_delete_object_ops, s3_delete_mpu_ops], height=8),
             RowPanel(title="Lifecycle Conductor"),
-            RowPanel(title="Lifecycle Bucket Processors"),
-            layout.row([trigger_latency], height=7),
+            layout.row([lifecycle_scans, trigger_latency], height=7),
+            layout.row([lifecycle_scan_rate, active_indexing_jobs, legacy_tasks], height=7),
         ]),
     )
     .auto_panel_ids()
