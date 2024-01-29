@@ -68,6 +68,7 @@ def s3_circuit_breaker_over_time(title=None, process=None, job=None):
         targets=[
             Target(
                 expr=expr,
+                legendFormat='{{ job }}',
             ),
         ],
         minValue=0,

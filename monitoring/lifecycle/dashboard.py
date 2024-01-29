@@ -7,6 +7,8 @@ from grafanalib.core import (
     Heatmap,
     HeatmapColor,
     RowPanel,
+    Template,
+    Templating,
     Threshold,
     YAxis,
 )
@@ -40,6 +42,7 @@ ALL_JOBS=[
     '${job_lifecycle_transition_processor}',
     '${job_lifecycle_gc_processor}',
     '${job_lifecycle_populator}',
+    '${job_sorbet_forwarder}.*',
 ]
 
 class Metrics:
@@ -71,12 +74,12 @@ class Metrics:
 
     S3_OPS = metrics.CounterMetric(
        's3_lifecycle_s3_operations_total',
-       'origin', 'op', 'status', 'job', namespace='${namespace}',
+       'origin', 'op', 'status', job=['$jobs'], namespace='${namespace}',
     )
 
     TRIGGER_LATENCY, LATENCY, DURATION = [
         metrics.BucketMetric(
-            name, 'location', 'type', 'job', namespace='${namespace}',
+            name, 'location', 'type', job=['$jobs'], namespace='${namespace}',
         )
         for name in [
             's3_lifecycle_trigger_latency_seconds',
@@ -87,7 +90,7 @@ class Metrics:
 
     KAFKA_PUBLISH_SUCCESS, KAFKA_PUBLISH_ERROR = [
         metrics.CounterMetric(
-            name, 'origin', 'op', namespace='${namespace}', job=ALL_JOBS,
+            name, 'origin', 'op', namespace='${namespace}', job=['$jobs'],
         )
         for name in [
             's3_lifecycle_kafka_publish_success_total',
@@ -111,17 +114,17 @@ class GcMetrics:
 class BacklogMetrics:
     LATEST_PUBLISHED_MESSAGE_TS = metrics.Metric(
         's3_zenko_queue_latest_published_message_timestamp',
-        'topic', 'partition', job=ALL_JOBS, namespace='${namespace}',
+        'topic', 'partition', job=['$jobs'], namespace='${namespace}',
     )
 
     DELIVERY_REPORTS_TOTAL = metrics.CounterMetric(
         's3_zenko_queue_delivery_reports_total',
-        'status', job=ALL_JOBS, namespace='${namespace}',
+        'status', job=['$jobs'], namespace='${namespace}',
     )
 
     LATEST_CONSUMED_MESSAGE_TS, LATEST_CONSUME_EVENT_TS = [
         metrics.Metric(
-            name, 'topic', 'partition', 'consumergroup', job=ALL_JOBS, namespace='${namespace}',
+            name, 'topic', 'partition', 'consumergroup', job=['$jobs'], namespace='${namespace}',
         )
         for name in [
             's3_zenko_queue_latest_consumed_message_timestamp',
@@ -131,17 +134,17 @@ class BacklogMetrics:
 
     REBALANCE_TOTAL = metrics.CounterMetric(
         's3_zenko_queue_rebalance_total',
-        'topic', 'partition', 'status', job=ALL_JOBS, namespace='${namespace}',
+        'topic', 'partition', 'status', job=['$jobs'], namespace='${namespace}',
     )
 
     SLOW_TASKS = metrics.Metric(
         's3_zenko_queue_slowTasks_count',
-        'topic', 'partition', 'consumergroup', job=ALL_JOBS, namespace='${namespace}',
+        'topic', 'partition', 'consumergroup', job=['$jobs'], namespace='${namespace}',
     )
 
     TASK_PROCESSING_TIME = metrics.BucketMetric(
         's3_zenko_queue_task_processing_time_seconds',
-        'topic', 'partition', 'consumergroup', 'error', job=ALL_JOBS, namespace='${namespace}',
+        'topic', 'partition', 'consumergroup', 'error', job=['$jobs'], namespace='${namespace}',
     )
 
 
@@ -259,8 +262,8 @@ s3_request_rate = Stat(
     thresholds=[Threshold('dark-purple', 0, 0.)],
 )
 
-circuit_breaker = s3_circuit_breaker(job=ALL_JOBS)
-circuit_breaker_over_time = s3_circuit_breaker_over_time(job=ALL_JOBS)
+circuit_breaker = s3_circuit_breaker(job=['$jobs'])
+circuit_breaker_over_time = s3_circuit_breaker_over_time(job=['$jobs'])
 circuit_breaker_over_time.targets[0].expr = relabel_job(circuit_breaker_over_time.targets[0].expr)
 
 ops_rate = [
@@ -777,6 +780,12 @@ dashboard = (
                 value="zenko",
             ),
             ConstantInput(
+                name="zenkoName",
+                label="zenko instance name",
+                description="Name of the Zenko instance",
+                value="artesca-data",
+            ),
+            ConstantInput(
                 name="job_lifecycle_producer",
                 label="job lifecycle producer",
                 description="Name of the lifecycle conductor job, used to filter only lifecycle conductor instances",
@@ -799,6 +808,12 @@ dashboard = (
                 label="job lifecycle transition processor",
                 description="Name of the lifecycle transition processor job, used to filter only lifecycle transition processor instances",
                 value="artesca-data-backbeat-lifecycle-transition-headless",
+            ),
+            ConstantInput(
+                name="job_sorbet_forwarder",
+                label="job sorbet forwarder",
+                description="Prefix of the sorbet forwarder jobs, used to filter only sorbet forwarder instances",
+                value="artesca-data-backbeat-cold-sorbet-fwd",
             ),
             ConstantInput(
                 name="job_lifecycle_populator",
@@ -837,6 +852,18 @@ dashboard = (
                 value="1",
             ),
         ],
+        templating=Templating([
+            Template(
+                dataSource='${DS_PROMETHEUS}',
+                label='Service',
+                name='jobs',
+                query=f'label_values(up{{namespace="${{namespace}}", job=~"{"|".join(ALL_JOBS)}"}}, job)',
+                regex='/^${zenkoName}-(?:backbeat-|cold-sorbet-)?(?:lifecycle-)?(.*?)(?:-processor)?(?:-headless)?$/',
+                includeAll=True,
+                multi=True,
+                allValue='.*',
+            ),
+        ]),
         panels=layout.column([
             layout.row(up + layout.resize([lifecycle_batch], width=6), height=4),
             layout.row([

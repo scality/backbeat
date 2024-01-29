@@ -16,6 +16,13 @@
       "value": "zenko"
     },
     {
+      "description": "Name of the Zenko instance",
+      "label": "zenko instance name",
+      "name": "zenkoName",
+      "type": "constant",
+      "value": "artesca-data"
+    },
+    {
       "description": "Name of the lifecycle conductor job, used to filter only lifecycle conductor instances",
       "label": "job lifecycle producer",
       "name": "job_lifecycle_producer",
@@ -42,6 +49,13 @@
       "name": "job_lifecycle_transition_processor",
       "type": "constant",
       "value": "artesca-data-backbeat-lifecycle-transition-headless"
+    },
+    {
+      "description": "Prefix of the sorbet forwarder jobs, used to filter only sorbet forwarder instances",
+      "label": "job sorbet forwarder",
+      "name": "job_sorbet_forwarder",
+      "type": "constant",
+      "value": "artesca-data-backbeat-cold-sorbet-fwd"
     },
     {
       "description": "Name of the lifecycle populator job, used to filter only lifecycle populator instances",
@@ -818,7 +832,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"})*10",
+          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"$jobs\"})*10",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1005,7 +1019,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\", type=~\"expiration|expiration:mpu\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\", type=~\"expiration|expiration:mpu\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1077,7 +1091,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\", type=~\"transition\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\", type=~\"transition\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1149,7 +1163,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\", type=~\"archive|archive:gc\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\", type=~\"archive|archive:gc\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1221,7 +1235,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\", type=~\"restore\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\", type=~\"restore\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1293,7 +1307,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1408,7 +1422,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "100 / (1 + (sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) or vector(0))\n           /\n           (sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\"}[$__rate_interval])) > 0)\n      )",
+          "expr": "100 / (1 + (sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) or vector(0))\n           /\n           (sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=\"200\"}[$__rate_interval])) > 0)\n      )",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1511,13 +1525,13 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"})by(job) * 10\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"$jobs\"})by(job) * 10\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "",
+          "legendFormat": "{{ job }}",
           "metric": "",
           "refId": "",
           "step": 10,
@@ -1627,7 +1641,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\"}[$__rate_interval])) by (type)",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (type)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1709,7 +1723,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\"}[$__rate_interval])) by (type)",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (type)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1777,7 +1791,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{namespace=\"${namespace}\"}[$__rate_interval])) by (location)",
+          "expr": "sum(rate(s3_lifecycle_duration_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (location)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1864,7 +1878,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_latency_seconds_bucket{namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
+          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_latency_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -1928,7 +1942,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_lifecycle_latency_seconds_bucket{namespace=\"${namespace}\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_lifecycle_latency_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -2034,7 +2048,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
+          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2135,7 +2149,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\"}[$__rate_interval])) by (le, location))",
+          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (le, location))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2199,7 +2213,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\", type=\"expiration\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\", type=\"expiration\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -2282,7 +2296,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\", type=\"transition\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\", type=\"transition\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -2365,7 +2379,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\", type=\"archive\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\", type=\"archive\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -2448,7 +2462,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{namespace=\"${namespace}\", type=\"restore\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_lifecycle_duration_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\", type=\"restore\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -2581,7 +2595,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}[$__rate_interval])) by(op)",
+          "expr": "sum(rate(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"$jobs\"}[$__rate_interval])) by(op)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2666,7 +2680,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "(sum(rate(s3_lifecycle_kafka_publish_error_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}[$__rate_interval])) by(op)\n  or 0 * group(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}) by(op))",
+          "expr": "(sum(rate(s3_lifecycle_kafka_publish_error_total{namespace=\"${namespace}\", job=~\"$jobs\"}[$__rate_interval])) by(op)\n  or 0 * group(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"$jobs\"}) by(op))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2762,7 +2776,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "100 / (1 + (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}[$__rate_interval])) by(op)\n             or 0 * group(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}) by(op))\n           /\n           (sum(rate(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"}[$__rate_interval])) by(op) > 0))",
+          "expr": "100 / (1 + (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace=\"${namespace}\", job=~\"$jobs\"}[$__rate_interval])) by(op)\n             or 0 * group(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"$jobs\"}) by(op))\n           /\n           (sum(rate(s3_lifecycle_kafka_publish_success_total{namespace=\"${namespace}\", job=~\"$jobs\"}[$__rate_interval])) by(op) > 0))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2847,7 +2861,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(   label_replace(kafka_consumergroup_group_max_lag,\n                 \"consumergroup\", \"$1\", \"group\", \"(.*)\")\n   * on(consumergroup) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(consumergroup, job)\n) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(   label_replace(kafka_consumergroup_group_max_lag,\n                 \"consumergroup\", \"$1\", \"group\", \"(.*)\")\n   * on(consumergroup) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"$jobs\", namespace=\"${namespace}\"}) by(consumergroup, job)\n) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2936,7 +2950,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  max(s3_zenko_queue_latest_consume_event_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"} - s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  max(s3_zenko_queue_latest_consume_event_timestamp{job=~\"$jobs\", namespace=\"${namespace}\"} - s3_zenko_queue_latest_consumed_message_timestamp{job=~\"$jobs\", namespace=\"${namespace}\"}) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3021,7 +3035,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(rate(s3_zenko_queue_task_processing_time_seconds_sum{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n  /sum(rate(s3_zenko_queue_task_processing_time_seconds_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(rate(s3_zenko_queue_task_processing_time_seconds_sum{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n  /sum(rate(s3_zenko_queue_task_processing_time_seconds_count{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3085,7 +3099,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_zenko_queue_task_processing_time_seconds_bucket{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by(le)",
+          "expr": "sum(increase(s3_zenko_queue_task_processing_time_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by(le)",
           "format": "heatmap",
           "hide": false,
           "instant": false,
@@ -3189,7 +3203,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(s3_zenko_queue_slowTasks_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(s3_zenko_queue_slowTasks_count{job=~\"$jobs\", namespace=\"${namespace}\"}) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3274,7 +3288,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(increase(s3_zenko_queue_rebalance_total{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(increase(s3_zenko_queue_rebalance_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3388,7 +3402,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) by (status)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (status)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3522,7 +3536,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"2..\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=~\"2..\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3536,7 +3550,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3550,7 +3564,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3659,7 +3673,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3673,7 +3687,7 @@
         },
         {
           "datasource": null,
-          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=~\"4..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3687,7 +3701,7 @@
         },
         {
           "datasource": null,
-          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
+          "expr": "(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status=~\"5..\"}[$__rate_interval])) or vector(0))\n /\n(sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) > 0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3776,7 +3790,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\"}[$__rate_interval])) by(origin)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by(origin)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3846,7 +3860,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) by(origin)",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=~\"$jobs\", namespace=\"${namespace}\", status!=\"200\"}[$__rate_interval])) by(origin)",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3965,7 +3979,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=\"${job_lifecycle_object_processor}\", namespace=\"${namespace}\", status!=\"200\", op=\"deleteObject\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3979,7 +3993,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"deleteObject\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=\"${job_lifecycle_object_processor}\", namespace=\"${namespace}\", status=\"200\", op=\"deleteObject\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -4098,7 +4112,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status!=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=\"${job_lifecycle_object_processor}\", namespace=\"${namespace}\", status!=\"200\", op=\"abortMultipartUpload\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -4112,7 +4126,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(s3_lifecycle_s3_operations_total{namespace=\"${namespace}\", status=\"200\", op=\"abortMultipartUpload\", job=\"${job_lifecycle_object_processor}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_lifecycle_s3_operations_total{job=\"${job_lifecycle_object_processor}\", namespace=\"${namespace}\", status=\"200\", op=\"abortMultipartUpload\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -4313,7 +4327,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_trigger_latency_seconds_bucket{namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
+          "expr": "histogram_quantile(0.95, sum(rate(s3_lifecycle_trigger_latency_seconds_bucket{job=~\"$jobs\", namespace=\"${namespace}\"}[$__rate_interval])) by (le, type))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -4674,7 +4688,35 @@
     "lifecycle"
   ],
   "templating": {
-    "list": []
+    "list": [
+      {
+        "allValue": ".*",
+        "auto": false,
+        "auto_count": 30,
+        "auto_min": "10s",
+        "current": {
+          "selected": false,
+          "tags": [],
+          "text": null,
+          "value": null
+        },
+        "datasource": "${DS_PROMETHEUS}",
+        "hide": 0,
+        "includeAll": true,
+        "label": "Service",
+        "multi": true,
+        "name": "jobs",
+        "options": [],
+        "query": "label_values(up{namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}|${job_sorbet_forwarder}.*\"}, job)",
+        "refresh": 1,
+        "regex": "/^${zenkoName}-(?:backbeat-|cold-sorbet-)?(?:lifecycle-)?(.*?)(?:-processor)?(?:-headless)?$/",
+        "sort": 1,
+        "tagValuesQuery": null,
+        "tagsQuery": null,
+        "type": "query",
+        "useTags": false
+      }
+    ]
   },
   "time": {
     "from": "now-1h",
