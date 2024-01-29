@@ -145,6 +145,17 @@ class BacklogMetrics:
     )
 
 
+def relabel_job(*expr):
+    # type: (*str) -> str
+    return '\n'.join([
+        'label_replace(',
+        'label_replace(',
+        *['  ' + e for e in expr],
+        ', "job", "$1", "job", "${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless")',
+        ', "job", "$1-processor", "job", "(gc|transition)")',
+    ])
+
+
 def color_override(name, color):
     # type: (str, str) -> dict
     return {
@@ -250,6 +261,7 @@ s3_request_rate = Stat(
 
 circuit_breaker = s3_circuit_breaker(job=ALL_JOBS)
 circuit_breaker_over_time = s3_circuit_breaker_over_time(job=ALL_JOBS)
+circuit_breaker_over_time.targets[0].expr = relabel_job(circuit_breaker_over_time.targets[0].expr)
 
 ops_rate = [
     Stat(
@@ -471,14 +483,14 @@ kafka_lag = TimeSeries(
     unit=UNITS.SHORT,
     targets=[
         Target(
-            expr='\n'.join([
+            expr=relabel_job('\n'.join([
                 'sum('
                 '   label_replace(kafka_consumergroup_group_max_lag,',
                 '                 "consumergroup", "$1", "group", "(.*)")',
                 '   * on(consumergroup) group_right',
                 '   group(' + BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS() + ') by(consumergroup, job)',
                 ') by(job)',
-            ]),
+            ])),
             legendFormat="{{ job }}",
         )
     ],
@@ -494,8 +506,10 @@ tasks_latency = TimeSeries(
     lineInterpolation='smooth',
     targets=[
         Target(
-            expr=f'max({BacklogMetrics.LATEST_CONSUME_EVENT_TS()} - {BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS()}) by(service)',
-            legendFormat="{{ service }}",
+            expr=relabel_job(
+                f'max({BacklogMetrics.LATEST_CONSUME_EVENT_TS()} - {BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS()}) by(job)'
+            ),
+            legendFormat="{{ job }}",
         )
     ]
 )
@@ -507,11 +521,11 @@ avg_task_processing_time = TimeSeries(
     unit=UNITS.SECONDS,
     targets=[
         Target(
-            expr='\n'.join([
+            expr=relabel_job(
                 'sum(rate(' + BacklogMetrics.TASK_PROCESSING_TIME.sum() + ')) by (job)',
                 '/'
                 'sum(rate(' + BacklogMetrics.TASK_PROCESSING_TIME.count() + ')) by (job)',
-            ]),
+            ),
             legendFormat="{{ job }}",
         )
     ]
@@ -541,7 +555,9 @@ slow_tasks_over_time = TimeSeries(
     unit=UNITS.SHORT,
     targets=[
         Target(
-            expr='sum(' + BacklogMetrics.SLOW_TASKS() + ') by (job)',
+            expr=relabel_job(
+                'sum(' + BacklogMetrics.SLOW_TASKS() + ') by (job)'
+            ),
             legendFormat="{{ job }}",
         )
     ]
@@ -554,7 +570,9 @@ rebalance_over_time = TimeSeries(
     unit=UNITS.SHORT,
     targets=[
         Target(
-            expr='sum(increase(' + BacklogMetrics.REBALANCE_TOTAL() + ')) by (job)',
+            expr=relabel_job(
+                'sum(increase(' + BacklogMetrics.REBALANCE_TOTAL() + ')) by (job)'
+            ),
             legendFormat="{{ job }}",
         )
     ],

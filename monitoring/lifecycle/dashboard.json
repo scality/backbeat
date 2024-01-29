@@ -1511,7 +1511,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"})by(job) * 10",
+          "expr": "label_replace(\nlabel_replace(\n  avg(s3_circuit_breaker{namespace=\"${namespace}\",job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\"})by(job) * 10\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2847,7 +2847,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(   label_replace(kafka_consumergroup_group_max_lag,\n                 \"consumergroup\", \"$1\", \"group\", \"(.*)\")\n   * on(consumergroup) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(consumergroup, job)\n) by(job)",
+          "expr": "label_replace(\nlabel_replace(\n  sum(   label_replace(kafka_consumergroup_group_max_lag,\n                 \"consumergroup\", \"$1\", \"group\", \"(.*)\")\n   * on(consumergroup) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(consumergroup, job)\n) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2936,13 +2936,13 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "max(s3_zenko_queue_latest_consume_event_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"} - s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(service)",
+          "expr": "label_replace(\nlabel_replace(\n  max(s3_zenko_queue_latest_consume_event_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"} - s3_zenko_queue_latest_consumed_message_timestamp{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
           "interval": "",
           "intervalFactor": 1,
-          "legendFormat": "{{ service }}",
+          "legendFormat": "{{ job }}",
           "metric": "",
           "refId": "",
           "step": 10,
@@ -3021,7 +3021,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(rate(s3_zenko_queue_task_processing_time_seconds_sum{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n/sum(rate(s3_zenko_queue_task_processing_time_seconds_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)",
+          "expr": "label_replace(\nlabel_replace(\n  sum(rate(s3_zenko_queue_task_processing_time_seconds_sum{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n  /sum(rate(s3_zenko_queue_task_processing_time_seconds_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3189,7 +3189,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(s3_zenko_queue_slowTasks_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by (job)",
+          "expr": "label_replace(\nlabel_replace(\n  sum(s3_zenko_queue_slowTasks_count{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -3274,7 +3274,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "sum(increase(s3_zenko_queue_rebalance_total{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)",
+          "expr": "label_replace(\nlabel_replace(\n  sum(increase(s3_zenko_queue_rebalance_total{job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}\", namespace=\"${namespace}\"}[$__rate_interval])) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
