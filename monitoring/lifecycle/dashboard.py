@@ -7,6 +7,7 @@ from grafanalib.core import (
     Heatmap,
     HeatmapColor,
     RowPanel,
+    REFRESH_ON_TIME_RANGE_CHANGE,
     Template,
     Templating,
     Threshold,
@@ -79,7 +80,7 @@ class Metrics:
 
     TRIGGER_LATENCY, LATENCY, DURATION = [
         metrics.BucketMetric(
-            name, 'location', 'type', job=['$jobs'], namespace='${namespace}',
+            name, 'type', location=['$locations'], job=['$jobs'], namespace='${namespace}',
         )
         for name in [
             's3_lifecycle_trigger_latency_seconds',
@@ -861,7 +862,17 @@ dashboard = (
                 regex='/^${zenkoName}-(?:backbeat-|cold-sorbet-)?(?:lifecycle-)?(.*?)(?:-processor)?(?:-headless)?$/',
                 includeAll=True,
                 multi=True,
+                allValue="|".join(ALL_JOBS),
+            ),
+            Template(
+                dataSource='${DS_PROMETHEUS}',
+                label='Location',
+                name='locations',
+                query=f'label_values({{namespace="${{namespace}}", job=~"{"|".join(ALL_JOBS)}", location!=""}}, location)',
+                includeAll=True,
+                multi=True,
                 allValue='.*',
+                refresh=REFRESH_ON_TIME_RANGE_CHANGE,
             ),
         ]),
         panels=layout.column([
