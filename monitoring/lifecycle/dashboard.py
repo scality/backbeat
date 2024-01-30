@@ -125,7 +125,7 @@ class BacklogMetrics:
 
     LATEST_CONSUMED_MESSAGE_TS, LATEST_CONSUME_EVENT_TS = [
         metrics.Metric(
-            name, 'topic', 'partition', 'consumergroup', job=['$jobs'], namespace='${namespace}',
+            name, 'topic', 'partition', 'group', job=['$jobs'], namespace='${namespace}',
         )
         for name in [
             's3_zenko_queue_latest_consumed_message_timestamp',
@@ -135,17 +135,17 @@ class BacklogMetrics:
 
     REBALANCE_TOTAL = metrics.CounterMetric(
         's3_zenko_queue_rebalance_total',
-        'topic', 'partition', 'status', job=['$jobs'], namespace='${namespace}',
+        'topic', 'group', 'status', job=['$jobs'], namespace='${namespace}',
     )
 
     SLOW_TASKS = metrics.Metric(
         's3_zenko_queue_slowTasks_count',
-        'topic', 'partition', 'consumergroup', job=['$jobs'], namespace='${namespace}',
+        'topic', 'partition', 'group', job=['$jobs'], namespace='${namespace}',
     )
 
     TASK_PROCESSING_TIME = metrics.BucketMetric(
         's3_zenko_queue_task_processing_time_seconds',
-        'topic', 'partition', 'consumergroup', 'error', job=['$jobs'], namespace='${namespace}',
+        'topic', 'partition', 'group', 'error', job=['$jobs'], namespace='${namespace}',
     )
 
 
@@ -488,11 +488,10 @@ kafka_lag = TimeSeries(
     targets=[
         Target(
             expr=relabel_job('\n'.join([
-                'sum('
-                '   label_replace(kafka_consumergroup_group_max_lag,',
-                '                 "consumergroup", "$1", "group", "(.*)")',
-                '   * on(consumergroup) group_right',
-                '   group(' + BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS() + ') by(consumergroup, job)',
+                'sum(',
+                '   kafka_consumergroup_group_max_lag',
+                '   * on(group) group_right',
+                '   group(' + BacklogMetrics.LATEST_CONSUMED_MESSAGE_TS() + ') by(group, job)',
                 ') by(job)',
             ])),
             legendFormat="{{ job }}",

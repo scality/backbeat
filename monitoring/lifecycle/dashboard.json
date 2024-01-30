@@ -2861,7 +2861,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(   label_replace(kafka_consumergroup_group_max_lag,\n                 \"consumergroup\", \"$1\", \"group\", \"(.*)\")\n   * on(consumergroup) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"$jobs\", namespace=\"${namespace}\"}) by(consumergroup, job)\n) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(\n   kafka_consumergroup_group_max_lag\n   * on(group) group_right\n   group(s3_zenko_queue_latest_consumed_message_timestamp{job=~\"$jobs\", namespace=\"${namespace}\"}) by(group, job)\n) by(job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,
