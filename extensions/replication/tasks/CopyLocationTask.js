@@ -122,9 +122,11 @@ class CopyLocationTask extends BackbeatTask {
                     return next(err);
                 }
 
+                const transitionTime = actionEntry.getAttribute('metrics.transitionTime') ||
+                    objMD.getTransitionTime();
                 LifecycleMetrics.onLifecycleStarted(log, 'transition',
                     actionEntry.getAttribute('toLocation'),
-                    startTime - Date.parse(objMD.getTransitionTime));
+                    startTime - Date.parse(transitionTime));
 
                 // Do a multipart upload when either the size is above
                 // a threshold or the source object is itself a MPU.

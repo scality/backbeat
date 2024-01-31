@@ -97,7 +97,7 @@ const lifecycleKafkaPublish = {
 class LifecycleMetrics {
     static handleError(log, err, method) {
         if (log) {
-            log.error('failed to update prometheus metrics', { error: err, method });
+            log.error('failed to update prometheus metrics', { error: Object.assign({}, err), method });
         }
     }
 

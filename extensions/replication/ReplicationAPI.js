@@ -32,6 +32,7 @@ class ReplicationAPI {
      * metrics accounting)
      * @param {string} [params.resultsTopic] - name of topic to get
      * result message (no result will be published if not provided)
+     * @param {string} params.transitionTime - transition time
      * @return {ActionQueueEntry} new action entry
      */
     static createCopyLocationAction(params) {
@@ -52,6 +53,7 @@ class ReplicationAPI {
                 origin: params.originLabel,
                 fromLocation: params.fromLocation,
                 contentLength: params.contentLength,
+                transitionTime: params.transitionTime,
             });
         if (params.resultsTopic) {
             action.setResultsTopic(params.resultsTopic);
@@ -97,7 +99,7 @@ class ReplicationAPI {
                 size: contentLength,
                 eTag,
                 try: attempt,
-                transitionTime: new Date(transitionTime).toISOString(),
+                transitionTime,
             };
             kafkaEntry.message = JSON.stringify(message);
         }

@@ -203,11 +203,13 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                     }
                     locationToGC = oldLocation;
 
-                    const transitionTime = objMD.getTransitionTime();
                     this._updateMdWithTransition(entry, objMD);
                     return this._putMetadata(entry, objMD, log, err => {
+                        const transitionTime = entry.getAttribute('metrics.transitionTime') ||
+                            objMD.getTransitionTime();
+                        const locationName = entry.getAttribute('toLocation');
                         LifecycleMetrics.onLifecycleCompleted(log, 'transition',
-                            newLocation, Date.now() - Date.parse(transitionTime));
+                            locationName, Date.now() - Date.parse(transitionTime));
                         next(err);
                     });
                 },
