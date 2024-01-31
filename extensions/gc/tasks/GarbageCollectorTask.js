@@ -178,7 +178,7 @@ class GarbageCollectorTask extends BackbeatTask {
             }
 
             GarbageCollectorMetrics.onGcCompleted(log, entry.ruleType,
-                Date.now() - entry.getAttribute('timestamp'));
+                locations[0]?.dataStoreName, Date.now() - entry.getAttribute('timestamp'));
             return done();
         });
     }
@@ -259,6 +259,7 @@ class GarbageCollectorTask extends BackbeatTask {
                         log.end().info('completed expiration of archived data',
                             entry.getLogInfo());
                         GarbageCollectorMetrics.onGcCompleted(log, 'archive',
+                            entry.getAttribute('target.oldLocation'),
                             Date.now() - entry.getAttribute('timestamp'));
                     }
 

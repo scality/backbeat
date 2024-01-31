@@ -108,7 +108,7 @@ class GcMetrics:
 
     DURATION = metrics.BucketMetric(
        's3_gc_duration_seconds',
-       'origin', job='${job_lifecycle_gc_processor}', namespace='${namespace}'
+       'origin', 'op', location=['$locations'], job='${job_lifecycle_gc_processor}', namespace='${namespace}'
     )
 
 

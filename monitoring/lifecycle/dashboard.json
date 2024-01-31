@@ -1655,7 +1655,7 @@
         },
         {
           "datasource": null,
-          "expr": "sum(rate(s3_gc_duration_seconds_count{job=\"${job_lifecycle_gc_processor}\", namespace=\"${namespace}\"}[$__rate_interval]))",
+          "expr": "sum(rate(s3_gc_duration_seconds_count{location=~\"$locations\", job=\"${job_lifecycle_gc_processor}\", namespace=\"${namespace}\"}[$__rate_interval]))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -2062,7 +2062,7 @@
         },
         {
           "datasource": null,
-          "expr": "histogram_quantile(0.95, sum(rate(s3_gc_duration_seconds_bucket{job=\"${job_lifecycle_gc_processor}\", namespace=\"${namespace}\"}[$__rate_interval])) by (le))",
+          "expr": "histogram_quantile(0.95, sum(rate(s3_gc_duration_seconds_bucket{location=~\"$locations\", job=\"${job_lifecycle_gc_processor}\", namespace=\"${namespace}\"}[$__rate_interval])) by (le))",
           "format": "time_series",
           "hide": false,
           "instant": false,
@@ -4690,7 +4690,7 @@
   "templating": {
     "list": [
       {
-        "allValue": "${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}|${job_sorbet_forwarder}",
+        "allValue": "${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}|${job_sorbet_forwarder}.*",
         "auto": false,
         "auto_count": 30,
         "auto_min": "10s",
@@ -4734,7 +4734,7 @@
         "multi": true,
         "name": "locations",
         "options": [],
-        "query": "label_values({namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}|${job_sorbet_forwarder}\", location!=\"\"}, location)",
+        "query": "label_values({namespace=\"${namespace}\", job=~\"${job_lifecycle_producer}|${job_lifecycle_bucket_processor}|${job_lifecycle_object_processor}|${job_lifecycle_transition_processor}|${job_lifecycle_gc_processor}|${job_lifecycle_populator}|${job_sorbet_forwarder}.*\", location!=\"\"}, location)",
         "refresh": 2,
         "regex": null,
         "sort": 1,

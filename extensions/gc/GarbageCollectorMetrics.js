@@ -2,6 +2,7 @@ const { ZenkoMetrics } = require('arsenal').metrics;
 
 const GC_LABEL_ORIGIN =  'origin';
 const GC_LABEL_OP = 'op';
+const GC_LABEL_LOCATION = 'location';
 const GC_LABEL_STATUS = 'status';
 
 const gcS3Operations = ZenkoMetrics.createCounter({
@@ -18,7 +19,7 @@ const gcDuration = ZenkoMetrics.createHistogram({
     name: 's3_gc_duration_seconds',
     help: 'Duration of the garbage collector operation, calculated from the time when the GC is ' +
         'requested to the end of the operation',
-    labelNames: [GC_LABEL_ORIGIN],
+    labelNames: [GC_LABEL_ORIGIN, GC_LABEL_OP, GC_LABEL_LOCATION],
     buckets: [0.2, 0.1, 0.5, 2.5, 10, 50],
 });
 
@@ -42,10 +43,11 @@ class GarbageCollectorMetrics {
         }
     }
 
-    static onGcCompleted(log, process, duration) {
+    static onGcCompleted(log, process, location, duration) {
         try {
             gcDuration.observe({
                 [GC_LABEL_ORIGIN]: process,
+                [GC_LABEL_LOCATION]: location,
             }, duration / 1000);
         } catch (err) {
             GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onGcComplete');
