@@ -317,7 +317,7 @@ groups:
 
   - alert: KafkaConsumerSlowTask
     Expr: |
-      sum(s3_zenko_queue_slowTasks_count{namespace="${namespace}"}) by(job) > 0
+      sum(s3_backbeat_queue_slowTasks_count{namespace="${namespace}"}) by(job) > 0
     For: "5m"
     Labels:
      severity: warning
@@ -332,7 +332,7 @@ groups:
 
   - alert: KafkaConsumerRebalanceTimeout
     Expr: |
-      sum(s3_zenko_queue_rebalance_total_count{namespace="${namespace}", status="timeout"}) by(pod) > 0
+      sum(s3_backbeat_queue_rebalance_total_count{namespace="${namespace}", status="timeout"}) by(pod) > 0
     Labels:
      severity: critical
     Annotations:
