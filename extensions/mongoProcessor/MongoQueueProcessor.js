@@ -23,6 +23,7 @@ const BucketMemState = require('./utils/BucketMemState');
 
 // batch metrics by location and send to kafka metrics topic every 5 seconds
 const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
+const MQP_PROCESSOR_CONCURRENCY = Number.parseInt(process.env.MQP_PROCESSOR_CONCURRENCY, 10);
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -133,6 +134,7 @@ class MongoQueueProcessor {
                 groupId: `${this.mongoProcessorConfig.groupId}`,
                 kafka: { hosts: this.kafkaConfig.hosts },
                 queueProcessor: this.processKafkaEntry.bind(this),
+                concurrency: MQP_PROCESSOR_CONCURRENCY,
             });
             this._consumer.on('error', () => {
                 if (!consumerReady) {
