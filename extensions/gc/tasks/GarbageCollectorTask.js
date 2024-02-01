@@ -136,6 +136,7 @@ class GarbageCollectorTask extends BackbeatTask {
 
     _executeDeleteData(entry, log, done) {
         const { locations } = entry.getAttribute('target');
+        const ruleType = entry.getContextAttribute('ruleType');
         const params = {
             Locations: locations.map(location => ({
                 key: location.key,
@@ -155,7 +156,7 @@ class GarbageCollectorTask extends BackbeatTask {
 
         this._batchDeleteData(params, entry, log, err => {
             // ruleType can be either `transition` or `restore` (for restore-expiration)
-            GarbageCollectorMetrics.onS3Request(log, 'batchdelete', entry.ruleType, err);
+            GarbageCollectorMetrics.onS3Request(log, 'batchdelete', ruleType, err);
             entry.setEnd(err);
             log.info('action execution ended', entry.getLogInfo());
             if (err && err.statusCode === 412) {
@@ -177,7 +178,7 @@ class GarbageCollectorTask extends BackbeatTask {
                 return done(err);
             }
 
-            GarbageCollectorMetrics.onGcCompleted(log, entry.ruleType,
+            GarbageCollectorMetrics.onGcCompleted(log, ruleType,
                 locations[0]?.dataStoreName, Date.now() - entry.getAttribute('timestamp'));
             return done();
         });
