@@ -2466,7 +2466,7 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 9,
         "x": 0,
         "y": 35
       },
@@ -2504,6 +2504,126 @@
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "calcs": [
+            "mean"
+          ],
+          "decimals": null,
+          "limit": null,
+          "links": [],
+          "mappings": [
+            {
+              "options": {
+                "from": 0,
+                "result": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "OK"
+                },
+                "to": 2
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 2,
+                "result": {
+                  "color": "orange",
+                  "index": 1,
+                  "text": "Throttled"
+                },
+                "to": 10
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 10,
+                "result": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Stalled"
+                },
+                "to": 20
+              },
+              "type": "range"
+            }
+          ],
+          "max": 20,
+          "min": 0,
+          "override": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "orange",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 2.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "red",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 10.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "title": null,
+          "unit": "none",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 9,
+        "y": 35
+      },
+      "hideTimeOverride": false,
+      "id": 31,
+      "links": [],
+      "maxDataPoints": 100,
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_data_processor}\"})*10",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Data processor throttling",
+      "transformations": [],
+      "transparent": false,
+      "type": "gauge"
     },
     {
       "datasource": "${DS_PROMETHEUS}",
@@ -2551,12 +2671,12 @@
       },
       "gridPos": {
         "h": 6,
-        "w": 12,
+        "w": 9,
         "x": 12,
         "y": 35
       },
       "hideTimeOverride": false,
-      "id": 31,
+      "id": 32,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2589,6 +2709,126 @@
       "transformations": [],
       "transparent": false,
       "type": "timeseries"
+    },
+    {
+      "datasource": "${DS_PROMETHEUS}",
+      "editable": true,
+      "error": false,
+      "fieldConfig": {
+        "defaults": {
+          "calcs": [
+            "mean"
+          ],
+          "decimals": null,
+          "limit": null,
+          "links": [],
+          "mappings": [
+            {
+              "options": {
+                "from": 0,
+                "result": {
+                  "color": "green",
+                  "index": 0,
+                  "text": "OK"
+                },
+                "to": 2
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 2,
+                "result": {
+                  "color": "orange",
+                  "index": 1,
+                  "text": "Throttled"
+                },
+                "to": 10
+              },
+              "type": "range"
+            },
+            {
+              "options": {
+                "from": 10,
+                "result": {
+                  "color": "red",
+                  "index": 2,
+                  "text": "Stalled"
+                },
+                "to": 20
+              },
+              "type": "range"
+            }
+          ],
+          "max": 20,
+          "min": 0,
+          "override": {},
+          "thresholds": {
+            "mode": "absolute",
+            "steps": [
+              {
+                "color": "green",
+                "index": 0,
+                "line": true,
+                "op": "gt",
+                "value": "null",
+                "yaxis": "left"
+              },
+              {
+                "color": "orange",
+                "index": 1,
+                "line": true,
+                "op": "gt",
+                "value": 2.0,
+                "yaxis": "left"
+              },
+              {
+                "color": "red",
+                "index": 2,
+                "line": true,
+                "op": "gt",
+                "value": 10.0,
+                "yaxis": "left"
+              }
+            ]
+          },
+          "title": null,
+          "unit": "none",
+          "values": false
+        },
+        "showThresholdLabels": false,
+        "showThresholdMarkers": true
+      },
+      "gridPos": {
+        "h": 6,
+        "w": 3,
+        "x": 21,
+        "y": 35
+      },
+      "hideTimeOverride": false,
+      "id": 33,
+      "links": [],
+      "maxDataPoints": 100,
+      "targets": [
+        {
+          "datasource": null,
+          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_replay_processor}\"})*10",
+          "format": "time_series",
+          "hide": false,
+          "instant": false,
+          "interval": "",
+          "intervalFactor": 1,
+          "legendFormat": "",
+          "metric": "",
+          "refId": "",
+          "step": 10,
+          "target": ""
+        }
+      ],
+      "title": "Replay processor throttling",
+      "transformations": [],
+      "transparent": false,
+      "type": "gauge"
     },
     {
       "datasource": "${DS_PROMETHEUS}",
@@ -2641,7 +2881,7 @@
         "y": 41
       },
       "hideTimeOverride": false,
-      "id": 32,
+      "id": 34,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2727,7 +2967,7 @@
         "y": 41
       },
       "hideTimeOverride": false,
-      "id": 33,
+      "id": 35,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2813,7 +3053,7 @@
         "y": 47
       },
       "hideTimeOverride": false,
-      "id": 34,
+      "id": 36,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2899,7 +3139,7 @@
         "y": 47
       },
       "hideTimeOverride": false,
-      "id": 35,
+      "id": 37,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -2985,7 +3225,7 @@
         "y": 47
       },
       "hideTimeOverride": false,
-      "id": 36,
+      "id": 38,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3071,7 +3311,7 @@
         "y": 53
       },
       "hideTimeOverride": false,
-      "id": 37,
+      "id": 39,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3132,7 +3372,7 @@
         "y": 53
       },
       "hideTimeOverride": false,
-      "id": 38,
+      "id": 40,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3225,7 +3465,7 @@
         "y": 53
       },
       "hideTimeOverride": false,
-      "id": 39,
+      "id": 41,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3286,7 +3526,7 @@
         "y": 53
       },
       "hideTimeOverride": false,
-      "id": 40,
+      "id": 42,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3364,7 +3604,7 @@
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 41,
+      "id": 43,
       "legend": {
         "show": false
       },
@@ -3447,7 +3687,7 @@
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 42,
+      "id": 44,
       "legend": {
         "show": false
       },
@@ -3530,7 +3770,7 @@
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 43,
+      "id": 45,
       "legend": {
         "show": false
       },
@@ -3620,7 +3860,7 @@
         "y": 59
       },
       "hideTimeOverride": false,
-      "id": 44,
+      "id": 46,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3701,7 +3941,7 @@
         "y": 62
       },
       "hideTimeOverride": false,
-      "id": 45,
+      "id": 47,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3782,7 +4022,7 @@
         "y": 65
       },
       "hideTimeOverride": false,
-      "id": 46,
+      "id": 48,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -3821,126 +4061,6 @@
       "type": "stat"
     },
     {
-      "datasource": "${DS_PROMETHEUS}",
-      "editable": true,
-      "error": false,
-      "fieldConfig": {
-        "defaults": {
-          "calcs": [
-            "mean"
-          ],
-          "decimals": null,
-          "limit": null,
-          "links": [],
-          "mappings": [
-            {
-              "options": {
-                "from": 0,
-                "result": {
-                  "color": "green",
-                  "index": 0,
-                  "text": "OK"
-                },
-                "to": 2
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 2,
-                "result": {
-                  "color": "orange",
-                  "index": 1,
-                  "text": "Throttled"
-                },
-                "to": 10
-              },
-              "type": "range"
-            },
-            {
-              "options": {
-                "from": 10,
-                "result": {
-                  "color": "red",
-                  "index": 2,
-                  "text": "Stalled"
-                },
-                "to": 20
-              },
-              "type": "range"
-            }
-          ],
-          "max": 20,
-          "min": 0,
-          "override": {},
-          "thresholds": {
-            "mode": "absolute",
-            "steps": [
-              {
-                "color": "green",
-                "index": 0,
-                "line": true,
-                "op": "gt",
-                "value": "null",
-                "yaxis": "left"
-              },
-              {
-                "color": "orange",
-                "index": 1,
-                "line": true,
-                "op": "gt",
-                "value": 2.0,
-                "yaxis": "left"
-              },
-              {
-                "color": "red",
-                "index": 2,
-                "line": true,
-                "op": "gt",
-                "value": 10.0,
-                "yaxis": "left"
-              }
-            ]
-          },
-          "title": null,
-          "unit": "none",
-          "values": false
-        },
-        "showThresholdLabels": false,
-        "showThresholdMarkers": true
-      },
-      "gridPos": {
-        "h": 10,
-        "w": 24,
-        "x": 0,
-        "y": 68
-      },
-      "hideTimeOverride": false,
-      "id": 47,
-      "links": [],
-      "maxDataPoints": 100,
-      "targets": [
-        {
-          "datasource": null,
-          "expr": "avg(s3_circuit_breaker{namespace=\"${namespace}\",job=\"${job_data_processor}\"})*10",
-          "format": "time_series",
-          "hide": false,
-          "instant": false,
-          "interval": "",
-          "intervalFactor": 1,
-          "legendFormat": "",
-          "metric": "",
-          "refId": "",
-          "step": 10,
-          "target": ""
-        }
-      ],
-      "title": "Flow Control",
-      "transformations": [],
-      "transparent": false,
-      "type": "gauge"
-    },
-    {
       "collapsed": false,
       "editable": true,
       "error": false,
@@ -3956,10 +4076,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 78
+        "y": 68
       },
       "hideTimeOverride": false,
-      "id": 48,
+      "id": 49,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -4017,10 +4137,10 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 79
+        "y": 69
       },
       "hideTimeOverride": false,
-      "id": 49,
+      "id": 50,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4103,10 +4223,10 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 79
+        "y": 69
       },
       "hideTimeOverride": false,
-      "id": 50,
+      "id": 51,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4189,10 +4309,10 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 85
+        "y": 75
       },
       "hideTimeOverride": false,
-      "id": 51,
+      "id": 52,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4275,10 +4395,10 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 85
+        "y": 75
       },
       "hideTimeOverride": false,
-      "id": 52,
+      "id": 53,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4343,13 +4463,13 @@
         "h": 6,
         "w": 12,
         "x": 0,
-        "y": 91
+        "y": 81
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 53,
+      "id": 54,
       "legend": {
         "show": false
       },
@@ -4427,13 +4547,13 @@
         "h": 6,
         "w": 12,
         "x": 12,
-        "y": 91
+        "y": 81
       },
       "heatmap": {},
       "hideTimeOverride": false,
       "hideZeroBuckets": true,
       "highlightCards": true,
-      "id": 54,
+      "id": 55,
       "legend": {
         "show": false
       },
@@ -4496,10 +4616,10 @@
         "h": 1,
         "w": 24,
         "x": 0,
-        "y": 97
+        "y": 87
       },
       "hideTimeOverride": false,
-      "id": 55,
+      "id": 56,
       "links": [],
       "maxDataPoints": 100,
       "panels": [],
@@ -4557,10 +4677,10 @@
         "h": 6,
         "w": 8,
         "x": 0,
-        "y": 98
+        "y": 88
       },
       "hideTimeOverride": false,
-      "id": 56,
+      "id": 57,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4642,10 +4762,10 @@
         "h": 6,
         "w": 8,
         "x": 8,
-        "y": 98
+        "y": 88
       },
       "hideTimeOverride": false,
-      "id": 57,
+      "id": 58,
       "links": [],
       "maxDataPoints": 100,
       "options": {
@@ -4727,10 +4847,10 @@
         "h": 6,
         "w": 8,
         "x": 16,
-        "y": 98
+        "y": 88
       },
       "hideTimeOverride": false,
-      "id": 58,
+      "id": 59,
       "links": [],
       "maxDataPoints": 100,
       "options": {

@@ -538,7 +538,7 @@ queue_populator_objects_datarate = TimeSeries(
     )],
 )
 
-queue_processor_lag = [
+queue_processor_lag, replay_processor_lag = [
     TimeSeries(
         title=name + ' processor lag',
         dataSource='${DS_PROMETHEUS}',
@@ -701,11 +701,13 @@ queue_processor_stage_avg = [
 ]
 
 queue_processor_circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    process='replication_queue_processor',
+    'Data processor throttling',
     job='${job_data_processor}',
 )
-
+replay_processor_circuit_breaker = s3_circuit_breaker(
+    'Replay processor throttling',
+    job='${job_replay_processor}',
+)
 
 replay_processor_rate, replay_processor_attempts, replay_processor_success_attempts, replay_processor_failed_attempts = [
     TimeSeries(
@@ -930,7 +932,10 @@ dashboard = (
                 queue_populator_objects_rate, queue_populator_objects_datarate,
             ], height=6),
             RowPanel(title="Queue Processor"),
-            layout.row(queue_processor_lag, height=6),
+            layout.row([
+                queue_processor_lag,  layout.resize([queue_processor_circuit_breaker], width=3),
+                replay_processor_lag, layout.resize([replay_processor_circuit_breaker], width=3)
+            ], height=6),
             layout.row(queue_processor_rate, height=6),
             layout.row(queue_processor_speed, height=6),
             layout.row([
@@ -943,7 +948,6 @@ dashboard = (
                 *queue_processor_stage_time,
                 layout.column(queue_processor_stage_avg, width=3, height=3)
             ], height=9),
-            layout.row([queue_processor_circuit_breaker], height=10),
             RowPanel(title="Replay"),
             layout.row([replay_processor_rate, replay_processor_attempts],
                         height=6),
