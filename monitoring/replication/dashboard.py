@@ -538,7 +538,7 @@ queue_populator_objects_datarate = TimeSeries(
     )],
 )
 
-queue_processor_lag = [
+queue_processor_lag, replay_processor_lag = [
     TimeSeries(
         title=name + ' processor lag',
         dataSource='${DS_PROMETHEUS}',
@@ -701,11 +701,13 @@ queue_processor_stage_avg = [
 ]
 
 queue_processor_circuit_breaker = s3_circuit_breaker(
-    'Flow Control',
-    process='replication_queue_processor',
+    'Data processor throttling',
     job='${job_data_processor}',
 )
-
+replay_processor_circuit_breaker = s3_circuit_breaker(
+    'Replay processor throttling',
+    job='${job_replay_processor}',
+)
 
 replay_processor_rate, replay_processor_attempts, replay_processor_success_attempts, replay_processor_failed_attempts = [
     TimeSeries(
@@ -920,44 +922,42 @@ dashboard = (
             layout.row([
                 replication_rpo, replication_latency,
             ], height=6),
-            RowPanel(title="Queue Populator", collapsed=True, panels=layout.column([
-                layout.row([
-                    queue_populator_lag, queue_populator_kafka_injection_rate,
-                    layout.column([queue_populator_objects_count, queue_populator_objects_size],
-                                  width=4, height=3),
-                ], height=6),
-                layout.row([
-                    queue_populator_objects_rate, queue_populator_objects_datarate,
-                ], height=6),
-            ])),
-            RowPanel(title="Queue Processor", collapsed=True, panels=layout.column([
-                layout.row(queue_processor_lag, height=6),
-                layout.row(queue_processor_rate, height=6),
-                layout.row(queue_processor_speed, height=6),
-                layout.row([
-                    queue_processor_status_completed,
-                    *layout.resize([queue_processor_ops_by_location], width=4),
-                    queue_processor_status_failed,
-                    *layout.resize([queue_processor_errors_by_location],  width=4),
-                ], height=6),
-                layout.row([
-                    *queue_processor_stage_time,
-                    layout.column(queue_processor_stage_avg, width=3, height=3)
-                ], height=9),
-                layout.row([queue_processor_circuit_breaker], height=10),
-            ])),
-            RowPanel(title="Replay", collapsed=True, panels=layout.column([
-                layout.row([replay_processor_rate, replay_processor_attempts],
-                           height=6),
-                layout.row([replay_processor_success_attempts, replay_processor_failed_attempts],
-                           height=6),
-                layout.row([replay_count, replay_by_size], height=6),
-            ])),
-            RowPanel(title="Status Processor", collapsed=True, panels=layout.column([
-                layout.row([
-                    status_processor_partition_lag, status_processor_rate, status_processor_avg_latency,
-                ], height=6),
-            ])),
+            RowPanel(title="Queue Populator"),
+            layout.row([
+                queue_populator_lag, queue_populator_kafka_injection_rate,
+                layout.column([queue_populator_objects_count, queue_populator_objects_size],
+                                width=4, height=3),
+            ], height=6),
+            layout.row([
+                queue_populator_objects_rate, queue_populator_objects_datarate,
+            ], height=6),
+            RowPanel(title="Queue Processor"),
+            layout.row([
+                queue_processor_lag,  layout.resize([queue_processor_circuit_breaker], width=3),
+                replay_processor_lag, layout.resize([replay_processor_circuit_breaker], width=3)
+            ], height=6),
+            layout.row(queue_processor_rate, height=6),
+            layout.row(queue_processor_speed, height=6),
+            layout.row([
+                queue_processor_status_completed,
+                *layout.resize([queue_processor_ops_by_location], width=4),
+                queue_processor_status_failed,
+                *layout.resize([queue_processor_errors_by_location],  width=4),
+            ], height=6),
+            layout.row([
+                *queue_processor_stage_time,
+                layout.column(queue_processor_stage_avg, width=3, height=3)
+            ], height=9),
+            RowPanel(title="Replay"),
+            layout.row([replay_processor_rate, replay_processor_attempts],
+                        height=6),
+            layout.row([replay_processor_success_attempts, replay_processor_failed_attempts],
+                        height=6),
+            layout.row([replay_count, replay_by_size], height=6),
+            RowPanel(title="Status Processor"),
+            layout.row([
+                status_processor_partition_lag, status_processor_rate, status_processor_avg_latency,
+            ], height=6),
         ]),
     )
     .auto_panel_ids()
