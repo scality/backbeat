@@ -308,7 +308,7 @@ describe('KafkaConnectWrapper', () => {
     });
 
     describe('deleteConnector', () => {
-        it('should only restart connector', async () => {
+        it('should delete a connector', async () => {
             const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves();
             await wrapper.deleteConnector('mongo-source')
             .then(() =>  assert(makeRequestStub.calledOnceWith({
@@ -321,6 +321,24 @@ describe('KafkaConnectWrapper', () => {
         it('should throw error when request fails', async () => {
             sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
             await wrapper.deleteConnector('mongo-source')
+            .catch(err => assert.deepEqual(err, errors.InternalError));
+        });
+    });
+
+    describe('restartConnector', () => {
+        it('should restart a connector', async () => {
+            const makeRequestStub = sinon.stub(wrapper, 'makeRequest').resolves();
+            await wrapper.restartConnector('mongo-source', true, true)
+            .then(() =>  assert(makeRequestStub.calledOnceWith({
+                method: 'POST',
+                path: '/connectors/mongo-source/restart?includeTasks=true&onlyFailed=true',
+            })))
+            .catch(err => assert.ifError(err));
+        });
+
+        it('should throw error when request fails', async () => {
+            sinon.stub(wrapper, 'makeRequest').rejects(errors.InternalError);
+            await wrapper.restartConnector('mongo-source')
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
     });
