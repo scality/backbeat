@@ -266,27 +266,25 @@ class ConnectorsManager {
      */
     async _updateConnectors() {
         const connectorsStatus = {};
-        let connectorUpdateFailed = false;
         await eachLimit(this._connectors, 10, async connector => {
             const startTime = Date.now();
-            connectorsStatus[connector.name] = {
-                numberOfBuckets: connector.bucketCount,
-                updated: null,
-            };
             try {
+                // check if connector is in a failed state and restart it
+                await this._validateConnectorState(connector);
+
                 // check if we need to spawn/despawn the connector
                 // - connector is destroyed if no buckets are configured
                 // - connector is spawned when buckets are configured on it
                 // or update the connector when buckets configuration changed
                 const updated = await this._spawnOrDestroyConnector(connector);
-                connectorsStatus[connector.name].updated = updated;
                 if (updated) {
                     const delta = (Date.now() - startTime) / 1000;
                     this._metricsHandler.onConnectorReconfiguration(connector, true, delta);
+                    connectorsStatus[connector.name] = {
+                        numberOfBuckets: connector.bucketCount,
+                    };
                 }
             } catch (err) {
-                connectorUpdateFailed = true;
-                connectorsStatus[connector.name].updated = false;
                 this._metricsHandler.onConnectorReconfiguration(connector, false);
                 this._logger.error('Failed to updated connector', {
                     method: 'ConnectorsManager._updateConnectors',
@@ -296,14 +294,56 @@ class ConnectorsManager {
                 });
             }
         });
-        const logMessage = connectorUpdateFailed ? 'Failed to update some or all the connectors' :
-            'Successfully updated all the connectors';
-        const logFunction = connectorUpdateFailed ? this._logger.error.bind(this._logger) :
-            this._logger.info.bind(this._logger);
-        logFunction(logMessage, {
-            method: 'ConnectorsManager._updateConnectors',
-            connectorsStatus,
-        });
+        if (Object.keys(connectorsStatus).length > 0) {
+            this._logger.info('Successfully updated connectors', {
+                method: 'ConnectorsManager._updateConnectors',
+                connectorsStatus,
+            });
+        }
+    }
+
+    /**
+     * Checks if connectors are in a failed state and restarts them
+     * @param {connector} connector connector instance
+     * @returns {Promise<undefined>} undefined
+     * @throws {InternalError}
+     */
+    async _validateConnectorState(connector) {
+        if (!connector.isRunning) {
+            return;
+        }
+
+        try {
+            const connectorStatus = await this._kafkaConnect.getConnectorStatus(connector.name);
+            const isConnectorFailed = connectorStatus?.connector?.state === 'FAILED';
+            const areTasksFailed = connectorStatus?.tasks?.some(task => {
+                if (task.state === 'FAILED') {
+                    this._logger.error('Connector task failed', {
+                        method: 'ConnectorsManager._validateConnectorState',
+                        connector: connector.name,
+                        taskId: task.id,
+                        error: task.trace,
+                    });
+                    return true;
+                }
+                return false;
+            });
+            if (isConnectorFailed || areTasksFailed) {
+                await connector.restart();
+                this._metricsHandler.onConnectorRestart(connector);
+                this._logger.info('Successfully restarted a connector', {
+                    method: 'ConnectorsManager._validateConnectorState',
+                    connector: connector.name,
+                });
+            }
+        } catch (err) {
+            this._logger.error('Could not check or reset connector state', {
+                method: 'ConnectorsManager._validateConnectorState',
+                connector: connector.name,
+                error: err.description,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
     }
 
     /**

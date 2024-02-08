@@ -117,7 +117,7 @@ class Allocator {
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {
-                    method: 'Allocator.listenToBucket',
+                    method: 'Allocator.stopListeningToBucket',
                     bucket,
                     connector: connector.name,
                 });
