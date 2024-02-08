@@ -114,12 +114,12 @@ class GcMetrics:
 
 class BacklogMetrics:
     LATEST_PUBLISHED_MESSAGE_TS = metrics.Metric(
-        's3_zenko_queue_latest_published_message_timestamp',
+        's3_backbeat_queue_latest_published_message_timestamp',
         'topic', 'partition', job=['$jobs'], namespace='${namespace}',
     )
 
     DELIVERY_REPORTS_TOTAL = metrics.CounterMetric(
-        's3_zenko_queue_delivery_reports_total',
+        's3_backbeat_queue_delivery_reports_total',
         'status', job=['$jobs'], namespace='${namespace}',
     )
 
@@ -128,23 +128,23 @@ class BacklogMetrics:
             name, 'topic', 'partition', 'group', job=['$jobs'], namespace='${namespace}',
         )
         for name in [
-            's3_zenko_queue_latest_consumed_message_timestamp',
-            's3_zenko_queue_latest_consume_event_timestamp',
+            's3_backbeat_queue_latest_consumed_message_timestamp',
+            's3_backbeat_queue_latest_consume_event_timestamp',
         ]
     ]
 
     REBALANCE_TOTAL = metrics.CounterMetric(
-        's3_zenko_queue_rebalance_total',
+        's3_backbeat_queue_rebalance_total',
         'topic', 'group', 'status', job=['$jobs'], namespace='${namespace}',
     )
 
     SLOW_TASKS = metrics.Metric(
-        's3_zenko_queue_slowTasks_count',
+        's3_backbeat_queue_slowTasks_count',
         'topic', 'partition', 'group', job=['$jobs'], namespace='${namespace}',
     )
 
     TASK_PROCESSING_TIME = metrics.BucketMetric(
-        's3_zenko_queue_task_processing_time_seconds',
+        's3_backbeat_queue_task_processing_time_seconds',
         'topic', 'partition', 'group', 'error', job=['$jobs'], namespace='${namespace}',
     )
 
