@@ -4,6 +4,7 @@ const werelogs = require('werelogs');
 
 const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
+const { errors } = require('arsenal');
 
 const logger = new werelogs.Logger('Connector');
 
@@ -90,6 +91,29 @@ describe('Connector', () => {
             connector._isRunning = true;
             await connector.destroy();
             assert.strictEqual(connector.config['startup.mode.timestamp.start.at.operation.time'], undefined);
+        });
+    });
+
+    describe('restart', () => {
+        it('Should restart connector', async () => {
+            const restartStub = sinon.stub(connector._kafkaConnect, 'restartConnector')
+                .resolves();
+            connector._isRunning = true;
+            await connector.restart();
+            assert(restartStub.calledOnceWith('example-connector'));
+        });
+        it('Should not try to restart a connector that is not spawned', async () => {
+            const restartStub = sinon.stub(connector._kafkaConnect, 'restartConnector')
+                .resolves();
+            connector._isRunning = false;
+            await connector.restart();
+            assert(restartStub.notCalled);
+        });
+        it('Should fail when kafka connect returns an error', async () => {
+            sinon.stub(connector._kafkaConnect, 'restartConnector')
+                .rejects(errors.InternalError);
+            connector._isRunning = true;
+            assert.rejects(connector.restart());
         });
     });
 

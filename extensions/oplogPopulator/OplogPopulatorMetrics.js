@@ -58,6 +58,11 @@ class OplogPopulatorMetrics {
             help: 'Total number of connector configuration submissions to kafka-connect',
             labelNames: ['connector', 'success'],
         });
+        this.connectorRestarts = ZenkoMetrics.createCounter({
+            name: 's3_oplog_populator_connector_restarts',
+            help: 'Total number of connector restarts',
+            labelNames: ['connector'],
+        });
     }
 
     /**
@@ -169,6 +174,24 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metrics', {
                 method: 'OplogPopulatorMetrics.onConnectorReconfiguration',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connector_restarts metric
+     * @param {string} connector connector name
+     * @returns {undefined}
+     */
+    onConnectorRestart(connector) {
+        try {
+            this.connectorRestarts.inc({
+                connector: connector.name,
+            });
+        } catch (error) {
+            this._logger.error('An error occured while pushing metric', {
+                method: 'OplogPopulatorMetrics.onConnectorRestarted',
                 error: error.message,
             });
         }

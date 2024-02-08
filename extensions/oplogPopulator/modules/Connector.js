@@ -199,6 +199,32 @@ class Connector {
     }
 
     /**
+     * Restarts the Kafka-connect mongo connector
+     * @returns {Promise|undefined} undefined
+     * @throws {InternalError}
+     */
+    async restart() {
+        if (!this._isRunning) {
+            this._logger.error('tried restarting a destroyed connector', {
+                method: 'Connector.restart',
+                connector: this._name,
+            });
+            return;
+        }
+        try {
+            // only restarting failed instances of tasks and connector
+            await this._kafkaConnect.restartConnector(this._name, true, true);
+        } catch (err) {
+            this._logger.error('Error while restarting connector', {
+                method: 'Connector.restart',
+                connector: this._name,
+                error: err.description || err.message,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
+    }
+
+    /**
      * Add bucket to this connector
      * Connector is updated with the new bucket list
      * @param {string} bucket bucket to add
