@@ -270,6 +270,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                   .addContext({
                       origin: 'transientSource',
                       reqId: log.getSerializedUids(),
+                      ruleType: 'transient',
                   })
                   .addContext(entry.getLogInfo())
                   .setAttribute('source', sourceAttr)

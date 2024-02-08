@@ -29,7 +29,24 @@ const conductorBucketListings = {
         help: 'Total number of failed bucket listings by lifecycle conductor',
         labelNames: [LIFECYCLE_LABEL_ORIGIN],
     }),
+    throttling: ZenkoMetrics.createCounter({
+        name: 's3_lifecycle_conductor_bucket_list_throttling_total',
+        help: 'Total number of throttled bucket listings by lifecycle conductor',
+        labelNames: [LIFECYCLE_LABEL_ORIGIN],
+    }),
 };
+
+const lifecycleActiveIndexingJobs = ZenkoMetrics.createGauge({
+    name: 's3_lifecycle_active_indexing_jobs',
+    help: 'Number of active indexing jobs',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN],
+});
+
+const lifecycleLegacyTask = ZenkoMetrics.createCounter({
+    name: 's3_lifecycle_legacy_tasks_total',
+    help: 'Number of legacy tasks triggered by lifecycle',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_STATUS],
+});
 
 const lifecycleS3Operations = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_s3_operations_total',
@@ -80,7 +97,7 @@ const lifecycleKafkaPublish = {
 class LifecycleMetrics {
     static handleError(log, err, method) {
         if (log) {
-            log.error('failed to update prometheus metrics', { error: err, method });
+            log.error('failed to update prometheus metrics', { error: Object.assign({}, err), method });
         }
     }
 
@@ -107,9 +124,39 @@ class LifecycleMetrics {
 
     static onBucketListing(log, err) {
         try {
-            conductorBucketListings[err ? 'error' : 'success'].inc({ origin: 'conductor' });
+            if (!err) {
+                conductorBucketListings.success.inc({ origin: 'conductor' });
+            } else if (err.Throttling) {
+                conductorBucketListings.throttling.inc({ origin: 'conductor' });
+            } else {
+                conductorBucketListings.error.inc({ origin: 'conductor' });
+            }
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onBucketListing');
+        }
+    }
+
+    static onActiveIndexingJobsFailed(log) {
+        try {
+            lifecycleActiveIndexingJobs.reset();
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onActiveIndexingJobsFailed');
+        }
+    }
+
+    static onActiveIndexingJobs(log, count) {
+        try {
+            lifecycleActiveIndexingJobs.set({ origin: 'conductor' }, count);
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onActiveIndexingJobs');
+        }
+    }
+
+    static onLegacyTask(log, status) {
+        try {
+            lifecycleLegacyTask.inc({ origin: 'conductor', status });
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLegacyTask');
         }
     }
 

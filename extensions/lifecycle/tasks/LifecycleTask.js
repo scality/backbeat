@@ -1146,6 +1146,7 @@ class LifecycleTask extends BackbeatTask {
             contentLength: objectMD.getContentLength(),
             resultsTopic: this.transitionTasksTopic,
             accountId: params.accountId,
+            transitionTime: new Date(params.transitionTime).toISOString(),
             attempt,
         });
         entry.addContext({
@@ -1239,9 +1240,6 @@ class LifecycleTask extends BackbeatTask {
                 LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
                     isCold ? 'archive' : 'transition',
                     locationName, Date.now() - params.transitionTime);
-                if (isCold) {
-                    entry.setAttribute('metrics.transitionTime', params.transitionTime);
-                }
                 return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
                     err => next(err));
             },
