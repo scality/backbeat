@@ -50,7 +50,7 @@
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
-    "breakbeat": "scality/breakbeat#v1.0.1",
+    "breakbeat": "scality/breakbeat#v1.0.2",
     "bucketclient": "scality/bucketclient#8.1.9",
     "commander": "^2.11.0",
     "eslint-plugin-mocha": "^10.2.0",

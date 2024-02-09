@@ -1452,9 +1452,9 @@ brace-expansion@^1.1.7:
     balanced-match "^1.0.0"
     concat-map "0.0.1"
 
-breakbeat@scality/breakbeat#v1.0.1:
-  version "1.0.1"
-  resolved "https://codeload.github.com/scality/breakbeat/tar.gz/c85885488597cb1f30ece57c8272525fd2c7ae8b"
+breakbeat@scality/breakbeat#v1.0.2:
+  version "1.0.2"
+  resolved "https://codeload.github.com/scality/breakbeat/tar.gz/4d3844424e424a3e0174a70f19715c57f2ae9c1c"
   dependencies:
     "@hapi/joi" "^17.1.1"
     "@types/node" "^18.11.11"
