@@ -1,9 +1,11 @@
 const assert = require('assert');
 const async = require('async');
 const AWS = require('aws-sdk');
+const sinon = require('sinon');
 
 const Logger = require('werelogs').Logger;
 const LifecycleRule = require('arsenal').models.LifecycleRule;
+const ObjectMD = require('arsenal').models.ObjectMD;
 
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const testConfig = require('../../config.json');
@@ -501,6 +503,10 @@ describe('lifecycle task functional tests', function dF() {
         s3Helper = new S3Helper(s3);
     });
 
+    afterEach(() => {
+        sinon.restore();
+    });
+
     // Assert that the results from the bucket processor have the expected data.
     function assertTransitionResult(params) {
         const { data, expectedKeys } = params;
@@ -643,6 +649,94 @@ describe('lifecycle task functional tests', function dF() {
             setupRunLifecycleTask(params, (err, data) => {
                 assert.ifError(err);
                 assertTransitionResult({ data, expectedKeys });
+                return done();
+            });
+        });
+
+        it('transition rules: should mark transition in progress', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('test/obj-1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+
+            const expectedKeys = [
+                'test/obj-1',
+            ];
+
+            sinon.spy(backbeatMetadataProxyMock, 'putMetadata');
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+
+                assert(backbeatMetadataProxyMock.putMetadata.calledOnce);
+
+                // Need an extra API call to find the object's LastModified date, from which we can
+                // calculate the transition time (using `getTransitionTimestamp()` to account for
+                // timestreching used in the tests.
+                return s3.headObject({ Bucket: 'test-bucket', Key: 'test/obj-1' }, (err, data) => {
+                    assert.ifError(err);
+
+                    const transitionTime = lcTask._lifecycleDateTime.getTransitionTimestamp(
+                        params.rules[0].Transitions[0], data.LastModified);
+
+                const md = backbeatMetadataProxyMock.putMetadata.args[0][0].mdBlob;
+                assert.deepEqual(ObjectMD.createFromBlob(md).result, new ObjectMD({
+                    ...objectMD.object1,
+                    'x-amz-scal-transition-in-progress': true,
+                        'x-amz-scal-transition-time': new Date(transitionTime).toISOString(),
+                    'originOp': 's3:LifecycleTransition:Start'
+                }));
+
+                return done();
+                });
+            });
+        });
+
+        it('transition rules: should not mark transition in progress if transition already completed', done => {
+            const params = {
+                scenarioNumber: 1,
+                hasVersioning: false,
+                rules: [
+                    new LifecycleRule()
+                        .addPrefix('test/obj-1')
+                        .addTransitions([{
+                            Days: 0,
+                            StorageClass: 'us-east-2',
+                        }])
+                        .build(),
+                ],
+            };
+
+            const expectedKeys = [
+                'test/obj-1',
+            ];
+
+            sinon.spy(backbeatMetadataProxyMock, 'putMetadata');
+            const getMd = sinon.stub(backbeatMetadataProxyMock, 'getMetadata');
+            getMd.callsArgWith(2, null, {
+                Body: JSON.stringify(objectMD.object1),
+            });
+            getMd.withArgs(sinon.match.has('objectKey', 'test/obj-1')).onSecondCall().callsArgWith(2, null, {
+                Body: JSON.stringify({ ...objectMD.object1, dataStoreName: 'us-east-2' }),
+            });
+
+            setupRunLifecycleTask(params, (err, data) => {
+                assert.ifError(err);
+                assertTransitionResult({ data, expectedKeys });
+
+                assert(backbeatMetadataProxyMock.getMetadata.calledTwice);
+                assert(backbeatMetadataProxyMock.putMetadata.notCalled);
+
                 return done();
             });
         });

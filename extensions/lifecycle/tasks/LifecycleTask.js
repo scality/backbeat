@@ -1586,7 +1586,7 @@ class LifecycleTask extends BackbeatTask {
                     lastModified: obj.LastModified,
                     site: rules.Transition.StorageClass,
                     transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                        rules.Transition, obj.LastModified),
+                        rules.Transition, object.LastModified),
                 }, log, done);
             }
 
