@@ -16,7 +16,7 @@ const bucket = 'testbucket';
 const key = 'testkey';
 const version = 'testversion';
 const accountId = '834789881858';
-const ownerId = 'ownerinfo';
+const owner = 'ownerinfo';
 
 const loc = [{
     key: 'key',
@@ -70,7 +70,7 @@ describe('GarbageCollectorTask', () => {
               .setAttribute('target.key', version)
               .setAttribute('target.version', key)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.ownerId', ownerId);
+              .setAttribute('target.owner', owner);
 
         mdObj.setLocation(loc)
             .setDataStoreName('old-location')
@@ -110,7 +110,7 @@ describe('GarbageCollectorTask', () => {
               .setAttribute('target.key', version)
               .setAttribute('target.version', key)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.ownerId', ownerId);
+              .setAttribute('target.owner', owner);
 
         mdObj.setLocation(loc)
             .setDataStoreName('old-location')
@@ -149,7 +149,7 @@ describe('GarbageCollectorTask', () => {
               .setAttribute('target.key', version)
               .setAttribute('target.version', key)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.ownerId', ownerId);
+              .setAttribute('target.owner', owner);
 
         mdObj.setLocation(loc)
             .setDataStoreName('old-location')
@@ -189,7 +189,7 @@ describe('GarbageCollectorTask', () => {
               .setAttribute('target.key', version)
               .setAttribute('target.version', key)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.ownerId', ownerId);
+              .setAttribute('target.owner', owner);
 
         backbeatMetadataProxyClient.setMdObj(undefined);
 
@@ -218,7 +218,7 @@ describe('GarbageCollectorTask', () => {
               .setAttribute('target.key', version)
               .setAttribute('target.version', key)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.ownerId', ownerId);
+              .setAttribute('target.owner', owner);
 
         backbeatMetadataProxyClient.setMdObj(undefined);
 
