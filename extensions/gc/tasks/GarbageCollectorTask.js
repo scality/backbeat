@@ -23,16 +23,16 @@ class GarbageCollectorTask extends BackbeatTask {
     // account id information is missing.
     // TODO BB-367: replace once replication services uses assume role
     _getAccountId(entry, log, cb) {
-        const { accountId, ownerId } = entry.getAttribute('target');
+        const { accountId, owner } = entry.getAttribute('target');
 
         if (accountId) {
             return process.nextTick(cb, null, accountId);
         }
 
         log.debug('unable to find account id in entry; performing vault request', {
-            ownerId,
+            owner,
         });
-        return this.getAccountId(ownerId, log, cb);
+        return this.getAccountId(owner, log, cb);
     }
 
     _getMetadata(entry, log, done) {
