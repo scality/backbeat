@@ -271,7 +271,7 @@ class GarbageCollectorTask extends BackbeatTask {
             if (err) {
                 // if error occurs, do not commit offset unless the error is ObjNotFound
                 // because it means the object has been deleted by other means and we don't need to retry
-                if (err.code === 'ObjNotFound') {
+                if (err.code === 'ObjNotFound' || err.code === 'NoSuchBucket') {
                     return done(err, { committable: true });
                 }
                 return done(err, { committable: false });
