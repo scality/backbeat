@@ -112,7 +112,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
-        const { bucket, key, version, eTag } = entry.getAttribute('target');
+        const { bucket, key, version, eTag, accountId } = entry.getAttribute('target');
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
@@ -125,7 +125,8 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
               })
               .setAttribute('source', entry.getAttribute('source'))
               .setAttribute('serviceName', 'lifecycle-transition')
-              .setAttribute('target.locations', locations);
+              .setAttribute('target.locations', locations)
+              .setAttribute('target.accountId', accountId);
         this.gcProducer.publishActionEntry(gcEntry);
         return process.nextTick(done);
     }
