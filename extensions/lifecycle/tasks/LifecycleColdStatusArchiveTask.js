@@ -13,13 +13,14 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             bucketName: bucket,
             objectKey: key,
             objectVersion: version,
-            accountId
+            accountId,
+            ownerId,
         } = entry.target;
-        return { bucket, key, version, accountId };
+        return { bucket, key, version, accountId, ownerId };
     }
 
     _garbageCollectArchivedSource(entry, oldLocation, newLocation, log) {
-        const { bucket, key, version, accountId, owner } = this.getTargetAttribute(entry);
+        const { bucket, key, version, accountId, ownerId } = this.getTargetAttribute(entry);
         const gcEntry = ActionQueueEntry.create('deleteArchivedSourceData')
               .addContext({
                   origin: 'lifecycle',
@@ -36,7 +37,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
               .setAttribute('target.key', key)
               .setAttribute('target.version', version)
               .setAttribute('target.accountId', accountId)
-              .setAttribute('target.owner', owner);
+              .setAttribute('target.ownerId', ownerId);
         this.gcProducer.publishActionEntry(gcEntry, err => {
             LifecycleMetrics.onKafkaPublish(log, 'GCTopic', 'archive', err, 1);
         });
