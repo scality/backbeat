@@ -1251,6 +1251,21 @@ class LifecycleTask extends BackbeatTask {
                     return next(err, objectMD);
                 }),
             (objectMD, next) => {
+                const dataStoreName = objectMD.getDataStoreName();
+                if (params.site === dataStoreName) {
+                    // If the object is in "target" location, it means the transition has already
+                    // completed, which may happen since we push the message to kafka before
+                    // updating metadata: we must thus simply skip the metadata update, which would
+                    // end up leaving the transition-in-progress flag forever.
+                    log.info('object already transitioned', {
+                        bucket: params.bucket,
+                        objectKey: params.objectKey,
+                        versionId: params.versionId,
+                        dataStoreName,
+                    });
+                    return next();
+                }
+
                 // Update object metadata with "x-amz-scal-transition-in-progress"
                 // to avoid transitioning object a second time from a new batch.
                 objectMD.setTransitionInProgress(true, params.transitionTime);
@@ -1571,7 +1586,7 @@ class LifecycleTask extends BackbeatTask {
                     lastModified: obj.LastModified,
                     site: rules.Transition.StorageClass,
                     transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                        rules.Transition, obj.LastModified),
+                        rules.Transition, object.LastModified),
                 }, log, done);
             }
 
