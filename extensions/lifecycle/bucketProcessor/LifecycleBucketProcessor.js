@@ -16,9 +16,13 @@ const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
 const {
-    updateCircuitBreakerConfigForImplicitOutputQueue
+    updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
+const {
+    extractBucketProcessorCircuitBreakerConfigs,
+} = require('../CircuitBreakerGroup');
 const { lifecycleTaskVersions } = require('../../../lib/constants');
+const locations = require('../../../conf/locationConfig.json');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
 
@@ -155,11 +159,21 @@ class LifecycleBucketProcessor {
             }
         });
 
+        const globalCircuitBreakerConfig = extractBucketProcessorCircuitBreakerConfigs(
+                this._lcConfig.bucketProcessor.circuitBreaker,
+                this._lcConfig,
+                this._repConfig,
+                locations,
+                this._log,
+        );
+
         this._circuitBreakerConfig = updateCircuitBreakerConfigForImplicitOutputQueue(
-            this._lcConfig.bucketProcessor.circuitBreaker,
+            globalCircuitBreakerConfig.global,
             this._lcConfig.objectProcessor.groupId,
             this._lcConfig.objectTasksTopic,
         );
+
+        this._circuitBreakers = globalCircuitBreakerConfig.circuitBreakerGroup;
     }
 
     /**
@@ -178,6 +192,7 @@ class LifecycleBucketProcessor {
             ncvHeap: this.ncvHeap,
             pausedLocations: this._pausedLocations,
             lcOptions: this._lcOptions,
+            circuitBreakers: this._circuitBreakers,
             log: this._log,
         };
     }
