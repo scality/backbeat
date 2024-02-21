@@ -23,16 +23,16 @@ class GarbageCollectorTask extends BackbeatTask {
     // account id information is missing.
     // TODO BB-367: replace once replication services uses assume role
     _getAccountId(entry, log, cb) {
-        const { accountId, ownerId } = entry.getAttribute('target');
+        const { accountId, owner } = entry.getAttribute('target');
 
         if (accountId) {
             return process.nextTick(cb, null, accountId);
         }
 
         log.debug('unable to find account id in entry; performing vault request', {
-            ownerId,
+            owner,
         });
-        return this.getAccountId(ownerId, log, cb);
+        return this.getAccountId(owner, log, cb);
     }
 
     _getMetadata(entry, log, done) {
@@ -271,7 +271,7 @@ class GarbageCollectorTask extends BackbeatTask {
             if (err) {
                 // if error occurs, do not commit offset unless the error is ObjNotFound
                 // because it means the object has been deleted by other means and we don't need to retry
-                if (err.code === 'ObjNotFound') {
+                if (err.code === 'ObjNotFound' || err.code === 'NoSuchBucket') {
                     return done(err, { committable: true });
                 }
                 return done(err, { committable: false });

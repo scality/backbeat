@@ -13,9 +13,10 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             bucketName: bucket,
             objectKey: key,
             objectVersion: version,
-            accountId
+            accountId,
+            owner,
         } = entry.target;
-        return { bucket, key, version, accountId };
+        return { bucket, key, version, accountId, owner };
     }
 
     _garbageCollectArchivedSource(entry, oldLocation, newLocation, log) {

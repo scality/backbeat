@@ -276,7 +276,7 @@ class UpdateReplicationStatus extends BackbeatTask {
                   .setAttribute('source', sourceAttr)
                   .setAttribute('target.locations', locations)
                   .setAttribute('target.accountId', entry.getAccountId())
-                  .setAttribute('target.ownerId', entry.getOwnerId());
+                  .setAttribute('target.owner', entry.getOwnerId());
             this.gcProducer.publishActionEntry(gcEntry);
         }
         return cb();
