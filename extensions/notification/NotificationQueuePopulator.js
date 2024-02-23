@@ -125,8 +125,16 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 key,
                 eventType,
             });
+            const pushedToTopic = new Map();
             // validate and push kafka message foreach destination topic
             this.notificationConfig.destinations.forEach(destination => {
+                const topic = destination.internalTopic ||
+                    this.notificationConfig.topic;
+                // avoid pushing a message multiple times to the
+                // same internal topic
+                if (pushedToTopic[topic]) {
+                    return undefined;
+                }
                 // get destination specific notification config
                 const destBnConf = config.queueConfig.find(
                     c => c.queueArn.split(':').pop()
@@ -152,15 +160,15 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         eventType,
                         eventTime: message.dateTime,
                     });
-                    const internalTopic = destination.internalTopic ||
-                        this.notificationConfig.topic;
-                    this.publish(internalTopic,
+                    this.publish(topic,
                         // keeping all messages for same object
                         // in the same partition to keep the order.
                         // here we use the object name and not the
                         // "_id" which also includes the versionId
                         `${bucket}/${message.key}`,
                         JSON.stringify(message));
+                    // keep track of internal topics we have pushed to
+                    pushedToTopic[topic] = true;
                 }
                 return undefined;
             });
