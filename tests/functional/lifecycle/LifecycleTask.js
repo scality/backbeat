@@ -1,7 +1,7 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const async = require('async');
 const AWS = require('aws-sdk');
-const sinon = require('sinon');
 
 const Logger = require('werelogs').Logger;
 const LifecycleRule = require('arsenal').models.LifecycleRule;
@@ -410,6 +410,10 @@ class LifecycleBucketProcessorMock {
         this._kafkaBacklogMetrics.setProducer(this._producer);
         this.ncvHeap = new Map();
         this.lcOptions = timeOptions;
+        this._tripped = false;
+        this._circuitBreakers = {
+            tripped: () => this._tripped,
+        };
     }
 
     getCount() {
@@ -438,6 +442,7 @@ class LifecycleBucketProcessorMock {
             log: this._log,
             ncvHeap: this.ncvHeap,
             lcOptions: timeOptions,
+            circuitBreakers: this._circuitBreakers,
         };
     }
 
@@ -445,6 +450,11 @@ class LifecycleBucketProcessorMock {
         this._producer.reset();
         this._kafkaBacklogMetrics.reset();
         this.ncvHeap.clear();
+        this._tripped = false;
+    }
+
+    setTripped(tripped) {
+        this._tripped = tripped;
     }
 }
 
@@ -2003,4 +2013,69 @@ describe('lifecycle task functional tests', function dF() {
             });
         });
     }); // end incomplete mpu objects block
+
+    describe('lifecycle tasks circuit breaker tests', () => {
+        afterEach(done => {
+            lcp.reset();
+            s3Helper.emptyAndDeleteBucket(err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        [
+            {
+                scenario: 1,
+                versioning: false,
+                prefix: 'test/'
+            }, {
+                scenario: 2,
+                versioning: true,
+                prefix: 'version-'
+            }
+        ].forEach(item => {
+            it('should not transition objects when circuit breaker is triggered ' +
+                `(${item.versioning ? '' : 'not '}versioned)`, done => {
+                lcp.setTripped(true);
+                const params = {
+                    scenarioNumber: item.scenario,
+                    hasVersioning: item.versioning,
+                    rules: [
+                        new LifecycleRule()
+                            .addPrefix(item.prefix)
+                            .addTransitions([{
+                                Days: 0,
+                                StorageClass: 'us-east-2',
+                            }])
+                            .build(),
+                    ],
+                };
+                setupRunLifecycleTask(params, (err, data) => {
+                    assert.ifError(err);
+                    assertTransitionResult({ data, expectedKeys: [] });
+                    return done();
+                });
+            });
+
+            it('should not expire objects if circuit breaker is triggered ' +
+            `(${item.versioning ? '' : 'not '}versioned)`, done => {
+                lcp.setTripped(true);
+                const params = {
+                    scenarioNumber: item.scenario,
+                    hasVersioning: item.versioning,
+                    rules: [
+                        new LifecycleRule()
+                            .addPrefix(item.prefix)
+                            .addExpiration('Date', CURRENT)
+                            .build(),
+                    ],
+                };
+                setupRunLifecycleTask(params, (err, data) => {
+                    assert.ifError(err);
+                    assert.strictEqual(data.count.object, 0);
+                    return done();
+                });
+            });
+        });
+    });
 });

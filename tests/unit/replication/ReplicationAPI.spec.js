@@ -77,4 +77,24 @@ describe('ReplicationAPI', () => {
             });
         });
     });
+
+    describe('getDataMoverTopicPerLocation', () => {
+        it('should return the correct topic for a cold location', () => {
+            const location = 'location-dmf-v1';
+            const topic = ReplicationAPI.getDataMoverTopicPerLocation(location);
+            assert.strictEqual(topic, 'cold-archive-req-location-dmf-v1');
+        });
+
+        it('should return the correct topic for a hot location', () => {
+            const location = 'us-east-1';
+            const topic = ReplicationAPI.getDataMoverTopicPerLocation(location);
+            assert.strictEqual(topic, 'backbeat-data-mover');
+        });
+
+        it('should return empty string for an unknown location', () => {
+            const location = 'unknown';
+            const topic = ReplicationAPI.getDataMoverTopicPerLocation(location);
+            assert.strictEqual(topic, '');
+        });
+    });
 });
