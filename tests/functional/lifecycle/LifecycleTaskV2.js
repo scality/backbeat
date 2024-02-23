@@ -80,6 +80,9 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 pausedLocations: new Set(),
                 log,
                 lcOptions: timeOptions,
+                circuitBreakers: {
+                    tripped: () => false,
+                },
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);

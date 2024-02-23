@@ -80,6 +80,9 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 log,
                 lcOptions: timeOptions,
                 ncvHeap: new Map(),
+                circuitBreakers: {
+                    tripped: () => false,
+                },
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);

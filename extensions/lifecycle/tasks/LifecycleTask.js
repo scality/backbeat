@@ -29,6 +29,8 @@ const errorReplicationInProgress = errors.InternalError.
     customizeDescription('replication of the object is currently in progress');
 const errorLocationPaused = errors.InternalError.
     customizeDescription('lifecycle events to location have been paused');
+const errorCircuitBreakerTripped = errors.Throttling.
+    customizeDescription('circuit breaker tripped, skipping action');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -161,9 +163,21 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _sendObjectAction(entry, cb) {
+        const location = entry.getAttribute('details.dataStoreName');
+
+        const shouldBreak = this.circuitBreakers.tripped(
+            'expiration',
+            location,
+            this.objectTasksTopic,
+        );
+        if (shouldBreak) {
+            process.nextTick(() => cb(errorCircuitBreakerTripped));
+            return;
+        }
+
         LifecycleMetrics.onLifecycleTriggered(this.log, 'bucket',
             entry.getActionType() === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
-            entry.getAttribute('details.dataStoreName'),
+            location,
             Date.now() - entry.getAttribute('transitionTime'));
 
         const entries = [{ message: entry.toKafkaMessage() }];
@@ -1198,6 +1212,15 @@ class LifecycleTask extends BackbeatTask {
                 if (this.pausedLocations.has(params.site)) {
                     return next(errorLocationPaused);
                 }
+                const topic = ReplicationAPI.getDataMoverTopicPerLocation(params.site);
+                const shouldBreak = this.circuitBreakers.tripped(
+                    'transition',
+                    params.site,
+                    topic,
+                );
+                if (shouldBreak) {
+                    return next(errorCircuitBreakerTripped);
+                }
                 return next();
             },
             next =>
@@ -1243,7 +1266,7 @@ class LifecycleTask extends BackbeatTask {
                 return ReplicationAPI.sendDataMoverAction(this.producer, entry, log,
                     err => next(err));
             },
-            (next) =>
+            next =>
                 // Refresh metadata to minimize risk of race condition on ObjectMD update
                 // c.f. https://scality.atlassian.net/browse/ARSN-341
                 this._getObjectMD(params, log, (err, objectMD) => {

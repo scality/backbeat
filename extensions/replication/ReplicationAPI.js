@@ -126,6 +126,24 @@ class ReplicationAPI {
         });
     }
 
+    /**
+     * Returns the appropriate topic based on
+     * the location temperature
+     * @param {string} location location name
+     * @returns {string} topic name
+     */
+    static getDataMoverTopicPerLocation(location) {
+        let topic = dataMoverTopic;
+        const locationConfig = locations[location];
+        if (!locationConfig) {
+            return '';
+        }
+        if (locationConfig.isCold) {
+            topic = `${coldStorageArchiveTopicPrefix}${location}`;
+        }
+        return topic;
+    }
+
     static getDataMoverTopic() {
         return dataMoverTopic;
     }
