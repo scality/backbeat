@@ -11,6 +11,7 @@ const {
 } = config.extensions.lifecycle;
 
 const LifecycleQueuePopulator = require('../../../extensions/lifecycle/LifecycleQueuePopulator');
+const { errors } = require('arsenal');
 
 const logger = new werelogs.Logger('test:LifecycleQueuePopulator');
 
@@ -434,6 +435,7 @@ describe('LifecycleQueuePopulator', () => {
                     'x-amz-storage-class': 'STANDARD',
                     'dataStoreName': 'us-east-1',
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: false,
             },
             {
@@ -444,6 +446,7 @@ describe('LifecycleQueuePopulator', () => {
                     ...objMd,
                     versionId: '98500086134471999999RG001  0',
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: false,
             },
             {
@@ -455,6 +458,7 @@ describe('LifecycleQueuePopulator', () => {
                     versionId: '98500086134471999999RG001  0',
                     isNull: true,
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: false,
             },
             {
@@ -465,6 +469,7 @@ describe('LifecycleQueuePopulator', () => {
                     ...objMd,
                     isDeleteMarker: true,
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: false,
             },
             {
@@ -477,6 +482,7 @@ describe('LifecycleQueuePopulator', () => {
                     'x-amz-storage-class': 'azure-archive',
                     'dataStoreName': 'azure-archive',
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: false,
             },
             {
@@ -487,6 +493,7 @@ describe('LifecycleQueuePopulator', () => {
                     ...objMd,
                     versionId: '98500086134471999999RG001  0',
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: true,
             },
             {
@@ -496,6 +503,7 @@ describe('LifecycleQueuePopulator', () => {
                 md: {
                     ...objMd,
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: true,
             },
             {
@@ -507,10 +515,36 @@ describe('LifecycleQueuePopulator', () => {
                     versionId: '98500086134471999999RG001  0',
                     isNull: true,
                 },
+                getAccountIdResponse: [null, '1234'],
                 called: true,
+            },
+            {
+                it: 'should still push when we fail to get accountId',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    versionId: '98500086134471999999RG001  0',
+                    isNull: true,
+                },
+                getAccountIdResponse: [errors.InternalError, ''],
+                called: true,
+            },
+            {
+                it: 'should ignore if producer not found',
+                type: 'delete',
+                key: 'object',
+                md: {
+                    ...objMd,
+                    'x-amz-storage-class': 'dmf-v2',
+                    'dataStoreName': 'dmf-v2',
+                },
+                getAccountIdResponse: [null, ''],
+                called: false,
             },
         ].forEach(params => {
             it(params.it, () => {
+                lcqp.vaultClientWrapper.getAccountId = sinon.stub().yields(...params.getAccountIdResponse);
                 const timestamp = new Date();
                 const entry = {
                     type: params.type,
@@ -533,6 +567,7 @@ describe('LifecycleQueuePopulator', () => {
                     archiveInfo: params.md.archive.archiveInfo,
                     requestId: message.requestId,
                     transitionTime: timestamp.toISOString(),
+                    accountId: params.getAccountIdResponse[1],
                 };
                 if (params.md.versionId) {
                     expectedMessage.objectVersion = encode(params.md.versionId);
