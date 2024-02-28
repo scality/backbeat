@@ -295,6 +295,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
 
             if (err) {
                 this.log.error('unable to get account', {
+                    method: 'LifecycleQueuePopulator._handleRestoreOp',
                     ownerId,
                     err,
                 });
@@ -422,48 +423,63 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        this.log.trace(
-            'publishing object delete entry',
-            { bucket: entry.bucket, key: entry.key, version: value.versionId },
-        );
+        const ownerId = value['owner-id'];
+        this.vaultClientWrapper.getAccountId(ownerId, (err, accountId) => {
+            // In case of failure, we still send the delete request to Sorbet forwarder
+            // without the accountId. The accountId is not used for delete operations. It is
+            // only included for consistency with other operations.
+            if (err) {
+                this.log.error('unable to get account', {
+                    method: 'LifecycleQueuePopulator._handleDeleteOp',
+                    ownerId,
+                    err,
+                });
+            }
 
-        const topic = `${coldStorageGCTopicPrefix}${locationName}`;
-        const key = `${entry.bucket}/${entry.key}`;
+            this.log.trace(
+                'publishing object delete entry',
+                { bucket: entry.bucket, key: entry.key, version: value.versionId },
+            );
 
-        let version;
-        if (value.versionId) {
-            version = encode(value.versionId);
-        }
+            const topic = `${coldStorageGCTopicPrefix}${locationName}`;
+            const key = `${entry.bucket}/${entry.key}`;
 
-        const message = JSON.stringify({
-            bucketName: entry.bucket,
-            objectKey: value.key,
-            objectVersion: version,
-            archiveInfo: value.archive.archiveInfo,
-            requestId: uuid(),
-            transitionTime: new Date(entry.overheadFields.commitTimestamp).toISOString(),
+            let version;
+            if (value.versionId) {
+                version = encode(value.versionId);
+            }
+
+            const message = JSON.stringify({
+                bucketName: entry.bucket,
+                objectKey: value.key,
+                objectVersion: version,
+                archiveInfo: value.archive.archiveInfo,
+                requestId: uuid(),
+                transitionTime: new Date(entry.overheadFields.commitTimestamp).toISOString(),
+                accountId: accountId || '',
+            });
+
+            const producer = this._producers[topic];
+            if (producer) {
+                LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive:gc',
+                    locationName, Date.now() - entry.overheadFields.commitTimestamp);
+
+                const kafkaEntry = { key: encodeURIComponent(key), message };
+                producer.send([kafkaEntry], err => {
+                    LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageGCTopic', 'queuePopulator', err, 1);
+                    if (err) {
+                        this.log.error('error publishing object delete request entry', {
+                            error: err,
+                            method: 'LifecycleQueuePopulator._handleDeleteOp',
+                        });
+                    }
+                });
+            } else {
+                this.log.error(`producer not available for location ${locationName}`, {
+                    method: 'LifecycleQueuePopulator._handleDeleteOp',
+                });
+            }
         });
-
-        const producer = this._producers[topic];
-        if (producer) {
-            LifecycleMetrics.onLifecycleTriggered(this.log, 'queuePopulator', 'archive:gc',
-                locationName, Date.now() - entry.overheadFields.commitTimestamp);
-
-            const kafkaEntry = { key: encodeURIComponent(key), message };
-            producer.send([kafkaEntry], err => {
-                LifecycleMetrics.onKafkaPublish(this.log, 'ColdStorageGCTopic', 'queuePopulator', err, 1);
-                if (err) {
-                    this.log.error('error publishing object delete request entry', {
-                        error: err,
-                        method: 'LifecycleQueuePopulator._handleDeleteOp',
-                    });
-                }
-            });
-        } else {
-            this.log.error(`producer not available for location ${locationName}`, {
-                method: 'LifecycleQueuePopulator._handleDeleteOp',
-            });
-        }
     }
 
     /**
