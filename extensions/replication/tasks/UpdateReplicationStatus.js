@@ -1,7 +1,5 @@
 const errors = require('arsenal').errors;
 const assert = require('assert');
-const async = require('async');
-const util = require('util');
 
 const config = require('../../../lib/Config');
 
@@ -9,10 +7,6 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
-
-const notifConstants = require('../../notification/constants');
-const messageUtil = require('../../notification/utils/message');
-const configUtil = require('../../notification/utils/config');
 
 const {
     metricsExtension,
@@ -45,11 +39,6 @@ class UpdateReplicationStatus extends BackbeatTask {
         this.backbeatSourceClient = new BackbeatMetadataProxy(
             `${transport}://${s3.host}:${s3.port}`, auth, this.sourceHTTPAgent);
 
-        if (this.notificationConfigManager) {
-            // callback version of notificationConfigManager's getConfig function
-            this.getNotificationConfig = util.callbackify(this.notificationConfigManager.getConfig
-                .bind(this.notificationConfigManager));
-        }
     }
 
     processQueueEntry(sourceEntry, done) {
@@ -246,7 +235,6 @@ class UpdateReplicationStatus extends BackbeatTask {
         }
         const versionId =
             sourceEntry.getReplicationSiteDataStoreVersionId(site);
-        entry.setOriginOp('');
         entry.setReplicationSiteDataStoreVersionId(site, versionId);
         entry.setSite(site);
         return entry;
@@ -378,9 +366,6 @@ class UpdateReplicationStatus extends BackbeatTask {
             if (this.repConfig.monitorReplicationFailures) {
                 this._pushFailedEntry(queueEntry, log);
             }
-            if (this.bucketNotificationConfig) {
-                this._publishFailedReplicationStatusNotification(queueEntry, log);
-            }
             const labels = {
                 location: site,
                 replayCount: totalAttempts - count,
@@ -464,110 +449,6 @@ class UpdateReplicationStatus extends BackbeatTask {
                         updatedSourceEntry, log, done);
                 });
             });
-    }
-
-    /**
-     * Publishes the failed replication event
-     * into the notification topic
-     * @param {Object} sourceEntry the object entry
-     * @param {Logger} log the logger instance
-     * @param {Function} done optional callback when all notification have been posted
-     * @return {undefined}
-     */
-    _publishFailedReplicationStatusNotification(sourceEntry, log, done) {
-        const bucket = sourceEntry.getBucket();
-        const key = sourceEntry.getObjectKey();
-        const value = sourceEntry.getValue();
-        const versionId = sourceEntry.getVersionId();
-        this.getNotificationConfig(bucket, (err, config) => {
-            if (err) {
-                log.error('error while getting bucket notification configuration', {
-                    method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                    entry: sourceEntry.getLogInfo(),
-                    error: err,
-                });
-            }
-            // we skip if no config is available for the bucket
-            if (config && Object.keys(config).length > 0) {
-                const eventType = notifConstants.replicationFailedEvent;
-                const ent = {
-                    bucket,
-                    key,
-                    versionId,
-                    eventType,
-                    dateTime: new Date().toISOString(),
-                };
-                log.debug('validating entry', {
-                    method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                    bucket,
-                    key,
-                    versionId,
-                    eventType,
-                });
-                // validate and push kafka message to each destination internal topic
-                async.each(this.bucketNotificationConfig.destinations,
-                    (destination, cb) => {
-                        // get destination specific notification config
-                        const destBnConf = config.queueConfig.find(
-                            c => c.queueArn.split(':').pop()
-                            === destination.resource);
-                        if (!destBnConf) {
-                            // skip, if there is no config for the current
-                            // destination resource
-                            return cb();
-                        }
-                        // pass only destination specific config to
-                        // validate entry
-                        const bnConfig = {
-                            queueConfig: [destBnConf],
-                        };
-                        // skip if entry doesn't match config
-                        if (!configUtil.validateEntry(bnConfig, ent)) {
-                            return cb();
-                        }
-                        const message
-                            = messageUtil.addLogAttributes(value, ent);
-                        log.info('publishing replication failed notification', {
-                            method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                            bucket,
-                            key: message.key,
-                            eventType,
-                            eventTime: message.dateTime,
-                        });
-                        const entry = {
-                            key: encodeURIComponent(bucket),
-                            message: JSON.stringify(message)
-                        };
-                        return this.notificationProducers[destination.resource].send([entry], err => {
-                            if (err) {
-                                log.error('error in entry delivery to notification topic', {
-                                    method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                                    destination: destination.resource,
-                                    entry: sourceEntry.getLogInfo(),
-                                    error: err,
-                                });
-                            }
-                            return cb();
-                        });
-                }, err => {
-                    if (err) {
-                        log.error('error while pushing replication failed notification', {
-                            method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                            entry: sourceEntry.getLogInfo(),
-                            error: err,
-                        });
-                    }
-                    log.info('Successfully pushed failed replication event to notification topic', {
-                        method: 'UpdateReplicationStatus._publishFailedReplicationStatusNotification',
-                        bucket,
-                        key,
-                    });
-                    if (done) {
-                        done(err);
-                    }
-                });
-            }
-        });
     }
 }
 
