@@ -32,14 +32,14 @@ jobs:
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
-        password: ${{ secrets.GITHUB_TOKEN }}
+        password: ${{ github.token }}
 
     - name: Build and push kafka
       uses: docker/build-push-action@v2
       with:
         push: true
         context: .github/dockerfiles/kafka
-        tags: "ghcr.io/scality/backbeat/ci-kafka:${{ github.sha }}"
+        tags: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
         cache-from: type=local,src=/tmp/.buildx-cache
         cache-to: type=local,dest=/tmp/.buildx-cache-new,mode=max
 
@@ -60,7 +60,7 @@ jobs:
         ports:
         - 6379:6379
       kafka:
-        image: ghcr.io/scality/backbeat/ci-kafka:${{ github.sha }}
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
         credentials:
           username: ${{ github.repository_owner }}
           password: ${{ secrets.GITHUB_TOKEN }}
