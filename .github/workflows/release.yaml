@@ -39,7 +39,7 @@ jobs:
 
       - name: Push dashboards into the production namespace
         run: |
-          oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-dashboards:${{ github.event.inputs.tag }} \
+          oras push ghcr.io/${{ github.repository }}/${{ env.PROJECT_NAME }}-dashboards:${{ github.event.inputs.tag }} \
             ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
             ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
             ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
@@ -58,7 +58,7 @@ jobs:
 
       - name: Push policies into the production namespace
         run: |
-          oras push ${{ env.REGISTRY_NAME }}/${{ env.PROJECT_NAME }}/${{ env.PROJECT_NAME }}-policies:${{ github.event.inputs.tag }} \
+          oras push ghcr.io/${{ github.repository }}/${{ env.PROJECT_NAME }}-policies:${{ github.event.inputs.tag }} \
             extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
             extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
             extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
