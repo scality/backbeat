@@ -329,6 +329,17 @@ class LifecycleBucketProcessor {
                 return cb();
             }
 
+            const stuckChance = Number(process.env.STUCK_TASK_PERCENT) / 100;
+            if (Math.random() < stuckChance) {
+                this._log.error('stuck task simulation', {
+                    method: 'LifecycleBucketProcessor._processBucketEntry',
+                    bucket,
+                    owner,
+                    details: result.details,
+                });
+                return undefined;
+            }
+
             let task;
 
             if (taskVersion === lifecycleTaskVersions.v1 || !taskVersion) {
