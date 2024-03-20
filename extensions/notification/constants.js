@@ -12,7 +12,6 @@ const constants = {
     authFilesFolder: 'ssl',
     supportedAuthTypes: ['kerberos'],
     deleteEvent: 's3:ObjectRemoved:Delete',
-    replicationFailedEvent: 's3:Replication:OperationFailedReplication',
     eventMessageProperty: {
         eventType: 'originOp',
         region: 'dataStoreName',

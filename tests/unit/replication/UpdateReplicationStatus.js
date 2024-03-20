@@ -6,16 +6,15 @@ const UpdateReplicationStatus =
 const ReplicationStatusProcessor =
     require('../../../extensions/replication/replicationStatusProcessor/ReplicationStatusProcessor');
 const QueueEntry = require('../../../lib/models/QueueEntry');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const { replicationEntry } = require('../../utils/kafkaEntries');
-const { sourceEntry } = require('../../utils/mockEntries');
 
 const { Logger } = require('werelogs');
 const log = new Logger('test:UpdateReplicationStatus');
 
 const config = require('../../config.json');
 const fakeLogger = require('../../utils/fakeLogger');
-const configUtil = require('../../../extensions/notification/utils/config');
-const { notification } = require('../../config.notification.json').extensions;
+const { ObjectMD } = require('arsenal/build/lib/models');
 
 function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)
@@ -65,8 +64,7 @@ describe('UpdateReplicationStatus._getUpdatedSourceEntry()', () => {
               ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
         checkReplicationInfo('sf', 'COMPLETED', updatedSourceEntry);
         checkReplicationInfo('replicationaws', 'PENDING', updatedSourceEntry);
-        // originOp should have been reset before putting metadata
-        assert.strictEqual(updatedSourceEntry.getOriginOp(), '');
+        assert.strictEqual(updatedSourceEntry.getOriginOp(), 's3:Replication:OperationCompletedReplication');
     });
 
     it('should return null when site status is COMPLETED and existing site ' +
@@ -129,7 +127,7 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
         sinon.restore();
     });
 
-    it('should publish replication failure notification when replay is disabled', done => {
+    it('should trigger replication failure notification when replay is disabled', done => {
         const task = new UpdateReplicationStatus({
             getStateVars: () => ({
                 repConfig: {
@@ -138,24 +136,20 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 sourceConfig: config.extensions.replication.source,
                 destConfig: config.extensions.replication.destination,
-                bucketNotificationConfig: notification,
-                notificationConfigManager: {
-                    getConfig: () => null
-                },
             }),
         }, metricHandlers);
-        const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+        const entry = new ObjectQueueEntry('test', '', new ObjectMD());
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
-        const getReplayCountStub = sinon.stub(sourceEntry, 'getReplayCount');
+        const getReplayCountStub = sinon.stub(entry, 'getReplayCount');
 
-        task._handleFailedReplicationEntry(sourceEntry, sourceEntry, 'test-site-2', fakeLogger);
+        const outEntry = task._handleFailedReplicationEntry(entry, entry, 'test-site-2', fakeLogger);
         assert(getReplayCountStub.notCalled);
         assert(pushRelayEntryStub.notCalled);
-        assert(publishNotificationStub.calledOnceWith(sourceEntry, fakeLogger));
+        assert.strictEqual(outEntry.getOriginOp(), 's3:Replication:OperationFailedReplication');
         return done();
     });
 
-    it('should publish replication failure notification when replayCount is 0', done => {
+    it('should trigger replication failure notification when replayCount is 0', done => {
         const task = new UpdateReplicationStatus({
             getStateVars: () => ({
                 repConfig: {
@@ -164,24 +158,20 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 sourceConfig: config.extensions.replication.source,
                 destConfig: config.extensions.replication.destination,
-                bucketNotificationConfig: notification,
-                notificationConfigManager: {
-                    getConfig: () => null
-                },
                 replayTopics: ['replay-topic'],
             }),
         }, metricHandlers);
-        const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+        const entry = new ObjectQueueEntry('test', '', new ObjectMD());
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
-        sinon.stub(sourceEntry, 'getReplayCount').returns(0);
+        sinon.stub(entry, 'getReplayCount').returns(0);
 
-        task._handleFailedReplicationEntry(sourceEntry, sourceEntry, 'test-site-2', fakeLogger);
+        const outEntry = task._handleFailedReplicationEntry(entry, entry, 'test-site-2', fakeLogger);
         assert(pushRelayEntryStub.notCalled);
-        assert(publishNotificationStub.calledOnceWith(sourceEntry, fakeLogger));
+        assert.strictEqual(outEntry.getOriginOp(), 's3:Replication:OperationFailedReplication');
         return done();
     });
 
-    it('should not publish replication failure notification on first replay', done => {
+    it('should not trigger replication failure notification on first replay', done => {
         const task = new UpdateReplicationStatus({
             getStateVars: () => ({
                 repConfig: {
@@ -190,24 +180,20 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 sourceConfig: config.extensions.replication.source,
                 destConfig: config.extensions.replication.destination,
-                bucketNotificationConfig: notification,
-                notificationConfigManager: {
-                    getConfig: () => null
-                },
                 replayTopics: ['replay-topic'],
             }),
         }, metricHandlers);
-        const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+        const entry = new ObjectQueueEntry('test', '', new ObjectMD());
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
-        sinon.stub(sourceEntry, 'getReplayCount').returns(null);
+        sinon.stub(entry, 'getReplayCount').returns(null);
 
-        task._handleFailedReplicationEntry(sourceEntry, sourceEntry, 'test-site-2', fakeLogger);
-        assert(pushRelayEntryStub.calledOnceWith(sourceEntry, 'test-site-2', fakeLogger));
-        assert(publishNotificationStub.notCalled);
+        const outEntry = task._handleFailedReplicationEntry(entry, entry, 'test-site-2', fakeLogger);
+        assert(pushRelayEntryStub.calledOnceWith(entry, 'test-site-2', fakeLogger));
+        assert(!outEntry);
         return done();
     });
 
-    it('should not publish replication failure notification on next replay', done => {
+    it('should not trigger replication failure notification on next replay', done => {
         const task = new UpdateReplicationStatus({
             getStateVars: () => ({
                 repConfig: {
@@ -216,116 +202,16 @@ describe('UpdateReplicationStatus._handleFailedReplicationEntry', () => {
                 },
                 sourceConfig: config.extensions.replication.source,
                 destConfig: config.extensions.replication.destination,
-                bucketNotificationConfig: notification,
-                notificationConfigManager: {
-                    getConfig: () => null
-                },
                 replayTopics: ['replay-topic'],
             }),
         }, metricHandlers);
-        const publishNotificationStub = sinon.stub(task, '_publishFailedReplicationStatusNotification');
+        const entry = new ObjectQueueEntry('test', '', new ObjectMD());
         const pushRelayEntryStub = sinon.stub(task, '_pushReplayEntry');
-        sinon.stub(sourceEntry, 'getReplayCount').returns(1);
+        sinon.stub(entry, 'getReplayCount').returns(1);
 
-        task._handleFailedReplicationEntry(sourceEntry, sourceEntry, 'test-site-2', fakeLogger);
-        assert(pushRelayEntryStub.calledOnceWith(sourceEntry, 'test-site-2', fakeLogger));
-        assert(publishNotificationStub.notCalled);
+        const outEntry = task._handleFailedReplicationEntry(entry, entry, 'test-site-2', fakeLogger);
+        assert(pushRelayEntryStub.calledOnceWith(entry, 'test-site-2', fakeLogger));
+        assert(!outEntry);
         return done();
-    });
-});
-
-describe('UpdateReplicationStatus._publishFailedReplicationStatusNotification', () => {
-    const date = new Date();
-    let clock;
-
-    beforeEach(() => {
-        clock = sinon.useFakeTimers(date.getTime());
-    });
-
-    afterEach(() => {
-        sinon.restore();
-        clock.restore();
-    });
-
-    it('should publish entry to notification destination topic in correct format', done => {
-        const validateStub = sinon.stub(configUtil, 'validateEntry');
-        validateStub.onCall(0).returns(true);
-        validateStub.onCall(1).returns(false);
-        const notificationProducerSend1 = sinon.stub().callsFake((entries, cb) => cb());
-        const notificationProducerSend2 = sinon.stub().callsFake((entries, cb) => cb());
-        const task = new UpdateReplicationStatus({
-            getStateVars: () => ({
-                repConfig: {
-                    replicationStatusProcessor: {},
-                    monitorReplicationFailures: false,
-                },
-                sourceConfig: config.extensions.replication.source,
-                destConfig: config.extensions.replication.destination,
-                bucketNotificationConfig: notification,
-                notificationProducers: {
-                    destination1: {
-                        send: notificationProducerSend1
-                    },
-                    destination2: {
-                        send: notificationProducerSend2
-                    },
-                },
-                notificationConfigManager: {
-                    getConfig: async () => ({
-                        queueConfig: [
-                            {
-                                events: [
-                                    's3:ObjectCreated:*',
-                                    's3:ObjectRemoved:*',
-                                    's3:Replication:OperationFailedReplication'
-                                ],
-                                queueArn: 'arn:scality:bucketnotif:::destination1',
-                                id: 'NjhiYzg2YTQtZmM3NS00YTJlLWJkMWYtMzcwZjk0MjA5YzAz'
-                            },
-                            {
-                                events: [
-                                    's3:ObjectCreated:*',
-                                    's3:ObjectRemoved:*',
-                                ],
-                                queueArn: 'arn:scality:bucketnotif:::destination2',
-                                id: 'NjhiYzg2YTQtZmM3NS00YTJlLWJkMWYtMzcwZjkfvjA5YzAz'
-                            }
-                        ],
-                    }),
-                }
-            }),
-        });
-        sinon.stub(sourceEntry, 'getObjectKey').returns('example-key');
-        sinon.stub(sourceEntry, 'getVersionId').returns('123456');
-        sinon.stub(sourceEntry, 'getBucket').returns('example-bucket');
-        sinon.stub(sourceEntry, 'getValue').returns({
-            'last-modified': '0000',
-            'originOp': 'origin-operation',
-            'dataStoreName': 'metastore',
-            'md-model-version': '1',
-            'content-length': '6',
-            'versionId': '1234',
-        });
-        const message = {
-            eventType: 's3:Replication:OperationFailedReplication',
-            region: 'metastore',
-            schemaVersion: '1',
-            size: '6',
-            versionId: '123456',
-            bucket: 'example-bucket',
-            key: 'example-key',
-            dateTime: date.toISOString(),
-        };
-        const entryPublished = {
-            key: 'example-bucket',
-            message: JSON.stringify(message),
-        };
-        task._publishFailedReplicationStatusNotification(sourceEntry, fakeLogger, err => {
-            assert.ifError(err);
-            assert(validateStub.callCount === 2);
-            assert(notificationProducerSend1.calledOnceWith([entryPublished]));
-            assert(notificationProducerSend2.notCalled);
-            return done();
-        });
     });
 });

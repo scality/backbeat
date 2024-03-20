@@ -2,7 +2,7 @@ const assert = require('assert');
 const util = require('util');
 
 const { isMasterKey } = require('arsenal').versioning;
-const { usersBucket, mpuBucketPrefix } = require('arsenal').constants;
+const { usersBucket, mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
 const messageUtil = require('./utils/message');
@@ -92,6 +92,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Notification rules are normally verified when setting the notification
+     * configuration (even for wildcards), however we need an explicit check at
+     * this level to filter out non standard events that might be valid for one
+     * of the wildcard rules set.
+     * @param {String} eventType - notification event type
+     * @returns {boolean} - true if notification is supported
+     */
+    _isNotificationEventSupported(eventType) {
+        return supportedNotificationEvents.has(eventType);
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
@@ -101,17 +113,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     async _processObjectEntry(bucket, key, value, timestamp) {
+        this._metricsStore.notifEvent();
         if (!this._shouldProcessEntry(key, value)) {
             return undefined;
         }
-        this._metricsStore.notifEvent();
+        const { eventMessageProperty } = notifConstants;
+        const eventType = value[eventMessageProperty.eventType];
+        if (!this._isNotificationEventSupported(eventType)) {
+            return undefined;
+        }
         const versionId = this._getVersionId(value);
         const config = await this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
-            const { eventMessageProperty }
-                = notifConstants;
-            const eventType
-                = value[eventMessageProperty.eventType];
             const ent = {
                 bucket,
                 key: value.key,

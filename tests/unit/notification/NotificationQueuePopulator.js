@@ -249,6 +249,31 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(1).args.at(0), 'internal-notification-topic-destination2');
             assert.strictEqual(publishStub.getCall(2).args.at(0), 'backbeat-bucket-notification');
         });
+
+        it('Should not publish object entry in notification topic if ' +
+            'notification is non standard', async () => {
+            sinon.stub(bnConfigManager, 'getConfig').returns({
+                queueConfig: [
+                    {
+                        events: ['s3:ObjectCreated:*'],
+                        queueArn: 'arn:scality:bucketnotif:::destination1',
+                        filterRules: [],
+                    },
+                ],
+            });
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'originOp': 's3:ObjectCreated:non-standard',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+            assert(publishStub.notCalled);
+        });
     });
 
     describe('filterAsync ::', () => {
