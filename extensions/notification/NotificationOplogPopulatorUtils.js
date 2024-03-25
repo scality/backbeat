@@ -10,7 +10,10 @@ class NotificationOplogPopulatorUtils extends OplogPopulatorUtils {
      static getExtensionMongoDBFilter() {
         return {
             'value.notificationConfiguration': {
-                $type: 3
+                $type: 3,
+                $not: {
+                    $size: 0
+                }
             }
         };
     }
@@ -23,7 +26,7 @@ class NotificationOplogPopulatorUtils extends OplogPopulatorUtils {
      * current extension enabled
      */
     static isBucketExtensionEnabled(bucketMD) {
-        return Boolean(bucketMD.notificationConfiguration !== null);
+        return bucketMD.notificationConfiguration && Object.keys(bucketMD.notificationConfiguration).length > 0;
     }
 }
 module.exports = NotificationOplogPopulatorUtils;
