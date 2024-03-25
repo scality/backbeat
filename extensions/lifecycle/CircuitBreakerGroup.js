@@ -247,7 +247,7 @@ function extractBucketProcessorCircuitBreakerConfigs(cbConf, lcConfig, repConfig
             topics.forEach(tp => {
                 circuitBreakerGroup.addCircuitBreaker(
                     probe,
-                    query.replace('${topic}', tp).replace('${location}', location ? location[1] : ''),
+                    query.replaceAll('${topic}', tp).replaceAll('${location}', location ? location[1] : ''),
                     useForTransition,
                     useForExpiration,
                     tp,
@@ -262,7 +262,7 @@ function extractBucketProcessorCircuitBreakerConfigs(cbConf, lcConfig, repConfig
             locationNames.forEach(loc => {
                 circuitBreakerGroup.addCircuitBreaker(
                     probe,
-                    query.replace('${location}', loc).replace('${topic}', topic ? topic[1] : ''),
+                    query.replaceAll('${location}', loc).replaceAll('${topic}', topic ? topic[1] : ''),
                     useForTransition,
                     useForExpiration,
                     topic ? topic[1] : '',

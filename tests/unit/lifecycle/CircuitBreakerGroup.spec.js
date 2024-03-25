@@ -14,7 +14,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
         const withClause = probe.query.match(/^when\s?\(\{(.*?)\}\)\sand\s/);
         let query = withClause ? probe.query.replace(withClause[0], '') : probe.query;
         if (template) {
-            query = query.replace(template, value);
+            query = query.replaceAll(template, value);
         }
         return {
             nominalEvaluateIntervalMs: 60000,
@@ -48,7 +48,8 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
 
     const topicSpecificTemplatedProbe = {
         type: 'prometheusQuery',
-        query: 'when({topic="cold-archive-req-location-dmf-v1"}) and kafka_consumergroup_group_lag{topic="${topic}"}',
+        query: 'when({topic="cold-archive-req-location-dmf-v1"}) ' +
+            'and kafka_consumergroup_group_lag{group="${topic}",topic="${topic}"}',
         threshold: 100,
         prometheus: {
             endpoint: 'http://prometheus:9090',
@@ -84,7 +85,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
 
     const locationSpecificTemplatedProbe = {
         type: 'prometheusQuery',
-        query: 'when({location="dmf-v1"}) and s3_sorbet_is_throttled{location="${location}"}',
+        query: 'when({location="dmf-v1"}) and kafka_consumergroup_group_lag{group="${location}", topic="${location}"}',
         threshold: 100,
         prometheus: {
             endpoint: 'http://prometheus:9090',
