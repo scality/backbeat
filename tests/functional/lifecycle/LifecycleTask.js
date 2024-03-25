@@ -429,7 +429,6 @@ class LifecycleBucketProcessorMock {
         return {
             producer: this._producer,
             removeBucketFromQueued: () => {},
-            enabledRules: this._lcConfig.rules,
             // Corresponds to the default endpoint in the cloudserver config.
             bootstrapList: [{ site: 'us-east-2', type: 'aws_s3' }],
             s3Endpoint: s3config.endpoint,
