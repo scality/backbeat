@@ -221,6 +221,9 @@ describe('OplogPopulator', () => {
         const notificationFilter = {
             'value.notificationConfiguration': {
                 $type: 3,
+                $not: {
+                    $size: 0,
+                },
             },
         };
         const lifecycleFilter = {
@@ -388,7 +391,16 @@ describe('OplogPopulator', () => {
                 desc: 'all extensions active',
                 exts: ['notification', 'lifecycle', 'replication'],
                 metadata: {
-                    notificationConfiguration: {},
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: [
+                                    's3:ObjectCreated:*',
+                                ],
+                                queueArn: 'arn:scality:bucketnotif:::dest1',
+                            }
+                        ]
+                    },
                     lifecycleConfiguration: {
                         rules: [
                             {
@@ -421,12 +433,32 @@ describe('OplogPopulator', () => {
                 desc: 'notification active',
                 exts: ['notification'],
                 metadata: {
-                    notificationConfiguration: {},
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: [
+                                    's3:ObjectCreated:*',
+                                ],
+                                queueArn: 'arn:scality:bucketnotif:::dest1',
+                            }
+                        ]
+                    },
                     replicationConfiguration: null,
                     lifecycleConfiguration: null,
                     ingestion: null,
                 },
                 result: true,
+            },
+            {
+                desc: 'notification disabled',
+                exts: ['notification'],
+                metadata: {
+                    notificationConfiguration: {},
+                    replicationConfiguration: null,
+                    lifecycleConfiguration: null,
+                    ingestion: null,
+                },
+                result: false,
             },
             {
                 desc: 'replication mixed rules',
