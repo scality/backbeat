@@ -3,7 +3,6 @@
 const async = require('async');
 const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
-const { supportedLifecycleRules } = require('arsenal').constants;
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -15,6 +14,7 @@ const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
+const { getFormattedSupportedLifecycleRules } = require('../util/rules');
 const {
     updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
@@ -85,17 +85,7 @@ class LifecycleBucketProcessor {
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
-        this._supportedRulesObject = {};
-        this._hasSupportedRules = Array.isArray(supportedLifecycleRules) &&
-            supportedLifecycleRules.length > 0;
-
-        if (this._hasSupportedRules) {
-            supportedLifecycleRules.forEach(rule => {
-                this._supportedRulesObject[rule] = { enabled: true };
-            });
-        } else {
-            this._log.debug('no lifecycle rules enabled');
-        }
+        this._supportedRules = getFormattedSupportedLifecycleRules();
 
         this._producerReady = false;
         this._consumerReady = false;
@@ -184,7 +174,6 @@ class LifecycleBucketProcessor {
         return {
             producer: this._producer,
             bootstrapList: this._repConfig.destination.bootstrapList,
-            enabledRules: this._supportedRulesObject,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,
             transitionTasksTopic: this._lcConfig.transitionTasksTopic,
@@ -236,14 +225,18 @@ class LifecycleBucketProcessor {
      * @return {Boolean} Whether the config should be processed
      */
     _shouldProcessConfig(config) {
-        if (config.Rules.length === 0) {
-            this._log.debug('bucket lifecycle config has no rules to process', {
-                config,
+        const rulesEnabled = config.Rules.some(rule => {
+            if (rule.Status === 'Disabled') {
+                return false;
+            }
+            return Object.keys(rule).some(key => {
+                if (!this._supportedRules.includes(key)) {
+                    return false;
+                }
+                return !rule[key].StorageClass || !this._pausedLocations.has(rule[key].StorageClass);
             });
-            return false;
-        }
-
-        return this._hasSupportedRules;
+        });
+        return rulesEnabled;
     }
 
     /**

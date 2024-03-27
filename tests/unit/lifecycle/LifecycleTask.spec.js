@@ -81,12 +81,6 @@ const NON_CURRENT_DELETE_MARKER = {
 const lp = {
     getStateVars: () => (
         {
-            enabledRules: {
-                expiration: { enabled: true },
-                transitions: { enabled: true },
-                noncurrentVersionExpiration: { enabled: true },
-                abortIncompleteMultipartUpload: { enabled: true },
-            },
             ncvHeap: new Map(),
             lcOptions: timeOptions,
         }
