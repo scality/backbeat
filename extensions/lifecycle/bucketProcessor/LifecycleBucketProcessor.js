@@ -14,7 +14,10 @@ const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
-const { getFormattedSupportedLifecycleRules } = require('../util/rules');
+const {
+    getFormattedSupportedLifecycleRules,
+    isExpirationRule
+} = require('../util/rules');
 const {
     updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
@@ -225,7 +228,7 @@ class LifecycleBucketProcessor {
      * @return {Boolean} Whether the config should be processed
      */
     _shouldProcessConfig(config) {
-        const rulesEnabled = config.Rules.some(rule => {
+        return config.Rules.some(rule => {
             if (rule.Status === 'Disabled') {
                 return false;
             }
@@ -233,10 +236,13 @@ class LifecycleBucketProcessor {
                 if (!this._supportedRules.includes(key)) {
                     return false;
                 }
-                return !rule[key].StorageClass || !this._pausedLocations.has(rule[key].StorageClass);
+                if (isExpirationRule(key)) {
+                    return true;
+                }
+                return rule[key].some(transitionRule =>
+                    !this._pausedLocations.has(transitionRule.StorageClass));
             });
         });
-        return rulesEnabled;
     }
 
     /**
