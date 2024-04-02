@@ -225,6 +225,10 @@ class LifecycleBucketProcessor {
      * @return {Boolean} Whether the config should be processed
      */
     _shouldProcessConfig(config) {
+        this._log.info('checking if rules are enabled', {
+            method: 'LifecycleBucketProcessor._shouldProcessConfig',
+            rules: JSON.stringify(config.Rules),
+        });
         const rulesEnabled = config.Rules.some(rule => {
             if (rule.Status === 'Disabled') {
                 return false;
