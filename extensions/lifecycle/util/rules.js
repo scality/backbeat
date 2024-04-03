@@ -202,14 +202,26 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
  */
 function getFormattedSupportedLifecycleRules() {
    return supportedLifecycleRules.map(rule => {
-        if (rule === 'transitions') {
-            return 'Transition';
+        if (rule === 'noncurrentVersionTransition') {
+            return 'NoncurrentVersionTransitions';
         }
         return rule.charAt(0).toUpperCase() + rule.slice(1);
     });
 }
 
+/**
+ * Check if ruleName is an expiration rule
+ * @param {string} ruleName lifecycle rule name
+ * @returns {bool} true if ruleName is an expiration rule
+ */
+function isExpirationRule(ruleName) {
+    return ruleName === 'Expiration' ||
+        ruleName === 'NoncurrentVersionExpiration' ||
+        ruleName === 'AbortIncompleteMultipartUpload';
+}
+
 module.exports = {
     rulesToParams,
     getFormattedSupportedLifecycleRules,
+    isExpirationRule,
 };

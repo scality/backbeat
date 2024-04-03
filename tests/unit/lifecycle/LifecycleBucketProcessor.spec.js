@@ -48,10 +48,10 @@ describe('Lifecycle Bucket Processor', () => {
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
-                    'Transition',
-                    'Noncurrentversiontransition',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
                 ],
                 pauseLocations: [],
                 expected: false,
@@ -74,20 +74,20 @@ describe('Lifecycle Bucket Processor', () => {
                         },
                         {
                             Status: 'Disabled',
-                            Transition: {
+                            Transitions: [{
                                 Days: 10,
                                 StorageClass: 'azure'
-                            },
+                            }],
                             ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
                         }
                     ],
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
-                    'Transition',
-                    'Noncurrentversiontransition',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
                 ],
                 pauseLocations: [],
                 expected: false,
@@ -104,20 +104,20 @@ describe('Lifecycle Bucket Processor', () => {
                         },
                         {
                             Status: 'Enabled',
-                            Transition: {
+                            Transitions: [{
                                 Days: 10,
                                 StorageClass: 'azure'
-                            },
+                            }],
                             ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
                         }
                     ],
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
-                    'Transition',
-                    'Noncurrentversiontransition',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
                 ],
                 pauseLocations: [],
                 expected: true,
@@ -127,20 +127,20 @@ describe('Lifecycle Bucket Processor', () => {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            Transition: {
+                            Transitions: [{
                                 Days: 10,
                                 StorageClass: 'azure'
-                            },
+                            }],
                             ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
                         }
                     ],
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
-                    'Transition',
-                    'Noncurrentversiontransition',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
                 ],
                 pauseLocations: ['azure'],
                 expected: false,
@@ -150,20 +150,20 @@ describe('Lifecycle Bucket Processor', () => {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            NoncurrentVersionTransition: {
+                            NoncurrentVersionTransitions: [{
                                 NoncurrentDays: 10,
                                 StorageClass: 'azure'
-                            },
+                            }],
                             ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
                         }
                     ],
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
-                    'Transition',
-                    'Noncurrentversiontransition',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
+                    'Transitions',
+                    'NoncurrentVersionTransitions',
                 ],
                 pauseLocations: ['azure'],
                 expected: false,
@@ -173,18 +173,18 @@ describe('Lifecycle Bucket Processor', () => {
                     Rules: [
                         {
                             Status: 'Enabled',
-                            Transition: {
+                            Transitions: [{
                                 Days: 10,
                                 StorageClass: 'azure'
-                            },
+                            }],
                             ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
                         }
                     ],
                 },
                 supportedRules: [
                     'Expiration',
-                    'Noncurrentversionexpiration',
-                    'AbortincompletemultipartUpload',
+                    'NoncurrentVersionExpiration',
+                    'AbortIncompleteMultipartUpload',
                 ],
                 pauseLocations: [],
                 expected: false,
