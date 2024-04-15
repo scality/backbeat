@@ -2,11 +2,13 @@
 
 ## Docker Image generation
 
-Docker images are hosted on [registry.scality.com](registry.scality.com).
-It has two names spaces for backbeat:
+Docker images are hosted on [ghcr.io/scality](https://github.com/orgs/scality/packages).
+There are a few images:
 
-* Production Namespace: registry.scality.com/backbeat
-* Dev Namespace: registry.scality.com/backbeat-dev
+* Container image: `ghrc.io/scality/backbeat`
+* Dashboards: `ghrc.io/scality/backbeat/backbeat-dashboard`
+* Policies: `ghrc.io/scality/backbeat/backbeat-policies`
+* CI ancillary images: `ghrc.io/scality/backbeat/ci-*`
 
 The CI will push images with every CI build tagging the
 content with the developer’s branch short SHA-1 commit hash.
@@ -18,8 +20,8 @@ Tagged versions of backbeat will be stored in the production namespace.
 ## How to pull docker images
 
 ```sh
-docker pull registry.scality.com/backbeat-dev/backbeat:<SHA-1 commit hash>
-docker pull registry.scality.com/backbeat/backbeat:<tag>
+docker pull ghcr.io/scality/backbeat:<SHA-1 commit hash>
+docker pull ghcr.io/scality/backbeat:<tag>
 ```
 
 ## Release Process
