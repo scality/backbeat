@@ -1,4 +1,4 @@
-FROM registry.scality.com/federation/nodesvc-base:7.10.7.0 as builder
+FROM ghcr.io/scality/federation/nodesvc-base:7.10.7.0 as builder
 
 WORKDIR /tmp/build
 
@@ -9,7 +9,7 @@ RUN yarn cache clean \
     && yarn cache clean
 
 ################################################################################
-FROM registry.scality.com/federation/nodesvc-base:7.10.7.0
+FROM ghcr.io/scality/federation/nodesvc-base:7.10.7.0
 
 WORKDIR ${HOME_DIR}/backbeat
 
