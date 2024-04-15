@@ -51,7 +51,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=syntheticbucketd
 
     - name: Build and push MongoDB
-      uses: docker/build-push-action@v4
+      uses: docker/build-push-action@v5
       with:
         push: true
         context: .github/dockerfiles/mongodb
@@ -65,7 +65,7 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - uses: actions/setup-go@v4
+    - uses: actions/setup-go@v5
       with:
         go-version: '1.16.2'
         cache-dependency-path: bucket-scanner/go.sum
@@ -80,7 +80,7 @@ jobs:
                -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
 
-    - uses: codecov/codecov-action@v3
+    - uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: bucket-scanner
@@ -133,7 +133,7 @@ jobs:
       run: yarn run cover:test
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
-    - uses: codecov/codecov-action@v3
+    - uses: codecov/codecov-action@v4
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: ./coverage/test
