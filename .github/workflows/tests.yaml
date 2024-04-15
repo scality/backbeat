@@ -32,6 +32,15 @@ jobs:
         tags: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
         cache-from: type=gha,scope=ci-kafka
         cache-to: type=gha,mode=max,scope=ci-kafka
+    - name: Build and push syntheticbucketd
+      uses: docker/build-push-action@v5
+      with:
+        push: true
+        context: .
+        file: .github/dockerfiles/syntheticbucketd/Dockerfile
+        tags: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
+        cache-from: type=gha,scope=syntheticbucketd
+        cache-to: type=gha,mode=max,scope=syntheticbucketd
 
   tests:
     needs: build
@@ -42,7 +51,7 @@ jobs:
         ports:
         - 6379:6379
       syntheticbucketd:
-        image: ghcr.io/scality/backbeat/syntheticbucketd:${{ github.sha }}
+        image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
         ports:
         - 9001:9001
       kafka:
