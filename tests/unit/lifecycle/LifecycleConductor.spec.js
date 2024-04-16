@@ -50,23 +50,22 @@ describe('Lifecycle Conductor', () => {
         this.timeout(4000);
 
         it('should return error when mongodbclient returns an error', done => {
-            conductor._mongodbClient = { getIndexingJobs: () => {}, getCollection: () => (
-                { find: () => (
-                    { project: () => (
-                        { hasNext: () => new Promise((resolve, reject) => {
-                            reject(new Error('error'));
+            conductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({
+                    find: () => ({
+                        project: () => ({
+                            hasNext: () => new Promise((resolve, reject) => {
+                                reject(new Error('error'));
+                            })
                         })
                     })
                 })
-            }) };
-            conductor._zkClient = { getData: () => {} };
+            };
+            conductor._zkClient = { getData: (_, cb) => cb(null, null, cb) };
 
             sinon.stub(conductor, '_controlBacklog')
                 .callsFake(cb => cb(null));
-            sinon.stub(conductor._mongodbClient, 'getIndexingJobs')
-                .callsFake((_, cb) => cb(null, ['job1', 'job2']));
-            sinon.stub(conductor._zkClient, 'getData')
-                .callsFake((_, cb) => cb(null, null, cb));
 
             conductor.processBuckets(err => {
                 assert.strictEqual(err.message, 'error');
@@ -75,25 +74,25 @@ describe('Lifecycle Conductor', () => {
         });
 
         it('should process buckets without errors', done => {
-            conductor._mongodbClient = { getIndexingJobs: () => {}, getCollection: () => (
-                { find: () => (
-                    { project: () => (
-                        { hasNext: () => new Promise((resolve, reject) => {
-                            resolve(null, false);
+            conductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({
+                    find: () => ({
+                        project: () => ({
+                            hasNext: () => new Promise(resolve => {
+                                resolve(null, false);
+                            })
                         })
                     })
                 })
-            }) };
-            conductor._zkClient = { getData: () => {}, setData: () => {} };
+            };
+            conductor._zkClient = {
+                getData: (_, cb) => cb(null, null, cb),
+                setData: (path, data, version, cb) => cb(null, cb)
+            };
 
             sinon.stub(conductor, '_controlBacklog')
                 .callsFake(cb => cb(null));
-            sinon.stub(conductor._mongodbClient, 'getIndexingJobs')
-                .callsFake((_, cb) => cb(null, ['job1', 'job2']));
-            sinon.stub(conductor._zkClient, 'getData')
-                .callsFake((_, cb) => cb(null, null, cb));
-            sinon.stub(conductor._zkClient, 'setData')
-                .callsFake((path, data, version, cb) => cb(null, cb));
 
             conductor.processBuckets(done);
         });
