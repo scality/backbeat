@@ -48,6 +48,32 @@ describe('Lifecycle Conductor', () => {
     describe('processBuckets', function test() {
         // timeout set to 4000 to account for 2s for async ops + 1s for bucket queue completion check interval
         this.timeout(4000);
+
+        it('should call callback with error when mongodbclient returns an error', done => {
+            conductor._mongodbClient = { getIndexingJobs: () => {}, getCollection: () => (
+                { find: () => (
+                    { project: () => (
+                        { hasNext: () => new Promise((resolve, reject) => {
+                            reject(new Error('error'));
+                        })
+                    })
+                })
+            }) };
+            conductor._zkClient = { getData: () => {} };
+
+            sinon.stub(conductor, '_controlBacklog')
+                .callsFake(cb => cb(null));
+            sinon.stub(conductor._mongodbClient, 'getIndexingJobs')
+                .callsFake((_, cb) => cb(null, ['job1', 'job2']));
+            sinon.stub(conductor._zkClient, 'getData')
+                .callsFake((_, cb) => cb(null, null, cb));
+
+            conductor.processBuckets(err => {
+                assert.strictEqual(err.message, 'error');
+                done();
+            });
+        });
+
         // tests that `activeIndexingJobRetrieved` is not reset until the e
         it('should not reset `activeIndexingJobsRetrieved` while async operations are in progress', done => {
             const order = [];
