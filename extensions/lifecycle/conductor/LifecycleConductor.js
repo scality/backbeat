@@ -719,7 +719,7 @@ class LifecycleConductor {
                     err => {
                         if (!err) {
                             // clear last seen bucket from zk
-                            checkpointBucket('', err => {
+                            return checkpointBucket('', err => {
                                 if (err) {
                                     return done(err);
                                 }
@@ -727,6 +727,8 @@ class LifecycleConductor {
                                 return done(null, nEnqueued);
                             });
                         }
+
+                        return done(err);
                     }
                 );
             }
