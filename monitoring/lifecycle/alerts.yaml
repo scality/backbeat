@@ -51,12 +51,11 @@ groups:
       description: "Less than 50% of lifecycle bucket processors are up and healthy"
       summary: "Degraded lifecycle bucket processor"
 
-  - alert: LifecycleBucketProcessorRequestWarning
+  - alert: LifecycleBucketProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -64,12 +63,11 @@ groups:
       description: "More than 3% of S3 requests by bucket processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleBucketProcessorRequestCritical
+  - alert: LifecycleBucketProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
@@ -100,12 +98,11 @@ groups:
       description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
       summary: "Degraded lifecycle object processor"
   
-  - alert: LifecycleObjectProcessorRequestWarning
+  - alert: LifecycleObjectProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -113,12 +110,11 @@ groups:
       description: "More than 3% of S3 requests by object processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleObjectProcessorRequestCritical
+  - alert: LifecycleObjectProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
