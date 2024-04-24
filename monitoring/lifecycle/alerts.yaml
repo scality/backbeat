@@ -31,7 +31,7 @@ groups:
 - name: LifecycleBucketProcessor
   rules:
 
-  - alert: LifecycleBucketProcessorDegraded
+  - alert: LifecycleBucketProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) < ${lifecycle_bucket_replicas}
     For: "30s"
     Labels:
@@ -41,7 +41,7 @@ groups:
       description: "Less than 100% of lifecycle bucket processors are up and healthy"
       summary: "Degraded lifecycle bucket processor"
 
-  - alert: LifecycleBucketProcessorCritical
+  - alert: LifecycleBucketProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) * 2 < ${lifecycle_bucket_replicas}
     For: "30s"
     Labels:
@@ -78,7 +78,7 @@ groups:
 - name: LifecycleObjectProcessor
   rules:
 
-  - alert: LifecycleObjectProcessorDegraded
+  - alert: LifecycleObjectProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) < ${lifecycle_object_replicas}
     For: "30s"
     Labels:
@@ -88,7 +88,7 @@ groups:
       description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
       summary: "Degraded lifecycle object processor"
   
-  - alert: LifecycleObjectProcessorCritical
+  - alert: LifecycleObjectProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
     For: "30s"
     Labels:
@@ -125,7 +125,7 @@ groups:
 - name: Kafka Messages
   rules:
 
-  - alert: LifecycleKafkaBucketMessagesWarning
+  - alert: LifecycleKafkaBucketMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
@@ -138,7 +138,7 @@ groups:
       description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
       summary: "High rate of failed messages to the bucket topic"
 
-  - alert: LifecycleKafkaBucketMessagesCritical
+  - alert: LifecycleKafkaBucketMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
@@ -151,7 +151,7 @@ groups:
       description: "More than 5% of Kafka messages failed to publish to the lifecycle bucket topic"
       summary: "High rate of failed messages to the bucket topic"
 
-  - alert: LifecycleKafkaObjectMessagesWarning
+  - alert: LifecycleKafkaObjectMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
@@ -164,7 +164,7 @@ groups:
       description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
       summary: "High rate of failed messages to the object topic"
 
-  - alert: LifecycleKafkaObjectMessagesCritical
+  - alert: LifecycleKafkaObjectMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)

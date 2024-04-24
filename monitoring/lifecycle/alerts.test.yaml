@@ -33,13 +33,10 @@ tests:
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",pod="bucket-3"}
         values: 1 0 0
     alert_rule_test:
-      - alertname: LifecycleBucketProcessorDegraded
+      - alertname: LifecycleBucketProcessorDown
         eval_time: 1m
         exp_alerts: []
-      - alertname: LifecycleBucketProcessorCritical
-        eval_time: 1m
-        exp_alerts: []
-      - alertname: LifecycleBucketProcessorDegraded
+      - alertname: LifecycleBucketProcessorDown
         eval_time: 2m
         exp_alerts:
           - exp_labels:
@@ -48,10 +45,7 @@ tests:
               zenko_service: backbeat-lifecycle-bucket-processor
               description: "Less than 100% of lifecycle bucket processors are up and healthy"
               summary: "Degraded lifecycle bucket processor"
-      - alertname: LifecycleBucketProcessorCritical
-        eval_time: 2m
-        exp_alerts: []
-      - alertname: LifecycleBucketProcessorDegraded
+      - alertname: LifecycleBucketProcessorDown
         eval_time: 3m
         exp_alerts:
           - exp_labels:
@@ -60,9 +54,6 @@ tests:
               zenko_service: backbeat-lifecycle-bucket-processor
               description: "Less than 100% of lifecycle bucket processors are up and healthy"
               summary: "Degraded lifecycle bucket processor"
-      - alertname: LifecycleBucketProcessorCritical
-        eval_time: 3m
-        exp_alerts:
           - exp_labels:
               severity: critical
             exp_annotations:
@@ -80,13 +71,10 @@ tests:
       - series: up{namespace="zenko",job="artesca-data-backbeat-lifecycle-object-processor-headless",pod="object-3"}
         values: 1 0 0
     alert_rule_test:
-      - alertname: LifecycleObjectProcessorDegraded
+      - alertname: LifecycleObjectProcessorDown
         eval_time: 1m
         exp_alerts: []
-      - alertname: LifecycleObjectProcessorCritical
-        eval_time: 1m
-        exp_alerts: []
-      - alertname: LifecycleObjectProcessorDegraded
+      - alertname: LifecycleObjectProcessorDown
         eval_time: 2m
         exp_alerts:
           - exp_labels:
@@ -95,10 +83,7 @@ tests:
               zenko_service: backbeat-lifecycle-object-processor
               description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
               summary: "Degraded lifecycle object processor"
-      - alertname: LifecycleObjectProcessorCritical
-        eval_time: 2m
-        exp_alerts: []
-      - alertname: LifecycleObjectProcessorDegraded
+      - alertname: LifecycleObjectProcessorDown
         eval_time: 3m
         exp_alerts:
           - exp_labels:
@@ -107,9 +92,6 @@ tests:
               zenko_service: backbeat-lifecycle-object-processor
               description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
               summary: "Degraded lifecycle object processor"
-      - alertname: LifecycleObjectProcessorCritical
-        eval_time: 3m
-        exp_alerts:
           - exp_labels:
               severity: critical
             exp_annotations:
