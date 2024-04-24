@@ -211,6 +211,62 @@ tests:
         eval_time: 19m
         exp_alerts: []
 
+  - name: LifecycleTransitionProcessorRequest
+    interval: 1m
+    input_series:
+      - series: s3_lifecycle_s3_operations_total{namespace="zenko", job="artesca-data-backbeat-lifecycle-transition-processor-headless", status="200"}
+        values: 0+99x4 495+97x4 980+95x4 1455+98x4
+      - series: s3_lifecycle_s3_operations_total{namespace="zenko", job="artesca-data-backbeat-lifecycle-transition-processor-headless", status="413"}
+        values: 0+1x4    5+3x4   20+5x4    45+2x4
+      - series: s3_lifecycle_s3_operations_total{namespace="zenko", job="artesca-data-backbeat-lifecycle-bucket-processor-headless", status="200", process="bucket"}
+        values: 0+100x19
+    alert_rule_test:
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 1m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 5m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 9m
+        exp_alerts: []
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 10m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "More than 3% of S3 requests by transition processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 14m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "More than 3% of S3 requests by transition processors resulting in errors"
+              summary: "High rate of S3 request errors"
+      - alertname: LifecycleTransitionProcessorRequest
+        eval_time: 15m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "More than 3% of S3 requests by transition processors resulting in errors"
+              summary: "High rate of S3 request errors"
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-transition-processor
+              description: "More than 5% of S3 requests by transition processors resulting in errors"
+              summary: "Very high rate of S3 request errors"
+      - alertname: LifecycleObjectProcessorRequest
+        eval_time: 19m
+        exp_alerts: []
+
   - name: LifecycleTransitionProcessor Replicas
     interval: 1m
     input_series:

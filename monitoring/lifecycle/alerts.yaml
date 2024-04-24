@@ -196,12 +196,11 @@ groups:
       description: "Less than 50% of lifecycle transition processors are up and healthy"
       summary: "Degraded lifecycle transition processor"
 
-  - alert: LifecycleTransitionProcessorRequestWarning
+  - alert: LifecycleTransitionProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -209,12 +208,11 @@ groups:
       description: "More than 3% of S3 requests by transition processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleTransitionProcessorRequestCritical
+  - alert: LifecycleTransitionProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
