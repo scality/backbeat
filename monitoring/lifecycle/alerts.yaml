@@ -40,7 +40,7 @@ groups:
       description: "Lifecycle producer pod has been down for 30 seconds"
       summary: "Lifecycle producer service is down"
 
-  - alert: LifecycleLateScanWarning
+  - alert: LifecycleLateScan
     Expr: |
       (
         time() - (
@@ -61,7 +61,7 @@ groups:
         {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
       summary: "Lifecycle scan not executed in time"
 
-  - alert: LifecycleLateScanCritical
+  - alert: LifecycleLateScan
     Expr: |
       (
         time() - (
@@ -176,7 +176,7 @@ groups:
       description: "More than 5% of S3 requests by object processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
-  - alert: LifecycleTransitionProcessorDegraded
+  - alert: LifecycleTransitionProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) < ${lifecycle_transition_replicas}
     For: "30s"
     Labels:
@@ -186,7 +186,7 @@ groups:
       description: "Less than 100% of lifecycle transition processors are up and healthy"
       summary: "Degraded lifecycle transition processor"
 
-  - alert: LifecycleTransitionProcessorCritical
+  - alert: LifecycleTransitionProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) * 2 < ${lifecycle_transition_replicas}
     For: "30s"
     Labels:
@@ -222,7 +222,7 @@ groups:
       description: "More than 5% of S3 requests by transition processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
-  - alert: LifecycleLatencyWarning
+  - alert: LifecycleLatency
     Expr: |
       histogram_quantile(0.95,
         sum(rate(
@@ -239,7 +239,7 @@ groups:
         `{{ $labels.location }}`.
       summary: "High lifecycle latency"
 
-  - alert: LifecycleLatencyCritical
+  - alert: LifecycleLatency
     Expr: |
       histogram_quantile(0.95,
         sum(rate(
