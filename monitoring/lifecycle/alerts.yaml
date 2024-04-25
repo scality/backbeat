@@ -40,7 +40,7 @@ groups:
       description: "Lifecycle producer pod has been down for 30 seconds"
       summary: "Lifecycle producer service is down"
 
-  - alert: LifecycleLateScanWarning
+  - alert: LifecycleLateScan
     Expr: |
       (
         time() - (
@@ -61,7 +61,7 @@ groups:
         {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
       summary: "Lifecycle scan not executed in time"
 
-  - alert: LifecycleLateScanCritical
+  - alert: LifecycleLateScan
     Expr: |
       (
         time() - (
@@ -85,7 +85,7 @@ groups:
 - name: LifecycleBucketProcessor
   rules:
 
-  - alert: LifecycleBucketProcessorDegraded
+  - alert: LifecycleBucketProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) < ${lifecycle_bucket_replicas}
     For: "30s"
     Labels:
@@ -95,7 +95,7 @@ groups:
       description: "Less than 100% of lifecycle bucket processors are up and healthy"
       summary: "Degraded lifecycle bucket processor"
 
-  - alert: LifecycleBucketProcessorCritical
+  - alert: LifecycleBucketProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_bucket_processor}"}) * 2 < ${lifecycle_bucket_replicas}
     For: "30s"
     Labels:
@@ -105,12 +105,11 @@ groups:
       description: "Less than 50% of lifecycle bucket processors are up and healthy"
       summary: "Degraded lifecycle bucket processor"
 
-  - alert: LifecycleBucketProcessorRequestWarning
+  - alert: LifecycleBucketProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -118,12 +117,11 @@ groups:
       description: "More than 3% of S3 requests by bucket processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleBucketProcessorRequestCritical
+  - alert: LifecycleBucketProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!="2xx", process="bucket"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", status!~"^2..", process="bucket"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_bucket_processor}", process="bucket"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
@@ -134,7 +132,7 @@ groups:
 - name: LifecycleObjectProcessor
   rules:
 
-  - alert: LifecycleObjectProcessorDegraded
+  - alert: LifecycleObjectProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) < ${lifecycle_object_replicas}
     For: "30s"
     Labels:
@@ -144,7 +142,7 @@ groups:
       description: "Less than 100% of lifecycle object processors for expiration are up and healthy"
       summary: "Degraded lifecycle object processor"
   
-  - alert: LifecycleObjectProcessorCritical
+  - alert: LifecycleObjectProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_object_processor}"}) * 2 < ${lifecycle_object_replicas}
     For: "30s"
     Labels:
@@ -154,12 +152,11 @@ groups:
       description: "Less than 50% of lifecycle object processors for expiration are up and healthy"
       summary: "Degraded lifecycle object processor"
   
-  - alert: LifecycleObjectProcessorRequestWarning
+  - alert: LifecycleObjectProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -167,12 +164,11 @@ groups:
       description: "More than 3% of S3 requests by object processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleObjectProcessorRequestCritical
+  - alert: LifecycleObjectProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!="2xx", process="expiration"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", status!~"^2..", process="expiration"}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_object_processor}", process="expiration"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
@@ -180,7 +176,7 @@ groups:
       description: "More than 5% of S3 requests by object processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
-  - alert: LifecycleTransitionProcessorDegraded
+  - alert: LifecycleTransitionProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) < ${lifecycle_transition_replicas}
     For: "30s"
     Labels:
@@ -190,7 +186,7 @@ groups:
       description: "Less than 100% of lifecycle transition processors are up and healthy"
       summary: "Degraded lifecycle transition processor"
 
-  - alert: LifecycleTransitionProcessorCritical
+  - alert: LifecycleTransitionProcessorDown
     Expr: sum(up{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}) * 2 < ${lifecycle_transition_replicas}
     For: "30s"
     Labels:
@@ -200,12 +196,11 @@ groups:
       description: "Less than 50% of lifecycle transition processors are up and healthy"
       summary: "Degraded lifecycle transition processor"
 
-  - alert: LifecycleTransitionProcessorRequestWarning
+  - alert: LifecycleTransitionProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
         >= 0.03
-    For: "5m"
     Labels:
      severity: warning
     Annotations:
@@ -213,12 +208,11 @@ groups:
       description: "More than 3% of S3 requests by transition processors resulting in errors"
       summary: "High rate of S3 request errors"
 
-  - alert: LifecycleTransitionProcessorRequestCritical
+  - alert: LifecycleTransitionProcessorRequest
     Expr: |
-      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!="2xx"}[5m]))
+      sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}", status!~"^2.."}[5m]))
         / sum(rate(s3_lifecycle_s3_operations_total{namespace="${namespace}", job="${job_lifecycle_transition_processor}"}[5m]))
         >= 0.05
-    For: "5m"
     Labels:
      severity: critical
     Annotations:
@@ -226,7 +220,7 @@ groups:
       description: "More than 5% of S3 requests by transition processors resulting in errors"
       summary: "Very high rate of S3 request errors"
 
-  - alert: LifecycleLatencyWarning
+  - alert: LifecycleLatency
     Expr: |
       histogram_quantile(0.95,
         sum(rate(
@@ -243,7 +237,7 @@ groups:
         `{{ $labels.location }}`.
       summary: "High lifecycle latency"
 
-  - alert: LifecycleLatencyCritical
+  - alert: LifecycleLatency
     Expr: |
       histogram_quantile(0.95,
         sum(rate(
@@ -263,7 +257,7 @@ groups:
 - name: Kafka Messages
   rules:
 
-  - alert: LifecycleKafkaBucketMessagesWarning
+  - alert: LifecycleKafkaBucketMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
@@ -276,7 +270,7 @@ groups:
       description: "More than 3% of Kafka messages failed to publish to the lifecycle bucket topic"
       summary: "High rate of failed messages to the bucket topic"
 
-  - alert: LifecycleKafkaBucketMessagesCritical
+  - alert: LifecycleKafkaBucketMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="BucketTopic"}[5m]) > 0)
@@ -289,7 +283,7 @@ groups:
       description: "More than 5% of Kafka messages failed to publish to the lifecycle bucket topic"
       summary: "High rate of failed messages to the bucket topic"
 
-  - alert: LifecycleKafkaObjectMessagesWarning
+  - alert: LifecycleKafkaObjectMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
@@ -302,7 +296,7 @@ groups:
       description: "More than 3% of Kafka messages failed to publish to the lifecycle object topic"
       summary: "High rate of failed messages to the object topic"
 
-  - alert: LifecycleKafkaObjectMessagesCritical
+  - alert: LifecycleKafkaObjectMessages
     Expr: |
       sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
         / (sum(rate(s3_lifecycle_kafka_publish_error_total{namespace="${namespace}",op="ObjectTopic"}[5m]) > 0)
