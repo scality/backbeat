@@ -261,4 +261,68 @@ describe('replication queue populator', () => {
         // should not throw
         rqp._filterBucketOp(entry);
     });
+
+    // A "standalone null master key" is created when an object is placed in a non-versioned bucket,
+    // which is then converted to a versioned bucket. If no new versioned objects are added for that object,
+    // it appears as a standalone null master key with no version id.
+    it('should replicate standalone null master key', () => {
+        const customKafkaValue = {
+            ...kafkaValue,
+        };
+        delete customKafkaValue.versionId;
+        const entry = Object.assign({}, {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: '\x7FMkey0',
+            logReader: {
+                getMetricLabels: () => {},
+            },
+        }, { value: JSON.stringify(customKafkaValue) });
+
+        rqp._filterKeyOp(entry);
+
+        const publishedMessage = rqp.getState();
+        assert(publishedMessage.key);
+    });
+
+    it.skip('should replicate master suspended null version', () => {
+        const customKafkaValue = {
+            ...kafkaValue,
+            versionId: '98285859405462999999RG001  ',
+            isNull: true,
+        };
+        const entry = Object.assign({}, {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: '\x7FMkey0',
+            logReader: {
+                getMetricLabels: () => {},
+            },
+        }, { value: JSON.stringify(customKafkaValue) });
+
+        rqp._filterKeyOp(entry);
+
+        const publishedMessage = rqp.getState();
+        assert(publishedMessage.key);
+    });
+
+    it('should not replicate non-null master', () => {
+        const customKafkaValue = {
+            ...kafkaValue,
+            versionId: '98285859405462999999RG001  ',
+        };
+        const entry = Object.assign({}, {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: '\x7FMkey0',
+            logReader: {
+                getMetricLabels: () => {},
+            },
+        }, { value: JSON.stringify(customKafkaValue) });
+
+        rqp._filterKeyOp(entry);
+
+        const publishedMessage = rqp.getState();
+        assert(!publishedMessage.key);
+    });
 });
