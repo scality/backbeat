@@ -285,7 +285,7 @@ describe('replication queue populator', () => {
         assert(publishedMessage.key);
     });
 
-    it.skip('should replicate master suspended null version', () => {
+    it('should replicate master suspended null version', () => {
         const customKafkaValue = {
             ...kafkaValue,
             versionId: '98285859405462999999RG001  ',
