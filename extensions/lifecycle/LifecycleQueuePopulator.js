@@ -323,6 +323,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
                 requestId: uuid(),
+                eTag: value['content-md5'],
                 transitionTime: transitionTime.toISOString(),
                 accountId,
                 requestedDurationSecs,
