@@ -264,6 +264,7 @@ describe('LifecycleQueuePopulator', () => {
                         accountId: '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
                         bucketName: 'lc-queue-populator-test-bucket',
                         objectKey: 'object',
+                        eTag: '01064f35c238bd2b785e34508c3d27f4',
                         archiveInfo: {
                             archiveId: '04425717-a65c-4e8a-95e1-fa1d902d9d9f',
                             archiveVersion: 7504504064263669
