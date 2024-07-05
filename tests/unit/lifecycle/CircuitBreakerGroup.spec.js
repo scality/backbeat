@@ -967,7 +967,7 @@ describe('extractBucketProcessorCircuitBreakerConfigs', () => {
                     transition: {
                         location: {},
                         topic: {},
-                        global: [ ],
+                        global: [],
                     },
                     expiration: {
                         location: {},
