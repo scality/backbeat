@@ -611,3 +611,25 @@ tests:
       - alertname: KafkaConsumerRebalanceTimeouts
         eval_time: 4m
         exp_alerts: []
+
+  - name: CircuitBreakerError
+    interval: 1m
+    input_series:
+      - series: s3_circuit_breaker_errors_count{namespace="zenko"}
+        values: 0 0 1 1 1 1 1 1 1 1
+    alert_rule_test:
+      - alertname: CircuitBreakerError
+        eval_time: 0m
+        exp_alerts: []
+      - alertname: CircuitBreakerError
+        eval_time: 5m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: zenko
+            exp_annotations:
+              summary: "Circuit breaker is unable to query prometheus"
+              description: "Circuit breaker is unable to query prometheus."
+      - alertname: CircuitBreakerError
+        eval_time: 10m
+        exp_alerts: []

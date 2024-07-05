@@ -334,3 +334,15 @@ groups:
         Kafka rebalance has timed out for pod `{{ $labels.pod }}`, which indicates that the consumer
         is not working anymore, and should be restarted.
       summary: "Kafka consumer has stopped consuming messages"
+
+- name: Circuit Breaker
+  rules:
+  - alert: CircuitBreakerError
+    Expr: |
+      increase(s3_circuit_breaker_errors_count{namespace="${namespace}"}[5m]) > 0
+    Labels:
+     severity: warning
+    Annotations:
+      description: >-
+        Circuit breaker is unable to query prometheus.
+      summary: "Circuit breaker is unable to query prometheus"
