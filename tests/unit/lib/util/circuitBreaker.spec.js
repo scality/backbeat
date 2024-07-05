@@ -1,5 +1,6 @@
 const assert = require('assert');
 const {
+    circuitBreakerCounter,
     circuitBreakerGauge,
     startCircuitBreakerMetricsExport,
     updateCircuitBreakerConfigForImplicitOutputQueue
@@ -164,13 +165,28 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
 });
 
 describe('startCircuitBreakerMetricsExport', () => {
-    it('should export circuit breaker state', done => {
-        const cb = { state: 1234 };
+    it('should export circuit breaker state  and not increment counter', done => {
+        const cb = { state: 1234, failedProbes: false };
         startCircuitBreakerMetricsExport(cb, 'test', 10);
         setTimeout(async () => {
-            const { values: [{ value, labels }] } = await circuitBreakerGauge.get();
-            assert.deepStrictEqual(labels.type, 'test');
-            assert.deepStrictEqual(value, 1234);
+            const { values: [{ value: gaugeValue, labels: gaugeLabels }] } = await circuitBreakerGauge.get();
+            const { values: [{ value: counterValue }] } = await circuitBreakerCounter.get();
+            assert.deepStrictEqual(gaugeLabels.type, 'test');
+            assert.deepStrictEqual(gaugeValue, 1234);
+            assert.deepStrictEqual(counterValue, 0);
+            done();
+        }, 20);
+    });
+
+    it('should export circuit breaker state and increment counter', done => {
+        const cb = { state: 1234, failedProbes: true };
+        startCircuitBreakerMetricsExport(cb, 'test', 10);
+        setTimeout(async () => {
+            const { values: [{ value: gaugeValue, labels: gaugeLabels }] } = await circuitBreakerGauge.get();
+            const { values: [{ value: counterValue }] } = await circuitBreakerCounter.get();
+            assert.deepStrictEqual(gaugeLabels.type, 'test');
+            assert.deepStrictEqual(gaugeValue, 1234);
+            assert.deepStrictEqual(counterValue, 1);
             done();
         }, 20);
     });
