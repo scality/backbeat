@@ -170,7 +170,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 // expiration date is updated while the expiry was "in-flight" (e.g.
                 // queued for expiry but not yet expired)
                 const restoreExpirationDate = new Date(archive.restoreWillExpireAt);
-                if (restoreExpirationDate > new Date()) {
+                if (restoreExpirationDate > new Date() && !entry.getAttribute('bypassExpirationCheck')) {
                     return process.nextTick(done);
                 }
 
