@@ -96,7 +96,7 @@ class CopyLocationTask extends BackbeatTask {
             versionId: 'target.version',
             copyToLocation: 'toLocation',
         });
-        log.debug('action execution starts', actionEntry.getLogInfo());
+        log.info('action execution starts', actionEntry.getLogInfo());
         return async.waterfall([
             next => {
                 if (!this._validateActionCredentials(actionEntry)) {
