@@ -969,42 +969,42 @@ class QueueProcessor extends EventEmitter {
         const verboseLiveness = {};
         // track and return all errors in one response
         const responses = [];
-        if (this.replicationStatusProducer === undefined ||
-            this.replicationStatusProducer === null) {
-            verboseLiveness.replicationStatusProducer = libConstants.statusUndefined;
-            responses.push({
-                component: 'Replication Status Producer',
-                status: libConstants.statusUndefined,
-                site: this.site,
-            });
-        } else if (!this.replicationStatusProducer.isReady()) {
-            verboseLiveness.replicationStatusProducer = libConstants.statusNotReady;
-            responses.push({
-                component: 'Replication Status Producer',
-                status: libConstants.statusNotReady,
-                site: this.site,
-            });
-        } else {
-            verboseLiveness.replicationStatusProducer = libConstants.statusReady;
-        }
+        // if (this.replicationStatusProducer === undefined ||
+        //     this.replicationStatusProducer === null) {
+        //     verboseLiveness.replicationStatusProducer = libConstants.statusUndefined;
+        //     responses.push({
+        //         component: 'Replication Status Producer',
+        //         status: libConstants.statusUndefined,
+        //         site: this.site,
+        //     });
+        // } else if (!this.replicationStatusProducer.isReady()) {
+        //     verboseLiveness.replicationStatusProducer = libConstants.statusNotReady;
+        //     responses.push({
+        //         component: 'Replication Status Producer',
+        //         status: libConstants.statusNotReady,
+        //         site: this.site,
+        //     });
+        // } else {
+        //     verboseLiveness.replicationStatusProducer = libConstants.statusReady;
+        // }
 
-        if (this._consumer === undefined || this._consumer === null) {
-            verboseLiveness.consumer = libConstants.statusUndefined;
-            responses.push({
-                component: 'Consumer',
-                status: libConstants.statusUndefined,
-                site: this.site,
-            });
-        } else if (!this._consumer.isReady()) {
-            verboseLiveness.consumer = libConstants.statusNotReady;
-            responses.push({
-                component: 'Consumer',
-                status: libConstants.statusNotReady,
-                site: this.site,
-            });
-        } else {
-            verboseLiveness.consumer = libConstants.statusReady;
-        }
+        // if (this._consumer === undefined || this._consumer === null) {
+        //     verboseLiveness.consumer = libConstants.statusUndefined;
+        //     responses.push({
+        //         component: 'Consumer',
+        //         status: libConstants.statusUndefined,
+        //         site: this.site,
+        //     });
+        // } else if (!this._consumer.isReady()) {
+        //     verboseLiveness.consumer = libConstants.statusNotReady;
+        //     responses.push({
+        //         component: 'Consumer',
+        //         status: libConstants.statusNotReady,
+        //         site: this.site,
+        //     });
+        // } else {
+        //     verboseLiveness.consumer = libConstants.statusReady;
+        // }
 
         log.debug('verbose liveness', verboseLiveness);
         return responses;
