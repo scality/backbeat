@@ -740,15 +740,15 @@ class QueueProcessor extends EventEmitter {
                 }
                 return done();
             }),
-            done => {
-                if (options && options.disableConsumer) {
-                    return done();
-                }
-                this._consumer = this._createConsumer(
-                    this.topic,
-                    this.processReplicationEntry.bind(this), options);
-                return this._consumer.once('canary', done);
-            },
+            // done => {
+            //     if (options && options.disableConsumer) {
+            //         return done();
+            //     }
+            //     this._consumer = this._createConsumer(
+            //         this.topic,
+            //         this.processReplicationEntry.bind(this), options);
+            //     return this._consumer.once('canary', done);
+            // },
             done  => {
                 if (options && options.disableConsumer) {
                     return done();
