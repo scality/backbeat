@@ -136,20 +136,22 @@ class CopyLocationTask extends BackbeatTask {
                         return this._getAndPutMultipartUpload(actionEntry, objMD,
                             log, next);
                     }
+                    log.info('action execution progressing', actionEntry.getLogInfo());
                     return this._getAndPutObject(actionEntry, objMD, log, next);
                 }, artificialDelayS * 1000);
             },
         ], err => {
             const retArgs = this._publishCopyLocationStatus(
                 err, actionEntry, kafkaEntry, log);
-
-            const { origin, fromLocation, contentLength } =
-                  actionEntry.getAttribute('metrics');
-            ReplicationMetrics.onReplicationProcessed(
-                origin, fromLocation, this.site, contentLength,
-                actionEntry.getStatus(),
-                actionEntry.getElapsedMs());
-
+                
+                const { origin, fromLocation, contentLength } =
+                actionEntry.getAttribute('metrics');
+                ReplicationMetrics.onReplicationProcessed(
+                    origin, fromLocation, this.site, contentLength,
+                    actionEntry.getStatus(),
+                    actionEntry.getElapsedMs());
+                    
+            log.info('action execution finished', actionEntry.getLogInfo());
             return done(null, retArgs);
         });
     }
