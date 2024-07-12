@@ -128,7 +128,7 @@ class CopyLocationTask extends BackbeatTask {
                     actionEntry.getAttribute('toLocation'),
                     startTime - Date.parse(transitionTime));
 
-                artificialDelayS = parseInt(process.env.ARTIFICIAL_DELAY_S) || 0;
+                const artificialDelayS = parseInt(process.env.ARTIFICIAL_DELAY_S) || 0;
                 setTimeout(() => {
                     if (objMD.getContentLength() / 1000000 >=
                         this.repConfig.queueProcessor.minMPUSizeMB ||
