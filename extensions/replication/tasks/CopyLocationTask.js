@@ -128,26 +128,16 @@ class CopyLocationTask extends BackbeatTask {
                     actionEntry.getAttribute('toLocation'),
                     startTime - Date.parse(transitionTime));
 
-                // Do a multipart upload when either the size is above
-                // a threshold or the source object is itself a MPU.
-                //
-                // FIXME: object ETag for MPUs is an aggregate from
-                // each part's ETag, which does not allow the current
-                // implementation to check the data integrity when
-                // doing ranged PUTs. Also in the current
-                // implementation we are forced to send an ETag for a
-                // multiple backend putObject(), which only matches if
-                // the object is not a MPU, so we cannot use this
-                // route for MPUs as-is without recomputing a new
-                // checksum, which is not the case today (hence the
-                // MPU check below).
-                if (objMD.getContentLength() / 1000000 >=
-                    this.repConfig.queueProcessor.minMPUSizeMB ||
-                    objMD.isMultipartUpload()) {
-                    return this._getAndPutMultipartUpload(actionEntry, objMD,
-                        log, next);
-                }
-                return this._getAndPutObject(actionEntry, objMD, log, next);
+                artificialDelayS = parseInt(process.env.ARTIFICIAL_DELAY_S) || 0;
+                setTimeout(() => {
+                    if (objMD.getContentLength() / 1000000 >=
+                        this.repConfig.queueProcessor.minMPUSizeMB ||
+                        objMD.isMultipartUpload()) {
+                        return this._getAndPutMultipartUpload(actionEntry, objMD,
+                            log, next);
+                    }
+                    return this._getAndPutObject(actionEntry, objMD, log, next);
+                }, artificialDelayS * 1000);
             },
         ], err => {
             const retArgs = this._publishCopyLocationStatus(
