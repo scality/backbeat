@@ -10,7 +10,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { LifecycleMetrics } = require('../../lifecycle/LifecycleMetrics');
 const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
-const { attachReqUids } = require('../../../lib/clients/utils');
+const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
@@ -77,7 +77,7 @@ class CopyLocationTask extends BackbeatTask {
             endpoint: `${transport}://${s3.host}:${s3.port}`,
             credentials: s3Credentials,
             sslEnabled: transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
+            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS },
             maxRetries: 0,
         });
         this.backbeatMetadataProxy = new BackbeatMetadataProxy(
