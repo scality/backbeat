@@ -797,8 +797,8 @@ class CopyLocationTask extends BackbeatTask {
     }
 
     /**
-     * Get the source object metadata and ensure the latest object MD5 hash is
-     * the same as in the action entry.
+     * Ensure the latest object MD5 hash is the same as in the action entry,
+     * and that the object has not already been transitioned to the destination
      * @param {ActionQueueEntry} actionEntry - the action entry
      * @param {ObjectMD} objMD - metadata object
 
@@ -816,6 +816,11 @@ class CopyLocationTask extends BackbeatTask {
                     'object contents have changed');
             }
         }
+        if (objMD.getDataStoreName() === actionEntry.getAttribute('toLocation')) {
+            // The object was already transitioned to the destination location
+            return errors.InvalidObjectState.customizeDescription(
+                'object already transitioned');
+        }
         return null;
     }
 
@@ -824,6 +829,11 @@ class CopyLocationTask extends BackbeatTask {
             actionEntry.setError(err);
         }
         log.info('action execution ended', actionEntry.getLogInfo());
+        // skip object if it was already transitioned
+        if (err && (err.InvalidObjectState || err.code === 'InvalidObjectState')) {
+            log.info('object skipped: invalid object state', actionEntry.getLogInfo());
+            return { committable: true };
+        }
         if (!actionEntry.getResultsTopic()) {
             // no result requested, we may commit immediately
             return { committable: true };
