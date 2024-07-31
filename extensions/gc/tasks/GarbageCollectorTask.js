@@ -17,6 +17,10 @@ class GarbageCollectorTask extends BackbeatTask {
         super();
         const gcState = gc.getStateVars();
         Object.assign(this, gcState);
+        const retryParams = gcState.gcConfig?.consumer.retry;
+        if (retryParams) {
+            this.retryParams = retryParams;
+        }
     }
 
     // helper method needed for replication generated entries in which the
@@ -134,7 +138,7 @@ class GarbageCollectorTask extends BackbeatTask {
         });
     }
 
-    _executeDeleteData(entry, log, done) {
+    _executeDeleteDataOnce(entry, log, done) {
         const { locations } = entry.getAttribute('target');
         const ruleType = entry.getContextAttribute('ruleType');
         const params = {
@@ -184,7 +188,24 @@ class GarbageCollectorTask extends BackbeatTask {
         });
     }
 
-    _deleteArchivedSourceData(entry, log, done) {
+    _executeDeleteData(entry, log, done) {
+        const logFields = {
+            bucket: entry.getAttribute('source.bucket'),
+            objectKey: entry.getAttribute('source.objectKey'),
+            storageClass: entry.getAttribute('source.storageClass'),
+            ruleType: entry.getContextAttribute('ruleType'),
+        };
+
+        this.retry({
+            actionDesc: 'execute delete data',
+            logFields,
+            actionFunc: cb => this._executeDeleteDataOnce(entry, log, cb),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, done);
+    }
+
+    _deleteArchivedSourceDataOnce(entry, log, done) {
         const { bucket, key, version, oldLocation, newLocation } = entry.getAttribute('target');
 
         async.waterfall([
@@ -254,7 +275,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     .setUserMetadata({
                         'x-amz-meta-scal-s3-transition-attempt': undefined,
                     });
-                return this._putMetadata(entry, objMD, log, err => {
+                this._putMetadata(entry, objMD, log, err => {
                     GarbageCollectorMetrics.onS3Request(log, 'putMetadata', 'archive', err);
                     if (!err) {
                         log.end().info('completed expiration of archived data',
@@ -278,6 +299,17 @@ class GarbageCollectorTask extends BackbeatTask {
             }
             return done();
         });
+    }
+
+    _deleteArchivedSourceData(entry, log, done) {
+        this.retry({
+            actionDesc: 'delete archived source data',
+            logFields: { bucket: entry.getAttribute('target').bucket,
+                key: entry.getAttribute('target').key, version: entry.getAttribute('target').version },
+            actionFunc: cb => this._deleteArchivedSourceDataOnce(entry, log, cb),
+            shouldRetryFunc: err => err.retryable,
+            log,
+        }, done);
     }
 
     /**
