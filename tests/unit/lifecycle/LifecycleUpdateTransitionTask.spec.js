@@ -11,6 +11,7 @@ const {
     BackbeatMetadataProxyMock,
     ProcessorMock,
 } = require('../mocks');
+const { errors } = require('arsenal');
 
 describe('LifecycleUpdateTransitionTask', () => {
     let backbeatMetadataProxyClient;
@@ -53,6 +54,7 @@ describe('LifecycleUpdateTransitionTask', () => {
             new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
         mdObj = new ObjectMD();
         mdObj.setLocation(oldLocation)
+            .setTransitionInProgress(true)
             .setContentMd5('1ccc7006b902a4d30ec26e9ddcf759d8')
             .setLastModified('1970-01-01T00:00:00.000Z');
         backbeatMetadataProxyClient.setMdObj(mdObj);
@@ -141,6 +143,28 @@ describe('LifecycleUpdateTransitionTask', () => {
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
             assert.deepStrictEqual(
                 receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            done();
+        });
+    });
+
+    it('should reset transition-in-progress flag when transition fails', done => {
+        actionEntry.setError(errors.InternalError);
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+            assert.deepStrictEqual(receivedMd['x-amz-meta-scal-s3-transition-attempt'], 1);
+            assert.deepStrictEqual(receivedMd['x-amz-scal-transition-in-progress'], false);
+            done();
+        });
+    });
+
+    it('should increment transition attempt count when transition fails', done => {
+        actionEntry.setError(errors.InternalError);
+        mdObj.setUserMetadata({ 'x-amz-meta-scal-s3-transition-attempt': 2 });
+        task.processActionEntry(actionEntry, err => {
+            assert.ifError(err);
+            const receivedMd = backbeatMetadataProxyClient.getReceivedMd();
+            assert.deepStrictEqual(receivedMd['x-amz-meta-scal-s3-transition-attempt'], 3);
             done();
         });
     });

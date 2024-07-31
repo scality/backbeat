@@ -71,6 +71,9 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             .setDataStoreName(newLocationName)
             .setAmzStorageClass(newLocationName)
             .setOriginOp('s3:LifecycleTransition')
+            .setUserMetadata({
+                'x-amz-meta-scal-s3-transition-attempt': undefined,
+            })
             .setTransitionInProgress(false);
     }
 
@@ -145,15 +148,116 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
     }
 
     /**
-     * Execute the action specified in action entry to update metadata
-     * after an object data has been transitioned to a new storage
-     * class
+     * Updates metadata after a lifecycle transition has been successfully
+     * And initiates garbage collection of the data
+     * @param {ActionQueueEntry} entry - action entry to execute
+     * @param {Logger} log - logger instance
+     * @param {Function} done - callback funtion
+     * @return {undefined}
+     */
+    handleSuccessfullTransition(entry, log, done) {
+        let locationToGC;
+        return async.waterfall([
+            next => this._getMetadata(entry, log, (err, objMD) => {
+                LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
+                next(err, objMD);
+            }),
+            (objMD, next) => {
+                const oldLocation = objMD.getLocation();
+                const newLocation = entry.getAttribute('results.location');
+                if (this._wasObjectModified(entry, objMD, log)) {
+                    locationToGC = newLocation;
+                    return next();
+                }
+                const eTag = entry.getAttribute('target.eTag');
+                // commit if MD5 did not change after transition
+                // started and location has effectively been
+                // updated, rollback if MD5 changed
+                if (eTag !== `"${objMD.getContentMd5()}"`) {
+                    log.info('object ETag has changed during lifecycle ' +
+                             'transition processing',
+                    Object.assign({
+                        method:
+                        'LifecycleUpdateTransitionTask.processActionEntry',
+                    }, entry.getLogInfo()));
+                    locationToGC = newLocation;
+                    return next();
+                }
+                try {
+                    assert.notDeepStrictEqual(oldLocation, newLocation);
+                } catch (err) {
+                    log.info('duplicate location update, skipping',
+                    Object.assign({
+                        method:
+                        'LifecycleUpdateTransitionTask.processActionEntry',
+                    }, entry.getLogInfo()));
+                    return next();
+                }
+                locationToGC = oldLocation;
+
+                this._updateMdWithTransition(entry, objMD);
+                return this._putMetadata(entry, objMD, log, err => {
+                    const transitionTime = entry.getAttribute('metrics.transitionTime') ||
+                        objMD.getTransitionTime();
+                    const locationName = entry.getAttribute('toLocation');
+                    LifecycleMetrics.onLifecycleCompleted(log, 'transition',
+                        locationName, Date.now() - Date.parse(transitionTime));
+                    next(err);
+                });
+            },
+            next => {
+                log.end().info('metadata updated for transition',
+                    entry.getLogInfo());
+
+                if (!locationToGC) {
+                    return next();
+                }
+                return this._garbageCollectLocation(
+                    entry, locationToGC, log, next);
+            },
+        ], done);
+    }
+
+    /**
+     * Requeue the object to get transitioned again
+     * @param {ActionQueueEntry} entry - action entry to execute
+     * @param {Logger} log - logger instance
+     * @param {Function} done - callback funtion
+     * @return {undefined}
+     */
+    handleFailedTransition(entry, log, done) {
+        return async.waterfall([
+            next => this._getMetadata(entry, log, (err, objMD) => {
+                LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
+                next(err, objMD);
+            }),
+            (objMD, next) => {
+                const userMDStr = objMD.getUserMetadata() || '{}';
+                const userMD = JSON.parse(userMDStr);
+
+                let tryCount = userMD['x-amz-meta-scal-s3-transition-attempt'];
+                if (tryCount === undefined) {
+                    tryCount = 1;
+                } else {
+                    tryCount = parseInt(tryCount, 10) + 1;
+                }
+
+                objMD.setTransitionInProgress(false)
+                    .setUserMetadata({
+                        'x-amz-meta-scal-s3-transition-attempt': tryCount,
+                    });
+
+                return this._putMetadata(entry, objMD, log, next);
+            },
+        ], done);
+    }
+
+    /**
      *
      * @param {ActionQueueEntry} entry - action entry to execute
      * @param {Function} done - callback funtion
      * @return {undefined}
      */
-
     processActionEntry(entry, done) {
         const log = this.logger.newRequestLogger();
         entry.addLoggedAttributes({
@@ -164,69 +268,10 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             lastModified: 'target.lastModified',
         });
         if (entry.getStatus() === 'success') {
-            let locationToGC;
-            return async.waterfall([
-                next => this._getMetadata(entry, log, (err, objMD) => {
-                    LifecycleMetrics.onS3Request(log, 'getMetadata', 'transition', err);
-                    next(err, objMD);
-                }),
-                (objMD, next) => {
-                    const oldLocation = objMD.getLocation();
-                    const newLocation = entry.getAttribute('results.location');
-                    if (this._wasObjectModified(entry, objMD, log)) {
-                        locationToGC = newLocation;
-                        return next();
-                    }
-                    const eTag = entry.getAttribute('target.eTag');
-                    // commit if MD5 did not change after transition
-                    // started and location has effectively been
-                    // updated, rollback if MD5 changed
-                    if (eTag !== `"${objMD.getContentMd5()}"`) {
-                        log.info('object ETag has changed during lifecycle ' +
-                                 'transition processing',
-                        Object.assign({
-                            method:
-                            'LifecycleUpdateTransitionTask.processActionEntry',
-                        }, entry.getLogInfo()));
-                        locationToGC = newLocation;
-                        return next();
-                    }
-                    try {
-                        assert.notDeepStrictEqual(oldLocation, newLocation);
-                    } catch (err) {
-                        log.info('duplicate location update, skipping',
-                        Object.assign({
-                            method:
-                            'LifecycleUpdateTransitionTask.processActionEntry',
-                        }, entry.getLogInfo()));
-                        return next();
-                    }
-                    locationToGC = oldLocation;
-
-                    this._updateMdWithTransition(entry, objMD);
-                    return this._putMetadata(entry, objMD, log, err => {
-                        const transitionTime = entry.getAttribute('metrics.transitionTime') ||
-                            objMD.getTransitionTime();
-                        const locationName = entry.getAttribute('toLocation');
-                        LifecycleMetrics.onLifecycleCompleted(log, 'transition',
-                            locationName, Date.now() - Date.parse(transitionTime));
-                        next(err);
-                    });
-                },
-                next => {
-                    log.end().info('metadata updated for transition',
-                        entry.getLogInfo());
-
-                    if (!locationToGC) {
-                        return next();
-                    }
-                    return this._garbageCollectLocation(
-                        entry, locationToGC, log, next);
-                },
-            ], done);
+            return this.handleSuccessfullTransition(entry, log, done);
         }
-        // don't update metadata if the copy failed
-        return process.nextTick(done);
+
+        return this.handleFailedTransition(entry, log, done);
     }
 }
 
