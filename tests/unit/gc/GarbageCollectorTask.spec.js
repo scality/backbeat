@@ -1,5 +1,6 @@
 const assert = require('assert');
 const werelogs = require('werelogs');
+const sinon = require('sinon');
 const { ObjectMD } = require('arsenal').models;
 
 const GarbageCollectorTask = require('../../../extensions/gc/tasks/GarbageCollectorTask');
@@ -35,12 +36,20 @@ describe('GarbageCollectorTask', () => {
     let gcProducer;
     let gcProcessor;
     let mdObj;
+    let gcConfig;
 
     beforeEach(() => {
         mdObj = new ObjectMD();
         backbeatClient = new BackbeatClientMock();
         backbeatMetadataProxyClient = new BackbeatMetadataProxyMock();
         gcProducer = new GarbageCollectorProducerMock();
+        gcConfig = {
+            consumer: {
+                retry: {
+                    maxRetries: 3,
+                },
+            },
+        };
         gcProcessor = new ProcessorMock(
             null,
             null,
@@ -48,6 +57,7 @@ describe('GarbageCollectorTask', () => {
             backbeatMetadataProxyClient,
             gcProducer,
             null,
+            gcConfig,
             new werelogs.Logger('test:GarbageCollectorTask'));
         gcTask = new GarbageCollectorTask(gcProcessor);
     });
@@ -171,6 +181,43 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
+    it('should retry delete operation if gc failed with retryable error', done => {
+        backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
+
+        const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+              .addContext({
+                  origin: 'lifecycle',
+                  ruleType: 'archive',
+                  bucketName: bucket,
+                  objectKey: key,
+                  versionId: version,
+              })
+              .setAttribute('serviceName', 'lifecycle-transition')
+              .setAttribute('target.oldLocation', 'old-location')
+              .setAttribute('target.newLocation', 'new-location')
+              .setAttribute('target.bucket', bucket)
+              .setAttribute('target.key', version)
+              .setAttribute('target.version', key)
+              .setAttribute('target.accountId', accountId)
+              .setAttribute('target.owner', owner);
+
+        mdObj.setLocation(loc)
+            .setDataStoreName('old-location')
+            .setAmzStorageClass('old-location')
+            .setTransitionInProgress(true);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+
+        gcTask.processActionEntry(entry, (err, commitInfo) => {
+            assert.strictEqual(batchDeleteDataSpy.callCount, 4);
+            assert.strictEqual(err.statusCode, 500);
+            assert.deepStrictEqual(commitInfo, { committable: false });
+            batchDeleteDataSpy.restore();
+            done();
+        });
+    });
+
     it('should send committable error when object is not found', done => {
         backbeatMetadataProxyClient.error = { statusCode: 404, code: 'ObjNotFound' };
 
@@ -228,4 +275,94 @@ describe('GarbageCollectorTask', () => {
             done();
         });
     });
+
+    it('should delete data', done => {
+        backbeatClient.batchDeleteResponse = { error: null, res: null };
+
+        const entry = ActionQueueEntry.create('deleteData')
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'expiration',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-expiration')
+            .setAttribute('target', {
+                bucket,
+                key: version,
+                version: key,
+                accountId,
+                owner,
+                locations: [{
+                    key: 'locationKey',
+                    dataStoreName: 'dataStoreName',
+                    size: 'size',
+                    dataStoreVersionId: 'dataStoreVersionId',
+                }],
+            });
+        mdObj.setLocation(loc)
+            .setDataStoreName('locationName')
+            .setAmzStorageClass('STANDARD');
+
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+
+        gcTask.processActionEntry(entry, (err, commitInfo) => {
+            assert.ifError(err);
+            assert.strictEqual(commitInfo, undefined);
+
+            const updatedMD = backbeatMetadataProxyClient.mdObj;
+            assert.deepStrictEqual(updatedMD.getLocation(), loc);
+            assert.strictEqual(updatedMD.getDataStoreName(), 'locationName');
+            assert.strictEqual(updatedMD.getAmzStorageClass(), 'STANDARD');
+
+            assert.strictEqual(batchDeleteDataSpy.callCount, 1);
+            batchDeleteDataSpy.restore();
+            done();
+        });
+    });
+
+    it('should retry delete operation if gc failed with retryable error', done => {
+        backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
+
+        const entry = ActionQueueEntry.create('deleteData')
+            .addContext({
+                origin: 'lifecycle',
+                ruleType: 'expiration',
+                bucketName: bucket,
+                objectKey: key,
+                versionId: version,
+            })
+            .setAttribute('serviceName', 'lifecycle-expiration')
+            .setAttribute('target', {
+                bucket,
+                key: version,
+                version: key,
+                accountId,
+                owner,
+                locations: [{
+                    key: 'locationKey',
+                    dataStoreName: 'dataStoreName',
+                    size: 'size',
+                    dataStoreVersionId: 'dataStoreVersionId',
+                }],
+            });
+        mdObj.setLocation(loc)
+            .setDataStoreName('locationName')
+            .setAmzStorageClass('STANDARD');
+
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        const batchDeleteDataSpy = sinon.spy(gcTask, '_batchDeleteData');
+
+        gcTask.processActionEntry(entry, err => {
+            assert.strictEqual(batchDeleteDataSpy.callCount, 4);
+            assert.strictEqual(err.statusCode, 500);
+            batchDeleteDataSpy.restore();
+            done();
+        });
+    });
+
 });
