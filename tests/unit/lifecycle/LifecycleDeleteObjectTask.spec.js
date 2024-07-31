@@ -35,6 +35,7 @@ describe('LifecycleDeleteObjectTask', () => {
             backbeatMdProxyClient,
             null,
             null,
+            null,
             new werelogs.Logger('test:LifecycleDeleteObjectTask'));
         objMd = new ObjectMD();
         backbeatMdProxyClient.setMdObj(objMd);

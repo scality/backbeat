@@ -139,14 +139,16 @@ class BackbeatMetadataProxyMock {
     }
 }
 
+
 class ProcessorMock {
-    constructor(lcConfig, s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, coldProducer, logger) {
+    constructor(lcConfig, s3Client, backbeatClient, backbeatMetadataProxy, gcProducer, coldProducer, gcConfig, logger) {
         this.lcConfig = lcConfig;
         this.s3Client = s3Client;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
         this.backbeatClient = backbeatClient;
         this.gcProducer = gcProducer;
         this.coldProducer = coldProducer;
+        this._gcConfig = gcConfig;
         this.logger = logger;
     }
 
@@ -156,6 +158,7 @@ class ProcessorMock {
             backbeatClient: this.backbeatMetadataProxy,
             gcProducer: this.gcProducer,
             coldProducer: this.coldProducer,
+            gcConfig: this._gcConfig,
             logger: this.logger,
             getBackbeatClient: () => this.backbeatClient,
             getBackbeatMetadataProxy: () => this.backbeatMetadataProxy,
