@@ -51,6 +51,7 @@ describe('LifecycleUpdateTransitionTask', () => {
             backbeatMetadataProxyClient,
             gcProducer,
             null,
+            null,
             new werelogs.Logger('test:LifecycleUpdateTransitionTask'));
         mdObj = new ObjectMD();
         mdObj.setLocation(oldLocation)

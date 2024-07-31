@@ -39,6 +39,7 @@ describe('LifecycleUpdateExpirationTask', () => {
             backbeatMetadataProxyClient,
             gcProducer,
             null,
+            null,
             new werelogs.Logger('test:LifecycleUpdateExpirationTask'));
         actionEntry = ActionQueueEntry.create('gc')
             .setAttribute('target', {

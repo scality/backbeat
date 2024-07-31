@@ -61,6 +61,7 @@ describe('LifecycleResetTransitionInProgressTask', () => {
             backbeatMetadataProxyClient,
             null,
             null,
+            null,
             new werelogs.Logger('test:LifecycleRetriggerRestoreTask'));
 
         task = new LifecycleRetriggerRestoreTask(objectProcessor);

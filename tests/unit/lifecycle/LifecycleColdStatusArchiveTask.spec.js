@@ -61,6 +61,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
             backbeatMetadataProxyClient,
             gcProducer,
             coldProducer,
+            null,
             new werelogs.Logger('test:LifecycleColdStatusArchiveTask'));
         archiveTask = new LifecycleColdStatusArchiveTask(objectProcessor);
     });
