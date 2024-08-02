@@ -154,7 +154,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 key,
                 eventType,
             });
-            if (configUtil.validateEntry(config, ent)) {
+            const { isValid } = configUtil.validateEntry(config, ent);
+            if (isValid) {
                 const message
                     = messageUtil.addLogAttributes(value, ent);
                 this.log.info('publishing message', {

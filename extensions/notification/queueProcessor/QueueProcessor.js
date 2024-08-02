@@ -199,10 +199,10 @@ class QueueProcessor extends EventEmitter {
             const config = this.bnConfigManager.getConfig(bucket);
             if (config && Object.keys(config).length > 0) {
                 const notifConfig = config.notificationConfiguration;
-                const destBnConf = notifConfig.queueConfig.find(
+                const destBnConf = notifConfig.queueConfig.filter(
                     c => c.queueArn.split(':').pop()
                         === this.destinationId);
-                if (!destBnConf) {
+                if (!destBnConf.length) {
                     // skip, if there is no config for the current
                     // destination resource
                     return done();
@@ -212,7 +212,7 @@ class QueueProcessor extends EventEmitter {
                 const bnConfig = {
                     bucket,
                     notificationConfiguration: {
-                        queueConfig: [destBnConf],
+                        queueConfig: destBnConf,
                     },
                 };
                 this.logger.debug('validating entry', {
@@ -222,9 +222,10 @@ class QueueProcessor extends EventEmitter {
                     eventType,
                     destination: this.destinationId,
                 });
-                if (configUtil.validateEntry(bnConfig, sourceEntry)) {
+                const { isValid, matchingConfig } = configUtil.validateEntry(bnConfig, sourceEntry);
+                if (isValid) {
                     // add notification configuration id to the message
-                    sourceEntry.configurationId = destBnConf.id;
+                    sourceEntry.configurationId = matchingConfig.id;
                     const message
                         = messageUtil.transformToSpec(sourceEntry);
                     const msg = {
@@ -242,6 +243,7 @@ class QueueProcessor extends EventEmitter {
                         eventType: eventRecord.eventName,
                         eventTime: eventRecord.eventTime,
                         destination: this.destinationId,
+                        matchingConfig,
                     });
                     return this._destination.send([msg], done);
                 }
