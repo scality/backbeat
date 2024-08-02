@@ -65,39 +65,37 @@ function filterConfigsByEvent(bnConfigs, event) {
 /**
  * Validates an entry from log against bucket notification configurations to see
  * if the entry has to be published. Validations include, bucket specific
- * configuration check, event type check, object name specific filter checks
- * @param  {Object} bnConfig - Bucket notification configuration
- * @param  {Object} entry - An entry from the log
- * @return {boolean} true if event qualifies for notification
+ * configuration check, event type check, object name specific filter checks.
+ * @param {Object} bnConfig - Bucket notification configuration.
+ * @param {Object} entry - An entry from the log.
+ * @return {Object} Result with validity boolean and matching configuration rule.
  */
 function validateEntry(bnConfig, entry) {
     const { bucket, eventType } = entry;
-    /**
-     * if the event type is unavailable, it is an entry that is a
-     * placeholder for deletion or cleanup, these entries should be ignored and
-     * not be processed.
-    */
+
     if (!eventType) {
-        return false;
+        return { isValid: false, matchingConfig: null };
     }
-    const notifConf = bnConfig.notificationConfiguration;
-    // check if the entry belongs to the bucket in the configuration
+
     if (bucket !== bnConfig.bucket) {
-        return false;
+        return { isValid: false, matchingConfig: null };
     }
-    // check if the event type matches
+
+    const notifConf = bnConfig.notificationConfiguration;
     const qConfigs = filterConfigsByEvent(notifConf.queueConfig, eventType);
+
     if (qConfigs.length > 0) {
-        const qConfigWithFilters
-            = qConfigs.filter(c => c.filterRules && c.filterRules.length > 0);
-        // if there are configs without filters, make the entry valid
-        if (qConfigs.length > qConfigWithFilters.length) {
-            return true;
-        }
-        return qConfigWithFilters.some(
-            c => validateEntryWithFilter(c.filterRules, entry));
+        const matchingConfig = qConfigs.find(c => {
+            if (!c.filterRules || c.filterRules.length === 0) {
+                return true;
+            }
+            return validateEntryWithFilter(c.filterRules, entry);
+        });
+
+        return { isValid: !!matchingConfig, matchingConfig };
     }
-    return false;
+
+    return { isValid: false, matchingConfig: null };
 }
 
 module.exports = {

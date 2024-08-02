@@ -164,3 +164,495 @@ describe('notification QueueProcessor', () => {
         });
     });
 });
+
+describe('notification QueueProcessor with multiple rules', () => {
+    let qp;
+    let sendStub;
+
+    before(done => {
+        qp = new QueueProcessor(null, null, null, {
+            host: 'external-kafka-host',
+        }, 'destId');
+        qp.bnConfigManager = {
+            getConfig: () => ({
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                            ],
+                        }, {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '1',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'tata/',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+            setConfig: () => {},
+        };
+
+        qp._setupDestination('kafka', done);
+    });
+
+    beforeEach(() => {
+        sendStub = sinon.stub().callsFake((messages, cb) => setTimeout(() => cb(), 100));
+        qp._destination._notificationProducer = {
+            send: sendStub,
+        };
+    });
+
+    it('should send notification to external destination if object matches the first rule', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'toto/key',
+            }),
+        }, err => {
+            assert.ifError(err);
+
+            const [m] = sendStub.args[0][0];
+            const { key, message } = m;
+            assert.strictEqual(key, 'mybucket/toto/key');
+            assert.deepStrictEqual(message, {
+                Records: [
+                    {
+                        eventVersion: '1.0',
+                        eventSource: 'scality:s3',
+                        eventTime: '2024-08-02T09:19:43.991Z',
+                        awsRegion: 'us-east-1',
+                        eventName: 's3:ObjectCreated:Put',
+                        userIdentity: { principalId: null },
+                        requestParameters: { sourceIPAddress: null },
+                        responseElements: {
+                            'x-amz-request-id': null,
+                            'x-amz-id-2': null,
+                        },
+                        s3: {
+                            s3SchemaVersion: '1.0',
+                            configurationId: '0',
+                            bucket: {
+                                name: 'mybucket',
+                                ownerIdentity: { principalId: null },
+                                arn: null,
+                            },
+                            object: {
+                                key: 'toto/key',
+                                eTag: null,
+                                size: '2',
+                                versionId: null,
+                                sequencer: null,
+                            },
+                        },
+                    },
+                ],
+            });
+            done();
+        });
+    });
+
+    it('should send notification to external destination if object matches the second rule', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'tata/key',
+            }),
+        }, err => {
+            assert.ifError(err);
+
+            const [m] = sendStub.args[0][0];
+            const { key, message } = m;
+            assert.strictEqual(key, 'mybucket/tata/key');
+            assert.deepStrictEqual(message, {
+                Records: [
+                    {
+                        eventVersion: '1.0',
+                        eventSource: 'scality:s3',
+                        eventTime: '2024-08-02T09:19:43.991Z',
+                        awsRegion: 'us-east-1',
+                        eventName: 's3:ObjectCreated:Put',
+                        userIdentity: { principalId: null },
+                        requestParameters: { sourceIPAddress: null },
+                        responseElements: {
+                            'x-amz-request-id': null,
+                            'x-amz-id-2': null,
+                        },
+                        s3: {
+                            s3SchemaVersion: '1.0',
+                            configurationId: '1',
+                            bucket: {
+                                name: 'mybucket',
+                                ownerIdentity: { principalId: null },
+                                arn: null,
+                            },
+                            object: {
+                                key: 'tata/key',
+                                eTag: null,
+                                size: '2',
+                                versionId: null,
+                                sequencer: null,
+                            },
+                        },
+                    },
+                ],
+            });
+            done();
+        });
+    });
+
+    it('should not send notification to external destination if object does not match any rule', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'key.png',
+            }),
+        }, err => {
+            assert.ifError(err);
+            assert(sendStub.notCalled);
+
+            done();
+        });
+    });
+});
+
+describe('notification QueueProcessor with one rule filtering by prefix and suffix', () => {
+    let qp;
+    let sendStub;
+
+    before(done => {
+        qp = new QueueProcessor(null, null, null, {
+            host: 'external-kafka-host',
+        }, 'destId');
+        qp.bnConfigManager = {
+            getConfig: () => ({
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                                {
+                                    name: 'Suffix',
+                                    value: '.png',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+            setConfig: () => {},
+        };
+
+        qp._setupDestination('kafka', done);
+    });
+
+    beforeEach(() => {
+        sendStub = sinon.stub().callsFake((messages, cb) => setTimeout(() => cb(), 100));
+        qp._destination._notificationProducer = {
+            send: sendStub,
+        };
+    });
+
+    it('should send notification to external destination if object matches all filter rules', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'toto/key.png',
+            }),
+        }, err => {
+            assert.ifError(err);
+
+            assert(sendStub.calledOnce);
+            const [m] = sendStub.args[0][0];
+            const { key, message } = m;
+            assert.strictEqual(key, 'mybucket/toto/key.png');
+            assert.deepStrictEqual(message, {
+                Records: [
+                    {
+                        eventVersion: '1.0',
+                        eventSource: 'scality:s3',
+                        eventTime: '2024-08-02T09:19:43.991Z',
+                        awsRegion: 'us-east-1',
+                        eventName: 's3:ObjectCreated:Put',
+                        userIdentity: { principalId: null },
+                        requestParameters: { sourceIPAddress: null },
+                        responseElements: {
+                            'x-amz-request-id': null,
+                            'x-amz-id-2': null,
+                        },
+                        s3: {
+                            s3SchemaVersion: '1.0',
+                            configurationId: '0',
+                            bucket: {
+                                name: 'mybucket',
+                                ownerIdentity: { principalId: null },
+                                arn: null,
+                            },
+                            object: {
+                                key: 'toto/key.png',
+                                eTag: null,
+                                size: '2',
+                                versionId: null,
+                                sequencer: null,
+                            },
+                        },
+                    },
+                ],
+            });
+            done();
+        });
+    });
+
+    it('should not send notification to external destination if object matches only the prefix filter rule', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'toto/key',
+            }),
+        }, err => {
+            assert.ifError(err);
+            assert(sendStub.notCalled);
+
+            done();
+        });
+    });
+
+    it('should not send notification to external destination if object matches only the suffix filter rule', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'key.png',
+            }),
+        }, err => {
+            assert.ifError(err);
+            assert(sendStub.notCalled);
+
+            done();
+        });
+    });
+});
+
+describe('notification QueueProcessor with multiple rules and object matching all rules', () => {
+    let qp;
+    let sendStub;
+
+    before(done => {
+        qp = new QueueProcessor(null, null, null, {
+            host: 'external-kafka-host',
+        }, 'destId');
+        qp.bnConfigManager = {
+            getConfig: () => ({
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                            ],
+                        }, {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '1',
+                            filterRules: [
+                                {
+                                    name: 'Suffix',
+                                    value: '.png',
+                                },
+                            ],
+                        },
+                    ],
+                },
+            }),
+            setConfig: () => {},
+        };
+
+        qp._setupDestination('kafka', done);
+    });
+
+    beforeEach(() => {
+        sendStub = sinon.stub().callsFake((messages, cb) => setTimeout(() => cb(), 100));
+        qp._destination._notificationProducer = {
+            send: sendStub,
+        };
+    });
+
+    it('should send only one notification to external destination if object matches all rules', done => {
+        qp.processKafkaEntry({
+            value: JSON.stringify({
+                dateTime: '2024-08-02T09:19:43.991Z',
+                eventType: 's3:ObjectCreated:Put',
+                region: 'us-east-1',
+                schemaVersion: '3',
+                size: '2',
+                versionId: null,
+                bucket: 'mybucket',
+                key: 'toto/key.png',
+            }),
+        }, err => {
+            assert.ifError(err);
+
+            assert(sendStub.calledOnce);
+            const [m] = sendStub.args[0][0];
+            const { key, message } = m;
+            assert.strictEqual(key, 'mybucket/toto/key.png');
+            assert.deepStrictEqual(message, {
+                Records: [
+                    {
+                        eventVersion: '1.0',
+                        eventSource: 'scality:s3',
+                        eventTime: '2024-08-02T09:19:43.991Z',
+                        awsRegion: 'us-east-1',
+                        eventName: 's3:ObjectCreated:Put',
+                        userIdentity: { principalId: null },
+                        requestParameters: { sourceIPAddress: null },
+                        responseElements: {
+                            'x-amz-request-id': null,
+                            'x-amz-id-2': null,
+                        },
+                        s3: {
+                            s3SchemaVersion: '1.0',
+                            configurationId: '0',
+                            bucket: {
+                                name: 'mybucket',
+                                ownerIdentity: { principalId: null },
+                                arn: null,
+                            },
+                            object: {
+                                key: 'toto/key.png',
+                                eTag: null,
+                                size: '2',
+                                versionId: null,
+                                sequencer: null,
+                            },
+                        },
+                    },
+                ],
+            });
+            done();
+        });
+    });
+});
+
+describe('notification QueueProcessor destination id not matching the rule destination id', () => {
+    let qp;
+    let sendStub;
+
+    before(done => {
+        qp = new QueueProcessor(null, null, null, {
+            host: 'external-kafka-host',
+        }, 'destId');
+
+        qp._setupDestination('kafka', done);
+    });
+
+    beforeEach(() => {
+        sendStub = sinon.stub().callsFake((messages, cb) => setTimeout(() => cb(), 100));
+        qp._destination._notificationProducer = {
+            send: sendStub,
+        };
+    });
+
+    it('should not send notification if QueueProcessor destination id does not match the rule destination id', done => {
+        const mismatchedARN = [
+            'arn:scality:bucketnotif:::2destId',
+            'arn:scality:bucketnotif:::destId2',
+        ];
+
+        mismatchedARN.forEach(arn => {
+            qp.bnConfigManager = {
+                getConfig: () => ({
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: ['s3:ObjectCreated:*'],
+                                queueArn: arn,
+                                id: '0',
+                                filterRules: [
+                                    { name: 'Prefix', value: 'toto/' },
+                                ],
+                            },
+                        ],
+                    },
+                }),
+            };
+
+            const kafkaEntry = {
+                value: JSON.stringify({
+                    dateTime: '2024-08-02T09:19:43.991Z',
+                    eventType: 's3:ObjectCreated:Put',
+                    region: 'us-east-1',
+                    schemaVersion: '3',
+                    size: '2',
+                    versionId: null,
+                    bucket: 'mybucket',
+                    key: 'toto/key',
+                }),
+            };
+
+            qp.processKafkaEntry(kafkaEntry, err => {
+                assert.ifError(err);
+                assert(sendStub.notCalled);
+            });
+        });
+
+        done();
+    });
+});
