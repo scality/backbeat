@@ -57,10 +57,26 @@ const testConfigs = [
         notificationConfiguration: {
             queueConfig: [
                 {
-                    events: ['s3:ObjectCreated:Copy'],
+                    events: ['s3:ObjectCreated:Put'],
                     queueArn: 'q4',
-                    filterRules: [],
+                    filterRules: [
+                        {
+                            name: 'Prefix',
+                            value: 'abcd',
+                        },
+                    ],
                     id: 'config4',
+                },
+                {
+                    events: ['s3:ObjectRemoved:Delete'],
+                    queueArn: 'q4',
+                    filterRules: [
+                        {
+                            name: 'Suffix',
+                            value: '.png',
+                        },
+                    ],
+                    id: 'config4.1',
                 },
             ],
         },
@@ -140,6 +156,35 @@ const testConfigs = [
             ],
         },
     },
+    {
+        bucket: 'bucket9',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:Put'],
+                    queueArn: 'q9',
+                    filterRules: [
+                        {
+                            name: 'Prefix',
+                            value: '0833/epolicy/',
+                        },
+                    ],
+                    id: 'config9',
+                },
+                {
+                    events: ['s3:ObjectCreated:Put'],
+                    queueArn: 'q9',
+                    filterRules: [
+                        {
+                            name: 'Prefix',
+                            value: '0394/ars/',
+                        },
+                    ],
+                    id: 'config9.1',
+                },
+            ],
+        },
+    },
 ];
 
 const tests = [
@@ -151,6 +196,12 @@ const tests = [
             key: 'test.png',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:Put'],
+            queueArn: 'q1',
+            filterRules: [],
+            id: 'config1',
+        },
     },
     {
         desc: 'pass if the object key prefix matches the configuration',
@@ -160,6 +211,17 @@ const tests = [
             key: 'abcd.png',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectRemoved:Delete'],
+            queueArn: 'q2',
+            filterRules: [
+                {
+                    name: 'Prefix',
+                    value: 'abcd',
+                },
+            ],
+            id: 'config2',
+        },
     },
     {
         desc: 'pass if the object key suffix matches the configuration',
@@ -169,6 +231,77 @@ const tests = [
             key: 'test.png',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectRemoved:DeleteMarkerCreated'],
+            queueArn: 'q3',
+            filterRules: [
+                {
+                    name: 'Suffix',
+                    value: '.png',
+                },
+            ],
+            id: 'config3',
+        },
+    },
+    {
+        desc: 'pass if the object key prefix matches the first of the configuration',
+        entry: {
+            eventType: 's3:ObjectCreated:Put',
+            bucket: 'bucket4',
+            key: 'abcdefgh',
+        },
+        pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:Put'],
+            queueArn: 'q4',
+            filterRules: [
+                {
+                    name: 'Prefix',
+                    value: 'abcd',
+                },
+            ],
+            id: 'config4',
+        },
+    },
+    {
+        desc: 'pass if the object key suffix matches the second of the configuration',
+        entry: {
+            eventType: 's3:ObjectRemoved:Delete',
+            bucket: 'bucket4',
+            key: 'toto.png',
+        },
+        pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectRemoved:Delete'],
+            queueArn: 'q4',
+            filterRules: [
+                {
+                    name: 'Suffix',
+                    value: '.png',
+                },
+            ],
+            id: 'config4.1',
+        },
+    },
+    {
+        desc: 'pass if the object key matches both configuration rules',
+        entry: {
+            eventType: 's3:ObjectRemoved:Delete',
+            bucket: 'bucket4',
+            key: 'abcd.png',
+        },
+        pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectRemoved:Delete'],
+            queueArn: 'q4',
+            filterRules: [
+                {
+                    name: 'Suffix',
+                    value: '.png',
+                },
+            ],
+            id: 'config4.1',
+        },
     },
     {
         desc: 'pass if object key prefix & suffix matches the configuration',
@@ -178,6 +311,21 @@ const tests = [
             key: 'abcdef.png',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:CompleteMultipartUpload'],
+            queueArn: 'q5',
+            filterRules: [
+                {
+                    name: 'Prefix',
+                    value: 'abcd',
+                },
+                {
+                    name: 'Suffix',
+                    value: '.png',
+                },
+            ],
+            id: 'config5',
+        },
     },
     {
         desc: 'pass if object passes at least one notification configuration',
@@ -187,6 +335,11 @@ const tests = [
             key: 'test.jpg',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:Copy'],
+            queueArn: 'q61',
+            id: 'config61',
+        },
     },
     {
         desc: 'pass if the event matches wildcard event',
@@ -196,6 +349,48 @@ const tests = [
             key: 'abcd.png',
         },
         pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:*'],
+            queueArn: 'q7',
+            filterRules: [],
+            id: 'config7',
+        },
+    },
+    {
+        desc: 'pass if match the first configuration',
+        entry: {
+            eventType: 's3:ObjectCreated:Put',
+            bucket: 'bucket9',
+            key: '0833/epolicy/1',
+        },
+        pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:Put'],
+            queueArn: 'q9',
+            filterRules: [{
+                name: 'Prefix',
+                value: '0833/epolicy/',
+            }],
+            id: 'config9',
+        },
+    },
+    {
+        desc: 'pass if match the second configuration',
+        entry: {
+            eventType: 's3:ObjectCreated:Put',
+            bucket: 'bucket9',
+            key: '0394/ars/1',
+        },
+        pass: true,
+        expectedMatchingConfig: {
+            events: ['s3:ObjectCreated:Put'],
+            queueArn: 'q9',
+            filterRules: [{
+                name: 'Prefix',
+                value: '0394/ars/',
+            }],
+            id: 'config9.1',
+        },
     },
     {
         desc: 'fail if the event type does not match the configuration',
@@ -278,6 +473,15 @@ const tests = [
         },
         pass: false,
     },
+    {
+        desc: 'fail if key does not match any configuration',
+        entry: {
+            eventType: undefined,
+            bucket: 'bucket9',
+            key: 'abcd.png',
+        },
+        pass: false,
+    },
 ];
 
 describe('Notification configuration util', () => {
@@ -315,7 +519,12 @@ describe('Notification configuration util', () => {
                     = getBucketNotifConfig(test.entry.bucket, configMap);
                 const result
                     = notifConfUtil.validateEntry(bnConfig.notificationConfiguration, test.entry);
-                assert.strictEqual(test.pass, result);
+                assert.strictEqual(test.pass, result.isValid);
+                if (test.pass) {
+                    assert.deepStrictEqual(test.expectedMatchingConfig, result.matchingConfig);
+                } else {
+                    assert(!result.matchingConfig);
+                }
             });
         });
     });
