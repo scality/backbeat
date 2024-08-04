@@ -149,10 +149,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     return undefined;
                 }
                 // get destination specific notification config
-                const destBnConf = config.queueConfig.find(
+                const destBnConf = config.queueConfig.filter(
                     c => c.queueArn.split(':').pop()
                         === destination.resource);
-                if (!destBnConf) {
+                if (!destBnConf.length) {
                     // skip, if there is no config for the current
                     // destination resource
                     return undefined;
@@ -160,9 +160,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 // pass only destination resource specific config to
                 // validate entry
                 const bnConfig = {
-                    queueConfig: [destBnConf],
+                    queueConfig: destBnConf,
                 };
-                if (configUtil.validateEntry(bnConfig, ent)) {
+                const { isValid, matchingConfig } = configUtil.validateEntry(bnConfig, ent);
+                if (isValid) {
                     const message
                         = messageUtil.addLogAttributes(value, ent);
                     this.log.info('publishing message', {
@@ -172,6 +173,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                         versionId,
                         eventType,
                         eventTime: message.dateTime,
+                        matchingConfig,
                     });
                     this.publish(topic,
                         // keeping all messages for same object
