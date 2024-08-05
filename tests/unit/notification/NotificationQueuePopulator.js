@@ -237,3 +237,98 @@ describe('NotificationQueuePopulator ::', () => {
         });
     });
 });
+
+describe('NotificationQueuePopulator with multiple rules ::', () => {
+    let bnConfigManager;
+    let notificationQueuePopulator;
+
+    beforeEach(() => {
+        bnConfigManager = new NotificationConfigManager({
+            mongoConfig,
+            logger,
+        });
+        sinon.stub(bnConfigManager, 'getConfig').returns({
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:*'],
+                    queueArn: 'arn:scality:bucketnotif:::destination1',
+                    id: '0',
+                    filterRules: [
+                        {
+                            name: 'Prefix',
+                            value: 'toto/',
+                        },
+                    ],
+                }, {
+                    events: ['s3:ObjectCreated:*'],
+                    queueArn: 'arn:scality:bucketnotif:::destination1',
+                    id: '1',
+                    filterRules: [
+                        {
+                            name: 'Prefix',
+                            value: 'tata/',
+                        },
+                    ],
+                },
+            ],
+        });
+        notificationQueuePopulator = new NotificationQueuePopulator({
+            config: notificationConfig,
+            bnConfigManager,
+            logger,
+        });
+        notificationQueuePopulator._metricsStore = {
+            notifEvent: () => null,
+        };
+    });
+
+    describe('_processObjectEntry with multiple rules::', () => {
+        it('Should publish object entry if it matches the first rule', async () => {
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'toto/example-key',
+                {
+                    'key': 'toto/example-key',
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
+        });
+
+        it('Should publish object entry if it matches the second rule', async () => {
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'tata/example-key',
+                {
+                    'key': 'tata/example-key',
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
+        });
+
+        it('Should not publish object entry if it does not match any rule', async () => {
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'key': 'example-key',
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+            sinon.assert.notCalled(publishStub);
+        });
+    });
+});
