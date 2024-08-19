@@ -81,6 +81,14 @@ const lifecycleDuration = ZenkoMetrics.createHistogram({
     buckets: [0.2, 1, 5, 30, 120, 600, 3600, 4 * 3600, 8 * 3600, 16 * 3600, 24 * 3600],
 });
 
+// For all practical purposes, this should be a counter; but we have no garantee that the clock is
+// monotonic: so this is really a gauge...
+const lifecycleLastTimestamp = ZenkoMetrics.createGauge({
+    name: 's3_lifecycle_last_timestamp_ms',
+    help: 'Timestamp of the lifecycle operation',
+    labelNames: [LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
+});
+
 const lifecycleKafkaPublish = {
     success: ZenkoMetrics.createCounter({
         name: 's3_lifecycle_kafka_publish_success_total',
@@ -189,6 +197,11 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_TYPE]: type,
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, durationMs / 1000);
+
+            lifecycleLastTimestamp.observe({
+                [LIFECYCLE_LABEL_TYPE]: type,
+                [LIFECYCLE_LABEL_LOCATION]: location,
+            }, new Date().getTime());
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleCompleted');
         }
