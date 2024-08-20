@@ -198,7 +198,7 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, durationMs / 1000);
 
-            lifecycleLastTimestamp.observe({
+            lifecycleLastTimestamp.set({
                 [LIFECYCLE_LABEL_TYPE]: type,
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, new Date().getTime());
