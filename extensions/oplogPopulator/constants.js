@@ -12,6 +12,7 @@ const constants = {
         // Using a string converter to avoid getting an over-stringified
         // JSON that is returned by default
         'output.format.value': 'json',
+        'change.stream.document.key.as.key': false,
         'value.converter.schemas.enable': false,
         'value.converter': 'org.apache.kafka.connect.storage.StringConverter',
         // Kafka message key config
