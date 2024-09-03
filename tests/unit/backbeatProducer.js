@@ -1,10 +1,56 @@
 const assert = require('assert');
 
 const BackbeatProducer = require('../../lib/BackbeatProducer');
+const sinon = require('sinon');
+const CODES = require('node-rdkafka').CODES;
 
 const { kafka } = require('../config.json');
 
 describe('backbeatProducer', () => {
+    describe('onEventError', () => {
+        let backbeatProducer;
+        let logErrorStub;
+        let emitStub;
+
+        beforeEach(() => {
+            backbeatProducer = new BackbeatProducer({ kafka });
+            logErrorStub = sinon.stub(backbeatProducer._log, 'error');
+            emitStub = sinon.stub(backbeatProducer, 'emit');
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should log and emit error for ERR__ALL_BROKERS_DOWN', () => {
+            const error = { code: CODES.ERRORS.ERR__ALL_BROKERS_DOWN, message: 'All brokers down' };
+            backbeatProducer.onEventError(error);
+
+            assert(logErrorStub.calledOnce);
+            assert(logErrorStub.calledWith('error with producer'));
+            assert(emitStub.calledOnce);
+            assert(emitStub.calledWith('error', error));
+        });
+
+        it('should log and emit error for ERR__TRANSPORT', () => {
+            const error = { code: CODES.ERRORS.ERR__TRANSPORT, message: 'Transport error' };
+            backbeatProducer.onEventError(error);
+
+            assert(logErrorStub.calledOnce);
+            assert(logErrorStub.calledWith('error with producer'));
+            assert(emitStub.calledOnce);
+            assert(emitStub.calledWith('error', error));
+        });
+
+        it('should log rdkafka.error for other errors', () => {
+            const error = { code: 'OTHER_ERROR', message: 'Some other error' };
+            backbeatProducer.onEventError(error);
+
+            assert(logErrorStub.calledOnce);
+            assert(logErrorStub.calledWith('rdkafka.error', { error }));
+            assert(emitStub.notCalled);
+        });
+    });
     it('should use default topic name without prefix', () => {
         const backbeatProducer = new BackbeatProducer({
             kafka,
