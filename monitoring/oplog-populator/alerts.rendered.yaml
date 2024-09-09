@@ -1,0 +1,49 @@
+groups:
+- name: Oplog Populator
+  rules:
+  - alert: OplogPopulatorUnavailable
+    annotations:
+      description: Oplog populator pod is down
+      summary: Oplog populator service is in critical state
+      zenko_service: backbeat-oplog-populator
+    expr: |
+      sum(up{namespace="zenko",job="artesca-data-backbeat-oplog-populator-headless"}) < 1
+    for: 30s
+    labels:
+      severity: critical
+  - alert: KafkaConnectFailedConnectorConfiguration
+    annotations:
+      description: Oplog populator failed to configure connector
+      summary: Oplog populator couldn't update kafka connect connector
+      zenko_service: backbeat-oplog-populator
+    expr: |
+      sum by(connector) (increase(oplog_populator_reconfiguration{success="false",job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}[1m]))
+      > 0
+    for: 5m
+    labels:
+      severity: critical
+  - alert: KafkaConnectReplicasAboveThreshold
+    annotations:
+      description: Kafka connect replica count is above soft limit
+      summary: Kafka connect replica count is above soft limit. Consider using a single
+        replica for your cluster
+      zenko_service: backbeat-oplog-populator
+    expr: "(sum(up{namespace=\"zenko\",job=\"artesca-data-base-queue-connector-metrics\"})
+      > bool 10) * \n(10 > bool 0)\n"
+    for: 5m
+    labels:
+      severity: warning
+  - alert: OplogPopulatorMetastoreChangeStreamLagThreshold
+    annotations:
+      description: Oplog populator metastore change stream lag is too big
+      summary: Oplog populator configuration lag is above threshold
+      zenko_service: backbeat-oplog-populator
+    expr: |
+      histogram_quantile(
+        0.99,
+        sum by(le) (rate(s3_oplog_populator_acknowledgement_lag_seconds_bucket{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}[1m]))
+      )
+      >= 10
+    for: 5m
+    labels:
+      severity: critical
