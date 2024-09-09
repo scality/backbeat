@@ -18,6 +18,7 @@ const paramsJoi = joi.object({
     activeExtensions: joi.array().required(),
     logger: joi.object().required(),
     enableMetrics: joi.boolean().default(true),
+    maxChangeStreams: joi.number().default(10),
 }).required();
 
 /**
@@ -67,6 +68,7 @@ class OplogPopulator {
         if (params.enableMetrics) {
             this._metricsHandler.registerMetrics();
         }
+        this._maxChangeStreams = this._config.maxChangeStreams;
     }
 
     /**
@@ -169,7 +171,6 @@ class OplogPopulator {
      */
     async _handleChangeStreamChangeEvent(change) {
         const isListeningToBucket = this._allocator.has(change.documentKey._id);
-        // no fullDocument field in delete events
         const isBackbeatEnabled = change.fullDocument ?
             this._isBucketBackbeatEnabled(change.fullDocument.value) : null;
         const eventDate = new Date(change.clusterTime);
@@ -182,10 +183,8 @@ class OplogPopulator {
             case 'replace':
             case 'update':
             case 'insert':
-                // remove bucket if no longer backbeat enabled
                 if (isListeningToBucket && !isBackbeatEnabled) {
                     await this._allocator.stopListeningToBucket(change.documentKey._id);
-                // add bucket if it became backbeat enabled
                 } else if (!isListeningToBucket && isBackbeatEnabled) {
                     await this._allocator.listenToBucket(change.documentKey._id, eventDate);
                 }
@@ -212,7 +211,7 @@ class OplogPopulator {
      * @returns {undefined}
      * @throws {InternalError}
      */
-    _setMetastoreChangeStream() {
+    async _setMetastoreChangeStream() {
         const changeStreamPipeline = [
             {
                 $project: {
@@ -220,8 +219,6 @@ class OplogPopulator {
                     'operationType': 1,
                     'documentKey._id': 1,
                     'fullDocument.value': 1,
-                    // transforming the BSON timestamp
-                    // into a usable date string
                     'clusterTime': {
                         $dateToString: {
                             date: '$clusterTime'
@@ -230,16 +227,35 @@ class OplogPopulator {
                 },
             },
         ];
-        this._changeStreamWrapper = new ChangeStream({
-            logger: this._logger,
-            collection: this._metastore,
-            pipeline: changeStreamPipeline,
-            handler: this._handleChangeStreamChangeEvent.bind(this),
-            throwOnError: false,
-            useStartAfter: semver.gte(this._mongoVersion, '4.2.0'),
+    
+        const buckets = await this._getBackbeatEnabledBuckets();
+        const bucketsToMonitor = buckets.slice(0, this._maxChangeStreams);
+    
+        for (const bucket of bucketsToMonitor) {
+            const changeStreamWrapper = new ChangeStream({
+                logger: this._logger,
+                collection: this._metastore,
+                pipeline: changeStreamPipeline,
+                handler: this._handleChangeStreamChangeEvent.bind(this),
+                throwOnError: false,
+                useStartAfter: semver.gte(this._mongoVersion, '4.2.0'),
+            });
+            changeStreamWrapper.start();
+            this._changeStreamWrappers.push(changeStreamWrapper);
+        }
+    
+        if (buckets.length > this._maxChangeStreams) {
+            this._logger.warn('Number of change streams exceeds the configured value', {
+                method: 'OplogPopulator._setMetastoreChangeStream',
+                maxChangeStreams: this._maxChangeStreams,
+                currentChangeStreams: buckets.length,
+            });
+        }
+    
+        this._logger.info('Change streams started', {
+            method: 'OplogPopulator._setMetastoreChangeStream',
+            count: this._changeStreamWrappers.length,
         });
-        // start watching metastore
-        this._changeStreamWrapper.start();
     }
 
     /**
