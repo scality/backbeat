@@ -31,7 +31,7 @@
     "lint": "eslint $(git ls-files '*.js')",
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node bin/backbeat.js",
-    "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification BACKBEAT_QUEUEPOPULATOR_LOGSOURCE=kafka node bin/queuePopulator.js",
+    "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification node bin/queuePopulator.js",
     "notification_processor": "node extensions/notification/queueProcessor/task.js"
   },
   "repository": {
