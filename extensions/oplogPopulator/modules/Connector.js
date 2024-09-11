@@ -2,6 +2,7 @@ const joi = require('joi');
 const uuid = require('uuid');
 const { errors } = require('arsenal');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
+const constants = require('../constants');
 
 const connectorParams = joi.object({
     name: joi.string().required(),
@@ -11,6 +12,9 @@ const connectorParams = joi.object({
     logger: joi.object().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
+    maximumBucketsPerConnector: joi.number().default(constants.maxBucketPerConnector),
+    isPipelineImmutable: joi.boolean().default(false),
+    singleChangeStream: joi.boolean().default(false),
 });
 
 /**
@@ -34,6 +38,12 @@ class Connector {
      * @param {Logger} params.logger logger object
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
+     * @param {Boolean} params.isPipelineImmutable true if the pipelines are
+     * immutable
+     * @param {number} params.maximumBucketsPerConnector maximum number of
+     * buckets per connector
+     * @param {Boolean} params.singleChangeStream if true, one connector binds to
+     * one bucket maximum
      */
     constructor(params) {
         joi.attempt(params, connectorParams);
@@ -59,6 +69,9 @@ class Connector {
             kafkaConnectPort: params.kafkaConnectPort,
             logger: this._logger,
         });
+        this._singleChangeStream = params.singleChangeStream;
+        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
+        this._isPipelineImmutable = params.isPipelineImmutable;
     }
 
     /**
@@ -233,6 +246,9 @@ class Connector {
      * @throws {InternalError}
      */
     async addBucket(bucket, doUpdate = false) {
+        if (this._buckets.size > this._maximumBucketsPerConnector) {
+            throw errors.InternalError.customizeDescription('Connector reached maximum number of buckets');
+        }
         this._buckets.add(bucket);
         this._updateConnectorState(true);
         try {
@@ -260,7 +276,19 @@ class Connector {
         this._buckets.delete(bucket);
         this._updateConnectorState(true);
         try {
-            await this.updatePipeline(doUpdate);
+            if (this._isPipelineImmutable && this._buckets.size >= 1) {
+                this._logger.warn('Removing a bucket from an immutable pipeline', {
+                    method: 'Connector.removeBucket',
+                    connector: this._name,
+                    bucket,
+                });
+            } else if (this._isPipelineImmutable) {
+                // If the pipeline is immutable and only one bucket is left,
+                // we can destroy the connector, so it will be recreated with
+                // a new bucket later.
+                return this.destroy();
+            }
+            return this.updatePipeline(doUpdate);
         } catch (err) {
             this._logger.error('Error while removing bucket from connector', {
                 method: 'Connector.removeBucket',
@@ -274,11 +302,16 @@ class Connector {
 
     /**
      * Makes new connector pipeline that includes
-     * buckets assigned to this connector
+     * buckets assigned to this connector. If the
+     * singleChangeStream parameter is set to true,
+     * returns a pipeline that listens to all collections.
      * @param {string[]} buckets list of bucket names
      * @returns {string} new connector pipeline
      */
     _generateConnectorPipeline(buckets) {
+        if (this._singleChangeStream) {
+            return '[]';
+        }
         const pipeline = [
             {
                 $match: {

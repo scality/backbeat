@@ -20,18 +20,19 @@ const connectorConfig = {
 };
 
 describe('Connector', () => {
+    const baseConnectorOptions = {
+        name: 'example-connector',
+        config: connectorConfig,
+        buckets: [],
+        isRunning: false,
+        kafkaConnectHost: '127.0.0.1',
+        kafkaConnectPort: 8083,
+        logger,
+    };
     let connector;
 
     beforeEach(() => {
-        connector = new Connector({
-            name: 'example-connector',
-            config: connectorConfig,
-            buckets: [],
-            isRunning: false,
-            kafkaConnectHost: '127.0.0.1',
-            kafkaConnectPort: 8083,
-            logger,
-        });
+        connector = new Connector(baseConnectorOptions);
     });
 
     afterEach(() => {
@@ -132,6 +133,16 @@ describe('Connector', () => {
             await connector.addBucket('example-bucket', false);
             assert(connectorUpdateStub.calledWith(false));
         });
+
+        it('should throw if trying to add a bucket but the limit is reached', async () => {
+            connector = new Connector({
+                ...baseConnectorOptions,
+                maximumBucketsPerConnector: 1,
+            });
+
+            await connector.addBucket('example-bucket');
+            assert.rejects(connector.addBucket('example-bucket-2'));
+        });
     });
 
     describe('removeBucket', () => {
@@ -150,6 +161,33 @@ describe('Connector', () => {
             await connector.removeBucket('example-bucket', false);
             assert(connectorUpdateStub.calledWith(false));
         });
+
+        it('should warn if deleting a bucket when the immutable mode is set and the connector has multiple buckets',
+            async () => {
+                connector = new Connector({
+                    ...baseConnectorOptions,
+                    isPipelineImmutable: true,
+                });
+
+                const warnStub = sinon.stub(connector._logger, 'warn');
+                connector._buckets.add('example-bucket');
+                connector._buckets.add('example-bucket-2');
+                await connector.removeBucket('example-bucket');
+                assert(warnStub.calledOnce);
+            });
+
+        it('should destroy the connector if the immutable mode is set and the connector has only one bucket',
+            async () => {
+                connector = new Connector({
+                    ...baseConnectorOptions,
+                    isPipelineImmutable: true,
+                });
+
+                const destroyStub = sinon.stub(connector, 'destroy');
+                connector._buckets.add('example-bucket');
+                await connector.removeBucket('example-bucket');
+                assert(destroyStub.calledOnce);
+            });
     });
 
     describe('_generateConnectorPipeline', () => {
@@ -165,6 +203,16 @@ describe('Connector', () => {
                     }
                 }
             ]));
+        });
+
+        it('should listen to everything if the singleChangeStream mode is set', () => {
+            connector = new Connector({
+                ...baseConnectorOptions,
+                singleChangeStream: true,
+            });
+
+            const pipeline = connector._generateConnectorPipeline();
+            assert.strictEqual(pipeline, '[]');
         });
     });
 
