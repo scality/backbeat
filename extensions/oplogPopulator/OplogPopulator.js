@@ -51,7 +51,7 @@ class OplogPopulator {
         this._logger = params.logger;
         this._changeStreamWrapper = null;
         this._allocator = null;
-        this._connectorsManager  = null;
+        this._connectorsManager = null;
         // contains OplogPopulatorUtils class of each supported extension
         this._extHelpers = {};
         // MongoDB related
@@ -78,9 +78,9 @@ class OplogPopulator {
     async _setupMongoClient() {
         try {
             const client = await MongoClient.connect(this._mongoUrl, {
-                 replicaSet: this._replicaSet,
-                 useNewUrlParser: true,
-                 useUnifiedTopology: true,
+                replicaSet: this._replicaSet,
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
             });
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
@@ -242,35 +242,71 @@ class OplogPopulator {
         this._changeStreamWrapper.start();
     }
 
+    _isPipelineImmutable() {
+        return semver.gte(this._mongoVersion, constants.mongodbVersionWithImmutablePipelines);
+    }
+
+    async _initializeConnectorsManager() {
+        return this._connectorsManager.initializeConnectors();
+    }
+
     /**
      * Sets the OplogPopulator
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
      */
     async setup() {
-       try {
-           this._loadOplogHelperClasses();
-           this._connectorsManager = new ConnectorsManager({
-               nbConnectors: this._config.numberOfConnectors,
-               database: this._database,
-               mongoUrl: this._mongoUrl,
-               oplogTopic: this._config.topic,
-               cronRule: this._config.connectorsUpdateCronRule,
-               prefix: this._config.prefix,
-               heartbeatIntervalMs: this._config.heartbeatIntervalMs,
-               kafkaConnectHost: this._config.kafkaConnectHost,
-               kafkaConnectPort: this._config.kafkaConnectPort,
-               metricsHandler: this._metricsHandler,
-               logger: this._logger,
-            });
-            await this._connectorsManager.initializeConnectors();
-            this._allocator = new Allocator({
-                connectorsManager: this._connectorsManager,
+        try {
+            this._loadOplogHelperClasses();
+            // initialize mongo client
+            await this._setupMongoClient();
+
+            if (this._isPipelineImmutable()) {
+                // In this case, mongodb does not support reusing a
+                // resume token from a different pipeline. In other
+                // words, we cannot alter an existing pipeline. In this
+                // case, the strategy is to allow a maximum of one
+                // bucket per kafka connector.
+                this._maximumBucketsPerConnector = 1;
+            } else {
+                // In this case, we can have multiple buckets per
+                // kafka connector. However, we want to proactively
+                // ensure that the pipeline will be accepted by
+                // mongodb.
+                this._maximumBucketsPerConnector = constants.maxBucketPerConnector;
+            }
+            // If the flag useSingleChangeStream is set to true, we
+            // set the max number to infinity, and the number of connectors
+            // to 1.
+            if (this._config.singleChangeStream) {
+                this._maximumBucketsPerConnector = Infinity;
+                this._config.numberOfConnectors = 1;
+            }
+
+            this._connectorsManager = new ConnectorsManager({
+                nbConnectors: this._config.numberOfConnectors,
+                singleChangeStream: this._config.singleChangeStream,
+                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+                isPipelineImmutable: this._isPipelineImmutable(),
+                database: this._database,
+                mongoUrl: this._mongoUrl,
+                oplogTopic: this._config.topic,
+                cronRule: this._config.connectorsUpdateCronRule,
+                prefix: this._config.prefix,
+                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
+                kafkaConnectHost: this._config.kafkaConnectHost,
+                kafkaConnectPort: this._config.kafkaConnectPort,
                 metricsHandler: this._metricsHandler,
                 logger: this._logger,
             });
-            // initialize mongo client
-            await this._setupMongoClient();
+            await this._initializeConnectorsManager();
+
+            this._allocator = new Allocator({
+                connectorsManager: this._connectorsManager,
+                metricsHandler: this._metricsHandler,
+                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+                logger: this._logger,
+            });
             // get currently valid buckets from mongo
             const validBuckets = await this._getBackbeatEnabledBuckets();
             // listen to valid buckets
@@ -291,13 +327,13 @@ class OplogPopulator {
             this._logger.info('OplogPopulator setup complete', {
                 method: 'OplogPopulator.setup',
             });
-       } catch (err) {
+        } catch (err) {
             this._logger.error('An error occured when setting up the OplogPopulator', {
                 method: 'OplogPopulator.setup',
                 error: err.description || err.message,
             });
             throw errors.InternalError.customizeDescription(err.description);
-       }
+        }
     }
 
     /**

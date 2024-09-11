@@ -13,6 +13,7 @@ const OplogPopulator =
     require('../../../extensions/oplogPopulator/OplogPopulator');
 const ChangeStream =
     require('../../../lib/wrappers/ChangeStream');
+const ConnectorsManager = require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
@@ -110,6 +111,73 @@ describe('OplogPopulator', () => {
             assert.strictEqual(oplogPopulator._mongoUrl, mongoUrl);
             assert.strictEqual(oplogPopulator._replicaSet, 'rs0');
             assert.strictEqual(oplogPopulator._database, 'metadata');
+        });
+    });
+
+    describe('_isPipelineImmutable', () => {
+        it('should return true if pipeline is immutable', () => {
+            oplogPopulator._mongoVersion = '6.0.0';
+            assert(oplogPopulator._isPipelineImmutable());
+        });
+
+        it('should return false if pipeline is not immutable', () => {
+            oplogPopulator._mongoVersion = '5.0.0';
+            assert(!oplogPopulator._isPipelineImmutable());
+        });
+    });
+
+    describe('setup', () => {
+
+        it('should handle error during setup', async () => {
+            const error = new Error('InternalError');
+            const loadOplogHelperClassesStub = sinon.stub(oplogPopulator, '_loadOplogHelperClasses').throws(error);
+            const loggerErrorStub = sinon.stub(oplogPopulator._logger, 'error');
+
+            await assert.rejects(oplogPopulator.setup(), error);
+
+            assert(loadOplogHelperClassesStub.calledOnce);
+            assert(loggerErrorStub.calledWith('An error occured when setting up the OplogPopulator', {
+                method: 'OplogPopulator.setup',
+                error: 'InternalError',
+            }));
+        });
+
+        it('should setup oplog populator', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+
+            await oplogPopulator.setup();
+
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+        });
+    });
+
+    describe('_initializeConnectorsManager', () => {
+        it('should initialize connectors manager', async () => {
+            oplogPopulator._connectorsManager = new ConnectorsManager({
+                nbConnectors: oplogPopulator._config.numberOfConnectors,
+                singleChangeStream: oplogPopulator._config.singleChangeStream,
+                maximumBucketsPerConnector: oplogPopulator._maximumBucketsPerConnector,
+                isPipelineImmutable: oplogPopulator._isPipelineImmutable(),
+                database: oplogPopulator._database,
+                mongoUrl: oplogPopulator._mongoUrl,
+                oplogTopic: oplogPopulator._config.topic,
+                cronRule: oplogPopulator._config.connectorsUpdateCronRule,
+                prefix: oplogPopulator._config.prefix,
+                heartbeatIntervalMs: oplogPopulator._config.heartbeatIntervalMs,
+                kafkaConnectHost: oplogPopulator._config.kafkaConnectHost,
+                kafkaConnectPort: oplogPopulator._config.kafkaConnectPort,
+                metricsHandler: oplogPopulator._metricsHandler,
+                logger: oplogPopulator._logger,
+            });
+            const connectorsManagerStub = sinon.stub(oplogPopulator._connectorsManager, 'initializeConnectors');
+            await oplogPopulator._initializeConnectorsManager();
+            assert(connectorsManagerStub.calledOnce);
         });
     });
 
