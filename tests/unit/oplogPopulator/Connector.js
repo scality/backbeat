@@ -146,6 +146,15 @@ describe('Connector', () => {
     });
 
     describe('removeBucket', () => {
+        it('should handle error', async () => {
+            const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
+                .rejects(errors.InternalError);
+
+            connector._buckets.add('example-bucket');
+            await assert.rejects(connector.removeBucket('example-bucket'));
+            assert(connectorUpdateStub.calledOnce);
+        });
+
         it('Should remove bucket and update connector', async () => {
             const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
                 .resolves();

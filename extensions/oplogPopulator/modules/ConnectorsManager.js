@@ -22,7 +22,10 @@ const paramsJoi = joi.object({
     kafkaConnectPort: joi.number().required(),
     singleChangeStream: joi.boolean().default(false),
     isPipelineImmutable: joi.boolean().default(false),
-    maximumBucketsPerConnector: joi.number().default(constants.maxBucketPerConnector),
+    maximumBucketsPerConnector: joi.alternatives().try(
+        joi.number().integer(),
+        joi.any().valid(Infinity),
+    ).default(constants.maxBucketPerConnector),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),

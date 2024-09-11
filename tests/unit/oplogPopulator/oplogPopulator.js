@@ -127,7 +127,6 @@ describe('OplogPopulator', () => {
     });
 
     describe('setup', () => {
-
         it('should handle error during setup', async () => {
             const error = new Error('InternalError');
             const loadOplogHelperClassesStub = sinon.stub(oplogPopulator, '_loadOplogHelperClasses').throws(error);
@@ -147,6 +146,38 @@ describe('OplogPopulator', () => {
             const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
             const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
             const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+
+            await oplogPopulator.setup();
+
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+        });
+
+        it('should setup oplog populator with single change stream', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+
+            oplogPopulator._config.singleChangeStream = true;
+
+            await oplogPopulator.setup();
+
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+        });
+
+        it('should setup oplog populator with immutable pipelines', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+
+            oplogPopulator._mongoVersion = '6.0.0';
 
             await oplogPopulator.setup();
 

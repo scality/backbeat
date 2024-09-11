@@ -12,7 +12,10 @@ const connectorParams = joi.object({
     logger: joi.object().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
-    maximumBucketsPerConnector: joi.number().default(constants.maxBucketPerConnector),
+    maximumBucketsPerConnector: joi.alternatives().try(
+        joi.number().integer(),
+        joi.any().valid(Infinity),
+    ).default(constants.maxBucketPerConnector),
     isPipelineImmutable: joi.boolean().default(false),
     singleChangeStream: joi.boolean().default(false),
 });
@@ -246,7 +249,7 @@ class Connector {
      * @throws {InternalError}
      */
     async addBucket(bucket, doUpdate = false) {
-        if (this._buckets.size > this._maximumBucketsPerConnector) {
+        if (this._buckets.size >= this._maximumBucketsPerConnector) {
             throw errors.InternalError.customizeDescription('Connector reached maximum number of buckets');
         }
         this._buckets.add(bucket);

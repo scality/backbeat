@@ -52,6 +52,20 @@ describe('LeastFullConnector (with multiple buckets per connector)', () => {
             const connector = strategy.getConnector([connector1, connector2]);
             assert.strictEqual(connector.name, connector1.name);
         });
+
+        it('Should return connector with fewest buckets (single stream case)', () => {
+            strategy = new LeastFullConnector({
+                maximumBucketsPerConnector: Infinity,
+                addConnector: () => new Connector({
+                    name: 'example-connector-3',
+                    buckets: [],
+                    ...defaultConnectorParams,
+                }),
+                logger,
+            });
+            const connector = strategy.getConnector([connector1, connector2]);
+            assert.strictEqual(connector.name, connector1.name);
+        });
     });
 });
 
