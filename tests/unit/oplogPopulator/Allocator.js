@@ -17,6 +17,7 @@ const defaultConnectorParams = {
     logger,
     kafkaConnectHost: '127.0.0.1',
     kafkaConnectPort: 8083,
+    maximumBucketsPerConnector: 10,
 };
 
 const connector1 = new Connector({
@@ -31,6 +32,7 @@ describe('Allocator', () => {
         allocator = new Allocator({
             connectorsManager: {
                 connectors: [],
+                addConnector: () => {},
             },
             metricsHandler: new OplogPopulatorMetrics(logger),
             logger,

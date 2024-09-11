@@ -4,10 +4,15 @@ class AllocationStrategy {
 
     /**
      * @constructor
-     * @param {Logger} logger logger object
+     * @param {Object} params params
+     * @param {Number} params.maximumBucketsPerConnector maximum number of buckets per connector
+     * @param {Function} params.addConnector function to add a connector
+     * @param {Logger} params.logger logger object
      */
-    constructor(logger) {
-        this._logger = logger;
+    constructor(params) {
+        this._logger = params.logger;
+        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
+        this._addConnector = params.addConnector.bind(this);
     }
 
     /**

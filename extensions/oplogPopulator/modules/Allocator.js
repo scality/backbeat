@@ -3,9 +3,11 @@ const { errors } = require('arsenal');
 
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 const LeastFullConnector = require('../allocationStrategy/LeastFullConnector');
+const constants = require('../constants');
 
 const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
+    maximumBucketsPerConnector: joi.number().default(constants.maxBucketPerConnector),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
@@ -31,6 +33,8 @@ class Allocator {
         this._logger = params.logger;
         this._allocationStrategy = new LeastFullConnector({
             logger: params.logger,
+            maximumBucketsPerConnector: params.maximumBucketsPerConnector,
+            addConnector: this._connectorsManager.addConnector.bind(this._connectorsManager),
         });
         this._metricsHandler = params.metricsHandler;
         // Stores connector assigned for each bucket
