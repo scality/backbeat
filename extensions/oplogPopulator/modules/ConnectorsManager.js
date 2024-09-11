@@ -20,6 +20,9 @@ const paramsJoi = joi.object({
     heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
+    singleChangeStream: joi.boolean().default(false),
+    isPipelineImmutable: joi.boolean().default(false),
+    maximumBucketsPerConnector: joi.number().default(constants.maxBucketPerConnector),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     logger: joi.object().required(),
@@ -40,6 +43,12 @@ class ConnectorsManager {
      * @constructor
      * @param {Object} params params
      * @param {number} params.nbConnectors number of connectors to have
+     * @param {boolean} params.maximumBucketsPerConnector maximum number of
+     * buckets per connector
+     * @param {boolean} params.isPipelineImmutable true if the mongodb pipelines
+     * are immutable
+     * @param {boolean} params.singleChangeStream wether to use a single change
+     * stream per bucket
      * @param {string} params.database MongoDB database to use (for connector)
      * @param {string} params.mongoUrl MongoDB connection url
      * @param {string} params.oplogTopic topic to use for oplog
@@ -69,6 +78,13 @@ class ConnectorsManager {
         this._connectors = [];
         // used for initial clean up of old connector pipelines
         this._oldConnectors = [];
+        this._singleChangeStream = params.singleChangeStream;
+        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
+        this._isPipelineImmutable = params.isPipelineImmutable;
+
+        if (this._singleChangeStream) {
+            this._nbConnectors = 1;
+        }
     }
 
     /**
@@ -120,7 +136,11 @@ class ConnectorsManager {
             logger: this._logger,
             kafkaConnectHost: this._kafkaConnectHost,
             kafkaConnectPort: this._kafkaConnectPort,
+            maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+            isPipelineImmutable: this._isPipelineImmutable,
+            singleChangeStream: this._singleChangeStream,
         });
+        this._connectors.push(connector);
         return connector;
     }
 
@@ -129,7 +149,7 @@ class ConnectorsManager {
      * @param {Object} connectorConfig connector config
      * @returns {string[]} list of buckets
      */
-     _extractBucketsFromConfig(connectorConfig) {
+    _extractBucketsFromConfig(connectorConfig) {
         const pipeline = connectorConfig.pipeline ?
             JSON.parse(connectorConfig.pipeline) : null;
         if (!pipeline || pipeline.length === 0) {
@@ -164,6 +184,9 @@ class ConnectorsManager {
                     logger: this._logger,
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
+                    maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+                    isPipelineImmutable: this._isPipelineImmutable,
+                    singleChangeStream: this._singleChangeStream,
                 });
                 this._logger.debug('Successfully retreived old connector', {
                     method: 'ConnectorsManager._getOldConnectors',
@@ -203,9 +226,14 @@ class ConnectorsManager {
             }
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
+            if (nbConnectorsToAdd > 0 && this._singleChangeStream) {
+                this._logger.warn('Single change stream is enabled but multiple connectors are running', {
+                    method: 'ConnectorsManager.initializeConnectors',
+                    numberOfActiveConnectors: this._connectors.length,
+                });
+            }
             for (let i = 0; i < nbConnectorsToAdd; i++) {
-                const newConnector = this.addConnector();
-                this._connectors.push(newConnector);
+                this.addConnector();
             }
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
@@ -235,7 +263,7 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
             } else if (!connector.isRunning && connector.bucketCount > 0) {
@@ -243,7 +271,7 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorsInstantiated(false);
                 this._logger.info('Successfully spawned a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
             } else if (connector.isRunning) {

@@ -8,6 +8,7 @@ const ConnectorsManager =
     require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
 const OplogPopulatorMetrics =
     require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
+const constants = require('../../../extensions/oplogPopulator/constants');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -60,6 +61,22 @@ const connectorConfig = {
 };
 
 describe('ConnectorsManager', () => {
+    const connectorsManagerBaseOptions = {
+        nbConnectors: 1,
+        database: 'metadata',
+        mongoUrl: 'mongodb://localhost:27017/?w=majority&readPreference=primary',
+        oplogTopic: 'oplog',
+        cronRule: '*/5 * * * * *',
+        heartbeatIntervalMs: 10000,
+        kafkaConnectHost: '127.0.0.1',
+        kafkaConnectPort: 8083,
+        metricsHandler: new OplogPopulatorMetrics(logger),
+        maximumBucketsPerConnector: constants.maxBucketPerConnector,
+        isPipelineImmutable: false,
+        singleChangeStream: false,
+        logger,
+    };
+
     let connectorsManager;
     let connector1;
 
@@ -86,22 +103,21 @@ describe('ConnectorsManager', () => {
             .resolves();
         connectorRestartStub = sinon.stub(connector1._kafkaConnect, 'restartConnector')
             .resolves();
-        connectorsManager = new ConnectorsManager({
-            nbConnectors: 1,
-            database: 'metadata',
-            mongoUrl: 'mongodb://localhost:27017/?w=majority&readPreference=primary',
-            oplogTopic: 'oplog',
-            cronRule: '*/5 * * * * *',
-            heartbeatIntervalMs: 10000,
-            kafkaConnectHost: '127.0.0.1',
-            kafkaConnectPort: 8083,
-            metricsHandler: new OplogPopulatorMetrics(logger),
-            logger,
-        });
+        connectorsManager = new ConnectorsManager(connectorsManagerBaseOptions);
     });
 
     afterEach(() => {
         sinon.reset();
+    });
+
+    it('should set the number of connectors to 1 if the singleChangeStream mode is set', () => {
+        const options = {
+            ...connectorsManagerBaseOptions,
+            singleChangeStream: true,
+        };
+
+        const manager = new ConnectorsManager(options);
+        assert.strictEqual(manager._nbConnectors, 1);
     });
 
     describe('_getDefaultConnectorConfiguration', () => {
@@ -135,6 +151,15 @@ describe('ConnectorsManager', () => {
             assert(connector instanceof Connector);
             assert.strictEqual(connector.name, 'source-connector');
             assert.strictEqual(connector.isRunning, false);
+        });
+
+        it('should add the connector to the list', async () => {
+            sinon.stub(connectorsManager, '_generateConnectorName')
+                .returns('source-connector');
+            sinon.stub(connectorsManager, '_getDefaultConnectorConfiguration')
+                .returns(connectorConfig);
+            const connector = connectorsManager.addConnector();
+            assert.strictEqual(connectorsManager._connectors[0], connector);
         });
     });
 
@@ -188,11 +213,29 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves([]);
             sinon.stub(connectorsManager, 'addConnector')
-                .returns(connector1);
+                .callsFake(() => {
+                    connectorsManager._connectors.push(connector1);
+                    return connector1;
+                });
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
             assert.deepEqual(connectorsManager._oldConnectors, []);
+        });
+
+        it('should warn if the number of connector is higher than 1 with the singleChangeStream mode', async () => {
+            connectorsManager._nbConnectors = 2;
+            connectorsManager._singleChangeStream = true;
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
+                .resolves([]);
+            sinon.stub(connectorsManager, 'addConnector')
+                .callsFake(() => {
+                    connectorsManager._connectors.push(connector1);
+                    return connector1;
+                });
+            const warnStub = sinon.stub(logger, 'warn');
+            await connectorsManager.initializeConnectors();
+            assert(warnStub.calledOnce);
         });
     });
 
