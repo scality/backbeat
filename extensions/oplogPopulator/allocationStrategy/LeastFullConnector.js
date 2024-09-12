@@ -18,7 +18,7 @@ class LeastFullConnector extends AllocationStrategy {
      */
     getConnector(connectors) {
         const connector = connectors.reduce((prev, elt) => (elt.bucketCount < prev.bucketCount ? elt : prev));
-        if (connector.buckets.length >= this._maximumBucketsPerConnector) {
+        if (connector.shouldBeDestroyed || connector.buckets.length >= this._maximumBucketsPerConnector) {
             return this._addConnector();
         }
         return connector;

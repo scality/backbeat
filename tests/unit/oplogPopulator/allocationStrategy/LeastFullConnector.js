@@ -29,7 +29,7 @@ const connector2 = new Connector({
 });
 
 const connector3 = new Connector({
-    name: 'example-connector-2',
+    name: 'example-connector-3',
     buckets: ['bucket3', 'bucket4'],
     ...defaultConnectorParams,
 });
@@ -75,7 +75,7 @@ describe('LeastFullConnector (with one bucket per connector)', () => {
         strategy = new LeastFullConnector({
             maximumBucketsPerConnector: 1,
             addConnector: () => new Connector({
-                name: 'example-connector-3',
+                name: 'example-connector-4',
                 buckets: [],
                 ...defaultConnectorParams,
             }),
@@ -84,9 +84,16 @@ describe('LeastFullConnector (with one bucket per connector)', () => {
     });
 
     describe('getConnector', () => {
-        it('Should return connector with fewest buckets', () => {
+        it('Should return a new connector', () => {
             const connector = strategy.getConnector([connector2, connector3]);
-            assert.strictEqual(connector.name, 'example-connector-3');
+            assert.strictEqual(connector.name, 'example-connector-4');
+        });
+
+        it('Should return a new connector if the target should be destroyed', () => {
+            connector1._shouldBeDestroyed = true;
+            const connector = strategy.getConnector([connector1, connector3]);
+            assert.strictEqual(connector.name, 'example-connector-4');
+            connector1._shouldBeDestroyed = false;
         });
     });
 });

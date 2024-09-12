@@ -185,17 +185,16 @@ describe('Connector', () => {
                 assert(warnStub.calledOnce);
             });
 
-        it('should destroy the connector if the immutable mode is set and the connector has only one bucket',
+        it('should set flag to true if the connector if the immutable mode is set and the connector has only one bucket',
             async () => {
                 connector = new Connector({
                     ...baseConnectorOptions,
                     isPipelineImmutable: true,
                 });
 
-                const destroyStub = sinon.stub(connector, 'destroy');
                 connector._buckets.add('example-bucket');
                 await connector.removeBucket('example-bucket');
-                assert(destroyStub.calledOnce);
+                assert(connector._shouldBeDestroyed);
             });
     });
 

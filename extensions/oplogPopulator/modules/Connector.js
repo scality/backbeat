@@ -54,6 +54,7 @@ class Connector {
         this._config = params.config;
         this._buckets = new Set(params.buckets);
         this._isRunning = params.isRunning;
+        this._shouldBeDestroyed = false;
         this._state = {
             // Used to check if buckets assigned to this connector
             // got modified from the last connector update
@@ -107,6 +108,12 @@ class Connector {
      * @returns {Boolean} connector running state
      */
     get isRunning() { return this._isRunning; }
+
+    /**
+     * Getter for connector destroy state
+     * @returns {Boolean} connector destroy state
+     */
+    get shouldBeDestroyed() { return this._shouldBeDestroyed; }
 
     /**
      * Calculate config size in bytes
@@ -286,10 +293,7 @@ class Connector {
                     bucket,
                 });
             } else if (this._isPipelineImmutable) {
-                // If the pipeline is immutable and only one bucket is left,
-                // we can destroy the connector, so it will be recreated with
-                // a new bucket later.
-                return this.destroy();
+                this._shouldBeDestroyed = true;
             }
             return this.updatePipeline(doUpdate);
         } catch (err) {
