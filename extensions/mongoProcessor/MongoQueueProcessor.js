@@ -621,19 +621,36 @@ class MongoQueueProcessor {
             const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._processDeleteOpQueueEntry(log, sourceEntry,
-                    location, err => {
+                return this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo, (err, zenkoObjMd) => {
+                    if (err) {
+                        this._normalizePendingMetric(location);
+                        return done(err);
+                    }
+
+                    if (zenkoObjMd.dataStoreName !== location) {
+                        log.end().info('skipping delete entry with location mismatch', {
+                            entry: sourceEntry.getLogInfo(),
+                            location,
+                            zenkoLocation: zenkoObjMd.location,
+                        });
+                        this._normalizePendingMetric(location);
+                        return done();
+                    }
+
+                    return this._processDeleteOpQueueEntry(log, sourceEntry, location, err => {
                         this._handleMetrics(sourceEntry, !!err);
                         return done(err);
                     });
+                });
             }
+
             if (sourceEntry instanceof ObjectQueueEntry) {
-                return this._processObjectQueueEntry(log, sourceEntry, location,
-                    bucketInfo, err => {
-                        this._handleMetrics(sourceEntry, !!err);
-                        return done(err);
-                    });
+                return this._processObjectQueueEntry(log, sourceEntry, location, bucketInfo, err => {
+                    this._handleMetrics(sourceEntry, !!err);
+                    return done(err);
+                });
             }
+
             log.end().warn('skipping unknown source entry', {
                 entry: sourceEntry.getLogInfo(),
                 entryType: sourceEntry.constructor.name,
