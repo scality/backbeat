@@ -4,21 +4,32 @@ class AllocationStrategy {
 
     /**
      * @constructor
-     * @param {Logger} logger logger object
+     * @param {Object} params params
+     * @param {Logger} params.logger logger object
      */
-    constructor(logger) {
-        this._logger = logger;
+    constructor(params) {
+        this._logger = params.logger;
     }
 
     /**
-     * Get best connector for assigning a bucket
-     * @param {Connector[]} connectors available connectors
-     * @returns {Connector} connector
+     * Get best connector to assign a bucket to.
+     * If no connector is available, null is returned.
+     * @param {Array<Connector>} connectors connectors
+     * @param {String} bucket bucket name
+     * @returns {Connector | null} connector
      */
-    getConnector(connectors) { // eslint-disable-line no-unused-vars
+    getConnector(connectors, bucket) { // eslint-disable-line no-unused-vars
         throw errors.NotImplemented;
     }
 
+    /**
+     * Assess if a pipeline can be updated
+     * @param {Connector} connector connector
+     * @returns {Boolean} true if the connector can be updated
+     */
+    canUpdate(connector) { // eslint-disable-line no-unused-vars
+        throw errors.NotImplemented;
+    }
 }
 
 module.exports = AllocationStrategy;
