@@ -1,13 +1,13 @@
 'use strict'; // eslint-disable-line
 
 const assert = require('assert');
-
 const joi = require('joi');
-
 const config = require('../../../lib/Config');
+const { Config } = require('../../../lib/Config');
 const { authJoi, inheritedAuthJoi } = require('../../../lib/config/configItems.joi');
 
 describe('backbeat config parsing and validation', () => {
+
     it('should parse correctly the default config', () => {
         assert.notStrictEqual(config, undefined);
     });
@@ -62,5 +62,30 @@ describe('backbeat config parsing and validation', () => {
 
             return schema.validateAsync(obj);
         });
+    });
+});
+
+describe('Site name', () => {
+    let conf;
+
+    beforeEach(() => {
+        conf = new Config();
+    });
+
+    afterEach(() => {
+        delete process.env.BOOTSTRAP_SITE_NAME;
+    });
+
+    it('should filter bootstrapList based on SITE_NAME', () => {
+        process.env.BOOTSTRAP_SITE_NAME = 'test-site-2';
+        const expectedBootstrapList = conf.bootstrapList.filter(item => item.site === 'test-site-2');
+        const newConfig = new Config();
+        assert.deepStrictEqual(newConfig.bootstrapList, expectedBootstrapList);
+    });
+
+    it('should not filter bootstrapList if SITE_NAME is not set', () => {
+        const expectedBootstrapList = conf.bootstrapList;
+        const newConfig = new Config();
+        assert.deepStrictEqual(newConfig.bootstrapList, expectedBootstrapList);
     });
 });
