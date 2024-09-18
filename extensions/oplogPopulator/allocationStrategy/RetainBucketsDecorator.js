@@ -27,7 +27,7 @@ class RetainBucketsDecorator extends AllocationStrategy {
      * Get the number of retained buckets
      * @returns {Number} number of retained buckets
      */
-    get retainedBucketsNb() { return this._retainedBuckets.size; }
+    get retainedBucketsCount() { return this._retainedBuckets.size; }
 
     /**
      * Callback when a bucket is removed from a connector
@@ -43,20 +43,12 @@ class RetainBucketsDecorator extends AllocationStrategy {
     }
 
     /**
-     * Callback when a connector is destroyed.
+     * Callback when a connector is destroyed or
+     * updated.
      * @param {Connector} connector connector
      * @returns {undefined}
      */
-    onConnectorDestroyed(connector) {
-        this._cleanupRetainedBucket(connector);
-    }
-
-    /**
-     * Cleanup retained buckets for a connector
-     * @param {Connector} connector connector
-     * @returns {undefined}
-     */
-    _cleanupRetainedBucket(connector) {
+    onConnectorUpdatedOrDestroyed(connector) {
         // When a connector is updated or destroyed, the retained
         // buckets are removed from the connector
         this._retainedBuckets.forEach((conn, bucket) => {
@@ -76,25 +68,24 @@ class RetainBucketsDecorator extends AllocationStrategy {
      * @returns {Connector | null} connector
      */
     getConnector(connectors, bucket) {
-        if (this._retainedBuckets.has(bucket)) {
-            return this._retainedBuckets.get(bucket);
-        }
-
-        return this._strategy.getConnector(connectors, bucket);
+        return this._retainedBuckets.get(bucket) ||
+            this._strategy.getConnector(connectors, bucket);
     }
 
     /**
-     * Assess if a pipeline can be updated. If the connector can
-     * be updated, the bucket is added as retained.
-     * @param {Connector} connector connector
+     * Assess if a pipeline can be updated.
      * @returns {Boolean} true if the connector can be updated
      */
-    canUpdate(connector) {
-        const res = this._strategy.canUpdate();
-        if (res) {
-            this._cleanupRetainedBucket(connector);
-        }
-        return res;
+    canUpdate() {
+        return this._strategy.canUpdate();
+    }
+
+    /**
+     * Getter for the maximum number of buckets per connector
+     * @returns {Number} maximum number of buckets per connector
+     */
+    get maximumBucketsPerConnector() {
+        return this._strategy.maximumBucketsPerConnector;
     }
 }
 

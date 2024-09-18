@@ -266,7 +266,6 @@ class OplogPopulator {
             this._allocationStrategy = this.initStrategy();
             this._connectorsManager = new ConnectorsManager({
                 nbConnectors: this._config.numberOfConnectors,
-                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
                 database: this._database,
                 mongoUrl: this._mongoUrl,
                 oplogTopic: this._config.topic,
@@ -288,14 +287,14 @@ class OplogPopulator {
             });
             // For now, we always use the RetainBucketsDecorator
             // so, we map the events from the classes
-            this._connectorsManager.on('connector-destroyed', connector =>
-                this._allocationStrategy.onConnectorDestroyed(connector));
+            this._connectorsManager.on('connector-updated', connector =>
+                this._allocationStrategy.onConnectorUpdatedOrDestroyed(connector));
             this._allocator.on('bucket-removed', (bucket, connector) =>
                 this._allocationStrategy.onBucketRemoved(bucket, connector));
             this._connectorsManager.on('connectors-reconciled', bucketsExceedingLimit => {
-                this._metricsHandler.onConnectorsReconciliation(
+                this._metricsHandler.onConnectorsReconciled(
                     bucketsExceedingLimit,
-                    this._allocationStrategy.retainedBucketsNb,
+                    this._allocationStrategy.retainedBucketsCount,
                 );
             });
             // get currently valid buckets from mongo
@@ -340,7 +339,6 @@ class OplogPopulator {
             // words, we cannot alter an existing pipeline. In this
             // case, the strategy is to allow a maximum of one
             // bucket per kafka connector.
-            this._maximumBucketsPerConnector = 1;
             strategy = new ImmutableConnector({
                 logger: this._logger,
                 metricsHandler: this._metricsHandler,
@@ -351,12 +349,10 @@ class OplogPopulator {
             // kafka connector. However, we want to proactively
             // ensure that the pipeline will be accepted by
             // mongodb.
-            this._maximumBucketsPerConnector = constants.maxBucketsPerConnector;
             strategy = new LeastFullConnector({
                 logger: this._logger,
                 metricsHandler: this._metricsHandler,
                 connectorsManager: this._connectorsManager,
-                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
             });
         }
         return new RetainBucketsDecorator(

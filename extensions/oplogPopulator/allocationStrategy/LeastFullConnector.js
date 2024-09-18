@@ -1,3 +1,4 @@
+const constants = require('../constants');
 const AllocationStrategy = require('./AllocationStrategy');
 
 /**
@@ -11,17 +12,6 @@ const AllocationStrategy = require('./AllocationStrategy');
 class LeastFullConnector extends AllocationStrategy {
 
     /**
-     * @constructor
-     * @param {Object} params params
-     * @param {Number} params.maximumBucketsPerConnector maximum number of buckets per connector
-     * @param {Logger} params.logger logger object
-     */
-    constructor(params) {
-        super(params);
-        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
-    }
-
-    /**
      * Get best connector to assign a bucket to.
      * If no connector is available, null is returned.
      * @param {Array<Connector>} connectors connectors
@@ -33,7 +23,7 @@ class LeastFullConnector extends AllocationStrategy {
             return null;
         }
         const connector = connectors.reduce((prev, elt) => (elt.bucketCount < prev.bucketCount ? elt : prev));
-        if (connector.buckets.length >= this._maximumBucketsPerConnector) {
+        if (connector.buckets.length >= this.maximumBucketsPerConnector) {
             return null;
         }
         return connector;
@@ -41,11 +31,18 @@ class LeastFullConnector extends AllocationStrategy {
 
     /**
      * Assess if a pipeline can be updated.
-     * @param {Connector} connector connector
      * @returns {true} true
      */
-    canUpdate(connector) { // eslint-disable-line no-unused-vars
+    canUpdate() {
         return true;
+    }
+
+    /**
+     * Getter for the maximum number of buckets per connector
+     * @returns {Number} maximum number of buckets per connector
+     */
+    get maximumBucketsPerConnector() {
+        return constants.maxBucketsPerConnector;
     }
 }
 

@@ -122,8 +122,8 @@ class Allocator extends EventEmitter {
         try {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
-                await connector.removeBucket(bucket);
                 this.emit('bucket-removed', bucket, connector);
+                await connector.removeBucket(bucket);
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {

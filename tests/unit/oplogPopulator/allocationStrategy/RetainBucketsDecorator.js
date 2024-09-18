@@ -40,7 +40,6 @@ const connector2 = new Connector({
         scenario: 'LeastFullConnector',
         strategy: new LeastFullConnector({
             logger,
-            maximumBucketsPerConnector: 2,
         }),
     }
 ].forEach(({ scenario, strategy }) => {
@@ -81,7 +80,7 @@ const connector2 = new Connector({
             it('should remove retained buckets for connector', () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 decorator._retainedBuckets.set('bucket2', connector2);
-                decorator.onConnectorDestroyed(connector1);
+                decorator.onConnectorUpdatedOrDestroyed(connector1);
                 assert.strictEqual(decorator._retainedBuckets.size, 1);
                 assert.strictEqual(decorator._retainedBuckets.get('bucket2'), connector2);
             });
@@ -89,7 +88,7 @@ const connector2 = new Connector({
             it('should not remove retained buckets for other connectors', () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 decorator._retainedBuckets.set('bucket2', connector2);
-                decorator.onConnectorDestroyed(connector2);
+                decorator.onConnectorUpdatedOrDestroyed(connector2);
                 assert.strictEqual(decorator._retainedBuckets.size, 1);
                 assert.strictEqual(decorator._retainedBuckets.get('bucket1'), connector1);
             });
@@ -97,14 +96,21 @@ const connector2 = new Connector({
 
         describe('canUpdate', () => {
             it('should return the strategy result', async () => {
-                const result = await decorator.canUpdate(connector1);
-                assert.strictEqual(result, strategy.canUpdate(connector1));
+                const result = await decorator.canUpdate();
+                assert.strictEqual(result, strategy.canUpdate());
             });
 
             it('should remove from retained buckets if the strategy allows', async () => {
                 sinon.stub(strategy, 'canUpdate').returns(true);
-                await decorator.canUpdate(connector1);
+                await decorator.canUpdate();
                 assert.strictEqual(decorator._retainedBuckets.size, 0);
+            });
+        });
+
+        describe('maximumBucketsPerConnector', () => {
+            it('should return the strategy result', () => {
+                const result = decorator.maximumBucketsPerConnector;
+                assert.strictEqual(result, strategy.maximumBucketsPerConnector);
             });
         });
     });

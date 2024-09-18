@@ -14,7 +14,6 @@ const OplogPopulator =
 const ChangeStream =
     require('../../../lib/wrappers/ChangeStream');
 const ConnectorsManager = require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
-const constants = require('../../../extensions/oplogPopulator/constants');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const ImmutableConnector = require('../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
@@ -136,20 +135,6 @@ describe('OplogPopulator', () => {
             sinon.restore();
         });
 
-        it('should set the maximum buckets per connector', () => {
-            const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(true);
-            oplogPopulator.initStrategy();
-            assert.strictEqual(oplogPopulator._maximumBucketsPerConnector, 1);
-            assert(arePipelinesImmutableStub.calledOnce);
-        });
-
-        it('should set the maximum buckets per connector to default if pipelines are not immutable', () => {
-            const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(false);
-            oplogPopulator.initStrategy();
-            assert.strictEqual(oplogPopulator._maximumBucketsPerConnector, constants.maxBucketsPerConnector);
-            assert(arePipelinesImmutableStub.calledOnce);
-        });
-
         it('should return an instance of RetainBucketsDecorator for immutable pipelines', () => {
             const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(true);
             const strategy = oplogPopulator.initStrategy();
@@ -212,7 +197,7 @@ describe('OplogPopulator', () => {
             assert(initializeConnectorsManagerStub.calledOnce);
         });
 
-        it('should bind the connector-destroyed event from the connectors manager', async () => {
+        it('should bind the connector-updated event from the connectors manager', async () => {
             const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
             const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
             const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
@@ -222,9 +207,10 @@ describe('OplogPopulator', () => {
             assert(getBackbeatEnabledBucketsStub.calledOnce);
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
-            const onConnectorDestroyedStub = sinon.stub(oplogPopulator._allocationStrategy, 'onConnectorDestroyed');
-            oplogPopulator._connectorsManager.emit('connector-destroyed');
-            assert(onConnectorDestroyedStub.calledOnce);
+            const onConnectorUpdatedOrDestroyedStub =
+            sinon.stub(oplogPopulator._allocationStrategy, 'onConnectorUpdatedOrDestroyed');
+            oplogPopulator._connectorsManager.emit('connector-updated');
+            assert(onConnectorUpdatedOrDestroyedStub.calledOnce);
         });
 
         it('should bind the bucket-removed event from the allocator', async () => {
@@ -252,7 +238,7 @@ describe('OplogPopulator', () => {
             assert(getBackbeatEnabledBucketsStub.calledOnce);
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
-            const onConnectorsReconciledStub = sinon.stub(oplogPopulator._metricsHandler, 'onConnectorsReconciliation');
+            const onConnectorsReconciledStub = sinon.stub(oplogPopulator._metricsHandler, 'onConnectorsReconciled');
             oplogPopulator._connectorsManager.emit('connectors-reconciled');
             assert(onConnectorsReconciledStub.calledOnce);
         });
@@ -262,7 +248,6 @@ describe('OplogPopulator', () => {
         it('should initialize connectors manager', async () => {
             oplogPopulator._connectorsManager = new ConnectorsManager({
                 nbConnectors: oplogPopulator._config.numberOfConnectors,
-                maximumBucketsPerConnector: oplogPopulator._maximumBucketsPerConnector,
                 database: oplogPopulator._database,
                 mongoUrl: oplogPopulator._mongoUrl,
                 oplogTopic: oplogPopulator._config.topic,

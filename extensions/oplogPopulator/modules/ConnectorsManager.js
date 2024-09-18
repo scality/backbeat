@@ -22,9 +22,6 @@ const paramsJoi = joi.object({
     heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
-    maximumBucketsPerConnector: joi.alternatives().try(
-        joi.number().integer(),
-    ).default(constants.maxBucketsPerConnector),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     allocationStrategy: joi.object()
@@ -47,8 +44,6 @@ class ConnectorsManager extends EventEmitter {
      * @constructor
      * @param {Object} params params
      * @param {number} params.nbConnectors number of connectors to have
-     * @param {boolean} params.maximumBucketsPerConnector maximum number of
-     * buckets per connector
      * @param {string} params.database MongoDB database to use (for connector)
      * @param {string} params.mongoUrl MongoDB connection url
      * @param {string} params.oplogTopic topic to use for oplog
@@ -80,7 +75,6 @@ class ConnectorsManager extends EventEmitter {
         this._connectors = [];
         // used for initial clean up of old connector pipelines
         this._oldConnectors = [];
-        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
         this._allocationStrategy = params.allocationStrategy;
     }
 
@@ -160,7 +154,6 @@ class ConnectorsManager extends EventEmitter {
      */
     async _getOldConnectors(connectorNames) {
         try {
-            let bucketsExceedingLimit = 0;
             const connectors = await Promise.all(connectorNames.map(async connectorName => {
                 // get old connector config
                 const oldConfig = await this._kafkaConnect.getConnectorConfig(connectorName);
@@ -180,13 +173,12 @@ class ConnectorsManager extends EventEmitter {
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
                 });
-                if (buckets.length > this._maximumBucketsPerConnector) {
-                    bucketsExceedingLimit += buckets.length - this._maximumBucketsPerConnector;
+                if (buckets.length > this._allocationStrategy.maximumBucketsPerConnector) {
                     this._logger.warn('Connector has more bucket than expected', {
                         method: 'ConnectorsManager._getOldConnectors',
                         connector: connector.name,
                         numberOfBuckets: buckets.length,
-                        allowed: this._maximumBucketsPerConnector,
+                        allowed: this._allocationStrategy.maximumBucketsPerConnector,
                     });
                 }
                 this._logger.debug('Successfully retreived old connector', {
@@ -195,7 +187,6 @@ class ConnectorsManager extends EventEmitter {
                 });
                 return connector;
             }));
-            this.emit('connectors-reconciled', bucketsExceedingLimit);
             this._logger.info('Successfully retreived old connectors', {
                 method: 'ConnectorsManager._getOldConnectors',
                 numberOfConnectors: connectors.length
@@ -255,7 +246,7 @@ class ConnectorsManager extends EventEmitter {
     async _spawnOrDestroyConnector(connector) {
         try {
             if (connector.isRunning && connector.bucketCount === 0) {
-                this.emit('connector-destroyed', connector);
+                this.emit('connector-updated', connector);
                 await connector.destroy();
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
@@ -271,9 +262,12 @@ class ConnectorsManager extends EventEmitter {
                     connector: connector.name,
                 });
                 return true;
-            } else if (connector.isRunning && this._allocationStrategy.canUpdate(connector)) {
-                const isConnectorUpdated = connector.updatePipeline(true);
-                return isConnectorUpdated;
+            } else if (connector.isRunning && this._allocationStrategy.canUpdate()) {
+                const isPipelineUpdated = connector.updatePipeline(true);
+                if (isPipelineUpdated) {
+                    this.emit('connector-updated', connector);
+                }
+                return isPipelineUpdated;
             }
 
             return false;
@@ -293,6 +287,7 @@ class ConnectorsManager extends EventEmitter {
      */
     async _updateConnectors() {
         const connectorsStatus = {};
+        let bucketsExceedingLimit = 0;
         await eachLimit(this._connectors, 10, async connector => {
             const startTime = Date.now();
             try {
@@ -311,6 +306,10 @@ class ConnectorsManager extends EventEmitter {
                         numberOfBuckets: connector.bucketCount,
                     };
                 }
+                if (connector.bucketCount > this._allocationStrategy.maximumBucketsPerConnector) {
+                    bucketsExceedingLimit +=
+                        connector.bucketCount - this._allocationStrategy.maximumBucketsPerConnector;
+                }
             } catch (err) {
                 this._metricsHandler.onConnectorReconfiguration(connector, false);
                 this._logger.error('Failed to updated connector', {
@@ -321,6 +320,7 @@ class ConnectorsManager extends EventEmitter {
                 });
             }
         });
+        this.emit('connectors-reconciled', bucketsExceedingLimit);
         if (Object.keys(connectorsStatus).length > 0) {
             this._logger.info('Successfully updated connectors', {
                 method: 'ConnectorsManager._updateConnectors',
@@ -378,8 +378,13 @@ class ConnectorsManager extends EventEmitter {
      * @returns {undefined}
      */
     scheduleConnectorUpdates() {
+        let updateInProgress = false;
         schedule.scheduleJob(this._cronRule, async () => {
-            await this._updateConnectors();
+            if (!updateInProgress) {
+                updateInProgress = true;
+                await this._updateConnectors();
+                updateInProgress = false;
+            }
         });
     }
 

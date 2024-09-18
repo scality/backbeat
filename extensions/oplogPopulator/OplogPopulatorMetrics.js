@@ -206,20 +206,20 @@ class OplogPopulatorMetrics {
     }
 
     /**
-     * updates metrics when the connectors are reconcilied
+     * updates metrics when the connectors are reconciled
      * @param {number} bucketsExceedingLimit number of buckets above the limit
      * for all connectors
      * @param {number} retainedBuckets number of buckets still listened to by
      * immutable connectors despite intended removal
      * @returns {undefined}
      */
-    onConnectorsReconciliation(bucketsExceedingLimit, retainedBuckets) {
+    onConnectorsReconciled(bucketsExceedingLimit, retainedBuckets) {
         try {
             this.bucketsExceedingLimit.set(bucketsExceedingLimit);
             this.retainedBuckets.set(retainedBuckets);
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
-                method: 'OplogPopulatorMetrics.onConnectorsReconciliation',
+                method: 'OplogPopulatorMetrics.onConnectorsReconciled',
                 error: error.message,
             });
         }

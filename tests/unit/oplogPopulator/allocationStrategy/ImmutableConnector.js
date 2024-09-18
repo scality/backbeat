@@ -47,4 +47,10 @@ describe('ImmutableConnector', () => {
         const result = await immutableConnector.canUpdate();
         assert.strictEqual(result, false);
     });
+
+    it('should return 1 for maximumBucketsPerConnector', async () => {
+        const immutableConnector = new ImmutableConnector({ logger });
+        const result = await immutableConnector.maximumBucketsPerConnector;
+        assert.strictEqual(result, 1);
+    });
 });

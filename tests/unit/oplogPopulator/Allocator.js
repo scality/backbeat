@@ -10,7 +10,6 @@ const OplogPopulatorMetrics =
     require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
-const constants = require('../../../extensions/oplogPopulator/constants');
 
 const logger = new werelogs.Logger('Allocator');
 
@@ -41,7 +40,6 @@ describe('Allocator', () => {
                 // Not needed to test all strategies here: we stub their methods
                 new LeastFullConnector({
                     logger,
-                    maximumBucketsPerConnector: constants.maxBucketsPerConnector,
                 }),
                 { logger, }
             ),

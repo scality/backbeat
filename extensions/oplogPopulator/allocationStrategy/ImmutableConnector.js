@@ -22,11 +22,18 @@ class ImmutableConnector extends AllocationStrategy {
     /**
      * Assess if a pipeline can be updated. With the immutable
      * strategy, a connector cannot be updated.
-     * @param {Connector} connector connector
      * @returns {false} false
      */
-    canUpdate(connector) { // eslint-disable-line no-unused-vars
+    canUpdate() {
         return false;
+    }
+
+    /**
+     * Getter for the maximum number of buckets per connector
+     * @returns {Number} maximum number of buckets per connector
+     */
+    get maximumBucketsPerConnector() {
+        return 1;
     }
 }
 
