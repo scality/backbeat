@@ -51,7 +51,7 @@ class OplogPopulator {
         this._logger = params.logger;
         this._changeStreamWrapper = null;
         this._allocator = null;
-        this._connectorsManager  = null;
+        this._connectorsManager = null;
         // contains OplogPopulatorUtils class of each supported extension
         this._extHelpers = {};
         // MongoDB related
@@ -78,9 +78,9 @@ class OplogPopulator {
     async _setupMongoClient() {
         try {
             const client = await MongoClient.connect(this._mongoUrl, {
-                 replicaSet: this._replicaSet,
-                 useNewUrlParser: true,
-                 useUnifiedTopology: true,
+                replicaSet: this._replicaSet,
+                useNewUrlParser: true,
+                useUnifiedTopology: true,
             });
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
@@ -291,13 +291,13 @@ class OplogPopulator {
             this._logger.info('OplogPopulator setup complete', {
                 method: 'OplogPopulator.setup',
             });
-       } catch (err) {
+        } catch (err) {
             this._logger.error('An error occured when setting up the OplogPopulator', {
                 method: 'OplogPopulator.setup',
                 error: err.description || err.message,
             });
             throw errors.InternalError.customizeDescription(err.description);
-       }
+        }
     }
 
     /**

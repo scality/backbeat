@@ -73,7 +73,7 @@ class Allocator {
      */
     async listenToBucket(bucket, eventDate = null) {
         try {
-            if (!this._bucketsToConnectors.has(bucket)) {
+            if (!this.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
                 const connector = this._allocationStrategy.getConnector(connectors);
                 // In the initial startup of the oplog populator

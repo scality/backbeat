@@ -129,7 +129,7 @@ class ConnectorsManager {
      * @param {Object} connectorConfig connector config
      * @returns {string[]} list of buckets
      */
-     _extractBucketsFromConfig(connectorConfig) {
+    _extractBucketsFromConfig(connectorConfig) {
         const pipeline = connectorConfig.pipeline ?
             JSON.parse(connectorConfig.pipeline) : null;
         if (!pipeline || pipeline.length === 0) {
@@ -244,7 +244,7 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
             } else if (!connector.isRunning && connector.bucketCount > 0) {
@@ -252,7 +252,7 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorsInstantiated(false);
                 this._logger.info('Successfully spawned a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
             } else if (connector.isRunning) {
