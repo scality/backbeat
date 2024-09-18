@@ -39,7 +39,7 @@ groups:
       description: "Oplog populator failed to configure connector"
       summary: "Oplog populator couldn't update kafka connect connector"
 
-  - alert: KafkaConnectReplicasAboveThreshold
+  - alert: KafkaConnectTooManyConnectors
     Expr: |
         sum(s3_oplog_populator_connectors{job="${oplog_populator_job}",namespace="${namespace}"})
         > ${oplogPopulatorChangeStreamLimit}
@@ -48,8 +48,8 @@ groups:
      severity: warning
     Annotations:
       zenko_service: backbeat-oplog-populator
-      description: "Kafka connector count is above the soft limit"
-      summary: "Kafka connector count is above the soft limit. If the number of buckets is too high, consider using a single replica for your cluster"
+      description: "Kafka connector count is above the soft limit. If the number of buckets is too high, consider using a single replica for your cluster"
+      summary: "Kafka connector count is above the soft limit"
 
   - alert: OplogPopulatorMetastoreChangeStreamLagThreshold
     Expr: |

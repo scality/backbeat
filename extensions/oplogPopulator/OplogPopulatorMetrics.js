@@ -33,6 +33,10 @@ class OplogPopulatorMetrics {
             help: 'Total number of buckets per connector',
             labelNames: ['connector'],
         });
+        this.retainedBuckets = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_connector_retained_buckets',
+            help: 'Current number of buckets still listened to by immutable connectors despite intended removal',
+        });
         this.requestSize = ZenkoMetrics.createCounter({
             name: 's3_oplog_populator_connector_request_bytes_total',
             help: 'Total size of kafka connect request in bytes',
@@ -192,6 +196,22 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorRestarted',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates s3_oplog_populator_connector_retained_buckets metric
+     * @param {number} count number of buckets retained
+     * @returns {undefined}
+     */
+    onRetainedBuckets(count) {
+        try {
+            this.retainedBuckets.set(count);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metric', {
+                method: 'OplogPopulatorMetrics.onRetainedBuckets',
                 error: error.message,
             });
         }

@@ -165,6 +165,15 @@ class ConnectorsManager {
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
                 });
+                if (buckets.length > this._maximumBucketsPerConnector) {
+                    this._metricsHandler.onRetainedBuckets(buckets.length);
+                    this._logger.warn('Connector has more than expected number of bucket', {
+                        method: 'ConnectorsManager._getOldConnectors',
+                        connector: connector.name,
+                        numberOfBuckets: buckets.length,
+                        allowed: this._maximumBucketsPerConnector,
+                    });
+                }
                 this._logger.debug('Successfully retreived old connector', {
                     method: 'ConnectorsManager._getOldConnectors',
                     connector: connector.name

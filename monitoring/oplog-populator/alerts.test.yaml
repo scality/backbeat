@@ -80,18 +80,18 @@ tests:
       - series: s3_oplog_populator_connectors{job="artesca-data-backbeat-oplog-populator-headless",namespace="zenko"}
         values: 1x3 11x20 1x3
     alert_rule_test:
-      - alertname: KafkaConnectReplicasAboveThreshold
+      - alertname: KafkaConnectTooManyConnectors
         eval_time: 4m
         exp_alerts: []
-      - alertname: KafkaConnectReplicasAboveThreshold
+      - alertname: KafkaConnectTooManyConnectors
         eval_time: 15m
         exp_alerts:
           - exp_labels:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-oplog-populator
-              description: "Kafka connector count is above the soft limit"
-              summary: "Kafka connector count is above the soft limit. If the number of buckets is too high, consider using a single replica for your cluster"
+              description: "Kafka connector count is above the soft limit. If the number of buckets is too high, consider using a single replica for your cluster"
+              summary: "Kafka connector count is above the soft limit"
       - alertname: KafkaConnectReplicasAbove
         eval_time: 25m
         exp_alerts: []
