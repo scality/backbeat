@@ -33,6 +33,7 @@ describe('LeastFullConnector', () => {
     beforeEach(() => {
         strategy = new LeastFullConnector({
             logger,
+            maximumBucketsPerConnector: 2,
         });
     });
 
@@ -40,6 +41,16 @@ describe('LeastFullConnector', () => {
         it('Should return connector with fewest buckets', () => {
             const connector = strategy.getConnector([connector1, connector2]);
             assert.strictEqual(connector.name, connector1.name);
+        });
+
+        it('Should return null if no connectors', () => {
+            const connector = strategy.getConnector([]);
+            assert.strictEqual(connector, null);
+        });
+
+        it('should return null if the smallest connector is full', () => {
+            const connector = strategy.getConnector([connector2]);
+            assert.strictEqual(connector, null);
         });
     });
 });

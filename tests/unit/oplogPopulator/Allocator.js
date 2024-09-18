@@ -8,6 +8,9 @@ const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
 const OplogPopulatorMetrics =
     require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
+const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
+const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
+const constants = require('../../../extensions/oplogPopulator/constants');
 
 const logger = new werelogs.Logger('Allocator');
 
@@ -31,8 +34,17 @@ describe('Allocator', () => {
         allocator = new Allocator({
             connectorsManager: {
                 connectors: [],
+                addConnector: () => connector1,
             },
             metricsHandler: new OplogPopulatorMetrics(logger),
+            allocationStrategy: new RetainBucketsDecorator(
+                // Not needed to test all strategies here: we stub their methods
+                new LeastFullConnector({
+                    logger,
+                    maximumBucketsPerConnector: constants.maxBucketsPerConnector,
+                }),
+                { logger, }
+            ),
             logger,
         });
     });
@@ -65,13 +77,18 @@ describe('Allocator', () => {
     });
 
     describe('listenToBucket', () => {
+        it('should handle errors', async () => {
+            sinon.stub(connector1, 'addBucket').rejects(new Error('error'));
+            assert.rejects(allocator.listenToBucket('example-bucket-2'));
+        });
+
         it('Should listen to bucket if it wasn\'t assigned before', async () => {
             allocator._connectorsManager.connectors = [connector1];
             const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
                 .returns(connector1);
             const addBucketStub = sinon.stub(connector1, 'addBucket').resolves();
             await allocator.listenToBucket('example-bucket-1');
-            assert(getConnectorStub.calledOnceWith([connector1]));
+            assert(getConnectorStub.calledOnceWith([connector1], 'example-bucket-1'));
             assert(addBucketStub.calledOnceWith('example-bucket-1'));
             const assignedConnector = allocator._bucketsToConnectors.get('example-bucket-1');
             assert.deepEqual(assignedConnector, connector1);
@@ -86,16 +103,29 @@ describe('Allocator', () => {
             assert(getConnectorStub.notCalled);
             assert(addBucketStub.notCalled);
         });
+
+        it('should add a connector if the strategy returns null', () => {
+            allocator._connectorsManager.connectors = [connector1];
+            sinon.stub(allocator._allocationStrategy, 'getConnector').returns(null);
+            const addConnectorStub = sinon.stub(allocator._connectorsManager, 'addConnector');
+            allocator.listenToBucket('example-bucket-2');
+            assert(addConnectorStub.calledOnce);
+        });
     });
 
     describe('stopListeningToBucket', () => {
-        it('Should stop listening to bucket if it was assigned a connector', async () => {
+        it('Should handle errors', async () => {
+            sinon.stub(connector1, 'removeBucket').rejects(new Error('error'));
+            assert.rejects(allocator.stopListeningToBucket('example-bucket-2'));
+        });
+
+        it('Should emit event if listening to bucket that was assigned a connector', async () => {
             allocator._bucketsToConnectors.set('example-bucket-1', connector1);
             const removeBucketStub = sinon.stub(connector1, 'removeBucket').resolves();
             await allocator.stopListeningToBucket('example-bucket-1');
             assert(removeBucketStub.calledOnceWith('example-bucket-1'));
-            const exists = allocator._bucketsToConnectors.has('example-bucket-1');
-            assert.strictEqual(exists, false);
+            const assignedConnector = allocator._bucketsToConnectors.get('example-bucket-1');
+            assert.strictEqual(assignedConnector, undefined);
         });
 
         it('Should do nothing if bucket has no connector assigned', async () => {

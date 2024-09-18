@@ -8,6 +8,9 @@ const ConnectorsManager =
     require('../../../extensions/oplogPopulator/modules/ConnectorsManager');
 const OplogPopulatorMetrics =
     require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
+const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
+const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
+const constants = require('../../../extensions/oplogPopulator/constants');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -96,6 +99,14 @@ describe('ConnectorsManager', () => {
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
             metricsHandler: new OplogPopulatorMetrics(logger),
+            allocationStrategy: new RetainBucketsDecorator(
+                // Not needed to test all strategies here: we stub their methods
+                new LeastFullConnector({
+                    logger,
+                    maximumBucketsPerConnector: constants.maxBucketsPerConnector,
+                }),
+                { logger }
+            ),
             logger,
         });
     });
@@ -168,6 +179,20 @@ describe('ConnectorsManager', () => {
             assert.strictEqual(connectors[0].config['topic.namespace.map'], '{"*":"oplog"}');
             assert.strictEqual(connectors[0].isRunning, true);
         });
+
+        it('Should warn when the number of retrieved bucket in a connector exceeds the limit', async () => {
+            const config = { ...connectorConfig };
+            connectorsManager._maximumBucketsPerConnector = 1;
+            config['topic.namespace.map'] = 'outdated-topic';
+            config['offset.partitiom.name'] = 'partition-name';
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
+                .resolves(config);
+            sinon.stub(connectorsManager, '_extractBucketsFromConfig').returns(['bucket1', 'bucket2']);
+            const warnStub = sinon.stub(connectorsManager._logger, 'warn');
+            const connectors = await connectorsManager._getOldConnectors(['source-connector', 'source-connector-2']);
+            assert.strictEqual(connectors.length, 2);
+            assert(warnStub.called);
+        });
     });
 
     describe('initializeConnectors', () => {
@@ -188,7 +213,10 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves([]);
             sinon.stub(connectorsManager, 'addConnector')
-                .returns(connector1);
+                .callsFake(() => {
+                    connectorsManager._connectors.push(connector1);
+                    return connector1;
+                });
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
@@ -205,6 +233,15 @@ describe('ConnectorsManager', () => {
             assert.strictEqual(updated, true);
             assert(connectorCreateStub.notCalled);
             assert(connectorDeleteStub.calledOnceWith(connector1.name));
+        });
+
+        it('should emit event when destroying connector', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set();
+            const emitStub = sinon.stub(connectorsManager, 'emit');
+            await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert(emitStub.calledOnceWith('connector-updated', connector1));
         });
 
         it('should spawn a non running connector when buckets are configured', async () => {
@@ -234,6 +271,18 @@ describe('ConnectorsManager', () => {
             connector1._isRunning = false;
             connector1._state.bucketsGotModified = false;
             connector1._buckets = new Set();
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, false);
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+        });
+
+        it('should do nothing if the strategy does not allow to update', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = false;
+            connector1._buckets = new Set(['bucket1']);
+            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
+                .resolves(false);
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, false);
             assert(connectorCreateStub.notCalled);
