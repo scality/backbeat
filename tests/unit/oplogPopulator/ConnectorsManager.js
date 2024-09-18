@@ -241,7 +241,7 @@ describe('ConnectorsManager', () => {
             connector1._buckets = new Set();
             const emitStub = sinon.stub(connectorsManager, 'emit');
             await connectorsManager._spawnOrDestroyConnector(connector1);
-            assert(emitStub.calledOnceWith('connector-updated', connector1));
+            assert(emitStub.calledOnceWith('connector-destroyed', connector1));
         });
 
         it('should spawn a non running connector when buckets are configured', async () => {

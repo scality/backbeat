@@ -77,11 +77,11 @@ const connector2 = new Connector({
             });
         });
 
-        describe('onConnectorUpdated', () => {
+        describe('onConnectorDestroyed', () => {
             it('should remove retained buckets for connector', () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 decorator._retainedBuckets.set('bucket2', connector2);
-                decorator.onConnectorUpdated(connector1);
+                decorator.onConnectorDestroyed(connector1);
                 assert.strictEqual(decorator._retainedBuckets.size, 1);
                 assert.strictEqual(decorator._retainedBuckets.get('bucket2'), connector2);
             });
@@ -89,7 +89,7 @@ const connector2 = new Connector({
             it('should not remove retained buckets for other connectors', () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 decorator._retainedBuckets.set('bucket2', connector2);
-                decorator.onConnectorUpdated(connector2);
+                decorator.onConnectorDestroyed(connector2);
                 assert.strictEqual(decorator._retainedBuckets.size, 1);
                 assert.strictEqual(decorator._retainedBuckets.get('bucket1'), connector1);
             });

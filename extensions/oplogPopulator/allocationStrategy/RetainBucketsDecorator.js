@@ -24,6 +24,12 @@ class RetainBucketsDecorator extends AllocationStrategy {
     }
 
     /**
+     * Get the number of retained buckets
+     * @returns {Number} number of retained buckets
+     */
+    get retainedBucketsNb() { return this._retainedBuckets.size; }
+
+    /**
      * Callback when a bucket is removed from a connector
      * @param {String} bucket bucket name
      * @param {Connector} connector connector
@@ -37,11 +43,20 @@ class RetainBucketsDecorator extends AllocationStrategy {
     }
 
     /**
-     * Callback when a connector is updated
+     * Callback when a connector is destroyed.
      * @param {Connector} connector connector
      * @returns {undefined}
      */
-    onConnectorUpdated(connector) {
+    onConnectorDestroyed(connector) {
+        this._cleanupRetainedBucket(connector);
+    }
+
+    /**
+     * Cleanup retained buckets for a connector
+     * @param {Connector} connector connector
+     * @returns {undefined}
+     */
+    _cleanupRetainedBucket(connector) {
         // When a connector is updated or destroyed, the retained
         // buckets are removed from the connector
         this._retainedBuckets.forEach((conn, bucket) => {
@@ -77,7 +92,7 @@ class RetainBucketsDecorator extends AllocationStrategy {
     canUpdate(connector) {
         const res = this._strategy.canUpdate();
         if (res) {
-            this.onConnectorUpdated(connector);
+            this._cleanupRetainedBucket(connector);
         }
         return res;
     }
