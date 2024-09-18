@@ -65,13 +65,13 @@ const connector2 = new Connector({
         });
 
         describe('getConnector', () => {
-            it('Should return the retrained bucket\'s connector if it exists', () => {
+            it('should return the retrained bucket\'s connector if it exists', () => {
                 decorator._retainedBuckets.set('bucket1', connector1);
                 const result = decorator.getConnector([connector1, connector2], 'bucket1');
                 assert.strictEqual(result, connector1);
             });
 
-            it('Should call the strategy if the bucket is not retained', () => {
+            it('should call the strategy if the bucket is not retained', () => {
                 const result = decorator.getConnector([connector1, connector2], 'bucket1');
                 assert.strictEqual(result, strategy.getConnector([connector1, connector2], 'bucket1'));
             });
@@ -96,12 +96,12 @@ const connector2 = new Connector({
         });
 
         describe('canUpdate', () => {
-            it('Should return the strategy result', async () => {
+            it('should return the strategy result', async () => {
                 const result = await decorator.canUpdate(connector1);
                 assert.strictEqual(result, strategy.canUpdate(connector1));
             });
 
-            it('Should remove from retained buckets if the strategy allows', async () => {
+            it('should remove from retained buckets if the strategy allows', async () => {
                 sinon.stub(strategy, 'canUpdate').returns(true);
                 await decorator.canUpdate(connector1);
                 assert.strictEqual(decorator._retainedBuckets.size, 0);

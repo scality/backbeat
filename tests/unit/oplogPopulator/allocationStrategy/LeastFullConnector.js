@@ -38,12 +38,12 @@ describe('LeastFullConnector', () => {
     });
 
     describe('getConnector', () => {
-        it('Should return connector with fewest buckets', () => {
+        it('should return connector with fewest buckets', () => {
             const connector = strategy.getConnector([connector1, connector2]);
             assert.strictEqual(connector.name, connector1.name);
         });
 
-        it('Should return null if no connectors', () => {
+        it('should return null if no connectors', () => {
             const connector = strategy.getConnector([]);
             assert.strictEqual(connector, null);
         });

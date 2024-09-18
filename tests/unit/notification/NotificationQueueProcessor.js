@@ -90,7 +90,7 @@ describe('NotificationQueueProcessor:: ', () => {
     });
 
     describe('processKafkaEntry ::', () => {
-        it('Should publish notification in correct format', async () => {
+        it('should publish notification in correct format', async () => {
             notificationQueueProcessor._getConfig = sinon.stub().yields(null, notificationConfiguration);
             const sendStub = sinon.stub().yields(null);
             notificationQueueProcessor._destination = {

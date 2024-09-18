@@ -98,7 +98,7 @@ describe('NotificationConfigManager ::', () => {
     });
 
     describe('_setupMongoClient ::', () => {
-        it('Should setup the mongo client and get metastore collection', () => {
+        it('should setup the mongo client and get metastore collection', () => {
             const manager = new NotificationConfigManager(params);
             const getCollectionStub = sinon.stub();
             const mongoCommandStub = sinon.stub().returns({
@@ -123,7 +123,7 @@ describe('NotificationConfigManager ::', () => {
             });
         });
 
-        it('Should fail when mongo client setup fails', () => {
+        it('should fail when mongo client setup fails', () => {
             const manager = new NotificationConfigManager(params);
             sinon.stub(MongoClient, 'connect').callsArgWith(2,
                 errors.InternalError, null);
@@ -132,7 +132,7 @@ describe('NotificationConfigManager ::', () => {
             });
         });
 
-        it('Should fail when when getting the metadata db', () => {
+        it('should fail when when getting the metadata db', () => {
             const manager = new NotificationConfigManager(params);
             const getDbStub = sinon.stub().throws(errors.InternalError);
             sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
@@ -143,7 +143,7 @@ describe('NotificationConfigManager ::', () => {
             });
         });
 
-        it('Should fail when mongo client fails to get metastore', () => {
+        it('should fail when mongo client fails to get metastore', () => {
             const manager = new NotificationConfigManager(params);
             const getCollectionStub = sinon.stub().throws(errors.InternalError);
             const getDbStub = sinon.stub().returns({
@@ -159,7 +159,7 @@ describe('NotificationConfigManager ::', () => {
     });
 
     describe('_handleChangeStreamChangeEvent ::', () => {
-        it('Should remove entry from cache', () => {
+        it('should remove entry from cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'delete',
@@ -185,7 +185,7 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 0);
         });
 
-        it('Should replace entry from cache', () => {
+        it('should replace entry from cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'replace',
@@ -223,7 +223,7 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 1);
         });
 
-        it('Should do nothing when config not in cache', () => {
+        it('should do nothing when config not in cache', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'delete',
@@ -250,7 +250,7 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(manager._cachedConfigs.count(), 1);
         });
 
-        it('Should do nothing when operation is not supported', () => {
+        it('should do nothing when operation is not supported', () => {
             const changeStreamEvent = {
                 _id: 'resumeToken',
                 operationType: 'insert',
@@ -315,7 +315,7 @@ describe('NotificationConfigManager ::', () => {
     });
 
     describe('getConfig ::', () =>  {
-        it('Should return notification configuration of bucket', async () => {
+        it('should return notification configuration of bucket', async () => {
             const manager = new NotificationConfigManager(params);
             manager._metastore = {
                 findOne: () => (
@@ -334,7 +334,7 @@ describe('NotificationConfigManager ::', () => {
                 notificationConfiguration);
         });
 
-        it('Should return undefined when bucket doesn\'t have notification configuration', async () => {
+        it('should return undefined when bucket doesn\'t have notification configuration', async () => {
             const manager = new NotificationConfigManager(params);
             manager._metastore = {
                 findOne: () => ({ value: {} }),
@@ -343,7 +343,7 @@ describe('NotificationConfigManager ::', () => {
             assert.strictEqual(config, undefined);
         });
 
-        it('Should return undefined when mongo findOne fails', async () => {
+        it('should return undefined when mongo findOne fails', async () => {
             const manager = new NotificationConfigManager(params);
             manager._metastore = {
                 findOne: sinon.stub().throws(errors.InternalError),

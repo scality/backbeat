@@ -132,7 +132,7 @@ describe('ChangeStream', () => {
     });
 
     describe('start', () =>  {
-        it('Should create and listen to the metastore change stream', done => {
+        it('should create and listen to the metastore change stream', done => {
             const watchStub = sinon.stub().returns(new events.EventEmitter());
             wrapper._collection = {
                 watch: watchStub,
@@ -149,7 +149,7 @@ describe('ChangeStream', () => {
             });
         });
 
-        it('Should set the change stream pipeline', done => {
+        it('should set the change stream pipeline', done => {
             const watchStub = sinon.stub().returns(new events.EventEmitter());
             const changeStreamPipline = [
                 {
@@ -216,7 +216,7 @@ describe('ChangeStream', () => {
             });
         });
 
-        it('Should fail if it fails to create change stream', done => {
+        it('should fail if it fails to create change stream', done => {
             wrapper._collection = {
                 watch: sinon.stub().throws(errors.InternalError),
             };

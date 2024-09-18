@@ -39,7 +39,7 @@ describe('Connector', () => {
     });
 
     describe('spawn', () => {
-        it('Should spawn connector with correct pipeline', async () => {
+        it('should spawn connector with correct pipeline', async () => {
             const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
             assert.strictEqual(connector.isRunning, false);
@@ -50,7 +50,7 @@ describe('Connector', () => {
             }));
             assert.strictEqual(connector.isRunning, true);
         });
-        it('Should change partition name on creation', async () => {
+        it('should change partition name on creation', async () => {
             sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
             await connector.spawn();
@@ -59,7 +59,7 @@ describe('Connector', () => {
             await connector.spawn();
             assert.notStrictEqual(partitionName, connector.config['offset.partition.name']);
         });
-        it('Should not try spawning a new connector when on is already existent', async () => {
+        it('should not try spawning a new connector when on is already existent', async () => {
             const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
             connector._isRunning = true;
@@ -69,7 +69,7 @@ describe('Connector', () => {
     });
 
     describe('destroy', () => {
-        it('Should destroy connector', async () => {
+        it('should destroy connector', async () => {
             const deleteStub = sinon.stub(connector._kafkaConnect, 'deleteConnector')
                 .resolves();
             connector._isRunning = true;
@@ -78,14 +78,14 @@ describe('Connector', () => {
             assert(deleteStub.calledOnceWith('example-connector'));
             assert.strictEqual(connector.isRunning, false);
         });
-        it('Should not try destroying a new connector when connector is already destroyed', async () => {
+        it('should not try destroying a new connector when connector is already destroyed', async () => {
             const deleteStub = sinon.stub(connector._kafkaConnect, 'deleteConnector')
                 .resolves();
             connector._isRunning = false;
             await connector.destroy();
             assert(deleteStub.notCalled);
         });
-        it('Should reset resume point', async () => {
+        it('should reset resume point', async () => {
             sinon.stub(connector._kafkaConnect, 'deleteConnector')
                 .resolves();
             connector._isRunning = true;
@@ -95,21 +95,21 @@ describe('Connector', () => {
     });
 
     describe('restart', () => {
-        it('Should restart connector', async () => {
+        it('should restart connector', async () => {
             const restartStub = sinon.stub(connector._kafkaConnect, 'restartConnector')
                 .resolves();
             connector._isRunning = true;
             await connector.restart();
             assert(restartStub.calledOnceWith('example-connector'));
         });
-        it('Should not try to restart a connector that is not spawned', async () => {
+        it('should not try to restart a connector that is not spawned', async () => {
             const restartStub = sinon.stub(connector._kafkaConnect, 'restartConnector')
                 .resolves();
             connector._isRunning = false;
             await connector.restart();
             assert(restartStub.notCalled);
         });
-        it('Should fail when kafka connect returns an error', async () => {
+        it('should fail when kafka connect returns an error', async () => {
             sinon.stub(connector._kafkaConnect, 'restartConnector')
                 .rejects(errors.InternalError);
             connector._isRunning = true;
@@ -118,7 +118,7 @@ describe('Connector', () => {
     });
 
     describe('addBucket', () => {
-        it('Should add bucket and update connector', async () => {
+        it('should add bucket and update connector', async () => {
             const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
                 .resolves();
             await connector.addBucket('example-bucket');
@@ -126,7 +126,7 @@ describe('Connector', () => {
             assert.strictEqual(connector._buckets.has('example-bucket'), true);
         });
 
-        it('Should add bucket without updating connector', async () => {
+        it('should add bucket without updating connector', async () => {
             const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
                 .resolves();
             await connector.addBucket('example-bucket', false);
@@ -135,7 +135,7 @@ describe('Connector', () => {
     });
 
     describe('removeBucket', () => {
-        it('Should remove bucket and update connector', async () => {
+        it('should remove bucket and update connector', async () => {
             const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
                 .resolves();
             connector._buckets.add('example-bucket');
@@ -144,7 +144,7 @@ describe('Connector', () => {
             assert.strictEqual(connector._buckets.has('example-bucket'), false);
         });
 
-        it('Should remove bucket without updating connector', async () => {
+        it('should remove bucket without updating connector', async () => {
             const connectorUpdateStub = sinon.stub(connector, 'updatePipeline')
                 .resolves();
             await connector.removeBucket('example-bucket', false);
@@ -153,7 +153,7 @@ describe('Connector', () => {
     });
 
     describe('_generateConnectorPipeline', () => {
-        it('Should return new pipeline', () => {
+        it('should return new pipeline', () => {
             const buckets = ['example-bucket-1', 'example-bucket-2'];
             const pipeline = connector._generateConnectorPipeline(buckets);
             assert.strictEqual(pipeline, JSON.stringify([
@@ -169,7 +169,7 @@ describe('Connector', () => {
     });
 
     describe('_updateConnectorState', () => {
-        it('Should update all fields when a bucket is added/removed', () => {
+        it('should update all fields when a bucket is added/removed', () => {
             const clock = sinon.useFakeTimers();
             clock.tick(100);
             connector._state.bucketsGotModified = false;
@@ -179,7 +179,7 @@ describe('Connector', () => {
             assert.notEqual(oldDate, connector._state.lastUpdated);
         });
 
-        it('Should update all fields when connector got updated and no other operations occured', () => {
+        it('should update all fields when connector got updated and no other operations occured', () => {
             connector._state.bucketsGotModified = true;
             const oldDate = connector._state.lastUpdated;
             const now = Date.now();
@@ -190,7 +190,7 @@ describe('Connector', () => {
             assert.notEqual(oldDate, connector._state.lastUpdated);
         });
 
-        it('Should only update date incase an opetation happend while updating connector', () => {
+        it('should only update date incase an opetation happend while updating connector', () => {
             const oldDate = Date.now();
             connector._state.lastUpdated = oldDate;
             connector._state.bucketsGotModified = true;
@@ -204,7 +204,7 @@ describe('Connector', () => {
     });
 
     describe('updatePipeline', () => {
-        it('Should only update connector pipeline data if conditions are met', async () => {
+        it('should only update connector pipeline data if conditions are met', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
@@ -217,7 +217,7 @@ describe('Connector', () => {
             assert(updateStub.notCalled);
         });
 
-        it('Should update connector', async () => {
+        it('should update connector', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = true;
@@ -231,7 +231,7 @@ describe('Connector', () => {
             assert(updateStub.calledOnceWith('example-connector', connector._config));
         });
 
-        it('Should not update when buckets assigned to connector haven\'t changed', async () => {
+        it('should not update when buckets assigned to connector haven\'t changed', async () => {
             connector._state.bucketsGotModified = false;
             connector._state.isUpdating = false;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
@@ -244,7 +244,7 @@ describe('Connector', () => {
             assert(updateStub.notCalled);
         });
 
-        it('Should not update when connector is updating', async () => {
+        it('should not update when connector is updating', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = true;
             const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
@@ -257,7 +257,7 @@ describe('Connector', () => {
             assert(updateStub.notCalled);
         });
 
-        it('Should not update destroyed connector', async () => {
+        it('should not update destroyed connector', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = false;
@@ -273,7 +273,7 @@ describe('Connector', () => {
     });
 
     describe('getConfigSizeInBytes', () => {
-        it('Should return correct size in bytes', () => {
+        it('should return correct size in bytes', () => {
             connector._config = { key: 'value' };
             const size = connector.getConfigSizeInBytes();
             assert.strictEqual(size, 15);
@@ -281,7 +281,7 @@ describe('Connector', () => {
     });
 
     describe('updatePartitionName', () => {
-        it('Should update partition name in config', () => {
+        it('should update partition name in config', () => {
             connector._config['offset.partition.name'] = 'partition-name';
             connector.updatePartitionName();
             assert.notStrictEqual(connector._config['offset.partition.name'], 'partition-name');
@@ -289,7 +289,7 @@ describe('Connector', () => {
     });
 
     describe('setResumePoint', () => {
-        it('Should not set the resume point when resume point already set', () => {
+        it('should not set the resume point when resume point already set', () => {
             connector._isRunning = false;
             connector._config['startup.mode.timestamp.start.at.operation.time'] = '2023-11-15T16:18:53.000Z';
             connector.setResumePoint(new Date('2023-11-16T16:18:53.000Z'));
@@ -299,7 +299,7 @@ describe('Connector', () => {
             );
         });
 
-        it('Should set the resume point when not present and connector is stopped', () => {
+        it('should set the resume point when not present and connector is stopped', () => {
             connector._isRunning = false;
             delete connector._config['startup.mode.timestamp.start.at.operation.time'];
 

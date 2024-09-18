@@ -124,12 +124,12 @@ describe('ConnectorsManager', () => {
     });
 
     describe('_generateConnectorName', () => {
-        it('Should generate a random name', () => {
+        it('should generate a random name', () => {
             const connectorName = connectorsManager._generateConnectorName();
             assert(connectorName.startsWith('source-connector-'));
         });
 
-        it('Should add prefix to connector name', () => {
+        it('should add prefix to connector name', () => {
             connectorsManager._prefix = 'pfx-';
             const connectorName = connectorsManager._generateConnectorName();
             assert(connectorName.startsWith('pfx-source-connector-'));
@@ -166,7 +166,7 @@ describe('ConnectorsManager', () => {
     });
 
     describe('_getOldConnectors', () => {
-        it('Should update connector config while keeping the extra fields', async () => {
+        it('should update connector config while keeping the extra fields', async () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
@@ -180,7 +180,7 @@ describe('ConnectorsManager', () => {
             assert.strictEqual(connectors[0].isRunning, true);
         });
 
-        it('Should warn when the number of retrieved bucket in a connector exceeds the limit', async () => {
+        it('should warn when the number of retrieved bucket in a connector exceeds the limit', async () => {
             const config = { ...connectorConfig };
             connectorsManager._maximumBucketsPerConnector = 1;
             config['topic.namespace.map'] = 'outdated-topic';
@@ -196,7 +196,7 @@ describe('ConnectorsManager', () => {
     });
 
     describe('initializeConnectors', () => {
-        it('Should initialize old connector', async () => {
+        it('should initialize old connector', async () => {
             connectorsManager._nbConnectors = 1;
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves(['source-connector']);
@@ -208,7 +208,7 @@ describe('ConnectorsManager', () => {
             assert.deepEqual(connectorsManager._oldConnectors, [connector1]);
         });
 
-        it('Should add more connectors', async () => {
+        it('should add more connectors', async () => {
             connectorsManager._nbConnectors = 1;
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves([]);
