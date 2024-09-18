@@ -211,6 +211,51 @@ describe('OplogPopulator', () => {
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
         });
+
+        it('should bind the connector-destroyed event from the connectors manager', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+            await oplogPopulator.setup();
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+            const onConnectorDestroyedStub = sinon.stub(oplogPopulator._allocationStrategy, 'onConnectorDestroyed');
+            oplogPopulator._connectorsManager.emit('connector-destroyed');
+            assert(onConnectorDestroyedStub.calledOnce);
+        });
+
+        it('should bind the bucket-removed event from the allocator', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+            await oplogPopulator.setup();
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+            const onBucketRemovedStub = sinon.stub(oplogPopulator._allocationStrategy, 'onBucketRemoved');
+            oplogPopulator._allocator.emit('bucket-removed');
+            assert(onBucketRemovedStub.calledOnce);
+        });
+
+        it('should bind the connectors-reconciled event from the connectors manager', async () => {
+            const setupMongoClientStub = sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            const getBackbeatEnabledBucketsStub = sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+            await oplogPopulator.setup();
+            assert(setupMongoClientStub.calledOnce);
+            assert(getBackbeatEnabledBucketsStub.calledOnce);
+            assert(setMetastoreChangeStreamStub.calledOnce);
+            assert(initializeConnectorsManagerStub.calledOnce);
+            const onConnectorsReconciledStub = sinon.stub(oplogPopulator._metricsHandler, 'onConnectorsReconciliation');
+            oplogPopulator._connectorsManager.emit('connectors-reconciled');
+            assert(onConnectorsReconciledStub.calledOnce);
+        });
     });
 
     describe('_initializeConnectorsManager', () => {

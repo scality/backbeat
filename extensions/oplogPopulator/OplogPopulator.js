@@ -263,7 +263,7 @@ class OplogPopulator {
             this._loadOplogHelperClasses();
             // initialize mongo client
             await this._setupMongoClient();
-            const allocationStrategy = this.initStrategy();
+            this._allocationStrategy = this.initStrategy();
             this._connectorsManager = new ConnectorsManager({
                 nbConnectors: this._config.numberOfConnectors,
                 maximumBucketsPerConnector: this._maximumBucketsPerConnector,
@@ -276,26 +276,26 @@ class OplogPopulator {
                 kafkaConnectHost: this._config.kafkaConnectHost,
                 kafkaConnectPort: this._config.kafkaConnectPort,
                 metricsHandler: this._metricsHandler,
-                allocationStrategy,
+                allocationStrategy: this._allocationStrategy,
                 logger: this._logger,
             });
             await this._initializeConnectorsManager();
             this._allocator = new Allocator({
                 connectorsManager: this._connectorsManager,
                 metricsHandler: this._metricsHandler,
-                allocationStrategy,
+                allocationStrategy: this._allocationStrategy,
                 logger: this._logger,
             });
             // For now, we always use the RetainBucketsDecorator
             // so, we map the events from the classes
             this._connectorsManager.on('connector-destroyed', connector =>
-                allocationStrategy.onConnectorDestroyed(connector));
+                this._allocationStrategy.onConnectorDestroyed(connector));
             this._allocator.on('bucket-removed', (bucket, connector) =>
-                allocationStrategy.onBucketRemoved(bucket, connector));
-            this._allocator.on('connectors-reconciled', bucketsExceedingLimit => {
+                this._allocationStrategy.onBucketRemoved(bucket, connector));
+            this._connectorsManager.on('connectors-reconciled', bucketsExceedingLimit => {
                 this._metricsHandler.onConnectorsReconciliation(
                     bucketsExceedingLimit,
-                    allocationStrategy.retainedBucketsNb,
+                    this._allocationStrategy.retainedBucketsNb,
                 );
             });
             // get currently valid buckets from mongo
