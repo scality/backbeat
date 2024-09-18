@@ -11,6 +11,9 @@ const { ZenkoMetrics } = require('arsenal').metrics;
 const OplogPopulatorMetrics = require('./OplogPopulatorMetrics');
 const { OplogPopulatorConfigJoiSchema } = require('./OplogPopulatorConfigValidator');
 const { mongoJoi } = require('../../lib/config/configItems.joi');
+const ImmutableConnector = require('./allocationStrategy/ImmutableConnector');
+const RetainBucketsDecorator = require('./allocationStrategy/RetainBucketsDecorator');
+const LeastFullConnector = require('./allocationStrategy/LeastFullConnector');
 
 const paramsJoi = joi.object({
     config: OplogPopulatorConfigJoiSchema.required(),
@@ -242,35 +245,53 @@ class OplogPopulator {
         this._changeStreamWrapper.start();
     }
 
+    _arePipelinesImmutable() {
+        return semver.gte(this._mongoVersion, constants.mongodbVersionWithImmutablePipelines);
+    }
+
+    async _initializeConnectorsManager() {
+        return this._connectorsManager.initializeConnectors();
+    }
+
     /**
      * Sets the OplogPopulator
      * @returns {Promise|undefined} undefined
      * @throws {InternalError}
      */
     async setup() {
-       try {
-           this._loadOplogHelperClasses();
-           this._connectorsManager = new ConnectorsManager({
-               nbConnectors: this._config.numberOfConnectors,
-               database: this._database,
-               mongoUrl: this._mongoUrl,
-               oplogTopic: this._config.topic,
-               cronRule: this._config.connectorsUpdateCronRule,
-               prefix: this._config.prefix,
-               heartbeatIntervalMs: this._config.heartbeatIntervalMs,
-               kafkaConnectHost: this._config.kafkaConnectHost,
-               kafkaConnectPort: this._config.kafkaConnectPort,
-               metricsHandler: this._metricsHandler,
-               logger: this._logger,
+        try {
+            this._loadOplogHelperClasses();
+            // initialize mongo client
+            await this._setupMongoClient();
+            const allocationStrategy = this.initStrategy();
+            this._connectorsManager = new ConnectorsManager({
+                nbConnectors: this._config.numberOfConnectors,
+                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+                database: this._database,
+                mongoUrl: this._mongoUrl,
+                oplogTopic: this._config.topic,
+                cronRule: this._config.connectorsUpdateCronRule,
+                prefix: this._config.prefix,
+                heartbeatIntervalMs: this._config.heartbeatIntervalMs,
+                kafkaConnectHost: this._config.kafkaConnectHost,
+                kafkaConnectPort: this._config.kafkaConnectPort,
+                metricsHandler: this._metricsHandler,
+                allocationStrategy,
+                logger: this._logger,
             });
-            await this._connectorsManager.initializeConnectors();
+            await this._initializeConnectorsManager();
             this._allocator = new Allocator({
                 connectorsManager: this._connectorsManager,
                 metricsHandler: this._metricsHandler,
+                allocationStrategy,
                 logger: this._logger,
             });
-            // initialize mongo client
-            await this._setupMongoClient();
+            // For now, we always use the RetainBucketsDecorator
+            // so, we map the events from the classes
+            this._connectorsManager.on('connector-updated', connector =>
+                allocationStrategy.onConnectorUpdated(connector));
+            this._allocator.on('bucket-removed', (bucket, connector) =>
+                allocationStrategy.onBucketRemoved(bucket, connector));
             // get currently valid buckets from mongo
             const validBuckets = await this._getBackbeatEnabledBuckets();
             // listen to valid buckets
@@ -298,6 +319,44 @@ class OplogPopulator {
             });
             throw errors.InternalError.customizeDescription(err.description);
         }
+    }
+
+    /**
+     * Init the allocation strategy
+     * @returns {RetainBucketsDecorator} extended allocation strategy
+     * handling retained buckets
+     */
+    initStrategy() {
+        let strategy;
+        if (this._arePipelinesImmutable()) {
+            // In this case, mongodb does not support reusing a
+            // resume token from a different pipeline. In other
+            // words, we cannot alter an existing pipeline. In this
+            // case, the strategy is to allow a maximum of one
+            // bucket per kafka connector.
+            this._maximumBucketsPerConnector = 1;
+            strategy = new ImmutableConnector({
+                logger: this._logger,
+                metricsHandler: this._metricsHandler,
+                connectorsManager: this._connectorsManager,
+            });
+        } else {
+            // In this case, we can have multiple buckets per
+            // kafka connector. However, we want to proactively
+            // ensure that the pipeline will be accepted by
+            // mongodb.
+            this._maximumBucketsPerConnector = constants.maxBucketsPerConnector;
+            strategy = new LeastFullConnector({
+                logger: this._logger,
+                metricsHandler: this._metricsHandler,
+                connectorsManager: this._connectorsManager,
+                maximumBucketsPerConnector: this._maximumBucketsPerConnector,
+            });
+        }
+        return new RetainBucketsDecorator(
+            strategy,
+            { logger: this._logger },
+        );
     }
 
     /**

@@ -9,6 +9,8 @@ const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const Connector = require('./Connector');
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
+const { EventEmitter } = require('stream');
+const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 
 const paramsJoi = joi.object({
     nbConnectors: joi.number().required(),
@@ -20,8 +22,13 @@ const paramsJoi = joi.object({
     heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
+    maximumBucketsPerConnector: joi.alternatives().try(
+        joi.number().integer(),
+    ).default(constants.maxBucketsPerConnector),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
+    allocationStrategy: joi.object()
+        .instance(AllocationStrategy).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -34,21 +41,25 @@ const eachLimit = util.promisify(async.eachLimit);
  * @classdesc ConnectorsManager handles connector logic
  * for spawning connectors and retreiving old ones
  */
-class ConnectorsManager {
+class ConnectorsManager extends EventEmitter {
 
     /**
      * @constructor
      * @param {Object} params params
      * @param {number} params.nbConnectors number of connectors to have
+     * @param {boolean} params.maximumBucketsPerConnector maximum number of
+     * buckets per connector
      * @param {string} params.database MongoDB database to use (for connector)
      * @param {string} params.mongoUrl MongoDB connection url
      * @param {string} params.oplogTopic topic to use for oplog
      * @param {string} params.cronRule connector updates cron rule
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
+     * @param {AllocationStrategy} params.allocationStrategy allocation strategy
      * @param {Logger} params.logger logger object
      */
     constructor(params) {
+        super();
         joi.attempt(params, paramsJoi);
         this._nbConnectors = params.nbConnectors;
         this._cronRule = params.cronRule;
@@ -69,6 +80,8 @@ class ConnectorsManager {
         this._connectors = [];
         // used for initial clean up of old connector pipelines
         this._oldConnectors = [];
+        this._maximumBucketsPerConnector = params.maximumBucketsPerConnector;
+        this._allocationStrategy = params.allocationStrategy;
     }
 
     /**
@@ -121,6 +134,7 @@ class ConnectorsManager {
             kafkaConnectHost: this._kafkaConnectHost,
             kafkaConnectPort: this._kafkaConnectPort,
         });
+        this._connectors.push(connector);
         return connector;
     }
 
@@ -213,8 +227,7 @@ class ConnectorsManager {
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
             for (let i = 0; i < nbConnectorsToAdd; i++) {
-                const newConnector = this.addConnector();
-                this._connectors.push(newConnector);
+                this.addConnector();
             }
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
@@ -240,6 +253,7 @@ class ConnectorsManager {
     async _spawnOrDestroyConnector(connector) {
         try {
             if (connector.isRunning && connector.bucketCount === 0) {
+                this.emit('connector-updated', connector);
                 await connector.destroy();
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
@@ -255,9 +269,11 @@ class ConnectorsManager {
                     connector: connector.name,
                 });
                 return true;
-            } else if (connector.isRunning) {
-                return connector.updatePipeline(true);
+            } else if (connector.isRunning && this._allocationStrategy.canUpdate(connector)) {
+                const isConnectorUpdated = connector.updatePipeline(true);
+                return isConnectorUpdated;
             }
+
             return false;
         } catch (err) {
             this._logger.error('Error while spawning or destorying connector', {

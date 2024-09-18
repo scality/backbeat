@@ -2,12 +2,15 @@ const joi = require('joi');
 const { errors } = require('arsenal');
 
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
-const LeastFullConnector = require('../allocationStrategy/LeastFullConnector');
+const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
+const { EventEmitter } = require('./ConnectorsManager');
 
 const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
+    allocationStrategy: joi.object()
+        .instance(AllocationStrategy).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -17,21 +20,22 @@ const paramsJoi = joi.object({
  * @classdesc Allocator handles listening to buckets by assigning
  * a connector to them.
  */
-class Allocator {
+class Allocator extends EventEmitter {
 
     /**
      * @constructor
      * @param {Object} params Allocator param
      * @param {ConnectorsManager} params.connectorsManager connectorsManager
+     * @param {OplogPopulatorMetrics} params.metricsHandler metrics handler
+     * @param {AllocationStrategy} params.allocationStrategy allocation strategy
      * @param {Logger} params.logger logger object
      */
     constructor(params) {
+        super();
         joi.attempt(params, paramsJoi);
         this._connectorsManager = params.connectorsManager;
         this._logger = params.logger;
-        this._allocationStrategy = new LeastFullConnector({
-            logger: params.logger,
-        });
+        this._allocationStrategy = params.allocationStrategy;
         this._metricsHandler = params.metricsHandler;
         // Stores connector assigned for each bucket
         this._bucketsToConnectors = new Map();
@@ -75,7 +79,12 @@ class Allocator {
         try {
             if (!this.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
-                const connector = this._allocationStrategy.getConnector(connectors);
+                let connector = this._allocationStrategy.getConnector(connectors, bucket);
+                if (!connector) {
+                    // the connector is not available (too many buckets)
+                    // we need to create a new connector
+                    connector = this._connectorsManager.addConnector();
+                }
                 // In the initial startup of the oplog populator
                 // we fetch the buckets directly from mongo.
                 // We don't have an event date in this case.
@@ -114,6 +123,7 @@ class Allocator {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
                 await connector.removeBucket(bucket);
+                this.emit('bucket-removed', bucket, connector);
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {
