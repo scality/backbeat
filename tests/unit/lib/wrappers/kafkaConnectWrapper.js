@@ -361,7 +361,7 @@ describe('KafkaConnectWrapper', () => {
                 .returns(request);
         });
 
-        it('Should make request and return body', async () => {
+        it('should make request and return body', async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -383,7 +383,7 @@ describe('KafkaConnectWrapper', () => {
             .catch(err => assert.ifError(err));
         });
 
-        it('Should fail if request fails', async () => {
+        it('should fail if request fails', async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -394,7 +394,7 @@ describe('KafkaConnectWrapper', () => {
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('Should write data into post request', async () => {
+        it('should write data into post request', async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'POST',
                 path: '/connectors',
@@ -423,7 +423,7 @@ describe('KafkaConnectWrapper', () => {
             .catch(err => assert.ifError(err));
         });
 
-        it('Should group and parse data chunks', async () => {
+        it('should group and parse data chunks', async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -449,7 +449,7 @@ describe('KafkaConnectWrapper', () => {
             .catch(err => assert.ifError(err));
         });
 
-        it('Should fail if it can\'t parse response body', async () => {
+        it('should fail if it can\'t parse response body', async () => {
             const promiseResponse = wrapper.makeRequest({
                 method: 'GET',
                 path: '/connectors',
@@ -471,7 +471,7 @@ describe('KafkaConnectWrapper', () => {
             .catch(err => assert.deepEqual(err, errors.InternalError));
         });
 
-        it('Should fail if response has bad status code', async () => {
+        it('should fail if response has bad status code', async () => {
             response.statusCode = 500;
             response.message = 'Server Error';
             const promiseResponse = wrapper.makeRequest({

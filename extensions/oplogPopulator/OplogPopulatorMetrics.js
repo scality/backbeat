@@ -33,6 +33,14 @@ class OplogPopulatorMetrics {
             help: 'Total number of buckets per connector',
             labelNames: ['connector'],
         });
+        this.bucketsExceedingLimit = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_buckets_exceeding_limit',
+            help: 'Total number of buckets exceeding the limit for all connectors',
+        });
+        this.retainedBuckets = ZenkoMetrics.createGauge({
+            name: 's3_oplog_populator_retained_buckets',
+            help: 'Current number of buckets still listened to by immutable connectors despite intended removal',
+        });
         this.requestSize = ZenkoMetrics.createCounter({
             name: 's3_oplog_populator_connector_request_bytes_total',
             help: 'Total size of kafka connect request in bytes',
@@ -192,6 +200,26 @@ class OplogPopulatorMetrics {
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorRestarted',
+                error: error.message,
+            });
+        }
+    }
+
+    /**
+     * updates metrics when the connectors are reconciled
+     * @param {number} bucketsExceedingLimit number of buckets above the limit
+     * for all connectors
+     * @param {number} retainedBuckets number of buckets still listened to by
+     * immutable connectors despite intended removal
+     * @returns {undefined}
+     */
+    onConnectorsReconciled(bucketsExceedingLimit, retainedBuckets) {
+        try {
+            this.bucketsExceedingLimit.set(bucketsExceedingLimit);
+            this.retainedBuckets.set(retainedBuckets);
+        } catch (error) {
+            this._logger.error('An error occured while pushing metric', {
+                method: 'OplogPopulatorMetrics.onConnectorsReconciled',
                 error: error.message,
             });
         }

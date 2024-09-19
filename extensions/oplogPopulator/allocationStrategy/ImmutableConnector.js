@@ -1,16 +1,13 @@
-const { errors } = require('arsenal');
+const AllocationStrategy = require('./AllocationStrategy');
 
-class AllocationStrategy {
-
-    /**
-     * @constructor
-     * @param {Object} params params
-     * @param {Logger} params.logger logger object
-     */
-    constructor(params) {
-        this._logger = params.logger;
-    }
-
+/**
+ * @class ImmutableConnector
+ *
+ * @classdesc ImmutableConnector is an allocation
+ * strategy that always requires a new connector to be
+ * created for each bucket.
+ */
+class ImmutableConnector extends AllocationStrategy {
     /**
      * Get best connector to assign a bucket to.
      * If no connector is available, null is returned.
@@ -19,15 +16,16 @@ class AllocationStrategy {
      * @returns {Connector | null} connector
      */
     getConnector(connectors, bucket) { // eslint-disable-line no-unused-vars
-        throw errors.NotImplemented;
+        return null;
     }
 
     /**
-     * Assess if a pipeline can be updated
-     * @returns {Boolean} true if the connector can be updated
+     * Assess if a pipeline can be updated. With the immutable
+     * strategy, a connector cannot be updated.
+     * @returns {false} false
      */
     canUpdate() {
-        throw errors.NotImplemented;
+        return false;
     }
 
     /**
@@ -35,8 +33,8 @@ class AllocationStrategy {
      * @returns {Number} maximum number of buckets per connector
      */
     get maximumBucketsPerConnector() {
-        throw errors.NotImplemented;
+        return 1;
     }
 }
 
-module.exports = AllocationStrategy;
+module.exports = ImmutableConnector;

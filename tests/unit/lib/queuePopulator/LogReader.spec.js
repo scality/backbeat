@@ -72,7 +72,7 @@ describe('LogReader', () => {
         });
     });
 
-    it('Should strip metadata v1 prefixes from object entries', done => {
+    it('should strip metadata v1 prefixes from object entries', done => {
         const mockExtension = {
             filter: sinon.spy(),
         };
@@ -117,7 +117,7 @@ describe('LogReader', () => {
         done();
     });
 
-    it('Should not change keys of objects in v0 format', done => {
+    it('should not change keys of objects in v0 format', done => {
         const mockExtension = {
             filter: sinon.spy(),
         };
@@ -164,7 +164,7 @@ describe('LogReader', () => {
     });
 
     describe('_processFilterEntries', () => {
-        it('Should do nothing if no records where pushed', done => {
+        it('should do nothing if no records where pushed', done => {
             const batchState = {
                 currentRecords: [],
             };
@@ -176,7 +176,7 @@ describe('LogReader', () => {
             });
         });
 
-        it('Should process all records', done => {
+        it('should process all records', done => {
             const batchState = {
                 currentRecords: [1, 2],
             };
@@ -191,7 +191,7 @@ describe('LogReader', () => {
     });
 
     describe('_processFilterEntry', () => {
-        it('Should do nothing if record is empty', done => {
+        it('should do nothing if record is empty', done => {
             const batchState = {
                 entriesToPublish: {},
             };
@@ -203,7 +203,7 @@ describe('LogReader', () => {
             });
         });
 
-        it('Should process record', done => {
+        it('should process record', done => {
             const batchState = {
                 entriesToPublish: {},
             };
@@ -225,7 +225,7 @@ describe('LogReader', () => {
     });
 
     describe('_filterEntries', () => {
-        it('Should process all record entries', done => {
+        it('should process all record entries', done => {
             const batchState = {
                 logStats: {
                     nbLogEntriesRead: 0,

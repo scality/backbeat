@@ -19,7 +19,7 @@ describe('IngestionReader', () => {
         zkMock = new ZookeeperMock();
     });
 
-    it('Should strip metadata v1 prefixes from object entries', done => {
+    it('should strip metadata v1 prefixes from object entries', done => {
         const mockExtension = {
             filter: sinon.spy(),
         };
@@ -63,7 +63,7 @@ describe('IngestionReader', () => {
         done();
     });
 
-    it('Should not change keys of objects in v0 format', done => {
+    it('should not change keys of objects in v0 format', done => {
         const mockExtension = {
             filter: sinon.spy(),
         };

@@ -52,7 +52,7 @@ describe('LogConsumer', () => {
     });
 
     describe('_waitForAssignment', () => {
-        it('Should wait for consumer group to balance', done => {
+        it('should wait for consumer group to balance', done => {
             const waitAssignementSpy = sinon.spy(logConsumer, '_waitForAssignment');
             const getAssignemntsStub = sinon.stub();
             getAssignemntsStub.onCall(0).returns([]);
@@ -71,7 +71,7 @@ describe('LogConsumer', () => {
     });
 
     describe('_storeCurrentOffsets', () => {
-        it('Should store offsets', done => {
+        it('should store offsets', done => {
             const committedStub = sinon.stub();
             committedStub.callsArgWith(1, null, [{
                 topic: 'backbeat-oplog-topic',
@@ -94,7 +94,7 @@ describe('LogConsumer', () => {
     });
 
     describe('_resetRecordStream', () => {
-        it('Should initialize record stream', () => {
+        it('should initialize record stream', () => {
             logConsumer._resetRecordStream();
             assert(logConsumer._listRecordStream instanceof ListRecordStream);
             assert.strictEqual(typeof(logConsumer._listRecordStream.getOffset), 'function');
@@ -102,7 +102,7 @@ describe('LogConsumer', () => {
     });
 
     describe('_consumeKafkaMessages', () => {
-        it('Should consume kafka messages', done => {
+        it('should consume kafka messages', done => {
             const consumeStub = sinon.stub();
             consumeStub.callsArgWith(1, null, [kafkaMessage]);
             logConsumer._consumer = {
@@ -131,7 +131,7 @@ describe('LogConsumer', () => {
     });
 
     describe('readRecords', () => {
-        it('Should return stream', done => {
+        it('should return stream', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArg(1);
             const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')
@@ -151,7 +151,7 @@ describe('LogConsumer', () => {
             });
         });
 
-        it('Should fail if consumer group failed to stabilize', done => {
+        it('should fail if consumer group failed to stabilize', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArgWith(1, errors.InternalError);
             logConsumer.readRecords({ limit: 1 }, err => {
@@ -161,7 +161,7 @@ describe('LogConsumer', () => {
             });
         });
 
-        it('Should fail if it can\'t store offsets', done => {
+        it('should fail if it can\'t store offsets', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArg(1);
             const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')
@@ -174,7 +174,7 @@ describe('LogConsumer', () => {
             });
         });
 
-        it('Should fail if it can\'t consume kafka messages', done => {
+        it('should fail if it can\'t consume kafka messages', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArg(1);
             const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')

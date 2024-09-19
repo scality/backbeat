@@ -48,13 +48,13 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('_isBucketEntry ::', () => {
-        it('Should return true if entry is a bucket entry', done => {
+        it('should return true if entry is a bucket entry', done => {
             const isBucket =
                 notificationQueuePopulator._isBucketEntry('__metastore', 'example-bucket');
             assert.strictEqual(isBucket, true);
             return done();
         });
-        it('Should return false if entry is an object entry', done => {
+        it('should return false if entry is an object entry', done => {
             const isBucket =
                 notificationQueuePopulator._isBucketEntry('example-bucket', 'example-key');
             assert.strictEqual(isBucket, false);
@@ -63,7 +63,7 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('_processObjectEntry ::', () => {
-        it('Should publish object entry in notification topic of destination1', async () => {
+        it('should publish object entry in notification topic of destination1', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(notificationConfiguration);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
@@ -79,7 +79,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
-        it('Should publish object entry in notification topic of destination2', async () => {
+        it('should publish object entry in notification topic of destination2', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(notificationConfiguration);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
@@ -95,7 +95,7 @@ describe('NotificationQueuePopulator ::', () => {
                 assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
             });
 
-        it('Should not publish object entry in notification topic if ' +
+        it('should not publish object entry in notification topic if ' +
             'config validation failed', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns(notificationConfiguration);
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
@@ -113,7 +113,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert(publishStub.notCalled);
         });
 
-        it('Should publish object entry to internal shared topic only once ' +
+        it('should publish object entry to internal shared topic only once ' +
             'when multiple destinations are valid for that event', async () => {
             // override the destinations' config to use the default shared topic
             notificationQueuePopulator.notificationConfig = {
@@ -152,7 +152,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'backbeat-bucket-notification');
         });
 
-        it('Should publish object entry to same custom internal topic only once ' +
+        it('should publish object entry to same custom internal topic only once ' +
             'when multiple destinations are valid for that event', async () => {
             // override the destinations' config to use a single custom internal topic
             notificationQueuePopulator.notificationConfig = {
@@ -191,7 +191,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'custom-topic');
         });
 
-        it('Should publish object entry to each entry\'s destination topic when multiple ' +
+        it('should publish object entry to each entry\'s destination topic when multiple ' +
             'destinations are valid for an event', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns({
                 queueConfig: [
@@ -250,7 +250,7 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(2).args.at(0), 'backbeat-bucket-notification');
         });
 
-        it('Should not publish object entry in notification topic if ' +
+        it('should not publish object entry in notification topic if ' +
             'notification is non standard', async () => {
             sinon.stub(bnConfigManager, 'getConfig').returns({
                 queueConfig: [
@@ -277,7 +277,7 @@ describe('NotificationQueuePopulator ::', () => {
     });
 
     describe('filterAsync ::', () => {
-        it('Should fail if entry value parse fails', done => {
+        it('should fail if entry value parse fails', done => {
             const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
             const entry = {
                 bucket: 'example-bucket',
@@ -295,7 +295,7 @@ describe('NotificationQueuePopulator ::', () => {
             });
         });
 
-        it('Should fail if entry is a bucket entry', done => {
+        it('should fail if entry is a bucket entry', done => {
             const processEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
             const entry = {
                 bucket: '__metastore',
@@ -313,7 +313,7 @@ describe('NotificationQueuePopulator ::', () => {
             });
         });
 
-        it('Should process the entry', done => {
+        it('should process the entry', done => {
             const processEntryCbStub = sinon.stub(notificationQueuePopulator, '_processObjectEntryCb')
                 .yields();
             const entry = {
@@ -456,7 +456,7 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
     });
 
     describe('_processObjectEntry with multiple rules::', () => {
-        it('Should publish object entry if it matches the first rule', async () => {
+        it('should publish object entry if it matches the first rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
                 'example-bucket',
@@ -472,7 +472,7 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
-        it('Should publish object entry if it matches the second rule', async () => {
+        it('should publish object entry if it matches the second rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
                 'example-bucket',
@@ -488,7 +488,7 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
         });
 
-        it('Should not publish object entry if it does not match any rule', async () => {
+        it('should not publish object entry if it does not match any rule', async () => {
             const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
             await notificationQueuePopulator._processObjectEntry(
                 'example-bucket',

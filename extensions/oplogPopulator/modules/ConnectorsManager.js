@@ -9,6 +9,8 @@ const constants = require('../constants');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const Connector = require('./Connector');
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
+const { EventEmitter } = require('stream');
+const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 
 const paramsJoi = joi.object({
     nbConnectors: joi.number().required(),
@@ -22,6 +24,8 @@ const paramsJoi = joi.object({
     kafkaConnectPort: joi.number().required(),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
+    allocationStrategy: joi.object()
+        .instance(AllocationStrategy).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -34,7 +38,7 @@ const eachLimit = util.promisify(async.eachLimit);
  * @classdesc ConnectorsManager handles connector logic
  * for spawning connectors and retreiving old ones
  */
-class ConnectorsManager {
+class ConnectorsManager extends EventEmitter {
 
     /**
      * @constructor
@@ -46,9 +50,11 @@ class ConnectorsManager {
      * @param {string} params.cronRule connector updates cron rule
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
+     * @param {AllocationStrategy} params.allocationStrategy allocation strategy
      * @param {Logger} params.logger logger object
      */
     constructor(params) {
+        super();
         joi.attempt(params, paramsJoi);
         this._nbConnectors = params.nbConnectors;
         this._cronRule = params.cronRule;
@@ -69,6 +75,7 @@ class ConnectorsManager {
         this._connectors = [];
         // used for initial clean up of old connector pipelines
         this._oldConnectors = [];
+        this._allocationStrategy = params.allocationStrategy;
     }
 
     /**
@@ -121,6 +128,9 @@ class ConnectorsManager {
             kafkaConnectHost: this._kafkaConnectHost,
             kafkaConnectPort: this._kafkaConnectPort,
         });
+        connector.on(constants.connectorUpdatedEvent,
+            connector => this.emit(constants.connectorUpdatedEvent, connector));
+        this._connectors.push(connector);
         return connector;
     }
 
@@ -129,7 +139,7 @@ class ConnectorsManager {
      * @param {Object} connectorConfig connector config
      * @returns {string[]} list of buckets
      */
-     _extractBucketsFromConfig(connectorConfig) {
+    _extractBucketsFromConfig(connectorConfig) {
         const pipeline = connectorConfig.pipeline ?
             JSON.parse(connectorConfig.pipeline) : null;
         if (!pipeline || pipeline.length === 0) {
@@ -165,6 +175,14 @@ class ConnectorsManager {
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
                 });
+                if (buckets.length > this._allocationStrategy.maximumBucketsPerConnector) {
+                    this._logger.warn('Connector has more bucket than expected', {
+                        method: 'ConnectorsManager._getOldConnectors',
+                        connector: connector.name,
+                        numberOfBuckets: buckets.length,
+                        allowed: this._allocationStrategy.maximumBucketsPerConnector,
+                    });
+                }
                 this._logger.debug('Successfully retreived old connector', {
                     method: 'ConnectorsManager._getOldConnectors',
                     connector: connector.name
@@ -204,8 +222,7 @@ class ConnectorsManager {
             // Add connectors if required number of connectors not reached
             const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
             for (let i = 0; i < nbConnectorsToAdd; i++) {
-                const newConnector = this.addConnector();
-                this._connectors.push(newConnector);
+                this.addConnector();
             }
             this._logger.info('Successfully initialized connectors', {
                 method: 'ConnectorsManager.initializeConnectors',
@@ -235,7 +252,7 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
             } else if (!connector.isRunning && connector.bucketCount > 0) {
@@ -243,12 +260,13 @@ class ConnectorsManager {
                 this._metricsHandler.onConnectorsInstantiated(false);
                 this._logger.info('Successfully spawned a connector', {
                     method: 'ConnectorsManager._spawnOrDestroyConnector',
-                    connector: connector.name
+                    connector: connector.name,
                 });
                 return true;
-            } else if (connector.isRunning) {
+            } else if (connector.isRunning && this._allocationStrategy.canUpdate()) {
                 return connector.updatePipeline(true);
             }
+
             return false;
         } catch (err) {
             this._logger.error('Error while spawning or destorying connector', {
@@ -266,6 +284,7 @@ class ConnectorsManager {
      */
     async _updateConnectors() {
         const connectorsStatus = {};
+        let bucketsExceedingLimit = 0;
         await eachLimit(this._connectors, 10, async connector => {
             const startTime = Date.now();
             try {
@@ -284,6 +303,10 @@ class ConnectorsManager {
                         numberOfBuckets: connector.bucketCount,
                     };
                 }
+                if (connector.bucketCount > this._allocationStrategy.maximumBucketsPerConnector) {
+                    bucketsExceedingLimit +=
+                        connector.bucketCount - this._allocationStrategy.maximumBucketsPerConnector;
+                }
             } catch (err) {
                 this._metricsHandler.onConnectorReconfiguration(connector, false);
                 this._logger.error('Failed to updated connector', {
@@ -294,6 +317,7 @@ class ConnectorsManager {
                 });
             }
         });
+        this.emit(constants.connectorsReconciledEvent, bucketsExceedingLimit);
         if (Object.keys(connectorsStatus).length > 0) {
             this._logger.info('Successfully updated connectors', {
                 method: 'ConnectorsManager._updateConnectors',
@@ -351,8 +375,13 @@ class ConnectorsManager {
      * @returns {undefined}
      */
     scheduleConnectorUpdates() {
+        let updateInProgress = false;
         schedule.scheduleJob(this._cronRule, async () => {
-            await this._updateConnectors();
+            if (!updateInProgress) {
+                updateInProgress = true;
+                await this._updateConnectors();
+                updateInProgress = false;
+            }
         });
     }
 

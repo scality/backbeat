@@ -81,4 +81,5 @@ jobs:
             namespace=zenko
             oplog_populator_job=artesca-data-backbeat-oplog-populator-headless
             oplogPopulatorChangeStreamLagThreshold=10
+            oplogPopulatorChangeStreamLimit=10
           github_token: ${{ secrets.GIT_ACCESS_TOKEN }}

@@ -111,7 +111,7 @@ describe('ListRecordStream', () => {
     });
 
     describe('_transform', () => {
-        it('Should correct format entry', done => {
+        it('should correct format entry', done => {
             const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
             listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
@@ -130,7 +130,7 @@ describe('ListRecordStream', () => {
                 return done();
             });
         });
-        it('Should skip record if format is invalid', done => {
+        it('should skip record if format is invalid', done => {
             const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
             const InvalidKafkaMessage = getKafkaMessage('');
             listRecordStream.write(InvalidKafkaMessage);

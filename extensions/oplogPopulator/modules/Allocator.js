@@ -2,12 +2,16 @@ const joi = require('joi');
 const { errors } = require('arsenal');
 
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
-const LeastFullConnector = require('../allocationStrategy/LeastFullConnector');
+const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
+const { EventEmitter } = require('./ConnectorsManager');
+const constants = require('../constants');
 
 const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
+    allocationStrategy: joi.object()
+        .instance(AllocationStrategy).required(),
     logger: joi.object().required(),
 }).required();
 
@@ -17,21 +21,22 @@ const paramsJoi = joi.object({
  * @classdesc Allocator handles listening to buckets by assigning
  * a connector to them.
  */
-class Allocator {
+class Allocator extends EventEmitter {
 
     /**
      * @constructor
      * @param {Object} params Allocator param
      * @param {ConnectorsManager} params.connectorsManager connectorsManager
+     * @param {OplogPopulatorMetrics} params.metricsHandler metrics handler
+     * @param {AllocationStrategy} params.allocationStrategy allocation strategy
      * @param {Logger} params.logger logger object
      */
     constructor(params) {
+        super();
         joi.attempt(params, paramsJoi);
         this._connectorsManager = params.connectorsManager;
         this._logger = params.logger;
-        this._allocationStrategy = new LeastFullConnector({
-            logger: params.logger,
-        });
+        this._allocationStrategy = params.allocationStrategy;
         this._metricsHandler = params.metricsHandler;
         // Stores connector assigned for each bucket
         this._bucketsToConnectors = new Map();
@@ -72,18 +77,24 @@ class Allocator {
      * @throws {InternalError}
      */
     async listenToBucket(bucket, eventDate = null) {
+        let connector;
         try {
-            if (!this._bucketsToConnectors.has(bucket)) {
+            if (!this.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
-                const connector = this._allocationStrategy.getConnector(connectors);
+                connector = this._allocationStrategy.getConnector(connectors, bucket);
+                if (!connector) {
+                    // the connector is not available (too many buckets)
+                    // we need to create a new connector
+                    connector = this._connectorsManager.addConnector();
+                }
                 // In the initial startup of the oplog populator
                 // we fetch the buckets directly from mongo.
                 // We don't have an event date in this case.
                 if (eventDate) {
                     connector.setResumePoint(eventDate);
                 }
-                await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
+                await connector.addBucket(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'add');
                 this._logger.info('Started listening to bucket', {
                     method: 'Allocator.listenToBucket',
@@ -92,6 +103,9 @@ class Allocator {
                 });
             }
         } catch (err) {
+            if (this._bucketsToConnectors.get(bucket) === connector) {
+                this._bucketsToConnectors.delete(bucket);
+            }
             this._logger.error('Error when starting to listen to bucket', {
                 method: 'Allocator.listenToBucket',
                 bucket,
@@ -113,6 +127,7 @@ class Allocator {
         try {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
+                this.emit(constants.bucketRemovedFromConnectorEvent, bucket, connector);
                 await connector.removeBucket(bucket);
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');

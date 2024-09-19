@@ -27,14 +27,14 @@ const mongoConfShard = {
 };
 
 describe('constructConnectionString', () => {
-    it('Should construct correct mongo connection string', done => {
+    it('should construct correct mongo connection string', done => {
         const url = MongoUtils.constructConnectionString(mongoConfRepl);
         assert.strictEqual(url, 'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
             '/?w=majority&readPreference=primary&replicaSet=rs0');
         return done();
     });
 
-    it('Should construct correct mongo connection string (replica)', done => {
+    it('should construct correct mongo connection string (replica)', done => {
         const url = MongoUtils.constructConnectionString(mongoConfShard);
         assert.strictEqual(url, 'mongodb://user:pass@localhost:27017,localhost:27018,localhost:27019' +
             '/?w=majority&readPreference=primary');
@@ -49,7 +49,7 @@ describe('getMongoVersion', () => {
         }),
     };
 
-    it('Should return mongo version in the passed callback', done => {
+    it('should return mongo version in the passed callback', done => {
         MongoUtils.getMongoVersion(client, (err, version) => {
             assert.ifError(err);
             assert.strictEqual(version, '4.2.0');
@@ -57,7 +57,7 @@ describe('getMongoVersion', () => {
         });
     });
 
-    it('Should return mongo version as a return value', async () => {
+    it('should return mongo version as a return value', async () => {
         const version = await MongoUtils.getMongoVersion(client);
         assert.strictEqual(version, '4.2.0');
     });

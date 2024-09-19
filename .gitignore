@@ -9,9 +9,13 @@ pids
 
 # Coverage directory used by tools like istanbul
 coverage
+.nyc_output
 
 # Dependencies
 node_modules
 
 # Redis
 *.rdb
+
+# Python cache, created when refreshing the monitoring files
+__pycache__
