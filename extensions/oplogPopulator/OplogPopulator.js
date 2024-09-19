@@ -287,11 +287,11 @@ class OplogPopulator {
             });
             // For now, we always use the RetainBucketsDecorator
             // so, we map the events from the classes
-            this._connectorsManager.on('connector-updated', connector =>
+            this._connectorsManager.on(constants.connectorUpdatedEvent, connector =>
                 this._allocationStrategy.onConnectorUpdatedOrDestroyed(connector));
-            this._allocator.on('bucket-removed', (bucket, connector) =>
+            this._allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
                 this._allocationStrategy.onBucketRemoved(bucket, connector));
-            this._connectorsManager.on('connectors-reconciled', bucketsExceedingLimit => {
+            this._connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
                 this._metricsHandler.onConnectorsReconciled(
                     bucketsExceedingLimit,
                     this._allocationStrategy.retainedBucketsCount,

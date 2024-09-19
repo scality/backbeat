@@ -34,11 +34,11 @@ class OplogPopulatorMetrics {
             labelNames: ['connector'],
         });
         this.bucketsExceedingLimit = ZenkoMetrics.createGauge({
-            name: 's3_oplog_populator_connector_buckets_exceeding_limit',
+            name: 's3_oplog_populator_buckets_exceeding_limit',
             help: 'Total number of buckets exceeding the limit for all connectors',
         });
         this.retainedBuckets = ZenkoMetrics.createGauge({
-            name: 's3_oplog_populator_connector_retained_buckets',
+            name: 's3_oplog_populator_retained_buckets',
             help: 'Current number of buckets still listened to by immutable connectors despite intended removal',
         });
         this.requestSize = ZenkoMetrics.createCounter({

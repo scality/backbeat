@@ -18,7 +18,7 @@ class RetainBucketsDecorator extends AllocationStrategy {
         super(params);
         this._strategy = strategy;
 
-        // Stores buckets that should are removed from the connector
+        // Stores buckets that should be removed from the connector
         // but still in use
         this._retainedBuckets = new Map();
     }

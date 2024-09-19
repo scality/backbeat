@@ -128,6 +128,8 @@ class ConnectorsManager extends EventEmitter {
             kafkaConnectHost: this._kafkaConnectHost,
             kafkaConnectPort: this._kafkaConnectPort,
         });
+        connector.on(constants.connectorUpdatedEvent,
+            connector => this.emit(constants.connectorUpdatedEvent, connector));
         this._connectors.push(connector);
         return connector;
     }
@@ -246,7 +248,6 @@ class ConnectorsManager extends EventEmitter {
     async _spawnOrDestroyConnector(connector) {
         try {
             if (connector.isRunning && connector.bucketCount === 0) {
-                this.emit('connector-updated', connector);
                 await connector.destroy();
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
@@ -263,11 +264,7 @@ class ConnectorsManager extends EventEmitter {
                 });
                 return true;
             } else if (connector.isRunning && this._allocationStrategy.canUpdate()) {
-                const isPipelineUpdated = connector.updatePipeline(true);
-                if (isPipelineUpdated) {
-                    this.emit('connector-updated', connector);
-                }
-                return isPipelineUpdated;
+                return connector.updatePipeline(true);
             }
 
             return false;
@@ -320,7 +317,7 @@ class ConnectorsManager extends EventEmitter {
                 });
             }
         });
-        this.emit('connectors-reconciled', bucketsExceedingLimit);
+        this.emit(constants.connectorsReconciledEvent, bucketsExceedingLimit);
         if (Object.keys(connectorsStatus).length > 0) {
             this._logger.info('Successfully updated connectors', {
                 method: 'ConnectorsManager._updateConnectors',

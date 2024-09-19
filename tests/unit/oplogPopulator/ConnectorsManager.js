@@ -11,6 +11,7 @@ const OplogPopulatorMetrics =
     require('../../../extensions/oplogPopulator/OplogPopulatorMetrics');
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
+const constants = require('../../../extensions/oplogPopulator/constants');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -238,9 +239,9 @@ describe('ConnectorsManager', () => {
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = false;
             connector1._buckets = new Set();
-            const emitStub = sinon.stub(connectorsManager, 'emit');
+            const emitStub = sinon.stub(connector1, 'emit');
             await connectorsManager._spawnOrDestroyConnector(connector1);
-            assert(emitStub.calledOnceWith('connector-updated', connector1));
+            assert(emitStub.calledOnceWith(constants.connectorUpdatedEvent, connector1));
         });
 
         it('should spawn a non running connector when buckets are configured', async () => {

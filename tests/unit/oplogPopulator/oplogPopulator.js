@@ -18,6 +18,7 @@ const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/alloc
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const ImmutableConnector = require('../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
 const AllocationStrategy = require('../../../extensions/oplogPopulator/allocationStrategy/AllocationStrategy');
+const constants = require('../../../extensions/oplogPopulator/constants');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
@@ -209,7 +210,7 @@ describe('OplogPopulator', () => {
             assert(initializeConnectorsManagerStub.calledOnce);
             const onConnectorUpdatedOrDestroyedStub =
             sinon.stub(oplogPopulator._allocationStrategy, 'onConnectorUpdatedOrDestroyed');
-            oplogPopulator._connectorsManager.emit('connector-updated');
+            oplogPopulator._connectorsManager.emit(constants.connectorUpdatedEvent);
             assert(onConnectorUpdatedOrDestroyedStub.calledOnce);
         });
 
@@ -224,7 +225,7 @@ describe('OplogPopulator', () => {
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
             const onBucketRemovedStub = sinon.stub(oplogPopulator._allocationStrategy, 'onBucketRemoved');
-            oplogPopulator._allocator.emit('bucket-removed');
+            oplogPopulator._allocator.emit(constants.bucketRemovedFromConnectorEvent);
             assert(onBucketRemovedStub.calledOnce);
         });
 
@@ -239,7 +240,7 @@ describe('OplogPopulator', () => {
             assert(setMetastoreChangeStreamStub.calledOnce);
             assert(initializeConnectorsManagerStub.calledOnce);
             const onConnectorsReconciledStub = sinon.stub(oplogPopulator._metricsHandler, 'onConnectorsReconciled');
-            oplogPopulator._connectorsManager.emit('connectors-reconciled');
+            oplogPopulator._connectorsManager.emit(constants.connectorsReconciledEvent);
             assert(onConnectorsReconciledStub.calledOnce);
         });
     });

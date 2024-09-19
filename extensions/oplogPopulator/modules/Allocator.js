@@ -4,6 +4,7 @@ const { errors } = require('arsenal');
 const OplogPopulatorMetrics = require('../OplogPopulatorMetrics');
 const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 const { EventEmitter } = require('./ConnectorsManager');
+const constants = require('../constants');
 
 const paramsJoi = joi.object({
     connectorsManager: joi.object().required(),
@@ -126,8 +127,8 @@ class Allocator extends EventEmitter {
         try {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
+                this.emit(constants.bucketRemovedFromConnectorEvent, bucket, connector);
                 await connector.removeBucket(bucket);
-                this.emit('bucket-removed', bucket, connector);
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {

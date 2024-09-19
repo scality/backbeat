@@ -1,7 +1,9 @@
 const joi = require('joi');
 const uuid = require('uuid');
 const { errors } = require('arsenal');
+const { EventEmitter } = require('stream');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
+const constants = require('../constants');
 
 const connectorParams = joi.object({
     name: joi.string().required(),
@@ -21,7 +23,7 @@ const connectorParams = joi.object({
  * destroy and update the config of the connector when adding
  * or removing buckets from it
  */
-class Connector {
+class Connector extends EventEmitter {
 
     /**
      * @constructor
@@ -36,6 +38,7 @@ class Connector {
      * @param {number} params.kafkaConnectPort kafka connect port
      */
     constructor(params) {
+        super();
         joi.attempt(params, connectorParams);
         this._name = params.name;
         this._config = params.config;
@@ -184,6 +187,7 @@ class Connector {
             return;
         }
         try {
+            this.emit(constants.connectorUpdatedEvent, this);
             await this._kafkaConnect.deleteConnector(this._name);
             this._isRunning = false;
             // resetting the resume point to set a new one on creation of the connector
@@ -339,6 +343,7 @@ class Connector {
             if (doUpdate && this._isRunning) {
                 const timeBeforeUpdate = Date.now();
                 this._state.isUpdating = true;
+                this.emit(constants.connectorUpdatedEvent, this);
                 await this._kafkaConnect.updateConnectorConfig(this._name, this._config);
                 this._updateConnectorState(false, timeBeforeUpdate);
                 this._state.isUpdating = false;
