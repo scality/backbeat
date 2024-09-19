@@ -109,6 +109,18 @@ describe('Allocator', () => {
             allocator.listenToBucket('example-bucket-2');
             assert(addConnectorStub.calledOnce);
         });
+
+        it('should handle errors when adding a bucket', async () => {
+            allocator._connectorsManager.connectors = [connector1];
+            const getConnectorStub = sinon.stub(allocator._allocationStrategy, 'getConnector')
+                .returns(connector1);
+            const addBucketStub = sinon.stub(connector1, 'addBucket').throws();
+            await assert.rejects(allocator.listenToBucket('example-bucket-1'));
+            assert(getConnectorStub.calledOnceWith([connector1], 'example-bucket-1'));
+            assert(addBucketStub.calledOnceWith('example-bucket-1'));
+            const assignedConnector = allocator._bucketsToConnectors.get('example-bucket-1');
+            assert.deepEqual(assignedConnector, undefined);
+        });
     });
 
     describe('stopListeningToBucket', () => {

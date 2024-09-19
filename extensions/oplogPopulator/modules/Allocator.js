@@ -76,10 +76,11 @@ class Allocator extends EventEmitter {
      * @throws {InternalError}
      */
     async listenToBucket(bucket, eventDate = null) {
+        let connector;
         try {
             if (!this.has(bucket)) {
                 const connectors = this._connectorsManager.connectors;
-                let connector = this._allocationStrategy.getConnector(connectors, bucket);
+                connector = this._allocationStrategy.getConnector(connectors, bucket);
                 if (!connector) {
                     // the connector is not available (too many buckets)
                     // we need to create a new connector
@@ -91,8 +92,8 @@ class Allocator extends EventEmitter {
                 if (eventDate) {
                     connector.setResumePoint(eventDate);
                 }
-                await connector.addBucket(bucket);
                 this._bucketsToConnectors.set(bucket, connector);
+                await connector.addBucket(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'add');
                 this._logger.info('Started listening to bucket', {
                     method: 'Allocator.listenToBucket',
@@ -101,6 +102,9 @@ class Allocator extends EventEmitter {
                 });
             }
         } catch (err) {
+            if (this._bucketsToConnectors.get(bucket) === connector) {
+                this._bucketsToConnectors.delete(bucket);
+            }
             this._logger.error('Error when starting to listen to bucket', {
                 method: 'Allocator.listenToBucket',
                 bucket,
@@ -122,8 +126,8 @@ class Allocator extends EventEmitter {
         try {
             const connector = this._bucketsToConnectors.get(bucket);
             if (connector) {
-                this.emit('bucket-removed', bucket, connector);
                 await connector.removeBucket(bucket);
+                this.emit('bucket-removed', bucket, connector);
                 this._bucketsToConnectors.delete(bucket);
                 this._metricsHandler.onConnectorConfigured(connector, 'delete');
                 this._logger.info('Stopped listening to bucket', {
