@@ -4,11 +4,13 @@ const { errors } = require('arsenal');
 const { EventEmitter } = require('stream');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
 const constants = require('../constants');
+const arsenalConstants = require('arsenal').constants;
 
 const connectorParams = joi.object({
     name: joi.string().required(),
     config: joi.object().required(),
     buckets: joi.array().required(),
+    singlePipeline: joi.boolean().default(false),
     isRunning: joi.boolean().required(),
     logger: joi.object().required(),
     kafkaConnectHost: joi.string().required(),
@@ -33,6 +35,8 @@ class Connector extends EventEmitter {
      * @param {Object} params.config Kafka-connect MongoDB source
      * connector config
      * @param {string[]} params.buckets buckets assigned to this connector
+     * @param {boolean} params.singlePipeline true if a single pipeline
+     * is used for all buckets
      * @param {Logger} params.logger logger object
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
@@ -44,6 +48,7 @@ class Connector extends EventEmitter {
         this._config = params.config;
         this._buckets = new Set(params.buckets);
         this._isRunning = params.isRunning;
+        this._singlePipeline = params.singlePipeline;
         this._state = {
             // Used to check if buckets assigned to this connector
             // got modified from the last connector update
@@ -278,11 +283,26 @@ class Connector extends EventEmitter {
 
     /**
      * Makes new connector pipeline that includes
-     * buckets assigned to this connector
-     * @param {string[]} buckets list of bucket names
+     * buckets assigned to this connector. If the
+     * allocation strategy is not set, we listen to
+     * all non-special collections.
+     * @param {string[]} buckets buckets assigned to this connector
      * @returns {string} new connector pipeline
      */
     _generateConnectorPipeline(buckets) {
+        if (this._singlePipeline) {
+            return JSON.stringify([
+                {
+                    $match: {
+                        'ns.coll': {
+                            $not: {
+                                $regex: `^(${arsenalConstants.mpuBucketPrefix}|__).*`,
+                            },
+                        }
+                    }
+                }
+            ]);
+        }
         const pipeline = [
             {
                 $match: {

@@ -34,19 +34,19 @@ const connectorConfig = {
         fields: [{
             name: 'ns',
             type: [{
-                    name: 'ns',
-                    type: 'record',
-                    fields: [{
-                        name: 'coll',
-                        type: ['string', 'null'],
-                    }],
-                }, 'null'],
+                name: 'ns',
+                type: 'record',
+                fields: [{
+                    name: 'coll',
+                    type: ['string', 'null'],
+                }],
+            }, 'null'],
         }, {
             name: 'fullDocument',
             type: [{
-               type: 'record',
-               name: 'fullDocumentRecord',
-               fields: [{
+                type: 'record',
+                name: 'fullDocumentRecord',
+                fields: [{
                     name: 'value',
                     type: [{
                         type: 'record',
@@ -56,7 +56,7 @@ const connectorConfig = {
                             type: ['string', 'null'],
                         }],
                     }, 'null'],
-               }],
+                }],
             }, 'null'],
         }],
     }),
@@ -163,16 +163,112 @@ describe('ConnectorsManager', () => {
             const buckets = connectorsManager._extractBucketsFromConfig(config);
             assert.deepEqual(buckets, ['example-bucket-1, example-bucket-2']);
         });
+
+        it('should return a wildcard if a pipeline is unique', () => {
+            const config = {
+                pipeline: JSON.stringify([{
+                    $match: {
+                        'ns.coll': {
+                            $not: {
+                                $regex: '^example',
+                            },
+                        },
+                    },
+                }]),
+            };
+            const buckets = connectorsManager._extractBucketsFromConfig(config);
+            assert.deepEqual(buckets, ['*']);
+        });
     });
 
-    describe('_getOldConnectors', () => {
-        it('should update connector config while keeping the extra fields', async () => {
+    describe('_isUniqueConnector', () => {
+        it('should return true if the connector handles all buckets', () => {
+            const buckets = ['*'];
+            const isUnique = connectorsManager._isUniqueConnector(buckets);
+            assert.strictEqual(isUnique, true);
+        });
+
+        it('should return false if the connector handles a subset of buckets', () => {
+            const buckets = ['bucket1', 'bucket2'];
+            const isUnique = connectorsManager._isUniqueConnector(buckets);
+            assert.strictEqual(isUnique, false);
+        });
+    });
+
+    describe('_extractOldConnectorsConfigs', () => {
+        it('should extract old connectors configs', async () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
-            const connectors = await connectorsManager._getOldConnectors(['source-connector']);
+            sinon.stub(connectorsManager, '_extractBucketsFromConfig').returns(['bucket1', 'bucket2']);
+            const connectors = await connectorsManager._extractOldConnectorsConfigs(['source-connector']);
+            assert.strictEqual(connectors.length, 1);
+            assert.strictEqual(connectors[0].connectorName, 'source-connector');
+        });
+
+        it('should throw in case of error', async () => {
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
+                .rejects(new Error('error'));
+            await assert.rejects(
+                connectorsManager._extractOldConnectorsConfigs(['source-connector']),
+                { message: 'InternalError' }
+            );
+        });
+    });
+
+    describe('_cleanIncompatibleOldKafkaConnectors', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should remove unique pipeline if the current strategy is set', async () => {
+            const oldConnector = [
+                {
+                    connectorName: 'source-connector',
+                    oldConfig: { ...connectorConfig },
+                    buckets: ['bucket1', 'bucket2']
+                },
+            ];
+            sinon.stub(connectorsManager, '_allocationStrategy').value(true);
+            sinon.stub(connectorsManager, '_isUniqueConnector').returns(true);
+            const deleteConnectorStub = sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+
+            await connectorsManager._cleanIncompatibleOldKafkaConnectors(oldConnector);
+            assert(deleteConnectorStub.calledOnceWith('source-connector'));
+        });
+
+        it('should remove pipeline if the strategy is unset and the pipeline is not unique', async () => {
+            const oldConnector = [
+                {
+                    connectorName: 'source-connector',
+                    oldConfig: { ...connectorConfig },
+                    buckets: ['bucket1', 'bucket2']
+                },
+            ];
+            sinon.stub(connectorsManager, '_allocationStrategy').value(false);
+            sinon.stub(connectorsManager, '_isUniqueConnector').returns(false);
+            const deleteConnectorStub = sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+
+            await connectorsManager._cleanIncompatibleOldKafkaConnectors(oldConnector);
+            assert(deleteConnectorStub.calledOnceWith('source-connector'));
+        });
+    });
+
+
+    describe('_getOldConnectors', () => {
+        it('should update connector config while keeping the extra fields', async () => {
+            const oldConnectors = [
+                {
+                    connectorName: 'source-connector',
+                    oldConfig: { ...connectorConfig },
+                    buckets: ['bucket1', 'bucket2']
+                },
+            ];
+            oldConnectors[0].oldConfig['topic.namespace.map'] = 'outdated-topic';
+            oldConnectors[0].oldConfig['offset.partitiom.name'] = 'partition-name';
+            const connectors = connectorsManager._getOldConnectors(oldConnectors);
             assert.strictEqual(connectors.length, 1);
             assert.strictEqual(connectors[0].name, 'source-connector');
             assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
@@ -181,16 +277,19 @@ describe('ConnectorsManager', () => {
         });
 
         it('should warn when the number of retrieved bucket in a connector exceeds the limit', async () => {
-            const config = { ...connectorConfig };
-            config['topic.namespace.map'] = 'outdated-topic';
-            config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._allocationStrategy, 'maximumBucketsPerConnector').value(1);
-            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
-                .resolves(config);
-            sinon.stub(connectorsManager, '_extractBucketsFromConfig').returns(['bucket1', 'bucket2']);
             const warnStub = sinon.stub(connectorsManager._logger, 'warn');
-            const connectors = await connectorsManager._getOldConnectors(['source-connector', 'source-connector-2']);
-            assert.strictEqual(connectors.length, 2);
+            const oldConnectors = [
+                {
+                    connectorName: 'source-connector',
+                    oldConfig: { ...connectorConfig },
+                    buckets: ['bucket1', 'bucket2']
+                },
+            ];
+            oldConnectors[0].oldConfig['topic.namespace.map'] = 'outdated-topic';
+            oldConnectors[0].oldConfig['offset.partitiom.name'] = 'partition-name';
+            const connectors = connectorsManager._getOldConnectors(oldConnectors);
+            assert.strictEqual(connectors.length, 1);
             assert(warnStub.called);
         });
     });
@@ -198,10 +297,12 @@ describe('ConnectorsManager', () => {
     describe('initializeConnectors', () => {
         it('should initialize old connector', async () => {
             connectorsManager._nbConnectors = 1;
+            sinon.stub(connectorsManager, '_extractOldConnectorsConfigs');
+            sinon.stub(connectorsManager, '_cleanIncompatibleOldKafkaConnectors');
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves(['source-connector']);
             sinon.stub(connectorsManager, '_getOldConnectors')
-                .resolves([connector1]);
+                .returns([connector1]);
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
             assert.deepEqual(connectorsManager._connectors, [connector1]);
@@ -363,17 +464,17 @@ describe('ConnectorsManager', () => {
                         state: 'RUNNING',
                     },
                     tasks:
-                    [
-                        {
-                            id: 0,
-                            state: 'RUNNING',
-                        },
-                        {
-                            id: 1,
-                            state: 'FAILED',
-                            trace: 'org.apache.kafka.common.errors.RecordTooLargeException\n'
-                        }
-                    ]
+                        [
+                            {
+                                id: 0,
+                                state: 'RUNNING',
+                            },
+                            {
+                                id: 1,
+                                state: 'FAILED',
+                                trace: 'org.apache.kafka.common.errors.RecordTooLargeException\n'
+                            }
+                        ]
                 });
             connector1._isRunning = true;
             await connectorsManager._validateConnectorState(connector1);

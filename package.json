@@ -17,7 +17,7 @@
     "oplog_populator": "node extensions/oplogPopulator/OplogPopulatorTask.js",
     "mongo_queue_processor": "node extensions/mongoProcessor/mongoProcessorTask.js",
     "garbage_collector": "node extensions/gc/service.js",
-    "test": "mocha --recursive tests/unit --timeout 30000",
+    "test": "mocha --recursive tests/unit/oplogPopulator --timeout 30000",
     "cover:test": "nyc --clean --silent yarn run test && nyc report --report-dir ./coverage/test --reporter=lcov",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000",

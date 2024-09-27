@@ -46,9 +46,9 @@ RUN apt-get update && \
 WORKDIR /usr/src/app
 
 # Keep the .git directory in order to properly report version
-COPY . /usr/src/app
-COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
+COPY --from=builder /usr/src/app/node_modules ./node_modules/
+COPY . /usr/src/app
 
 ENTRYPOINT ["tini", "--", "/usr/src/app/docker-entrypoint.sh"]
 

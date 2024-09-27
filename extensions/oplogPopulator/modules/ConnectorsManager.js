@@ -14,18 +14,19 @@ const AllocationStrategy = require('../allocationStrategy/AllocationStrategy');
 
 const paramsJoi = joi.object({
     nbConnectors: joi.number().required(),
+    singlePipeline: joi.boolean().default(false),
     database: joi.string().required(),
     mongoUrl: joi.string().required(),
     oplogTopic: joi.string().required(),
     cronRule: joi.string().required(),
-    prefix: joi.string(),
+    prefix: joi.string().allow(null),
     heartbeatIntervalMs: joi.number().required(),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     allocationStrategy: joi.object()
-        .instance(AllocationStrategy).required(),
+        .instance(AllocationStrategy).allow(null),
     logger: joi.object().required(),
 }).required();
 
@@ -44,6 +45,7 @@ class ConnectorsManager extends EventEmitter {
      * @constructor
      * @param {Object} params params
      * @param {number} params.nbConnectors number of connectors to have
+     * @param {boolean} params.singlePipeline single pipeline mode
      * @param {string} params.database MongoDB database to use (for connector)
      * @param {string} params.mongoUrl MongoDB connection url
      * @param {string} params.oplogTopic topic to use for oplog
@@ -57,6 +59,7 @@ class ConnectorsManager extends EventEmitter {
         super();
         joi.attempt(params, paramsJoi);
         this._nbConnectors = params.nbConnectors;
+        this._singlePipeline = params.singlePipeline;
         this._cronRule = params.cronRule;
         this._heartbeatIntervalMs = params.heartbeatIntervalMs;
         this._logger = params.logger;
@@ -127,6 +130,7 @@ class ConnectorsManager extends EventEmitter {
             logger: this._logger,
             kafkaConnectHost: this._kafkaConnectHost,
             kafkaConnectPort: this._kafkaConnectPort,
+            singlePipeline: this._singlePipeline,
         });
         connector.on(constants.connectorUpdatedEvent,
             connector => this.emit(constants.connectorUpdatedEvent, connector));
@@ -145,41 +149,111 @@ class ConnectorsManager extends EventEmitter {
         if (!pipeline || pipeline.length === 0) {
             return [];
         }
+        if (pipeline[0].$match['ns.coll'].$not) {
+            return ['*'];
+        }
         return pipeline[0].$match['ns.coll'].$in;
     }
 
     /**
-     * Gets old connector configs and initializes connector
-     * instances
+     * Extracts old connectors from kafka connect
      * @param {string[]} connectorNames connector names
-     * @returns {Promise|Connector[]} list of connectors
+     * @returns {Promise<Object[]>} list of old connectors
+     * @throws {InternalError}
      */
-    async _getOldConnectors(connectorNames) {
+    async _extractOldConnectorsConfigs(connectorNames) {
         try {
-            const connectors = await Promise.all(connectorNames.map(async connectorName => {
+            const oldConnectorsConfigs = await Promise.all(connectorNames.map(async connectorName => {
                 // get old connector config
                 const oldConfig = await this._kafkaConnect.getConnectorConfig(connectorName);
                 // extract buckets from old connector config
                 const buckets = this._extractBucketsFromConfig(oldConfig);
+                return {
+                    connectorName,
+                    oldConfig,
+                    buckets,
+                };
+            }));
+            this._logger.info('Successfully extracted old connectors', {
+                method: 'ConnectorsManager._extractOldConnectorsConfigs',
+                numberOfConnectors: oldConnectorsConfigs.length
+            });
+            return oldConnectorsConfigs;
+        } catch (err) {
+            this._logger.error('An error occurred while extracting old connectors', {
+                method: 'ConnectorsManager._extractOldConnectorsConfigs',
+                error: err.description || err.message,
+            });
+            throw errors.InternalError.customizeDescription(err.description);
+        }
+    }
+
+    /**
+     * Checks if a connector is unique by checking if it listens to all buckets
+     * @param {string[]} buckets list of buckets
+     * @returns {boolean} true if connector is unique
+     */
+    _isUniqueConnector(buckets) {
+        return buckets.length === 1 && buckets[0] === '*';
+    }
+
+    /**
+     * Cleans old connectors that cannot be used with the current strategy
+     * @param {Object[]} oldConnectors old connectors
+     * @returns {Promise<Object[]>} list of old connectors
+     * @throws {InternalError}
+     */
+    async _cleanIncompatibleOldKafkaConnectors(oldConnectors) {
+        const oldConnectorsKept = [];
+        await Promise.all(oldConnectors.map(async oldConnector => {
+            console.log('should clean a connector??', {
+                oldConnector,
+                isUnique: this._isUniqueConnector(oldConnector.buckets),
+                singlePipeline: this._singlePipeline,
+            })
+            if (this._isUniqueConnector(oldConnector.buckets) !== this._singlePipeline) {
+                await this._kafkaConnect.deleteConnector(oldConnector.connectorName);
+                this._logger.info('Successfully deleted old connector', {
+                    method: 'ConnectorsManager._cleanOldConnectors',
+                    connector: oldConnector.connectorName,
+                });
+            } else {
+                oldConnectorsKept.push(oldConnector);
+            }
+        }));
+        return oldConnectorsKept;
+    }
+
+    /**
+     * Initializes connector instances from old connectors.
+     * If old buckets cannot be used with the current strategy,
+     * they are destroyed.
+     * @param {Object[]} oldConnectors old connectors
+     * @returns {Promise|Connector[]} list of connectors
+     */
+    _getOldConnectors(oldConnectors) {
+        try {
+            const connectors = oldConnectors.map(oldConnector => {
                 // generating a new config as the old config can be outdated (wrong topic for example)
-                const config = this._getDefaultConnectorConfiguration(connectorName);
+                const config = this._getDefaultConnectorConfiguration(oldConnector.connectorName);
                 // initializing connector
                 const connector = new Connector({
-                    name: connectorName,
+                    name: oldConnector.connectorName,
                     // update existing connector config while leaving in fields that were
                     // added manually like 'offset.topic.name'
-                    config: { ...oldConfig, ...config },
-                    buckets,
+                    config: { ...oldConnector.oldConfig, ...config },
+                    buckets: oldConnector.buckets,
                     isRunning: true,
                     logger: this._logger,
                     kafkaConnectHost: this._kafkaConnectHost,
                     kafkaConnectPort: this._kafkaConnectPort,
+                    singlePipeline: this._isUniqueConnector(oldConnector.buckets),
                 });
-                if (buckets.length > this._allocationStrategy.maximumBucketsPerConnector) {
+                if (oldConnector.buckets.length > this._allocationStrategy?.maximumBucketsPerConnector) {
                     this._logger.warn('Connector has more bucket than expected', {
                         method: 'ConnectorsManager._getOldConnectors',
                         connector: connector.name,
-                        numberOfBuckets: buckets.length,
+                        numberOfBuckets: oldConnector.buckets.length,
                         allowed: this._allocationStrategy.maximumBucketsPerConnector,
                     });
                 }
@@ -188,7 +262,7 @@ class ConnectorsManager extends EventEmitter {
                     connector: connector.name
                 });
                 return connector;
-            }));
+            });
             this._logger.info('Successfully retreived old connectors', {
                 method: 'ConnectorsManager._getOldConnectors',
                 numberOfConnectors: connectors.length
@@ -214,13 +288,19 @@ class ConnectorsManager extends EventEmitter {
             // get and initialize old connectors
             const oldConnectorNames = await this._kafkaConnect.getConnectors();
             if (oldConnectorNames) {
-                const oldConnectors = await this._getOldConnectors(oldConnectorNames);
+                const oldConnectorsConfigs = await this._extractOldConnectorsConfigs(oldConnectorNames);
+                const oldConnectorsToKeep = await this._cleanIncompatibleOldKafkaConnectors(oldConnectorsConfigs);
+                const oldConnectors = this._getOldConnectors(oldConnectorsToKeep);
                 this._connectors.push(...oldConnectors);
                 this._oldConnectors.push(...oldConnectors);
                 this._metricsHandler.onConnectorsInstantiated(true, oldConnectors.length);
             }
             // Add connectors if required number of connectors not reached
-            const nbConnectorsToAdd = this._nbConnectors - this._connectors.length;
+            let nbConnectors = this._nbConnectors;
+            if (this._singlePipeline) {
+                nbConnectors = 1;
+            }
+            const nbConnectorsToAdd = nbConnectors - this._connectors.length;
             for (let i = 0; i < nbConnectorsToAdd; i++) {
                 this.addConnector();
             }
@@ -247,7 +327,7 @@ class ConnectorsManager extends EventEmitter {
      */
     async _spawnOrDestroyConnector(connector) {
         try {
-            if (connector.isRunning && connector.bucketCount === 0) {
+            if (connector.isRunning && connector.bucketCount === 0 && !this._singlePipeline) {
                 await connector.destroy();
                 this._metricsHandler.onConnectorDestroyed();
                 this._logger.info('Successfully destroyed a connector', {
@@ -255,7 +335,7 @@ class ConnectorsManager extends EventEmitter {
                     connector: connector.name,
                 });
                 return true;
-            } else if (!connector.isRunning && connector.bucketCount > 0) {
+            } else if (!connector.isRunning && (connector.bucketCount > 0 || this._singlePipeline)) {
                 await connector.spawn();
                 this._metricsHandler.onConnectorsInstantiated(false);
                 this._logger.info('Successfully spawned a connector', {
@@ -263,7 +343,7 @@ class ConnectorsManager extends EventEmitter {
                     connector: connector.name,
                 });
                 return true;
-            } else if (connector.isRunning && this._allocationStrategy.canUpdate()) {
+            } else if (connector.isRunning && (this._singlePipeline || this._allocationStrategy?.canUpdate())) {
                 return connector.updatePipeline(true);
             }
 
@@ -303,7 +383,7 @@ class ConnectorsManager extends EventEmitter {
                         numberOfBuckets: connector.bucketCount,
                     };
                 }
-                if (connector.bucketCount > this._allocationStrategy.maximumBucketsPerConnector) {
+                if (connector.bucketCount > this._allocationStrategy?.maximumBucketsPerConnector) {
                     bucketsExceedingLimit +=
                         connector.bucketCount - this._allocationStrategy.maximumBucketsPerConnector;
                 }

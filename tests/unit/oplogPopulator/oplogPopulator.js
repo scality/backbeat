@@ -154,6 +154,10 @@ describe('OplogPopulator', () => {
     });
 
     describe('setup', () => {
+        afterEach(() => {
+            oplogPopulator._config.numberOfConnectors = 1;
+        });
+
         it('should handle error during setup', async () => {
             const error = new Error('InternalError');
             const loadOplogHelperClassesStub = sinon.stub(oplogPopulator, '_loadOplogHelperClasses').throws(error);
@@ -242,6 +246,18 @@ describe('OplogPopulator', () => {
             const onConnectorsReconciledStub = sinon.stub(oplogPopulator._metricsHandler, 'onConnectorsReconciled');
             oplogPopulator._connectorsManager.emit(constants.connectorsReconciledEvent);
             assert(onConnectorsReconciledStub.calledOnce);
+        });
+
+        it('should not listen to metastore if no allocation strategy', async () => {
+            oplogPopulator._config.numberOfConnectors = 0;
+            sinon.stub(oplogPopulator, '_setupMongoClient').resolves();
+            const setMetastoreChangeStreamStub = sinon.stub(oplogPopulator, '_setMetastoreChangeStream');
+            const initializeConnectorsManagerStub = sinon.stub(oplogPopulator, '_initializeConnectorsManager');
+            sinon.stub(oplogPopulator, '_getBackbeatEnabledBuckets').resolves([]);
+            oplogPopulator._allocationStrategy = null;
+            await oplogPopulator.setup();
+            assert(setMetastoreChangeStreamStub.notCalled);
+            assert(initializeConnectorsManagerStub.calledOnce);
         });
     });
 

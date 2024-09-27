@@ -11,7 +11,7 @@ const paramsJoi = joi.object({
     metricsHandler: joi.object()
         .instance(OplogPopulatorMetrics).required(),
     allocationStrategy: joi.object()
-        .instance(AllocationStrategy).required(),
+        .instance(AllocationStrategy).allow(null),
     logger: joi.object().required(),
 }).required();
 

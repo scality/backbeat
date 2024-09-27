@@ -55,6 +55,7 @@ class OplogPopulator {
         this._changeStreamWrapper = null;
         this._allocator = null;
         this._connectorsManager = null;
+        this._useSingleConnector = false;
         // contains OplogPopulatorUtils class of each supported extension
         this._extHelpers = {};
         // MongoDB related
@@ -266,6 +267,7 @@ class OplogPopulator {
             this._allocationStrategy = this.initStrategy();
             this._connectorsManager = new ConnectorsManager({
                 nbConnectors: this._config.numberOfConnectors,
+                singlePipeline: this._useSingleConnector,
                 database: this._database,
                 mongoUrl: this._mongoUrl,
                 oplogTopic: this._config.topic,
@@ -285,33 +287,35 @@ class OplogPopulator {
                 allocationStrategy: this._allocationStrategy,
                 logger: this._logger,
             });
-            // For now, we always use the RetainBucketsDecorator
-            // so, we map the events from the classes
-            this._connectorsManager.on(constants.connectorUpdatedEvent, connector =>
-                this._allocationStrategy.onConnectorUpdatedOrDestroyed(connector));
-            this._allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
-                this._allocationStrategy.onBucketRemoved(bucket, connector));
-            this._connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
-                this._metricsHandler.onConnectorsReconciled(
-                    bucketsExceedingLimit,
-                    this._allocationStrategy.retainedBucketsCount,
-                );
-            });
-            // get currently valid buckets from mongo
-            const validBuckets = await this._getBackbeatEnabledBuckets();
-            // listen to valid buckets
-            await Promise.all(validBuckets.map(bucket => this._allocator.listenToBucket(bucket)));
-            // establish change stream
-            this._setMetastoreChangeStream();
-            // remove no longer valid buckets from old connectors
-            const oldConnectorBuckets = this._connectorsManager.oldConnectors
-                .map(connector => connector.buckets)
-                .flat();
-            const invalidBuckets = oldConnectorBuckets.filter(bucket => !validBuckets.includes(bucket));
-            await Promise.all(invalidBuckets.map(bucket => this._allocator.stopListeningToBucket(bucket)));
-            this._logger.info('Successfully removed invalid buckets from old connectors', {
-                method: 'ConnectorsManager.removeInvalidBuckets',
-            });
+            if (this._allocationStrategy) {
+                // For now, we always use the RetainBucketsDecorator
+                // so, we map the events from the classes
+                this._connectorsManager.on(constants.connectorUpdatedEvent, connector =>
+                    this._allocationStrategy.onConnectorUpdatedOrDestroyed(connector));
+                this._allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
+                    this._allocationStrategy.onBucketRemoved(bucket, connector));
+                this._connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
+                    this._metricsHandler.onConnectorsReconciled(
+                        bucketsExceedingLimit,
+                        this._allocationStrategy.retainedBucketsCount,
+                    );
+                });
+                // get currently valid buckets from mongo
+                const validBuckets = await this._getBackbeatEnabledBuckets();
+                // listen to valid buckets
+                await Promise.all(validBuckets.map(bucket => this._allocator.listenToBucket(bucket)));
+                // establish change stream
+                this._setMetastoreChangeStream();
+                // remove no longer valid buckets from old connectors
+                const oldConnectorBuckets = this._connectorsManager.oldConnectors
+                    .map(connector => connector.buckets)
+                    .flat();
+                const invalidBuckets = oldConnectorBuckets.filter(bucket => !validBuckets.includes(bucket));
+                await Promise.all(invalidBuckets.map(bucket => this._allocator.stopListeningToBucket(bucket)));
+                this._logger.info('Successfully removed invalid buckets from old connectors', {
+                    method: 'ConnectorsManager.removeInvalidBuckets',
+                });
+            }
             // start scheduler for updating connectors
             this._connectorsManager.scheduleConnectorUpdates();
             this._logger.info('OplogPopulator setup complete', {
@@ -333,7 +337,13 @@ class OplogPopulator {
      */
     initStrategy() {
         let strategy;
-        if (this._arePipelinesImmutable()) {
+        if (this._config.numberOfConnectors === 0) {
+            // If the number of connector is set to 0, then we
+            // use a single connector to listen to the whole DB.
+            // in this case, we do not create any allocation strategy.
+            this._useSingleConnector = true;
+            return null;
+        } else if (this._arePipelinesImmutable()) {
             // In this case, mongodb does not support reusing a
             // resume token from a different pipeline. In other
             // words, we cannot alter an existing pipeline. In this
@@ -373,6 +383,10 @@ class OplogPopulator {
             allocator: this._allocator,
             changeStream: this._changeStreamWrapper
         };
+
+        if (this._useSingleConnector) {
+            delete components.changeStream;
+        }
 
         const allReady = Object.values(components).every(v => v);
         if (!allReady) {

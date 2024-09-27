@@ -4,7 +4,7 @@ const werelogs = require('werelogs');
 
 const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
-const { errors } = require('arsenal');
+const { errors, constants } = require('arsenal');
 
 const logger = new werelogs.Logger('Connector');
 
@@ -153,6 +153,10 @@ describe('Connector', () => {
     });
 
     describe('_generateConnectorPipeline', () => {
+        afterEach(() => {
+            connector._singlePipeline = false;
+        });
+
         it('should return new pipeline', () => {
             const buckets = ['example-bucket-1', 'example-bucket-2'];
             const pipeline = connector._generateConnectorPipeline(buckets);
@@ -161,6 +165,24 @@ describe('Connector', () => {
                     $match: {
                         'ns.coll': {
                             $in: buckets,
+                        }
+                    }
+                }
+            ]));
+        });
+
+        it('should listen to everything if the single change stream mode is set', () => {
+            connector._config['single.change.stream.mode'] = true;
+            const buckets = ['example-bucket-1', 'example-bucket-2'];
+            connector._singlePipeline = true;
+            const pipeline = connector._generateConnectorPipeline(buckets);
+            assert.strictEqual(pipeline, JSON.stringify([
+                {
+                    $match: {
+                        'ns.coll': {
+                            $not: {
+                                $regex: `^(${constants.mpuBucketPrefix}|__).*`,
+                            },
                         }
                     }
                 }
