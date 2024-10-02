@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const sinon = require('sinon');
+const async = require('async');
 
 const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
@@ -16,12 +17,20 @@ const {
     timeOptions,
 } = require('../../functional/lifecycle/configObjects');
 
+const {
+    bucketProcessorEntry,
+    bucketProcessorV1Entry,
+    bucketProcessorV2Entry
+} = require('../../utils/kafkaEntries');
+const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
+const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
+
 
 describe('Lifecycle Bucket Processor', () => {
     let lbp;
     beforeEach(() => {
         lbp = new LifecycleBucketProcessor(
-            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, timeOptions);
+            zkConfig, kafkaConfig, lcConfig, repConfig, s3Config, mongoConfig, 'http', timeOptions);
     });
 
     afterEach(() => {
@@ -194,6 +203,73 @@ describe('Lifecycle Bucket Processor', () => {
                 lbp._supportedRules = params.supportedRules;
                 lbp._pausedLocations = new Set(params.pauseLocations);
                 assert.strictEqual(lbp._shouldProcessConfig(params.lcConfig), params.expected);
+            });
+        });
+    });
+
+    describe('_processBucketEntry', () => {
+
+        [
+            {
+                it: 'should use the forceLegacyListing when listing version is not ' +
+                    'specified in the Kafka messages (v1 case)',
+                forceLegacyListing: true,
+                kafkaMessage: bucketProcessorEntry,
+                validateTask: task => task instanceof LifecycleTask && !(task instanceof LifecycleTaskV2),
+            },
+            {
+                it: 'should use the forceLegacyListing when listing version is not ' +
+                    'specified in the Kafka messages (v2 case)',
+                forceLegacyListing: false,
+                kafkaMessage: bucketProcessorEntry,
+                validateTask: task => task instanceof LifecycleTaskV2,
+            },
+            {
+                it: 'should use the listing type specified in the kafka message (v1 case)',
+                forceLegacyListing: false,
+                kafkaMessage: bucketProcessorV1Entry,
+                validateTask: task => task instanceof LifecycleTask && !(task instanceof LifecycleTaskV2),
+            },
+            {
+                it: 'should use the listing type specified in the kafka message (v2 case)',
+                forceLegacyListing: true,
+                kafkaMessage: bucketProcessorV2Entry,
+                validateTask: task => task instanceof LifecycleTaskV2,
+            },
+        ].forEach(opts => {
+            it(opts.it, done => {
+                if (opts.forceLegacyListing !== null) {
+                    lbp._lcConfig.forceLegacyListing = opts.forceLegacyListing;
+                }
+
+                lbp.clientManager = {
+                    getS3Client: () => ({}),
+                    getBackbeatMetadataProxy: () => ({}),
+                };
+
+                sinon.stub(lbp, '_getBucketLifecycleConfiguration').yields(null, {
+                    Rules: [{
+                        Status: 'Enabled',
+                        Transitions: [{
+                            Days: 10,
+                            StorageClass: 'azure'
+                        }],
+                        ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
+                    }]
+                });
+
+                const tasks = [];
+                lbp._internalTaskScheduler = async.queue((ctx, cb) => {
+                    tasks.push(ctx.task);
+                    cb();
+                }, 1);
+
+                lbp._processBucketEntry(opts.kafkaMessage, err => {
+                    assert.ifError(err);
+                    assert.strictEqual(tasks.length, 1);
+                    assert(opts.validateTask(tasks[0]));
+                    done();
+                });
             });
         });
     });

@@ -15,7 +15,7 @@ const joiSchema = joi.object({
     transitionTasksTopic: joi.string().default(parent => parent.objectTasksTopic),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
-    forceLegacyListing: joi.boolean().default(true),
+    forceLegacyListing: joi.boolean().default(false),
     autoCreateIndexes: joi.boolean().default(false),
     conductor: {
         auth: inheritedAuthJoi,
