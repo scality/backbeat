@@ -2,8 +2,8 @@ const { RulesReducer } = require('./RulesReducer');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
 const { s3middleware } = require('arsenal');
-const { supportedLifecycleRules } = require('arsenal').constants;
 const { scaleMsPerDay } = s3middleware.objectUtils;
+const config = require('../../../lib/Config');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
@@ -201,7 +201,7 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
  * @returns {string[]} formatted supported lifecycle rules
  */
 function getFormattedSupportedLifecycleRules() {
-   return supportedLifecycleRules.map(rule => {
+   return config.extensions.lifecycle.supportedLifecycleRules.map(rule => {
         if (rule === 'noncurrentVersionTransition') {
             return 'NoncurrentVersionTransitions';
         }
