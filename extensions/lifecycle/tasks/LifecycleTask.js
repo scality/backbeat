@@ -3,7 +3,6 @@
 const async = require('async');
 const { errors, versioning } = require('arsenal');
 const { ObjectMD } = require('arsenal').models;
-const { supportedLifecycleRules } = require('arsenal').constants;
 const {
     LifecycleDateTime,
     LifecycleUtils,
@@ -96,10 +95,10 @@ class LifecycleTask extends BackbeatTask {
         });
 
         this._lifecycleUtils = new LifecycleUtils(
-            supportedLifecycleRules,
+            config.extensions.lifecycle.supportedLifecycleRules,
             this._lifecycleDateTime
         );
-        this._supportedRules = supportedLifecycleRules;
+        this._supportedRules = config.extensions.lifecycle.supportedLifecycleRules;
         this._totalRetries = 0;
     }
 

@@ -73,6 +73,13 @@ const joiSchema = joi.object({
     coldStorageRestoreAdjustTopicPrefix: joi.string().default('cold-restore-adjust-req-'),
     coldStorageGCTopicPrefix: joi.string().default('cold-gc-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
+    supportedLifecycleRules: joi.array().items(joi.string()).default([
+        'expiration',
+        'noncurrentVersionExpiration',
+        'abortIncompleteMultipartUpload',
+        'transitions',
+        'noncurrentVersionTransition',
+    ]),
 });
 
 function configValidator(backbeatConfig, extConfig) {
