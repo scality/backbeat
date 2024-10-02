@@ -330,7 +330,7 @@ class LifecycleBucketProcessor {
 
             let task;
 
-            if (taskVersion === lifecycleTaskVersions.v1 || !taskVersion) {
+            if (taskVersion === lifecycleTaskVersions.v1 || (!taskVersion && this._lcConfig.forceLegacyListing)) {
                 task = new LifecycleTask(this);
             } else {
                 task = new LifecycleTaskV2(this);
