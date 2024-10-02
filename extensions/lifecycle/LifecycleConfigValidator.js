@@ -8,6 +8,8 @@ const {
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi');
 
+const { supportedLifecycleRules }  = require('../../lib/constants');
+
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
@@ -73,6 +75,9 @@ const joiSchema = joi.object({
     coldStorageRestoreAdjustTopicPrefix: joi.string().default('cold-restore-adjust-req-'),
     coldStorageGCTopicPrefix: joi.string().default('cold-gc-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
+    supportedLifecycleRules: joi.array().items(
+        joi.string().valid(...supportedLifecycleRules)
+    ).default(supportedLifecycleRules),
 });
 
 function configValidator(backbeatConfig, extConfig) {
