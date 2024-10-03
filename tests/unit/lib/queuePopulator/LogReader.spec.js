@@ -110,6 +110,7 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
+                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -155,6 +156,7 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
+                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -241,6 +243,57 @@ describe('LogReader', () => {
                 assert(processLogEntryStb.calledTwice);
                 assert.strictEqual(batchState.logStats.nbLogEntriesRead, 2);
                 return done();
+            });
+        });
+    });
+
+    describe('_processLogEntry', () => {
+        [
+            {
+                description: 'without overhead fields',
+                overhead: null,
+            }, {
+                description: 'with overhead fields',
+                overhead: {
+                    versionId: '1234',
+                },
+            }
+        ].forEach(params => {
+            it(`should pass the proper fields to the filter method (${params.description})`, done => {
+                const date = Date.now();
+                const record = {
+                    db: 'example-bucket',
+                    timestamp: date,
+                };
+                const entry = {
+                    type: 'put',
+                    key: 'example-key',
+                    timestamp: date,
+                    value: null,
+                    overhead: params.overhead,
+                };
+                logReader._extensions = [
+                    {
+                        filter: sinon.stub().returns(),
+                    },
+                ];
+                logReader._processLogEntry({}, record, entry, err => {
+                    assert.ifError(err);
+                    assert(logReader._extensions[0].filter.calledWithExactly({
+                        type: 'put',
+                        bucket: 'example-bucket',
+                        key: 'example-key',
+                        value: null,
+                        logReader,
+                        overheadFields: {
+                            commitTimestamp: date,
+                            opTimestamp: date,
+                            versionId: undefined,
+                            ...params.overhead,
+                        },
+                    }));
+                    done();
+                });
             });
         });
     });
