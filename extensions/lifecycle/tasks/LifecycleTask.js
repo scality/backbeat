@@ -95,10 +95,10 @@ class LifecycleTask extends BackbeatTask {
         });
 
         this._lifecycleUtils = new LifecycleUtils(
-            config.extensions.lifecycle.supportedLifecycleRules,
+            this.supportedRules,
             this._lifecycleDateTime
         );
-        this._supportedRules = config.extensions.lifecycle.supportedLifecycleRules;
+        this._supportedRules = this.supportedRules;
         this._totalRetries = 0;
     }
 

@@ -272,14 +272,7 @@
             "coldStorageArchiveTopicPrefix": "cold-archive-req-",
             "coldStorageRestoreTopicPrefix": "cold-restore-req-",
             "coldStorageGCTopicPrefix": "cold-gc-req-",
-            "coldStorageStatusTopicPrefix": "cold-status-",
-            "supportedLifecycleRules": [
-                "expiration",
-                "noncurrentVersionExpiration",
-                "abortIncompleteMultipartUpload",
-                "transitions",
-                "noncurrentVersionTransition"
-            ]
+            "coldStorageStatusTopicPrefix": "cold-status-"
         },
         "gc": {
             "topic": "backbeat-gc",
