@@ -222,14 +222,7 @@
             "coldStorageRestoreTopicPrefix": "cold-restore-req-",
             "coldStorageGCTopicPrefix": "cold-gc-req-",
             "coldStorageStatusTopicPrefix": "cold-status-",
-            "coldStorageTopics": [],
-            "supportedLifecycleRules": [
-                "expiration",
-                "noncurrentVersionExpiration",
-                "abortIncompleteMultipartUpload",
-                "transitions",
-                "noncurrentVersionTransition"
-            ] 
+            "coldStorageTopics": []
         },
         "gc": {
             "topic": "backbeat-test-gc",
