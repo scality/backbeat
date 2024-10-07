@@ -14,6 +14,7 @@ const constants = {
     supportedAuthTypes: ['kerberos'],
     deleteEvent: 's3:ObjectRemoved:Delete',
     eventMessageProperty: {
+        dateTime: 'last-modified',
         eventType: 'originOp',
         region: 'dataStoreName',
         schemaVersion: 'md-model-version',

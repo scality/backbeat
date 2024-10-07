@@ -34,7 +34,8 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(1000),
     },
     destinations: joi.array().items(destinationSchema).default([]),
-    probeServer: probeServerJoi.default()
+    probeServer: probeServerJoi.default(),
+    ignoreEmptyEvents: joi.boolean().default(true),
 });
 
 function configValidator(backbeatConfig, extConfig) {
