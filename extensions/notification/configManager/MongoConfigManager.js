@@ -8,12 +8,12 @@ const LRUCache = require('arsenal').algorithms
 const MongoClient = require('mongodb').MongoClient;
 
 const ChangeStream = require('../../../lib/wrappers/ChangeStream');
-const constants = require('../constants');
 const { constructConnectionString, getMongoVersion } = require('../../utils/MongoUtils');
 const BaseConfigManager = require('./BaseConfigManager');
 
 const paramsJoi = joi.object({
     mongoConfig: joi.object().required(),
+    bucketMetastore: joi.string().required(),
     logger: joi.object().required(),
 }).required();
 
@@ -84,6 +84,7 @@ class MongoConfigManager extends BaseConfigManager {
         this._logger = params.logger;
         this._mongoConfig = params.mongoConfig;
         this._cachedConfigs = new LRUCache(MAX_CACHED_ENTRIES);
+        this._bucketMetastore = params.bucketMetastore;
         this._mongoClient = null;
         this._metastore = null;
         this._metastoreChangeStream = null;
@@ -116,7 +117,7 @@ class MongoConfigManager extends BaseConfigManager {
                 this._mongoClient = client.db(this._mongoConfig.database, {
                     ignoreUndefined: true,
                 });
-                this._metastore = this._mongoClient.collection(constants.bucketMetastore);
+                this._metastore = this._mongoClient.collection(this._bucketMetastore);
                 // get mongodb version
                 getMongoVersion(this._mongoClient, (err, version) => {
                     if (err) {
