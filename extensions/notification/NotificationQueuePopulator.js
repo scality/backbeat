@@ -218,20 +218,23 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     return undefined;
                 }
                 // get destination specific notification config
-                const destBnConf = config.queueConfig.filter(
-                    c => c.queueArn.split(':').pop()
-                        === destination.resource);
-                if (!destBnConf.length) {
+                const queueConfig = config.notificationConfiguration.queueConfig.filter(
+                    c => c.queueArn.split(':').pop() === destination.resource
+                );
+                if (!queueConfig.length) {
                     // skip, if there is no config for the current
                     // destination resource
                     return undefined;
                 }
                 // pass only destination resource specific config to
                 // validate entry
-                const bnConfig = {
-                    queueConfig: destBnConf,
+                const destConfig = {
+                    bucket,
+                    notificationConfiguration: {
+                        queueConfig,
+                    },
                 };
-                const { isValid, matchingConfig } = configUtil.validateEntry(bnConfig, ent);
+                const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, ent);
                 if (isValid) {
                     const message
                         = messageUtil.addLogAttributes(value, ent);
