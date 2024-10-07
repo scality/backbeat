@@ -18,7 +18,7 @@ const destinationSchema = joi.object({
     resource: joi.string().required(),
     type: joi.string().required(),
     host: joi.string().required(),
-    port: joi.number().required(),
+    port: joi.number().optional(),
     internalTopic: joi.string(),
     topic: joi.string().required(),
     auth: authSchema.default({}),
