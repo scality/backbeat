@@ -16,6 +16,7 @@ const config = require('../../../lib/Config');
 const kafkaConfig = config.kafka;
 const notifConfig = config.extensions.notification;
 const mongoConfig = config.queuePopulator.mongo;
+const zkConfig = config.zookeeper;
 
 const log = new werelogs.Logger('Backbeat:NotificationProcessor:task');
 werelogs.configure({
@@ -44,7 +45,7 @@ if (isDestinationAuthEmpty) {
     destinationAuth = null;
 }
 const queueProcessor = new QueueProcessor(
-    mongoConfig, kafkaConfig, notifConfig, destination, destinationAuth);
+    mongoConfig, zkConfig, kafkaConfig, notifConfig, destination, destinationAuth);
 
 /**
  * Handle ProbeServer liveness check

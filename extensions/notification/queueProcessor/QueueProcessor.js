@@ -4,7 +4,6 @@ const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
-const util = require('util');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const errors = require('arsenal').errors;
 
@@ -13,6 +12,7 @@ const NotificationDestination = require('../destination');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 
 const processedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_queue_processor_events_total',
@@ -34,6 +34,7 @@ class QueueProcessor extends EventEmitter {
      *
      * @constructor
      * @param {Object} mongoConfig - mongodb connnection configuration object
+     * @param {Object} zkConfig - zookeeper configuration object
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -65,10 +66,11 @@ class QueueProcessor extends EventEmitter {
      * @param {String} destinationId - resource name/id of destination
      * @param {Object} destinationAuth - destination authentication config
      */
-    constructor(mongoConfig, kafkaConfig, notifConfig, destinationId,
+    constructor(mongoConfig, zkConfig, kafkaConfig, notifConfig, destinationId,
         destinationAuth) {
         super();
         this.mongoConfig = mongoConfig;
+        this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.destinationId = destinationId;
@@ -84,12 +86,32 @@ class QueueProcessor extends EventEmitter {
         this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;
-        // Once the notification manager is initialized
-        // this will hold the callback version of the getConfig
-        // function of the notification config manager
-        this._getConfig = null;
+        this.zkClient = null;
 
         this.logger = new Logger('Backbeat:Notification:QueueProcessor');
+    }
+
+    _setupZookeeper(done) {
+        if (this.mongoConfig) {
+            done();
+            return;
+        }
+
+        const populatorZkPath = this.notifConfig.zookeeperPath;
+        const zookeeperUrl =
+            `${this.zkConfig.connectionString}${populatorZkPath}`;
+        this.logger.info('opening zookeeper connection for reading ' +
+            'bucket notification configuration', { zookeeperUrl });
+        this.zkClient = new ZookeeperManager(zookeeperUrl, {
+            autoCreateNamespace: this.zkConfig.autoCreateNamespace,
+        }, this.logger);
+
+        this.zkClient.once('error', done);
+        this.zkClient.once('ready', () => {
+            // just in case there would be more 'error' events emitted
+            this.zkClient.removeAllListeners('error');
+            done();
+        });
     }
 
     /**
@@ -101,6 +123,7 @@ class QueueProcessor extends EventEmitter {
         try {
             this.bnConfigManager = new NotificationConfigManager({
                 mongoConfig: this.mongoConfig,
+                zkClient: this.zkClient,
                 logger: this.logger,
             });
             return this.bnConfigManager.setup(done);
@@ -141,6 +164,7 @@ class QueueProcessor extends EventEmitter {
      */
     start(options, done) {
         async.series([
+            next => this._setupZookeeper(next),
             next => this._setupNotificationConfigManager(next),
             next => this._setupDestination(this.destinationConfig.type, next),
             next => this._destination.init(() => {
@@ -179,9 +203,6 @@ class QueueProcessor extends EventEmitter {
                     this.emit('ready');
                     return next();
                 });
-                // callbackify getConfig from notification config manager
-                this._getConfig = util.callbackify(this.bnConfigManager
-                    .getConfig.bind(this.bnConfigManager));
                 return undefined;
             }),
         ], err => {
@@ -229,7 +250,7 @@ class QueueProcessor extends EventEmitter {
         }
         const { bucket, key, eventType } = sourceEntry;
         try {
-            return this._getConfig(bucket, (err, notifConfig) => {
+            return this.bnConfigManager.getConfig(bucket, (err, notifConfig) => {
                 if (err) {
                     this.logger.error('Error while getting notification configuration', {
                         bucket,
