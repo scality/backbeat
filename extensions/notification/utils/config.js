@@ -76,7 +76,7 @@ function filterConfigsByEvent(queueConfig, eventType) {
  * @return {Object} Result with validity boolean and matching configuration rule.
  */
 function validateEntry(bnConfig, entry) {
-    const eventType = entry.eventType;
+    const { bucket, eventType } = entry;
 
     /**
      * if the event type is unavailable, it is an entry that is a
@@ -87,9 +87,14 @@ function validateEntry(bnConfig, entry) {
         return { isValid: false, matchingConfig: null };
     }
 
+    if (bucket !== bnConfig.bucket) {
+        return { isValid: false, matchingConfig: null };
+    }
+
     // check if the event type matches at least one supported event from
     // one of the queue configurations
-    const qConfigs = filterConfigsByEvent(bnConfig.queueConfig, eventType);
+    const notifConf = bnConfig.notificationConfiguration;
+    const qConfigs = filterConfigsByEvent(notifConf.queueConfig, eventType);
 
     if (qConfigs.length > 0) {
         const matchingConfig = qConfigs.find(c => {
