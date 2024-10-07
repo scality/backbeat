@@ -43,6 +43,75 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Get bucket attributes from log entry
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - bucket attributes if available
+     */
+    _getBucketAttributes(value) {
+        if (value && value.attributes) {
+            const { error, result } = safeJsonParse(value.attributes);
+            if (error) {
+                return undefined;
+            }
+            return result;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get bucket name from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {String|undefined} - bucket name if available
+     */
+    _getBucketNameFromAttributes(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.name) {
+            return attributes.name;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get notification configuration from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - notification configuration if available
+     */
+    _getBucketNotificationConfiguration(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.notificationConfiguration) {
+            return attributes.notificationConfiguration;
+        }
+        return undefined;
+    }
+
+    /**
+     * Process bucket entry from the log
+     *
+     * @param {Object} value - log entry object
+     * @return {undefined}
+     */
+    _processBucketEntry(value) {
+        const bucketName = this._getBucketNameFromAttributes(value);
+        const notificationConfiguration
+            = this._getBucketNotificationConfiguration(value);
+        if (notificationConfiguration &&
+            Object.keys(notificationConfiguration).length > 0) {
+            const bnConfig = {
+                bucket: bucketName,
+                notificationConfiguration,
+            };
+            // bucket notification config is available, update node
+            this.bnConfigManager.setConfig(bucketName, bnConfig);
+            return undefined;
+        }
+        // bucket notification conf has been removed, so remove zk node
+        return this.bnConfigManager.removeConfig(bucketName);
+    }
+
+    /**
      * Returns the correct versionId
      * to display according to the
      * versioning state of the object
@@ -208,11 +277,13 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             this.log.error('could not parse log entry', { value, error });
             return cb();
         }
-        // ignore bucket operations, mpu's or if the entry has no bucket
-        const isUserBucketOp = !bucket || bucket === usersBucket;
-        const isMpuOp = key && key.startsWith(mpuBucketPrefix);
-        const isBucketOp = bucket && result && this._isBucketEntry(bucket, key);
-        if ([isUserBucketOp, isMpuOp, isBucketOp].some(cond => cond)) {
+        // ignore bucket op, mpu's or if the entry has no bucket
+        if (!bucket || bucket === usersBucket || (key && key.startsWith(mpuBucketPrefix))) {
+            return cb();
+        }
+        // bucket notification configuration updates
+        if (bucket && result && this._isBucketEntry(bucket, key)) {
+            this._processBucketEntry(result);
             return cb();
         }
         // object entry processing - filter and publish
