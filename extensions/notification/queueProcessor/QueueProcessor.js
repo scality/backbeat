@@ -123,6 +123,7 @@ class QueueProcessor extends EventEmitter {
         try {
             this.bnConfigManager = new NotificationConfigManager({
                 mongoConfig: this.mongoConfig,
+                bucketMetastore: this.notifConfig.bucketMetastore,
                 zkClient: this.zkClient,
                 logger: this.logger,
             });

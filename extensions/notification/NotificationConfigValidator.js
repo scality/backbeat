@@ -36,6 +36,7 @@ const joiSchema = joi.object({
     destinations: joi.array().items(destinationSchema).default([]),
     probeServer: probeServerJoi.default(),
     ignoreEmptyEvents: joi.boolean().default(true),
+    bucketMetastore: joi.string().default('__metastore'),
 });
 
 function configValidator(backbeatConfig, extConfig) {
