@@ -91,10 +91,11 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     /**
      * Process bucket entry from the log
      *
+     * @param {string} bucket - bucket name from log entry
      * @param {Object} value - log entry object
      * @return {undefined}
      */
-    _processBucketEntry(value) {
+    _processBucketEntry(bucket, value) {
         const bucketName = this._getBucketNameFromAttributes(value);
         const notificationConfiguration
             = this._getBucketNotificationConfiguration(value);
@@ -108,8 +109,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             this.bnConfigManager.setConfig(bucketName, bnConfig);
             return undefined;
         }
-        // bucket notification conf has been removed, so remove zk node
-        return this.bnConfigManager.removeConfig(bucketName);
+        // bucket was deleter or notification conf has been removed, so remove zk node
+        return this.bnConfigManager.removeConfig(bucketName || bucket);
     }
 
     /**
@@ -328,7 +329,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         }
         // bucket notification configuration updates
         if (bucket && result && this._isBucketEntry(bucket, key)) {
-            this._processBucketEntry(result);
+            this._processBucketEntry(key, result);
             return cb();
         }
         // object entry processing - filter and publish
