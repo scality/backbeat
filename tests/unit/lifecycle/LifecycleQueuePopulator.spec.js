@@ -375,7 +375,10 @@ describe('LifecycleQueuePopulator', () => {
             lcqp = new LifecycleQueuePopulator(params);
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
         });
-        it('it should call _handleDeleteOp on delete message', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+        it('should call _handleDeleteOp on delete message', () => {
             const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
             lcqp.filter({
                 type: 'delete',

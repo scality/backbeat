@@ -28,6 +28,7 @@
     },
     "extensions": {
         "notification": {
+            "bucketMetastore": "__metastore",
             "topic": "backbeat-bucket-notification",
             "monitorNotificationFailures": true,
             "queueProcessor": {

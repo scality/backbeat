@@ -111,7 +111,7 @@ describe('ListRecordStream', () => {
     });
 
     describe('_transform', () => {
-        it('should correct format entry', done => {
+        it('should return correct format entry', done => {
             const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
             listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
@@ -130,10 +130,39 @@ describe('ListRecordStream', () => {
                 return done();
             });
         });
+
         it('should skip record if format is invalid', done => {
             const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
-            const InvalidKafkaMessage = getKafkaMessage('');
+            const InvalidKafkaMessage = getKafkaMessage('}{');
             listRecordStream.write(InvalidKafkaMessage);
+            listRecordStream.write(kafkaMessage);
+            listRecordStream.once('data', data => {
+                // Streams guarantee that data is kept in the
+                // same order when writing and reading it.
+                // This means that if the function doesn't work
+                // as intended and processed the invalid
+                // event it should be read in first by this event
+                // handler which'll fail the test
+                assert.deepEqual(data, {
+                    timestamp: new Date(kafkaMessage.timestamp),
+                    db: 'example-bucket',
+                    entries: [{
+                        key: 'example-key',
+                        type: 'put',
+                        value: JSON.stringify({
+                            field: 'value'
+                        }),
+                        timestamp: '2023-11-29T15:05:57.000Z',
+                    }],
+                });
+                return done();
+            });
+        });
+
+        it('should skip empty record', done => {
+            const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
+            const EmptyKafkaMessage = getKafkaMessage('{}');
+            listRecordStream.write(EmptyKafkaMessage);
             listRecordStream.write(kafkaMessage);
             listRecordStream.once('data', data => {
                 // Streams guarantee that data is kept in the
