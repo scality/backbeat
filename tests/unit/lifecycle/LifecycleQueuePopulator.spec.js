@@ -375,7 +375,10 @@ describe('LifecycleQueuePopulator', () => {
             lcqp = new LifecycleQueuePopulator(params);
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
         });
-        it('it should call _handleDeleteOp on delete message', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+        it('should call _handleDeleteOp on delete message', () => {
             const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
             lcqp.filter({
                 type: 'delete',
@@ -384,6 +387,17 @@ describe('LifecycleQueuePopulator', () => {
                 value: JSON.stringify(templateEntry),
             });
             assert(handleDeleteStub.calledOnce);
+        });
+
+        it('should skip when entry has no metadata', () => {
+            const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
+            lcqp.filter({
+                type: 'delete',
+                bucket: 'lc-queue-populator-test-bucket',
+                key: 'hosts\x0098500086134471999999RG001  0',
+                value: null,
+            });
+            assert(handleDeleteStub.notCalled);
         });
     });
 

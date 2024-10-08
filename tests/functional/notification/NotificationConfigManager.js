@@ -34,6 +34,7 @@ const notificationConfigurationVariant = {
 describe('NotificationConfigManager ::', () => {
     const params = {
         mongoConfig,
+        bucketMetastore: '__metastore',
         logger,
     };
     let manager;
@@ -71,28 +72,33 @@ describe('NotificationConfigManager ::', () => {
     it('getConfig should return correct value', async () => {
         // should store new configs in cache
         const config = await manager.getConfig('example-bucket-1');
-        assert.deepEqual(config, notificationConfiguration);
+        assert.deepEqual(config, {
+            bucket: 'example-bucket-1',
+            notificationConfiguration,
+        });
     });
 
     it('Cache should store new configs', async () => {
+        const backend = manager._configManagerBackend;
         // cache should initially be empty
-        assert.strictEqual(manager._cachedConfigs.count(), 0);
+        assert.strictEqual(backend._cachedConfigs.count(), 0);
         // should store new configs in cache
         await manager.getConfig('example-bucket-1');
-        assert.strictEqual(manager._cachedConfigs.count(), 1);
-        assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+        assert.strictEqual(backend._cachedConfigs.count(), 1);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'),
             notificationConfiguration);
         await manager.getConfig('example-bucket-2');
-        assert.deepEqual(manager._cachedConfigs.get('example-bucket-2'),
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'),
             notificationConfiguration);
-        assert.strictEqual(manager._cachedConfigs.count(), 2);
+        assert.strictEqual(backend._cachedConfigs.count(), 2);
         // should retreive config fom cache without re-adding it
         await manager.getConfig('example-bucket-1');
-        assert.strictEqual(manager._cachedConfigs.count(), 2);
+        assert.strictEqual(backend._cachedConfigs.count(), 2);
     });
 
     it('Cache should be invalidated when change stream event occurs (delete event)',
         async () => {
+        const backend = manager._configManagerBackend;
         // adding configs to cache
         await manager.getConfig('example-bucket-1');
         await manager.getConfig('example-bucket-2');
@@ -104,15 +110,16 @@ describe('NotificationConfigManager ::', () => {
                 _id: 'example-bucket-1',
             },
         };
-        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
+        backend._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
-        assert.strictEqual(manager._cachedConfigs.count(), 1);
-        assert.strictEqual(manager._cachedConfigs.get('example-bucket-1'), undefined);
-        assert(manager._cachedConfigs.get('example-bucket-2'));
+        assert.strictEqual(backend._cachedConfigs.count(), 1);
+        assert.strictEqual(backend._cachedConfigs.get('example-bucket-1'), undefined);
+        assert(backend._cachedConfigs.get('example-bucket-2'));
     });
 
     it('Cache should be invalidated when change stream event occurs (replace/update events)',
         async () => {
+        const backend = manager._configManagerBackend;
         // adding configs to cache
         await manager.getConfig('example-bucket-1');
         await manager.getConfig('example-bucket-2');
@@ -130,17 +137,17 @@ describe('NotificationConfigManager ::', () => {
                 }
             }
         };
-        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
+        backend._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
         // cached config for "example-bucket-1" should be invalidated
-        assert.strictEqual(manager._cachedConfigs.count(), 2);
-        assert.deepEqual(manager._cachedConfigs.get('example-bucket-1'),
+        assert.strictEqual(backend._cachedConfigs.count(), 2);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-1'),
             notificationConfigurationVariant);
         // update event should yield the same results
         changeStreamEvent.operationType = 'update';
         changeStreamEvent.fullDocument._id = 'example-bucket-2';
-        manager._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
-        assert.strictEqual(manager._cachedConfigs.count(), 2);
-        assert.deepEqual(manager._cachedConfigs.get('example-bucket-2'),
+        backend._metastoreChangeStream._changeStream.emit('change', changeStreamEvent);
+        assert.strictEqual(backend._cachedConfigs.count(), 2);
+        assert.deepEqual(backend._cachedConfigs.get('example-bucket-2'),
             notificationConfiguration);
     });
 });

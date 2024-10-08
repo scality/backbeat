@@ -518,7 +518,7 @@ describe('Notification configuration util', () => {
                 const bnConfig
                     = getBucketNotifConfig(test.entry.bucket, configMap);
                 const result
-                    = notifConfUtil.validateEntry(bnConfig.notificationConfiguration, test.entry);
+                    = notifConfUtil.validateEntry(bnConfig, test.entry);
                 assert.strictEqual(test.pass, result.isValid);
                 if (test.pass) {
                     assert.deepStrictEqual(test.expectedMatchingConfig, result.matchingConfig);

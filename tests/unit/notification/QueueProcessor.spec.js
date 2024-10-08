@@ -9,7 +9,7 @@ describe('notification QueueProcessor', () => {
     let qp;
 
     before(done => {
-        qp = new QueueProcessor(null, null, {
+        qp = new QueueProcessor(null, null, null, {
             destinations: [
                 {
                     resource: 'destId',
@@ -17,22 +17,22 @@ describe('notification QueueProcessor', () => {
                 },
             ],
         }, 'destId', null);
-        qp._getConfig = (bucket, cb) => cb(null, {
-            queueConfig: [
-                {
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    events: [
-                        's3:ObjectCreated:*',
-                    ],
-                },
-            ],
-        });
         qp.bnConfigManager = {
             setConfig: () => {},
+            getConfig: (bucket, cb) => cb(null, {
+                bucket: 'mybucket',
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            events: [
+                                's3:ObjectCreated:*',
+                            ],
+                        },
+                    ],
+                },
+            })
         };
-        qp.bnConfigManager.setConfig('mybucket', {
-            host: 'foo',
-        });
         qp._setupDestination('kafka', done);
     });
 
@@ -175,7 +175,7 @@ describe('notification QueueProcessor with multiple rules', () => {
     let sendStub;
 
     before(done => {
-        qp = new QueueProcessor(null, null, {
+        qp = new QueueProcessor(null, null, null, {
             destinations: [
                 {
                     resource: 'destId',
@@ -184,34 +184,36 @@ describe('notification QueueProcessor with multiple rules', () => {
             ],
         }, 'destId', null);
 
-        qp._getConfig = (bucket, cb) => cb(null, {
-            queueConfig: [
-                {
-                    events: ['s3:ObjectCreated:*'],
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    id: '0',
-                    filterRules: [
+        qp.bnConfigManager = {
+            setConfig: () => {},
+            getConfig: (bucket, cb) => cb(null, {
+                bucket: 'mybucket',
+                notificationConfiguration: {
+                    queueConfig: [
                         {
-                            name: 'Prefix',
-                            value: 'toto/',
-                        },
-                    ],
-                }, {
-                    events: ['s3:ObjectCreated:*'],
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    id: '1',
-                    filterRules: [
-                        {
-                            name: 'Prefix',
-                            value: 'tata/',
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                            ],
+                        }, {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '1',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'tata/',
+                                },
+                            ],
                         },
                     ],
                 },
-            ],
-        });
-
-        qp.bnConfigManager = {
-            setConfig: () => {},
+            }),
         };
 
         qp._setupDestination('kafka', done);
@@ -360,7 +362,7 @@ describe('notification QueueProcessor with one rule filtering by prefix and suff
     let sendStub;
 
     before(done => {
-        qp = new QueueProcessor(null, null, {
+        qp = new QueueProcessor(null, null, null, {
             destinations: [
                 {
                     resource: 'destId',
@@ -369,28 +371,30 @@ describe('notification QueueProcessor with one rule filtering by prefix and suff
             ],
         }, 'destId', null);
 
-        qp._getConfig = (bucket, cb) => cb(null, {
-            queueConfig: [
-                {
-                    events: ['s3:ObjectCreated:*'],
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    id: '0',
-                    filterRules: [
+        qp.bnConfigManager = {
+            setConfig: () => {},
+            getConfig: (bucket, cb) => cb(null, {
+                bucket: 'mybucket',
+                notificationConfiguration: {
+                    queueConfig: [
                         {
-                            name: 'Prefix',
-                            value: 'toto/',
-                        },
-                        {
-                            name: 'Suffix',
-                            value: '.png',
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                                {
+                                    name: 'Suffix',
+                                    value: '.png',
+                                },
+                            ],
                         },
                     ],
                 },
-            ],
-        });
-
-        qp.bnConfigManager = {
-            setConfig: () => {},
+            }),
         };
 
         qp._setupDestination('kafka', done);
@@ -505,7 +509,7 @@ describe('notification QueueProcessor with multiple rules and object matching al
     let sendStub;
 
     before(done => {
-        qp = new QueueProcessor(null, null, {
+        qp = new QueueProcessor(null, null, null, {
             destinations: [
                 {
                     resource: 'destId',
@@ -514,34 +518,36 @@ describe('notification QueueProcessor with multiple rules and object matching al
             ],
         }, 'destId', null);
 
-        qp._getConfig = (bucket, cb) => cb(null, {
-            queueConfig: [
-                {
-                    events: ['s3:ObjectCreated:*'],
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    id: '0',
-                    filterRules: [
+        qp.bnConfigManager = {
+            setConfig: () => {},
+            getConfig: (bucket, cb) => cb(null, {
+                bucket: 'mybucket',
+                notificationConfiguration: {
+                    queueConfig: [
                         {
-                            name: 'Prefix',
-                            value: 'toto/',
-                        },
-                    ],
-                }, {
-                    events: ['s3:ObjectCreated:*'],
-                    queueArn: 'arn:scality:bucketnotif:::destId',
-                    id: '1',
-                    filterRules: [
-                        {
-                            name: 'Suffix',
-                            value: '.png',
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '0',
+                            filterRules: [
+                                {
+                                    name: 'Prefix',
+                                    value: 'toto/',
+                                },
+                            ],
+                        }, {
+                            events: ['s3:ObjectCreated:*'],
+                            queueArn: 'arn:scality:bucketnotif:::destId',
+                            id: '1',
+                            filterRules: [
+                                {
+                                    name: 'Suffix',
+                                    value: '.png',
+                                },
+                            ],
                         },
                     ],
                 },
-            ],
-        });
-
-        qp.bnConfigManager = {
-            setConfig: () => {},
+            }),
         };
 
         qp._setupDestination('kafka', done);
@@ -616,7 +622,7 @@ describe('notification QueueProcessor destination id not matching the rule desti
     let sendStub;
 
     before(done => {
-        qp = new QueueProcessor(null, null, {
+        qp = new QueueProcessor(null, null, null, {
             destinations: [
                 {
                     resource: 'destId',
@@ -642,18 +648,24 @@ describe('notification QueueProcessor destination id not matching the rule desti
         ];
 
         mismatchedARN.forEach(arn => {
-            qp._getConfig = (bucket, cb) => cb(null, {
-                queueConfig: [
-                    {
-                        events: ['s3:ObjectCreated:*'],
-                        queueArn: arn,
-                        id: '0',
-                        filterRules: [
-                            { name: 'Prefix', value: 'toto/' },
+            qp.bnConfigManager = {
+                setConfig: () => {},
+                getConfig: (bucket, cb) => cb(null, {
+                    bucket: 'mybucket',
+                    notificationConfiguration: {
+                        queueConfig: [
+                            {
+                                events: ['s3:ObjectCreated:*'],
+                                queueArn: arn,
+                                id: '0',
+                                filterRules: [
+                                    { name: 'Prefix', value: 'toto/' },
+                                ],
+                            },
                         ],
                     },
-                ],
-            });
+                }),
+            };
 
             const kafkaEntry = {
                 value: JSON.stringify({
