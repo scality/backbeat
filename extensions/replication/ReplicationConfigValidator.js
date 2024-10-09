@@ -71,7 +71,7 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
-        probeServer: probeServerJoi.alternatives().try(
+        probeServer: joi.alternatives().try(
             probeServerJoi,
             probeServerPerSite
         ).default(),
