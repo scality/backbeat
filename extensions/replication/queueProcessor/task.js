@@ -243,7 +243,7 @@ function initAndStart(zkClient) {
          * Get probe config will pull the configuration for the probe server based on
          * the provided site key, and if the probe server config is not an array, it will
          * return the global probe server config.
-         * 
+         *
          *  Get the probe server config for the first site in the site names list,
          *  as if the probeConfig is an array there is only one element in site names
          *
