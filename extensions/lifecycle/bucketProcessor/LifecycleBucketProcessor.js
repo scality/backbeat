@@ -456,12 +456,18 @@ class LifecycleBucketProcessor {
             done => this._initKafkaBacklogMetrics(done),
             done => this._setupConsumer(done),
             done => {
-                this._locationStatusStream = new LocationStatusStream('lifecycle',
-                    this._mongoConfig,
-                    this._pauseServiceForLocation.bind(this),
-                    this._resumeServiceForLocation.bind(this),
-                    this._log);
-                this._locationStatusStream.start(done);
+                if (this._mongoConfig) {
+                    this._locationStatusStream = new LocationStatusStream(
+                        'lifecycle',
+                        this._mongoConfig,
+                        this._pauseServiceForLocation.bind(this),
+                        this._resumeServiceForLocation.bind(this),
+                        this._log
+                    );
+                    this._locationStatusStream.start(done);
+                } else {
+                    done();
+                }
             }
         ], done);
     }
