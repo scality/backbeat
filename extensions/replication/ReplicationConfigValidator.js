@@ -1,7 +1,7 @@
 const fs = require('fs');
 const joi = require('joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
-        retryParamsJoi, probeServerJoi } =
+        retryParamsJoi, probeServerJoi, probeServerPerSite } =
     require('../../lib/config/configItems.joi');
 
 const qpRetryJoi = joi.object({
