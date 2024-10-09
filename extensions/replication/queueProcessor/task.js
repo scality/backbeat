@@ -243,23 +243,24 @@ function initAndStart(zkClient) {
          * Get probe config will pull the configuration for the probe server based on
          * the provided site key, and if the probe server config is not an array, it will
          * return the global probe server config.
+         * 
+         *  Get the probe server config for the first site in the site names list,
+         *  as if the probeConfig is an array there is only one element in site names
          *
          * @param {Object} queueProcessorConfig - Configuration of the queue processor that
          *      holds the probe server configs for all sites
-         * @param {string} site - Name of the site we are processing
+         * @param {Array<String>} siteNames - List of site names
          * @returns {ProbeServerConfig} Config for site or global config
          */
-        function getProbeConfig(queueProcessorConfig, site) {
-            if (Array.isArray(queueProcessorConfig.probeServer) && site) {
-                return queueProcessorConfig.probeServer.filter(probe => probe.site === site)[0];
+        function getProbeConfig(queueProcessorConfig, siteNames) {
+            if (Array.isArray(queueProcessorConfig.probeServer) && siteNames[0]) {
+                return queueProcessorConfig.probeServer.filter(probe => probe.site === siteNames[0])[0];
             }
             return queueProcessorConfig.probeServer;
         }
 
         startProbeServer(
-            // get the probe server config for the first site in the bootstrap list,
-            // as if the probeConfig is an array there is only one element in bootstrap list
-            getProbeConfig(repConfig.queueProcessor, bootstrapList[0].site),
+            getProbeConfig(repConfig.queueProcessor, siteNames),
             (err, probeServer) => {
                 if (err) {
                     log.fatal('error creating probe server', {
