@@ -593,5 +593,138 @@ describe('Lifecycle Conductor', () => {
                 done();
             });
         });
+
+        it('should not use any filter when listing from from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                bucketSource: 'mongodb',
+            }, []);
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    hasNext: sinon.stub().resolves(false),
+                })
+            });
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({ find: findStub })
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                assert.deepEqual(findStub.getCall(0).args[0], {});
+                done();
+            });
+        });
+
+        it('should filter by account when listing from from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                accountsDenied: [`${accountName1}:${account1}`],
+                bucketSource: 'mongodb',
+            }, []);
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    hasNext: sinon.stub().resolves(false),
+                })
+            });
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({ find: findStub })
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                assert.deepEqual(findStub.getCall(0).args[0], {
+                    'value.owner': {
+                        $nin: [
+                            'ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143',
+                        ],
+                    },
+                });
+                done();
+            });
+        });
+
+        it('should filter by bucket when listing from from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                bucketsDenied: [bucket2],
+                bucketSource: 'mongodb',
+            }, []);
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    hasNext: sinon.stub().resolves(false),
+                })
+            });
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({ find: findStub })
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                assert.deepEqual(findStub.getCall(0).args[0], {
+                    _id: {
+                        $nin: ['bucket2'],
+                    },
+                });
+                done();
+            });
+        });
+
+        it('should use the resume marker when listing from from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                bucketSource: 'mongodb',
+            }, []);
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    hasNext: sinon.stub().resolves(false),
+                })
+            });
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({ find: findStub })
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, Buffer.from('bucket1'), null);
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                assert.deepEqual(findStub.getCall(0).args[0], {
+                    _id: {
+                        $gt: 'bucket1',
+                    },
+                });
+                done();
+            });
+        });
+
+        it('should filter by account and bucket when listing from from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                accountsDenied: [`${accountName1}:${account1}`],
+                bucketsDenied: [bucket2],
+                bucketSource: 'mongodb',
+            }, []);
+            const findStub = sinon.stub().returns({
+                project: () => ({
+                    hasNext: sinon.stub().resolves(false),
+                })
+            });
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1', 'job2']),
+                getCollection: () => ({ find: findStub })
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, Buffer.from('bucket1'), null);
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                assert.deepEqual(findStub.getCall(0).args[0], {
+                    '_id': {
+                        $gt: 'bucket1',
+                        $nin: ['bucket2'],
+                    },
+                    'value.owner': {
+                        $nin: [
+                            'ab288756448dc58f61482903131e7ae533553d20b52b0e2ef80235599a1b9143',
+                        ],
+                    },
+                });
+                done();
+            });
+        });
     });
 });

@@ -705,11 +705,25 @@ class LifecycleConductor {
                     lastSentVersion = stat.version;
                 }
 
+                const filter = {};
+                if (entry) {
+                    filter._id = { $gt: entry };
+                }
+
+                if (this.accountsBlacklisted.size > 0) {
+                    filter['value.owner'] = { $nin: Array.from(this.accountsBlacklisted) };
+                }
+
+                if (this.bucketsBlacklisted.size > 0) {
+                    filter._id = {
+                        ...filter._id,
+                        $nin: Array.from(this.bucketsBlacklisted),
+                   };
+                }
+
                 const cursor = this._mongodbClient
                     .getCollection('__metastore')
-                    .find(
-                        entry ? { _id: { $gt: entry } } : {}
-                    )
+                    .find(filter)
                     .project({ '_id': 1, 'value.owner': 1, 'value.lifecycleConfiguration': 1 });
 
                 return done(null, cursor);
@@ -718,8 +732,8 @@ class LifecycleConductor {
                 async.during(
                     test => process.nextTick(
                         () => cursor.hasNext()
-                            .then(res => test(null, res))
-                            .catch(test)),
+                        .then(res => test(null, res))
+                        .catch(test)),
                     next => {
                         const breakerState = this._circuitBreaker.state;
                         const queueInfo = {
