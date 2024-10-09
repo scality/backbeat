@@ -243,7 +243,7 @@ function initAndStart(zkClient) {
          * Get probe config will pull the configuration for the probe server based on
          * the provided site key, and if the probe server config is not an array, it will
          * return the global probe server config.
-         * 
+         *
          * @param {Object} queueProcessorConfig - Configuration of the queue processor that
          *      holds the probe server configs for all sites
          * @param {string} site - Name of the site we are processing
