@@ -4,6 +4,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const async = require('async');
 
+const LocationStatusStream = require('../../../extensions/utils/LocationStatusStream');
 const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
 
@@ -270,6 +271,44 @@ describe('Lifecycle Bucket Processor', () => {
                     assert(opts.validateTask(tasks[0]));
                     done();
                 });
+            });
+        });
+    });
+
+    describe('start', () => {
+        let setupProducerStub;
+        let initKafkaBacklogMetricsStub;
+        let setupConsumerStub;
+        let startStub;
+
+        beforeEach(() => {
+            setupProducerStub = sinon.stub(lbp, '_setupProducer').callsFake(cb => cb());
+            initKafkaBacklogMetricsStub = sinon.stub(lbp, '_initKafkaBacklogMetrics').callsFake(cb => cb());
+            setupConsumerStub = sinon.stub(lbp, '_setupConsumer').callsFake(cb => cb());
+            startStub = sinon.stub(LocationStatusStream.prototype, 'start').callsFake(cb => cb());
+        });
+
+        it('should call LocationStatusStream.start when mongoConfig is set', done => {
+            lbp._mongoConfig = mongoConfig;
+            lbp.start(err => {
+                assert.ifError(err);
+                assert(setupProducerStub.calledOnce);
+                assert(initKafkaBacklogMetricsStub.calledOnce);
+                assert(setupConsumerStub.calledOnce);
+                assert(startStub.calledOnce);
+                done();
+            });
+        });
+
+        it('should not call LocationStatusStream.start when mongoConfig is not set', done => {
+            lbp._mongoConfig = null;
+            lbp.start(err => {
+                assert.ifError(err);
+                assert(setupProducerStub.calledOnce);
+                assert(initKafkaBacklogMetricsStub.calledOnce);
+                assert(setupConsumerStub.calledOnce);
+                assert(startStub.notCalled);
+                done();
             });
         });
     });
