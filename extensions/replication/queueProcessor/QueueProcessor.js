@@ -753,8 +753,9 @@ class QueueProcessor extends EventEmitter {
                 if (options && options.disableConsumer) {
                     return done();
                 }
-                if (this.isReplayTopic) {
+                if (this.isReplayTopic || !this.repConfig.dataMoverTopic) {
                     // Do not process dataMover topic in replay processors
+                    // or if dataMover topic is not configured
                     return done();
                 }
                 this._dataMoverConsumer = this._createConsumer(
