@@ -22,7 +22,7 @@ const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
-const { startProbeServer } = require('../../../lib/util/probe');
+const { startProbeServer, getProbeConfig } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
@@ -153,28 +153,6 @@ function setupZkSiteNode(qp, zkClient, site, done) {
         }
         return done(null, { paused: false });
     });
-}
-
-/**
- * Get probe config will pull the configuration for the probe server based on
- * the provided site key, and if the probe server config is not an array, it will
- * return the global probe server config.
- *
- *  Get the probe server config for the first site in the site names list,
- *  as if the probeConfig is an array there is only one element in site names
- *
- * @param {Object} queueProcessorConfig - Configuration of the queue processor that
- *      holds the probe server configs for all sites
- * @param {Array<String>} siteNames - List of site names
- * @returns {ProbeServerConfig} Config for site or global config
- */
-function getProbeConfig(queueProcessorConfig, siteNames) {
-    if (Array.isArray(queueProcessorConfig.probeServer) &&
-    queueProcessorConfig.probeServer.length > 0 &&
-    siteNames.length > 0) {
-        return queueProcessorConfig.probeServer.filter(probe => probe.site === siteNames[0])[0];
-    }
-    return queueProcessorConfig.probeServer;
 }
 
 function initAndStart(zkClient) {

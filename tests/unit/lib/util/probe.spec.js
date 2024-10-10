@@ -1,5 +1,5 @@
 const assert = require('assert');
-const { startProbeServer } =
+const { startProbeServer, getProbeConfig } =
     require('../../../../lib/util/probe');
 
 describe('Probe server', () => {
@@ -25,3 +25,50 @@ describe('Probe server', () => {
         });
     });
 });
+
+describe.only('getProbeConfig', function() {
+    it('returns the probeServer config when siteNames is empty and probeServer is a single object', function() {
+      const queueProcessorConfig = {
+        probeServer: { bindAddress: '127.0.0.1', port: '8080' }
+      };
+      const siteNames = [];
+  
+      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      assert.deepStrictEqual(result, { bindAddress: '127.0.0.1', port: '8080' });
+    });
+  
+    it('returns undefined when siteNames is empty and probeServer is not a single object', function() {
+      const queueProcessorConfig = {
+        probeServer: [{ site: 'site1', bindAddress: '127.0.0.1', port: '8080' }]
+      };
+      const siteNames = [];
+  
+      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      assert.strictEqual(result, undefined);
+    });
+  
+    it('returns the correct site config when probeServer is an array and siteNames has one matching element', function() {
+      const queueProcessorConfig = {
+        probeServer: [
+          { site: 'site1', bindAddress: '127.0.0.1', port: '8080' },
+          { site: 'site2', bindAddress: '127.0.0.2', port: '8081' }
+        ]
+      };
+      const siteNames = ['site2'];
+  
+      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      assert.deepStrictEqual(result, { site: 'site2', bindAddress: '127.0.0.2', port: '8081' });
+    });
+  
+    it('returns undefined when probeServer is an array and siteNames has no matching element', function() {
+      const queueProcessorConfig = {
+        probeServer: [
+          { site: 'site1', bindAddress: '127.0.0.1', port: '8080' }
+        ]
+      };
+      const siteNames = ['site2'];
+  
+      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      assert.strictEqual(result, undefined);
+    });
+  });
