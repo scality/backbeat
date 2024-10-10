@@ -71,4 +71,27 @@ describe('getProbeConfig', () => {
       const result = getProbeConfig(queueProcessorConfig, siteNames);
       assert.strictEqual(result, undefined);
     });
+
+    it('returns undefined when siteNames contains more than one element', () => {
+        const queueProcessorConfig = {
+            probeServer: [
+                { site: 'site1', bindAddress: '127.0.0.1', port: '8080' },
+                { site: 'site2', bindAddress: '127.0.0.2', port: '8081' }
+            ]
+        };
+        const siteNames = ['site1', 'site2']; // More than one element in siteNames
+
+        const result = getProbeConfig(queueProcessorConfig, siteNames);
+        assert.strictEqual(result, undefined);
+    });
+
+    it('returns undefined when probeServer is not an array and siteNames is not empty', () => {
+        const queueProcessorConfig = {
+            probeServer: { bindAddress: '127.0.0.1', port: '8080' } // probeServer is a single object
+        };
+        const siteNames = ['site1']; // siteNames is not empty
+
+        const result = getProbeConfig(queueProcessorConfig, siteNames);
+        assert.strictEqual(result, undefined);
+    });
   });
