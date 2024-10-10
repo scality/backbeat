@@ -785,7 +785,7 @@ class LifecycleConductor {
             // in-progress immediately.
             dataMoverCheck:
             next => this._kafkaBacklogMetrics.checkConsumerProgress(
-                this.repConfig.dataMoverTopic, null, 'lifecycle', next),
+                "blababla-topic", null, 'lifecycle', next),
         }, (err, checkResults) => {
             if (err) {
                 return done(err);
