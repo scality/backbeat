@@ -26,28 +26,28 @@ describe('Probe server', () => {
     });
 });
 
-describe.only('getProbeConfig', function() {
-    it('returns the probeServer config when siteNames is empty and probeServer is a single object', function() {
+describe('getProbeConfig', () => {
+    it('returns the probeServer config when siteNames is empty and probeServer is a single object', () => {
       const queueProcessorConfig = {
         probeServer: { bindAddress: '127.0.0.1', port: '8080' }
       };
       const siteNames = [];
-  
+
       const result = getProbeConfig(queueProcessorConfig, siteNames);
       assert.deepStrictEqual(result, { bindAddress: '127.0.0.1', port: '8080' });
     });
-  
-    it('returns undefined when siteNames is empty and probeServer is not a single object', function() {
+
+    it('returns undefined when siteNames is empty and probeServer is not a single object', () => {
       const queueProcessorConfig = {
         probeServer: [{ site: 'site1', bindAddress: '127.0.0.1', port: '8080' }]
       };
       const siteNames = [];
-  
+
       const result = getProbeConfig(queueProcessorConfig, siteNames);
       assert.strictEqual(result, undefined);
     });
-  
-    it('returns the correct site config when probeServer is an array and siteNames has one matching element', function() {
+
+    it('returns the correct site config when probeServer is an array and siteNames has one matching element', () => {
       const queueProcessorConfig = {
         probeServer: [
           { site: 'site1', bindAddress: '127.0.0.1', port: '8080' },
@@ -55,19 +55,19 @@ describe.only('getProbeConfig', function() {
         ]
       };
       const siteNames = ['site2'];
-  
+
       const result = getProbeConfig(queueProcessorConfig, siteNames);
       assert.deepStrictEqual(result, { site: 'site2', bindAddress: '127.0.0.2', port: '8081' });
     });
-  
-    it('returns undefined when probeServer is an array and siteNames has no matching element', function() {
+
+    it('returns undefined when probeServer is an array and siteNames has no matching element', () => {
       const queueProcessorConfig = {
         probeServer: [
           { site: 'site1', bindAddress: '127.0.0.1', port: '8080' }
         ]
       };
       const siteNames = ['site2'];
-  
+
       const result = getProbeConfig(queueProcessorConfig, siteNames);
       assert.strictEqual(result, undefined);
     });
