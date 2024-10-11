@@ -360,4 +360,18 @@ describe('MongoConfigManager ::', () => {
             assert.strictEqual(config, undefined);
         });
     });
+
+    describe('setConfig ::', () =>  {
+        it('should always return false', async () => {
+            const manager = new MongoConfigManager(params);
+            assert.strictEqual(manager.setConfig('example-bucket-1', {}), false);
+        });
+    });
+
+    describe('removeConfig ::', () =>  {
+        it('should always return false', async () => {
+            const manager = new MongoConfigManager(params);
+            assert.strictEqual(manager.removeConfig('example-bucket-1'), false);
+        });
+    });
 });

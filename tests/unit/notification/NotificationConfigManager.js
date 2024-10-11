@@ -38,7 +38,6 @@ describe('NotificationConfigManager', () => {
 
             const manager = new NotificationConfigManager(params);
             assert(manager._configManagerBackend instanceof MongoConfigManager);
-            assert.strictEqual(manager._usesZookeeperBackend, false);
         });
 
         it('should use the zookeeper backend', () => {
@@ -99,10 +98,26 @@ describe('NotificationConfigManager', () => {
                 })
                 .catch(err => assert.ifError(err));
         });
+
+        it('should call callback when the promise resolves', done => {
+            const params = {
+                zkClient: {},
+                logger,
+            };
+            const manager = new NotificationConfigManager(params);
+
+            sinon.stub(manager._configManagerBackend, 'getConfig').resolves(bucketConfig);
+
+            manager.getConfig('bucket1', (err, result) => {
+                assert.ifError(err);
+                assert.strictEqual(result, bucketConfig);
+                done();
+            });
+        });
     });
 
     describe('setConfig', () => {
-        it('should do nothing if using a mongodb backend', () => {
+        it('should call setConfig of the backend', () => {
             const params = {
                 mongoConfig: {
                     database: 'eb1e786d-da1e-3fc5-83d2-46f083ab9764',
@@ -116,26 +131,14 @@ describe('NotificationConfigManager', () => {
             };
 
             const manager = new NotificationConfigManager(params);
-            manager._configManagerBackend.setConfig = sinon.stub().returns(true);
+            manager._configManagerBackend.setConfig = sinon.stub().returns(false);
             manager.setConfig('bucket1', bucketConfig);
-            assert(manager._configManagerBackend.setConfig.notCalled);
-        });
-
-        it('should call the zookeeper backend', () => {
-            const params = {
-                zkClient: {},
-                logger,
-            };
-
-            const manager = new NotificationConfigManager(params);
-            const stub = sinon.stub(manager._configManagerBackend, 'setConfig').returns(true);
-            manager.setConfig('bucket1', bucketConfig);
-            assert(stub.calledOnce);
+            assert(manager._configManagerBackend.setConfig.calledOnce);
         });
     });
 
     describe('removeConfig', () => {
-        it('should do nothing if using a mongodb backend', () => {
+        it('should call removeConfig of the backend', () => {
             const params = {
                 mongoConfig: {
                     database: 'eb1e786d-da1e-3fc5-83d2-46f083ab9764',
@@ -149,26 +152,14 @@ describe('NotificationConfigManager', () => {
             };
 
             const manager = new NotificationConfigManager(params);
-            manager._configManagerBackend.removeConfig = sinon.stub().returns(true);
-            manager.setConfig('bucket1');
-            assert(manager._configManagerBackend.removeConfig.notCalled);
-        });
-
-        it('should call the zookeeper backend', () => {
-            const params = {
-                zkClient: {},
-                logger,
-            };
-
-            const manager = new NotificationConfigManager(params);
-            const stub = sinon.stub(manager._configManagerBackend, 'removeConfig').returns(true);
+            manager._configManagerBackend.removeConfig = sinon.stub().returns(false);
             manager.removeConfig('bucket1');
-            assert(stub.calledOnce);
+            assert(manager._configManagerBackend.removeConfig.calledOnce);
         });
     });
 
     describe('setup', () => {
-        it('should call the setup method', done => {
+        it('should call the setup method of the backend', done => {
             const params = {
                 zkClient: {},
                 logger,
