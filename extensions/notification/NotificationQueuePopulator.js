@@ -201,7 +201,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
         if (overheadFields) {
             return overheadFields.opTimestamp || overheadFields.commitTimestamp || null;
         }
-        return value[notifConstants.eventMessageProperty.dateTime] || null;
+        return (value && value[notifConstants.eventMessageProperty.dateTime]) || null;
     }
 
     /**
