@@ -286,6 +286,24 @@ class MongoConfigManager {
             return undefined;
         }
     }
+
+    /**
+     * Set bucket notification configuration
+     * (Not implemted in the MongoDB backend)
+     * @return {boolean} - false
+     */
+    setConfig() {
+        return false;
+    }
+
+    /**
+     * Remove bucket notification configuration
+     * (Not implemted in the MongoDB backend)
+     * @return {boolean} - false
+     */
+    removeConfig() {
+        return false;
+    }
 }
 
 module.exports = MongoConfigManager;
