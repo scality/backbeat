@@ -9,9 +9,7 @@ const ZookeeperConfigManager = require('./configManager/ZookeeperConfigManager')
 class NotificationConfigManager {
 
     constructor(params) {
-        this._usesZookeeperBackend = false;
         const { mongoConfig, bucketMetastore, zkClient, logger } = params;
-
         if (mongoConfig) {
             this._configManagerBackend = new MongoConfigManager({
                 mongoConfig,
@@ -54,10 +52,7 @@ class NotificationConfigManager {
      * @return {boolean} - true if set
      */
     setConfig(bucket, config) {
-        if (this._usesZookeeperBackend) {
-            return this._configManagerBackend.setConfig(bucket, config);
-        }
-        return false;
+        return this._configManagerBackend.setConfig(bucket, config);
     }
 
     /**
@@ -68,10 +63,7 @@ class NotificationConfigManager {
      * @return {undefined}
      */
     removeConfig(bucket) {
-        if (this._usesZookeeperBackend) {
-            return this._configManagerBackend.removeConfig(bucket);
-        }
-        return false;
+        return this._configManagerBackend.removeConfig(bucket);
     }
 
     /**
