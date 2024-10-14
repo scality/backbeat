@@ -527,5 +527,29 @@ describe('Notification configuration util', () => {
                 }
             });
         });
+
+        it('should fail if the configuration is for another bucket', () => {
+            const config =  {
+                bucket: 'bucket1',
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            events: ['s3:ObjectCreated:Put'],
+                            queueArn: 'q1',
+                            filterRules: [],
+                            id: 'config1',
+                        },
+                    ],
+                },
+            };
+            const entry = {
+                eventType: 's3:ObjectCreated:Put',
+                bucket: 'bucket10',
+                key: 'test.png',
+            };
+            const result = notifConfUtil.validateEntry(config, entry);
+            assert.strictEqual(false, result.isValid);
+            assert(!result.matchingConfig);
+        });
     });
 });
