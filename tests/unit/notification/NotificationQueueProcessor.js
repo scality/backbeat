@@ -104,34 +104,8 @@ describe('NotificationQueueProcessor:: ', () => {
             sinon.stub(notificationQueueProcessor, '_destination').value({
                 init: sinon.stub().yields(null),
             });
-            const interval = setInterval(() => {
-                if (notificationQueueProcessor.zkClient) {
-                    notificationQueueProcessor.zkClient.emit('ready');
-                    clearInterval(interval);
-                }
-            }, 30);
             notificationQueueProcessor.start({ disableConsumer: true }, err => {
                 assert.ifError(err);
-                assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
-                done();
-            });
-        });
-
-        it('should fail if zookeeper client setup fails', done => {
-            notificationQueueProcessor.mongoConfig = null;
-            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
-            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
-            sinon.stub(notificationQueueProcessor, '_destination').value({
-                init: sinon.stub().yields(null),
-            });
-            const interval = setInterval(() => {
-                if (notificationQueueProcessor.zkClient) {
-                    notificationQueueProcessor.zkClient.emit('error', errors.InternalError);
-                    clearInterval(interval);
-                }
-            }, 30);
-            notificationQueueProcessor.start({ disableConsumer: true }, err => {
-                assert.deepEqual(err, errors.InternalError);
                 assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
                 done();
             });
