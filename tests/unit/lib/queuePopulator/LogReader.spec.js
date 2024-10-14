@@ -309,6 +309,7 @@ describe('LogReader', () => {
             logReader.processLogEntries({}, () => {});
             setTimeout(() => {
                 assert.strictEqual(emmitted, true);
+                assert.strictEqual(logReader.batchProcessTimedOut(), true);
                 done();
             }, 2000);
         }).timeout(4000);
@@ -325,6 +326,7 @@ describe('LogReader', () => {
             });
             logReader.processLogEntries({}, () => {
                 assert.strictEqual(emmitted, false);
+                assert.strictEqual(logReader.batchProcessTimedOut(), false);
                 done();
             });
         });
