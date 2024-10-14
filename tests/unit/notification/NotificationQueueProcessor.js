@@ -3,7 +3,9 @@ const werelogs = require('werelogs');
 const sinon = require('sinon');
 
 const NotificationQueueProcessor = require('../../../extensions/notification/queueProcessor/QueueProcessor');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const constants = require('../../../extensions/notification/constants');
+const { errors } = require('arsenal');
 
 const mongoConfig
     = require('../../config.notification.json').queuePopulator.mongo;
@@ -11,6 +13,8 @@ const kafkaConfig
     = require('../../config.notification.json').queuePopulator.kafka;
 const notificationConfig
     = require('../../config.notification.json').extensions.notification;
+const zookeeperConfig
+    = require('../../config.notification.json').zookeeper;
 
 const logger = new werelogs.Logger('NotificationQueueProcessor:test');
 
@@ -83,13 +87,68 @@ describe('NotificationQueueProcessor:: ', () => {
     let notificationQueueProcessor;
 
     beforeEach(() => {
-        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, {}, kafkaConfig,
+        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, zookeeperConfig, kafkaConfig,
             notificationConfig, notificationConfig.destinations[0].resource, null);
         notificationQueueProcessor.logger = logger;
     });
 
     afterEach(() => {
         sinon.restore();
+    });
+
+    describe('start', () => {
+        it('should setup zookeeper client when mongo is not configured', done => {
+            notificationQueueProcessor.mongoConfig = null;
+            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
+            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
+            sinon.stub(notificationQueueProcessor, '_destination').value({
+                init: sinon.stub().yields(null),
+            });
+            const interval = setInterval(() => {
+                if (notificationQueueProcessor.zkClient) {
+                    notificationQueueProcessor.zkClient.emit('ready');
+                    clearInterval(interval);
+                }
+            }, 30);
+            notificationQueueProcessor.start({ disableConsumer: true }, err => {
+                assert.ifError(err);
+                assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
+                done();
+            });
+        });
+
+        it('should fail if zookeeper client setup fails', done => {
+            notificationQueueProcessor.mongoConfig = null;
+            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
+            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
+            sinon.stub(notificationQueueProcessor, '_destination').value({
+                init: sinon.stub().yields(null),
+            });
+            const interval = setInterval(() => {
+                if (notificationQueueProcessor.zkClient) {
+                    notificationQueueProcessor.zkClient.emit('error', errors.InternalError);
+                    clearInterval(interval);
+                }
+            }, 30);
+            notificationQueueProcessor.start({ disableConsumer: true }, err => {
+                assert.deepEqual(err, errors.InternalError);
+                assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
+                done();
+            });
+        });
+
+        it('should not setup zookeeper client if mongo is configured', done => {
+            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
+            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
+            sinon.stub(notificationQueueProcessor, '_destination').value({
+                init: sinon.stub().yields(null),
+            });
+            notificationQueueProcessor.start({ disableConsumer: true }, err => {
+                assert.ifError(err);
+                assert.strictEqual(notificationQueueProcessor.zkClient, null);
+                done();
+            });
+        });
     });
 
     describe('processKafkaEntry ::', () => {
