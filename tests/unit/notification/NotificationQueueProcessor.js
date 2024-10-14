@@ -5,7 +5,6 @@ const sinon = require('sinon');
 const NotificationQueueProcessor = require('../../../extensions/notification/queueProcessor/QueueProcessor');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const constants = require('../../../extensions/notification/constants');
-const { errors } = require('arsenal');
 
 const mongoConfig
     = require('../../config.notification.json').queuePopulator.mongo;
@@ -104,6 +103,12 @@ describe('NotificationQueueProcessor:: ', () => {
             sinon.stub(notificationQueueProcessor, '_destination').value({
                 init: sinon.stub().yields(null),
             });
+            const interval = setInterval(() => {
+                if (notificationQueueProcessor.zkClient) {
+                    notificationQueueProcessor.zkClient.emit('ready');
+                    clearInterval(interval);
+                }
+            }, 30);
             notificationQueueProcessor.start({ disableConsumer: true }, err => {
                 assert.ifError(err);
                 assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
