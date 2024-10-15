@@ -843,7 +843,7 @@ describe('queue processor functional tests with mocking', () => {
                           objectSizeMetrics: [100, 1000],
                         },
                         {},
-                        { topic: 'metrics-test-topic' });
+                        { topic: 'metrics-test-topic' }, true);
                     replicationStatusProcessor.start({ bootstrap: true }, done);
                 },
                 done => {
