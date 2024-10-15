@@ -204,16 +204,28 @@ class MongoQueueProcessor {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
+
+        // Use x-amz-meta-scal-version-id if provided, instead of the actual versionId of the object.
+        // This should happen only for restored objects : in all other situations, both the source
+        // and ingested objects should have the same version id (and not x-amz-meta-scal-version-id
+        // metadata).
+        const versionId = entry.getValue()['x-amz-meta-scal-version-id'] || entry.getVersionId();
+
         // master keys with a 'null' version id comming from
         // a versioning suspended bucket are considered a version
         // we should not specify the version id in this case
-        if (entry.getVersionId() && !entry.getIsNull()) {
+        if (versionId && !entry.getIsNull()) {
             params.versionId = entry.getVersionId();
         }
 
-        return this._mongoClient.getObject(bucket, key, params, log,
-        (err, data) => {
+        return this._mongoClient.getObject(bucket, key, params, log, (err, data) => {
             if (err && err.NoSuchKey) {
+                // TODO: this may happen if the object was created from artesca side (e.g. on restore)
+                //       --> in that case, the versionId does not match, and we cannot find the object
+                //       --> yet we have the 'ring' versionId in the (zenko) entry's `location`
+                //           field, so we may try to look it up (get all versions, check the one with
+                //           where location is indeed in the RING and with the 'target' versionId)
+                // ....or we introduce a way to store the RING object with the target metadata
                 return done();
             }
             if (err) {
@@ -224,6 +236,23 @@ class MongoQueueProcessor {
                 });
                 return done(err);
             }
+
+            // Sanity check (esp. for restored objects case): verify that the object in the data
+            // location matches the object we ingested
+            if (data.location[0].dataStoreVersionId !== versionId) {
+                const err = new Error('version id mismatch');
+                log.error('error getting zenko object metadata', {
+                    method: 'MongoQueueProcessor._getZenkoObjectMetadata',
+                    err,
+                    entry: entry.getLogInfo(),
+                });
+                return done(err); // TODO: should we return an error here, or just consider a mismatch?
+            }
+
+            // Remove extra OOB restore metadata, if present
+            delete data['x-amz-meta-scal-version-id']; // eslint-disable-line no-param-reassign
+            delete data['x-amz-meta-scal-restore-info']; // eslint-disable-line no-param-reassign
+
             return done(null, data);
         });
     }
@@ -329,6 +358,8 @@ class MongoQueueProcessor {
      */
     _updateReplicationInfo(entry, bucketInfo, content, zenkoObjMd) {
         const bucketRepInfo = bucketInfo.getReplicationConfiguration();
+
+        // TODO: adjust `_updateReplicationInfo` for restored objects
 
         // reset first before attempting any other updates
         const objectMDModel = new ObjectMD();
@@ -627,6 +658,17 @@ class MongoQueueProcessor {
                         return done(err);
                     }
 
+                    // TODO: use getReducedLocation() ? or x-amz-storage-class ? or dataStoreName ?
+                    // * x-amz-storage-class --> will always indicate the "cold" location
+                    // * dataStoreName will be cold when archived, and "oob" when restored
+                    // ==> we update the data store name (and x-amz-storage-class) before actually
+                    //   removing the data so we should look at this: so we can ignore when there is
+                    //   a match (e.g. lifecycle gc) and process when the event when user deletes
+                    //   the (restored) object
+                    //
+                    // TODO: two cases for restored object to test
+                    // - expiring restored object from Sorbet --> delete from Zenko, should work fine...
+                    // - delete made on the ring (user deletes the object) --> need to be propagated to Zenko!
                     if (zenkoObjMd.dataStoreName !== location) {
                         log.end().info('skipping delete entry with location mismatch', {
                             entry: sourceEntry.getLogInfo(),
@@ -645,6 +687,10 @@ class MongoQueueProcessor {
             }
 
             if (sourceEntry instanceof ObjectQueueEntry) {
+                // TODO: need to handle "replacement" case, e.g. if new object (version) is created on the RING
+                // while the object is either restored or archived
+                // - this is versionned : so it will not depend on the "state" of the object
+                // - probably works fine, may simply not have the same versions on both sides...
                 return this._processObjectQueueEntry(log, sourceEntry, location, bucketInfo, err => {
                     this._handleMetrics(sourceEntry, !!err);
                     return done(err);
