@@ -3,7 +3,7 @@ const config = require('../../config.json');
 const LifecycleObjectTransitionProcessor =
     require('../../../extensions/lifecycle/objectProcessor/LifecycleObjectTransitionProcessor');
 
-describe('LifecycleObjectExpirationProcessor', () => {
+describe('LifecycleObjectTransitionProcessor', () => {
     let objectProcessor;
 
     beforeEach(() => {
@@ -22,5 +22,13 @@ describe('LifecycleObjectExpirationProcessor', () => {
             consumerParams[config.extensions.lifecycle.transitionTasksTopic].topic,
             config.extensions.lifecycle.transitionTasksTopic
         );
+    });
+
+    it('should set up gcProducer when start is called', done => {
+        objectProcessor.start(err => {
+            assert.ifError(err);
+            assert(objectProcessor._gcProducer, 'gcProducer should be set');
+            done();
+        });
     });
 });
