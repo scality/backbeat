@@ -1,5 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const stream = require('stream');
 
 const ZookeeperMock = require('zookeeper-mock');
 
@@ -23,6 +24,12 @@ class MockLogConsumer {
                 cb(null, {});
             }
         });
+    }
+}
+
+class MockRecordStream extends stream.PassThrough {
+    constructor() {
+        super({ objectMode: true });
     }
 }
 
@@ -362,6 +369,138 @@ describe('LogReader', () => {
             sinon.stub(logReader, '_processSaveLogOffset').yields();
             logReader.processLogEntries({}, () => {
                 assert.strictEqual(logReader.batchProcessTimedOut(), false);
+                done();
+            });
+        });
+    });
+
+    describe('_processPrepareEntries', () => {
+        it('should consume "batchState.maxRead" logs from tailable stream', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: true,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 3,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 5; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, true);
+                done();
+            });
+        });
+
+        it('should consume and return if tailable stream doesn\'t have enough records', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: true,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 30,
+                startTime: Date.now(),
+                timeoutMs: 100,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, false);
+                done();
+            });
+        });
+
+        it('should consume all logs from a non tailable streams', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: false,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 3,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            batchState.logRes.log.end();
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, true);
+                done();
+            });
+        });
+
+        it('should set hasMoreLog to false when a non tailable streams doesn\'t have enough records', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: false,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 5,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            batchState.logRes.log.end();
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, false);
                 done();
             });
         });

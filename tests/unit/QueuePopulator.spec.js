@@ -4,6 +4,7 @@ const sinon = require('sinon');
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 const constants = require('../../lib/constants');
+const { errors } = require('arsenal');
 
 describe('QueuePopulator', () => {
     let qp;
@@ -118,6 +119,75 @@ describe('QueuePopulator', () => {
                     },
                 ])
             );
+        });
+    });
+
+    describe('_processLogEntries', () => {
+        it('should process log records once when no more logs are available', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub().yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should process log records until no more logs are available', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledTwice);
+                return done();
+            });
+        });
+
+        it('should only process log records once if exhaustLogSource is set to false', done => {
+            qp.qpConfig.exhaustLogSource = false;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should only process log records once if the logReaders need to be updated', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp.logReadersUpdate = true;
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should forward logReader errors', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub().yields(errors.InternalError, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.deepEqual(err, errors.InternalError);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
         });
     });
 });
