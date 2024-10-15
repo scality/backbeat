@@ -490,6 +490,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     filter(entry) {
+        if (!entry.value) {
+            return undefined;
+        }
+
         if (entry.type === 'delete') {
             this._handleDeleteOp(entry);
             return undefined;
