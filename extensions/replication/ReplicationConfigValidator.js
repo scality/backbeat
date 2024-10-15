@@ -74,7 +74,7 @@ const joiSchema = joi.object({
         probeServer: joi.alternatives().try(
             probeServerJoi,
             probeServerPerSite
-        ).default({ bindAddress: 'localhost', port: '' }),
+        ).default({ bindAddress: 'localhost', port: 4042 }),
         circuitBreaker: joi.object().optional(),
     }).required(),
     replicationStatusProcessor: {
