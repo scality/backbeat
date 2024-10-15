@@ -377,7 +377,11 @@ function wrapAction(actionFunc, serviceName, options) {
 
     const log = new werelogs.Logger(process.argv[1]).newRequestLogger();
     const iamClient = createIAMClient(options.parent);
-    const stsClient = createSTSClient(options.parent);
+    let stsClient;
+
+    if (options.stsEndpoint) {
+        stsClient = createSTSClient(options.parent);
+    }
 
     actionFunc(iamClient, stsClient, serviceName, options.policy, log, (err, data) => {
         if (err) {
