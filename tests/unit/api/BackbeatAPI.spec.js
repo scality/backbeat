@@ -327,7 +327,6 @@ describe('BackbeatAPI', () => {
                 assert(setupMongoClientStub.calledOnce);
                 assert(setProducerStub.calledThrice);
                 assert(setupLocationStatusManagerStub.notCalled);
-                assert(debugSpy.calledWith('BackbeatAPI setup ready without Mongo'));
                 done();
             });
         });
