@@ -15,7 +15,7 @@ const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
 const {
-    getFormattedSupportedLifecycleRules,
+    formatSupportedLifecycleRules,
     isExpirationRule
 } = require('../util/rules');
 const {
@@ -88,7 +88,7 @@ class LifecycleBucketProcessor {
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
-        this._supportedRules = getFormattedSupportedLifecycleRules();
+        this._supportedRules = formatSupportedLifecycleRules(lcConfig);
 
         this._producerReady = false;
         this._consumerReady = false;
