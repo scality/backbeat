@@ -18,6 +18,8 @@ const replicationConstants = require('../../../extensions/replication/constants'
 const ReplicationAPI =
       require('../../../extensions/replication/ReplicationAPI');
 const TestConfigurator = require('../../utils/TestConfigurator');
+const ReplicationStatusProcessor = require('../../../extensions/replication' +
+    '/replicationStatusProcessor/ReplicationStatusProcessor');
 
 /* eslint-disable max-len */
 
@@ -760,8 +762,6 @@ describe('queue processor functional tests with mocking', () => {
     let copyLocationResultsConsumer;
 
     const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
-    const ReplicationStatusProcessor = require('../../../extensions/replication' +
-                  '/replicationStatusProcessor/ReplicationStatusProcessor');
 
     before(function before(done) {
         this.timeout(60000);
@@ -843,7 +843,8 @@ describe('queue processor functional tests with mocking', () => {
                           objectSizeMetrics: [100, 1000],
                         },
                         {},
-                        { topic: 'metrics-test-topic' });
+                        { topic: 'metrics-test-topic' },
+                        { topic: 'backbeat-gc' });
                     replicationStatusProcessor.start({ bootstrap: true }, done);
                 },
                 done => {
