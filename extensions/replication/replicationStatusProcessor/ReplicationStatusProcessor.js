@@ -204,16 +204,16 @@ class ReplicationStatusProcessor {
      *   in PEM format
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
-     * @param {Boolean} enableGC - flag to enable garbage collection - Based on GC config
+     * @param {Boolean} gcConfig - flag to enable garbage collection - Based on GC config
      */
     constructor(kafkaConfig, sourceConfig, repConfig,
-                internalHttpsConfig, mConfig, enableGC) {
+                internalHttpsConfig, mConfig, gcConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
         this.internalHttpsConfig = internalHttpsConfig;
         this.mConfig = mConfig;
-        this.enableGC = enableGC;
+        this.gcConfig = gcConfig;
         this._consumer = null;
         this._gcProducer = null;
         this._mProducer = null;
@@ -372,9 +372,9 @@ class ReplicationStatusProcessor {
                 });
             },
             done => {
-                if (this.enableGC) {
+                if (this.gcConfig) {
                     this._gcProducer = new GarbageCollectorProducer();
-                    this._gcProducer.setupProducer(done);
+                    return this._gcProducer.setupProducer(done);
                 } else {
                     return done();
                 }
