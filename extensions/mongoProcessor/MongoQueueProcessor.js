@@ -7,7 +7,8 @@ const errors = require('arsenal').errors;
 const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
-const ObjectMD = require('arsenal').models.ObjectMD;
+const { ObjectMD } = require('arsenal').models;
+const { VersionID } = require('arsenal').versioning;
 const { extractVersionId } = require('../../lib/util/versioning');
 
 const Config = require('../../lib/Config');
@@ -195,27 +196,43 @@ class MongoQueueProcessor {
     }
 
     _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
-        // NOTE: This is only used for updating replication info. If the Zenko
-        //   bucket does not have repInfo set, then we can ignore fetching
+        // NOTE: This is used for updating replication info, as well as validating the
+        // `x-amz-meta-scal-version-id` header. If the Zenko bucket does not have repInfo set and
+        // the header is not set, then we can ignore fetching
         const bucketRepInfo = bucketInfo.getReplicationConfiguration();
-        if (!bucketRepInfo || !bucketRepInfo.rules ||
-            !bucketRepInfo.rules[0].enabled) {
+        // KO for DeleteOpQueueEntry : no such field (and no metadata...)
+        const scalVersionId = entry.getValue ? entry.getValue()['x-amz-meta-scal-version-id'] : undefined;
+        if (!(entry instanceof DeleteOpQueueEntry) &&
+            !scalVersionId &&
+            (!bucketRepInfo || !bucketRepInfo.rules || !bucketRepInfo.rules[0].enabled)) {
             return done();
         }
 
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
+
+        // Use x-amz-meta-scal-version-id if provided, instead of the actual versionId of the object.
+        // This should happen only for restored objects : in all other situations, both the source
+        // and ingested objects should have the same version id (and not x-amz-meta-scal-version-id
+        // metadata).
+        const versionId = VersionID.decode(scalVersionId) || entry.getVersionId();
+
         // master keys with a 'null' version id comming from
         // a versioning suspended bucket are considered a version
         // we should not specify the version id in this case
-        if (entry.getVersionId() && !entry.getIsNull()) {
-            params.versionId = entry.getVersionId();
+        if (versionId && !entry.getIsNull()) {
+            params.versionId = versionId;
         }
 
-        return this._mongoClient.getObject(bucket, key, params, log,
-        (err, data) => {
+        return this._mongoClient.getObject(bucket, key, params, log, (err, data) => {
             if (err && err.NoSuchKey) {
+                // TODO: this may happen if the object was created from artesca side (e.g. on restore)
+                //       --> in that case, the versionId does not match, and we cannot find the object
+                //       --> yet we have the 'ring' versionId in the (zenko) entry's `location`
+                //           field, so we may try to look it up (get all versions, check the one with
+                //           where location is indeed in the RING and with the 'target' versionId)
+                // ....or we introduce a way to store the RING object with the target metadata
                 return done();
             }
             if (err) {
@@ -226,6 +243,19 @@ class MongoQueueProcessor {
                 });
                 return done(err);
             }
+
+            // Sanity check (esp. for restored objects case): verify that the object in the data
+            // location matches the object we ingested
+            // if (data.location[0].dataStoreVersionId !== entry.getVersionId()) {
+            //     const err = new Error('version id mismatch');
+            //     log.error('error getting zenko object metadata', {
+            //         method: 'MongoQueueProcessor._getZenkoObjectMetadata',
+            //         err,
+            //         entry: entry.getLogInfo(),
+            //     });
+            //     return done(err); // TODO: should we return an error here, or just consider a mismatch?
+            // }
+
             return done(null, data);
         });
     }
@@ -442,6 +472,10 @@ class MongoQueueProcessor {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
 
+        this.logger.info('processing object metadata', {
+            bucket, key, scalVersionId: sourceEntry.getValue()['x-amz-meta-scal-version-id'],
+        });
+
         this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
         (err, zenkoObjMd) => {
             if (err) {
@@ -480,6 +514,34 @@ class MongoQueueProcessor {
 
             const objVal = sourceEntry.getValue();
             const params = {};
+
+            // If the object has `x-amz-meta-scal-version-id`, we need to use it instead of the id.
+            // This should only happen for objects restored onto the OOB location, and the location
+            // should match in that case
+            const scalVersionId = objVal['x-amz-meta-scal-version-id'];
+            if (scalVersionId) {
+
+                this.logger.info('restored oob object', {
+                    bucket, key, scalVersionId, zenkoObjMd, sourceEntry
+                });
+
+                if (!zenkoObjMd) {
+                    this.logger.warn('missing source entry, ignoring x-amz-meta-scal-version-id', {
+                        method: 'MongoQueueProcessor._processObjectQueueEntry',
+                        location,
+                    });
+                } else if (zenkoObjMd.location[0]?.dataStoreVersionId !== sourceEntry.getVersionId()) {
+                    this.logger.warn('mismatched source entry, ignoring x-amz-meta-scal-version-id', {
+                        method: 'MongoQueueProcessor._processObjectQueueEntry',
+                        location,
+                    });
+                } else {
+                    sourceEntry.setVersionId(zenkoObjMd.versionId);
+                    delete objVal['x-amz-meta-scal-version-id'];
+                    delete objVal['x-amz-meta-scal-restore-info'];
+                }
+            }
+
             // Versioning suspended entries will have a version id but also a isNull tag.
             // These master keys are considered a version and do not have a duplicate version,
             // we don't specify the version id and repairMaster in this case
@@ -629,7 +691,18 @@ class MongoQueueProcessor {
                         return done(err);
                     }
 
-                    if (zenkoObjMd.dataStoreName !== location) {
+                    // TODO: use getReducedLocation() ? or x-amz-storage-class ? or dataStoreName ?
+                    // * x-amz-storage-class --> will always indicate the "cold" location
+                    // * dataStoreName will be cold when archived, and "oob" when restored
+                    // ==> we update the data store name (and x-amz-storage-class) before actually
+                    //   removing the data so we should look at this: so we can ignore when there is
+                    //   a match (e.g. lifecycle gc) and process when the event when user deletes
+                    //   the (restored) object
+                    //
+                    // TODO: two cases for restored object to test
+                    // - expiring restored object from Sorbet --> delete from Zenko, should work fine...
+                    // - delete made on the ring (user deletes the object) --> need to be propagated to Zenko!
+                    if (zenkoObjMd?.dataStoreName !== location) {
                         log.end().info('skipping delete entry with location mismatch', {
                             entry: sourceEntry.getLogInfo(),
                             location,
@@ -647,10 +720,11 @@ class MongoQueueProcessor {
             }
 
             if (sourceEntry instanceof ObjectQueueEntry) {
-                return this._processObjectQueueEntry(log, sourceEntry, location, bucketInfo, err => {
-                    this._handleMetrics(sourceEntry, !!err);
-                    return done(err);
-                });
+                return this._processObjectQueueEntry(log, sourceEntry, location,
+                    bucketInfo, err => {
+                        this._handleMetrics(sourceEntry, !!err);
+                        return done(err);
+                    });
             }
 
             log.end().warn('skipping unknown source entry', {
