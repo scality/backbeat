@@ -296,8 +296,11 @@ describe('LogReader', () => {
                 });
             });
         });
+    });
 
-        it('should shutdown when batch processing is stuck', done => {
+    describe('processLogEntries', () => {
+        it('should shutdown when batch processing is stuck and CRASH_ON_BATCH_TIMEOUT is set', done => {
+            process.env.CRASH_ON_BATCH_TIMEOUT = true;
             logReader._batchTimeoutSeconds = 1;
             // logReader will become stuck as _processReadRecords will never
             // call the callback
@@ -309,12 +312,31 @@ describe('LogReader', () => {
             logReader.processLogEntries({}, () => {});
             setTimeout(() => {
                 assert.strictEqual(emmitted, true);
+                delete process.env.CRASH_ON_BATCH_TIMEOUT;
+                done();
+            }, 2000);
+        }).timeout(4000);
+
+        it('should fail healthcheck when batch processing is stuck', done => {
+            delete process.env.CRASH_ON_BATCH_TIMEOUT;
+            logReader._batchTimeoutSeconds = 1;
+            // logReader will become stuck as _processReadRecords will never
+            // call the callback
+            sinon.stub(logReader, '_processReadRecords').returns();
+            let emmitted = false;
+            process.once('SIGTERM', () => {
+                emmitted = true;
+            });
+            logReader.processLogEntries({}, () => {});
+            setTimeout(() => {
+                assert.strictEqual(emmitted, false);
                 assert.strictEqual(logReader.batchProcessTimedOut(), true);
                 done();
             }, 2000);
         }).timeout(4000);
 
         it('should not shutdown if timeout not reached', done => {
+            process.env.CRASH_ON_BATCH_TIMEOUT = true;
             sinon.stub(logReader, '_processReadRecords').yields();
             sinon.stub(logReader, '_processPrepareEntries').yields();
             sinon.stub(logReader, '_processFilterEntries').yields();
@@ -326,6 +348,19 @@ describe('LogReader', () => {
             });
             logReader.processLogEntries({}, () => {
                 assert.strictEqual(emmitted, false);
+                delete process.env.CRASH_ON_BATCH_TIMEOUT;
+                done();
+            });
+        });
+
+        it('should not fail healthcheck if timeout not reached', done => {
+            delete process.env.CRASH_ON_BATCH_TIMEOUT;
+            sinon.stub(logReader, '_processReadRecords').yields();
+            sinon.stub(logReader, '_processPrepareEntries').yields();
+            sinon.stub(logReader, '_processFilterEntries').yields();
+            sinon.stub(logReader, '_processPublishEntries').yields();
+            sinon.stub(logReader, '_processSaveLogOffset').yields();
+            logReader.processLogEntries({}, () => {
                 assert.strictEqual(logReader.batchProcessTimedOut(), false);
                 done();
             });
