@@ -12,7 +12,7 @@ function makeReplicationStatusProcessor(replayTopics) {
             transport: 'http',
         },
         { replayTopics, objectSizeMetrics: [100, 1000] },
-        {}, false);
+        {});
 }
 
 describe('ReplicationStatusProcessor', () => {
