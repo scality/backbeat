@@ -1,5 +1,6 @@
 'use strict'; // eslint-disable-line
 const assert = require('assert');
+const async = require('async');
 
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
@@ -11,6 +12,7 @@ const { LifecycleResetTransitionInProgressTask } =
 const { updateCircuitBreakerConfigForImplicitOutputQueue } = require('../../../lib/CircuitBreaker');
 const { LifecycleRetriggerRestoreTask } = require('../tasks/LifecycleRetriggerRestoreTask');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
+const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 
 class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
 
@@ -53,12 +55,14 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
      * @return {undefined}
      */
     start(done) {
-        super.start(err => {
-            if (err) {
-                return done(err);
-            }
-            return this.setupProducer(done);
-        });
+        async.waterfall([
+            next => super.start(next),
+            next => {
+                this._gcProducer = new GarbageCollectorProducer();
+                this._gcProducer.setupProducer(next);
+            },
+            next => this.setupProducer(next),
+        ], done);
     }
 
     /**
@@ -198,6 +202,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         return {
             ...super.getStateVars(),
             coldProducer: this._coldProducer,
+            gcProducer: this._gcProducer,
         };
     }
 }

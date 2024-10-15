@@ -1,12 +1,10 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 
 const BackbeatConsumerManager = require('../../../lib/BackbeatConsumerManager');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const GarbageCollectorProducer = require('../../gc/GarbageCollectorProducer');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 
@@ -56,7 +54,6 @@ class LifecycleObjectProcessor extends EventEmitter {
         this._lcConfig = lcConfig;
         this._processConfig = this.getProcessConfig(this._lcConfig);
         this._consumers = null;
-        this._gcProducer = null;
 
         this.clientManager = new ClientManager({
             id: this.getProcessorType(),
@@ -131,13 +128,7 @@ class LifecycleObjectProcessor extends EventEmitter {
     start(done) {
         this.clientManager.initSTSConfig();
         this.clientManager.initCredentialsManager();
-        async.parallel([
-            done => this._setupConsumers(done),
-            done => {
-                this._gcProducer = new GarbageCollectorProducer();
-                this._gcProducer.setupProducer(done);
-            },
-        ], done);
+        this._setupConsumers(done);
     }
 
     /**
@@ -228,7 +219,6 @@ class LifecycleObjectProcessor extends EventEmitter {
                 this.clientManager.getBackbeatClient.bind(this.clientManager),
             getBackbeatMetadataProxy:
                 this.clientManager.getBackbeatMetadataProxy.bind(this.clientManager),
-            gcProducer: this._gcProducer,
             logger: this._log,
         };
     }
