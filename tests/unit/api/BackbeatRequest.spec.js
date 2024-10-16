@@ -77,6 +77,19 @@ describe('BackbeatRequest helper class', () => {
             assert.strictEqual(details3.bucket, 'mybucket');
             assert.strictEqual(details3.key, 'mykey');
             assert.strictEqual(details3.versionId, 'myvId');
+
+            const req4 = new BackbeatRequest({
+                url: '/_/crr/failed/mybucket/mykey?versionId=myvId&role=myrole',
+                method: 'GET',
+            });
+            const details4 = req4.getRouteDetails();
+
+            assert.strictEqual(details4.extension, 'crr');
+            assert.strictEqual(details4.status, 'failed');
+            assert.strictEqual(details4.bucket, 'mybucket');
+            assert.strictEqual(details4.key, 'mykey');
+            assert.strictEqual(details4.versionId, 'myvId');
+            assert.strictEqual(details4.role, 'myrole');
         });
 
         it('should parse monitoring routes and store internally as route ' +
