@@ -1,3 +1,5 @@
+const querystring = require('querystring');
+
 /**
  * Class used to create an entry from the cached Redis key.
  */
@@ -11,11 +13,12 @@ class ObjectFailureEntry {
     constructor(member, sitename) {
         this.member = member;
         const schema = this.member.split(':');
-        const [bucket, objectKey, encodedVersionId] = schema;
+        const [bucket, objectKey, encodedVersionId, encodedRole] = schema;
         this.bucket = bucket;
         this.objectKey = objectKey;
         this.encodedVersionId = encodedVersionId;
         this.sitename = sitename;
+        this.role = encodedRole ? querystring.unescape(encodedRole) : '';
     }
 
     getBucket() {
@@ -34,8 +37,17 @@ class ObjectFailureEntry {
         return this.sitename;
     }
 
+    getReplicationRoles() {
+        return this.role;
+    }
+
     getMember() {
-        return `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
+        const member =
+            `${this.bucket}:${this.objectKey}:${this.encodedVersionId}`;
+        if (this.role) {
+            return `${member}:${this.role}`;
+        }
+        return member;
     }
 
     getLogInfo() {
