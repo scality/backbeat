@@ -4,10 +4,12 @@ const MongoClient = require('mongodb').MongoClient;
 
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
+const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const config = require('../../../lib/Config');
 const fakeLogger = require('../../utils/fakeLogger');
 const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 const locationConfig = require('../../../conf/locationConfig.json');
+const { errors } = require('arsenal');
 
 describe('BackbeatAPI', () => {
     let bbapi;
@@ -21,6 +23,10 @@ describe('BackbeatAPI', () => {
     before(() => {
         setupIngestionSiteMock();
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     // valid routes
@@ -42,6 +48,7 @@ describe('BackbeatAPI', () => {
         { url: '/_/monitoring/metrics', method: 'GET' },
         { url: '/_/crr/failed/mybucket/mykey?versionId=test-myvId',
             method: 'GET' },
+        { url: '/_/crr/failed/mybucket/mykey?role=testrole', method: 'GET' },
         { url: '/_/crr/failed?mymarker', method: 'GET' },
         // invalid params but will default to getting all buckets
         { url: '/_/crr/failed/mybucket', method: 'GET' },
@@ -327,6 +334,277 @@ describe('BackbeatAPI', () => {
                 assert(setupMongoClientStub.calledOnce);
                 assert(setProducerStub.calledThrice);
                 assert(setupLocationStatusManagerStub.notCalled);
+                done();
+            });
+        });
+    });
+
+    describe('validateQuery', () => {
+        it('should return an error if marker is invalid', () => {
+            const req = new BackbeatRequest({
+                url: '/_/crr/failed?marker=invalid',
+                method: 'GET',
+            });
+            const routeError = bbapi.validateQuery(req);
+            assert.deepEqual(routeError, errors.InvalidQueryParameter);
+        });
+
+        it('should return an error if sitename is invalid', () => {
+            const req = new BackbeatRequest({
+                url: '/_/crr/failed?sitename=',
+                method: 'GET',
+            });
+            const routeError = bbapi.validateQuery(req);
+            assert.deepEqual(routeError, errors.InvalidQueryParameter);
+        });
+
+        it('should return an error if role is invalid', () => {
+            const req = new BackbeatRequest({
+                url: '/_/crr/failed?role=',
+                method: 'GET',
+            });
+            const routeError = bbapi.validateQuery(req);
+            assert.deepEqual(routeError, errors.InvalidQueryParameter);
+        });
+
+        it('should return null if query is valid', () => {
+            const req = new BackbeatRequest({
+                url: '/_/crr/failed?marker=1&sitename=site1&role=replication',
+                method: 'GET',
+            });
+            const routeError = bbapi.validateQuery(req);
+            assert.strictEqual(routeError, null);
+        });
+    });
+
+    describe('getFailedCRR', () => {
+        it('should use the role in redis key', done => {
+            const stub = sinon.stub(bbapi, '_getEntriesAcrossSites').yields();
+            sinon.stub(bbapi, '_getFailedCRRResponse').yields();
+
+            const details = {
+                bucket: 'mybucket',
+                key: 'mykey',
+                role: 'replication',
+            };
+            bbapi.getFailedCRR(details, err => {
+                assert.ifError(err);
+                assert.strictEqual(stub.getCall(0).args.at(0), 'mybucket:mykey::replication');
+                done();
+            });
+        });
+
+        it('should use proper redis key if role not specified', done => {
+            const stub = sinon.stub(bbapi, '_getEntriesAcrossSites').yields();
+            sinon.stub(bbapi, '_getFailedCRRResponse').yields();
+
+            const details = {
+                bucket: 'mybucket',
+                key: 'mykey',
+            };
+            bbapi.getFailedCRR(details, err => {
+                assert.ifError(err);
+                assert.strictEqual(stub.getCall(0).args.at(0), 'mybucket:mykey:');
+                done();
+            });
+        });
+    });
+
+    describe('_getObjectQueueEntry', () => {
+        it('should setup role on backbeatMetadataProxy if auth type is "role"', done => {
+            const setupSourceRole = sinon.stub().returns();
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'role',
+                    },
+                },
+            });
+            sinon.stub(bbapi, '_backbeatMetadataProxy').value({
+                setupSourceRole,
+                setSourceClient: sinon.stub().returns({
+                    getMetadata: sinon.stub().yields(null, {
+                        Body: JSON.stringify({}),
+                    }),
+                }),
+            });
+            const entry = {
+                getBucket: () => 'mybucket',
+                getObjectKey: () => 'mykey',
+                getEncodedVersionId: () => 'myvId',
+                getSite: () => 'site1',
+                getReplicationRoles: () => 'role1',
+                getLogInfo: () => 'entry',
+            };
+            bbapi._getObjectQueueEntry(entry, err => {
+                assert.ifError(err);
+                assert(setupSourceRole.calledOnce);
+                done();
+            });
+        });
+
+        it('should not setup role on backbeatMetadataProxy if auth type is not "role"', done => {
+            const setupSourceRole = sinon.stub().returns();
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'service',
+                    },
+                },
+            });
+            sinon.stub(bbapi, '_backbeatMetadataProxy').value({
+                setupSourceRole,
+                setSourceClient: sinon.stub().returns({
+                    getMetadata: sinon.stub().yields(null, {
+                        Body: JSON.stringify({}),
+                    }),
+                }),
+            });
+            const entry = {
+                getBucket: () => 'mybucket',
+                getObjectKey: () => 'mykey',
+                getEncodedVersionId: () => 'myvId',
+                getSite: () => 'site1',
+                getReplicationRoles: () => 'role1',
+                getLogInfo: () => 'entry',
+            };
+            bbapi._getObjectQueueEntry(entry, err => {
+                assert.ifError(err);
+                assert(setupSourceRole.notCalled);
+                done();
+            });
+        });
+    });
+
+    describe('_getFailedCRRResponse', () => {
+        it('should include role in the resposnse when auth type is "role"', done => {
+            const objectMD = {
+                'md-model-version': 2,
+                'owner-display-name': 'Bart',
+                'owner-id': '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+                'x-amz-storage-class': 'STANDARD',
+                'content-length': 542,
+                'content-type': 'text/plain',
+                'last-modified': '2017-07-13T02:44:25.515Z',
+                'content-md5': '01064f35c238bd2b785e34508c3d27f4',
+                'key': 'object',
+                'isDeleteMarker': false,
+                'isNull': false,
+                'dataStoreName': 'STANDARD',
+                'originOp': 's3:ObjectRestore:Post',
+                'versionId': 'test-myvId',
+                'replicationInfo': {
+                    role: 'replication',
+                    status: 'SUCCESS',
+                    backends: [{
+                            site: 'azure',
+                            status: 'SUCCESS',
+                            dataStoreVersionId: '123456',
+                    }],
+                },
+            };
+            const entry = new ObjectQueueEntry('mybucket', 'mykey', objectMD);
+            sinon.stub(bbapi, '_getObjectQueueEntry').yields(null, entry);
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'role',
+                    },
+                },
+            });
+            const expectedResponse = {
+                IsTruncated: false,
+                Versions: [{
+                    Bucket: 'mybucket',
+                    Key: 'mykey',
+                    VersionId: '746573742d6d79764964',
+                    StorageClass: null,
+                    Size: 542,
+                    LastModified: '2017-07-13T02:44:25.515Z',
+                    Role: 'replication'
+                }],
+            };
+            bbapi._getFailedCRRResponse(undefined, [entry], (err, resp) => {
+                assert.ifError(err);
+                assert.deepEqual(resp, expectedResponse);
+                done();
+            });
+        });
+    });
+
+    describe('_parseRetryFailedCRR', () => {
+        it('should fail if the "Role" property is not included when auth type is "role"', () => {
+            const body = JSON.stringify([{
+                Bucket: 'mybucket',
+                Key: 'mykey',
+                StorageClass: 'replication',
+            }]);
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'role',
+                    },
+                },
+            });
+            const res = bbapi._parseRetryFailedCRR(body);
+            assert(res.error);
+        });
+
+        it('should succeed if the "Role" property is included when auth type is "role"', () => {
+            const body = JSON.stringify([{
+                Bucket: 'mybucket',
+                Key: 'mykey',
+                StorageClass: 'replication',
+                Role: 'replication',
+            }]);
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'role',
+                    },
+                },
+            });
+            const res = bbapi._parseRetryFailedCRR(body);
+            assert.strictEqual(res.error, undefined);
+        });
+
+        it('should succeed if the "Role" property is not included when auth type is not "role"', () => {
+            const body = JSON.stringify([{
+                Bucket: 'mybucket',
+                Key: 'mykey',
+                StorageClass: 'replication',
+            }]);
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'service',
+                    },
+                },
+            });
+            const res = bbapi._parseRetryFailedCRR(body);
+            assert.strictEqual(res.error, undefined);
+        });
+    });
+
+    describe('retryFailedCRR', () => {
+        it('should include the role in the key when searching redis', done => {
+            const body = JSON.stringify([{
+                Bucket: 'mybucket',
+                Key: 'mykey',
+                StorageClass: 'replication',
+                Role: 'replication',
+            }]);
+            sinon.stub(bbapi, '_repConfig').value({
+                source: {
+                    auth: {
+                        type: 'role',
+                    },
+                },
+            });
+            const zscore = sinon.stub(bbapi._redisClient, 'zscore').yields(null, null);
+            bbapi.retryFailedCRR(undefined, body, err => {
+                assert.ifError(err);
+                assert.strictEqual(zscore.getCall(0).args.at(1), 'mybucket:mykey::replication');
                 done();
             });
         });

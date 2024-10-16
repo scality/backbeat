@@ -4,7 +4,7 @@ const ObjectFailureEntry =
     require('../../../extensions/replication/utils/ObjectFailureEntry');
 
 describe('ObjectFailureEntry helper class', () => {
-    const member = 'test-bucket:test-key:test-versionId';
+    const member = 'test-bucket:test-key:test-versionId:test-role';
     const sitename = 'test-site';
     const entry = new ObjectFailureEntry(member, sitename);
 
@@ -22,6 +22,9 @@ describe('ObjectFailureEntry helper class', () => {
 
     it('should get the member', () =>
         assert.strictEqual(entry.getMember(), member));
+
+    it('should get the role', () =>
+        assert.strictEqual(entry.getReplicationRoles(), 'test-role'));
 
     it('should get the log info', () =>
         assert.deepStrictEqual(entry.getLogInfo(), {

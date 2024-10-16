@@ -1360,10 +1360,14 @@ describe('queue processor functional tests with mocking', () => {
                             const parsedFailedQueueMessage = JSON.parse(message);
                             assert(parsedFailedQueueMessage.key.startsWith(
                                 `${replicationConstants.redisKeys.failedCRR}:${queueProcessorSF.site}:`));
+                            const role = querystring.escape(
+                                s3mock.getParam('source.md.replicationInfo.role').split(',')[0]
+                            );
                             assert.strictEqual(
                                 parsedFailedQueueMessage.member,
                                 `${s3mock.getParam('source.bucket')}:${s3mock.getParam('key')}`
-                              + `:${s3mock.getParam('versionIdEncoded')}`);
+                              + `:${s3mock.getParam('versionIdEncoded')}`
+                              + `:${role}`);
                             failedCRRProducer.publishFailedCRREntry = origPublishFailedMethod;
                             done();
                         };
