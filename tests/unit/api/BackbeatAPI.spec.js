@@ -214,6 +214,7 @@ describe('BackbeatAPI', () => {
     });
 
     describe('_setZookeeper', () => {
+        let zkManagerSpy;
         beforeEach(() => {
             zkManagerSpy = sinon.spy(ZookeeperManager.prototype, 'constructor');
         });
