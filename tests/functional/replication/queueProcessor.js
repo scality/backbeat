@@ -936,7 +936,8 @@ describe('queue processor functional tests with mocking', () => {
                         { once: true });
                     async.parallel([
                         done => queueProcessorSF.processReplicationEntry(
-                            s3mock.getParam('kafkaEntry'), () => {
+                            s3mock.getParam('kafkaEntry'), err => {
+                                assert.deepStrictEqual(err, errors.ObjNotFound);
                                 done();
                             }),
                     ], done);
