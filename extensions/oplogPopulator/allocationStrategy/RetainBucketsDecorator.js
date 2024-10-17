@@ -12,11 +12,12 @@ class RetainBucketsDecorator extends AllocationStrategy {
     /**
      * @constructor
      * @param {AllocationStrategy} strategy the strategy to decorate
-     * @param {Object} params params
-     * @param {Logger} params.logger logger object
      */
-    constructor(strategy, params) {
-        super(params);
+    constructor(strategy) {
+        super({
+            logger: strategy._logger,
+            pipelineFactory: strategy._pipelineFactory,
+        });
         this._strategy = strategy;
 
         // Stores buckets that should be removed from the connector
