@@ -24,18 +24,18 @@ class RetainBucketsDecorator extends AllocationStrategy {
         this._retainedBuckets = new Map();
     }
 
-    bindConnectorEvents(connectorsManager, metricsHandler) {
+    bindConnectorEvents(connectorsManager, allocator, metricsHandler) {
         // Bind events from the connector manager to the strategy
         connectorsManager.on(constants.connectorUpdatedEvent, connector =>
-            this._strategy.onConnectorUpdatedOrDestroyed(connector));
+            this.onConnectorUpdatedOrDestroyed(connector));
 
-        this._allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
-            this._strategy.onBucketRemoved(bucket, connector));
+        allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
+            this.onBucketRemoved(bucket, connector));
 
         connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
             metricsHandler.onConnectorsReconciled(
                 bucketsExceedingLimit,
-                this._strategy.retainedBucketsCount,
+                this.retainedBucketsCount,
             );
         });
     }

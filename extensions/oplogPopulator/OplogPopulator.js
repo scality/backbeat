@@ -14,6 +14,9 @@ const { mongoJoi } = require('../../lib/config/configItems.joi');
 const ImmutableConnector = require('./allocationStrategy/ImmutableConnector');
 const RetainBucketsDecorator = require('./allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('./allocationStrategy/LeastFullConnector');
+const UniqueConnector = require('./allocationStrategy/UniqueConnector');
+const WildcardPipelineFactory = require('./pipeline/WildcardPipelineFactory');
+const MultipleBucketsPipelineFactory = require('./pipeline/MultipleBucketsPipelineFactory');
 
 const paramsJoi = joi.object({
     config: OplogPopulatorConfigJoiSchema.required(),
@@ -285,7 +288,8 @@ class OplogPopulator {
                 allocationStrategy: this._allocationStrategy,
                 logger: this._logger,
             });
-            this._allocationStrategy.bindConnectorEvents(this._connectorsManager, this._metricsHandler);
+            this._allocationStrategy.bindConnectorEvents(
+                this._connectorsManager, this._allocator, this._metricsHandler);
             // get currently valid buckets from mongo
             const validBuckets = await this._getBackbeatEnabledBuckets();
             // listen to valid buckets
@@ -328,25 +332,28 @@ class OplogPopulator {
             // words, we cannot alter an existing pipeline. In this
             // case, the strategy is to allow a maximum of one
             // bucket per kafka connector.
+            pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new ImmutableConnector({
                 logger: this._logger,
-                metricsHandler: this._metricsHandler,
-                connectorsManager: this._connectorsManager,
+                pipelineFactory,
             });
         } else {
             // In this case, we can have multiple buckets per
             // kafka connector. However, we want to proactively
             // ensure that the pipeline will be accepted by
             // mongodb.
+            pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new LeastFullConnector({
                 logger: this._logger,
-                metricsHandler: this._metricsHandler,
-                connectorsManager: this._connectorsManager,
+                pipelineFactory,
             });
         }
         return new RetainBucketsDecorator(
             strategy,
-            { logger: this._logger },
+            {
+                logger: this._logger,
+                pipelineFactory,
+            },
         );
     }
 

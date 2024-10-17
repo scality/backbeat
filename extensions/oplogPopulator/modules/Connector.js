@@ -9,6 +9,7 @@ const connectorParams = joi.object({
     name: joi.string().required(),
     config: joi.object().required(),
     buckets: joi.array().required(),
+    getPipeline: joi.func().required(),
     isRunning: joi.boolean().required(),
     logger: joi.object().required(),
     kafkaConnectHost: joi.string().required(),
@@ -33,6 +34,7 @@ class Connector extends EventEmitter {
      * @param {Object} params.config Kafka-connect MongoDB source
      * connector config
      * @param {string[]} params.buckets buckets assigned to this connector
+     * @param {boolean} params.getPipeline callback to get connector pipeline
      * @param {Logger} params.logger logger object
      * @param {string} params.kafkaConnectHost kafka connect host
      * @param {number} params.kafkaConnectPort kafka connect port
@@ -44,6 +46,7 @@ class Connector extends EventEmitter {
         this._config = params.config;
         this._buckets = new Set(params.buckets);
         this._isRunning = params.isRunning;
+        this._getPipeline = params.getPipeline;
         this._state = {
             // Used to check if buckets assigned to this connector
             // got modified from the last connector update
@@ -277,25 +280,6 @@ class Connector extends EventEmitter {
     }
 
     /**
-     * Makes new connector pipeline that includes
-     * buckets assigned to this connector
-     * @param {string[]} buckets list of bucket names
-     * @returns {string} new connector pipeline
-     */
-    _generateConnectorPipeline(buckets) {
-        const pipeline = [
-            {
-                $match: {
-                    'ns.coll': {
-                        $in: buckets,
-                    }
-                }
-            }
-        ];
-        return JSON.stringify(pipeline);
-    }
-
-    /**
      * Handles updating the values of _bucketsGotModified
      * @param {boolean} bucketsGotModified value of _state.bucketsGotModified
      * to set
@@ -338,7 +322,7 @@ class Connector extends EventEmitter {
         if (!this._state.bucketsGotModified || this._state.isUpdating) {
             return false;
         }
-        this._config.pipeline = this._generateConnectorPipeline([...this._buckets]);
+        this._config.pipeline = this._getPipeline([...this._buckets]);
         try {
             if (doUpdate && this._isRunning) {
                 const timeBeforeUpdate = Date.now();

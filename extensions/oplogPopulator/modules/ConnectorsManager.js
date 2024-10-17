@@ -123,6 +123,7 @@ class ConnectorsManager extends EventEmitter {
             name: connectorName,
             config,
             buckets: [],
+            getPipeline: this._allocationStrategy.pipelineFactory.getPipeline,
             isRunning: false,
             logger: this._logger,
             kafkaConnectHost: this._kafkaConnectHost,
@@ -132,20 +133,6 @@ class ConnectorsManager extends EventEmitter {
             connector => this.emit(constants.connectorUpdatedEvent, connector));
         this._connectors.push(connector);
         return connector;
-    }
-
-    /**
-     * Extracts buckets from a connector config pipeline
-     * @param {Object} connectorConfig connector config
-     * @returns {string[]} list of buckets
-     */
-    _extractBucketsFromConfig(connectorConfig) {
-        const pipeline = connectorConfig.pipeline ?
-            JSON.parse(connectorConfig.pipeline) : null;
-        if (!pipeline || pipeline.length === 0) {
-            return [];
-        }
-        return pipeline[0].$match['ns.coll'].$in;
     }
 
     /**
@@ -160,7 +147,15 @@ class ConnectorsManager extends EventEmitter {
                 // get old connector config
                 const oldConfig = await this._kafkaConnect.getConnectorConfig(connectorName);
                 // extract buckets from old connector config
-                const buckets = this._extractBucketsFromConfig(oldConfig);
+                const buckets = this._allocationStrategy.getOldConnectorBucketList(oldConfig);
+                if (!buckets) {
+                    this._logger.warn('Ignoring old connector', {
+                        method: 'ConnectorsManager._getOldConnectors',
+                        connector: connectorName,
+                        oldConfig,
+                    });
+                    return null;
+                }
                 // generating a new config as the old config can be outdated (wrong topic for example)
                 const config = this._getDefaultConnectorConfiguration(connectorName);
                 // initializing connector
@@ -170,6 +165,7 @@ class ConnectorsManager extends EventEmitter {
                     // added manually like 'offset.topic.name'
                     config: { ...oldConfig, ...config },
                     buckets,
+                    getPipeline: this._allocationStrategy.pipelineFactory.getPipeline,
                     isRunning: true,
                     logger: this._logger,
                     kafkaConnectHost: this._kafkaConnectHost,
