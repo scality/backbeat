@@ -5,6 +5,8 @@ const werelogs = require('werelogs');
 const Connector =
     require('../../../extensions/oplogPopulator/modules/Connector');
 const { errors } = require('arsenal');
+const MultipleBucketsPipelineFactory =
+    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('Connector');
 
@@ -30,6 +32,7 @@ describe('Connector', () => {
             isRunning: false,
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
+            getPipeline: new MultipleBucketsPipelineFactory().getPipeline,
             logger,
         });
     });
@@ -152,22 +155,6 @@ describe('Connector', () => {
         });
     });
 
-    describe('_generateConnectorPipeline', () => {
-        it('should return new pipeline', () => {
-            const buckets = ['example-bucket-1', 'example-bucket-2'];
-            const pipeline = connector._generateConnectorPipeline(buckets);
-            assert.strictEqual(pipeline, JSON.stringify([
-                {
-                    $match: {
-                        'ns.coll': {
-                            $in: buckets,
-                        }
-                    }
-                }
-            ]));
-        });
-    });
-
     describe('_updateConnectorState', () => {
         it('should update all fields when a bucket is added/removed', () => {
             const clock = sinon.useFakeTimers();
@@ -207,7 +194,7 @@ describe('Connector', () => {
         it('should only update connector pipeline data if conditions are met', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
-            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+            const pipelineStub = sinon.stub(connector, '_getPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
@@ -221,7 +208,7 @@ describe('Connector', () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = true;
-            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+            const pipelineStub = sinon.stub(connector, '_getPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
@@ -234,7 +221,7 @@ describe('Connector', () => {
         it('should not update when buckets assigned to connector haven\'t changed', async () => {
             connector._state.bucketsGotModified = false;
             connector._state.isUpdating = false;
-            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+            const pipelineStub = sinon.stub(connector, '_getPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
@@ -247,7 +234,7 @@ describe('Connector', () => {
         it('should not update when connector is updating', async () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = true;
-            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+            const pipelineStub = sinon.stub(connector, '_getPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
@@ -261,7 +248,7 @@ describe('Connector', () => {
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = false;
-            const pipelineStub = sinon.stub(connector, '_generateConnectorPipeline')
+            const pipelineStub = sinon.stub(connector, '_getPipeline')
                 .returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
