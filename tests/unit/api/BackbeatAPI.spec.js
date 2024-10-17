@@ -242,7 +242,7 @@ describe('BackbeatAPI', () => {
         it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
             bbapi._setZookeeper(() => {
                 assert(zkManagerArgs);
-                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181/backbeat');
+                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181');
                 done();
             }, MockZookeeperManager);
         });
@@ -251,7 +251,7 @@ describe('BackbeatAPI', () => {
             delete bbapi._queuePopulator.mongo;
             bbapi._setZookeeper(() => {
                 assert(zkManagerArgs);
-                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181/backbeat/queue-populator');
+                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181/backbeat/test/queue-populator');
                 done();
             }, MockZookeeperManager);
         });
