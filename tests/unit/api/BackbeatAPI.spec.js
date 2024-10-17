@@ -6,7 +6,6 @@ const config = require('../../../lib/Config');
 const fakeLogger = require('../../utils/fakeLogger');
 const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 const locationConfig = require('../../../conf/locationConfig.json');
-const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const sinon = require('sinon');
 
 describe('BackbeatAPI', () => {
@@ -215,16 +214,14 @@ describe('BackbeatAPI', () => {
 
     describe('_setZookeeper', () => {
         let zkManagerArgs;
-        beforeEach(() => {
-            class MockZookeeperManager {
-                constructor(url, options, logger) {
-                    zkManagerArgs = { url, options, logger };
-                    this.once = sinon.stub();
-                    this.removeAllListeners = sinon.stub();
-                }
-            }
-        });
 
+        class MockZookeeperManager {
+            constructor(url, options, logger) {
+                zkManagerArgs = { url, options, logger };
+                this.once = sinon.stub();
+                this.removeAllListeners = sinon.stub();
+            }
+        }
         afterEach(() => {
             sinon.restore();
         });
