@@ -1,4 +1,6 @@
 const assert = require('assert');
+const redis = require('ioredis');
+const sinon = require('sinon');
 
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
@@ -19,6 +21,14 @@ describe('BackbeatAPI', () => {
     before(() => {
         setupIngestionSiteMock();
         bbapi = new BackbeatAPI(config, fakeLogger, { timer: true });
+
+        sinon.stub(redis.prototype, 'connect').returns(Promise.resolve());
+        sinon.stub(redis.prototype, 'on').returnsThis();
+        sinon.stub(redis.prototype, 'quit').returns(Promise.resolve());
+    });
+
+    after(() => {
+        sinon.restore();
     });
 
     // valid routes
@@ -212,25 +222,38 @@ describe('BackbeatAPI', () => {
     });
 
     describe('_setZookeeper', () => {
-        describe('_setZookeeper', () => {
-
-            it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
-                bbapi._setZookeeper(err => {
-                    assert.ifError(err);
-                    assert.strictEqual(bbapi.zkClient.url, 'localhost:1');
-                    done();
+        let zkManagerArgs;
+        class MockZookeeperManager {
+            constructor(url, options, logger) {
+                zkManagerArgs = { url, options, logger };
+                this.once = sinon.stub().callsFake((event, callback) => {
+                    if (event === 'connected') {
+                        callback();
+                    }
                 });
-            });
+                this.removeAllListeners = sinon.stub();
+            }
+        }
 
-            it('should append zookeeperPath to connectionString if this._queuePopulator.mongo does not exist', done => {
-                delete bbapi._queuePopulator.mongo;
-                bbapi._zkConfig = { connectionString: 'localhost:1', autoCreateNamespace: true };
-                bbapi._setZookeeper(err => {
-                    assert.ifError(err);
-                    assert.strictEqual(bbapi.zkClient.url, 'localhost:1/test/path');
-                    done();
-                });
-            });
+        after(() => {
+            sinon.restore();
+        });
+
+        it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
+            bbapi._setZookeeper(() => {
+                assert(zkManagerArgs);
+                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181/backbeat');
+                done();
+            }, MockZookeeperManager);
+        });
+
+        it('should append zookeeperPath to connectionString if this._queuePopulator.mongo does not exist', done => {
+            delete bbapi._queuePopulator.mongo;
+            bbapi._setZookeeper(() => {
+                assert(zkManagerArgs);
+                assert.strictEqual(zkManagerArgs.url, '127.0.0.1:2181/backbeat/queue-populator');
+                done();
+            }, MockZookeeperManager);
         });
     });
 });
