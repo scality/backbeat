@@ -6,6 +6,8 @@ const config = require('../../../lib/Config');
 const fakeLogger = require('../../utils/fakeLogger');
 const setupIngestionSiteMock = require('../../utils/mockIngestionSite');
 const locationConfig = require('../../../conf/locationConfig.json');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
+const sinon = require('sinon');
 
 describe('BackbeatAPI', () => {
     let bbapi;
@@ -212,10 +214,19 @@ describe('BackbeatAPI', () => {
     });
 
     describe('_setZookeeper', () => {
+        beforeEach(() => {
+            zkManagerSpy = sinon.spy(ZookeeperManager.prototype, 'constructor');
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
         it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
             bbapi._setZookeeper(err => {
                 assert.ifError(err);
-                assert.strictEqual(bbapi._zkClient.url, 'localhost:1');
+                assert(zkManagerSpy.calledOnce);
+                const zkManagerArgs = zkManagerSpy.getCall(0).args;
+                assert.strictEqual(zkManagerArgs[0], 'localhost:1');
                 done();
             });
         });
@@ -224,7 +235,9 @@ describe('BackbeatAPI', () => {
             delete bbapi._config.queuePopulator.mongo;
             bbapi._setZookeeper(err => {
                 assert.ifError(err);
-                assert.strictEqual(bbapi._zkClient.url, 'localhost:1/test/path');
+                assert(zkManagerSpy.calledOnce);
+                const zkManagerArgs = zkManagerSpy.getCall(0).args;
+                assert.strictEqual(zkManagerArgs[0], 'localhost:1/test/path');
                 done();
             });
         });
