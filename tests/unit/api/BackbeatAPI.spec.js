@@ -214,9 +214,15 @@ describe('BackbeatAPI', () => {
     });
 
     describe('_setZookeeper', () => {
-        let zkManagerSpy;
+        let zkManagerArgs;
         beforeEach(() => {
-            zkManagerSpy = sinon.spy(ZookeeperManager.prototype, 'constructor');
+            class MockZookeeperManager {
+                constructor(url, options, logger) {
+                    zkManagerArgs = { url, options, logger };
+                    this.once = sinon.stub();
+                    this.removeAllListeners = sinon.stub();
+                }
+            }
         });
 
         afterEach(() => {
@@ -225,22 +231,22 @@ describe('BackbeatAPI', () => {
         it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
             bbapi._setZookeeper(err => {
                 assert.ifError(err);
-                assert(zkManagerSpy.calledOnce);
-                const zkManagerArgs = zkManagerSpy.getCall(0).args;
-                assert.strictEqual(zkManagerArgs[0], 'localhost:1');
+                assert.strictEqual(zkManagerArgs.url, 'localhost:1');
                 done();
-            });
+            }, MockZookeeperManager);
+            const zkClientInstance = zkManagerArgs;
+            zkClientInstance.once.withArgs('connected').callsFake((event, callback) => callback());
         });
 
         it('should append zookeeperPath to connectionString if this._queuePopulator.mongo does not exist', done => {
             delete bbapi._config.queuePopulator.mongo;
             bbapi._setZookeeper(err => {
                 assert.ifError(err);
-                assert(zkManagerSpy.calledOnce);
-                const zkManagerArgs = zkManagerSpy.getCall(0).args;
-                assert.strictEqual(zkManagerArgs[0], 'localhost:1/test/path');
+                assert.strictEqual(zkManagerArgs.url, 'localhost:1/test/path');
                 done();
-            });
+            }, MockZookeeperManager);
+            const zkClientInstance = zkManagerArgs;
+            zkClientInstance.once.withArgs('connected').callsFake((event, callback) => callback());
         });
     });
 });
