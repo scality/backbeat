@@ -210,4 +210,23 @@ describe('BackbeatAPI', () => {
             assert.deepStrictEqual(sites, params.expected);
         });
     });
+
+    describe('_setZookeeper', () => {
+        it('should use connectionString directly if this._queuePopulator.mongo exists', done => {
+            bbapi._setZookeeper(err => {
+                assert.ifError(err);
+                assert.strictEqual(bbapi._zkClient.url, 'localhost:1');
+                done();
+            });
+        });
+
+        it('should append zookeeperPath to connectionString if this._queuePopulator.mongo does not exist', done => {
+            delete bbapi._config.queuePopulator.mongo;
+            bbapi._setZookeeper(err => {
+                assert.ifError(err);
+                assert.strictEqual(bbapi._zkClient.url, 'localhost:1/test/path');
+                done();
+            });
+        });
+    });
 });
