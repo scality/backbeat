@@ -126,6 +126,10 @@ class BackbeatMetadataProxyMock {
         return cb(null, this.indexesObj);
     }
 
+    setError(error) {
+        this.error = error;
+    }
+
     putBucketIndexes(bucket, indexes, log, cb) {
         if (this.error) {
             return cb(this.error);
