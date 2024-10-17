@@ -157,7 +157,7 @@ describe('ConnectorsManager', () => {
         });
     });
 
-    describe('_getOldConnectors', () => {
+    describe('_processOldConnectors', () => {
         it('should delete old connector when the strategy rejects it', async () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
@@ -165,7 +165,7 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
             sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
-            const connectors = await connectorsManager._getOldConnectors(['source-connector']);
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 0);
         });
 
@@ -177,7 +177,7 @@ describe('ConnectorsManager', () => {
                 .resolves(config);
             sinon.stub(connectorsManager._allocationStrategy, 'getOldConnectorBucketList').returns(['bucket1']);
             sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
-            const connectors = await connectorsManager._getOldConnectors(['source-connector']);
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 1);
             assert.strictEqual(connectors[0].name, 'source-connector');
             assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
@@ -207,7 +207,7 @@ describe('ConnectorsManager', () => {
             connectorsManager._nbConnectors = 1;
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves(['source-connector']);
-            sinon.stub(connectorsManager, '_getOldConnectors')
+            sinon.stub(connectorsManager, '_processOldConnectors')
                 .resolves([connector1]);
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
