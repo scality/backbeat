@@ -149,12 +149,13 @@ class ConnectorsManager extends EventEmitter {
                 // extract buckets from old connector config
                 const buckets = this._allocationStrategy.getOldConnectorBucketList(oldConfig);
                 if (!buckets) {
-                    this._logger.warn('Ignoring old connector', {
+                    await this._kafkaConnect.deleteConnector(connectorName);
+                    this._logger.warn('Removed old connector', {
                         method: 'ConnectorsManager._getOldConnectors',
                         connector: connectorName,
                         oldConfig,
                     });
-                    return null;
+                    return undefined;
                 }
                 // generating a new config as the old config can be outdated (wrong topic for example)
                 const config = this._getDefaultConnectorConfiguration(connectorName);
@@ -185,11 +186,12 @@ class ConnectorsManager extends EventEmitter {
                 });
                 return connector;
             }));
+            const validConnectors = connectors.filter(c => !!c);
             this._logger.info('Successfully retreived old connectors', {
                 method: 'ConnectorsManager._getOldConnectors',
-                numberOfConnectors: connectors.length
+                numberOfConnectors: validConnectors.length,
             });
-            return connectors;
+            return validConnectors;
         } catch (err) {
             this._logger.error('An error occurred while getting old connectors', {
                 method: 'ConnectorsManager._getOldConnectors',
