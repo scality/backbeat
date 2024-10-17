@@ -7,6 +7,8 @@ const Connector =
 const LeastFullConnector =
     require('../../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const constants = require('../../../../extensions/oplogPopulator/constants');
+const MultipleBucketsPipelineFactory =
+    require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('LeastFullConnector');
 
@@ -16,6 +18,7 @@ const defaultConnectorParams = {
     logger,
     kafkaConnectHost: '127.0.0.1',
     kafkaConnectPort: 8083,
+    getPipeline: new MultipleBucketsPipelineFactory().getPipeline,
 };
 
 const connector1 = new Connector({
