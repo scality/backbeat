@@ -79,7 +79,6 @@ class BackbeatClientMock {
         this.response = { error, data };
     }
 
-
     batchDelete(params, cb) {
         this.times.batchDeleteResponse += 1;
 
