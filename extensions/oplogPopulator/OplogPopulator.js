@@ -326,7 +326,16 @@ class OplogPopulator {
      */
     initStrategy() {
         let strategy;
-        if (this._arePipelinesImmutable()) {
+        let pipelineFactory;
+        if (this._config.numberOfConnectors === 0) {
+            // If the number of connector is set to 0, then we
+            // use a single connector to listen to the whole DB.
+            pipelineFactory = new WildcardPipelineFactory();
+            strategy = new UniqueConnector({
+                logger: this._logger,
+                pipelineFactory,
+            });
+        } else if (this._arePipelinesImmutable()) {
             // In this case, mongodb does not support reusing a
             // resume token from a different pipeline. In other
             // words, we cannot alter an existing pipeline. In this
@@ -348,13 +357,7 @@ class OplogPopulator {
                 pipelineFactory,
             });
         }
-        return new RetainBucketsDecorator(
-            strategy,
-            {
-                logger: this._logger,
-                pipelineFactory,
-            },
-        );
+        return new RetainBucketsDecorator(strategy);
     }
 
     /**
