@@ -797,6 +797,7 @@ describe('queue processor functional tests with mocking', () => {
                   },
                   groupId: 'backbeat-func-test-group-id',
                   mpuPartsConcurrency: 10,
+                  sourceCheckIfSizeGreaterThanMB: 0,
               },
             },
             { host: '127.0.0.1',
@@ -924,6 +925,18 @@ describe('queue processor functional tests with mocking', () => {
                                                    testCase.nbParts > 0);
                                 assert(s3mock.hasPutTargetMd);
                                 assert.strictEqual(s3mock.partsDeleted.length, 0);
+                                done();
+                            }),
+                    ], done);
+                });
+
+                it('should fail a replication if unable to get metadata', done => {
+                    s3mock.installBackbeatErrorResponder('source.s3.getMetadata',
+                        errors.ObjNotFound,
+                        { once: true });
+                    async.parallel([
+                        done => queueProcessorSF.processReplicationEntry(
+                            s3mock.getParam('kafkaEntry'), () => {
                                 done();
                             }),
                     ], done);
