@@ -221,6 +221,7 @@ class OplogPopulatorMetrics {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorsReconciled',
                 error: error.message,
+                bucketsExceedingLimit,
             });
         }
     }

@@ -6,6 +6,7 @@ const constants = {
     // to 16 MB (16777216B) / 64 (max length of a bucket name) ~= 260000
     maxBucketsPerConnector: 260000,
     mongodbVersionWithImmutablePipelines: '6.0.0',
+    wildCardForAllBuckets: '*',
     connectorUpdatedEvent: 'connector-updated',
     bucketRemovedFromConnectorEvent: 'bucket-removed',
     connectorsReconciledEvent: 'connectors-reconciled',

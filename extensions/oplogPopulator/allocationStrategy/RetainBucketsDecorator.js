@@ -1,3 +1,4 @@
+const constants = require('../constants');
 const AllocationStrategy = require('./AllocationStrategy');
 
 /**
@@ -21,6 +22,22 @@ class RetainBucketsDecorator extends AllocationStrategy {
         // Stores buckets that should be removed from the connector
         // but still in use
         this._retainedBuckets = new Map();
+    }
+
+    bindConnectorEvents(connectorsManager, allocator, metricsHandler) {
+        // Bind events from the connector manager to the strategy
+        connectorsManager.on(constants.connectorUpdatedEvent, connector =>
+            this.onConnectorUpdatedOrDestroyed(connector));
+
+        allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
+            this.onBucketRemoved(bucket, connector));
+
+        connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
+            metricsHandler.onConnectorsReconciled(
+                bucketsExceedingLimit,
+                this.retainedBucketsCount,
+            );
+        });
     }
 
     /**
