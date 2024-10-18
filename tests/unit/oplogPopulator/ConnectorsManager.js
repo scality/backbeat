@@ -109,11 +109,8 @@ describe('ConnectorsManager', () => {
                 // Not needed to test all strategies here: we stub their methods
                 new LeastFullConnector({
                     logger,
-                }),
-                {
-                    logger,
                     pipelineFactory,
-                }
+                }),
             ),
             logger,
         });
