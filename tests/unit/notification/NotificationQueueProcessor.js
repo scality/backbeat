@@ -3,6 +3,7 @@ const werelogs = require('werelogs');
 const sinon = require('sinon');
 
 const NotificationQueueProcessor = require('../../../extensions/notification/queueProcessor/QueueProcessor');
+const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const constants = require('../../../extensions/notification/constants');
 
 const mongoConfig
@@ -11,17 +12,22 @@ const kafkaConfig
     = require('../../config.notification.json').queuePopulator.kafka;
 const notificationConfig
     = require('../../config.notification.json').extensions.notification;
+const zookeeperConfig
+    = require('../../config.notification.json').zookeeper;
 
 const logger = new werelogs.Logger('NotificationQueueProcessor:test');
 
-const notificationConfiguration = {
-    queueConfig: [
-        {
-            events: ['s3:ObjectCreated:*'],
-            queueArn: 'arn:scality:bucketnotif:::destination1',
-            filterRules: [],
-        },
-    ],
+const config = {
+    bucket: 'example-bucket',
+    notificationConfiguration: {
+        queueConfig: [
+            {
+                events: ['s3:ObjectCreated:*'],
+                queueArn: 'arn:scality:bucketnotif:::destination1',
+                filterRules: [],
+            },
+        ],
+    },
 };
 
 const kafkaEntry = {
@@ -80,7 +86,7 @@ describe('NotificationQueueProcessor:: ', () => {
     let notificationQueueProcessor;
 
     beforeEach(() => {
-        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, kafkaConfig,
+        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, zookeeperConfig, kafkaConfig,
             notificationConfig, notificationConfig.destinations[0].resource, null);
         notificationQueueProcessor.logger = logger;
     });
@@ -89,9 +95,46 @@ describe('NotificationQueueProcessor:: ', () => {
         sinon.restore();
     });
 
+    describe('start', () => {
+        it('should setup zookeeper client when mongo is not configured', done => {
+            notificationQueueProcessor.mongoConfig = null;
+            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
+            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
+            sinon.stub(notificationQueueProcessor, '_destination').value({
+                init: sinon.stub().yields(null),
+            });
+            const interval = setInterval(() => {
+                if (notificationQueueProcessor.zkClient) {
+                    notificationQueueProcessor.zkClient.emit('ready');
+                    clearInterval(interval);
+                }
+            }, 30);
+            notificationQueueProcessor.start({ disableConsumer: true }, err => {
+                assert.ifError(err);
+                assert(notificationQueueProcessor.zkClient instanceof ZookeeperManager);
+                done();
+            });
+        });
+
+        it('should not setup zookeeper client if mongo is configured', done => {
+            sinon.stub(notificationQueueProcessor, '_setupNotificationConfigManager').yields(null);
+            sinon.stub(notificationQueueProcessor, '_setupDestination').yields(null);
+            sinon.stub(notificationQueueProcessor, '_destination').value({
+                init: sinon.stub().yields(null),
+            });
+            notificationQueueProcessor.start({ disableConsumer: true }, err => {
+                assert.ifError(err);
+                assert.strictEqual(notificationQueueProcessor.zkClient, null);
+                done();
+            });
+        });
+    });
+
     describe('processKafkaEntry ::', () => {
         it('should publish notification in correct format', async () => {
-            notificationQueueProcessor._getConfig = sinon.stub().yields(null, notificationConfiguration);
+            notificationQueueProcessor.bnConfigManager = {
+                getConfig: sinon.stub().yields(null, config),
+            };
             const sendStub = sinon.stub().yields(null);
             notificationQueueProcessor._destination = {
                 send: sendStub,
