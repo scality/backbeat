@@ -1,4 +1,6 @@
 const assert = require('assert');
+const sinon = require('sinon');
+const MongoClient = require('mongodb').MongoClient;
 
 const BackbeatAPI = require('../../../lib/api/BackbeatAPI');
 const BackbeatRequest = require('../../../lib/api/BackbeatRequest');
@@ -208,6 +210,125 @@ describe('BackbeatAPI', () => {
         it('getRequestedSites:: should return correct list of requested sites', () => {
             const sites = bbapi.getRequestedSites(params.details);
             assert.deepStrictEqual(sites, params.expected);
+        });
+    });
+
+    describe('_setupMongoClient', () => {
+        let mongoClientStub;
+        let infoSpy;
+        let errorSpy;
+        let debugSpy;
+
+        beforeEach(() => {
+            mongoClientStub = sinon.stub(MongoClient, 'connect');
+            infoSpy = sinon.spy(fakeLogger, 'info');
+            errorSpy = sinon.spy(fakeLogger, 'error');
+            debugSpy = sinon.spy(fakeLogger, 'debug');
+        });
+
+        afterEach(() => {
+            mongoClientStub.restore();
+            infoSpy.restore();
+            errorSpy.restore();
+            debugSpy.restore();
+        });
+
+        it('should connect to MongoDB when configuration is present', done => {
+            const mockDb = { db: sinon.stub().returns({}) };
+            mongoClientStub.yields(null, mockDb);
+
+            bbapi._setupMongoClient(err => {
+                assert.ifError(err);
+                assert(mongoClientStub.calledOnce);
+                assert(infoSpy.calledWith('Connected to MongoDB', {
+                    method: 'BackbeatAPI._setupMongoClient',
+                }));
+                done();
+            });
+        });
+
+        it('should log an error when MongoDB connection fails', done => {
+            const mockError = new Error('Connection failed');
+            mongoClientStub.yields(mockError);
+
+            bbapi._setupMongoClient(err => {
+                assert.strictEqual(err, mockError);
+                assert(mongoClientStub.calledOnce);
+                assert(errorSpy.calledWith('Could not connect to MongoDB', {
+                    method: 'BackbeatAPI._setupMongoClient',
+                    error: mockError.message,
+                }));
+                done();
+            });
+        });
+
+        it('should skip MongoDB client setup when configuration is not present', done => {
+            delete bbapi._config.queuePopulator.mongo;
+
+            bbapi._setupMongoClient(err => {
+                assert.ifError(err);
+                assert(mongoClientStub.notCalled);
+                assert(debugSpy.calledWith('MongoDB configuration not found, skipping MongoDB client setup', {
+                    method: 'BackbeatAPI._setupMongoClient',
+                }));
+                done();
+            });
+        });
+    });
+
+    describe('setupInternals', () => {
+        let setZookeeperStub;
+        let setupMongoClientStub;
+        let setProducerStub;
+        let setupLocationStatusManagerStub;
+        let errorSpy;
+        let debugSpy;
+
+        beforeEach(() => {
+            setZookeeperStub = sinon.stub(bbapi, '_setZookeeper').yields(null);
+            setupMongoClientStub = sinon.stub(bbapi, '_setupMongoClient').yields(null);
+            setProducerStub = sinon.stub(bbapi, '_setProducer').yields(null, {});
+            setupLocationStatusManagerStub = sinon.stub(bbapi, '_setupLocationStatusManager').yields(null);
+            errorSpy = sinon.spy(fakeLogger, 'error');
+            debugSpy = sinon.spy(fakeLogger, 'debug');
+        });
+
+        afterEach(() => {
+            setZookeeperStub.restore();
+            setupMongoClientStub.restore();
+            setProducerStub.restore();
+            setupLocationStatusManagerStub.restore();
+            errorSpy.restore();
+            debugSpy.restore();
+        });
+
+        it('should setup internals when MongoDB configuration exists', done => {
+            bbapi._config.queuePopulator.mongo = {
+                host: 'localhost',
+                port: 27017,
+                db: 'backbeat',
+            };
+            bbapi.setupInternals(err => {
+                assert.ifError(err);
+                assert(setZookeeperStub.calledOnce);
+                assert(setupMongoClientStub.calledOnce);
+                assert(setProducerStub.calledThrice);
+                assert(setupLocationStatusManagerStub.calledOnce);
+                done();
+            });
+        });
+
+        it('should setup internals when MongoDB configuration does not exist', done => {
+            delete bbapi._config.queuePopulator.mongo;
+
+            bbapi.setupInternals(err => {
+                assert.ifError(err);
+                assert(setZookeeperStub.calledOnce);
+                assert(setupMongoClientStub.calledOnce);
+                assert(setProducerStub.calledThrice);
+                assert(setupLocationStatusManagerStub.notCalled);
+                done();
+            });
         });
     });
 });
