@@ -12,6 +12,8 @@ const OplogPopulatorMetrics =
 const RetainBucketsDecorator = require('../../../extensions/oplogPopulator/allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('../../../extensions/oplogPopulator/allocationStrategy/LeastFullConnector');
 const constants = require('../../../extensions/oplogPopulator/constants');
+const MultipleBucketsPipelineFactory =
+    require('../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
 
 const logger = new werelogs.Logger('ConnectorsManager');
 
@@ -72,6 +74,8 @@ describe('ConnectorsManager', () => {
     let connectorUpdateStub;
     let connectorRestartStub;
 
+    const pipelineFactory = new MultipleBucketsPipelineFactory();
+
     beforeEach(() => {
         connector1 = new Connector({
             name: 'source-connector',
@@ -81,6 +85,7 @@ describe('ConnectorsManager', () => {
             logger,
             kafkaConnectHost: '127.0.0.1',
             kafkaConnectPort: 8083,
+            getPipeline: pipelineFactory.getPipeline,
         });
         connectorCreateStub = sinon.stub(connector1._kafkaConnect, 'createConnector')
             .resolves();
@@ -104,8 +109,8 @@ describe('ConnectorsManager', () => {
                 // Not needed to test all strategies here: we stub their methods
                 new LeastFullConnector({
                     logger,
+                    pipelineFactory,
                 }),
-                { logger }
             ),
             logger,
         });
@@ -149,30 +154,27 @@ describe('ConnectorsManager', () => {
         });
     });
 
-    describe('_extractBucketsFromConfig', () => {
-        it('should extract buckets from connector config', () => {
-            const config = {
-                pipeline: JSON.stringify([{
-                    $match: {
-                        'ns.coll': {
-                            $in: ['example-bucket-1, example-bucket-2'],
-                        }
-                    }
-                }])
-            };
-            const buckets = connectorsManager._extractBucketsFromConfig(config);
-            assert.deepEqual(buckets, ['example-bucket-1, example-bucket-2']);
+    describe('_processOldConnectors', () => {
+        it('should delete old connector when the strategy rejects it', async () => {
+            const config = { ...connectorConfig };
+            config['topic.namespace.map'] = 'outdated-topic';
+            config['offset.partitiom.name'] = 'partition-name';
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
+                .resolves(config);
+            sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
+            assert.strictEqual(connectors.length, 0);
         });
-    });
 
-    describe('_getOldConnectors', () => {
         it('should update connector config while keeping the extra fields', async () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
             config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
-            const connectors = await connectorsManager._getOldConnectors(['source-connector']);
+            sinon.stub(connectorsManager._allocationStrategy, 'getOldConnectorBucketList').returns(['bucket1']);
+            sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 1);
             assert.strictEqual(connectors[0].name, 'source-connector');
             assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
@@ -187,9 +189,11 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._allocationStrategy, 'maximumBucketsPerConnector').value(1);
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
-            sinon.stub(connectorsManager, '_extractBucketsFromConfig').returns(['bucket1', 'bucket2']);
+            sinon.stub(connectorsManager._allocationStrategy, 'getOldConnectorBucketList')
+                .returns(['bucket1', 'bucket2']);
             const warnStub = sinon.stub(connectorsManager._logger, 'warn');
-            const connectors = await connectorsManager._getOldConnectors(['source-connector', 'source-connector-2']);
+            const connectors = await connectorsManager.
+                _processOldConnectors(['source-connector', 'source-connector-2']);
             assert.strictEqual(connectors.length, 2);
             assert(warnStub.called);
         });
@@ -200,7 +204,7 @@ describe('ConnectorsManager', () => {
             connectorsManager._nbConnectors = 1;
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectors')
                 .resolves(['source-connector']);
-            sinon.stub(connectorsManager, '_getOldConnectors')
+            sinon.stub(connectorsManager, '_processOldConnectors')
                 .resolves([connector1]);
             const connectors = await connectorsManager.initializeConnectors();
             assert.deepEqual(connectors, [connector1]);
