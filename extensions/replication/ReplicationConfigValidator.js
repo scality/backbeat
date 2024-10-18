@@ -73,6 +73,7 @@ const joiSchema = joi.object({
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: probeServerJoi.default(),
         circuitBreaker: joi.object().optional(),
+        sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),
