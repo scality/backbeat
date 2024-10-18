@@ -406,6 +406,7 @@ class QueueProcessor extends EventEmitter {
             groupId,
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
+            logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
             canary: true,
             circuitBreaker: this.circuitBreakerConfig,
             circuitBreakerMetrics: {
