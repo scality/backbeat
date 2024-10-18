@@ -49,6 +49,7 @@ describe('QueuePopulator', () => {
             const mockLogReader = sinon.spy();
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -72,6 +73,7 @@ describe('QueuePopulator', () => {
             };
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -87,6 +89,32 @@ describe('QueuePopulator', () => {
                         component: 'log reader',
                         status: constants.statusNotReady,
                         topic: 'topicB',
+                    },
+                ])
+            );
+        });
+
+        it('returns proper details when batch process timed out', () => {
+            const mockLogReader = sinon.spy();
+            mockLogReader.getProducerStatus = sinon.fake(() => ({
+                topicA: true,
+            }));
+            mockLogReader.getLogInfo = sinon.fake(() => {});
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => true);
+            qp.logReaders = [
+                mockLogReader,
+            ];
+            qp.zkClient = {
+                getState: () => zookeeper.State.SYNC_CONNECTED,
+            };
+            qp.handleLiveness(mockRes, mockLog);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            sinon.assert.calledOnceWithExactly(
+                mockRes.end,
+                JSON.stringify([
+                    {
+                        component: 'log reader',
+                        status: constants.statusTimedOut,
                     },
                 ])
             );
