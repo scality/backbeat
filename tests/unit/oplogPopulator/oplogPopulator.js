@@ -19,6 +19,7 @@ const LeastFullConnector = require('../../../extensions/oplogPopulator/allocatio
 const ImmutableConnector = require('../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
 const AllocationStrategy = require('../../../extensions/oplogPopulator/allocationStrategy/AllocationStrategy');
 const constants = require('../../../extensions/oplogPopulator/constants');
+const UniqueConnector = require('../../../extensions/oplogPopulator/allocationStrategy/UniqueConnector');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
@@ -150,6 +151,13 @@ describe('OplogPopulator', () => {
             assert(strategy instanceof RetainBucketsDecorator);
             assert(strategy._strategy instanceof LeastFullConnector);
             assert(arePipelinesImmutableStub.calledOnce);
+        });
+
+        it('should return an instance of RetainBucketsDecorator for unique pipelines', () => {
+            sinon.stub(oplogPopulator._config, 'numberOfConnectors').value(0);
+            const strategy = oplogPopulator.initStrategy();
+            assert(strategy instanceof RetainBucketsDecorator);
+            assert(strategy._strategy instanceof UniqueConnector);
         });
     });
 
