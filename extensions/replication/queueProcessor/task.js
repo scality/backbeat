@@ -240,7 +240,7 @@ function initAndStart(zkClient) {
         });
 
         startProbeServer(
-            getProbeConfig(repConfig.queueProcessor, siteNames),
+            getProbeConfig(repConfig.queueProcessor, siteNames, log),
             (err, probeServer) => {
                 if (err) {
                     log.fatal('error creating probe server', {

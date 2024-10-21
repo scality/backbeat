@@ -1,6 +1,7 @@
 const assert = require('assert');
 const { startProbeServer, getProbeConfig } =
     require('../../../../lib/util/probe');
+const Logger = require('werelogs').Logger;
 
 describe('Probe server', () => {
     it('is not created with no config', done => {
@@ -27,13 +28,14 @@ describe('Probe server', () => {
 });
 
 describe('getProbeConfig', () => {
+  const log = new Logger('getProbeConfig');
     it('returns the probeServer config when siteNames is empty and probeServer is a single object', () => {
       const queueProcessorConfig = {
         probeServer: { bindAddress: '127.0.0.1', port: '8080' }
       };
       const siteNames = [];
 
-      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      const result = getProbeConfig(queueProcessorConfig, siteNames, log);
       assert.deepStrictEqual(result, { bindAddress: '127.0.0.1', port: '8080' });
     });
 
@@ -43,7 +45,7 @@ describe('getProbeConfig', () => {
       };
       const siteNames = [];
 
-      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      const result = getProbeConfig(queueProcessorConfig, siteNames, log);
       assert.strictEqual(result, undefined);
     });
 
@@ -56,7 +58,7 @@ describe('getProbeConfig', () => {
       };
       const siteNames = ['site2'];
 
-      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      const result = getProbeConfig(queueProcessorConfig, siteNames, log);
       assert.deepStrictEqual(result, { site: 'site2', bindAddress: '127.0.0.2', port: '8081' });
     });
 
@@ -68,7 +70,7 @@ describe('getProbeConfig', () => {
       };
       const siteNames = ['site2'];
 
-      const result = getProbeConfig(queueProcessorConfig, siteNames);
+      const result = getProbeConfig(queueProcessorConfig, siteNames, log);
       assert.strictEqual(result, undefined);
     });
 
@@ -81,17 +83,17 @@ describe('getProbeConfig', () => {
         };
         const siteNames = ['site1', 'site2']; // More than one element in siteNames
 
-        const result = getProbeConfig(queueProcessorConfig, siteNames);
+        const result = getProbeConfig(queueProcessorConfig, siteNames, log);
         assert.strictEqual(result, undefined);
     });
 
-    it('returns undefined when probeServer is not an array and siteNames is not empty', () => {
+    it('returns probeserver when probeServer is not an array and siteNames is not empty', () => {
         const queueProcessorConfig = {
             probeServer: { bindAddress: '127.0.0.1', port: '8080' } // probeServer is a single object
         };
         const siteNames = ['site1']; // siteNames is not empty
 
-        const result = getProbeConfig(queueProcessorConfig, siteNames);
-        assert.strictEqual(result, undefined);
+        const result = getProbeConfig(queueProcessorConfig, siteNames, log);
+        assert.deepStrictEqual(result, queueProcessorConfig.probeServer);
     });
   });
