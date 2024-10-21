@@ -73,7 +73,7 @@ const joiSchema = joi.object({
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: joi.alternatives().try(
             probeServerJoi,
-            probeServerPerSite
+            probeServerPerSite,
         ).default({ bindAddress: 'localhost', port: 4042 }),
         circuitBreaker: joi.object().optional(),
     }).required(),
