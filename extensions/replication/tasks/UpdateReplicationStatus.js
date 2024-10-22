@@ -95,11 +95,12 @@ class UpdateReplicationStatus extends BackbeatTask {
         const bucket = queueEntry.getBucket();
         const objectKey = queueEntry.getObjectKey();
         const versionId = queueEntry.getEncodedVersionId();
+        const role = queueEntry.getReplicationRoles()?.split(',')[0];
         const score = Date.now();
         const latestHour = this.statsClient.getSortedSetCurrentHour(score);
         const message = {
             key: getSortedSetKey(site, latestHour),
-            member: getSortedSetMember(bucket, objectKey, versionId),
+            member: getSortedSetMember(bucket, objectKey, versionId, role),
             score,
         };
         this.failedCRRProducer.publishFailedCRREntry(JSON.stringify(message));
