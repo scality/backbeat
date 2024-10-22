@@ -1,7 +1,7 @@
 const fs = require('fs');
 const joi = require('joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
-        retryParamsJoi, probeServerJoi } =
+        retryParamsJoi, probeServerJoi, probeServerPerSite } =
     require('../../lib/config/configItems.joi');
 
 const qpRetryJoi = joi.object({
@@ -71,7 +71,10 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
-        probeServer: probeServerJoi.default(),
+        probeServer: joi.alternatives().try(
+            probeServerJoi,
+            probeServerPerSite,
+        ).default({ bindAddress: 'localhost', port: 4042 }),
         circuitBreaker: joi.object().optional(),
     }).required(),
     replicationStatusProcessor: {

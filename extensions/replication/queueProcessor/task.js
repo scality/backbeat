@@ -22,7 +22,7 @@ const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
 const { connectionString, autoCreateNamespace } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
-const { startProbeServer } = require('../../../lib/util/probe');
+const { startProbeServer, getProbeConfig } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
     require('arsenal').network.probe.ProbeServer;
 const { sendSuccess } = require('arsenal').network.probe.Utils;
@@ -240,7 +240,7 @@ function initAndStart(zkClient) {
         });
 
         startProbeServer(
-            repConfig.queueProcessor.probeServer,
+            getProbeConfig(repConfig.queueProcessor, siteNames, log),
             (err, probeServer) => {
                 if (err) {
                     log.fatal('error creating probe server', {
