@@ -12,7 +12,7 @@ const LifecycleTask = require('../tasks/LifecycleTask');
 const LifecycleTaskV2 = require('../tasks/LifecycleTaskV2');
 const safeJsonParse = require('../util/safeJsonParse');
 const ClientManager = require('../../../lib/clients/ClientManager');
-const { authTypeAssumeRole, supportedLifecycleRules } = require('../../../lib/constants');
+const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
 const {
     formatSupportedLifecycleRules,
