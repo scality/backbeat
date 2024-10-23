@@ -993,7 +993,7 @@ describe('queue processor functional tests with mocking', () => {
                                     s3mock._getMetadataSource(req, url, query, res);
                                     s3mock.resetParam('routes.source.s3.getMetadata.handler');
                                     done();
-                                  }),
+                                  }, { _static: true }),
                 done => queueProcessorSF.processReplicationEntry(
                     s3mock.getParam('kafkaEntry'), err => {
                         assert.ifError(err);
