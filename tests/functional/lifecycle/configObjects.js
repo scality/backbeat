@@ -13,6 +13,14 @@ const kafkaConfig = {
     },
 };
 
+const supportedLifecycleRules = [
+    'expiration',
+    'noncurrentVersionExpiration',
+    'abortIncompleteMultipartUpload',
+    'transitions',
+    'noncurrentVersionTransition'
+];
+
 const lcConfig = {
     forceLegacyListing: true,
     auth: {
@@ -42,6 +50,7 @@ const lcConfig = {
             enabled: true,
         },
     },
+    supportedLifecycleRules,
 };
 
 const repConfig = {
