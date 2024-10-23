@@ -975,7 +975,7 @@ describe('queue processor functional tests with mocking', () => {
                 done => queueProcessorSF.processReplicationEntry(
                     s3mock.getParam('kafkaEntry'), err => {
                         assert.ifError(err);
-                        assert.strictEqual(s3mock.hasPutTargetData, false);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
                         assert(s3mock.hasPutTargetMd);
                         done();
                     }),
