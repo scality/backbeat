@@ -204,14 +204,16 @@ class ReplicationStatusProcessor {
      *   in PEM format
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic
+     * @param {Object} gcConfig - config for garbage collector
      */
     constructor(kafkaConfig, sourceConfig, repConfig,
-                internalHttpsConfig, mConfig) {
+                internalHttpsConfig, mConfig, gcConfig) {
         this.kafkaConfig = kafkaConfig;
         this.sourceConfig = sourceConfig;
         this.repConfig = repConfig;
         this.internalHttpsConfig = internalHttpsConfig;
         this.mConfig = mConfig;
+        this.gcConfig = gcConfig;
         this._consumer = null;
         this._gcProducer = null;
         this._mProducer = null;
@@ -370,8 +372,12 @@ class ReplicationStatusProcessor {
                 });
             },
             done => {
-                this._gcProducer = new GarbageCollectorProducer();
-                this._gcProducer.setupProducer(done);
+                if (this.gcConfig) {
+                    this._gcProducer = new GarbageCollectorProducer();
+                    this._gcProducer.setupProducer(done);
+                } else {
+                    done();
+                }
             },
             done => {
                 this._mProducer = new MetricsProducer(this.kafkaConfig,

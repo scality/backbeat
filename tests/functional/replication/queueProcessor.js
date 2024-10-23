@@ -18,6 +18,8 @@ const replicationConstants = require('../../../extensions/replication/constants'
 const ReplicationAPI =
       require('../../../extensions/replication/ReplicationAPI');
 const TestConfigurator = require('../../utils/TestConfigurator');
+const ReplicationStatusProcessor = require('../../../extensions/replication' +
+    '/replicationStatusProcessor/ReplicationStatusProcessor');
 
 /* eslint-disable max-len */
 
@@ -760,8 +762,6 @@ describe('queue processor functional tests with mocking', () => {
     let copyLocationResultsConsumer;
 
     const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
-    const ReplicationStatusProcessor = require('../../../extensions/replication' +
-                  '/replicationStatusProcessor/ReplicationStatusProcessor');
 
     before(function before(done) {
         this.timeout(60000);
@@ -1450,6 +1450,67 @@ describe('queue processor functional tests with mocking', () => {
                         }),
                 ], done);
             });
+        });
+    });
+});
+
+describe('GC should be created if config is provided', () => {
+    it('should create a GC if config is provided', done => {
+        const replicationStatusProcessor = new ReplicationStatusProcessor(
+            { hosts: 'localhost:9092' },
+            { auth: { type: 'role',
+                      vault: { host: constants.source.vault,
+                               port: 7777 } },
+              s3: { host: constants.source.s3,
+                    port: 7777 },
+              transport: 'http',
+            },
+            { replicationStatusTopic:
+              'backbeat-func-test-repstatus',
+              replicationStatusProcessor: {
+                  retry: {
+                      timeoutS: 5,
+                  },
+                  groupId: 'backbeat-func-test-group-id',
+              },
+              monitorReplicationFailures: true,
+              objectSizeMetrics: [100, 1000],
+            },
+            {},
+            { topic: 'metrics-test-topic' },
+            { topic: 'backbeat-gc' });
+        replicationStatusProcessor.start({ bootstrap: true }, () => {
+            assert(replicationStatusProcessor.getStateVars().gcProducer);
+            replicationStatusProcessor.stop(done);
+        });
+    });
+
+    it('should not create a GC if config is not provided', done => {
+        const replicationStatusProcessor = new ReplicationStatusProcessor(
+            { hosts: 'localhost:9092' },
+            { auth: { type: 'role',
+                      vault: { host: constants.source.vault,
+                               port: 7777 } },
+              s3: { host: constants.source.s3,
+                    port: 7777 },
+              transport: 'http',
+            },
+            { replicationStatusTopic:
+              'backbeat-func-test-repstatus',
+              replicationStatusProcessor: {
+                  retry: {
+                      timeoutS: 5,
+                  },
+                  groupId: 'backbeat-func-test-group-id',
+              },
+              monitorReplicationFailures: true,
+              objectSizeMetrics: [100, 1000],
+            },
+            {},
+            { topic: 'metrics-test-topic' });
+        replicationStatusProcessor.start({ bootstrap: true }, () => {
+            assert.strictEqual(replicationStatusProcessor.getStateVars().gcProducer, null);
+            replicationStatusProcessor.stop(done);
         });
     });
 });
