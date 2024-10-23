@@ -749,7 +749,7 @@ class ReplicateObject extends BackbeatTask {
             },
             // Get data from source bucket and put it on the target bucket
             next => {
-                log.error("sourceCheckIfSizeGreaterThanMB", {
+                log.error('sourceCheckIfSizeGreaterThanMB', {
                     sourceCheckIfSizeGreaterThanMB: this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB,
                     contentLength: sourceEntry.getContentLength()
                 });
