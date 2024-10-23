@@ -122,7 +122,7 @@ class LifecycleConductor {
         const accountCanonicalIds = this._getAccountCanonicalIds(blacklist.accounts);
         this.accountsBlacklisted = new Set(accountCanonicalIds);
         this.onlyBlacklistAccounts = this.bucketsBlacklisted.size === 0 && this.accountsBlacklisted.size > 0;
-        this._vaultAdmin = this.lcConfig.conductor.vaultAdmin || this.lcConfig.auth.vault; 
+        this._vaultAdmin = this.lcConfig.conductor.vaultAdmin || this.lcConfig.auth.vault;
 
         this.logger = new Logger('Backbeat:Lifecycle:Conductor');
         this.vaultClientWrapper = new VaultClientWrapper(
