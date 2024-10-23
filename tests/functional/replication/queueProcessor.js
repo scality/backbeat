@@ -963,28 +963,6 @@ describe('queue processor functional tests with mocking', () => {
             ], done);
         });
 
-        it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
-            s3mock.setParam('source.md.contentLength', 100000000);
-            async.parallel([
-                done => s3mock.setParam('routes.source.s3.getMetadata.handler',
-                                  (req, url, query, res) => {
-                                    s3mock._getMetadataSource(req, url, query, res);
-                                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
-                                    done();
-                                  }, { _static: true }),
-                done => queueProcessorSF.processReplicationEntry(
-                    s3mock.getParam('kafkaEntry'), err => {
-                        assert.ifError(err);
-                        assert.strictEqual(s3mock.hasPutTargetData, true);
-                        assert(s3mock.hasPutTargetMd);
-                        done();
-                    }),
-            ], () => {
-                s3mock.resetParam('source.md.contentLength');
-                done();
-            });
-        });
-
         it('should retry with full replication if metadata-only returns ' +
         'ObjNotFound', done => {
             s3mock.setParam('nbParts', 2);
@@ -1005,6 +983,28 @@ describe('queue processor functional tests with mocking', () => {
                         done();
                     }),
             ], done);
+        });
+
+        it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
+            s3mock.setParam('source.md.contentLength', 100000000);
+            async.parallel([
+                done => s3mock.setParam('routes.source.s3.getMetadata.handler',
+                                  (req, url, query, res) => {
+                                    s3mock._getMetadataSource(req, url, query, res);
+                                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                                    done();
+                                  }, { _static: true }),
+                done => queueProcessorSF.processReplicationEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        done();
+                    }),
+            ], () => {
+                s3mock.resetParam('source.md.contentLength');
+                done();
+            });
         });
     });
 
