@@ -3,6 +3,10 @@ name: tests
 
 env:
   GINKGO_VERSION: v1.15.2
+  TMATE_SERVER_HOST: ${{ secrets.TMATE_SERVER_HOST }}
+  TMATE_SERVER_PORT: ${{ secrets.TMATE_SERVER_PORT }}
+  TMATE_SERVER_RSA_FINGERPRINT: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
+  TMATE_SERVER_ED25519_FINGERPRINT: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
 
 on:
   push:
@@ -160,6 +164,11 @@ jobs:
       with:
         testsuite: replication
         token: ${{ secrets.CODECOV_TOKEN }}
+    
+    - name: Debug wait
+      uses: ./.github/actions/debug-wait
+      timeout-minutes: 60
+      if: always()
 
     - name: run feature lifecycle tests
       uses: ./.github/actions/ft-test
