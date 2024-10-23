@@ -674,7 +674,6 @@ class S3Mock extends TestConfigurator {
     }
 
     _getMetadataSource(req, url, query, res) {
-        assert(query.versionId);
         res.writeHead(200);
         res.end(JSON.stringify({
             Body: JSON.parse(this.getParam('kafkaEntry.value')).value,
