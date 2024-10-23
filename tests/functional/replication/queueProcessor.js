@@ -797,7 +797,7 @@ describe('queue processor functional tests with mocking', () => {
                   },
                   groupId: 'backbeat-func-test-group-id',
                   mpuPartsConcurrency: 10,
-                  sourceCheckIfSizeGreaterThanMB: 0,
+                  sourceCheckIfSizeGreaterThanMB: 10,
               },
             },
             { host: '127.0.0.1',
@@ -930,18 +930,6 @@ describe('queue processor functional tests with mocking', () => {
                     ], done);
                 });
 
-                it('should fail a replication if unable to get metadata', done => {
-                    s3mock.installBackbeatErrorResponder('source.s3.getMetadata',
-                        errors.ObjNotFound,
-                        { once: true });
-                    async.parallel([
-                        done => queueProcessorSF.processReplicationEntry(
-                            s3mock.getParam('kafkaEntry'), () => {
-                                done();
-                            }),
-                    ], done);
-                });
-
                 it('should complete a "copy location" action', done => {
                     sendCopyLocationAction(
                         s3mock, queueProcessorSF, response => {
@@ -963,6 +951,28 @@ describe('queue processor functional tests with mocking', () => {
             s3mock.setParam('source.md.replicationInfo.content',
                             ['METADATA']);
             async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessorSF.processReplicationEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, false);
+                        assert(s3mock.hasPutTargetMd);
+                        done();
+                    }),
+            ], done);
+        });
+
+        it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
+            s3mock.setParam('source.md.contentLength', 100000000);
+            async.parallel([
+                done => s3mock.setParam('routes.source.s3.getMetadata.handler',
+                                  (req, url, query, res) => {
+                                    s3mock._getMetadataSource(req, url, query, res);
+                                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                                    done();
+                                  }, { _static: true }),
                 done => {
                     s3mock.onPutSourceMd = done;
                 },
@@ -1105,6 +1115,18 @@ describe('queue processor functional tests with mocking', () => {
                             assert(!s3mock.hasPutTargetData);
                             assert(!s3mock.hasPutTargetMd);
                             assert.strictEqual(s3mock.partsDeleted.length, 0);
+                            done();
+                        }),
+                ], done);
+            });
+
+            it('should fail a replication if unable to get metadata', done => {
+                s3mock.installBackbeatErrorResponder('source.s3.getMetadata',
+                    errors.ObjNotFound,
+                    { once: true });
+                async.parallel([
+                    done => queueProcessorSF.processReplicationEntry(
+                        s3mock.getParam('kafkaEntry'), () => {
                             done();
                         }),
                 ], done);
