@@ -973,9 +973,6 @@ describe('queue processor functional tests with mocking', () => {
                                     s3mock.resetParam('routes.source.s3.getMetadata.handler');
                                     done();
                                   }, { _static: true }),
-                done => {
-                    s3mock.onPutSourceMd = done;
-                },
                 done => queueProcessorSF.processReplicationEntry(
                     s3mock.getParam('kafkaEntry'), err => {
                         assert.ifError(err);
@@ -983,7 +980,9 @@ describe('queue processor functional tests with mocking', () => {
                         assert(s3mock.hasPutTargetMd);
                         done();
                     }),
-            ], done);
+            ], () => {
+                s3mock.resetParam("source.md.contentLength")
+            });
         });
 
         it('should retry with full replication if metadata-only returns ' +
