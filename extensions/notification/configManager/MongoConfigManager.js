@@ -266,10 +266,13 @@ class MongoConfigManager {
             // retreiving bucket metadata from the metastore
             const bucketMetadata = await this._metastore.findOne({ _id: bucket });
             const notificationConfiguration = bucketMetadata?.value?.notificationConfiguration;
-            // caching the bucket configuration
-            this._cachedConfigs.add(bucket, notificationConfiguration);
             const delay = (Date.now() - startTime) / 1000;
             onConfigManagerConfigGet(false, delay);
+            if (!notificationConfiguration) {
+                return undefined;
+            }
+            // caching the bucket configuration
+            this._cachedConfigs.add(bucket, notificationConfiguration);
             onConfigManagerCacheUpdate('add');
             return {
                 bucket,
