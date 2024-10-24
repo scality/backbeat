@@ -37,8 +37,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
      */
     constructor(params) {
         super(params);
-        this._authConfig = params.authConfig || params.lcConfig.conductor.auth || params.lcConfig.auth;
-        this._vaultAdmin = params.vaultAdmin || params.lcConfig?.conductor.vaultAdmin || params.lcConfig?.auth.vault;
+        this._authConfig = params.authConfig || params.lcConfig?.auth;
+        this._vaultAdmin = params.vaultAdmin || params.lcConfig?.auth.vault;
 
 
         this.vaultClientWrapper = new VaultClientWrapper(
