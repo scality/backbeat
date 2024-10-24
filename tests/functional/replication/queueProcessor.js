@@ -1007,7 +1007,6 @@ describe('queue processor functional tests with mocking', () => {
                         done();
                     }),
             ], () => {
-                
                 done();
             });
         });
