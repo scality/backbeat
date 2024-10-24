@@ -1002,7 +1002,6 @@ describe('queue processor functional tests with mocking', () => {
                         done();
                     }),
             ], () => {
-                s3mock.resetParam('contentLength');
                 done();
             });
         });
