@@ -42,6 +42,13 @@ const lcConfig = {
             enabled: true,
         },
     },
+    supportedLifecycleRules: [
+        'expiration',
+        'noncurrentVersionExpiration',
+        'abortIncompleteMultipartUpload',
+        'transitions',
+        'noncurrentVersionTransition'
+    ]
 };
 
 const repConfig = {

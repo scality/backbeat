@@ -2,7 +2,6 @@ const { RulesReducer } = require('./RulesReducer');
 const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } = require('../../../lib/constants');
 
 const { s3middleware } = require('arsenal');
-const { supportedLifecycleRules } = require('arsenal').constants;
 const { scaleMsPerDay } = s3middleware.objectUtils;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
@@ -197,11 +196,12 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
 /**
  * Formats the array of supported lifecycle rules in Arsenal so that
  * they correspond to how they are written in the lifecycle configuration.
- * @param {string[]} supportedLifecycleRules list of supported lifecycle rules
+ * @param {Object} lcConfig - Lifecycle configuration object
+ * @param {string[]} lcConfig.supportedLifecycleRules - List of supported lifecycle rules
  * @returns {string[]} formatted supported lifecycle rules
  */
-function getFormattedSupportedLifecycleRules() {
-   return supportedLifecycleRules.map(rule => {
+function formatSupportedLifecycleRules(lcConfig) {
+   return lcConfig.supportedLifecycleRules.map(rule => {
         if (rule === 'noncurrentVersionTransition') {
             return 'NoncurrentVersionTransitions';
         }
@@ -222,6 +222,6 @@ function isExpirationRule(ruleName) {
 
 module.exports = {
     rulesToParams,
-    getFormattedSupportedLifecycleRules,
+    formatSupportedLifecycleRules,
     isExpirationRule,
 };
