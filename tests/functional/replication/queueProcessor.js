@@ -1004,7 +1004,7 @@ describe('queue processor functional tests with mocking', () => {
                         assert.ifError(err);
                         assert.strictEqual(s3mock.hasPutTargetData, true);
                         assert(s3mock.hasPutTargetMd);
-                        assert(checkMdCalled)
+                        assert(checkMdCalled);
                         done();
                     }),
             ], () => {
