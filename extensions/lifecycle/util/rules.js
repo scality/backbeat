@@ -7,6 +7,7 @@ const { scaleMsPerDay } = s3middleware.objectUtils;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
+const TRANSITION_RULES = ['transitions', 'noncurrentVersionTransition'];
 
 function _getBeforeDate(currentDate, days, options) {
     const { timeProgressionFactor } = options;
@@ -220,8 +221,14 @@ function isExpirationRule(ruleName) {
         ruleName === 'AbortIncompleteMultipartUpload';
 }
 
+
+function rulesSupportTransition(lcRules) {
+    return lcRules.some(rule => TRANSITION_RULES.includes(rule));
+}
+
 module.exports = {
     rulesToParams,
     getFormattedSupportedLifecycleRules,
     isExpirationRule,
+    rulesSupportTransition,
 };
