@@ -343,12 +343,8 @@ describe('MongoConfigManager ::', () => {
             manager._metastore = {
                 findOne: () => ({ value: {} }),
             };
-            const expectedConfig = {
-                bucket: 'example-bucket-1',
-                notificationConfiguration: undefined,
-            };
             const config = await manager.getConfig('example-bucket-1');
-            assert.deepEqual(config, expectedConfig);
+            assert.deepEqual(config, undefined);
         });
 
         it('should return undefined when mongo findOne fails', async () => {
