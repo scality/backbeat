@@ -3,6 +3,8 @@ const sinon = require('sinon');
 
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
+const MetricsProducer = require('../../lib/MetricsProducer');
+const MetricsConsumer = require('../../lib/MetricsConsumer');
 const constants = require('../../lib/constants');
 const { errors } = require('arsenal');
 
@@ -187,6 +189,59 @@ describe('QueuePopulator', () => {
                 assert.deepEqual(err, errors.InternalError);
                 assert(qp.logReaders[0].processLogEntries.calledOnce);
                 return done();
+            });
+        });
+    });
+
+    describe('_setupMetricsClients', () => {
+        let queuePopulatorWithReplication;
+        let zkConfig;
+        let kafkaConfig;
+        let qpConfig;
+        let httpsConfig;
+        let mConfig;
+        let rConfig;
+        let vConfig;
+        let extConfigs;
+
+        beforeEach(() => {
+            zkConfig = { connectionString: 'localhost:2181' };
+            kafkaConfig = { hosts: 'localhost:9092' };
+            qpConfig = { logSource: 'bucketd', zookeeperPath: '/test' };
+            httpsConfig = {};
+            mConfig = { topic: 'metrics' };
+            rConfig = {};
+            vConfig = {};
+            extConfigs = { replication: {} };
+
+            queuePopulatorWithReplication = new QueuePopulator(
+                zkConfig, kafkaConfig, qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs
+            );
+        });
+
+        it('should set up metrics clients when replication extension is configured', done => {
+            const setupProducerStub = sinon.stub(MetricsProducer.prototype, 'setupProducer').callsFake(cb => cb());
+            const startConsumerStub = sinon.stub(MetricsConsumer.prototype, 'start').callsFake(() => {});
+
+            queuePopulatorWithReplication._setupMetricsClients(err => {
+                assert.ifError(err);
+                assert(queuePopulatorWithReplication._mProducer instanceof MetricsProducer);
+                assert(queuePopulatorWithReplication._mConsumer instanceof MetricsConsumer);
+                assert(setupProducerStub.calledOnce);
+                assert(startConsumerStub.calledOnce);
+
+                setupProducerStub.restore();
+                startConsumerStub.restore();
+                done();
+            });
+        });
+
+        it('should not set up metrics clients when replication extension is not configured', done => {
+            qp._setupMetricsClients(err => {
+                assert.ifError(err);
+                assert.strictEqual(qp._mProducer, null);
+                assert.strictEqual(qp._mConsumer, null);
+                done();
             });
         });
     });
