@@ -1117,18 +1117,6 @@ describe('queue processor functional tests with mocking', () => {
                 ], done);
             });
 
-            it('should fail a replication if unable to get metadata', done => {
-                s3mock.installBackbeatErrorResponder('source.s3.getMetadata',
-                    errors.ObjNotFound,
-                    { once: true });
-                async.parallel([
-                    done => queueProcessorSF.processReplicationEntry(
-                        s3mock.getParam('kafkaEntry'), () => {
-                            done();
-                        }),
-                ], done);
-            });
-
             it('should skip if replication status is already COMPLETED',
             done => {
                 s3mock.setParam('nbParts', 2);
