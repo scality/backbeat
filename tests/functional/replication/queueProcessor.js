@@ -984,6 +984,22 @@ describe('queue processor functional tests with mocking', () => {
                     }),
             ], done);
         });
+
+        it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
+            s3mock.setParam('contentLength', 100000000);
+            async.parallel([
+                done => queueProcessorSF.processReplicationEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        done();
+                    }),
+            ], () => {
+                s3mock.resetParam('contentLength');
+                done();
+            });
+        });
     });
 
     describe('error paths', function errorPaths() {
