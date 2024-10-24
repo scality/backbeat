@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const { rulesToParams } = require('../../../extensions/lifecycle/util/rules');
+const { rulesToParams, rulesSupportTransition } = require('../../../extensions/lifecycle/util/rules');
 
 const ONE_MINUTE_IN_SEC = 60 * 1000;
 const ONE_DAY_IN_SEC = 24 * 60 * ONE_MINUTE_IN_SEC;
@@ -988,5 +988,36 @@ describe('rulesToParams with versioning Disabled', () => {
 
         const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, customOptions);
         assert.deepStrictEqual(result, expected);
+    });
+});
+
+describe('rulesSupportTransition', () => {
+    it('sould return false if no transition rule supported', () => {
+        const rules = [
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+        ];
+        assert.strictEqual(rulesSupportTransition(rules), false);
+    });
+
+    it('sould return true if "transitions" rule supported', () => {
+        const rules = [
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+            'transitions',
+        ];
+        assert.strictEqual(rulesSupportTransition(rules), true);
+    });
+
+    it('sould return true if "noncurrentVersionTransition" rule supported', () => {
+        const rules = [
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+            'noncurrentVersionTransition',
+        ];
+        assert.strictEqual(rulesSupportTransition(rules), true);
     });
 });

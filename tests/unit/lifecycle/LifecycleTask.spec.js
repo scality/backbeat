@@ -83,6 +83,7 @@ const lp = {
         {
             ncvHeap: new Map(),
             lcOptions: timeOptions,
+            log: fakeLogger,
         }
     ),
 };
@@ -99,6 +100,10 @@ describe('lifecycle task helper methods', () => {
             'transitions',
             'noncurrentVersionTransitions',
         ]);
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     describe('_mergeSortedVersionsAndDeleteMarkers', () => {
@@ -2122,6 +2127,74 @@ describe('lifecycle task helper methods', () => {
                     done();
                 }
             );
+        });
+    });
+
+    describe('processBucketEntry', () => {
+        it('should snapshot datamover topic offsets when transition is supported', done => {
+            const s3target = {
+                listMultipartUploads: () => ({
+                    on: sinon.stub().returns(),
+                    // deliberatly failing to avoid going through all the logic
+                    send: sinon.stub().yields(errors.NoSuchBucket),
+                }),
+            };
+            const backbeatMetadataProxy = sinon.stub();
+            const bucketData = {
+                target: {
+                    owner: 'test-user',
+                    bucket: 'test-bucket',
+                },
+                details: {},
+            };
+            const bucketLCRules = {
+                Rules: [],
+            };
+            const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
+            lct.setSupportedRules([
+                'expiration',
+                'noncurrentVersionExpiration',
+                'abortIncompleteMultipartUpload',
+                'transitions',
+                'noncurrentVersionTransitions',
+            ]);
+            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
+                assert.deepEqual(err, errors.NoSuchBucket);
+                assert(snapshot.calledOnce);
+                done();
+            });
+        });
+
+        it('should not snapshot datamover topic offsets when transition is not supported', done => {
+            const s3target = {
+                listMultipartUploads: () => ({
+                    on: sinon.stub().returns(),
+                    // deliberatly failing to avoid going through all the logic
+                    send: sinon.stub().yields(errors.NoSuchBucket),
+                }),
+            };
+            const backbeatMetadataProxy = sinon.stub();
+            const bucketData = {
+                target: {
+                    owner: 'test-user',
+                    bucket: 'test-bucket',
+                },
+                details: {},
+            };
+            const bucketLCRules = {
+                Rules: [],
+            };
+            const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
+            lct.setSupportedRules([
+                'expiration',
+                'noncurrentVersionExpiration',
+                'abortIncompleteMultipartUpload',
+            ]);
+            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
+                assert.deepEqual(err, errors.NoSuchBucket);
+                assert(snapshot.notCalled);
+                done();
+            });
         });
     });
 });
