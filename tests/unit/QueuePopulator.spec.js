@@ -3,6 +3,8 @@ const sinon = require('sinon');
 
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
+const MetricsProducer = require('../../lib/MetricsProducer');
+const MetricsConsumer = require('../../lib/MetricsConsumer');
 const constants = require('../../lib/constants');
 const { errors } = require('arsenal');
 
