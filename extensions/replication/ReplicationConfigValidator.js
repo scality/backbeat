@@ -76,6 +76,7 @@ const joiSchema = joi.object({
             probeServerPerSite,
         ).default({ bindAddress: 'localhost', port: 4042 }),
         circuitBreaker: joi.object().optional(),
+        sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
     }).required(),
     replicationStatusProcessor: {
         groupId: joi.string().required(),

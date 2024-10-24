@@ -676,7 +676,6 @@ class S3Mock extends TestConfigurator {
     }
 
     _getMetadataSource(req, url, query, res) {
-        assert(query.versionId);
         res.writeHead(200);
         res.end(JSON.stringify({
             Body: JSON.parse(this.getParam('kafkaEntry.value')).value,
@@ -797,6 +796,7 @@ describe('queue processor functional tests with mocking', () => {
                   },
                   groupId: 'backbeat-func-test-group-id',
                   mpuPartsConcurrency: 10,
+                  sourceCheckIfSizeGreaterThanMB: 10,
               },
             },
             { host: '127.0.0.1',
@@ -983,6 +983,62 @@ describe('queue processor functional tests with mocking', () => {
                         done();
                     }),
             ], done);
+        });
+
+        it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
+            s3mock.setParam('contentLength', 100000000);
+            let checkMdCalled = false;
+            s3mock.setParam('routes.source.s3.getMetadata.handler',
+                (req, url, query, res) => {
+                    checkMdCalled = true;
+                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                    s3mock._getMetadataSource(req, url, query, res);
+                }, { _static: true });
+
+            async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessorSF.processReplicationEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        assert(checkMdCalled);
+                        done();
+                    }),
+            ], () => {
+                s3mock.resetParam('contentLength');
+                done();
+            });
+        });
+
+        it('should not check object MD if size is smaller than sourceCheckIfSizeGreaterThanMB', done => {
+            s3mock.setParam('contentLength', 1);
+            let checkMdCalled = false;
+            s3mock.setParam('routes.source.s3.getMetadata.handler',
+                (req, url, query, res) => {
+                    checkMdCalled = true;
+                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                    s3mock._getMetadataSource(req, url, query, res);
+                }, { _static: true });
+
+            async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessorSF.processReplicationEntry(
+                    s3mock.getParam('kafkaEntry'), err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        assert.strictEqual(checkMdCalled, false);
+                        done();
+                    }),
+            ], () => {
+                s3mock.resetParam('contentLength');
+                done();
+            });
         });
     });
 
