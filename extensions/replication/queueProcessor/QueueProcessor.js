@@ -406,6 +406,7 @@ class QueueProcessor extends EventEmitter {
             groupId,
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
+            logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
             canary: true,
             circuitBreaker: this.circuitBreakerConfig,
             circuitBreakerMetrics: {
@@ -1019,6 +1020,18 @@ class QueueProcessor extends EventEmitter {
      */
     static async handleMetrics(res, log) {
         log.debug('metrics requested');
+
+        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS) {
+            // consumer stats lag is on a different update cycle so we need to
+            // update the metrics when requested
+            const lagStats = this._consumer.consumerStats.lag;
+            Object.keys(lagStats).forEach(partition => {
+                metricsHandler.lag({
+                    partition,
+                    serviceName: this.serviceName,
+                }, lagStats[partition]);
+            });
+        }
         const metrics = await ZenkoMetrics.asPrometheus();
         res.writeHead(200, {
             'Content-Type': ZenkoMetrics.asPrometheusContentType(),
