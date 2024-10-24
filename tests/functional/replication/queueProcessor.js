@@ -987,7 +987,13 @@ describe('queue processor functional tests with mocking', () => {
 
         it('should check object MD if size is bigger than sourceCheckIfSizeGreaterThanMB', done => {
             s3mock.setParam('contentLength', 100000000);
-            let checkMdCalled = true;
+            let checkMdCalled = false;
+            s3mock.setParam('routes.source.s3.getMetadata.handler',
+                (req, url, query, res) => {
+                    checkMdCalled = true;
+                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                    s3mock._getMetadataSource(req, url, query, res);
+                }, { _static: true });
 
             async.parallel([
                 done => {
@@ -1002,7 +1008,8 @@ describe('queue processor functional tests with mocking', () => {
                         done();
                     }),
             ], () => {
-                s3mock.resetParam('contentLength');
+                s3mock.setParam('contentLength', this.getParam('partsContents')
+                .reduce((sum, partBody) => sum + partBody.length, 0));
                 done();
             });
         });
