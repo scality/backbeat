@@ -3,6 +3,7 @@ const util = require('util');
 
 const { isMasterKey } = require('arsenal').versioning;
 const { usersBucket, mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
+const VID_SEP = require('arsenal').versioning.VersioningConstants.VersionId.Separator;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
 const messageUtil = require('./utils/message');
@@ -38,8 +39,78 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {boolean} - true if bucket entry
      */
     _isBucketEntry(bucket, key) {
-        return ((bucket.toLowerCase() === notifConstants.bucketMetastore && !!key)
+        return ((bucket.toLowerCase() === this.notificationConfig.bucketMetastore && !!key)
             || key === undefined);
+    }
+
+    /**
+     * Get bucket attributes from log entry
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - bucket attributes if available
+     */
+    _getBucketAttributes(value) {
+        if (value && value.attributes) {
+            const { error, result } = safeJsonParse(value.attributes);
+            if (error) {
+                return undefined;
+            }
+            return result;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get bucket name from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {String|undefined} - bucket name if available
+     */
+    _getBucketNameFromAttributes(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.name) {
+            return attributes.name;
+        }
+        return undefined;
+    }
+
+    /**
+     * Get notification configuration from bucket attributes
+     *
+     * @param {Object} value - log entry object
+     * @return {Object|undefined} - notification configuration if available
+     */
+    _getBucketNotificationConfiguration(value) {
+        const attributes = this._getBucketAttributes(value);
+        if (attributes && attributes.notificationConfiguration) {
+            return attributes.notificationConfiguration;
+        }
+        return undefined;
+    }
+
+    /**
+     * Process bucket entry from the log
+     *
+     * @param {string} bucket - bucket name from log entry
+     * @param {Object} value - log entry object
+     * @return {undefined}
+     */
+    _processBucketEntry(bucket, value) {
+        const bucketName = this._getBucketNameFromAttributes(value);
+        const notificationConfiguration
+            = this._getBucketNotificationConfiguration(value);
+        if (notificationConfiguration &&
+            Object.keys(notificationConfiguration).length > 0) {
+            const bnConfig = {
+                bucket: bucketName,
+                notificationConfiguration,
+            };
+            // bucket notification config is available, update node
+            this.bnConfigManager.setConfig(bucketName, bnConfig);
+            return undefined;
+        }
+        // bucket was deleter or notification conf has been removed, so remove zk node
+        return this.bnConfigManager.removeConfig(bucketName || bucket);
     }
 
     /**
@@ -47,18 +118,21 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * to display according to the
      * versioning state of the object
      * @param {Object} value log entry object
+     * @param {Object} overheadFields - extra fields
+     * @param {Object} overheadFields.versionId - object versionId
      * @return {String} versionId
      */
-    _getVersionId(value) {
+    _getVersionId(value, overheadFields) {
+        const versionId = value.versionId || (overheadFields && overheadFields.versionId);
         const isNullVersion = value.isNull;
-        const isVersioned = !!value.versionId;
+        const isVersioned = !!versionId;
         // Versioning suspended objects have
         // a versionId, however it is internal
         // and should not be used to get the object
         if (isNullVersion || !isVersioned) {
             return null;
         } else {
-            return value.versionId;
+            return versionId;
         }
     }
 
@@ -104,33 +178,68 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     }
 
     /**
+     * Extract base key from versioned key
+     *
+     * @param {String} key - object key
+     * @return {String} - versioned base key
+     */
+    _extractVersionedBaseKey(key) {
+        return key.split(VID_SEP)[0];
+    }
+
+    /**
+     * Returns the dateTime of the event
+     * based on the event message property if existent
+     * or overhead fields
+     * @param {ObjectMD} value object metadata
+     * @param {Object} overheadFields overhead fields
+     * @param {Object} overheadFields.commitTimestamp - Kafka commit timestamp
+     * @param {Object} overheadFields.opTimestamp - MongoDB operation timestamp
+     * @returns {string} dateTime of the event
+     */
+    _getEventDateTime(value, overheadFields) {
+        if (overheadFields) {
+            return overheadFields.opTimestamp || overheadFields.commitTimestamp || null;
+        }
+        return (value && value[notifConstants.eventMessageProperty.dateTime]) || null;
+    }
+
+    /**
      * Process object entry from the log
      *
      * @param {String} bucket - bucket
      * @param {String} key - object key
      * @param {Object} value - log entry object
-     * @param {String} timestamp - operation timestamp
+     * @param {String} type - log entry type
+     * @param {Object} overheadFields - extra fields
+     * @param {Object} overheadFields.commitTimestamp - Kafka commit timestamp
+     * @param {Object} overheadFields.opTimestamp - MongoDB operation timestamp
      * @return {undefined}
      */
-    async _processObjectEntry(bucket, key, value, timestamp) {
+    async _processObjectEntry(bucket, key, value, type, overheadFields) {
         this._metricsStore.notifEvent();
         if (!this._shouldProcessEntry(key, value)) {
             return undefined;
         }
-        const { eventMessageProperty } = notifConstants;
-        const eventType = value[eventMessageProperty.eventType];
+        const { eventMessageProperty, deleteEvent } = notifConstants;
+        let eventType = value[eventMessageProperty.eventType];
+        if (eventType === undefined && type === 'del') {
+            eventType = deleteEvent;
+        }
         if (!this._isNotificationEventSupported(eventType)) {
             return undefined;
         }
-        const versionId = this._getVersionId(value);
+        const baseKey = this._extractVersionedBaseKey(key);
+        const versionId = this._getVersionId(value, overheadFields);
+        const dateTime = this._getEventDateTime(value, overheadFields);
         const config = await this.bnConfigManager.getConfig(bucket);
         if (config && Object.keys(config).length > 0) {
             const ent = {
                 bucket,
-                key: value.key,
+                key: baseKey,
                 eventType,
                 versionId,
-                dateTime: timestamp,
+                dateTime,
             };
             this.log.debug('validating entry', {
                 method: 'NotificationQueuePopulator._processObjectEntry',
@@ -149,20 +258,23 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                     return undefined;
                 }
                 // get destination specific notification config
-                const destBnConf = config.queueConfig.filter(
-                    c => c.queueArn.split(':').pop()
-                        === destination.resource);
-                if (!destBnConf.length) {
+                const queueConfig = config.notificationConfiguration.queueConfig.filter(
+                    c => c.queueArn.split(':').pop() === destination.resource
+                );
+                if (!queueConfig.length) {
                     // skip, if there is no config for the current
                     // destination resource
                     return undefined;
                 }
                 // pass only destination resource specific config to
                 // validate entry
-                const bnConfig = {
-                    queueConfig: destBnConf,
+                const destConfig = {
+                    bucket,
+                    notificationConfiguration: {
+                        queueConfig,
+                    },
                 };
-                const { isValid, matchingConfig } = configUtil.validateEntry(bnConfig, ent);
+                const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, ent);
                 if (isValid) {
                     const message
                         = messageUtil.addLogAttributes(value, ent);
@@ -200,7 +312,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined} Promise|undefined
      */
     filterAsync(entry, cb) {
-        const { bucket, key, overheadFields } = entry;
+        if (this.notificationConfig.ignoreEmptyEvents && !entry.value) {
+            return cb();
+        }
+        const { bucket, key, type, overheadFields } = entry;
         const value = entry.value || '{}';
         const { error, result } = safeJsonParse(value);
         // ignore if entry's value is not valid
@@ -208,16 +323,18 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             this.log.error('could not parse log entry', { value, error });
             return cb();
         }
-        // ignore bucket operations, mpu's or if the entry has no bucket
-        const isUserBucketOp = !bucket || bucket === usersBucket;
-        const isMpuOp = key && key.startsWith(mpuBucketPrefix);
-        const isBucketOp = bucket && result && this._isBucketEntry(bucket, key);
-        if ([isUserBucketOp, isMpuOp, isBucketOp].some(cond => cond)) {
+        // ignore bucket op, mpu's or if the entry has no bucket
+        if (!bucket || bucket === usersBucket || (key && key.startsWith(mpuBucketPrefix))) {
+            return cb();
+        }
+        // bucket notification configuration updates
+        if (bucket && result && this._isBucketEntry(bucket, key)) {
+            this._processBucketEntry(key, result);
             return cb();
         }
         // object entry processing - filter and publish
         if (key && result) {
-            return this._processObjectEntryCb(bucket, key, result, overheadFields.opTimestamp, cb);
+            return this._processObjectEntryCb(bucket, key, result, type, overheadFields, cb);
         }
         return cb();
     }

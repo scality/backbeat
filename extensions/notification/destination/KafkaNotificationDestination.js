@@ -47,8 +47,12 @@ class KafkaNotificationDestination extends NotificationDestination {
 
     _setupProducer(done) {
         const { host, port, topic, pollIntervalMs, auth } = this._destinationConfig;
+        let kafkaHost = host;
+        if (port) {
+            kafkaHost = `${host}:${port}`;
+        }
         const producer = new KafkaProducer({
-            kafka: { hosts: `${host}:${port}` },
+            kafka: { hosts: kafkaHost },
             topic,
             pollIntervalMs,
             auth,

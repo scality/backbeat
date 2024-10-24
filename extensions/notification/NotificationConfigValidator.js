@@ -18,7 +18,7 @@ const destinationSchema = joi.object({
     resource: joi.string().required(),
     type: joi.string().required(),
     host: joi.string().required(),
-    port: joi.number().required(),
+    port: joi.number().optional(),
     internalTopic: joi.string(),
     topic: joi.string().required(),
     auth: authSchema.default({}),
@@ -28,12 +28,15 @@ const joiSchema = joi.object({
     topic: joi.string(),
     monitorNotificationFailures: joi.boolean().default(true),
     notificationFailedTopic: joi.string().optional(),
+    zookeeperPath: joi.string().optional(),
     queueProcessor: {
         groupId: joi.string().required(),
         concurrency: joi.number().greater(0).default(1000),
     },
     destinations: joi.array().items(destinationSchema).default([]),
-    probeServer: probeServerJoi.default()
+    probeServer: probeServerJoi.default(),
+    ignoreEmptyEvents: joi.boolean().default(true),
+    bucketMetastore: joi.string().default('__metastore'),
 });
 
 function configValidator(backbeatConfig, extConfig) {
