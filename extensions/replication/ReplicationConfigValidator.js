@@ -83,6 +83,9 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(10),
         probeServer: probeServerJoi.default(),
     },
+    replayProcessor: joi.object({
+        probeServer: probeServerPerSite,
+    }).optional(),
     objectSizeMetrics: joi.array().items(joi.number()).default(OBJECT_SIZE_METRICS),
 });
 
