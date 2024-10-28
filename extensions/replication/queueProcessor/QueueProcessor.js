@@ -30,7 +30,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
-const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapHistogramObserve, wrapGaugeSet } = require('../../../lib/util/metrics');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 const {
@@ -77,6 +77,12 @@ const metadataReplicationBytesMetric = ZenkoMetrics.createCounter({
     name: 's3_replication_metadata_bytes_total',
     help: 'Total number of bytes replicated for metadata operation',
     labelNames: ['origin', 'serviceName', 'location'],
+});
+
+const kafkaLagMetric = ZenkoMetrics.createGauge({
+    name: 's3_replication_queue_lag',
+    help: 'Number of update entries waiting to be consumed from the Kafka topic',
+    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
 });
 
 const sourceDataBytesMetric = ZenkoMetrics.createCounter({
@@ -133,6 +139,7 @@ const metricsHandler = {
     dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric, defaultLabels),
     metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric, defaultLabels),
     sourceDataBytes: wrapCounterInc(sourceDataBytesMetric, defaultLabels),
+    lag: wrapGaugeSet(kafkaLagMetric, defaultLabels),
     reads: wrapCounterInc(readMetric, defaultLabels),
     writes: wrapCounterInc(writeMetric, defaultLabels),
     timeElapsed: wrapHistogramObserve(timeElapsedMetric, defaultLabels),
