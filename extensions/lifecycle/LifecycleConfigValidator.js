@@ -6,7 +6,6 @@ const {
     mongoJoi,
     probeServerJoi,
     retryParamsJoi,
-    supportedLifecycleRulesJoi,
 } = require('../../lib/config/configItems.joi');
 
 const { supportedLifecycleRules }  = require('../../lib/constants');

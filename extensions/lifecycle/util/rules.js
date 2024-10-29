@@ -3,7 +3,6 @@ const { lifecycleListing: { NON_CURRENT_TYPE, CURRENT_TYPE, ORPHAN_DM_TYPE } } =
 
 const { s3middleware } = require('arsenal');
 const { scaleMsPerDay } = s3middleware.objectUtils;
-const config = require('../../../lib/Config');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
