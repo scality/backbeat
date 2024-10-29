@@ -83,6 +83,13 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 circuitBreakers: {
                     tripped: () => false,
                 },
+                supportedRules: [
+                    'expiration',
+                    'noncurrentVersionExpiration',
+                    'abortIncompleteMultipartUpload',
+                    'transitions',
+                    'noncurrentVersionTransition'
+                ],
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);
