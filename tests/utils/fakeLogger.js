@@ -6,6 +6,7 @@ const fakeLogger = {
     warn: console.warn,    // eslint-disable-line no-console
     getSerializedUids: () => {},
     end: () => fakeLogger,
+    newRequestLogger: () => fakeLogger,
 };
 
 module.exports = fakeLogger;

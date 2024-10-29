@@ -61,13 +61,16 @@ class MockRequestAPI extends EventEmitter {
 }
 
 class BackbeatClientMock {
-    constructor() {
+    constructor(params) {
         this.response = null;
         this.batchDeleteResponse = {};
         this.times = {
             batchDeleteResponse: 0,
             deleteObjectFromExpiration: 0,
         };
+        if (params?.isS3c) {
+            this.deleteObjectFromExpiration = undefined;
+        }
     }
 
     deleteObjectFromExpiration() {
@@ -124,6 +127,10 @@ class BackbeatMetadataProxyMock {
             return cb(this.error);
         }
         return cb(null, this.indexesObj);
+    }
+
+    setError(error) {
+        this.error = error;
     }
 
     putBucketIndexes(bucket, indexes, log, cb) {
@@ -186,6 +193,7 @@ class S3ClientMock {
             headObject: 0,
             deleteObject: 0,
             deleteMultipartObject: 0,
+            abortMultipartUpload: 0,
         };
     }
 
@@ -215,6 +223,12 @@ class S3ClientMock {
 
     deleteMultipartObject() {
         this.calls.deleteMultipartObject += 1;
+        this.assertRespIsSet();
+        return new S3RequestMock(this.response.error, this.response.data);
+    }
+
+    abortMultipartUpload() {
+        this.calls.abortMultipartUpload += 1;
         this.assertRespIsSet();
         return new S3RequestMock(this.response.error, this.response.data);
     }

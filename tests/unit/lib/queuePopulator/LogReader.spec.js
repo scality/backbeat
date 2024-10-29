@@ -1,5 +1,6 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const stream = require('stream');
 
 const ZookeeperMock = require('zookeeper-mock');
 
@@ -23,6 +24,12 @@ class MockLogConsumer {
                 cb(null, {});
             }
         });
+    }
+}
+
+class MockRecordStream extends stream.PassThrough {
+    constructor() {
+        super({ objectMode: true });
     }
 }
 
@@ -110,6 +117,7 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
+                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -155,6 +163,7 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
+                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -241,6 +250,258 @@ describe('LogReader', () => {
                 assert(processLogEntryStb.calledTwice);
                 assert.strictEqual(batchState.logStats.nbLogEntriesRead, 2);
                 return done();
+            });
+        });
+    });
+
+    describe('_processLogEntry', () => {
+        [
+            {
+                description: 'without overhead fields',
+                overhead: null,
+            }, {
+                description: 'with overhead fields',
+                overhead: {
+                    versionId: '1234',
+                },
+            }
+        ].forEach(params => {
+            it(`should pass the proper fields to the filter method (${params.description})`, done => {
+                const date = Date.now();
+                const record = {
+                    db: 'example-bucket',
+                    timestamp: date,
+                };
+                const entry = {
+                    type: 'put',
+                    key: 'example-key',
+                    timestamp: date,
+                    value: null,
+                    overhead: params.overhead,
+                };
+                logReader._extensions = [
+                    {
+                        filter: sinon.stub().returns(),
+                    },
+                ];
+                logReader._processLogEntry({}, record, entry, err => {
+                    assert.ifError(err);
+                    assert(logReader._extensions[0].filter.calledWithExactly({
+                        type: 'put',
+                        bucket: 'example-bucket',
+                        key: 'example-key',
+                        value: null,
+                        logReader,
+                        overheadFields: {
+                            commitTimestamp: date,
+                            opTimestamp: date,
+                            versionId: undefined,
+                            ...params.overhead,
+                        },
+                    }));
+                    done();
+                });
+            });
+        });
+    });
+
+    describe('processLogEntries', () => {
+        it('should shutdown when batch processing is stuck and CRASH_ON_BATCH_TIMEOUT is set', done => {
+            process.env.CRASH_ON_BATCH_TIMEOUT = true;
+            logReader._batchTimeoutSeconds = 1;
+            // logReader will become stuck as _processReadRecords will never
+            // call the callback
+            sinon.stub(logReader, '_processReadRecords').returns();
+            let emmitted = false;
+            process.once('SIGTERM', () => {
+                emmitted = true;
+            });
+            logReader.processLogEntries({}, () => {});
+            setTimeout(() => {
+                assert.strictEqual(emmitted, true);
+                delete process.env.CRASH_ON_BATCH_TIMEOUT;
+                done();
+            }, 2000);
+        }).timeout(4000);
+
+        it('should fail healthcheck when batch processing is stuck', done => {
+            delete process.env.CRASH_ON_BATCH_TIMEOUT;
+            logReader._batchTimeoutSeconds = 1;
+            // logReader will become stuck as _processReadRecords will never
+            // call the callback
+            sinon.stub(logReader, '_processReadRecords').returns();
+            let emmitted = false;
+            process.once('SIGTERM', () => {
+                emmitted = true;
+            });
+            logReader.processLogEntries({}, () => {});
+            setTimeout(() => {
+                assert.strictEqual(emmitted, false);
+                assert.strictEqual(logReader.batchProcessTimedOut(), true);
+                done();
+            }, 2000);
+        }).timeout(4000);
+
+        it('should not shutdown if timeout not reached', done => {
+            process.env.CRASH_ON_BATCH_TIMEOUT = true;
+            sinon.stub(logReader, '_processReadRecords').yields();
+            sinon.stub(logReader, '_processPrepareEntries').yields();
+            sinon.stub(logReader, '_processFilterEntries').yields();
+            sinon.stub(logReader, '_processPublishEntries').yields();
+            sinon.stub(logReader, '_processSaveLogOffset').yields();
+            let emmitted = false;
+            process.once('SIGTERM', () => {
+                emmitted = true;
+            });
+            logReader.processLogEntries({}, () => {
+                assert.strictEqual(emmitted, false);
+                delete process.env.CRASH_ON_BATCH_TIMEOUT;
+                done();
+            });
+        });
+
+        it('should not fail healthcheck if timeout not reached', done => {
+            delete process.env.CRASH_ON_BATCH_TIMEOUT;
+            sinon.stub(logReader, '_processReadRecords').yields();
+            sinon.stub(logReader, '_processPrepareEntries').yields();
+            sinon.stub(logReader, '_processFilterEntries').yields();
+            sinon.stub(logReader, '_processPublishEntries').yields();
+            sinon.stub(logReader, '_processSaveLogOffset').yields();
+            logReader.processLogEntries({}, () => {
+                assert.strictEqual(logReader.batchProcessTimedOut(), false);
+                done();
+            });
+        });
+    });
+
+    describe('_processPrepareEntries', () => {
+        it('should consume "batchState.maxRead" logs from tailable stream', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: true,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 3,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 5; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, true);
+                done();
+            });
+        });
+
+        it('should consume and return if tailable stream doesn\'t have enough records', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: true,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 30,
+                startTime: Date.now(),
+                timeoutMs: 100,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, false);
+                done();
+            });
+        });
+
+        it('should consume all logs from a non tailable streams', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: false,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 3,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            batchState.logRes.log.end();
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, true);
+                done();
+            });
+        });
+
+        it('should set hasMoreLog to false when a non tailable streams doesn\'t have enough records', done => {
+            const batchState = {
+                logRes: {
+                    log: new MockRecordStream(),
+                    tailable: false,
+                },
+                logStats: {
+                    nbLogRecordsRead: 0,
+                    nbLogEntriesRead: 0,
+                    hasMoreLog: false,
+                },
+                entriesToPublish: {},
+                publishedEntries: {},
+                currentRecords: [],
+                maxRead: 5,
+                startTime: Date.now(),
+                timeoutMs: 60000,
+                logger: logReader.log,
+            };
+            for (let i = 0; i < 3; ++i) {
+                batchState.logRes.log.write({
+                    entries: [],
+                });
+            }
+            batchState.logRes.log.end();
+            logReader._processPrepareEntries(batchState, err => {
+                assert.ifError(err);
+                assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
+                assert.strictEqual(batchState.logStats.hasMoreLog, false);
+                done();
             });
         });
     });

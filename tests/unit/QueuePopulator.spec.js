@@ -4,6 +4,7 @@ const sinon = require('sinon');
 const zookeeper = require('node-zookeeper-client');
 const QueuePopulator = require('../../lib/queuePopulator/QueuePopulator');
 const constants = require('../../lib/constants');
+const { errors } = require('arsenal');
 
 describe('QueuePopulator', () => {
     let qp;
@@ -49,6 +50,7 @@ describe('QueuePopulator', () => {
             const mockLogReader = sinon.spy();
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -72,6 +74,7 @@ describe('QueuePopulator', () => {
             };
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -90,6 +93,101 @@ describe('QueuePopulator', () => {
                     },
                 ])
             );
+        });
+
+        it('returns proper details when batch process timed out', () => {
+            const mockLogReader = sinon.spy();
+            mockLogReader.getProducerStatus = sinon.fake(() => ({
+                topicA: true,
+            }));
+            mockLogReader.getLogInfo = sinon.fake(() => {});
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => true);
+            qp.logReaders = [
+                mockLogReader,
+            ];
+            qp.zkClient = {
+                getState: () => zookeeper.State.SYNC_CONNECTED,
+            };
+            qp.handleLiveness(mockRes, mockLog);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            sinon.assert.calledOnceWithExactly(
+                mockRes.end,
+                JSON.stringify([
+                    {
+                        component: 'log reader',
+                        status: constants.statusTimedOut,
+                    },
+                ])
+            );
+        });
+    });
+
+    describe('_processLogEntries', () => {
+        it('should process log records once when no more logs are available', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub().yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should process log records until no more logs are available', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledTwice);
+                return done();
+            });
+        });
+
+        it('should only process log records once if exhaustLogSource is set to false', done => {
+            qp.qpConfig.exhaustLogSource = false;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should only process log records once if the logReaders need to be updated', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub()
+                    .onCall(0).yields(null, true)
+                    .onCall(1).yields(null, false),
+            }];
+            qp.logReadersUpdate = true;
+            qp._processLogEntries({}, err => {
+                assert.ifError(err);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+
+        it('should forward logReader errors', done => {
+            qp.qpConfig.exhaustLogSource = true;
+            qp.logReaders = [{
+                processLogEntries: sinon.stub().yields(errors.InternalError, false),
+            }];
+            qp._processLogEntries({}, err => {
+                assert.deepEqual(err, errors.InternalError);
+                assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
         });
     });
 });

@@ -7,6 +7,7 @@ const config = require('../../../lib/Config');
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
+const TRANSITION_RULES = ['transitions', 'noncurrentVersionTransition'];
 
 function _getBeforeDate(currentDate, days, options) {
     const { timeProgressionFactor } = options;
@@ -197,11 +198,12 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
 /**
  * Formats the array of supported lifecycle rules in Arsenal so that
  * they correspond to how they are written in the lifecycle configuration.
- * @param {string[]} supportedLifecycleRules list of supported lifecycle rules
+ * @param {Object} lcConfig - Lifecycle configuration object
+ * @param {string[]} lcConfig.supportedLifecycleRules - List of supported lifecycle rules
  * @returns {string[]} formatted supported lifecycle rules
  */
-function getFormattedSupportedLifecycleRules() {
-   return config.extensions.lifecycle.supportedLifecycleRules.map(rule => {
+function formatSupportedLifecycleRules(lcConfig) {
+   return lcConfig.supportedLifecycleRules.map(rule => {
         if (rule === 'noncurrentVersionTransition') {
             return 'NoncurrentVersionTransitions';
         }
@@ -220,8 +222,14 @@ function isExpirationRule(ruleName) {
         ruleName === 'AbortIncompleteMultipartUpload';
 }
 
+
+function rulesSupportTransition(lcRules) {
+    return lcRules.some(rule => TRANSITION_RULES.includes(rule));
+}
+
 module.exports = {
     rulesToParams,
-    getFormattedSupportedLifecycleRules,
+    formatSupportedLifecycleRules,
     isExpirationRule,
+    rulesSupportTransition,
 };

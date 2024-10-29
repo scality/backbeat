@@ -9,6 +9,8 @@ const {
     supportedLifecycleRulesJoi,
 } = require('../../lib/config/configItems.joi');
 
+const { supportedLifecycleRules }  = require('../../lib/constants');
+
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     bucketTasksTopic: joi.string().required(),
@@ -16,7 +18,7 @@ const joiSchema = joi.object({
     transitionTasksTopic: joi.string().default(parent => parent.objectTasksTopic),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
-    forceLegacyListing: joi.boolean().default(true),
+    forceLegacyListing: joi.boolean().default(false),
     autoCreateIndexes: joi.boolean().default(false),
     conductor: {
         auth: inheritedAuthJoi,
@@ -32,6 +34,12 @@ const joiSchema = joi.object({
         backlogControl: joi.object({
             enabled: joi.boolean().default(true),
         }).default({ enabled: true }),
+        filter: joi.object({
+            deny: joi.object({
+                buckets: joi.array().items(joi.string()),
+                accounts: joi.array().items(joi.string()),
+            }),
+        }),
         probeServer: probeServerJoi.default(),
         vaultAdmin: hostPortJoi,
         circuitBreaker: joi.object().optional(),
@@ -68,7 +76,9 @@ const joiSchema = joi.object({
     coldStorageRestoreAdjustTopicPrefix: joi.string().default('cold-restore-adjust-req-'),
     coldStorageGCTopicPrefix: joi.string().default('cold-gc-req-'),
     coldStorageStatusTopicPrefix: joi.string().default('cold-status-'),
-    supportedLifecycleRules: supportedLifecycleRulesJoi,
+    supportedLifecycleRules: joi.array().items(
+        joi.string().valid(...supportedLifecycleRules)
+    ).default(supportedLifecycleRules),
 });
 
 function configValidator(backbeatConfig, extConfig) {

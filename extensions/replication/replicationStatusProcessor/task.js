@@ -13,11 +13,12 @@ const repConfig = config.extensions.replication;
 const sourceConfig = repConfig.source;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
+const gcConfig = config.extensions.gc;
 
 const { initManagement } = require('../../../lib/management/index');
 
 const replicationStatusProcessor = new ReplicationStatusProcessor(
-    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig);
+    kafkaConfig, sourceConfig, repConfig, internalHttpsConfig, mConfig, gcConfig);
 
 werelogs.configure({ level: config.log.logLevel,
      dump: config.log.dumpLevel });

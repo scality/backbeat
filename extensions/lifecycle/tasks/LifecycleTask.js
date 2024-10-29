@@ -16,6 +16,7 @@ const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
+const { rulesSupportTransition } = require('../util/rules');
 const { decode } = versioning.VersionID;
 
 const errorTransitionInProgress = errors.InternalError.
@@ -95,10 +96,10 @@ class LifecycleTask extends BackbeatTask {
         });
 
         this._lifecycleUtils = new LifecycleUtils(
-            config.extensions.lifecycle.supportedLifecycleRules,
+            this.supportedRules,
             this._lifecycleDateTime
         );
-        this._supportedRules = config.extensions.lifecycle.supportedLifecycleRules;
+        this._supportedRules = this.supportedRules;
         this._totalRetries = 0;
     }
 
@@ -1923,7 +1924,9 @@ class LifecycleTask extends BackbeatTask {
             // An optimization is possible by only publishing when
             // finishing a complete bucket listing, let it aside for
             // simplicity as it is just updating a few zookeeper nodes
-            this._snapshotDataMoverTopicOffsets(log);
+            if (rulesSupportTransition(this._supportedRules)) {
+                this._snapshotDataMoverTopicOffsets(log);
+            }
             return done(err);
         });
     }

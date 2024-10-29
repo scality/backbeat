@@ -47,7 +47,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         }, log, (err, blob) => {
             LifecycleMetrics.onS3Request(log, 'getMetadata', 'expiration', err);
             if (err) {
-                log.error('error getting metadata blob from S3', Object.assign({
+                // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned.
+                // In this case, instead of logging an error, it should be logged as a debug message,
+                // to avoid causing unnecessary concern to the customer.
+                // TODO: BB-612
+                const logLevel = err.code === 'InvalidBucketState' ? 'debug' : 'error';
+                log[logLevel]('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleDeleteObjectTask._getMetadata',
                     error: err.message,
                 }, entry.getLogInfo()));
@@ -98,6 +103,27 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         return done();
     }
 
+    _getS3Action(actionType, accountId) {
+        let reqMethod;
+        if (actionType === 'deleteObject') {
+            const backbeatClient = this.getBackbeatClient(accountId);
+            if (!backbeatClient) {
+                return null;
+            }
+            // Zenko supports the "deleteObjectFromExpiration" API, which
+            // sets the proper originOp in the metadata to trigger a
+            // nortification when an object gets expired.
+            if (typeof backbeatClient.deleteObjectFromExpiration === 'function') {
+                return backbeatClient.deleteObjectFromExpiration.bind(backbeatClient);
+            }
+            reqMethod = 'deleteObject';
+        } else {
+            reqMethod = 'abortMultipartUpload';
+        }
+        const client = this.getS3Client(accountId);
+        return client[reqMethod].bind(client);
+    }
+
     _executeDelete(entry, startTime, log, done) {
         const { accountId } = entry.getAttribute('target');
 
@@ -115,34 +141,24 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const transitionTime = entry.getAttribute('transitionTime');
         const location = this.objectMD?.dataStoreName || entry.getAttribute('details.dataStoreName');
         let req = null;
-        if (actionType === 'deleteObject') {
-            reqMethod = 'deleteObject';
-            const backbeatClient = this.getBackbeatClient(accountId);
-            if (!backbeatClient) {
-                log.error('failed to get backbeat client', { accountId });
-                return done(errors.InternalError
-                    .customizeDescription('Unable to obtain client'));
-            }
 
-            LifecycleMetrics.onLifecycleStarted(log, 'expiration',
-                location, startTime - transitionTime);
-
-            req = backbeatClient.deleteObjectFromExpiration(reqParams);
-        } else if (actionType === 'deleteMPU') {
-            reqParams.UploadId = entry.getAttribute('details.UploadId');
-            reqMethod = 'abortMultipartUpload';
-            const s3Client = this.getS3Client(accountId);
-            if (!s3Client) {
-                log.error('failed to get S3 client', { accountId });
-                return done(errors.InternalError
-                    .customizeDescription('Unable to obtain client'));
-            }
-
-            LifecycleMetrics.onLifecycleStarted(log, 'expiration:mpu',
-                location, startTime - transitionTime);
-
-            req = s3Client[reqMethod](reqParams);
+        const s3Action = this._getS3Action(actionType, accountId);
+        if (!s3Action) {
+            log.error('failed to get s3 action', {
+                accountId,
+                actionType,
+                method: 'LifecycleDeleteObjectTask._executeDelete',
+            });
+            return done(errors.InternalError
+                .customizeDescription('Unable to obtain s3 action'));
         }
+        LifecycleMetrics.onLifecycleStarted(log,
+            actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
+            location, startTime - transitionTime);
+        if (actionType === 'deleteMPU') {
+            reqParams.UploadId = entry.getAttribute('details.UploadId');
+        }
+        req = s3Action(reqParams);
         attachReqUids(req, log);
         return req.send(err => {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
@@ -215,6 +231,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         }
         return this._getMetadata(entry, log, (err, objMD) => {
             if (err) {
+                // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned,
+                // so we can skip checking object replication for non-versioned buckets.
+                // TODO: BB-612
+                if (err.code === 'InvalidBucketState') {
+                    return done();
+                }
                 return done(err);
             }
             const replicationStatus = objMD.getReplicationStatus();

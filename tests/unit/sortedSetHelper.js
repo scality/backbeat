@@ -19,6 +19,12 @@ describe('sorted set helper methods', () => {
             const member = getSortedSetMember('a', 'b');
             assert.strictEqual(member, 'a:b:');
         });
+
+        it('should return the correct Redis sorted set member schema when ' +
+        'using a role', () => {
+            const member = getSortedSetMember('a', 'b', 'c', 'd');
+            assert.strictEqual(member, 'a:b:c:d');
+        });
     });
 
     describe('getSortedSetKey', () => {

@@ -15,7 +15,7 @@ const ClientManager = require('../../../lib/clients/ClientManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
 const LocationStatusStream = require('../../utils/LocationStatusStream');
 const {
-    getFormattedSupportedLifecycleRules,
+    formatSupportedLifecycleRules,
     isExpirationRule
 } = require('../util/rules');
 const {
@@ -88,7 +88,7 @@ class LifecycleBucketProcessor {
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
-        this._supportedRules = getFormattedSupportedLifecycleRules();
+        this._supportedRules = formatSupportedLifecycleRules(lcConfig);
 
         this._producerReady = false;
         this._consumerReady = false;
@@ -186,6 +186,7 @@ class LifecycleBucketProcessor {
             lcOptions: this._lcOptions,
             circuitBreakers: this._circuitBreakers,
             log: this._log,
+            supportedRules: this._lcConfig.supportedLifecycleRules,
         };
     }
 
@@ -330,7 +331,7 @@ class LifecycleBucketProcessor {
 
             let task;
 
-            if (taskVersion === lifecycleTaskVersions.v1 || !taskVersion) {
+            if (taskVersion === lifecycleTaskVersions.v1 || (!taskVersion && this._lcConfig.forceLegacyListing)) {
                 task = new LifecycleTask(this);
             } else {
                 task = new LifecycleTaskV2(this);
@@ -456,12 +457,18 @@ class LifecycleBucketProcessor {
             done => this._initKafkaBacklogMetrics(done),
             done => this._setupConsumer(done),
             done => {
-                this._locationStatusStream = new LocationStatusStream('lifecycle',
-                    this._mongoConfig,
-                    this._pauseServiceForLocation.bind(this),
-                    this._resumeServiceForLocation.bind(this),
-                    this._log);
-                this._locationStatusStream.start(done);
+                if (this._mongoConfig) {
+                    this._locationStatusStream = new LocationStatusStream(
+                        'lifecycle',
+                        this._mongoConfig,
+                        this._pauseServiceForLocation.bind(this),
+                        this._resumeServiceForLocation.bind(this),
+                        this._log
+                    );
+                    this._locationStatusStream.start(done);
+                } else {
+                    done();
+                }
             }
         ], done);
     }

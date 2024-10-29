@@ -1,4 +1,5 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const { errors } = require('arsenal');
 const werelogs = require('werelogs');
 const { ObjectMD } = require('arsenal').models;
@@ -8,6 +9,13 @@ const LifecycleDeleteObjectTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleDeleteObjectTask');
 
 const day = 1000 * 60 * 60 * 24;
+
+const invalidBucketStateError = {
+    code: 'InvalidBucketState',
+    requestId: 'd4c33f72964c85667de4:89ee7213ce42b2a8d420',
+    statusCode: 409,
+    retryable: false,
+};
 
 const {
     S3ClientMock,
@@ -40,6 +48,10 @@ describe('LifecycleDeleteObjectTask', () => {
         objMd = new ObjectMD();
         backbeatMdProxyClient.setMdObj(objMd);
         task = new LifecycleDeleteObjectTask(objectProcessor);
+    });
+
+    afterEach(() => {
+        backbeatMdProxyClient.setError(null);
     });
 
     it('should not return error for 404s', done => {
@@ -153,6 +165,27 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
+    // TODO: After the implementation of CLDSRV-461, we could remove this test.
+    it('should expire non-versioned object',
+        done => {
+            objMd.setLegalHold(true);
+            const entry = ActionQueueEntry.create('deleteObject')
+                .setAttribute('target.owner', 'testowner')
+                .setAttribute('target.bucket', 'testbucket')
+                .setAttribute('target.accountId', 'testid')
+                .setAttribute('target.key', 'testkey')
+                .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+            s3Client.setResponse(null, {});
+            // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned
+            backbeatMdProxyClient.setError(invalidBucketStateError);
+            backbeatClient.setResponse(null, {});
+            task.processActionEntry(entry, err => {
+                assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
+                assert.ifError(err);
+                done();
+            });
+        });
+
     it('should expire current version of locked object with legal hold',
         done => {
             objMd.setLegalHold(true);
@@ -223,6 +256,81 @@ describe('LifecycleDeleteObjectTask', () => {
         task.processActionEntry(entry, err => {
             assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
             assert.ifError(err);
+            done();
+        });
+    });
+
+    it('should expire object using the deleteObjectFromExpiration method if supported', done => {
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
+            assert.strictEqual(s3Client.calls.deleteObject, 0);
+            done();
+        });
+    });
+
+    it('should expire object using the deleteObject method when not in Zenko', done => {
+        backbeatClient = new BackbeatClientMock({ isS3c: true });
+        sinon.stub(task, 'getBackbeatClient').returns(backbeatClient);
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(s3Client.calls.deleteObject, 1);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 0);
+            done();
+        });
+    });
+
+    it('should abort an MPU using the abortMultipartUpload method', done => {
+        const entry = ActionQueueEntry.create('deleteMPU')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.UploadId', 'someUploadId')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(s3Client.calls.abortMultipartUpload, 1);
+            assert.strictEqual(s3Client.calls.deleteObject, 0);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 0);
+            done();
+        });
+    });
+
+    it('should return an error when it can\'t get the BackbeatClient', done => {
+        sinon.stub(task, 'getBackbeatClient').returns(null);
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert(err);
             done();
         });
     });
