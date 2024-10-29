@@ -89,6 +89,6 @@
     "zookeeper-mock": "^1.2.0"
   },
   "engines": {
-    "node": ">=16"
+    "node": ">=22"
   }
 }
