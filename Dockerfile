@@ -1,4 +1,4 @@
-ARG NODE_VERSION=16.20-bullseye-slim
+ARG NODE_VERSION=22.11.0-bullseye-slim
 
 FROM node:${NODE_VERSION} as builder
 
@@ -22,7 +22,7 @@ RUN apt-get update \
         libffi-dev \
         libzstd-dev
 
-ENV DOCKERIZE_VERSION v0.6.1
+ENV DOCKERIZE_VERSION v0.8.0
 
 RUN wget https://github.com/jwilder/dockerize/releases/download/$DOCKERIZE_VERSION/dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
     && tar -C /usr/local/bin -xzvf dockerize-linux-amd64-$DOCKERIZE_VERSION.tar.gz \
