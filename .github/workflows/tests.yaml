@@ -2,7 +2,7 @@
 name: tests
 
 env:
-  GINKGO_VERSION: v1.15.2
+  GINKGO_VERSION: v2.21.0
 
 on:
   push:
@@ -72,7 +72,7 @@ jobs:
 
     - uses: actions/setup-go@v5
       with:
-        go-version: '1.16.2'
+        go-version: '1.23.0'
         cache-dependency-path: bucket-scanner/go.sum
 
     - name: Install ginkgo
