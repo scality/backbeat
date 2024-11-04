@@ -76,7 +76,6 @@
     "node-rdkafka-prometheus/prom-client": "14.2.0"
   },
   "devDependencies": {
-    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8",
     "c8": "^10.1.2",
     "eslint": "^9.13.0",
     "eslint-config-airbnb-base": "^15.0.0",
