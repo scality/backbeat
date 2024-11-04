@@ -315,6 +315,7 @@ class ReplicationStatusProcessor {
      * @return {undefined}
      */
     start(options, cb) {
+        let consumerReady = false;
         this._FailedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
         this._replayTopicNames.forEach(t => {
             this._ReplayProducers[t] = new ReplayProducer(this.kafkaConfig, t);
@@ -332,8 +333,14 @@ class ReplicationStatusProcessor {
             bootstrap: options && options.bootstrap,
             logConsumerMetricsIntervalS: this.repConfig.replicationStatusProcessor.logConsumerMetricsIntervalS,
         });
-        this._consumer.on('error', () => { });
+        this._consumer.on('error', () => {
+            if (!consumerReady) {
+                this.logger.fatal('error starting a backbeat consumer');
+                process.exit(1);
+            }
+        });
         this._consumer.on('ready', () => {
+            consumerReady = true;
             this.logger.info('replication status processor is ready to ' +
                 'consume replication status entries');
             this._consumer.subscribe();
