@@ -55,7 +55,7 @@
     "commander": "^12.1.0",
     "eslint-plugin-mocha": "^10.2.0",
     "fcntl": "github:scality/node-fcntl#0.2.2",
-    "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
+    "httpagent": "git+https://github.com/scality/httpagent#1.1.0",
     "ioredis": "^5.4.1",
     "joi": "^17.6.0",
     "minimatch": "^10.0.1",
