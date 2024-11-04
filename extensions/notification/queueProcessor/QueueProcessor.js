@@ -142,7 +142,15 @@ class QueueProcessor extends EventEmitter {
                     queueProcessor: this.processKafkaEntry.bind(this),
                     logConsumerMetricsIntervalS,
                 });
-                this._consumer.on('error', () => { });
+                this._consumer.on('error', err => {
+                    this.logger.error('error starting notification consumer',
+                    { method: 'QueueProcessor.start', error: err.message });
+                    // crash if got error at startup
+                    if (!this.isReady()) {
+                        return next(err);
+                    }
+                    return undefined;
+                });
                 this._consumer.on('ready', () => {
                     this._consumer.subscribe();
                     this.logger.info('queue processor is ready to consume ' +
@@ -260,6 +268,15 @@ class QueueProcessor extends EventEmitter {
             }
             return done();
         }
+    }
+
+    /**
+     * Checks if queue processor is ready to consume
+     *
+     * @returns {boolean} is queue processor ready
+     */
+    isReady() {
+        return this._consumer && this._consumer.isReady();
     }
 }
 
