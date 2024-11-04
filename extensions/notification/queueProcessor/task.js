@@ -24,7 +24,11 @@ try {
         'could not be found in destinations defined');
     const queueProcessor = new QueueProcessor(
         zkConfig, kafkaConfig, notifConfig, destinationConfig, destination);
-    queueProcessor.start();
+    queueProcessor.start(undefined, err => {
+        if (err) {
+            process.exit(1);
+        }
+    });
 } catch (err) {
     log.error('error starting notification queue processor task', {
         method: 'notification.task.queueProcessor.start',
