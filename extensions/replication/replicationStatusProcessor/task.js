@@ -25,6 +25,7 @@ werelogs.configure({
 });
 
 async.waterfall([
+    done => replicationStatusProcessor.start(undefined, done),
     done => startProbeServer(
         repConfig.replicationStatusProcessor.probeServer,
         (err, probeServer) => {
@@ -49,7 +50,6 @@ async.waterfall([
             done();
         }
     ),
-    done => replicationStatusProcessor.start(undefined, done),
 ], err => {
     if (err) {
         log.error('error during queue processor initialization', {
