@@ -576,13 +576,15 @@ class QueueProcessor extends EventEmitter {
 
         // consumer stats lag is on a different update cycle so we need to
         // update the metrics when requested
-        const lagStats = this._consumer.consumerStats.lag;
-        Object.keys(lagStats).forEach(partition => {
-            metricsHandler.lag({
-                partition,
-                serviceName: this.serviceName,
-            }, lagStats[partition]);
-        });
+        if (this._consumer) {
+            const lagStats = this._consumer.consumerStats.lag;
+            Object.keys(lagStats).forEach(partition => {
+                metricsHandler.lag({
+                    partition,
+                    serviceName: this.serviceName,
+                }, lagStats[partition]);
+            });
+        }
         const metrics = await promClient.register.metrics();
 
         res.writeHead(200, {
