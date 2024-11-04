@@ -6,20 +6,47 @@ const { Config } = require('../../../../lib/Config');
 const backbeatConfig = require('./config.json');
 
 describe('Config', () => {
+    let config;
+    let testConfig;
+
+    beforeEach(() => {
+        config = new Config();
+        // deep copy the config to avoid modifying the original
+        testConfig = JSON.parse(JSON.stringify(backbeatConfig));
+    });
+
     it('should make the probeserver config in the queuePoulator' +
         'required when multiple extensions are configured', () => {
-        const config = new Config();
-        const testConfig = { ...backbeatConfig };
         delete testConfig.queuePopulator.probeServer;
         assert.throws(() => config._parseConfig(testConfig));
     });
 
     it('should make the probeserver config in the queuePoulator' +
         'optional when only notification config is specified', () => {
-        const config = new Config();
-        const testConfig = { ...backbeatConfig };
         delete testConfig.queuePopulator.probeServer;
         testConfig.extensions = { notification: testConfig.extensions.notification };
+        assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
+
+    it('should throw an error when dataMoverTopic is not provided and transition is supported', () => {
+        delete testConfig.extensions.replication.dataMoverTopic;
+        testConfig.extensions.lifecycle.supportedLifecycleRules = [
+            'transitions',
+            'noncurrentVersionTransition',
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+        ];
+        assert.throws(() => config._parseConfig(testConfig));
+    });
+
+    it('should make dataMoverTopic optional when transitions are not supported', () => {
+        delete testConfig.extensions.replication.dataMoverTopic;
+        testConfig.extensions.lifecycle.supportedLifecycleRules = [
+            'expiration',
+            'noncurrentVersionExpiration',
+            'abortIncompleteMultipartUpload',
+        ];
         assert.doesNotThrow(() => config._parseConfig(testConfig));
     });
 });
