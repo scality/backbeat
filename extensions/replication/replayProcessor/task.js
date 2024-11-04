@@ -63,6 +63,21 @@ function getProbeConfig(replayProcessorConfig, site, topicName) {
 }
 
 async.waterfall([
+    done => {
+        metricsProducer.setupProducer(err => {
+            if (err) {
+                log.error('error starting metrics producer for queue processor', {
+                    error: err,
+                    method: 'MetricsProducer::setupProducer',
+                });
+            }
+            done(err);
+        });
+    },
+    done => {
+        queueProcessor.on('ready', done);
+        queueProcessor.start();
+    },
     done => startProbeServer(
         getProbeConfig(repConfig.replayProcessor, site, topic),
         (err, probeServer) => {
@@ -87,21 +102,6 @@ async.waterfall([
             done();
         }
     ),
-    done => {
-        metricsProducer.setupProducer(err => {
-            if (err) {
-                log.error('error starting metrics producer for queue processor', {
-                    error: err,
-                    method: 'MetricsProducer::setupProducer',
-                });
-            }
-            done(err);
-        });
-    },
-    done => {
-        queueProcessor.on('ready', done);
-        queueProcessor.start();
-    },
 ], err => {
     if (err) {
         log.error('error during queue processor initialization', {
