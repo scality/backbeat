@@ -86,7 +86,7 @@ describe('notification QueueProcessor', () => {
         const flushDeliveryReportsInterval = setInterval(() => {
             const _pendingDeliveryReports = pendingDeliveryReports;
             pendingDeliveryReports = [];
-            // eslint-disable-next-line no-restricted-syntax
+             
             for (const deliveryReportCb of _pendingDeliveryReports) {
                 deliveryReportCb();
             }

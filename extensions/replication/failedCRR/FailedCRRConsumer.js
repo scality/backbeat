@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line strict
+'use strict';  
 
 const { StatsModel } = require('arsenal').metrics;
 const Logger = require('werelogs').Logger;

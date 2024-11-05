@@ -59,7 +59,7 @@ class BackbeatTestConsumer extends BackbeatConsumer {
                         try {
                             _matchMessage(expectedMsg);
                             matched = true;
-                        } catch (err) {
+                        } catch {
                             newRemainingList.push(expectedMsg);
                         }
                     }

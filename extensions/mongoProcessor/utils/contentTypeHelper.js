@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';  
 
 function _getDataContent(entry) {
     const contentLength = entry.getContentLength();

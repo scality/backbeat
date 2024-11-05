@@ -185,7 +185,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
                 }
                 try {
                     assert.notDeepStrictEqual(oldLocation, newLocation);
-                } catch (err) {
+                } catch {
                     log.info('duplicate location update, skipping',
                     Object.assign({
                         method:

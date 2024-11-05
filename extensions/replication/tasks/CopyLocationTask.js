@@ -227,7 +227,7 @@ class CopyLocationTask extends BackbeatTask {
             });
             attachReqUids(sourceReq, log);
             sourceReq.on('error', err => {
-                // eslint-disable-next-line no-param-reassign
+                 
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', Object.assign({
                         method: 'CopyLocationTask._getAndPutObjectOnce',

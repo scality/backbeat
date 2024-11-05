@@ -1,8 +1,6 @@
 const assert = require('assert');
 const async = require('async');
-const crypto = require('crypto');
 const http = require('http');
-const URL = require('url');
 const querystring = require('querystring');
 
 const VersionIDUtils = require('arsenal').versioning.VersionID;

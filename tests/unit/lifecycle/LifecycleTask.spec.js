@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';  
 
 const assert = require('assert');
 const async = require('async');
@@ -163,8 +163,8 @@ describe('lifecycle task helper methods', () => {
             // Normally, when dealing with multiple objects, we wouldn't be able
             // to sort by just VersionId, since they could be intertwined.
             const expected = [...versions, ...dms].sort((a, b) => {
-                if (a.VersionId < b.VersionId) return -1;
-                if (a.VersionId > b.VersionId) return 1;
+                if (a.VersionId < b.VersionId) {return -1;}
+                if (a.VersionId > b.VersionId) {return 1;}
                 return 0;
             });
             const { error, sortedList } = lct._mergeSortedVersionsAndDeleteMarkers(versions, dms, fakeLogger);

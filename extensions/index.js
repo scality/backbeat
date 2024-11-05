@@ -10,7 +10,7 @@ fs.readdirSync(__dirname).forEach(moduleDir => {
         try {
             indexStat = fs.statSync(
                 path.join(__dirname, moduleDir, 'index.js'));
-        } catch (err) {} // eslint-disable-line no-empty
+        } catch {} // eslint-disable-line no-empty
         if (indexStat) {
             extensions[moduleDir] = require(`./${moduleDir}`);
         }
