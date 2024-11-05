@@ -2,7 +2,7 @@
 name: tests
 
 env:
-  GINKGO_VERSION: v1.15.2
+  GINKGO_VERSION: v2.21.0
 
 on:
   push:
@@ -20,6 +20,11 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: yarn
 
     - name: Set up Docker Buildk
       uses: docker/setup-buildx-action@v3
@@ -67,17 +72,17 @@ jobs:
 
     - uses: actions/setup-go@v5
       with:
-        go-version: '1.16.2'
+        go-version: '1.23.0'
         cache-dependency-path: bucket-scanner/go.sum
 
     - name: Install ginkgo
-      run: go get github.com/onsi/ginkgo/ginkgo@${GINKGO_VERSION}
+      run: go install github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION}
 
     - name: Run bucket scanner unit tests
       run: >-
-        ginkgo -r --randomizeAllSpecs --randomizeSuites --failOnPending --progress   \
+        ginkgo -r --randomize-suites --fail-on-pending --show-node-events   \
                --cover --trace --race --covermode=atomic --coverprofile=coverage.out \
-               -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
+               -nodes 1 -stream -timeout 5m
       working-directory: bucket-scanner
 
     - uses: codecov/codecov-action@v4
@@ -120,7 +125,7 @@ jobs:
       uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: '16'
+        node-version: '22'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1

@@ -7,6 +7,8 @@ NODE_PATH=${NODE_PATH:-node_modules}
 # port for cloudserver
 PORT=8000
 
+git clone --branch 8.6.8 git@github.com:scality/cloudserver
+
 if [ ! -d "${NODE_PATH}/@zenko/cloudserver" ]; then
     echo "cloudserver module was not found!"
     exit 1
@@ -19,6 +21,6 @@ killandsleep () {
   sleep 10
 }
 
-cd ${NODE_PATH}/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
+cd cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
 ./node_modules/.bin/nyc --clean --silent yarn run $1
 ./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
