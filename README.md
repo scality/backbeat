@@ -374,6 +374,3 @@ $HOME
     ├── cloudserver
     └── vault
 ```
-
-[badgepriv]: http://ci.ironmann.io/gh/scality/backbeat.svg?style=svg&circle-token=32e5dfd968e673450c44f0a255d1a812bae9b00c
-[badgepub]: https://circleci.com/gh/scality/backbeat.svg?style=svg
