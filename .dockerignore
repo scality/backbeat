@@ -6,3 +6,15 @@ localMetadata/*
 .tox
 coverage
 .DS_Store
+
+.dockerignore
+docs/
+images/
+res/
+_config.yml
+.eslintrc
+.gitignore
+circle.yml
+DESIGN.md
+README.md
+Using.md

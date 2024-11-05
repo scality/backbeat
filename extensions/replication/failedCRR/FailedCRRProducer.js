@@ -30,7 +30,7 @@ class FailedCRRProducer {
             maxRequestSize: this._kafkaConfig.maxRequestSize,
             topic: this._topic,
         });
-        this._producer.once('error', () => {});
+        this._producer.once('error', cb);
         this._producer.once('ready', () => {
             this._producer.removeAllListeners('error');
             this._producer.on('error', err =>

@@ -50,6 +50,7 @@ const queuePopulator = new QueuePopulator(zkConfig, kafkaConfig,
     qpConfig, httpsConfig, mConfig, rConfig, vConfig, extConfigs);
 
 async.waterfall([
+    done => queuePopulator.open(done),
     done => startProbeServer(qpConfig.probeServer, (err, probeServer) => {
         if (err) {
             log.error('error starting probe server', {
@@ -69,7 +70,6 @@ async.waterfall([
         }
         done();
     }),
-    done => queuePopulator.open(done),
     done => {
         const taskState = {
             batchInProgress: false,
