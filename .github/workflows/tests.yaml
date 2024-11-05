@@ -76,7 +76,7 @@ jobs:
         cache-dependency-path: bucket-scanner/go.sum
 
     - name: Install ginkgo
-      run: go install github.com/onsi/ginkgo/v2/ginkgo@${GINKGO_VERSION}
+      run: go install github.com/onsi/ginkgo/v2/ginkgo
 
     - name: Run bucket scanner unit tests
       run: >-
