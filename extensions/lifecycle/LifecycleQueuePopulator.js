@@ -7,7 +7,7 @@ const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { authTypeAssumeRole } = require('../../lib/constants');
-const uuid = require('uuid/v4');
+const { v4 }  = require('uuid');
 const safeJsonParse = require('./util/safeJsonParse');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
@@ -326,7 +326,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 objectKey: value.key,
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
-                requestId: uuid(),
+                requestId: v4(),
                 eTag: value['content-md5'],
                 transitionTime: transitionTime.toISOString(),
                 accountId,
@@ -370,7 +370,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 restoreWillExpireAt: expiryDate.toISOString(),
             },
             updatedAt: md['last-modified'],
-            requestId: uuid(),
+            requestId: v4(),
         });
 
         const coldLocation = md['x-amz-storage-class'];
@@ -463,7 +463,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 objectKey: value.key,
                 objectVersion: version,
                 archiveInfo: value.archive.archiveInfo,
-                requestId: uuid(),
+                requestId: v4(),
                 transitionTime: new Date(entry.overheadFields.commitTimestamp).toISOString(),
                 accountId: accountId || '',
             });

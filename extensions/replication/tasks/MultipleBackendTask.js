@@ -1,5 +1,5 @@
 const async = require('async');
-const uuid = require('uuid/v4');
+const { v4 } = require('uuid');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
@@ -471,7 +471,7 @@ class MultipleBackendTask extends ReplicateObject {
     _initiateMPU(sourceEntry, log, cb) {
         // If using Azure backend, create a unique ID to use as the block ID.
         if (this._getReplicationEndpointType() === 'azure') {
-            const uploadId = uuid().replace(/-/g, '');
+            const uploadId = v4().replace(/-/g, '');
             return setImmediate(() => cb(null, uploadId));
         }
         const destReq = this.backbeatSource.multipleBackendInitiateMPU({
