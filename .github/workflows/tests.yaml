@@ -82,7 +82,7 @@ jobs:
       run: >-
         ginkgo -r --randomize-suites --fail-on-pending --show-node-events \
                --cover --trace --race --covermode=atomic --coverprofile=coverage.out \
-               -nodes 1 -timeout 5m -slow-spec-threshold 60s
+               -nodes 1 -timeout 5m
       working-directory: bucket-scanner
 
     - uses: codecov/codecov-action@v4
