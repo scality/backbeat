@@ -124,7 +124,9 @@ class QueueProcessor extends EventEmitter {
             next => this._setupZookeeper(next),
             next => this._setupNotificationConfigManager(next),
             next => this._setupDestination(this.destinationConfig.type, next),
-            next => this._destination.init(() => {
+            // if connection to destination fails, process will stop & restart
+            next => this._destination.init(next),
+            next => {
                 if (options && options.disableConsumer) {
                     this.emit('ready');
                     return next();
@@ -160,7 +162,7 @@ class QueueProcessor extends EventEmitter {
                     return next();
                 });
                 return undefined;
-            }),
+            },
         ], err => {
             if (err) {
                 this.logger.info('error starting notification queue processor',
