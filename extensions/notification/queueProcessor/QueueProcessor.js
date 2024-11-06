@@ -143,7 +143,9 @@ class QueueProcessor extends EventEmitter {
         async.series([
             next => this._setupNotificationConfigManager(next),
             next => this._setupDestination(this.destinationConfig.type, next),
-            next => this._destination.init(() => {
+            // if connection to destination fails, process will stop & restart
+            next => this._destination.init(next),
+            next => {
                 if (options && options.disableConsumer) {
                     this.emit('ready');
                     return next();
@@ -183,7 +185,7 @@ class QueueProcessor extends EventEmitter {
                 this._getConfig = util.callbackify(this.bnConfigManager
                     .getConfig.bind(this.bnConfigManager));
                 return undefined;
-            }),
+            },
         ], err => {
             if (err) {
                 this.logger.error('error starting notification queue processor',

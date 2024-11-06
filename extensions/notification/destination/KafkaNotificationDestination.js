@@ -79,8 +79,9 @@ class KafkaNotificationDestination extends NotificationDestination {
                 this._log.info('error setting up kafka notif destination',
                     { error: err.message });
                 done(err);
+            } else {
+                done();
             }
-            done();
         });
     }
 
