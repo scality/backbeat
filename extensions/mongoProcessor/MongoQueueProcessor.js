@@ -15,15 +15,10 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 const QueueEntry = require('../../lib/models/QueueEntry');
 const DeleteOpQueueEntry = require('../../lib/models/DeleteOpQueueEntry');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
-const MetricsProducer = require('../../lib/MetricsProducer');
-const { metricsExtension, metricsTypeCompleted, metricsTypePendingOnly } =
-    require('../ingestion/constants');
+
 const getContentType = require('./utils/contentTypeHelper');
 const BucketMemState = require('./utils/BucketMemState');
 const MongoProcessorMetrics = require('./MongoProcessorMetrics');
-
-// batch metrics by location and send to kafka metrics topic every 5 seconds
-const METRIC_REPORT_INTERVAL_MS = process.env.CI === 'true' ? 1000 : 5000;
 
 // TODO - ADD PREFIX BASED ON SOURCE
 // april 6, 2018
@@ -79,16 +74,6 @@ class MongoQueueProcessor {
         // in-mem batch of metrics, we only track total entry count by location
         // this._accruedMetrics = { zenko-location: 10 }
         this._accruedMetrics = {};
-
-        setInterval(() => {
-            this._sendMetrics();
-        }, METRIC_REPORT_INTERVAL_MS);
-    }
-
-    _setupMetricsClients(cb) {
-        // Metrics Producer
-        this._mProducer = new MetricsProducer(this.kafkaConfig, this._mConfig);
-        this._mProducer.setupProducer(cb);
     }
 
     /**
@@ -173,18 +158,6 @@ class MongoQueueProcessor {
                     return this._consumer.close(next);
                 }
                 this.logger.debug('no kafka consumer to close', {
-                    method: 'MongoQueueProcessor.stop',
-                });
-                return next();
-            },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
-                        method: 'MongoQueueProcessor.stop',
-                    });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
                     method: 'MongoQueueProcessor.stop',
                 });
                 return next();
@@ -408,7 +381,6 @@ class MongoQueueProcessor {
         return this._mongoClient.deleteObject(bucket, key, options, log,
             err => {
                 if (err) {
-                    this._normalizePendingMetric(location);
                     log.end().error('error deleting object metadata ' +
                     'from mongo', {
                         bucket,
@@ -443,7 +415,6 @@ class MongoQueueProcessor {
         this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
         (err, zenkoObjMd) => {
             if (err) {
-                this._normalizePendingMetric(location);
                 log.end().error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
@@ -454,7 +425,6 @@ class MongoQueueProcessor {
 
             const content = getContentType(sourceEntry, zenkoObjMd);
             if (content.length === 0) {
-                this._normalizePendingMetric(location);
                 log.end().debug('skipping duplicate entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
                     entry: sourceEntry.getLogInfo(),
@@ -498,7 +468,6 @@ class MongoQueueProcessor {
             return this._mongoClient.putObject(bucket, key, objVal, params,
                 this.logger, err => {
                     if (err) {
-                        this._normalizePendingMetric(location);
                         log.end().error('error putting object metadata ' +
                         'to mongo', {
                             bucket,
@@ -519,23 +488,6 @@ class MongoQueueProcessor {
         });
     }
 
-    /**
-     * Send accrued metrics by location to kafka
-     * @return {undefined}
-     */
-    _sendMetrics() {
-        Object.keys(this._accruedMetrics).forEach(loc => {
-            const count = this._accruedMetrics[loc];
-
-            // only report metrics if something has been recorded for location
-            if (count > 0) {
-                this._accruedMetrics[loc] = 0;
-                const metric = { [loc]: { ops: count } };
-                this._mProducer.publishMetrics(metric, metricsTypeCompleted,
-                    metricsExtension, () => {});
-            }
-        });
-    }
 
     /**
      * Accrue metrics in-mem every METRIC_REPORT_INTERVAL_MS
@@ -548,19 +500,6 @@ class MongoQueueProcessor {
         } else {
             this._accruedMetrics[location] = 1;
         }
-    }
-
-    /**
-     * For cases where we experience an error or skip an entry, we need to
-     * normalize pending metric. This means we will see pending metrics stuck
-     * above 0 and will need to bring those metrics down
-     * @param {string} location - location constraint name
-     * @return {undefined}
-     */
-    _normalizePendingMetric(location) {
-        const metric = { [location]: { ops: 1 } };
-        this._mProducer.publishMetrics(metric, metricsTypePendingOnly,
-            metricsExtension, () => {});
     }
 
     /**
@@ -639,7 +578,6 @@ class MongoQueueProcessor {
                 entryType: sourceEntry.constructor.name,
                 method: 'MongoQueueProcessor.processKafkaEntry',
             });
-            this._normalizePendingMetric(location);
             return process.nextTick(done);
         });
     }

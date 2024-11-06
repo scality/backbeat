@@ -962,7 +962,7 @@ describe('queue processor functional tests with mocking', () => {
                     }),
             ], done);
         });
-
+        // eslint-disable-next-line mocha/no-exclusive-tests
         it('should retry with full replication if metadata-only returns ' +
         'ObjNotFound', done => {
             s3mock.setParam('nbParts', 2);
@@ -977,10 +977,14 @@ describe('queue processor functional tests with mocking', () => {
                 },
                 done => queueProcessorSF.processReplicationEntry(
                     s3mock.getParam('kafkaEntry'), err => {
+                        /* eslint-disable no-console */
+                        console.log('err', err);
                         assert.ifError(err);
+                        console.log(s3mock.hasPutTargetData, s3mock.hasPutTargetMd);
                         assert.strictEqual(s3mock.hasPutTargetData, true);
                         assert(s3mock.hasPutTargetMd);
                         done();
+                        /* eslint-disable no-console */
                     }),
             ], done);
         });
