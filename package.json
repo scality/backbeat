@@ -90,7 +90,7 @@
     "zookeeper-mock": "^1.2.0"
   },
   "optionalDependencies": {
-    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.6.8"
+    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.8.35"
   },
   "engines": {
     "node": ">=22"
