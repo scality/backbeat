@@ -1,0 +1,364 @@
+{
+    "zookeeper": {
+        "connectionString": "127.0.0.1:2181/backbeat",
+        "autoCreateNamespace": false
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092",
+        "backlogMetrics": {
+            "zkPath": "/backbeat/run/kafka-backlog-metrics",
+            "intervalS": 60
+        },
+        "maxRequestSize": 5000020
+    },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "vaultAdmin": {
+        "host": "127.0.0.1",
+        "port": 8500
+    },
+    "replicationGroupId": "RG001  ",
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "batchTimeoutMs": 9000,
+        "zookeeperPath": "/queue-populator",
+        "logSource": "mongo",
+        "bucketd": {
+            "host": "127.0.0.1",
+            "port": 9000
+        },
+        "dmd": {
+            "host": "127.0.0.1",
+            "port": 9990
+        },
+        "mongo": {
+            "replicaSetHosts":
+                "localhost:27017,localhost:27018,localhost:27019",
+            "writeConcern": "majority",
+            "replicaSet": "rs0",
+            "readPreference": "primary",
+            "database": "metadata"
+        },
+        "kafka": {
+            "topic": "backbeat-oplog",
+            "consumerGroupId": "backbeat-qp-oplog-group"
+        },
+        "probeServer": {
+            "bindAddress": "0.0.0.0",
+            "port": 4042
+        }
+    },
+    "extensions": {
+        "ingestion": {
+            "auth": {
+                "type": "service",
+                "account": "service-md-ingestion"
+            },
+            "topic": "backbeat-ingestion",
+            "zookeeperPath": "/ingestion",
+            "cronRule": "*/5 * * * * *",
+            "maxParallelReaders": 5,
+            "sources": [
+                {
+                    "name": "zenko-bucket",
+                    "bucket": "src-bucket",
+                    "host": "localhost",
+                    "port": 8000,
+                    "https": false,
+                    "type": "scality_s3",
+                    "locationConstraint": "a-zenko-location",
+                    "auth": {
+                        "accessKey": "myAccessKey",
+                        "secretKey": "myEncryptedSecretKey"
+                    }
+                }
+            ],
+            "probeServer": {
+                "bindAddress": "0.0.0.0",
+                "port": 8550
+            }
+        },
+        "mongoProcessor": {
+            "topic": "backbeat-ingestion",
+            "groupId": "backbeat-mongo-processor-group",
+            "retry": {
+                "maxRetries": 5,
+                "timeoutS": 300,
+                "backoff": {
+                    "min": 1000,
+                    "max": 300000,
+                    "jitter": 0.1,
+                    "factor": 1.5
+                }
+            },
+            "probeServer": {
+                "bindAddress": "0.0.0.0",
+                "port": 8551
+            }
+        },
+        "replication": {
+            "source": {
+                "transport": "http",
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 8000
+                },
+                "auth": {
+                    "type": "service",
+                    "account": "service-replication",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8500,
+                        "adminPort": 8600
+                    }
+                }
+            },
+            "destination": {
+                "transport": "http",
+                "bootstrapList": [
+                    { "site": "zenko", "servers": ["localhost:8001"],
+                      "echo": false },
+                    { "site": "wontwork-location", "type": "aws_s3" },
+                    { "site": "aws-location", "type": "aws_s3" }
+                ],
+                "auth": {
+                    "type": "service",
+                    "account": "service-replication"
+                }
+            },
+            "topic": "backbeat-replication",
+            "dataMoverTopic": "backbeat-data-mover",
+            "replicationStatusTopic": "backbeat-replication-status",
+            "replicationFailedTopic": "backbeat-replication-failed",
+            "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
+            "replayTopics": [
+                {
+                    "topicName": "backbeat-replication-replay-0",
+                    "retries": 5
+                }
+            ],
+            "queueProcessor": {
+                "groupId": "backbeat-replication-group",
+                "retry": {
+                    "aws_s3": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "azure": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "gcp": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "scality": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 300000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    }
+                },
+                "concurrency": 10,
+                "mpuPartsConcurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4043
+                }
+            },
+            "replicationStatusProcessor": {
+                "groupId": "backbeat-replication-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4045
+                }
+            },
+            "objectSizeMetrics": [
+                66560,
+                8388608,
+                68157440
+            ]
+        },
+        "lifecycle": {
+            "auth": {
+                "type": "service",
+                "account": "service-lifecycle"
+            },
+            "zookeeperPath": "/lifecycle",
+            "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
+            "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+            "transitionTasksTopic": "backbeat-lifecycle-transition-tasks",
+            "conductor": {
+                "cronRule": "0 */5 * * * *",
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8552
+                }
+            },
+            "bucketProcessor": {
+                "groupId": "backbeat-lifecycle-bucket-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8553
+                }
+            },
+            "objectProcessor": {
+                "groupId": "backbeat-lifecycle-object-processor-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "0.0.0.0",
+                    "port": 8554
+                }
+            },
+            "coldStorageArchiveTopicPrefix": "cold-archive-req-",
+            "coldStorageRestoreTopicPrefix": "cold-restore-req-",
+            "coldStorageGCTopicPrefix": "cold-gc-req-",
+            "coldStorageStatusTopicPrefix": "cold-status-"
+        },
+        "gc": {
+            "topic": "backbeat-gc",
+            "auth": {
+                "type": "service",
+                "account": "service-gc"
+            },
+            "consumer": {
+                "groupId": "backbeat-gc-consumer-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10
+            },
+            "probeServer": {
+                "bindAddress": "0.0.0.0",
+                "port": 8555
+            }
+        },
+        "oplogPopulator": {
+            "topic": "backbeat-oplog",
+            "kafkaConnectHost": "127.0.0.1",
+            "kafkaConnectPort": 8083,
+            "numberOfConnectors": 1,
+            "probeServer": {
+                "bindAddress": "0.0.0.0",
+                "port": 8556
+            }
+        },
+        "notification": {
+            "topic": "backbeat-bucket-notification",
+            "monitorNotificationFailures": true,
+            "queueProcessor": {
+                "groupId": "backbeat-bucket-notification-group",
+                "concurrency": 10
+            },
+            "destinations": [
+                {
+                    "resource": "destination1",
+                    "type": "kafka",
+                    "host": "localhost",
+                    "port": 9092,
+                    "topic": "destination-topic-1",
+                    "internalTopic": "internal-notification-topic-destination1",
+                    "auth": {}
+                },
+                {
+                    "resource": "destination2",
+                    "type": "kafka",
+                    "host": "localhost:9092",
+                    "port": 9092,
+                    "topic": "destination-topic-2",
+                    "internalTopic": "internal-notification-topic-destination2",
+                    "auth": {}
+                }
+            ]
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
+    },
+    "redis": {
+        "host": "localhost",
+        "port": 6379
+    },
+    "certFilePaths": {
+        "key": "",
+        "cert": "",
+        "ca": ""
+    }
+}
