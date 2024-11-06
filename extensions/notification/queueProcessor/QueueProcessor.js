@@ -116,17 +116,20 @@ class QueueProcessor extends EventEmitter {
      * @param {boolean} [options.disableConsumer] - true to disable
      *   startup of consumer (for testing: one has to call
      *   processQueueEntry() explicitly)
+     * @param {function} done callback
      * @return {undefined}
      */
-    start(options) {
+    start(options, done) {
         async.series([
             next => this._setupZookeeper(next),
             next => this._setupNotificationConfigManager(next),
             next => this._setupDestination(this.destinationConfig.type, next),
-            next => this._destination.init(() => {
+            // if connection to destination fails, process will stop & restart
+            next => this._destination.init(next),
+            next => {
                 if (options && options.disableConsumer) {
                     this.emit('ready');
-                    return undefined;
+                    return next();
                 }
                 const { groupId, concurrency, logConsumerMetricsIntervalS }
                     = this.notifConfig.queueProcessor;
@@ -142,22 +145,31 @@ class QueueProcessor extends EventEmitter {
                     queueProcessor: this.processKafkaEntry.bind(this),
                     logConsumerMetricsIntervalS,
                 });
-                this._consumer.on('error', () => { });
+                this._consumer.on('error', err => {
+                    this.logger.error('error starting notification consumer',
+                    { method: 'QueueProcessor.start', error: err.message });
+                    // crash if got error at startup
+                    if (!this.isReady()) {
+                        return next(err);
+                    }
+                    return undefined;
+                });
                 this._consumer.on('ready', () => {
                     this._consumer.subscribe();
                     this.logger.info('queue processor is ready to consume ' +
                         'notification entries');
                     this.emit('ready');
+                    return next();
                 });
-                return next();
-            }),
+                return undefined;
+            },
         ], err => {
             if (err) {
                 this.logger.info('error starting notification queue processor',
                     { error: err.message });
-                return undefined;
+                return done(err);
             }
-            return undefined;
+            return done();
         });
     }
 
@@ -262,6 +274,15 @@ class QueueProcessor extends EventEmitter {
             }
             return done();
         }
+    }
+
+    /**
+     * Checks if queue processor is ready to consume
+     *
+     * @returns {boolean} is queue processor ready
+     */
+    isReady() {
+        return this._consumer && this._consumer.isReady();
     }
 }
 

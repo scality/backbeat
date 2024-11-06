@@ -178,5 +178,10 @@ describe('Queue Processor', () => {
             sinon.assert.calledOnceWithExactly(res.writeHead, 200, { 'Content-Type': promClient.register.contentType });
             sinon.assert.calledOnceWithExactly(res.end, fakeMetrics);
         });
+
+        it('should not crash without _consumer', async () => {
+            qp._consumer = undefined;
+            return assert.doesNotReject(async () => await qp.handleMetrics(res, log));
+        });
     });
 });

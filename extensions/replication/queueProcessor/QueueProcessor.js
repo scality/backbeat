@@ -401,6 +401,7 @@ class QueueProcessor extends EventEmitter {
      */
     start(options) {
         this._setupProducer(err => {
+            let consumerReady = false;
             if (err) {
                 this.logger.info('error setting up kafka producer',
                     { error: err.message });
@@ -424,8 +425,15 @@ class QueueProcessor extends EventEmitter {
                 logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
                 circuitBreaker: this.circuitBreakerConfig,
             });
-            this._consumer.on('error', () => { });
+            this._consumer.on('error', () => {
+                if (!consumerReady) {
+                    this.logger.fatal('queue processor failed to start a ' +
+                                   'backbeat consumer');
+                    process.exit(1);
+                }
+            });
             this._consumer.on('ready', () => {
+                consumerReady = true;
                 this._consumer.subscribe();
                 this.logger.info('queue processor is ready to consume ' +
                     `replication entries from ${this.topic}`);
@@ -571,13 +579,15 @@ class QueueProcessor extends EventEmitter {
 
         // consumer stats lag is on a different update cycle so we need to
         // update the metrics when requested
-        const lagStats = this._consumer.consumerStats.lag;
-        Object.keys(lagStats).forEach(partition => {
-            metricsHandler.lag({
-                partition,
-                serviceName: this.serviceName,
-            }, lagStats[partition]);
-        });
+        if (this._consumer) {
+            const lagStats = this._consumer.consumerStats.lag;
+            Object.keys(lagStats).forEach(partition => {
+                metricsHandler.lag({
+                    partition,
+                    serviceName: this.serviceName,
+                }, lagStats[partition]);
+            });
+        }
         const metrics = await promClient.register.metrics();
 
         res.writeHead(200, {

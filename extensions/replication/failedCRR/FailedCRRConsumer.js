@@ -35,6 +35,7 @@ class FailedCRRConsumer {
      * @return {undefined}
      */
     start(cb) {
+        let consumerReady = false;
         const consumer = new BackbeatConsumer({
             kafka: {
                 hosts: this._kafkaConfig.hosts,
@@ -46,8 +47,17 @@ class FailedCRRConsumer {
             queueProcessor: this.processKafkaEntry.bind(this),
             fetchMaxBytes: CONSUMER_FETCH_MAX_BYTES,
         });
-        consumer.on('error', () => {});
+        consumer.on('error', err => {
+            if (!consumerReady) {
+                this.logger.fatal('could not setup a backbeat consumer', {
+                    method: 'FailedCRRConsumer.start',
+                    error: err,
+                });
+                process.exit(1);
+            }
+        });
         consumer.on('ready', () => {
+            consumerReady = true;
             consumer.subscribe();
             this.logger.info('retry consumer is ready to consume entries');
         });
