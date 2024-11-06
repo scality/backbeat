@@ -4,10 +4,10 @@ const { startProbeServer, getReplicationProbeConfig } =
 const Logger = require('werelogs').Logger;
 
 describe('Probe server', () => {
-    it('is not created with no config', done => {
+    it('should return undefined when no config is passed', done => {
         const config = undefined;
         startProbeServer(config, (err, probeServer) => {
-            assert(err);
+            assert.ifError(err);
             assert.strictEqual(probeServer, undefined);
             done();
         });
