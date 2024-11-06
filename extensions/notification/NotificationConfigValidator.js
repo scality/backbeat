@@ -33,7 +33,9 @@ const joiSchema = joi.object({
         concurrency: joi.number().greater(0).default(1000),
     },
     destinations: joi.array().items(destinationSchema).default([]),
-    probeServer: probeServerJoi.default()
+    // TODO: BB-625 reset to being required after supporting probeserver in S3C
+    // for bucket notification proceses
+    probeServer: probeServerJoi.optional()
 });
 
 function configValidator(backbeatConfig, extConfig) {
