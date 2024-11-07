@@ -1029,7 +1029,7 @@ class QueueProcessor extends EventEmitter {
     static async handleMetrics(res, log) {
         log.debug('metrics requested');
 
-        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS) {
+        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS && this._consumer) {
             // consumer stats lag is on a different update cycle so we need to
             // update the metrics when requested
             const lagStats = this._consumer.consumerStats.lag;

@@ -561,7 +561,7 @@ class ReplicationStatusProcessor {
         log.debug('metrics requested');
         const metrics = await ZenkoMetrics.asPrometheus();
 
-        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS) {
+        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS && this._consumer) {
             // consumer stats lag is on a different update cycle so we need to
             // update the metrics when requested
             const lagStats = this._consumer.consumerStats.lag;
