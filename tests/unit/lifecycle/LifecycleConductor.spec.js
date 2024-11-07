@@ -283,11 +283,27 @@ describe('Lifecycle Conductor', () => {
                     indexesForFeature.lifecycle.v2, // getIndex response
                     null, // metadata proxy error
                     true, // flag for status ofin progress job retrieval
+                    'mongodb',
                 ],
                 [
                     [], // updated job state
                     null, // expected putIndex object
                     lifecycleTaskVersions.v2, // expected version
+                ],
+            ],
+            [
+                'should return v2 if backend is not MongoDB',
+                [
+                    [],
+                    null,
+                    null,
+                    true,
+                    'bucketd',
+                ],
+                [
+                    [],
+                    null,
+                    lifecycleTaskVersions.v2,
                 ],
             ],
             [
@@ -297,6 +313,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     null,
                     true,
+                    'mongodb',
                 ],
                 [
                     [
@@ -315,6 +332,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     null,
                     true,
+                    'mongodb',
                 ],
                 [
                     [
@@ -334,6 +352,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     null,
                     true,
+                    'mongodb',
                 ],
                 [
                     [
@@ -351,6 +370,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     null,
                     false,
+                    'mongodb',
                 ],
                 [
                     [],
@@ -365,6 +385,7 @@ describe('Lifecycle Conductor', () => {
                     [],
                     new Error('test error'),
                     true,
+                    'mongodb',
                 ],
                 [
                     [],
@@ -376,13 +397,14 @@ describe('Lifecycle Conductor', () => {
 
         tests.forEach(([msg, input, expected]) =>
             it(msg, done => {
-                const [inJobs, getIndexes, mockError, getInProgressSucceeded] = input;
+                const [inJobs, getIndexes, mockError, getInProgressSucceeded, bucektSource] = input;
                 const [expectedJobs, putIndexes, expectedVersion] = expected;
 
                 const client = new BackbeatMetadataProxyMock();
                 conductor.clientManager.getBackbeatMetadataProxy = () => client;
                 conductor.activeIndexingJobsRetrieved = getInProgressSucceeded;
                 conductor.activeIndexingJobs = inJobs;
+                conductor._bucketSource = bucektSource;
                 client.indexesObj = getIndexes;
                 client.error = mockError;
 
