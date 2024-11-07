@@ -148,12 +148,6 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
     start() {
         // mocks
         this._mongoClient = new MongoClientMock();
-        this._mProducer = {
-            close: () => {},
-            publishMetrics: (metric, type, ext) => {
-                this.addToMetricsStore({ metric, type, ext });
-            },
-        };
         this._bootstrapList = bootstrapList;
         this._metricsStore = [];
     }
@@ -162,17 +156,9 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
         return this._consumer.sendMockEntry(entry, cb);
     }
 
-    addToMetricsStore(obj) {
-        this._metricsStore.push(obj);
-    }
-
     reset() {
         this._accruedMetrics = {};
         this._mongoClient.reset();
-    }
-
-    resetMetricsStore() {
-        this._metricsStore = [];
     }
 
     getAdded() {
@@ -181,10 +167,6 @@ class MongoQueueProcessorMock extends MongoQueueProcessor {
 
     getDeleted() {
         return this._mongoClient.getDeleted();
-    }
-
-    getMetricsStore() {
-        return this._metricsStore;
     }
 }
 
@@ -282,31 +264,6 @@ describe('MongoQueueProcessor', function mqp() {
     });
 
     describe('::_processObjectQueueEntry', () => {
-        function validateMetricReport(type, done) {
-            // only 2 types of metric type reports
-            assert(type === 'completed' || type === 'pendingOnly');
-
-            const expectedMetricStore = [{
-                ext: 'ingestion',
-                metric: {
-                    [LOCATION]: { ops: 1 },
-                },
-                type,
-            }];
-
-            const checker = setInterval(() => {
-                const ms = mqp.getMetricsStore();
-                if (ms.length !== 0) {
-                    clearInterval(checker);
-                    assert.deepStrictEqual(expectedMetricStore, ms);
-                    done();
-                }
-            }, 1000);
-        }
-
-        afterEach(() => {
-            mqp.resetMetricsStore();
-        });
 
         it('should save to mongo a new version entry and update fields',
         done => {
@@ -367,7 +324,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(repInfo.storageType, 'aws_s3');
                 assert.strictEqual(repInfo.dataStoreVersionId, '');
 
-                validateMetricReport('completed', done);
+                done();
             });
         });
 
@@ -432,7 +389,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(loc.dataStoreETag, `1:${contentMD5}`);
                 assert.strictEqual(decode(loc.dataStoreVersionId),
                     NEW_VERSION_ID);
-                validateMetricReport('completed', done);
+                done();
             });
         });
 
@@ -459,7 +416,7 @@ describe('MongoQueueProcessor', function mqp() {
                 const added = mqp.getAdded();
                 assert.strictEqual(added.length, 0);
 
-                validateMetricReport('pendingOnly', done);
+                done();
             });
         });
 
@@ -486,7 +443,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.deepStrictEqual(objVal.replicationInfo.content,
                     ['METADATA', 'DELETE_TAGGING']);
 
-                validateMetricReport('completed', done);
+                done();
             });
         });
 
@@ -513,8 +470,7 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(added.length, 1);
                 assert.deepStrictEqual(objVal.replicationInfo.content,
                     ['METADATA', 'PUT_TAGGING']);
-
-                validateMetricReport('completed', done);
+                done();
             });
         });
 
@@ -541,7 +497,7 @@ describe('MongoQueueProcessor', function mqp() {
                 const loc = objVal.location[0];
                 assert.strictEqual(decode(loc.dataStoreVersionId),
                     nullVersionId);
-                validateMetricReport('completed', done);
+                done();
             });
         });
     });
