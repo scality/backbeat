@@ -29,7 +29,7 @@ function onQueueProcessorEventProcessed(destination, eventType) {
 }
 
 const kafkaLagMetric = ZenkoMetrics.createGauge({
-    name: 's3_replication_queue_lag',
+    name: 's3_notification_queue_lag',
     help: 'Number of update entries waiting to be consumed from the Kafka topic',
     labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
 });
