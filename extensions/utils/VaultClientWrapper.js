@@ -11,7 +11,7 @@ class VaultClientWrapper {
         this._authConfig = authConfig;
         this._transport = this._authConfig.transport;
         this._clientId = id;
-        this._vaultConf = vaultConf;
+        this._vaultConf = vaultConf || this._authConfig.vault;
         this.logger = logger;
 
         const Agent = this._transport === 'https' ? HttpsAgent.Agent : HttpAgent.Agent;
