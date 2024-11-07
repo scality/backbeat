@@ -71,9 +71,7 @@ class MongoQueueProcessor {
         this._mongoClient = new MongoClient(this.mongoClientConfig);
         this._bucketMemState = new BucketMemState(Config);
 
-
     }
-
 
     /**
      * Start kafka consumer
@@ -82,18 +80,12 @@ class MongoQueueProcessor {
      */
     start() {
         this.logger.info('starting mongo queue processor');
-        async.series([
-            next => this._mongoClient.setup(err => {
-                if (err) {
-                    this.logger.error('could not connect to MongoDB', {
-                        method: 'MongoQueueProcessor.start',
-                        error: err.message,
-                    });
-                }
-                return next(err);
-            }),
-        ], error => {
-            if (error) {
+        this._mongoClient.setup(err => {
+            if (err) {
+                this.logger.error('could not connect to MongoDB', {
+                    method: 'MongoQueueProcessor.start',
+                    error: err.message,
+                });
                 this.logger.fatal('error starting mongo queue processor');
                 process.exit(1);
             }
@@ -139,20 +131,17 @@ class MongoQueueProcessor {
      * @return {undefined}
      */
     stop(done) {
-        async.parallel([
-            next => {
-                if (this._consumer) {
-                    this.logger.debug('closing kafka consumer', {
-                        method: 'MongoQueueProcessor.stop',
-                    });
-                    return this._consumer.close(next);
-                }
-                this.logger.debug('no kafka consumer to close', {
-                    method: 'MongoQueueProcessor.stop',
-                });
-                return next();
-            },
-        ], done);
+        if (this._consumer) {
+            this.logger.debug('closing kafka consumer', {
+                method: 'MongoQueueProcessor.stop',
+            });
+            this._consumer.close(done);
+        } else {
+            this.logger.debug('no kafka consumer to close', {
+                method: 'MongoQueueProcessor.stop',
+            });
+            done();
+        }
     }
 
     _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
