@@ -10,11 +10,10 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
 const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
-const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted, replicationStages } = require('../constants');
+const { replicationStages } = require('../constants');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
@@ -434,9 +433,6 @@ class ReplicateObject extends BackbeatTask {
             location: this.site,
             replicationContent: 'data',
         });
-        const extMetrics = getExtMetrics(this.site, size, sourceEntry);
-        this.mProducer.publishMetrics(extMetrics,
-            metricsTypeCompleted, metricsExtension, () => {});
     }
 
     _publishMetadataWriteMetrics(buffer, writeStartTime) {
@@ -758,10 +754,6 @@ class ReplicateObject extends BackbeatTask {
             // Get data from source bucket and put it on the target bucket
             next => {
                 if (!mdOnly) {
-                    const extMetrics = getExtMetrics(this.site,
-                        sourceEntry.getContentLength(), sourceEntry);
-                    this.mProducer.publishMetrics(extMetrics,
-                        metricsTypeQueued, metricsExtension, () => {});
                     return this._getAndPutData(sourceEntry, destEntry, log,
                                                next);
                 }

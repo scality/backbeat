@@ -8,8 +8,6 @@ const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const ReplicateObject = require('./ReplicateObject');
 const { attachReqUids } = require('../../../lib/clients/utils');
-const getExtMetrics = require('../utils/getExtMetrics');
-const { metricsExtension, metricsTypeQueued } = require('../constants');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -702,10 +700,6 @@ class MultipleBackendTask extends ReplicateObject {
             if (err) {
                 return doneOnce(err);
             }
-            const extMetrics = getExtMetrics(this.site,
-                sourceEntry.getContentLength(), sourceEntry);
-            this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-                metricsExtension, () => {});
             return this._completeRangedMPU(sourceEntry,
                 uploadId, log, doneOnce);
         });
@@ -713,10 +707,6 @@ class MultipleBackendTask extends ReplicateObject {
 
     _getAndPutObject(sourceEntry, log, cb) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
-        const extMetrics = getExtMetrics(this.site,
-            sourceEntry.getContentLength(), sourceEntry);
-        this.mProducer.publishMetrics(extMetrics, metricsTypeQueued,
-            metricsExtension, () => {});
 
         if (BACKBEAT_INJECT_REPLICATION_ERROR_COPYOBJ) {
             if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {

@@ -8,15 +8,12 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { LifecycleMetrics } = require('../../lifecycle/LifecycleMetrics');
-const ReplicationMetric = require('../ReplicationMetric');
 const ReplicationMetrics = require('../ReplicationMetrics');
 const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const { getAccountCredentials } =
           require('../../../lib/credentials/AccountCredentials');
 const RoleCredentials =
           require('../../../lib/credentials/RoleCredentials');
-const { metricsExtension, metricsTypeQueued, metricsTypeCompleted } =
-    require('../constants');
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -41,10 +38,6 @@ class CopyLocationTask extends BackbeatTask {
                 this.retryParams = retryParams;
             }
         }
-        this._replicationMetric = new ReplicationMetric()
-            .withProducer(this.mProducer.getProducer())
-            .withSite(this.site)
-            .withExtension(metricsExtension);
     }
 
     _validateActionCredentials(actionEntry) {
@@ -195,11 +188,6 @@ class CopyLocationTask extends BackbeatTask {
 
     _getAndPutObject(actionEntry, objMD, log, cb) {
         const objectLogger = this.logger.newRequestLogger(log.getUids());
-        this._replicationMetric
-            .withEntry(actionEntry)
-            .withMetricType(metricsTypeQueued)
-            .withObjectSize(objMD.getContentLength())
-            .publish();
         this.retry({
             actionDesc: 'stream object data',
             logFields: { entry: actionEntry.getLogInfo() },
@@ -335,11 +323,6 @@ class CopyLocationTask extends BackbeatTask {
             actionEntry.setSuccess({
                 location: data.location,
             });
-            this._replicationMetric
-                .withEntry(actionEntry)
-                .withMetricType(metricsTypeCompleted)
-                .withObjectSize(size)
-                .publish();
             return cb(null, data);
         });
     }
@@ -591,11 +574,6 @@ class CopyLocationTask extends BackbeatTask {
                 }
                 return doneOnce(err);
             }
-            this._replicationMetric
-                .withEntry(actionEntry)
-                .withMetricType(metricsTypeCompleted)
-                .withObjectSize(size)
-                .publish();
             return doneOnce(null, data);
         });
     }
@@ -786,11 +764,6 @@ class CopyLocationTask extends BackbeatTask {
             if (err) {
                 return cb(err);
             }
-            this._replicationMetric
-                .withEntry(actionEntry)
-                .withMetricType(metricsTypeQueued)
-                .withObjectSize(objMD.getContentLength())
-                .publish();
             return this._completeRangedMPU(actionEntry, objMD,
                 uploadId, log, cb);
         });

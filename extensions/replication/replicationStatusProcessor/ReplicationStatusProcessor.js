@@ -16,7 +16,6 @@ const QueueEntry = require('../../../lib/models/QueueEntry');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
-const MetricsProducer = require('../../../lib/MetricsProducer');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 // StatsClient constant default for site metrics
@@ -216,7 +215,6 @@ class ReplicationStatusProcessor {
         this.gcConfig = gcConfig;
         this._consumer = null;
         this._gcProducer = null;
-        this._mProducer = null;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -336,7 +334,6 @@ class ReplicationStatusProcessor {
             sourceHTTPAgent: this.sourceHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             gcProducer: this._gcProducer,
-            mProducer: this._mProducer,
             statsClient: this._statsClient,
             failedCRRProducer: this._failedCRRProducer,
             replayProducers: this._ReplayProducers,
@@ -378,11 +375,6 @@ class ReplicationStatusProcessor {
                 } else {
                     done();
                 }
-            },
-            done => {
-                this._mProducer = new MetricsProducer(this.kafkaConfig,
-                    this.mConfig);
-                this._mProducer.setupProducer(done);
             },
             done => {
                 let consumerReady = false;
@@ -431,18 +423,6 @@ class ReplicationStatusProcessor {
                     return this._consumer.close(next);
                 }
                 this.logger.debug('no kafka consumer to close', {
-                    method: 'ReplicationStatusProcessor.stop',
-                });
-                return next();
-            },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
-                        method: 'ReplicationStatusProcessor.stop',
-                    });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
                     method: 'ReplicationStatusProcessor.stop',
                 });
                 return next();
