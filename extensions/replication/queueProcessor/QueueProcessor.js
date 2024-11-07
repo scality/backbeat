@@ -28,7 +28,6 @@ const EchoBucket = require('../tasks/EchoBucket');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
-const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
 const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
@@ -222,7 +221,6 @@ class QueueProcessor extends EventEmitter {
         this.replicationStatusProducer = null;
         this._consumer = null;
         this._dataMoverConsumer = null;
-        this._mProducer = null;
         this.site = site;
         this.mConfig = mConfig;
         this.serviceName = this.isReplayTopic ?
@@ -695,7 +693,6 @@ class QueueProcessor extends EventEmitter {
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
             replicationStatusProducer: this.replicationStatusProducer,
-            mProducer: this._mProducer,
             logger: this.logger,
             site: this.site,
             consumer: this._consumer,
@@ -722,16 +719,7 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     start(options) {
-        this._mProducer = new MetricsProducer(this.kafkaConfig, this.mConfig);
         return async.parallel([
-            done => this._mProducer.setupProducer(err => {
-                if (err) {
-                    this.logger.info('error setting up metrics producer',
-                                     { error: err.message });
-                    process.exit(1);
-                }
-                return done();
-            }),
             done => this._setupProducer(err => {
                 if (err) {
                     this.logger.info('error setting up kafka producer',
@@ -837,20 +825,6 @@ class QueueProcessor extends EventEmitter {
                     return this._dataMoverConsumer.close(next);
                 }
                 this.logger.debug('no data mover consumer to close', {
-                    method: 'QueueProcessor.stop',
-                    site: this.site,
-                });
-                return next();
-            },
-            next => {
-                if (this._mProducer) {
-                    this.logger.debug('closing metrics producer', {
-                        method: 'QueueProcessor.stop',
-                        site: this.site,
-                    });
-                    return this._mProducer.close(next);
-                }
-                this.logger.debug('no metrics producer to close', {
                     method: 'QueueProcessor.stop',
                     site: this.site,
                 });

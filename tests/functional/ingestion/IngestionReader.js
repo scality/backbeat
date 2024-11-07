@@ -238,7 +238,6 @@ describe('ingestion reader tests with mock', function fD() {
                 qpConfig: testConfig.queuePopulator,
                 logger: dummyLogger,
                 extensions: [ingestionQP],
-                metricsProducer: { publishMetrics: () => { } },
                 s3Config: testConfig.s3,
                 producer,
             });
@@ -404,7 +403,6 @@ describe('ingestion reader tests with mock', function fD() {
                 qpConfig: testConfig.queuePopulator,
                 logger: dummyLogger,
                 extensions: [ingestionQP],
-                metricsProducer: { publishMetrics: () => { } },
                 s3Config: testConfig.s3,
                 producer,
             });
