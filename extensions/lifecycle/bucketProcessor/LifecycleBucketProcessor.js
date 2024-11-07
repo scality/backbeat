@@ -380,6 +380,8 @@ class LifecycleBucketProcessor {
         const producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
             maxRequestSize: this._kafkaConfig.maxRequestSize,
+            compressionType: this._kafkaConfig.compressionType,
+            requiredAcks: this._kafkaConfig.requiredAcks,
             topic: this._lcConfig.objectTasksTopic,
         });
         producer.once('error', err => {
@@ -418,6 +420,8 @@ class LifecycleBucketProcessor {
                 hosts: this._kafkaConfig.hosts,
                 site: this._kafkaConfig.site,
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
+                compressionType: this._kafkaConfig.compressionType,
+                requiredAcks: this._kafkaConfig.requiredAcks,
             },
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,

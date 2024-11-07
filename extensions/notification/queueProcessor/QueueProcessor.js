@@ -183,6 +183,8 @@ class QueueProcessor extends EventEmitter {
                     kafka: {
                         hosts: this.kafkaConfig.hosts,
                         site: this.kafkaConfig.site,
+                        compressionType: this.kafkaConfig.compressionType,
+                        requiredAcks: this.kafkaConfig.requiredAcks,
                     },
                     topic: internalTopic,
                     groupId: consumerGroupId,

@@ -78,6 +78,8 @@ class LifecycleObjectProcessor extends EventEmitter {
                 hosts: this._kafkaConfig.hosts,
                 site: this._kafkaConfig.site,
                 backlogMetrics: this._kafkaConfig.backlogMetrics,
+                compressionType: this._kafkaConfig.compressionType,
+                requiredAcks: this._kafkaConfig.requiredAcks,
             },
             topic,
             groupId: this._processConfig.groupId,

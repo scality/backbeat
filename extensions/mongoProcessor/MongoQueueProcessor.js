@@ -136,6 +136,8 @@ class MongoQueueProcessor {
                 kafka: {
                     hosts: this.kafkaConfig.hosts,
                     site: this.kafkaConfig.site,
+                    compressionType: this.kafkaConfig.compressionType,
+                    requiredAcks: this.kafkaConfig.requiredAcks,
                 },
                 queueProcessor: this.processKafkaEntry.bind(this),
                 circuitBreaker: this.mongoProcessorConfig.circuitBreaker,

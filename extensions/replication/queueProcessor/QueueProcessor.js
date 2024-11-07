@@ -380,6 +380,8 @@ class QueueProcessor extends EventEmitter {
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
             maxRequestSize: this.kafkaConfig.maxRequestSize,
+            compressionType: this.kafkaConfig.compressionType,
+            requiredAcks: this.kafkaConfig.requiredAcks,
             topic: this.repConfig.replicationStatusTopic,
         });
         producer.once('error', done);
@@ -409,6 +411,8 @@ class QueueProcessor extends EventEmitter {
                 site: this.kafkaConfig.site,
                 backlogMetrics: options && options.enableBacklogMetrics ?
                     this.kafkaConfig.backlogMetrics : undefined,
+                compressionType: this.kafkaConfig.compressionType,
+                requiredAcks: this.kafkaConfig.requiredAcks,
             },
             topic,
             groupId,

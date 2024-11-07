@@ -62,6 +62,8 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         const producer = new BackbeatProducer({
             kafka: { hosts: this.kafkaConfig.hosts },
             maxRequestSize: this.kafkaConfig.maxRequestSize,
+            compressionType: this.kafkaConfig.compressionType,
+            requiredAcks: this.kafkaConfig.requiredAcks,
             topic,
         });
         producer.once('error', done);
