@@ -22,6 +22,16 @@ const destinationSchema = joi.object({
     internalTopic: joi.string(),
     topic: joi.string().required(),
     auth: authSchema.default({}),
+    requiredAcks: joi.number().when('type', {
+        is: joi.string().not('kafka'),
+        then: joi.forbidden(),
+        otherwise: joi.number().default(1),
+    }),
+    compressionType: joi.string().when('type', {
+        is: joi.string().not('kafka'),
+        then: joi.forbidden(),
+        otherwise: joi.string().default('none'),
+    }),
 });
 
 const joiSchema = joi.object({
