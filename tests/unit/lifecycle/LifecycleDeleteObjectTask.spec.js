@@ -260,7 +260,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('should expire object using the deleteObjectFromExpiration method if supported', done => {
+    it('should expire object using the deleteObjectFromExpiration method', done => {
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
             .setAttribute('target.bucket', 'testbucket')
@@ -278,9 +278,7 @@ describe('LifecycleDeleteObjectTask', () => {
         });
     });
 
-    it('should expire object using the deleteObject method when not in Zenko', done => {
-        backbeatClient = new BackbeatClientMock({ isS3c: true });
-        sinon.stub(task, 'getBackbeatClient').returns(backbeatClient);
+    it('should fallback to deleteObject method if deleteObjectFromExpiration is not supported', done => {
         const entry = ActionQueueEntry.create('deleteObject')
             .setAttribute('target.owner', 'testowner')
             .setAttribute('target.bucket', 'testbucket')
@@ -289,11 +287,32 @@ describe('LifecycleDeleteObjectTask', () => {
             .setAttribute('target.version', 'testversion')
             .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
         s3Client.setResponse(null, {});
-        backbeatClient.setResponse(null, {});
+        const methodNotAllowedErr = new Error('MethodNotAllowed');
+        methodNotAllowedErr.statusCode = 405;
+        backbeatClient.setResponse(methodNotAllowedErr, {});
         task.processActionEntry(entry, err => {
             assert.ifError(err);
+            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
             assert.strictEqual(s3Client.calls.deleteObject, 1);
-            assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 0);
+            done();
+        });
+    });
+
+    it('should fail to fallback if it fails to get the s3 client', done => {
+        sinon.stub(task, 'getS3Client').returns(null);
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        const methodNotAllowedErr = new Error('MethodNotAllowed');
+        methodNotAllowedErr.statusCode = 405;
+        backbeatClient.setResponse(methodNotAllowedErr, {});
+        task.processActionEntry(entry, err => {
+            assert(err);
             done();
         });
     });
@@ -326,6 +345,24 @@ describe('LifecycleDeleteObjectTask', () => {
             .setAttribute('target.accountId', 'testid')
             .setAttribute('target.key', 'testkey')
             .setAttribute('target.version', 'testversion')
+            .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
+        s3Client.setResponse(null, {});
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert(err);
+            done();
+        });
+    });
+
+    it('should return an error when it can\'t get the S3 client', done => {
+        sinon.stub(task, 'getS3Client').returns(null);
+        const entry = ActionQueueEntry.create('deleteMPU')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.UploadId', 'someUploadId')
             .setAttribute('details.lastModified', '2022-05-13T17:51:31.261Z');
         s3Client.setResponse(null, {});
         backbeatClient.setResponse(null, {});
