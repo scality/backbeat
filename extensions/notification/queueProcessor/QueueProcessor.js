@@ -6,7 +6,7 @@ const async = require('async');
 const assert = require('assert');
 const util = require('util');
 const { ZenkoMetrics } = require('arsenal').metrics;
-const { wrapGaugeSet } = require('../../../lib/util/metrics')
+const { wrapGaugeSet } = require('../../../lib/util/metrics');
 const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
