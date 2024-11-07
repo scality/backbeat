@@ -37,14 +37,7 @@ const kafkaLagMetric = ZenkoMetrics.createGauge({
 /**
  * Contains methods to incrememt different metrics
  * @typedef {Object} MetricsHandler
- * @property {CounterInc} dataReplicationStatus - Increments the replication status metric for data operation
- * @property {CounterInc} metadataReplicationStatus - Increments the replication status metric for metadata operation
- * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
- * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
- * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
- * @property {CounterInc} reads - Increments the read metric
- * @property {CounterInc} writes - Increments the write metric
- * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
+ * @property {GaugeSet} lag - kafka lag metric
  */
 const metricsHandler = {
     lag: wrapGaugeSet(kafkaLagMetric, defaultLabels),

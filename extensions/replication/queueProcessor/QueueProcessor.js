@@ -129,6 +129,7 @@ const defaultLabels = {
  * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
  * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
  * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
+ * @property {GaugeSet} lag - Kafka lag metric
  * @property {CounterInc} reads - Increments the read metric
  * @property {CounterInc} writes - Increments the write metric
  * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
