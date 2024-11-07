@@ -1,7 +1,5 @@
 'use strict'; // eslint-disable-line
 
-const async = require('async');
-
 const Logger = require('werelogs').Logger;
 const errors = require('arsenal').errors;
 const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
