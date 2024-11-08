@@ -2,7 +2,7 @@ const assert = require('assert');
 
 const TaskScheduler = require('../../../../lib/tasks/TaskScheduler');
 
-describe.only('TaskScheduler', () => {
+describe('TaskScheduler', () => {
     it('should ensure serialization of updates with the same queue key',
     done => {
         const taskScheduler = new TaskScheduler(
