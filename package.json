@@ -89,10 +89,7 @@
     "sinon": "^19.0.2",
     "zookeeper-mock": "^1.2.0"
   },
-  "optionalDependencies": {
-    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#8.8.35"
-  },
   "engines": {
-    "node": ">=22"
+    "node": ">=20"
   }
 }
