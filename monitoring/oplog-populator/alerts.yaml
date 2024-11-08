@@ -10,7 +10,7 @@ x-inputs:
   value: 10
 - name: oplogPopulatorChangeStreamLimit
   type: config
-  value: 0
+  value: 10
 
 groups:
 - name: Oplog Populator
