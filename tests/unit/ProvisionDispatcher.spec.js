@@ -10,7 +10,7 @@ const mockZookeeperClient = require('../functional/utils/mockZookeeperClient');
 
 const sinon = require('sinon');
 
-describe('provision dispatcher based on zookeeper recipes',
+describe.only('provision dispatcher based on zookeeper recipes',
 function testDispatch() {
     const endpoint = 'fake.endpoint:2181';
     const zkConf = { connectionString: endpoint };

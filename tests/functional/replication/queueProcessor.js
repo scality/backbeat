@@ -19,11 +19,13 @@ const TestConfigurator = require('../../utils/TestConfigurator');
 const ReplicationStatusProcessor = require('../../../extensions/replication' +
     '/replicationStatusProcessor/ReplicationStatusProcessor');
 
+const { createHash } = require('crypto');
+
 /* eslint-disable max-len */
 
 
 function getMD5(body) {
-    return crypto.createHash('md5').update(body).digest('hex');
+    return createHash('md5').update(body).digest('hex');
 }
 
 function buildLocations(keysArray, bodiesArray, options) {
