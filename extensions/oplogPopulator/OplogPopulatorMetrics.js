@@ -215,8 +215,12 @@ class OplogPopulatorMetrics {
      */
     onConnectorsReconciled(bucketsExceedingLimit, retainedBuckets) {
         try {
-            this.bucketsExceedingLimit.set(bucketsExceedingLimit);
-            this.retainedBuckets.set(retainedBuckets);
+            if (this.bucketsExceedingLimit) {
+                this.bucketsExceedingLimit.set(bucketsExceedingLimit);
+            }
+            if (this.retainedBuckets) {
+                this.retainedBuckets.set(retainedBuckets);
+            }
         } catch (error) {
             this._logger.error('An error occured while pushing metric', {
                 method: 'OplogPopulatorMetrics.onConnectorsReconciled',
