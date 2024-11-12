@@ -165,6 +165,10 @@ describe('updateCircuitBreakerConfigForImplicitOutputQueue', () => {
 });
 
 describe('startCircuitBreakerMetricsExport', () => {
+    beforeEach(() => {
+        circuitBreakerGauge.reset();
+        circuitBreakerCounter.reset();
+    });
     it('should export circuit breaker state  and not increment counter', done => {
         const cb = { state: 1234, failedProbes: false };
         startCircuitBreakerMetricsExport(cb, 'test', 10);
