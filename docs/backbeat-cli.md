@@ -53,7 +53,7 @@ npm install
 4. **Create an alias for easy access**
 
 ```bash
-alias backbeat-cli='node bin/backbeat.cli.js'
+alias backbeat-cli='node bin/backbeat-cli.js'
 ```
 
 ## Configuration
@@ -65,9 +65,6 @@ Before using the Backbeat CLI, configure the necessary environment variables to 
 - `BACKBEAT_ENDPOINT`: The endpoint URL for the Backbeat service.  
   *Default*: `http://127.0.0.1:8000`
 
-- `AWS_REGION`: The AWS region to use.  
-  *Default*: `us-east-1`
-
 - `AWS_ACCESS_KEY_ID`: Your AWS access key ID.  
   *Default*: `accessKey1`
 
@@ -78,7 +75,6 @@ You can set these variables in your shell or include them in a configuration fil
 
 ```bash
 export BACKBEAT_ENDPOINT='http://your-backbeat-endpoint.com'
-export AWS_REGION='your-region'
 export AWS_ACCESS_KEY_ID='your-access-key-id'
 export AWS_SECRET_ACCESS_KEY='your-secret-access-key'
 ```

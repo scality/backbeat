@@ -1,7 +1,10 @@
 #!/usr/bin/env node
 
 const program = require('commander');
-const BackbeatClient = require('../lib/clients/BackbeatClient.js');
+const url = require('url');
+const https = require('https');
+const http = require('http');
+const { createBackbeatClient } = require('../lib/clients/utils.js');
 
 const pkg = require('../package.json');
 const werelogs = require('werelogs');
@@ -15,12 +18,38 @@ werelogs.configure({
     dump: config.log.dumpLevel,
 });
 
+function parseEndpoint(endpoint) {
+    try {
+        const parsedUrl = new url.URL(endpoint);
+        const transport = parsedUrl.protocol.slice(0, -1);
+        const host = parsedUrl.hostname;
+        const port = parsedUrl.port;
+
+        return { transport, host, port };
+    } catch (error) {
+        throw new Error(`Invalid endpoint URL: ${endpoint}`);
+    }
+}
+
 function createClient() {
-    return new BackbeatClient({
-        endpoint: process.env.BACKBEAT_ENDPOINT || 'http://127.0.0.1:8000',
-        region: process.env.AWS_REGION || 'us-east-1',
-        accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'accessKey1',
-        secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'verySecretKey1',
+    const { transport, host, port } = parseEndpoint(process.env.BACKBEAT_ENDPOINT || 'http://127.0.0.1:8000');
+
+    let agent;
+    if (transport === 'https') {
+        agent = new https.Agent({ keepAlive: true });
+    } else {
+        agent = new http.Agent({ keepAlive: true });
+    }
+
+    return createBackbeatClient({
+        transport,
+        host,
+        port,
+        credentials: {
+            accessKeyId: process.env.AWS_ACCESS_KEY_ID || 'accessKey1',
+            secretAccessKey: process.env.AWS_SECRET_ACCESS_KEY || 'verySecretKey1',
+        },
+        agent,
     });
 }
 
