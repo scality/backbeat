@@ -14,6 +14,7 @@ const NotificationDestination = require('../destination');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
+const libConstants = require('../../../lib/constants');
 
 const processedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_queue_processor_events_total',
@@ -92,6 +93,7 @@ class QueueProcessor extends EventEmitter {
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.destinationId = destinationId;
+        this.serviceName = libConstants.services.notificationQueueProcessor;
         this.destinationConfig
             = notifConfig.destinations.find(dest => dest.resource === destinationId);
         assert(this.destinationConfig, `Invalid destination argument "${destinationId}".` +
