@@ -39,14 +39,14 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         super(params);
         this._authConfig = params.authConfig;
 
-        this.vaultClientWrapper = new VaultClientWrapper(
-            LIFEYCLE_POPULATOR_CLIENT_ID,
-            params.vaultAdmin,
-            this._authConfig,
-            this.log,
-        );
+        if (this._authConfig?.type === authTypeAssumeRole) {
+            this.vaultClientWrapper = new VaultClientWrapper(
+                LIFEYCLE_POPULATOR_CLIENT_ID,
+                params.vaultAdmin,
+                this._authConfig,
+                this.log,
+            );
 
-        if (this._authConfig.type === authTypeAssumeRole) {
             this.vaultClientWrapper.init();
         }
 
@@ -238,6 +238,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     }
 
     _handleRestoreOp(entry) {
+        if (!this.vaultClientWrapper) {
+            return;
+        }
+
         if (entry.type !== 'put' ||
             entry.key.startsWith(mpuBucketPrefix)) {
             return;
@@ -391,6 +395,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     }
 
     _handleDeleteOp(entry) {
+        if (!this.vaultClientWrapper) {
+            return;
+        }
+
         const value = JSON.parse(entry.value);
 
         // if object is not archived there is nothing to do here

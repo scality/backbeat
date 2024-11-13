@@ -106,6 +106,14 @@ describe('LifecycleQueuePopulator', () => {
         }, 100);
     }
 
+    describe('constructor', () => {
+        it('should not create vaultClientWrapper when no auth config passed', () => {
+            const params = {};
+            const lcqp = new LifecycleQueuePopulator(params);
+            assert.strictEqual(lcqp.vaultClientWrapper, undefined);
+        });
+    });
+
     describe('Producer', () => {
         let lcqp;
         beforeEach(() => {
@@ -387,7 +395,6 @@ describe('LifecycleQueuePopulator', () => {
         });
     });
 
-
     describe(':_handleDeleteOp', () => {
         const kafkaSendStub = sinon.stub().yields();
         const objMd = {
@@ -545,7 +552,9 @@ describe('LifecycleQueuePopulator', () => {
             },
         ].forEach(params => {
             it(params.it, () => {
-                lcqp.vaultClientWrapper.getAccountId = sinon.stub().yields(...params.getAccountIdResponse);
+                lcqp.vaultClientWrapper = {
+                    getAccountId: sinon.stub().yields(...params.getAccountIdResponse),
+                };
                 const timestamp = new Date();
                 const entry = {
                     type: params.type,
