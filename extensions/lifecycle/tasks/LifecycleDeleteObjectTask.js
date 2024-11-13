@@ -103,25 +103,62 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         return done();
     }
 
-    _getS3Action(actionType, accountId) {
-        let reqMethod;
-        if (actionType === 'deleteObject') {
-            const backbeatClient = this.getBackbeatClient(accountId);
-            if (!backbeatClient) {
-                return null;
-            }
-            // Zenko supports the "deleteObjectFromExpiration" API, which
-            // sets the proper originOp in the metadata to trigger a
-            // nortification when an object gets expired.
-            if (typeof backbeatClient.deleteObjectFromExpiration === 'function') {
-                return backbeatClient.deleteObjectFromExpiration.bind(backbeatClient);
-            }
-            reqMethod = 'deleteObject';
-        } else {
-            reqMethod = 'abortMultipartUpload';
-        }
+    _abortMPU(reqParams, accountId, transitionTime, startTime, location, log, done) {
         const client = this.getS3Client(accountId);
-        return client[reqMethod].bind(client);
+        if (!client) {
+            log.error('failed to get s3 client', {
+                accountId,
+                actionType: 'deleteMPU',
+                method: 'LifecycleDeleteObjectTask._abortMPU',
+            });
+            done(errors.InternalError
+                .customizeDescription('Unable to obtain s3 client'));
+            return;
+        }
+        LifecycleMetrics.onLifecycleStarted(log,
+            'expiration:mpu',
+            location, startTime - transitionTime);
+        const req = client.abortMultipartUpload(reqParams);
+        attachReqUids(req, log);
+        req.send(done);
+    }
+
+    _deleteObject(reqParams, accountId, transitionTime, startTime, location, log, done) {
+        const logDetails = {
+            accountId,
+            actionType: 'deleteObject',
+            method: 'LifecycleDeleteObjectTask._deleteObject',
+        };
+        const client = this.getBackbeatClient(accountId);
+        if (!client) {
+            log.error('failed to get s3 backbeat client', logDetails);
+            done(errors.InternalError
+                .customizeDescription('Unable to obtain s3 client'));
+            return;
+        }
+        LifecycleMetrics.onLifecycleStarted(log,
+            'expiration',
+            location, startTime - transitionTime);
+        const req = client.deleteObjectFromExpiration(reqParams);
+        attachReqUids(req, log);
+        req.send(err => {
+            if (err?.statusCode === errors.MethodNotAllowed.code) {
+                log.warn('deleteObjectFromExpiration API not supported, falling back to deleteObject',
+                    logDetails);
+                // fallback to s3 deleteObject when using a cloudserver that
+                // doesn't support deleteObjectFromExpiration
+                const s3Client = this.getS3Client(accountId);
+                if (!s3Client) {
+                    log.error('failed to get s3 client', logDetails);
+                    return done(errors.InternalError
+                        .customizeDescription('Unable to obtain client'));
+                }
+                const s3Req = s3Client.deleteObject(reqParams);
+                attachReqUids(s3Req, log);
+                return s3Req.send(done);
+            }
+            return done(err);
+        });
     }
 
     _executeDelete(entry, startTime, log, done) {
@@ -135,37 +172,24 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         if (version !== undefined) {
             reqParams.VersionId = version;
         }
-        let reqMethod;
 
         const actionType = entry.getActionType();
         const transitionTime = entry.getAttribute('transitionTime');
         const location = this.objectMD?.dataStoreName || entry.getAttribute('details.dataStoreName');
-        let req = null;
 
-        const s3Action = this._getS3Action(actionType, accountId);
-        if (!s3Action) {
-            log.error('failed to get s3 action', {
-                accountId,
-                actionType,
-                method: 'LifecycleDeleteObjectTask._executeDelete',
-            });
-            return done(errors.InternalError
-                .customizeDescription('Unable to obtain s3 action'));
-        }
-        LifecycleMetrics.onLifecycleStarted(log,
-            actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
-            location, startTime - transitionTime);
+        let reqMethod = 'deleteObject';
+        let actionMethod = this._deleteObject.bind(this);
         if (actionType === 'deleteMPU') {
+            reqMethod = 'abortMultipartUpload';
             reqParams.UploadId = entry.getAttribute('details.UploadId');
+            actionMethod = this._abortMPU.bind(this);
         }
-        req = s3Action(reqParams);
-        attachReqUids(req, log);
-        return req.send(err => {
+
+        actionMethod(reqParams, accountId, transitionTime, startTime, location, log, err => {
             LifecycleMetrics.onS3Request(log, reqMethod, 'expiration', err);
             LifecycleMetrics.onLifecycleCompleted(log,
                 actionType === 'deleteMPU' ? 'expiration:mpu' : 'expiration',
                 location, Date.now() - entry.getAttribute('transitionTime'));
-
             if (err) {
                 log.error(
                     `an error occurred on ${reqMethod} to S3`, Object.assign({
