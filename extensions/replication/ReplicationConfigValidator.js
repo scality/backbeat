@@ -53,11 +53,7 @@ const joiSchema = joi.object({
         bootstrapList: bootstrapListJoi,
     },
     topic: joi.string().required(),
-    dataMoverTopic: joi.string().when('..lifecycle.supportedLifecycleRules', {
-        is: joi.array().has(joi.string().valid('transition')),
-        then: joi.required(),
-        otherwise: joi.forbidden(),
-    }),
+    dataMoverTopic: joi.string().optional(),
     replicationStatusTopic: joi.string().required(),
     monitorReplicationFailures: joi.boolean().default(true),
     replicationFailedTopic: joi.string().required(),
