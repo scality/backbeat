@@ -10,7 +10,7 @@ class NotificationConfigManager {
 
     constructor(params) {
         const {
-            mongoConfig, bucketMetastore, maxCachedConfigs, zkClient, zkConfig, zkPath, logger,
+            mongoConfig, bucketMetastore, maxCachedConfigs, zkClient, zkConfig, zkPath, zkConcurrency, logger,
         } = params;
         if (mongoConfig) {
             this._configManagerBackend = new MongoConfigManager({
@@ -25,6 +25,7 @@ class NotificationConfigManager {
                 zkClient,
                 zkConfig,
                 zkPath,
+                zkConcurrency,
                 logger,
             });
         }

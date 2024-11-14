@@ -39,6 +39,9 @@ const joiSchema = joi.object({
     probeServer: probeServerJoi.optional(),
     bucketMetastore: joi.string().default('__metastore'),
     maxCachedConfigs: joi.number().default(1000),
+    // Conrrency to use when updating all local bucket notification configs
+    // from zookeeper
+    zookeeperOpConcurrency: joi.number().default(10),
 });
 
 function configValidator(backbeatConfig, extConfig) {

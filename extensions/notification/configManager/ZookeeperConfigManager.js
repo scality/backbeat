@@ -21,6 +21,7 @@ const paramsJoi = joi.object({
         then: joi.optional(),
         otherwise: joi.required(),
     }),
+    zkConcurrency: joi.number().required(),
     logger: joi.object().required(),
 }).required();
 
@@ -42,9 +43,9 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         this._zkClient = params.zkClient;
         this._zkPath = params.zkPath;
         this._zkConfig = params.zkConfig;
+        this._zkConcurrency = params.zkConcurrency;
         this.log = params.logger;
         this._configs = new Map();
-        this._concurrency = constants.configManager.concurrency;
         this._emitter = new EventEmitter();
         this._setupEventListeners();
     }
@@ -324,7 +325,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _updateLocalStore(buckets, cb) {
-        async.eachSeries(buckets, (bucket, next) => {
+        async.eachLimit(buckets, this._zkConcurrency, (bucket, next) => {
             this._getBucketNotifConfig(bucket, (err, data) => {
                 if (err) {
                     return next(err);

@@ -44,6 +44,7 @@ describe('NotificationConfigManager', () => {
         it('should use the zookeeper backend', () => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
 
@@ -57,6 +58,7 @@ describe('NotificationConfigManager', () => {
         it('should return the configuration', () => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
             const manager = new NotificationConfigManager(params);
@@ -70,6 +72,7 @@ describe('NotificationConfigManager', () => {
         it('should return the configuration with a callback', done => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
             const manager = new NotificationConfigManager(params);
@@ -86,6 +89,7 @@ describe('NotificationConfigManager', () => {
         it('should return the configuration in a promise', done => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
             const manager = new NotificationConfigManager(params);
@@ -103,6 +107,7 @@ describe('NotificationConfigManager', () => {
         it('should call callback when the promise resolves', done => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
             const manager = new NotificationConfigManager(params);
@@ -165,6 +170,7 @@ describe('NotificationConfigManager', () => {
         it('should call the setup method of the backend', done => {
             const params = {
                 zkClient: {},
+                zkConcurrency: 10,
                 logger,
             };
 

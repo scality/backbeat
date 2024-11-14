@@ -102,6 +102,7 @@ class QueueProcessor extends EventEmitter {
                 maxCachedConfigs: this.notifConfig.maxCachedConfigs,
                 zkConfig: this.zkConfig,
                 zkPath: this.notifConfig.zookeeperPath,
+                zkConcurrency: this.notifConfig.zookeeperOpConcurrency,
                 logger: this.logger,
             });
             return this.bnConfigManager.setup(done);

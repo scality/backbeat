@@ -97,6 +97,7 @@ describe('ZookeeperConfigManager', () => {
     const zkClient = zk.createClient();
     const params = {
         zkClient,
+        zkConcurrency: 10,
         logger,
     };
 
@@ -223,6 +224,7 @@ describe('ZookeeperConfigManager', () => {
                     connectionString: '127.0.0.1:2181',
                     autoCreateNamespace: false,
                 },
+                zkConcurrency: 10,
                 logger,
             });
             sinon.stub(manager, '_checkConfigurationParentNode').yields(null, null);
