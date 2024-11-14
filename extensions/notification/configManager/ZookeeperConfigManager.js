@@ -113,7 +113,6 @@ class ZookeeperConfigManager extends BaseConfigManager  {
     }
 
     _setupEventListeners() {
-        this._emitter.setMaxListeners(constants.configManager.maxListeners);
         this._emitter
             .on('error', error => this._errorListener(error))
             .on('setConfig',
