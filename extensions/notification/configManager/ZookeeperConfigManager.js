@@ -145,6 +145,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._getBucketNotifConfig';
         const zkPath = this._getBucketNodeZkPath(bucket);
+        this.log.debug('fetching bucket notification configuration', {
+            method,
+            bucket,
+            zkPath,
+        });
         return this._zkClient.getData(zkPath, event => {
             this.log.debug('zookeeper getData watcher triggered', {
                 zkPath,
@@ -198,6 +203,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._setBucketNotifConfig';
         const zkPath = this._getBucketNodeZkPath(bucket);
+        this.log.debug('setting bucket notification configuration', {
+            method,
+            bucket,
+            zkPath,
+        });
         return async.waterfall([
             next => this._checkNodeExists(zkPath, next),
             (exists, next) => {
@@ -249,6 +259,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._createBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
+        this.log.debug('creating bucket notification configuration node', {
+            method,
+            bucket,
+            zkPath,
+        });
         return this._zkClient.mkdirp(zkPath, err => {
             if (err) {
                 this.log.error('Could not pre-create path in zookeeper', {
@@ -266,6 +281,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._removeBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
+        this.log.debug('removing bucket notification configuration node', {
+            method,
+            bucket,
+            zkPath,
+        });
         return this._zkClient.remove(zkPath, error => {
             if (error && error.name !== 'NO_NODE') {
                 this.log.error('Could not remove zookeeper node', {
