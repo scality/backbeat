@@ -3,7 +3,7 @@ const util = require('util');
 
 const { isMasterKey } = require('arsenal').versioning;
 const { usersBucket, mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
-const VID_SEP = require('arsenal').versioning.VersioningConstants.VersionId.Separator;
+const VID_SEPERATOR = require('arsenal').versioning.VersioningConstants.VersionId.Separator;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
 const messageUtil = require('./utils/message');
@@ -63,11 +63,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     /**
      * Get bucket name from bucket attributes
      *
-     * @param {Object} value - log entry object
+     * @param {Object} attributes - bucket attributes from log entry
      * @return {String|undefined} - bucket name if available
      */
-    _getBucketNameFromAttributes(value) {
-        const attributes = this._getBucketAttributes(value);
+    _getBucketNameFromAttributes(attributes) {
         if (attributes && attributes.name) {
             return attributes.name;
         }
@@ -77,11 +76,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
     /**
      * Get notification configuration from bucket attributes
      *
-     * @param {Object} value - log entry object
+     * @param {Object} attributes - bucket attributes from log entry
      * @return {Object|undefined} - notification configuration if available
      */
-    _getBucketNotificationConfiguration(value) {
-        const attributes = this._getBucketAttributes(value);
+    _getBucketNotificationConfiguration(attributes) {
         if (attributes && attributes.notificationConfiguration) {
             return attributes.notificationConfiguration;
         }
@@ -96,9 +94,10 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     _processBucketEntry(bucket, value) {
-        const bucketName = this._getBucketNameFromAttributes(value);
+        const attributes = this._getBucketAttributes(value);
+        const bucketName = this._getBucketNameFromAttributes(attributes);
         const notificationConfiguration
-            = this._getBucketNotificationConfiguration(value);
+            = this._getBucketNotificationConfiguration(attributes);
         if (notificationConfiguration &&
             Object.keys(notificationConfiguration).length > 0) {
             const bnConfig = {
@@ -110,7 +109,8 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             return undefined;
         }
         // bucket was deleter or notification conf has been removed, so remove zk node
-        return this.bnConfigManager.removeConfig(bucketName || bucket);
+        this.bnConfigManager.removeConfig(bucketName || bucket);
+        return undefined;
     }
 
     /**
@@ -184,7 +184,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {String} - versioned base key
      */
     _extractVersionedBaseKey(key) {
-        return key.split(VID_SEP)[0];
+        return key.split(VID_SEPERATOR)[0];
     }
 
     /**
