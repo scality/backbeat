@@ -14,11 +14,9 @@ const BaseConfigManager = require('./BaseConfigManager');
 const paramsJoi = joi.object({
     mongoConfig: joi.object().required(),
     bucketMetastore: joi.string().required(),
+    maxCachedConfigs: joi.number().required(),
     logger: joi.object().required(),
 }).required();
-
-const MAX_CACHED_ENTRIES = Number(process.env.MAX_CACHED_BUCKET_NOTIFICATION_CONFIGS)
-    || 1000;
 
 // should equal true if config manager's cache was hit during a get operation
 const CONFIG_MANAGER_CACHE_HIT = 'cache_hit';
@@ -83,7 +81,7 @@ class MongoConfigManager extends BaseConfigManager {
         joi.attempt(params, paramsJoi);
         this._logger = params.logger;
         this._mongoConfig = params.mongoConfig;
-        this._cachedConfigs = new LRUCache(MAX_CACHED_ENTRIES);
+        this._cachedConfigs = new LRUCache(params.maxCachedConfigs);
         this._bucketMetastore = params.bucketMetastore;
         this._mongoClient = null;
         this._metastore = null;

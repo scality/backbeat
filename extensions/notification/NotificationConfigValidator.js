@@ -38,6 +38,7 @@ const joiSchema = joi.object({
     // for bucket notification proceses
     probeServer: probeServerJoi.optional(),
     bucketMetastore: joi.string().default('__metastore'),
+    maxCachedConfigs: joi.number().default(1000),
 });
 
 function configValidator(backbeatConfig, extConfig) {

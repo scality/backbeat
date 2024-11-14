@@ -39,6 +39,7 @@ describe('NotificationQueuePopulator ::', () => {
         bnConfigManager = new NotificationConfigManager({
             mongoConfig,
             bucketMetastore: '__metastore',
+            maxCachedConfigs: 1000,
             logger,
         });
         notificationQueuePopulator = new NotificationQueuePopulator({
@@ -573,6 +574,7 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
         bnConfigManager = new NotificationConfigManager({
             mongoConfig,
             bucketMetastore: '__metastore',
+            maxCachedConfigs: 1000,
             logger,
         });
         sinon.stub(bnConfigManager, 'getConfig').returns({

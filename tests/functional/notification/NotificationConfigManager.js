@@ -35,6 +35,7 @@ describe('NotificationConfigManager ::', () => {
     const params = {
         mongoConfig,
         bucketMetastore: '__metastore',
+        maxCachedConfigs: 1000,
         logger,
     };
     let manager;

@@ -37,6 +37,7 @@ describe('MongoConfigManager ::', () => {
     const params = {
         mongoConfig,
         bucketMetastore: '__metastore',
+        maxCachedConfigs: 100,
         logger,
     };
 
@@ -347,13 +348,19 @@ describe('MongoConfigManager ::', () => {
             assert.deepEqual(config, undefined);
         });
 
-        it('should return undefined when mongo findOne fails', async () => {
+        it('should throw when mongo findOne fails', done => {
             const manager = new MongoConfigManager(params);
             manager._metastore = {
                 findOne: sinon.stub().throws(errors.InternalError),
             };
-            const config = await manager.getConfig('example-bucket-1');
-            assert.strictEqual(config, undefined);
+            manager.getConfig('example-bucket-1')
+            .then(() => {
+                assert.fail('should have thrown');
+            })
+            .catch(err => {
+                assert.deepEqual(err, errors.InternalError);
+                done();
+            });
         });
     });
 

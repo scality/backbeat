@@ -99,7 +99,7 @@ class QueueProcessor extends EventEmitter {
             this.bnConfigManager = new NotificationConfigManager({
                 mongoConfig: this.mongoConfig,
                 bucketMetastore: this.notifConfig.bucketMetastore,
-                zkClient: this.zkClient,
+                maxCachedConfigs: this.notifConfig.maxCachedConfigs,
                 zkConfig: this.zkConfig,
                 zkPath: this.notifConfig.zookeeperPath,
                 logger: this.logger,

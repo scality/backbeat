@@ -33,6 +33,7 @@ describe('NotificationConfigManager', () => {
                     writeConcern: 'majority'
                 },
                 bucketMetastore: '__metastore',
+                maxCachedConfigs: 1000,
                 logger,
             };
 
@@ -127,6 +128,7 @@ describe('NotificationConfigManager', () => {
                     writeConcern: 'majority'
                 },
                 bucketMetastore: '__metastore',
+                maxCachedConfigs: 1000,
                 logger,
             };
 
@@ -148,6 +150,7 @@ describe('NotificationConfigManager', () => {
                     writeConcern: 'majority'
                 },
                 bucketMetastore: '__metastore',
+                maxCachedConfigs: 1000,
                 logger,
             };
 
