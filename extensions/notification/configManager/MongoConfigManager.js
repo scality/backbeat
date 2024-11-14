@@ -4,6 +4,7 @@ const semver = require('semver');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const LRUCache = require('arsenal').algorithms
     .cache.LRUCache;
+const { errors } = require('arsenal');
 
 const MongoClient = require('mongodb').MongoClient;
 
@@ -287,7 +288,7 @@ class MongoConfigManager extends BaseConfigManager {
                 bucket,
                 error: err.message,
             });
-            return undefined;
+            throw errors.InternalError.customizeDescription(err.message);
         }
     }
 
