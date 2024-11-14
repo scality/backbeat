@@ -420,6 +420,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             });
         this._zkClient = new ZookeeperManager(zookeeperUrl, {
             autoCreateNamespace: this._zkConfig.autoCreateNamespace,
+            retries: this._zkConfig.retries,
         }, this.log);
 
         this._zkClient.once('error', done);
