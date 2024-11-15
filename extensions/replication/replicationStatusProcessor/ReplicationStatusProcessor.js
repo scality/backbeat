@@ -18,8 +18,7 @@ const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
-const libConstants = require('../../../lib/constants');
-
+const { replicationStatusProcessor } = require('../../../lib/constants').services;
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
 const constants = require('../../../lib/constants');
@@ -226,7 +225,7 @@ class ReplicationStatusProcessor {
         this._consumer = null;
         this._gcProducer = null;
         this._mProducer = null;
-        this.serviceName = libConstants.services.replicationStatusProcessor;
+        this.serviceName = replicationStatusProcessor;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
