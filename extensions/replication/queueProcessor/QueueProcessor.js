@@ -30,7 +30,7 @@ const BucketQueueEntry = require('../../../lib/models/BucketQueueEntry');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const libConstants = require('../../../lib/constants');
-const { wrapCounterInc, wrapHistogramObserve } = require('../../../lib/util/metrics');
+const { wrapCounterInc, wrapHistogramObserve, wrapGaugeSet } = require('../../../lib/util/metrics');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
 
 const {
@@ -79,6 +79,12 @@ const metadataReplicationBytesMetric = ZenkoMetrics.createCounter({
     labelNames: ['origin', 'serviceName', 'location'],
 });
 
+const kafkaLagMetric = ZenkoMetrics.createGauge({
+    name: 's3_replication_queue_lag',
+    help: 'Number of update entries waiting to be consumed from the Kafka topic',
+    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
+});
+
 const sourceDataBytesMetric = ZenkoMetrics.createCounter({
     name: 's3_replication_source_data_bytes_total',
     help: 'Total number of data bytes read from replication source',
@@ -123,6 +129,7 @@ const defaultLabels = {
  * @property {CounterInc} dataReplicationBytes - Increments the replication bytes metric for data operation
  * @property {CounterInc} metadataReplicationBytes - Increments the replication bytes metric for metadata operation
  * @property {CounterInc} sourceDataBytes - Increments the source data bytes metric
+ * @property {GaugeSet} lag - Kafka lag metric
  * @property {CounterInc} reads - Increments the read metric
  * @property {CounterInc} writes - Increments the write metric
  * @property {HistogramObserve} timeElapsed - Observes the time elapsed metric
@@ -133,6 +140,7 @@ const metricsHandler = {
     dataReplicationBytes: wrapCounterInc(dataReplicationBytesMetric, defaultLabels),
     metadataReplicationBytes: wrapCounterInc(metadataReplicationBytesMetric, defaultLabels),
     sourceDataBytes: wrapCounterInc(sourceDataBytesMetric, defaultLabels),
+    lag: wrapGaugeSet(kafkaLagMetric, defaultLabels),
     reads: wrapCounterInc(readMetric, defaultLabels),
     writes: wrapCounterInc(writeMetric, defaultLabels),
     timeElapsed: wrapHistogramObserve(timeElapsedMetric, defaultLabels),
@@ -406,6 +414,7 @@ class QueueProcessor extends EventEmitter {
             groupId,
             concurrency: this.repConfig.queueProcessor.concurrency,
             queueProcessor: queueProcessorFunc,
+            logConsumerMetricsIntervalS: this.repConfig.queueProcessor.logConsumerMetricsIntervalS,
             canary: true,
             circuitBreaker: this.circuitBreakerConfig,
             circuitBreakerMetrics: {
@@ -1020,6 +1029,18 @@ class QueueProcessor extends EventEmitter {
      */
     static async handleMetrics(res, log) {
         log.debug('metrics requested');
+
+        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS && this._consumer) {
+            // consumer stats lag is on a different update cycle so we need to
+            // update the metrics when requested
+            const lagStats = this._consumer.consumerStats.lag;
+            Object.keys(lagStats).forEach(partition => {
+                metricsHandler.lag({
+                    partition,
+                    serviceName: this.serviceName,
+                }, lagStats[partition]);
+            });
+        }
         const metrics = await ZenkoMetrics.asPrometheus();
         res.writeHead(200, {
             'Content-Type': ZenkoMetrics.asPrometheusContentType(),
