@@ -12,7 +12,7 @@ killandsleep () {
 }
 
 ./node_modules/.bin/nyc --clean --silent yarn start 2>&1 &
-bash tests/utils/wait_for_local_port.bash $PORT 40
+bash tests/utils/wait_for_local_port.bash $PORT 120
 yarn run $1
 killandsleep
 ./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
