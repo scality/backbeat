@@ -11,7 +11,7 @@ killandsleep () {
   sleep 10
 }
 
-./node_modules/.bin/nyc --clean --silent yarn start &
+./node_modules/.bin/nyc --clean --silent yarn start 2>&1 &
 bash tests/utils/wait_for_local_port.bash $PORT 40
 yarn run $1
 killandsleep
