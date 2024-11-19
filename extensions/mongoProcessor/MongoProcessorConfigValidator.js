@@ -5,6 +5,7 @@ const joiSchema = joi.object({
     topic: joi.string().required(),
     groupId: joi.string().required(),
     retry: retryParamsJoi,
+    concurrency: joi.number().greater(0).default(1),
     probeServer: probeServerJoi.default(),
     circuitBreaker: joi.object().optional(),
 });
