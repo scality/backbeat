@@ -437,7 +437,7 @@ class LifecycleConductor {
             },
             (nBucketsListed, next) => {
                 async.until(
-                    () => nBucketsQueued === nBucketsListed,
+                    cb => cb(null, nBucketsQueued === nBucketsListed),
                     unext => setTimeout(unext, 1000),
                     next);
             },
@@ -654,7 +654,7 @@ class LifecycleConductor {
                     log,
                 }, next);
             },
-            () => isTruncated,
+            cb => cb(null, isTruncated),
             err => {
                 if (err) {
                     return cb(err, nEnqueued);

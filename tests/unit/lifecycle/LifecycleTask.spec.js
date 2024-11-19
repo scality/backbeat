@@ -2114,7 +2114,7 @@ describe('lifecycle task helper methods', () => {
 
             let count = 0;
             async.whilst(
-                () => count++ < 102,
+                cb => cb(null, count++ < 102),
                 cb => lct._retryEntry({
                     logFields: { count, totalRetries: lct._totalRetries },
                     log: fakeLogger,

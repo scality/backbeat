@@ -87,9 +87,9 @@ describe('CRR Pause/Resume status updates', function d() {
             qpSite2.scheduleResume(futureDate);
 
             // wait for clients/jobs to set
-            return async.whilst(() => (
+            return async.whilst(cb => cb(null, (
                 !consumer1 && !consumer2 && !qpSite2.scheduledResume
-            ), cb => setTimeout(() => {
+            )), cb => setTimeout(() => {
                 consumer1 = qpSite1._consumer;
                 consumer2 = qpSite2._consumer;
                 return cb();
@@ -125,9 +125,9 @@ describe('CRR Pause/Resume status updates', function d() {
             replayProcessor2.scheduleResume(futureDate);
 
             // wait for clients/jobs to set
-            return async.whilst(() => (
+            return async.whilst(cb => cb(null, (
                 !replayConsumer1 && !replayConsumer2 && !replayProcessor2.scheduledResume
-            ), cb => setTimeout(() => {
+            )), cb => setTimeout(() => {
                 replayConsumer1 = replayProcessor1._consumer;
                 replayConsumer2 = replayProcessor2._consumer;
                 return cb();
@@ -138,8 +138,8 @@ describe('CRR Pause/Resume status updates', function d() {
     afterEach(done => {
         consumer1.resume();
         consumer2.pause();
-        async.whilst(() => qpSite1.scheduledResume !== null ||
-            !qpSite2.scheduledResume,
+        async.whilst(cb => cb(null, qpSite1.scheduledResume !== null ||
+            !qpSite2.scheduledResume),
         cb => setTimeout(() => {
             qpSite1._deleteScheduledResumeService();
             qpSite2.scheduleResume(futureDate);
@@ -153,8 +153,8 @@ describe('CRR Pause/Resume status updates', function d() {
     afterEach(done => {
         replayConsumer1.resume();
         replayConsumer2.pause();
-        async.whilst(() => replayProcessor1.scheduledResume !== null ||
-            !replayProcessor2.scheduledResume,
+        async.whilst(cb => cb(null, replayProcessor1.scheduledResume !== null ||
+            !replayProcessor2.scheduledResume),
         cb => setTimeout(() => {
             replayProcessor1._deleteScheduledResumeService();
             replayProcessor2.scheduleResume(futureDate);
@@ -183,7 +183,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer1),
+        }, 1000), cb => cb(null, isConsumerActive(consumer1)),
         err => {
             assert.ifError(err);
             // is zookeeper state shown as paused?
@@ -212,7 +212,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(replayConsumer1),
+        }, 1000), cb => cb(null, isConsumerActive(replayConsumer1)),
         err => {
             assert.ifError(err);
             // is zookeeper state shown as paused?
@@ -241,7 +241,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkScheduleState = data.scheduledResume;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer2),
+        }, 1000), cb => cb(null, isConsumerActive(consumer2)),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, true);
@@ -265,7 +265,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => !isConsumerActive(consumer2),
+        }, 1000), cb => cb(null, !isConsumerActive(consumer2)),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
@@ -287,7 +287,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => !isConsumerActive(replayConsumer2),
+        }, 1000), cb => cb(null, !isConsumerActive(replayConsumer2)),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
@@ -311,7 +311,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkPauseState = data.paused;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer1) !== true,
+        }, 1000), cb => cb(null, isConsumerActive(consumer1) !== true),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
@@ -333,7 +333,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkScheduleState = data.scheduledResume;
                 return cb();
             });
-        }, 1000), () => zkScheduleState !== null,
+        }, 1000), cb => cb(null, zkScheduleState !== null),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkScheduleState, null);
@@ -361,12 +361,12 @@ describe('CRR Pause/Resume status updates', function d() {
                     zkScheduleState = data.scheduledResume;
                     return cb();
                 });
-            }, 1000), () => {
+            }, 1000), cb => {
                 if (zkScheduleState) {
                     const zkStateDate = new Date(zkScheduleState);
-                    return zkStateDate.getTime() !== futureDate.getTime();
+                    return cb(null, zkStateDate.getTime() !== futureDate.getTime());
                 }
-                return true;
+                return cb(null, true);
             }, err => {
                 assert.ifError(err);
                 assert.strictEqual(zkPauseState, true);
@@ -407,12 +407,12 @@ describe('CRR Pause/Resume status updates', function d() {
                     zkScheduleState = data.scheduledResume;
                     return cb();
                 });
-            }, 1000), () => {
+            }, 1000), cb => {
                 if (zkScheduleState) {
                     const zkStateDate = new Date(zkScheduleState);
-                    return zkStateDate.getTime() !== newScheduledDate.getTime();
+                    return cb(null, zkStateDate.getTime() !== newScheduledDate.getTime());
                 }
-                return true;
+                return cb(null, true);
             }, err => {
                 assert.ifError(err);
                 assert.strictEqual(new Date(zkScheduleState).toString(),
@@ -438,7 +438,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkScheduleState = data.scheduledResume;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer2) !== true,
+        }, 1000), cb => cb(null, isConsumerActive(consumer2) !== true),
         err => {
             assert.ifError(err);
             assert.strictEqual(zkPauseState, false);
@@ -485,7 +485,7 @@ describe('CRR Pause/Resume status updates', function d() {
                 zkScheduleState = data.scheduledResume;
                 return cb();
             });
-        }, 1000), () => isConsumerActive(consumer2) !== true,
+        }, 1000), cb => cb(null, isConsumerActive(consumer2) !== true),
         err => {
             timeMachine.uninstall();
             assert.ifError(err);

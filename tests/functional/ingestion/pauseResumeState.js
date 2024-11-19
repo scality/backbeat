@@ -233,11 +233,11 @@ describe('Ingestion Pause/Resume', function d() {
             this.iPopulator._pauseService(secondLocation);
             this.iPopulator.applyUpdates();
             let pausedList = this.iPopulator.getPausedLocations();
-            return async.whilst(() =>
+            return async.whilst(cb => cb(null,
                 Object.keys(pausedList).includes(firstLocation) ||
                 pausedList[secondLocation] === undefined ||
                 (pausedList[secondLocation] &&
-                 pausedList[secondLocation].constructor.name !== 'Job'),
+                 pausedList[secondLocation].constructor.name !== 'Job')),
             cb => setTimeout(() => {
                 this.iPopulator._resumeService(firstLocation);
                 this.iPopulator._resumeService(secondLocation, futureDate);
@@ -576,14 +576,14 @@ describe('Ingestion Pause/Resume', function d() {
                         zkPauseState = JSON.parse(data);
                         return cb();
                     });
-                }, 1000), () => {
+                }, 1000), cb => {
                     if (zkPauseState && zkPauseState.scheduledResume) {
                         const zkStateDate =
                             new Date(zkPauseState.scheduledResume);
-                        return zkStateDate.getTime() !==
-                            newScheduledDate.getTime();
+                        return cb(null, zkStateDate.getTime() !==
+                            newScheduledDate.getTime());
                     }
-                    return true;
+                    return cb(null, true);
                 }, error => {
                     assert.ifError(error);
 
@@ -692,7 +692,7 @@ describe('Ingestion Pause/Resume', function d() {
                     zkPauseState = JSON.parse(data);
                     return cb();
                 });
-            }, 1000), () => zkPauseState.paused !== false,
+            }, 1000), cb => cb(null, zkPauseState.paused !== false),
             error => {
                 assert.ifError(error);
 
