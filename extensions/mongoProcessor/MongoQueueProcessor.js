@@ -60,6 +60,7 @@ class MongoQueueProcessor {
      *  randomness
      * @param {number} [mongoProcessorConfig.retry.backoff.factor] -
      *  backoff factor
+     * @param {number} [mongoProcessorConfig.concurrency] - consumer concurrency
      * @param {Object} mongoClientConfig - config for connecting to mongo
      * @param {Object} mConfig - metrics config
      */
@@ -141,6 +142,7 @@ class MongoQueueProcessor {
                 circuitBreakerMetrics: {
                     type: 'mongo_queue_processor',
                 },
+                concurrency: this.mongoProcessorConfig.concurrency,
             });
             this._consumer.on('error', () => {
                 MongoProcessorMetrics.onIngestionKafkaConsume('error');
