@@ -51,7 +51,7 @@
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
     "breakbeat": "scality/breakbeat#v1.0.3",
-    "bucketclient": "scality/bucketclient#8d40e22185657fb0010022bcfc15db41b6830358",
+    "bucketclient": "scality/bucketclient#e390a59f0eef300e0d713234c1d563faf8b2ecd5",
     "commander": "^12.1.0",
     "eslint-plugin-mocha": "^10.2.0",
     "fcntl": "github:scality/node-fcntl#0.2.2",
