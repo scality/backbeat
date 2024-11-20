@@ -5,7 +5,6 @@ const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
 const { ZenkoMetrics } = require('arsenal').metrics;
-const { wrapGaugeSet } = require('../../../lib/util/metrics');
 const errors = require('arsenal').errors;
 
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
@@ -13,7 +12,6 @@ const NotificationDestination = require('../destination');
 const configUtil = require('../utils/config');
 const messageUtil = require('../utils/message');
 const NotificationConfigManager = require('../NotificationConfigManager');
-const { notificationQueueProcessor } = require('../../../lib/constants').services;
 
 const processedEvents = ZenkoMetrics.createCounter({
     name: 's3_notification_queue_processor_events_total',
@@ -27,25 +25,6 @@ function onQueueProcessorEventProcessed(destination, eventType) {
         eventType,
     });
 }
-
-const kafkaLagMetric = ZenkoMetrics.createGauge({
-    name: 's3_notification_queue_lag',
-    help: 'Number of update entries waiting to be consumed from the Kafka topic',
-    labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
-});
-
-const defaultLabels = {
-    origin: 'notification',
-};
-
-/**
- * Contains methods to incrememt different metrics
- * @typedef {Object} MetricsHandler
- * @property {GaugeSet} lag - kafka lag metric
- */
-const metricsHandler = {
-    lag: wrapGaugeSet(kafkaLagMetric, defaultLabels),
-};
 
 class QueueProcessor extends EventEmitter {
     /**
@@ -94,7 +73,6 @@ class QueueProcessor extends EventEmitter {
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.destinationId = destinationId;
-        this.serviceName = notificationQueueProcessor;
         this.destinationConfig
             = notifConfig.destinations.find(dest => dest.resource === destinationId);
         assert(this.destinationConfig, `Invalid destination argument "${destinationId}".` +
@@ -354,19 +332,6 @@ class QueueProcessor extends EventEmitter {
      */
     async handleMetrics(res, log) {
         log.debug('metrics requested');
-
-        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS && this._consumer) {
-            // consumer stats lag is on a different update cycle so we need to
-            // update the metrics when requested
-            const lagStats = this._consumer.consumerStats.lag;
-            Object.keys(lagStats).forEach(partition => {
-                metricsHandler.lag({
-                    partition,
-                    serviceName: this.serviceName,
-                }, lagStats[partition]);
-            });
-        }
-
         res.writeHead(200, {
             'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });

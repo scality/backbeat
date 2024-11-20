@@ -18,14 +18,13 @@ const FailedCRRProducer = require('../failedCRR/FailedCRRProducer');
 const ReplayProducer = require('../replay/ReplayProducer');
 const MetricsProducer = require('../../../lib/MetricsProducer');
 const { http: HttpAgent, https: HttpsAgent } = require('httpagent');
-const { replicationStatusProcessor } = require('../../../lib/constants').services;
+
 // StatsClient constant default for site metrics
 const INTERVAL = 300; // 5 minutes;
 const constants = require('../../../lib/constants');
 const {
     wrapCounterInc,
     wrapHistogramObserve,
-    wrapGaugeSet,
 } = require('../../../lib/util/metrics');
 
 /**
@@ -59,12 +58,6 @@ const loadMetricHandlers = jsutil.once(repConfig => {
         name: 's3_replication_status_changed_total',
         help: 'Total number of objects updated',
         labelNames: ['origin', 'replicationStatus'],
-    });
-
-    const kafkaLagMetric = ZenkoMetrics.createGauge({
-        name: 's3_replication_status_queue_lag',
-        help: 'Number of update entries waiting to be consumed from the Kafka topic',
-        labelNames: ['origin', 'containerName', 'partition', 'serviceName'],
     });
 
     const replicationStatusDurationSeconds = ZenkoMetrics.createHistogram({
@@ -145,7 +138,6 @@ const loadMetricHandlers = jsutil.once(repConfig => {
     };
     return {
         status: wrapCounterInc(replicationStatusMetric, defaultLabels),
-        lag: wrapGaugeSet(kafkaLagMetric, defaultLabels),
         statusDuration: wrapHistogramObserve(replicationStatusDurationSeconds,
             defaultLabels),
         replicationLatency: wrapHistogramObserve(replicationLatency,
@@ -225,7 +217,6 @@ class ReplicationStatusProcessor {
         this._consumer = null;
         this._gcProducer = null;
         this._mProducer = null;
-        this.serviceName = replicationStatusProcessor;
 
         this.logger =
             new Logger('Backbeat:Replication:ReplicationStatusProcessor');
@@ -563,19 +554,6 @@ class ReplicationStatusProcessor {
     async handleMetrics(res, log) {
         log.debug('metrics requested');
         const metrics = await ZenkoMetrics.asPrometheus();
-
-        if (this.repConfig.queueProcessor.logConsumerMetricsIntervalS && this._consumer) {
-            // consumer stats lag is on a different update cycle so we need to
-            // update the metrics when requested
-            const lagStats = this._consumer.consumerStats.lag;
-            Object.keys(lagStats).forEach(partition => {
-                this.metricHandlers.lag({
-                    partition,
-                    serviceName: this.serviceName,
-                }, lagStats[partition]);
-            });
-        }
-
         res.writeHead(200, {
             'Content-Type': ZenkoMetrics.asPrometheusContentType(),
         });
