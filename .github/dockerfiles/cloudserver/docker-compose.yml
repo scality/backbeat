@@ -1,7 +1,0 @@
-services:
-  s3:
-    image: ${CLOUDSERVER_IMAGE}
-    network_mode: host
-    command: /bin/sh -c "yarn run mem_backend > /logs/s3/s3.log 2>&1"
-    volumes:
-      - ./logs/s3:/logs/s3

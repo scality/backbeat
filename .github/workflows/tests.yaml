@@ -207,5 +207,4 @@ jobs:
       run: |-
         set -e -o pipefail;
         mkdir -p .github/e2e_tests/artifacts/logs .github/e2e_tests/artifacts/data
-        cp -r .github/cloudserver/dockerfiles/logs/* .github/e2e_tests/artifacts/logs/
       if: always()
