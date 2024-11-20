@@ -20,7 +20,7 @@ inputs:
   cloudserver_image:
     description: name of the cloudserver image
     required: false
-    default: "ghcr.io/scality/cloudserver:8.8.35"
+    default: "ghcr.io/scality/cloudserver:8.6.8"
 
 runs:
   using: composite
