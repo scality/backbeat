@@ -1192,7 +1192,6 @@ arraybuffer.prototype.slice@^1.0.3:
 
 "arsenal@git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb":
   version "8.2.0"
-  uid "9a6451d247a8c53605e0311b4b3824f2612481eb"
   resolved "git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb"
   dependencies:
     "@azure/identity" "^4.5.0"
@@ -1234,12 +1233,13 @@ arraybuffer.prototype.slice@^1.0.3:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb":
+"arsenal@git+https://github.com/scality/arsenal#03503cb9ec0b13358873414c58ff9066f309146e":
   version "8.2.0"
-  resolved "git+https://github.com/scality/arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb"
+  resolved "git+https://github.com/scality/arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
   dependencies:
     "@azure/identity" "^4.5.0"
     "@azure/storage-blob" "^12.25.0"
+    "@eslint/plugin-kit" "^0.2.3"
     "@js-sdsl/ordered-set" "^4.4.2"
     "@types/async" "^3.2.24"
     "@types/utf8" "^3.0.3"
