@@ -246,7 +246,7 @@ describe('Lifecycle Conductor', () => {
             conductor._bucketSource = 'bucketd';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
-                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
             });
         });
 
