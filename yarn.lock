@@ -1190,12 +1190,14 @@ arraybuffer.prototype.slice@^1.0.3:
     is-array-buffer "^3.0.4"
     is-shared-array-buffer "^1.0.2"
 
-"arsenal@git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb":
+"arsenal@git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e":
   version "8.2.0"
-  resolved "git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb"
+  uid "03503cb9ec0b13358873414c58ff9066f309146e"
+  resolved "git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
   dependencies:
     "@azure/identity" "^4.5.0"
     "@azure/storage-blob" "^12.25.0"
+    "@eslint/plugin-kit" "^0.2.3"
     "@js-sdsl/ordered-set" "^4.4.2"
     "@types/async" "^3.2.24"
     "@types/utf8" "^3.0.3"
@@ -1458,11 +1460,11 @@ bson@^6.8.0:
   resolved "https://registry.yarnpkg.com/bson/-/bson-6.10.0.tgz#559c767cc8b605c3ab14e5896214c8f2abdd6a12"
   integrity sha512-ROchNosXMJD2cbQGm84KoP7vOGPO6/bOAW0veMMbzhXLqoZptcaYRVLitwvuhwhjjpU1qP4YZRWLhgETdgqUQw==
 
-bucketclient@scality/bucketclient#8d40e22185657fb0010022bcfc15db41b6830358:
+bucketclient@scality/bucketclient#e390a59f0eef300e0d713234c1d563faf8b2ecd5:
   version "8.1.11"
-  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/8d40e22185657fb0010022bcfc15db41b6830358"
+  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/e390a59f0eef300e0d713234c1d563faf8b2ecd5"
   dependencies:
-    arsenal "git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb"
+    arsenal "git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
     httpagent "git+https://github.com/scality/httpagent#1.0.6"
     werelogs scality/werelogs#8.1.5
 
