@@ -1464,7 +1464,7 @@ bucketclient@scality/bucketclient#e390a59f0eef300e0d713234c1d563faf8b2ecd5:
   version "8.1.11"
   resolved "https://codeload.github.com/scality/bucketclient/tar.gz/e390a59f0eef300e0d713234c1d563faf8b2ecd5"
   dependencies:
-    arsenal "git+https://github.com/scality/Arsenal#9a6451d247a8c53605e0311b4b3824f2612481eb"
+    arsenal "git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
     httpagent "git+https://github.com/scality/httpagent#1.0.6"
     werelogs scality/werelogs#8.1.5
 
@@ -2708,6 +2708,7 @@ http-proxy-agent@^7.0.0:
 
 "httpagent@git+https://github.com/scality/httpagent#1.1.0":
   version "1.1.0"
+  uid "8f9958eb9cde086db7819a86582fba640a5f8876"
   resolved "git+https://github.com/scality/httpagent#8f9958eb9cde086db7819a86582fba640a5f8876"
   dependencies:
     agentkeepalive "^4.5.0"
