@@ -66,21 +66,10 @@
     "@smithy/hash-node" "^1.0.1"
     tslib "^2.5.0"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@aws-sdk/types@^3.222.0":
   version "3.696.0"
   resolved "https://registry.yarnpkg.com/@aws-sdk/types/-/types-3.696.0.tgz#559c3df74dc389b6f40ba6ec6daffeab155330cd"
   integrity sha512-9rTvUJIAj5d3//U5FDPWGJ1nFJLuWb30vugGOrWk7aNZ6y9tuA3PI7Cc9dP8WEXKVyK1vuuk8rSFP2iqXnlgrw==
-=======
-"@aws-sdk/types@^3.110.0", "@aws-sdk/types@^3.222.0":
-=======
-"@aws-sdk/types@^3.222.0":
->>>>>>> 00164b90 (Bump bkclt latest version)
-  version "3.679.0"
-  resolved "https://registry.yarnpkg.com/@aws-sdk/types/-/types-3.679.0.tgz#3737bb0f190add9e788b838a24cd5d8106dbed4f"
-  integrity sha512-NwVq8YvInxQdJ47+zz4fH3BRRLC6lL+WLkvr242PVBbUOLRyK/lkwHlfiKUoeVIMyK5NF+up6TRg71t/8Bny6Q==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     "@smithy/types" "^3.7.1"
     tslib "^2.6.2"
@@ -147,21 +136,10 @@
   dependencies:
     tslib "^2.6.2"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@azure/core-rest-pipeline@^1.10.1", "@azure/core-rest-pipeline@^1.17.0", "@azure/core-rest-pipeline@^1.3.0", "@azure/core-rest-pipeline@^1.9.1":
   version "1.18.0"
   resolved "https://registry.yarnpkg.com/@azure/core-rest-pipeline/-/core-rest-pipeline-1.18.0.tgz#165f1cd9bb1060be3b6895742db3d1f1106271d3"
   integrity sha512-QSoGUp4Eq/gohEFNJaUOwTN7BCc2nHTjjbm75JT0aD7W65PWM1H/tItz0GsABn22uaKyGxiMhWQLt2r+FGU89Q==
-=======
-"@azure/core-rest-pipeline@^1.1.0", "@azure/core-rest-pipeline@^1.10.1", "@azure/core-rest-pipeline@^1.17.0", "@azure/core-rest-pipeline@^1.3.0", "@azure/core-rest-pipeline@^1.9.1":
-=======
-"@azure/core-rest-pipeline@^1.10.1", "@azure/core-rest-pipeline@^1.17.0", "@azure/core-rest-pipeline@^1.3.0", "@azure/core-rest-pipeline@^1.9.1":
->>>>>>> 00164b90 (Bump bkclt latest version)
-  version "1.17.0"
-  resolved "https://registry.yarnpkg.com/@azure/core-rest-pipeline/-/core-rest-pipeline-1.17.0.tgz#55dafa1093553c549ed6d8dbca69aa505c7b3aa3"
-  integrity sha512-62Vv8nC+uPId3j86XJ0WI+sBf0jlqTqPUFCBNrGtlaUeQUIXWV/D8GE5A1d+Qx8H7OQojn2WguC8kChD6v0shA==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     "@azure/abort-controller" "^2.0.0"
     "@azure/core-auth" "^1.8.0"
@@ -222,15 +200,7 @@
   dependencies:
     tslib "^2.6.2"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@azure/msal-browser@^3.26.1":
-=======
-"@azure/msal-browser@^3.26.1", "@azure/msal-browser@^3.5.0":
->>>>>>> cf55d233 (Use latest version of cloudserver)
-=======
-"@azure/msal-browser@^3.26.1":
->>>>>>> 00164b90 (Bump bkclt latest version)
   version "3.27.0"
   resolved "https://registry.yarnpkg.com/@azure/msal-browser/-/msal-browser-3.27.0.tgz#b6f02f73c8e102d3f115009b4677539fb173fe2b"
   integrity sha512-+b4ZKSD8+vslCtVRVetkegEhOFMLP3rxDWJY212ct+2r6jVg6OSQKc1Qz3kCoXo0FgwaXkb+76TMZfpHp8QtgA==
@@ -242,41 +212,19 @@
   resolved "https://registry.yarnpkg.com/@azure/msal-common/-/msal-common-14.16.0.tgz#f3470fcaec788dbe50859952cd499340bda23d7a"
   integrity sha512-1KOZj9IpcDSwpNiQNjt0jDYZpQvNZay7QAEi/5DLubay40iGYtLzya/jbjRPLyOTZhEKyL1MzPuw2HqBCjceYA==
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@azure/msal-node@^2.15.0":
   version "2.16.2"
   resolved "https://registry.yarnpkg.com/@azure/msal-node/-/msal-node-2.16.2.tgz#3eb768d36883ea6f9a939c0b5b467b518e78fffc"
   integrity sha512-An7l1hEr0w1HMMh1LU+rtDtqL7/jw74ORlc9Wnh06v7TU/xpG39/Zdr1ZJu3QpjUfKJ+E0/OXMW8DRSWTlh7qQ==
-=======
-"@azure/msal-node@^2.15.0", "@azure/msal-node@^2.5.1":
-=======
-"@azure/msal-node@^2.15.0":
->>>>>>> 00164b90 (Bump bkclt latest version)
-  version "2.16.0"
-  resolved "https://registry.yarnpkg.com/@azure/msal-node/-/msal-node-2.16.0.tgz#028ac69bc75738d6744dab3e3f20f8240f4f6e2c"
-  integrity sha512-oww0oJTOOvPKTVXqVyxfcFVjExQKYEkKR5KM0cTG3jnzt6u/MRMx8XaK49L/bxV35r9sCHQFjNlEShad9qGSYA==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     "@azure/msal-common" "14.16.0"
     jsonwebtoken "^9.0.0"
     uuid "^8.3.0"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@azure/storage-blob@^12.25.0":
   version "12.26.0"
   resolved "https://registry.yarnpkg.com/@azure/storage-blob/-/storage-blob-12.26.0.tgz#1fae3a0b68d8a91b56c89f353507916bf8705d1c"
   integrity sha512-SriLPKezypIsiZ+TtlFfE46uuBIap2HeaQVS78e1P7rz5OSbq0rsd52WE1mC5f7vAeLiXqv7I7oRhL3WFZEw3Q==
-=======
-"@azure/storage-blob@^12.12.0", "@azure/storage-blob@^12.25.0":
-=======
-"@azure/storage-blob@^12.25.0":
->>>>>>> 00164b90 (Bump bkclt latest version)
-  version "12.25.0"
-  resolved "https://registry.yarnpkg.com/@azure/storage-blob/-/storage-blob-12.25.0.tgz#fa9a1d2456cdf6526450a8b73059d2f2e9b1ec76"
-  integrity sha512-oodouhA3nCCIh843tMMbxty3WqfNT+Vgzj3Xo5jqR9UPnzq3d7mzLjlHAYz7lW+b4km3SIgz+NAgztvhm7Z6kQ==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     "@azure/abort-controller" "^2.1.2"
     "@azure/core-auth" "^1.4.0"
@@ -589,11 +537,7 @@
   resolved "https://registry.yarnpkg.com/@humanwhocodes/retry/-/retry-0.3.1.tgz#c72a5c76a9fbaf3488e231b13dc52c0da7bab42a"
   integrity sha512-JBxkERygn7Bv/GbN5Rv8Ul6LVknS+5Bp6RgDC/O8gEBU/yeH5Ui5C/OlWrTb6qct7LjjfT6Re2NxB0ln0yYybA==
 
-<<<<<<< HEAD
 "@humanwhocodes/retry@^0.4.1":
-=======
-"@humanwhocodes/retry@^0.4.0":
->>>>>>> cf55d233 (Use latest version of cloudserver)
   version "0.4.1"
   resolved "https://registry.yarnpkg.com/@humanwhocodes/retry/-/retry-0.4.1.tgz#9a96ce501bc62df46c4031fbd970e3cc6b10f07b"
   integrity sha512-c7hNEllBlenFTHBky65mhq8WD2kbN9Q6gk0bTk8lSBvc554jpXSkST1iePudpt7+A/AQvuHs9EMqjHDXMY1lrA==
@@ -823,27 +767,10 @@
   dependencies:
     tslib "^2.5.0"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@smithy/types@^3.7.1":
   version "3.7.1"
   resolved "https://registry.yarnpkg.com/@smithy/types/-/types-3.7.1.tgz#4af54c4e28351e9101996785a33f2fdbf93debe7"
   integrity sha512-XKLcLXZY7sUQgvvWyeaL/qwNPp6V3dWcUjqrQKjSb+tzYiCy340R/c64LV5j+Tnb2GhmunEX0eou+L+m2hJNYA==
-=======
-"@smithy/types@^2.12.0":
-  version "2.12.0"
-  resolved "https://registry.yarnpkg.com/@smithy/types/-/types-2.12.0.tgz#c44845f8ba07e5e8c88eda5aed7e6a0c462da041"
-  integrity sha512-QwYgloJ0sVNBeBuBs65cIkTbfzV/Q6ZNPCJ99EICFEdJYG50nGIY/uYXp+TbsdJReIuPr0a0kXmCvren3MbRRw==
-  dependencies:
-    tslib "^2.6.2"
-
-=======
->>>>>>> 00164b90 (Bump bkclt latest version)
-"@smithy/types@^3.5.0", "@smithy/types@^3.6.0":
-  version "3.6.0"
-  resolved "https://registry.yarnpkg.com/@smithy/types/-/types-3.6.0.tgz#03a52bfd62ee4b7b2a1842c8ae3ada7a0a5ff3a4"
-  integrity sha512-8VXK/KzOHefoC65yRgCn5vG1cysPJjHnOVt9d0ybFQSmJgQj152vMn4EkYhGuaOmnnZvCPav/KnYyE6/KsNZ2w==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     tslib "^2.6.2"
 
@@ -878,28 +805,10 @@
   dependencies:
     tslib "^2.6.2"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 "@smithy/util-middleware@^3.0.10":
   version "3.0.10"
   resolved "https://registry.yarnpkg.com/@smithy/util-middleware/-/util-middleware-3.0.10.tgz#ab8be99f1aaafe5a5490c344f27a264b72b7592f"
   integrity sha512-eJO+/+RsrG2RpmY68jZdwQtnfsxjmPxzMlQpnHKjFPwrYqvlcT+fHdT+ZVwcjlWSrByOhGr9Ff2GG17efc192A==
-=======
-"@smithy/util-middleware@^2.2.0":
-  version "2.2.0"
-  resolved "https://registry.yarnpkg.com/@smithy/util-middleware/-/util-middleware-2.2.0.tgz#80cfad40f6cca9ffe42a5899b5cb6abd53a50006"
-  integrity sha512-L1qpleXf9QD6LwLCJ5jddGkgWyuSvWBkJwWAZ6kFkdifdso+sk3L3O1HdmPvCdnCK3IS4qWyPxev01QMnfHSBw==
-  dependencies:
-    "@smithy/types" "^2.12.0"
-    tslib "^2.6.2"
-
-=======
->>>>>>> 00164b90 (Bump bkclt latest version)
-"@smithy/util-middleware@^3.0.8":
-  version "3.0.8"
-  resolved "https://registry.yarnpkg.com/@smithy/util-middleware/-/util-middleware-3.0.8.tgz#372bc7a2845408ad69da039d277fc23c2734d0c6"
-  integrity sha512-p7iYAPaQjoeM+AKABpYWeDdtwQNxasr4aXQEA/OmbOaug9V0odRVDy3Wx4ci8soljE/JXQo+abV0qZpW8NX0yA==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     "@smithy/types" "^3.7.1"
     tslib "^2.6.2"
@@ -1404,36 +1313,10 @@ available-typed-arrays@^1.0.7:
   dependencies:
     possible-typed-array-names "^1.0.0"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 aws-sdk@^2.1691.0, aws-sdk@^2.938.0:
   version "2.1692.0"
   resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1692.0.tgz#9dac5f7bfcc5ab45825cc8591b12753aa7d2902c"
   integrity sha512-x511uiJ/57FIsbgUe5csJ13k3uzu25uWQE+XqfBis/sB0SFoiElJWXRkgEAUh0U6n40eT3ay5Ue4oPkRMu1LYw==
-=======
-aws-sdk@2.905.0:
-  version "2.905.0"
-  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.905.0.tgz#35f9a7af77ecc0f62598b9498aee7c90b7ace5c5"
-  integrity sha512-5A12gp+DCkJBdu3U2UvAHUACgd69NEqDBB+XUlGxaiO7a7T7y+9Azr3GKGFVICZ/vbr2Or7bUm4//wu3LVPnsg==
-  dependencies:
-    buffer "4.9.2"
-    events "1.1.1"
-    ieee754 "1.1.13"
-    jmespath "0.15.0"
-    querystring "0.2.0"
-    sax "1.2.1"
-    url "0.10.3"
-    uuid "3.3.2"
-    xml2js "0.4.19"
-
-aws-sdk@^2.1005.0, aws-sdk@^2.1691.0, aws-sdk@^2.938.0:
-=======
-aws-sdk@^2.1691.0, aws-sdk@^2.938.0:
->>>>>>> 00164b90 (Bump bkclt latest version)
-  version "2.1691.0"
-  resolved "https://registry.yarnpkg.com/aws-sdk/-/aws-sdk-2.1691.0.tgz#9d6ccdcbae03c806fc62667b76eb3e33e5294dcc"
-  integrity sha512-/F2YC+DlsY3UBM2Bdnh5RLHOPNibS/+IcjUuhP8XuctyrN+MlL+fWDAiela32LTDk7hMy4rx8MTgvbJ+0blO5g==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     buffer "4.9.2"
     events "1.1.1"
@@ -1850,31 +1733,10 @@ cron-parser@^4.2.0:
   dependencies:
     luxon "^3.2.1"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 cross-spawn@^7.0.0, cross-spawn@^7.0.3, cross-spawn@^7.0.5:
   version "7.0.6"
   resolved "https://registry.yarnpkg.com/cross-spawn/-/cross-spawn-7.0.6.tgz#8a58fe78f00dcd70c370451759dfbfaf03e8ee9f"
   integrity sha512-uV2QOWP2nWzsy2aMp8aRibhi9dlzF5Hgh5SHaB9OiTGEyDTiJJyx0uy51QXdyWbtAHNua4XJzUKca3OzKUd3vA==
-=======
-cross-spawn@^6.0.5:
-  version "6.0.5"
-  resolved "https://registry.yarnpkg.com/cross-spawn/-/cross-spawn-6.0.5.tgz#4a5ec7c64dfae22c3a14124dbacdee846d80cbc4"
-  integrity sha512-eTVLrBSt7fjbDygz805pMnstIs2VTBNkRm0qxZd+M7A5XDdxVRWO5MxGBXZhjY4cqLYLdtrGqRf8mBPmzwSpWQ==
-  dependencies:
-    nice-try "^1.0.4"
-    path-key "^2.0.1"
-    semver "^5.5.0"
-    shebang-command "^1.2.0"
-    which "^1.2.9"
-
-=======
->>>>>>> 00164b90 (Bump bkclt latest version)
-cross-spawn@^7.0.0, cross-spawn@^7.0.2, cross-spawn@^7.0.3:
-  version "7.0.3"
-  resolved "https://registry.yarnpkg.com/cross-spawn/-/cross-spawn-7.0.3.tgz#f73a85b9d5d41d045551c177e2882d4ac85728a6"
-  integrity sha512-iRDPJKUPVEND7dHPO8rkbOnPpyDygcDFtWjpeWNCgy8WP2rXcxXL8TskReQl6OrB2G7+UJrags1q15Fudc7G6w==
->>>>>>> cf55d233 (Use latest version of cloudserver)
   dependencies:
     path-key "^3.1.0"
     shebang-command "^2.0.0"
@@ -2034,15 +1896,9 @@ ecdsa-sig-formatter@1.0.11:
     safe-buffer "^5.0.1"
 
 electron-to-chromium@^1.5.41:
-<<<<<<< HEAD
   version "1.5.63"
   resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.5.63.tgz#69444d592fbbe628d129866c2355691ea93eda3e"
   integrity sha512-ddeXKuY9BHo/mw145axlyWjlJ1UBt4WK3AlvkT7W2AbqfRQoacVoRUCF6wL3uIx/8wT9oLKXzI+rFqHHscByaA==
-=======
-  version "1.5.52"
-  resolved "https://registry.yarnpkg.com/electron-to-chromium/-/electron-to-chromium-1.5.52.tgz#2bed832c95a56a195504f918150e548474687da8"
-  integrity sha512-xtoijJTZ+qeucLBDNztDOuQBE1ksqjvNjvqFoST3nGC7fSpqJ+X6BdTBaY5BHG+IhWWmpc6b/KfpeuEDupEPOQ==
->>>>>>> cf55d233 (Use latest version of cloudserver)
 
 emoji-regex@^8.0.0:
   version "8.0.0"
@@ -2839,6 +2695,7 @@ http-proxy-agent@^7.0.0:
 
 "httpagent@git+https://github.com/scality/httpagent#1.1.0":
   version "1.1.0"
+  uid "8f9958eb9cde086db7819a86582fba640a5f8876"
   resolved "git+https://github.com/scality/httpagent#8f9958eb9cde086db7819a86582fba640a5f8876"
   dependencies:
     agentkeepalive "^4.5.0"
@@ -5028,22 +4885,6 @@ test-exclude@^7.0.1:
     glob "^10.4.1"
     minimatch "^9.0.4"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
-=======
-text-hex@1.0.x:
-  version "1.0.0"
-  resolved "https://registry.yarnpkg.com/text-hex/-/text-hex-1.0.0.tgz#69dc9c1b17446ee79a92bf5b884bb4b9127506f5"
-  integrity sha512-uuVGNWzgJ4yhRaNSiubPY7OjISw4sw4E5Uv0wbjp+OzcbmVU/rsT8ujgcXJhn9ypzsgr5vlzpPqP+MBBKcGvbg==
-
-=======
->>>>>>> 00164b90 (Bump bkclt latest version)
-text-table@^0.2.0:
-  version "0.2.0"
-  resolved "https://registry.yarnpkg.com/text-table/-/text-table-0.2.0.tgz#7f5ee823ae805207c00af2df4a84ec3fcfa570b4"
-  integrity sha512-N+8UisAXDGk8PFXP4HAzVR9nbfmVJ3zYLAWiTIoqC5v5isinhr+r5uaO8+7r3BMfuNIufIsA7RdpVgacC2cSpw==
-
->>>>>>> cf55d233 (Use latest version of cloudserver)
 "through@>=2.2.7 <3":
   version "2.3.8"
   resolved "https://registry.yarnpkg.com/through/-/through-2.3.8.tgz#0dd4c9ffaabc357960b1b724115d7e0e86a2e1f5"
@@ -5354,23 +5195,13 @@ werelogs@scality/werelogs#8.1.5:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-<<<<<<< HEAD
-<<<<<<< HEAD
 werelogs@scality/werelogs#8.2.0:
   version "8.2.0"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/7bf334cea94002d118f27d7ec1c7a5af74b51b8d"
   dependencies:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
-=======
-whatwg-mimetype@^2.3.0:
-  version "2.3.0"
-  resolved "https://registry.yarnpkg.com/whatwg-mimetype/-/whatwg-mimetype-2.3.0.tgz#3d4b1e0312d2079879f826aff18dbeeca5960fbf"
-  integrity sha512-M4yMwr6mAnQz76TbJm914+gPpB/nCwvZbJU28cUD6dR004SAxDLOOSUaB1JDRqLtaOV/vi0IC5lEAGFgrjGv/g==
->>>>>>> cf55d233 (Use latest version of cloudserver)
 
-=======
->>>>>>> 00164b90 (Bump bkclt latest version)
 whatwg-url@^11.0.0:
   version "11.0.0"
   resolved "https://registry.yarnpkg.com/whatwg-url/-/whatwg-url-11.0.0.tgz#0a849eebb5faf2119b901bb76fd795c2848d4018"
