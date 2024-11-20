@@ -14,6 +14,6 @@ killandsleep () {
   sleep 10
 }
 
-docker compose -f .github/dockerfiles/cloudserver/docker-compose.yml up & bash tests/utils/wait_for_local_port.bash $PORT 40
+docker run -d $CLOUDSERVER_IMAGE /bin/sh -c "yarn run mem_backend" -p $PORT & bash tests/utils/wait_for_local_port.bash $PORT 40
 ./node_modules/.bin/nyc --clean --silent yarn run $1
 ./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
