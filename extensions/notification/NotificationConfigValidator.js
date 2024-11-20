@@ -18,7 +18,7 @@ const destinationSchema = joi.object({
     resource: joi.string().required(),
     type: joi.string().required(),
     host: joi.string().required(),
-    port: joi.number().required(),
+    port: joi.number().optional(),
     internalTopic: joi.string(),
     topic: joi.string().required(),
     auth: authSchema.default({}),
@@ -28,6 +28,7 @@ const joiSchema = joi.object({
     topic: joi.string(),
     monitorNotificationFailures: joi.boolean().default(true),
     notificationFailedTopic: joi.string().optional(),
+    zookeeperPath: joi.string().optional(),
     queueProcessor: {
         groupId: joi.string().required(),
         concurrency: joi.number().greater(0).default(1000),
@@ -35,7 +36,12 @@ const joiSchema = joi.object({
     destinations: joi.array().items(destinationSchema).default([]),
     // TODO: BB-625 reset to being required after supporting probeserver in S3C
     // for bucket notification proceses
-    probeServer: probeServerJoi.optional()
+    probeServer: probeServerJoi.optional(),
+    bucketMetastore: joi.string().default('__metastore'),
+    maxCachedConfigs: joi.number().default(1000),
+    // Conrrency to use when updating all local bucket notification configs
+    // from zookeeper
+    zookeeperOpConcurrency: joi.number().default(10),
 });
 
 function configValidator(backbeatConfig, extConfig) {

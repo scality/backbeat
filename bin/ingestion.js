@@ -28,7 +28,7 @@ const qpConfig = config.queuePopulator;
 const mConfig = config.metrics;
 const rConfig = config.redis;
 const s3Config = config.s3;
-const { connectionString, autoCreateNamespace } = zkConfig;
+const { connectionString, autoCreateNamespace, retries } = zkConfig;
 
 const RESUME_NODE = 'scheduledResume';
 
@@ -316,6 +316,7 @@ function initAndStart(zkClient) {
 
 const zkClient = new ZookeeperManager(connectionString, {
     autoCreateNamespace,
+    retries,
 }, log);
 zkClient.once('error', err => {
     log.fatal('error connecting to zookeeper', {

@@ -4,7 +4,6 @@ const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;
 const async = require('async');
 const assert = require('assert');
-const util = require('util');
 const { ZenkoMetrics } = require('arsenal').metrics;
 const { wrapGaugeSet } = require('../../../lib/util/metrics');
 const errors = require('arsenal').errors;
@@ -55,6 +54,7 @@ class QueueProcessor extends EventEmitter {
      *
      * @constructor
      * @param {Object} mongoConfig - mongodb connnection configuration object
+     * @param {Object} zkConfig - zookeeper configuration object
      * @param {Object} kafkaConfig - kafka configuration object
      * @param {string} kafkaConfig.hosts - list of kafka brokers
      *   as "host:port[,host:port...]"
@@ -86,10 +86,11 @@ class QueueProcessor extends EventEmitter {
      * @param {String} destinationId - resource name/id of destination
      * @param {Object} destinationAuth - destination authentication config
      */
-    constructor(mongoConfig, kafkaConfig, notifConfig, destinationId,
+    constructor(mongoConfig, zkConfig, kafkaConfig, notifConfig, destinationId,
         destinationAuth) {
         super();
         this.mongoConfig = mongoConfig;
+        this.zkConfig = zkConfig;
         this.kafkaConfig = kafkaConfig;
         this.notifConfig = notifConfig;
         this.destinationId = destinationId;
@@ -106,10 +107,6 @@ class QueueProcessor extends EventEmitter {
         this.bnConfigManager = null;
         this._consumer = null;
         this._destination = null;
-        // Once the notification manager is initialized
-        // this will hold the callback version of the getConfig
-        // function of the notification config manager
-        this._getConfig = null;
 
         this.logger = new Logger('Backbeat:Notification:QueueProcessor');
     }
@@ -123,6 +120,11 @@ class QueueProcessor extends EventEmitter {
         try {
             this.bnConfigManager = new NotificationConfigManager({
                 mongoConfig: this.mongoConfig,
+                bucketMetastore: this.notifConfig.bucketMetastore,
+                maxCachedConfigs: this.notifConfig.maxCachedConfigs,
+                zkConfig: this.zkConfig,
+                zkPath: this.notifConfig.zookeeperPath,
+                zkConcurrency: this.notifConfig.zookeeperOpConcurrency,
                 logger: this.logger,
             });
             return this.bnConfigManager.setup(done);
@@ -203,9 +205,6 @@ class QueueProcessor extends EventEmitter {
                     this.emit('ready');
                     return next();
                 });
-                // callbackify getConfig from notification config manager
-                this._getConfig = util.callbackify(this.bnConfigManager
-                    .getConfig.bind(this.bnConfigManager));
                 return undefined;
             },
         ], err => {
@@ -253,7 +252,7 @@ class QueueProcessor extends EventEmitter {
         }
         const { bucket, key, eventType } = sourceEntry;
         try {
-            return this._getConfig(bucket, (err, notifConfig) => {
+            return this.bnConfigManager.getConfig(bucket, (err, notifConfig) => {
                 if (err) {
                     this.logger.error('Error while getting notification configuration', {
                         bucket,
@@ -264,19 +263,15 @@ class QueueProcessor extends EventEmitter {
                     return done(err);
                 }
                 if (notifConfig && Object.keys(notifConfig).length > 0) {
-                    const destBnConf = notifConfig.queueConfig.filter(
-                        c => c.queueArn.split(':').pop()
-                            === this.destinationId);
-                    if (!destBnConf.length) {
+                    // get destination specific notification config
+                    const queueConfig = notifConfig.notificationConfiguration.queueConfig.filter(
+                            c => c.queueArn.split(':').pop() === this.destinationId
+                    );
+                    if (!queueConfig.length) {
                         // skip, if there is no config for the current
                         // destination resource
-                        return done();
+                        return undefined;
                     }
-                    // pass only destination resource specific config to
-                    // validate entry
-                    const bnConfig = {
-                        queueConfig: destBnConf,
-                    };
                     this.logger.debug('validating entry', {
                         method: 'QueueProcessor.processKafkaEntry',
                         bucket,
@@ -285,7 +280,13 @@ class QueueProcessor extends EventEmitter {
                         eventType,
                         destination: this.destinationId,
                     });
-                    const { isValid, matchingConfig } = configUtil.validateEntry(bnConfig, sourceEntry);
+                    const destConfig = {
+                        bucket,
+                        notificationConfiguration: {
+                            queueConfig,
+                        },
+                    };
+                    const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, sourceEntry);
                     if (isValid) {
                         // add notification configuration id to the message
                         sourceEntry.configurationId = matchingConfig.id;
