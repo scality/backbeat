@@ -97,18 +97,12 @@ class MongoConfigManager extends BaseConfigManager {
      */
     _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
-        MongoClient.connect(mongoUrl, {
+        const client = MongoClient(mongoUrl, {
             replicaSet: this._mongoConfig.replicaSet,
             useNewUrlParser: true,
-        },
-        (err, client) => {
-            if (err) {
-                this._logger.error('Could not connect to MongoDB', {
-                    method: 'MongoConfigManager._setupMongoClient',
-                    error: err.message,
-                });
-                return cb(err);
-            }
+        });
+
+        return client.connect().then(client => {
             this._logger.debug('Connected to MongoDB', {
                 method: 'MongoConfigManager._setupMongoClient',
             });
@@ -133,6 +127,12 @@ class MongoConfigManager extends BaseConfigManager {
             } catch (error) {
                 return cb(error);
             }
+        }).catch(err => {
+            this._logger.error('Could not connect to MongoDB', {
+                method: 'MongoConfigManager._setupMongoClient',
+                error: err.message,
+            });
+            return cb(err);
         });
     }
 

@@ -63,18 +63,12 @@ class LocationStatusStream {
      */
     _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
-        MongoClient.connect(mongoUrl, {
+        const client = new MongoClient(mongoUrl, {
                 replicaSet: this._mongoConfig.replicaSet,
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
-        }, (err, client) => {
-            if (err) {
-                this._log.error('Could not connect to MongoDB', {
-                    method: 'ServiceStatusManager._setupMongoClient',
-                    error: err.message,
-                });
-                return cb(err);
-            }
+        });
+        return client.connect().then(client => {
             // connect to metadata DB
             this._mongoClient = client.db(this._mongoConfig.database, {
                 ignoreUndefined: true,
@@ -96,6 +90,12 @@ class LocationStatusStream {
                 return cb();
             });
             return undefined;
+        }).catch(err => {
+            this._log.error('Could not connect to MongoDB', {
+                method: 'ServiceStatusManager._setupMongoClient',
+                error: err.message,
+            });
+            return cb(err);
         });
     }
 
@@ -106,22 +106,23 @@ class LocationStatusStream {
      */
     _initializeLocationStatuses(cb) {
         this._locationStatusColl.find({})
-            .toArray((err, locations) => {
-                if (err) {
-                    this._log.error('Could not fetch location statuses from mongo', {
-                        method: 'ServiceStatusManager._initializeLocationStatuses',
-                        error: err.message,
-                    });
-                    return cb(err);
+        .toArray()
+        .then(locations => {
+            locations.forEach(location => {
+                const isPaused = location.value[this._serviceName].paused;
+                if (isPaused) {
+                    this._pauseServiceForLocation(location._id);
                 }
-                locations.forEach(location => {
-                    const isPaused = location.value[this._serviceName].paused;
-                    if (isPaused) {
-                        this._pauseServiceForLocation(location._id);
-                    }
-                });
-                return cb();
             });
+            return cb();
+        })
+        .catch(err => {
+            this._log.error('Could not fetch location statuses from mongo', {
+                method: 'ServiceStatusManager._initializeLocationStatuses',
+                error: err.message,
+            });
+            return cb(err);
+        });
     }
 
     /**
