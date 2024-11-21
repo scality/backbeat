@@ -96,18 +96,11 @@ class NotificationConfigManager {
         MongoClient.connect(mongoUrl, {
             replicaSet: this._mongoConfig.replicaSet,
             useNewUrlParser: true,
-        },
-        (err, client) => {
-            if (err) {
-                this._logger.error('Could not connect to MongoDB', {
-                    method: 'NotificationConfigManager._setupMongoClient',
-                    error: err.message,
-                });
-                return cb(err);
-            }
+        }).then((client) => {
             this._logger.debug('Connected to MongoDB', {
                 method: 'NotificationConfigManager._setupMongoClient',
             });
+
             try {
                 this._mongoClient = client.db(this._mongoConfig.database, {
                     ignoreUndefined: true,
@@ -129,6 +122,12 @@ class NotificationConfigManager {
             } catch (error) {
                 return cb(error);
             }
+        }).catch((err) => {
+            this._logger.error('Could not connect to MongoDB', {
+                method: 'NotificationConfigManager._setupMongoClient',
+                error: err.message,
+            });
+            return cb(err);
         });
     }
 

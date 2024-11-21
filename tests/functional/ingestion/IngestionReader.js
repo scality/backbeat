@@ -112,16 +112,13 @@ describe('ingestion reader tests with mock', function fD() {
         const topic = testConfig.extensions.ingestion.topic;
         async.waterfall([
             next => {
-                MongoClient.connect(mongoUrl, {}, (err, client) => {
-                    if (err) {
-                        next(err);
-                    }
+                MongoClient.connect(mongoUrl, {}).then((client) => {
                     this.client = client;
                     this.db = this.client.db('metadata', {
                         ignoreUndefined: true,
                     });
                     next();
-                });
+                }).catch(next);
             },
             next => kafkaAdminClient.createTopic({
                     topic,
@@ -153,10 +150,10 @@ describe('ingestion reader tests with mock', function fD() {
                 consumer.subscribe([testConfig.extensions.ingestion.topic]);
                 setTimeout(next, 2000);
             },
-            next => this.db.createCollection('PENSIEVE', err => {
+            next => this.db.createCollection('PENSIEVE').catch((err) => {
                 assert.ifError(err);
                 return next();
-            }),
+            }).then(next),
             next => {
                 this.m = this.db.collection('PENSIEVE');
                 this.m.insertOne(dummyPensieveCredentials, {});

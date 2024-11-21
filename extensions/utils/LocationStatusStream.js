@@ -67,14 +67,7 @@ class LocationStatusStream {
                 replicaSet: this._mongoConfig.replicaSet,
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
-        }, (err, client) => {
-            if (err) {
-                this._log.error('Could not connect to MongoDB', {
-                    method: 'ServiceStatusManager._setupMongoClient',
-                    error: err.message,
-                });
-                return cb(err);
-            }
+        }).then((client) => {
             // connect to metadata DB
             this._mongoClient = client.db(this._mongoConfig.database, {
                 ignoreUndefined: true,
@@ -96,7 +89,13 @@ class LocationStatusStream {
                 return cb();
             });
             return undefined;
-        });
+        }).catch((err) => {
+                this._log.error('Could not connect to MongoDB', {
+                    method: 'ServiceStatusManager._setupMongoClient',
+                    error: err.message,
+                });
+                return cb(err);
+            });
     }
 
     /**
