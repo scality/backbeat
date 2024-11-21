@@ -78,6 +78,16 @@ jobs:
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
+      - name: Build and push federation image
+        uses: docker/build-push-action@v5
+        with:
+          context: .
+          push: true
+          tags: ghcr.io/${{ github.repository }}:${{ github.event.inputs.tag }}-nodesvc-base
+          file: images/nodesvc-base/Dockerfile
+          cache-from: type=gha,scope=federation
+          cache-to: type=gha,scope=federation,mode=max
+
       - name: Create Release
         uses: softprops/action-gh-release@v2
         env:
