@@ -36,6 +36,7 @@ class NotificationConfigManager {
                 zkConcurrency,
                 logger,
             });
+        }
     }
 
     /**
