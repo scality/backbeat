@@ -21,6 +21,13 @@ jobs:
     - name: Checkout
       uses: actions/checkout@v4
 
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '18'
+        cache: yarn
+
     - name: Set up Docker Buildk
       uses: docker/setup-buildx-action@v3
 
@@ -120,7 +127,7 @@ jobs:
       uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: '16'
+        node-version: '18'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
