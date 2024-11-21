@@ -80,11 +80,12 @@ class OplogPopulator {
      */
     async _setupMongoClient() {
         try {
-            const client = await MongoClient.connect(this._mongoUrl, {
+            const client = new MongoClient(this._mongoUrl, {
                 replicaSet: this._replicaSet,
                 useNewUrlParser: true,
                 useUnifiedTopology: true,
             });
+            await client.connect();
             // connect to metadata DB
             this._mongoClient = client.db(this._database, {
                 ignoreUndefined: true,
