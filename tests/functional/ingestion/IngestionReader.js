@@ -112,7 +112,7 @@ describe('ingestion reader tests with mock', function fD() {
         const topic = testConfig.extensions.ingestion.topic;
         async.waterfall([
             next => {
-                MongoClient.connect(mongoUrl, {}).then((client) => {
+                MongoClient.connect(mongoUrl, {}).then(client => {
                     this.client = client;
                     this.db = this.client.db('metadata', {
                         ignoreUndefined: true,
@@ -150,7 +150,7 @@ describe('ingestion reader tests with mock', function fD() {
                 consumer.subscribe([testConfig.extensions.ingestion.topic]);
                 setTimeout(next, 2000);
             },
-            next => this.db.createCollection('PENSIEVE').catch((err) => {
+            next => this.db.createCollection('PENSIEVE').catch(err => {
                 assert.ifError(err);
                 return next();
             }).then(next),
