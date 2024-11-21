@@ -110,7 +110,7 @@ describe('MongoConfigManager ::', () => {
                 collection: getCollectionStub,
                 command: mongoCommandStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+            const mongoConnectStub = sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: getDbStub,
             });
             manager._setupMongoClient(err => {
@@ -127,8 +127,7 @@ describe('MongoConfigManager ::', () => {
 
         it('should fail when mongo client setup fails', () => {
             const manager = new MongoConfigManager(params);
-            sinon.stub(MongoClient, 'connect').callsArgWith(2,
-                errors.InternalError, null);
+            sinon.stub(MongoClient.prototype, 'connect').rejects(errors.InternalError);
             manager._setupMongoClient(err => {
                 assert.deepEqual(err, errors.InternalError);
             });
@@ -137,7 +136,7 @@ describe('MongoConfigManager ::', () => {
         it('should fail when when getting the metadata db', () => {
             const manager = new MongoConfigManager(params);
             const getDbStub = sinon.stub().throws(errors.InternalError);
-            sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+            sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: getDbStub,
             });
             manager._setupMongoClient(err => {

@@ -227,7 +227,7 @@ describe('BackbeatAPI', () => {
         let debugSpy;
 
         beforeEach(() => {
-            mongoClientStub = sinon.stub(MongoClient, 'connect');
+            mongoClientStub = sinon.stub(MongoClient.prototype, 'connect');
             infoSpy = sinon.spy(fakeLogger, 'info');
             errorSpy = sinon.spy(fakeLogger, 'error');
             debugSpy = sinon.spy(fakeLogger, 'debug');
@@ -242,7 +242,7 @@ describe('BackbeatAPI', () => {
 
         it('should connect to MongoDB when configuration is present', done => {
             const mockDb = { db: sinon.stub().returns({}) };
-            mongoClientStub.yields(null, mockDb);
+            mongoClientStub.resolves(mockDb);
 
             bbapi._setupMongoClient(err => {
                 assert.ifError(err);
@@ -256,7 +256,7 @@ describe('BackbeatAPI', () => {
 
         it('should log an error when MongoDB connection fails', done => {
             const mockError = new Error('Connection failed');
-            mongoClientStub.yields(mockError);
+            mongoClientStub.rejects(mockError);
 
             bbapi._setupMongoClient(err => {
                 assert.strictEqual(err, mockError);

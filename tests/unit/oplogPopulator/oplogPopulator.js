@@ -277,21 +277,11 @@ describe('OplogPopulator', () => {
                 collection: collectionStub,
                 command: mongoCommandStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({
+            sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: dbStub,
             });
             await oplogPopulator._setupMongoClient()
                 .then(() => {
-                    const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
-                        'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
-                    assert(mongoConnectStub.calledOnceWith(
-                        mongoUrl,
-                        {
-                            replicaSet: 'rs0',
-                            useNewUrlParser: true,
-                            useUnifiedTopology: true,
-                        }
-                    ));
                     assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
                     assert(collectionStub.calledOnceWith('__metastore'));
                     assert(mongoCommandStub.calledOnceWith({

@@ -249,7 +249,7 @@ describe('LocationStatusManager', () => {
         ].forEach(params => {
             it(params.case, done => {
                 lsm._mongoClient = {
-                    createCollection: sinon.stub().yields(),
+                    createCollection: sinon.stub().resolves(),
                     collection: () => ({
                         find: sinon.stub().yields(null, {
                             toArray: sinon.stub().yields(null, params.mongoLocations),
