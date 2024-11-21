@@ -7,11 +7,6 @@ NODE_PATH=${NODE_PATH:-node_modules}
 # port for cloudserver
 PORT=8000
 
-if [ ! -d "${NODE_PATH}/@zenko/cloudserver" ]; then
-    echo "cloudserver module was not found!"
-    exit 1
-fi
-
 trap killandsleep EXIT
 
 killandsleep () {
@@ -19,6 +14,6 @@ killandsleep () {
   sleep 10
 }
 
-cd ${NODE_PATH}/@zenko/cloudserver && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
+docker run -p $PORT:8000 -d $CLOUDSERVER_IMAGE /bin/sh -c "yarn run mem_backend" & bash tests/utils/wait_for_local_port.bash $PORT 40 && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
 ./node_modules/.bin/nyc --clean --silent yarn run $1
 ./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
