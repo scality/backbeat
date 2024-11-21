@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-22.04-2core
     permissions:
       # Need to explicitely add package write permissions for dependabot
       contents: read
@@ -20,6 +20,11 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: yarn
 
     - name: Set up Docker Buildk
       uses: docker/setup-buildx-action@v3
@@ -64,6 +69,11 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
+
+    - uses: actions/setup-node@v4
+      with:
+        node-version: '22'
+        cache: yarn
 
     - uses: actions/setup-go@v5
       with:
@@ -120,7 +130,7 @@ jobs:
       uses: actions/checkout@v4
     - uses: actions/setup-node@v4
       with:
-        node-version: '16'
+        node-version: '22'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
