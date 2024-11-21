@@ -11,17 +11,22 @@ const kafkaConfig
     = require('../../config.notification.json').queuePopulator.kafka;
 const notificationConfig
     = require('../../config.notification.json').extensions.notification;
+const zookeeperConfig
+    = require('../../config.notification.json').zookeeper;
 
 const logger = new werelogs.Logger('NotificationQueueProcessor:test');
 
-const notificationConfiguration = {
-    queueConfig: [
-        {
-            events: ['s3:ObjectCreated:*'],
-            queueArn: 'arn:scality:bucketnotif:::destination1',
-            filterRules: [],
-        },
-    ],
+const config = {
+    bucket: 'example-bucket',
+    notificationConfiguration: {
+        queueConfig: [
+            {
+                events: ['s3:ObjectCreated:*'],
+                queueArn: 'arn:scality:bucketnotif:::destination1',
+                filterRules: [],
+            },
+        ],
+    },
 };
 
 const kafkaEntry = {
@@ -80,7 +85,7 @@ describe('NotificationQueueProcessor:: ', () => {
     let notificationQueueProcessor;
 
     beforeEach(() => {
-        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, kafkaConfig,
+        notificationQueueProcessor = new NotificationQueueProcessor(mongoConfig, zookeeperConfig, kafkaConfig,
             notificationConfig, notificationConfig.destinations[0].resource, null);
         notificationQueueProcessor.logger = logger;
     });
@@ -91,7 +96,9 @@ describe('NotificationQueueProcessor:: ', () => {
 
     describe('processKafkaEntry ::', () => {
         it('should publish notification in correct format', async () => {
-            notificationQueueProcessor._getConfig = sinon.stub().yields(null, notificationConfiguration);
+            notificationQueueProcessor.bnConfigManager = {
+                getConfig: sinon.stub().yields(null, config),
+            };
             const sendStub = sinon.stub().yields(null);
             notificationQueueProcessor._destination = {
                 send: sendStub,

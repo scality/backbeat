@@ -40,6 +40,8 @@ class FailedCRRConsumer {
             kafka: {
                 hosts: this._kafkaConfig.hosts,
                 site: this._kafkaConfig.site,
+                compressionType: this._kafkaConfig.compressionType,
+                requiredAcks: this._kafkaConfig.requiredAcks,
             },
             topic: this._topic,
             groupId: 'backbeat-retry-group',

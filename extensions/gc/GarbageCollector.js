@@ -132,6 +132,8 @@ class GarbageCollector extends EventEmitter {
             kafka: {
                 hosts: this._kafkaConfig.hosts,
                 site: this._kafkaConfig.site,
+                compressionType: this._kafkaConfig.compressionType,
+                requiredAcks: this._kafkaConfig.requiredAcks,
             },
             topic: this._gcConfig.topic,
             groupId: this._gcConfig.consumer.groupId,

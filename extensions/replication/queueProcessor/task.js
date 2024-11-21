@@ -20,7 +20,7 @@ const redisConfig = config.redis;
 const httpsConfig = config.https;
 const internalHttpsConfig = config.internalHttps;
 const mConfig = config.metrics;
-const { connectionString, autoCreateNamespace } = zkConfig;
+const { connectionString, autoCreateNamespace, retries } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
 const { startProbeServer, getReplicationProbeConfig } = require('../../../lib/util/probe');
 const { DEFAULT_LIVE_ROUTE, DEFAULT_METRICS_ROUTE, DEFAULT_READY_ROUTE } =
@@ -288,6 +288,7 @@ function initAndStart(zkClient) {
 
 const zkClient = new ZookeeperManager(connectionString, {
     autoCreateNamespace,
+    retries,
 }, log);
 
 zkClient.once('error', err => {

@@ -75,6 +75,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
         const producer = new BackbeatProducer({
             kafka: { hosts: this._kafkaConfig.hosts },
             maxRequestSize: this._kafkaConfig.maxRequestSize,
+            compressionType: this._kafkaConfig.compressionType,
+            requiredAcks: this._kafkaConfig.requiredAcks,
         });
         producer.once('error', cb);
         producer.once('ready', () => {
@@ -121,6 +123,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                     hosts: this._kafkaConfig.hosts,
                     site: this._kafkaConfig.site,
                     backlogMetrics: this._kafkaConfig.backlogMetrics,
+                    compressionType: this._kafkaConfig.compressionType,
+                    requiredAcks: this._kafkaConfig.requiredAcks,
                 },
                 topic,
                 groupId: this._processConfig.groupId,

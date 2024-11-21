@@ -17,10 +17,6 @@ class KafkaProducer extends BackbeatProducer {
         return 'NotificationProducer';
     }
 
-    getRequireAcks() {
-        return 1;
-    }
-
     setFromConfig(joiResult) {
         super.setFromConfig(joiResult);
         this._auth = joiResult.auth ? authUtil.generateKafkaAuthObject(joiResult.auth) : {};
