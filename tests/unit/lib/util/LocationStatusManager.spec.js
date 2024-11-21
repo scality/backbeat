@@ -251,11 +251,11 @@ describe('LocationStatusManager', () => {
                 lsm._mongoClient = {
                     createCollection: sinon.stub().resolves(),
                     collection: () => ({
-                        find: sinon.stub().yields(null, {
-                            toArray: sinon.stub().yields(null, params.mongoLocations),
+                        find: sinon.stub().returns({
+                            toArray: sinon.stub().resolves(params.mongoLocations),
                         }),
-                        insert: sinon.stub().yields(),
-                        deleteMany: sinon.stub().yields(),
+                        insertOne: sinon.stub().resolves(),
+                        deleteMany: sinon.stub().resolves(),
                     }),
                 };
                 lsm._setupLocationStatusStore(err => {
@@ -337,7 +337,7 @@ describe('LocationStatusManager', () => {
     describe('_addNewLocations', () => {
         it('should add new locations', done => {
             lsm._locationStatusColl = {
-                insert: sinon.stub().yields(),
+                insertOne: sinon.stub().resolves(),
             };
             lsm._addNewLocations([], err => {
                 assert.ifError(err);
@@ -361,7 +361,7 @@ describe('LocationStatusManager', () => {
                     }
                 },
             ];
-            const deleteManyStub = sinon.stub().yields();
+            const deleteManyStub = sinon.stub().resolves();
             lsm._locationStatusColl = {
                 deleteMany: deleteManyStub,
             };
