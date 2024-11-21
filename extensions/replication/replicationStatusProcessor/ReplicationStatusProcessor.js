@@ -377,24 +377,36 @@ class ReplicationStatusProcessor {
                     }
                     return async.each(this._replayTopicNames, (topicName, next) =>
                         this._ReplayProducers[topicName].setupProducer(next),
-                    done);
+                    () => {
+                        console.log('Replay producers are ready');
+                        done();
+                    });
                 });
             },
             done => {
                 if (this.gcConfig) {
                     this._gcProducer = new GarbageCollectorProducer();
-                    this._gcProducer.setupProducer(done);
+                    this._gcProducer.setupProducer(() => {
+                        console.log('Garbage collector producer is ready');
+                        done();
+                    });
                 } else {
+                    console.log('Garbage collector producer is not configured');
                     done();
                 }
             },
             done => {
                 this._mProducer = new MetricsProducer(this.kafkaConfig,
                     this.mConfig);
-                this._mProducer.setupProducer(done);
+                this._mProducer.setupProducer(() => {
+                    console.log('Metrics producer is ready');
+                    done();
+                });
             },
             done => {
                 let consumerReady = false;
+                console.log('Starting consumer');
+                console.log('Kafka config', this.kafkaConfig, this.repConfig.replicationStatusTopic);
                 this._consumer = new BackbeatConsumer({
                     kafka: {
                         hosts: this.kafkaConfig.hosts,
@@ -417,7 +429,9 @@ class ReplicationStatusProcessor {
                     consumerReady = true;
                     this.logger.info('replication status processor is ready ' +
                                      'to consume replication status entries');
+                                     console.log('Consumer subscribing');
                     this._consumer.subscribe();
+                    console.log('Consumer is ready');
                     done();
                 });
             },

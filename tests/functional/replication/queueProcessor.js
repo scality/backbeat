@@ -766,6 +766,7 @@ describe('queue processor functional tests with mocking', () => {
         this.timeout(60000);
         const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
+        console.log('serverList', serverList);
 
         const qpParams = [
             'backbeat-func-test-dummy-topic',
@@ -822,6 +823,7 @@ describe('queue processor functional tests with mocking', () => {
             ], done),
             done => async.parallel([
                 done => {
+                    console.log("starting replicationStatusProcessor");
                     replicationStatusProcessor = new ReplicationStatusProcessor(
                         { hosts: 'localhost:9092' },
                         { auth: { type: 'role',
@@ -844,7 +846,11 @@ describe('queue processor functional tests with mocking', () => {
                         },
                         {},
                         { topic: 'metrics-test-topic' });
-                    replicationStatusProcessor.start({ bootstrap: true }, done);
+                        console.log("replication processor starting")
+                    replicationStatusProcessor.start({ bootstrap: true }, () =>{
+                        console.log("replicationStatusProcessor started");
+                        done();
+                    });
                 },
                 done => {
                     copyLocationResultsConsumer = new BackbeatConsumer({
@@ -859,7 +865,10 @@ describe('queue processor functional tests with mocking', () => {
                         },
                         bootstrap: true,
                     });
-                    copyLocationResultsConsumer.on('ready', done);
+                    copyLocationResultsConsumer.on('ready', () => {
+                        console.log('copyLocationResultsConsumer ready');
+                        done();
+                    });
                 },
             ], done),
         ], err => {
