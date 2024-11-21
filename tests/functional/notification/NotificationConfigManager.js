@@ -60,7 +60,7 @@ describe('NotificationConfigManager ::', () => {
             collection: getCollectionStub,
             command: mongoCommandStub,
         });
-        sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+        sinon.stub(MongoClient.prototype, 'connect').resolves({
             db: getDbStub,
         });
         manager.setup(done);

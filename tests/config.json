@@ -23,7 +23,8 @@
         },
         "mongo": {
             "logName": "s3-recordlog",
-            "replicaSetHosts": "localhost:27018"
+            "replicaSetHosts": "localhost:27018",
+            "readPreference": "primary"
         },
         "probeServer": {
             "bindAddress": "localhost",
