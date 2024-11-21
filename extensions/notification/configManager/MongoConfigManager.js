@@ -97,9 +97,10 @@ class MongoConfigManager extends BaseConfigManager {
      */
     _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
-        const client = MongoClient(mongoUrl, {
+        const client = new MongoClient(mongoUrl, {
             replicaSet: this._mongoConfig.replicaSet,
             useNewUrlParser: true,
+            readPreference: this._mongoConfig.readPreference,
         });
 
         return client.connect().then(client => {
