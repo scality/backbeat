@@ -14,6 +14,6 @@ killandsleep () {
   sleep 10
 }
 
-docker run -p $PORT:8000 -d $CLOUDSERVER_IMAGE /bin/sh -c "yarn run mem_backend" & bash tests/utils/wait_for_local_port.bash $PORT 40 && yarn run mem_backend & bash tests/utils/wait_for_local_port.bash $PORT 40
+docker run -p $PORT:8000 -d $CLOUDSERVER_IMAGE /bin/sh -c "yarn run mem_backend" & bash tests/utils/wait_for_local_port.bash $PORT 40
 ./node_modules/.bin/nyc --clean --silent yarn run $1
 ./node_modules/.bin/nyc report --report-dir "./coverage/$1" --reporter=lcov
