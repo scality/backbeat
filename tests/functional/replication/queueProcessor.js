@@ -604,10 +604,12 @@ class S3Mock extends TestConfigurator {
                 status: 'PENDING',
                 dataStoreVersionId: '',
             }],
+            dataStoreVersionId: '',
             content: replicatedContent,
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf,toazure',
             role: this.getParam('source.md.replicationInfo.role'),
+            storageType: '',
         });
         assert.strictEqual(parsedMd['owner-id'],
                            this.getParam('target.canonicalId'));
@@ -661,6 +663,8 @@ class S3Mock extends TestConfigurator {
                 status: 'PENDING',
                 dataStoreVersionId: '',
             }],
+            dataStoreVersionId: '',
+            storageType: '',
             content: this.getParam('source.md.replicationInfo.content'),
             destination: this.getParam('source.md.replicationInfo.destination'),
             storageClass: 'sf,toazure',
