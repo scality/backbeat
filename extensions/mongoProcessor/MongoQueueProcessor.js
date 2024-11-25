@@ -225,16 +225,9 @@ class MongoQueueProcessor {
             params.versionId = versionId;
         }
 
+        log.debug('getting zenko object metadata', { bucket, key, versionId, params });
+
         return this._mongoClient.getObject(bucket, key, params, log, (err, data) => {
-            if (err && err.NoSuchKey) {
-                // TODO: this may happen if the object was created from artesca side (e.g. on restore)
-                //       --> in that case, the versionId does not match, and we cannot find the object
-                //       --> yet we have the 'ring' versionId in the (zenko) entry's `location`
-                //           field, so we may try to look it up (get all versions, check the one with
-                //           where location is indeed in the RING and with the 'target' versionId)
-                // ....or we introduce a way to store the RING object with the target metadata
-                return done();
-            }
             if (err) {
                 log.error('error getting zenko object metadata', {
                     method: 'MongoQueueProcessor._getZenkoObjectMetadata',
@@ -243,18 +236,6 @@ class MongoQueueProcessor {
                 });
                 return done(err);
             }
-
-            // Sanity check (esp. for restored objects case): verify that the object in the data
-            // location matches the object we ingested
-            // if (data.location[0].dataStoreVersionId !== entry.getVersionId()) {
-            //     const err = new Error('version id mismatch');
-            //     log.error('error getting zenko object metadata', {
-            //         method: 'MongoQueueProcessor._getZenkoObjectMetadata',
-            //         err,
-            //         entry: entry.getLogInfo(),
-            //     });
-            //     return done(err); // TODO: should we return an error here, or just consider a mismatch?
-            // }
 
             return done(null, data);
         });
@@ -670,6 +651,9 @@ class MongoQueueProcessor {
         MongoProcessorMetrics.onProcessKafkaEntry();
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+
+        this.logger.info('processing kafka entry', { sourceEntry });
+
         if (sourceEntry.error) {
             log.end().error('error processing source entry',
                               { error: sourceEntry.error });
