@@ -81,10 +81,11 @@ jobs:
       - name: Build and push federation image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: images/federation
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.event.inputs.tag }}-nodesvc-base
-          file: images/nodesvc-base/Dockerfile
+          build-args:
+            BACKBEAT_VERSION=${{ github.event.inputs.tag }}
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
 

@@ -39,15 +39,14 @@ jobs:
       - name: Build and push federation image
         uses: docker/build-push-action@v5
         with:
-          context: .
+          context: images/federation
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-nodesvc-base
-          file: images/nodesvc-base/Dockerfile
+          build-args:
+            BACKBEAT_VERSION=${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
-        # BB-631 : remove this after federation image with NodeJS 22 is available
-        continue-on-error: true
-
+        
       - name: Push dashboards to the development namespace
         run: |
           oras push ghcr.io/${{ github.repository }}/${{ env.PROJECT_NAME }}-dashboards:${{ github.sha }} \
