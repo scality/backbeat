@@ -530,7 +530,7 @@ class LifecycleConductor {
         let marker = initMarker;
         let nEnqueued = 0;
         const start = new Date();
-        const retryWrapper = new BackbeatTask();
+        const retryWrapper = new BackbeatTask(this.lcConfig.conductor.retry);
 
         this.lastSentId = null;
         this.lastSentVersion = -1;

@@ -5,6 +5,7 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+/** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class ObjectLockedError extends Error {}
 class PendingReplicationError extends Error {}
@@ -18,7 +19,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
      */
     constructor(proc) {
         const procState = proc.getStateVars();
-        super();
+        super(procState.processConfig?.retry);
         Object.assign(this, procState);
         this.objectMD = null;
     }

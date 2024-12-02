@@ -24,7 +24,6 @@ const logIdFromType = {
  * endpoint using the S3 API.
  */
 class LifecycleObjectProcessor extends EventEmitter {
-
     /**
      * Constructor of LifecycleObjectProcessor
      *
@@ -65,7 +64,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             transport,
         }, this._log);
 
-        this.retryWrapper = new BackbeatTask();
+        this.retryWrapper = new BackbeatTask(this._processConfig.retry);
     }
 
     getProcessorType() {

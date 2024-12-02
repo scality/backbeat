@@ -85,7 +85,7 @@ class LifecycleTask extends BackbeatTask {
      */
     constructor(lp) {
         const lpState = lp.getStateVars();
-        super();
+        super(lpState.processConfig?.retry);
         Object.assign(this, lpState);
 
         const { transitionOneDayEarlier, expireOneDayEarlier, timeProgressionFactor } = this.lcOptions;

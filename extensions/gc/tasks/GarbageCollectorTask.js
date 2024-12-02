@@ -5,6 +5,7 @@ const { ObjectMD } = require('arsenal').models;
 const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
+/** @typedef { import('../GarbageCollector.js') } GarbageCollector */
 
 class GarbageCollectorTask extends BackbeatTask {
     /**
@@ -14,13 +15,9 @@ class GarbageCollectorTask extends BackbeatTask {
      * @param {GarbageCollector} gc - garbage collector instance
      */
     constructor(gc) {
-        super();
         const gcState = gc.getStateVars();
+        super(gcState.gcConfig?.consumer.retry);
         Object.assign(this, gcState);
-        const retryParams = gcState.gcConfig?.consumer.retry;
-        if (retryParams) {
-            this.retryParams = retryParams;
-        }
     }
 
     // helper method needed for replication generated entries in which the
