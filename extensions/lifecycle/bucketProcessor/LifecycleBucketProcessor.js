@@ -103,7 +103,7 @@ class LifecycleBucketProcessor {
             transport,
         }, this._log);
 
-        this.retryWrapper = new BackbeatTask();
+        this.retryWrapper = new BackbeatTask(lcConfig.bucketProcessor.retry);
 
         // helper object to facilitate the tracking of the the latest x
         // noncurrent versions of an object when the field
@@ -176,6 +176,7 @@ class LifecycleBucketProcessor {
     getStateVars() {
         return {
             producer: this._producer,
+            processConfig: this._lcConfig.bucketProcessor,
             bootstrapList: this._repConfig.destination.bootstrapList,
             bucketTasksTopic: this._lcConfig.bucketTasksTopic,
             objectTasksTopic: this._lcConfig.objectTasksTopic,

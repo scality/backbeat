@@ -6,7 +6,7 @@ const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ObjectMD = require('arsenal').models.ObjectMD;
 const { LifecycleMetrics } = require('../LifecycleMetrics');
-
+/** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class LifecycleUpdateTransitionTask extends BackbeatTask {
     /**
@@ -17,7 +17,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
      */
     constructor(proc) {
         const procState = proc.getStateVars();
-        super();
+        super(procState.processConfig?.retry);
         Object.assign(this, procState);
     }
 
