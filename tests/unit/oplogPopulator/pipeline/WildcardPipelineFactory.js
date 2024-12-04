@@ -1,5 +1,6 @@
 const assert = require('assert');
 const WildcardPipelineFactory = require('../../../../extensions/oplogPopulator/pipeline/WildcardPipelineFactory');
+const { constants } = require('arsenal');
 
 describe('WildcardPipelineFactory', () => {
     const wildcardPipelineFactory = new WildcardPipelineFactory();
@@ -35,6 +36,40 @@ describe('WildcardPipelineFactory', () => {
             const buckets = ['bucket1', 'bucket2'];
             const result = wildcardPipelineFactory.getPipeline(buckets);
             assert.strictEqual(result, '[{"$match":{"ns.coll":{"$not":{"$regex":"^(mpuShadowBucket|__).*"}}}}]');
+        });
+    });
+
+    describe('getOldConnectorBucketList', () => {
+        it('should return null if the list is not valid against the pipeline factory', async () => {
+            const config = {
+                pipeline: JSON.stringify([{
+                    $match: {
+                        'ns.coll': {
+                            $in: ['bucket1', 'bucket2'],
+                        },
+                    },
+                }]),
+            };
+            const result = wildcardPipelineFactory.getOldConnectorBucketList(config);
+            assert.deepStrictEqual(result, null);
+        });
+
+        it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
+            const config = {
+                pipeline: JSON.stringify([
+                    {
+                        $match: {
+                            'ns.coll': {
+                                $not: {
+                                    $regex: `^(${constants.mpuBucketPrefix}|__).*`,
+                                },
+                            },
+                        },
+                    },
+                ]),
+            };
+            const result = wildcardPipelineFactory.getOldConnectorBucketList(config);
+            assert.deepStrictEqual(result, ['*']);
         });
     });
 });

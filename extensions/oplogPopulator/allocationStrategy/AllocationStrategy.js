@@ -5,11 +5,9 @@ class AllocationStrategy {
     /**
      * @constructor
      * @param {Object} params params
-     * @param {PipelineFactory} params.pipelineFactory pipeline factory
      * @param {Logger} params.logger logger object
      */
     constructor(params) {
-        this._pipelineFactory = params.pipelineFactory;
         this._logger = params.logger;
     }
 
@@ -38,29 +36,6 @@ class AllocationStrategy {
      */
     get maximumBucketsPerConnector() {
         throw errors.NotImplemented;
-    }
-
-    /**
-     * Getter for the pipeline factory
-     * @returns {PipelineFactory} pipeline factory
-     */
-    get pipelineFactory() {
-        return this._pipelineFactory;
-    }
-
-    /**
-     * Process an old connector configuration, and return
-     * the list of buckets if the bucket list is valid against
-     * the current pipeline factory.
-     * @param {Object} oldConfig old configuration
-     * @returns {string[] | null} old configuration if valid
-     */
-    getOldConnectorBucketList(oldConfig) {
-        const bucketList = this.pipelineFactory.extractBucketsFromConfig(oldConfig);
-        if (this.pipelineFactory.isValid(bucketList)) {
-            return bucketList;
-        }
-        return null;
     }
 
 }

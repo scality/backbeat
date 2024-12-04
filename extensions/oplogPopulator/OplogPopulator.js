@@ -266,7 +266,9 @@ class OplogPopulator {
             this._loadOplogHelperClasses();
             // initialize mongo client
             await this._setupMongoClient();
-            this._allocationStrategy = this.initStrategy();
+            const configuration = this.initConfiguration();
+            this._allocationStrategy = configuration.allocationStrategy;
+            this._pipelineFactory = configuration.pipelineFactory;
             this._connectorsManager = new ConnectorsManager({
                 nbConnectors: this._config.numberOfConnectors,
                 database: this._database,
@@ -279,6 +281,7 @@ class OplogPopulator {
                 kafkaConnectPort: this._config.kafkaConnectPort,
                 metricsHandler: this._metricsHandler,
                 allocationStrategy: this._allocationStrategy,
+                pipelineFactory: this._pipelineFactory,
                 logger: this._logger,
             });
             await this._initializeConnectorsManager();
@@ -320,11 +323,13 @@ class OplogPopulator {
     }
 
     /**
-     * Init the allocation strategy
-     * @returns {RetainBucketsDecorator} extended allocation strategy
-     * handling retained buckets
+     * Init the allocation strategy and the pipeline factory
+     * @returns {{
+     *     allocationStrategy: RetainBucketsDecorator,
+     *     pipelineFactory: PipelineFactory
+     * }} configuration object
      */
-    initStrategy() {
+    initConfiguration() {
         let strategy;
         let pipelineFactory;
         if (this._config.numberOfConnectors === 0) {
@@ -333,7 +338,6 @@ class OplogPopulator {
             pipelineFactory = new WildcardPipelineFactory();
             strategy = new UniqueConnector({
                 logger: this._logger,
-                pipelineFactory,
             });
         } else if (this._arePipelinesImmutable()) {
             // In this case, mongodb does not support reusing a
@@ -344,7 +348,6 @@ class OplogPopulator {
             pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new ImmutableConnector({
                 logger: this._logger,
-                pipelineFactory,
             });
         } else {
             // In this case, we can have multiple buckets per
@@ -354,10 +357,12 @@ class OplogPopulator {
             pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new LeastFullConnector({
                 logger: this._logger,
-                pipelineFactory,
             });
         }
-        return new RetainBucketsDecorator(strategy);
+        return {
+            allocationStrategy: new RetainBucketsDecorator(strategy),
+            pipelineFactory,
+        };
     }
 
     /**

@@ -1,6 +1,7 @@
 const assert = require('assert');
 const MultipleBucketsPipelineFactory =
     require('../../../../extensions/oplogPopulator/pipeline/MultipleBucketsPipelineFactory');
+const { constants } = require('arsenal');
 
 describe('MultipleBucketsPipelineFactory', () => {
     const multipleBucketsPipelineFactory = new MultipleBucketsPipelineFactory();
@@ -48,6 +49,40 @@ describe('MultipleBucketsPipelineFactory', () => {
             const buckets = ['bucket1', 'bucket2'];
             const result = multipleBucketsPipelineFactory.getPipeline(buckets);
             assert.strictEqual(result, '[{"$match":{"ns.coll":{"$in":["bucket1","bucket2"]}}}]');
+        });
+    });
+
+    describe('getOldConnectorBucketList', () => {
+        it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
+            const config = {
+                pipeline: JSON.stringify([{
+                    $match: {
+                        'ns.coll': {
+                            $in: ['bucket1', 'bucket2'],
+                        },
+                    },
+                }]),
+            };
+            const result = multipleBucketsPipelineFactory.getOldConnectorBucketList(config);
+            assert.deepStrictEqual(result, ['bucket1', 'bucket2']);
+        });
+
+        it('should return null if the list is not valid against the pipeline factory', async () => {
+            const config = {
+                pipeline: JSON.stringify([
+                    {
+                        $match: {
+                            'ns.coll': {
+                                $not: {
+                                    $regex: `^(${constants.mpuBucketPrefix}|__).*`,
+                                },
+                            },
+                        },
+                    },
+                ]),
+            };
+            const result = multipleBucketsPipelineFactory.getOldConnectorBucketList(config);
+            assert.deepStrictEqual(result, null);
         });
     });
 });

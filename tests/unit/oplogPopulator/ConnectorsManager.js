@@ -109,9 +109,9 @@ describe('ConnectorsManager', () => {
                 // Not needed to test all strategies here: we stub their methods
                 new LeastFullConnector({
                     logger,
-                    pipelineFactory,
                 }),
             ),
+            pipelineFactory,
             logger,
         });
     });
@@ -155,6 +155,10 @@ describe('ConnectorsManager', () => {
     });
 
     describe('_processOldConnectors', () => {
+        afterEach(() => {
+            sinon.restore();
+        });
+
         it('should delete old connector when the strategy rejects it', async () => {
             const config = { ...connectorConfig };
             config['topic.namespace.map'] = 'outdated-topic';
@@ -172,7 +176,7 @@ describe('ConnectorsManager', () => {
             config['offset.partitiom.name'] = 'partition-name';
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
-            sinon.stub(connectorsManager._allocationStrategy, 'getOldConnectorBucketList').returns(['bucket1']);
+            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList').returns(['bucket1']);
             sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
             const connectors = await connectorsManager._processOldConnectors(['source-connector']);
             assert.strictEqual(connectors.length, 1);
@@ -189,7 +193,7 @@ describe('ConnectorsManager', () => {
             sinon.stub(connectorsManager._allocationStrategy, 'maximumBucketsPerConnector').value(1);
             sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
                 .resolves(config);
-            sinon.stub(connectorsManager._allocationStrategy, 'getOldConnectorBucketList')
+            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList')
                 .returns(['bucket1', 'bucket2']);
             const warnStub = sinon.stub(connectorsManager._logger, 'warn');
             const connectors = await connectorsManager.

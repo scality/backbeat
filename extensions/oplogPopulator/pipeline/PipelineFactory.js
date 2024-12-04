@@ -35,6 +35,21 @@ class PipelineFactory {
     }
 
     /**
+     * Process an old connector configuration, and return
+     * the list of buckets if the bucket list is valid against
+     * the current pipeline factory.
+     * @param {Object} oldConfig old configuration
+     * @returns {string[] | null} old configuration if valid
+     */
+    getOldConnectorBucketList(oldConfig) {
+        const bucketList = this.extractBucketsFromConfig(oldConfig);
+        if (this.isValid(bucketList)) {
+            return bucketList;
+        }
+        return null;
+    }
+
+    /**
      * Makes new connector pipeline that includes
      * buckets assigned to this connector.
      * @param {string[] | undefined} buckets buckets assigned to this connector
