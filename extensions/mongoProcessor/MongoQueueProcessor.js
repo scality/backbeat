@@ -195,33 +195,23 @@ class MongoQueueProcessor {
         ], done);
     }
 
-    _getZenkoObjectMetadata(log, entry, bucketInfo, done) {
-        // NOTE: This is used for updating replication info, as well as validating the
-        // `x-amz-meta-scal-version-id` header. If the Zenko bucket does not have repInfo set and
-        // the header is not set, then we can ignore fetching
-        const bucketRepInfo = bucketInfo.getReplicationConfiguration();
-        // KO for DeleteOpQueueEntry : no such field (and no metadata...)
-        const scalVersionId = entry.getValue ? entry.getValue()['x-amz-meta-scal-version-id'] : undefined;
-        if (!(entry instanceof DeleteOpQueueEntry) &&
-            !scalVersionId &&
-            (!bucketRepInfo || !bucketRepInfo.rules || !bucketRepInfo.rules[0].enabled)) {
-            return done();
-        }
-
+    /**
+     * Retrieve Zenko object metadata from MongoDB
+     * @param {Logger} log The logger object
+     * @param {ObjectQueueEntry|DeleteOpQueueEntry} entry The entry to being processed
+     * @param {string} versionId The version id of the object
+     * @param {function} done The callback function
+     * @returns {undefined}
+     */
+    _getZenkoObjectMetadata(log, entry, versionId, done) {
         const bucket = entry.getBucket();
         const key = entry.getObjectKey();
         const params = {};
 
-        // Use x-amz-meta-scal-version-id if provided, instead of the actual versionId of the object.
-        // This should happen only for restored objects : in all other situations, both the source
-        // and ingested objects should have the same version id (and not x-amz-meta-scal-version-id
-        // metadata).
-        const versionId = VersionID.decode(scalVersionId) || entry.getVersionId();
-
         // master keys with a 'null' version id comming from
         // a versioning suspended bucket are considered a version
         // we should not specify the version id in this case
-        if (versionId && !entry.getIsNull()) {
+        if (versionId && !(entry.getIsNull && entry.getIsNull())) {
             params.versionId = versionId;
         }
 
@@ -409,35 +399,69 @@ class MongoQueueProcessor {
         const key = sourceEntry.getObjectKey();
         const versionId = extractVersionId(sourceEntry.getObjectVersionedKey());
 
-        const options = versionId ? { versionId } : undefined;
+        this.logger.debug('processing object delete', { bucket, key, versionId });
 
-        // Calling deleteObject with undefined options to use deleteObjectNoVer which is used for
-        // deleting non versioned objects that only have master keys.
-        // When deleting a versioned object however we supply the version id in the options, which
-        // causes the function to call the deleteObjectVer function that is used to handle objects that
-        // have both a master and version keys. This handles the deletion of both the version and the master
-        // keys in the case where no other version is available, or deleting the version and updating the
-        // master key otherwise.
-        return this._mongoClient.deleteObject(bucket, key, options, log,
-            err => {
-                if (err) {
-                    this._normalizePendingMetric(location);
-                    log.end().error('error deleting object metadata ' +
-                    'from mongo', {
-                        bucket,
-                        key,
-                        error: err.message,
+        async.waterfall([
+            cb => this._getZenkoObjectMetadata(log, sourceEntry, versionId, cb),
+            (zenkoObjMd, cb) => {
+                // Skip if the object is in a different location, i.e. when the delete was caused
+                // by restored-object expiration or transition. It works because the dataStoreName
+                // is updated before actually sending the object to GC to effectively delete the
+                // data.
+                const encode = versionId => (versionId ? VersionID.encode(versionId) : 'null');
+                if (zenkoObjMd.dataStoreName !== location ||
+                    zenkoObjMd.location?.length !== 1 ||
+                    zenkoObjMd.location[0].dataStoreName !== location ||
+                    zenkoObjMd.location[0].key !== key ||
+                    (zenkoObjMd.location[0].dataStoreVersionId || 'null') !== encode(versionId)
+                ) {
+                    log.end().info('ignore delete entry, transitioned to another location', {
+                        entry: sourceEntry.getLogInfo(),
                         location,
                     });
-                    return done(err);
+                    return done();
                 }
-                this._produceMetricCompletionEntry(location);
-                log.end().info('object metadata deleted from mongo', {
+
+                return cb();
+            },
+            cb => {
+                // Calling deleteObject with undefined options to use deleteObjectNoVer which is used for
+                // deleting non versioned objects that only have master keys.
+                // When deleting a versioned object however we supply the version id in the options, which
+                // causes the function to call the deleteObjectVer function that is used to handle objects that
+                // have both a master and version keys. This handles the deletion of both the version and the master
+                // keys in the case where no other version is available, or deleting the version and updating the
+                // master key otherwise.
+                const options = versionId ? { versionId } : undefined;
+
+                return this._mongoClient.deleteObject(bucket, key, options, log, cb);
+            },
+        ], err => {
+            if (err?.is.NoSuchKey) {
+                log.end().info('skipping delete entry', {
                     entry: sourceEntry.getLogInfo(),
                     location,
                 });
                 return done();
+            }
+            if (err) {
+                this._normalizePendingMetric(location);
+                log.end().error('error deleting object metadata ' +
+                    'from mongo', {
+                    bucket,
+                    key,
+                    error: err.message,
+                    location,
+                });
+                return done(err);
+            }
+            this._produceMetricCompletionEntry(location);
+            log.end().info('object metadata deleted from mongo', {
+                entry: sourceEntry.getLogInfo(),
+                location,
             });
+            return done();
+        });
     }
 
     /**
@@ -452,14 +476,29 @@ class MongoQueueProcessor {
     _processObjectQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
+        const scalVersionId = sourceEntry.getValue()['x-amz-meta-scal-version-id'];
 
-        this.logger.info('processing object metadata', {
-            bucket, key, scalVersionId: sourceEntry.getValue()['x-amz-meta-scal-version-id'],
-        });
+        this.logger.debug('processing object metadata', { bucket, key, scalVersionId });
 
-        this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo,
-        (err, zenkoObjMd) => {
-            if (err) {
+        const maybeGetZenkoObjectMetadata = cb => {
+            // NOTE: ZenkoObjMD is used for updating replication info, as well as validating the
+            // `x-amz-meta-scal-version-id` header of restored objects. If the Zenko bucket does
+            // not have repInfo set and the header is not set, then we can skip fetching.
+            const bucketRepInfo = bucketInfo.getReplicationConfiguration();
+            if (!scalVersionId && !bucketRepInfo?.rules?.some(r => r.enabled)) {
+                return cb();
+            }
+
+            // Use x-amz-meta-scal-version-id if provided, instead of the actual versionId of the object.
+            // This should happen only for restored objects : in all other situations, both the source
+            // and ingested objects should have the same version id (and not x-amz-meta-scal-version-id
+            // metadata).
+            const versionId = scalVersionId ? VersionID.decode(scalVersionId) : sourceEntry.getVersionId();
+            return this._getZenkoObjectMetadata(log, sourceEntry, versionId, cb);
+        };
+
+        maybeGetZenkoObjectMetadata((err, zenkoObjMd) => {
+            if (err && !err.NoSuchKey) {
                 this._normalizePendingMetric(location);
                 log.end().error('error processing object queue entry', {
                     method: 'MongoQueueProcessor._processObjectQueueEntry',
@@ -467,6 +506,46 @@ class MongoQueueProcessor {
                     location,
                 });
                 return done(err);
+            }
+
+            // If the object has `x-amz-meta-scal-version-id`, we need to use it instead of the id.
+            // This should only happen for objects restored onto the OOB location, and the location
+            // should match in that case
+            if (scalVersionId) {
+                if (!zenkoObjMd) {
+                    this.logger.warn('missing source entry, ignoring x-amz-meta-scal-version-id', {
+                        method: 'MongoQueueProcessor._processObjectQueueEntry',
+                        location,
+                    });
+                    // This may happen if the object has been deleted from Zenko, but we processed
+                    // the create/update event from oplog after the object was deleted. We can
+                    // proceed normally and create the entry, as we will get a followup "delete"
+                    // operation and will thus eventually be consistent.
+                } else if (zenkoObjMd.location?.length !== 1 ||
+                    zenkoObjMd.location[0].dataStoreName !== location ||
+                    zenkoObjMd.location[0].dataStoreVersionId !== sourceEntry.getVersionId()) {
+                    this.logger.warn('mismatched source entry, skipping entry', {
+                        method: 'MongoQueueProcessor._processObjectQueueEntry',
+                        location,
+                    });
+
+                    // If the versionId does not match, it mean the object metadata has been updated
+                    // in Zenko already, and we are thus processing an outdated oplog entry: which
+                    // should be ignored. Not much of an issue though, as we have retrieved Zenko
+                    // object, so `getContentType()` will pickup tag changes only.
+                } else {
+                    this.logger.info('restored oob object', {
+                        bucket, key, scalVersionId, zenkoObjMd, sourceEntry
+                    });
+
+                    sourceEntry.setVersionId(scalVersionId);
+
+                    // TODO: do we need to update the (mongo) metadata in that case???
+                    // - This may happen if object is re-tagged while restored?
+                    // - Need to cleanup scal version id: delete objVal['x-amz-meta-scal-version-id'];
+                    // - Need to keep the archive & restore fields in the metadata
+                    return done();
+                }
             }
 
             const content = getContentType(sourceEntry, zenkoObjMd);
@@ -495,33 +574,6 @@ class MongoQueueProcessor {
 
             const objVal = sourceEntry.getValue();
             const params = {};
-
-            // If the object has `x-amz-meta-scal-version-id`, we need to use it instead of the id.
-            // This should only happen for objects restored onto the OOB location, and the location
-            // should match in that case
-            const scalVersionId = objVal['x-amz-meta-scal-version-id'];
-            if (scalVersionId) {
-
-                this.logger.info('restored oob object', {
-                    bucket, key, scalVersionId, zenkoObjMd, sourceEntry
-                });
-
-                if (!zenkoObjMd) {
-                    this.logger.warn('missing source entry, ignoring x-amz-meta-scal-version-id', {
-                        method: 'MongoQueueProcessor._processObjectQueueEntry',
-                        location,
-                    });
-                } else if (zenkoObjMd.location[0]?.dataStoreVersionId !== sourceEntry.getVersionId()) {
-                    this.logger.warn('mismatched source entry, ignoring x-amz-meta-scal-version-id', {
-                        method: 'MongoQueueProcessor._processObjectQueueEntry',
-                        location,
-                    });
-                } else {
-                    sourceEntry.setVersionId(zenkoObjMd.versionId);
-                    delete objVal['x-amz-meta-scal-version-id'];
-                    delete objVal['x-amz-meta-scal-restore-info'];
-                }
-            }
 
             // Versioning suspended entries will have a version id but also a isNull tag.
             // These master keys are considered a version and do not have a duplicate version,
@@ -652,7 +704,7 @@ class MongoQueueProcessor {
         const log = this.logger.newRequestLogger();
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
 
-        this.logger.info('processing kafka entry', { sourceEntry });
+        this.logger.trace('processing kafka entry', { sourceEntry });
 
         if (sourceEntry.error) {
             log.end().error('error processing source entry',
@@ -669,38 +721,11 @@ class MongoQueueProcessor {
             const location = bucketInfo.getLocationConstraint();
 
             if (sourceEntry instanceof DeleteOpQueueEntry) {
-                return this._getZenkoObjectMetadata(log, sourceEntry, bucketInfo, (err, zenkoObjMd) => {
-                    if (err) {
-                        this._normalizePendingMetric(location);
-                        return done(err);
-                    }
-
-                    // TODO: use getReducedLocation() ? or x-amz-storage-class ? or dataStoreName ?
-                    // * x-amz-storage-class --> will always indicate the "cold" location
-                    // * dataStoreName will be cold when archived, and "oob" when restored
-                    // ==> we update the data store name (and x-amz-storage-class) before actually
-                    //   removing the data so we should look at this: so we can ignore when there is
-                    //   a match (e.g. lifecycle gc) and process when the event when user deletes
-                    //   the (restored) object
-                    //
-                    // TODO: two cases for restored object to test
-                    // - expiring restored object from Sorbet --> delete from Zenko, should work fine...
-                    // - delete made on the ring (user deletes the object) --> need to be propagated to Zenko!
-                    if (zenkoObjMd?.dataStoreName !== location) {
-                        log.end().info('skipping delete entry with location mismatch', {
-                            entry: sourceEntry.getLogInfo(),
-                            location,
-                            zenkoLocation: zenkoObjMd.location,
-                        });
-                        this._normalizePendingMetric(location);
-                        return done();
-                    }
-
-                    return this._processDeleteOpQueueEntry(log, sourceEntry, location, err => {
+                return this._processDeleteOpQueueEntry(log, sourceEntry,
+                    location, bucketInfo, err => {
                         this._handleMetrics(sourceEntry, !!err);
                         return done(err);
                     });
-                });
             }
 
             if (sourceEntry instanceof ObjectQueueEntry) {

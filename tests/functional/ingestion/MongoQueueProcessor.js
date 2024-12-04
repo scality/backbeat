@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const async = require('async');
+const sinon = require('sinon');
 const { ObjectMD, BucketInfo } = require('arsenal').models;
 const { decode, encode } = require('arsenal').versioning.VersionID;
 const errors = require('arsenal').errors;
@@ -13,6 +14,7 @@ const MongoQueueProcessor =
     require('../../../extensions/mongoProcessor/MongoQueueProcessor');
 const authdata = require('../../../conf/authdata.json');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const DeleteOpQueueEntry = require('../../../lib/models/DeleteOpQueueEntry');
 const fakeLogger = require('../../utils/fakeLogger');
 
 const kafkaConfig = config.kafka;
@@ -119,8 +121,14 @@ class MongoClientMock {
         // we get object from mongo to determine replicationInfo.Content types.
         // use "tags" and "versionId" for determining this.
         const obj = new ObjectMD()
-                            .setVersionId(VERSION_ID)
-                            .setTags({ mytag: 'mytags-value' });
+            .setVersionId(VERSION_ID)
+            .setTags({ mytag: 'mytags-value' })
+            .setDataStoreName(LOCATION)
+            .setLocation([{
+                key: KEY,
+                dataStoreName: LOCATION,
+                dataStoreVersionId: encode(VERSION_ID),
+            }]);
         return cb(null, obj._data);
     }
 
@@ -204,74 +212,86 @@ describe('MongoQueueProcessor', function mqp() {
 
     afterEach(() => {
         mqp.reset();
+        sinon.restore();
     });
 
     describe('::_getZenkoObjectMetadata', () => {
-        function testGetZenkoObjectMetadata(entry, cb) {
-            mongoClient.getBucketAttributes(BUCKET, fakeLogger,
-            (error, bucketInfo) => {
-                assert.ifError(error);
-
-                mqp._getZenkoObjectMetadata(fakeLogger, entry, bucketInfo, cb);
-            });
-        }
-
-        it('should return empty if key does not exist in mongo', done => {
+        it('should return an error if key does not exist in mongo', done => {
             const key = 'nonexistant';
             const objmd = new ObjectMD().setKey(key);
             const entry = new ObjectQueueEntry(BUCKET, key, objmd);
-            testGetZenkoObjectMetadata(entry, (err, res) => {
-                assert.ifError(err);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, VERSION_ID, (err, res) => {
+                assert.ok(err?.is?.NoSuchKey);
 
                 assert.strictEqual(res, undefined);
                 return done();
             });
         });
 
-        it('should return empty if version id of object does not exist in ' +
-        'mongo', done => {
+        it('should return an error if version id of object does not exist in mongo', done => {
             const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
             const objmd = new ObjectMD()
-                                .setKey(KEY)
-                                .setVersionId(NEW_VERSION_ID);
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            testGetZenkoObjectMetadata(entry, (err, res) => {
-                assert.ifError(err);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, NEW_VERSION_ID, (err, res) => {
+                assert.ok(err?.is?.NoSuchKey);
 
                 assert.strictEqual(res, undefined);
                 return done();
             });
-        });
-
-        it('should return empty if bucket replication info is disabled',
-        done => {
-            const disabledRepInfo = Object.assign({}, mockReplicationInfo, {
-                rules: [{ enabled: false }],
-            });
-            const disabledMockBucketInfo = {
-                getReplicationConfiguration: () => disabledRepInfo,
-            };
-            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
-            const objmd = new ObjectMD()
-                                .setKey(KEY)
-                                .setVersionId(NEW_VERSION_ID);
-            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            mqp._getZenkoObjectMetadata(fakeLogger, entry,
-                disabledMockBucketInfo, (err, res) => {
-                    assert.ifError(err);
-
-                    assert.strictEqual(res, undefined);
-                    return done();
-                });
         });
 
         it('should return object metadata for existing version', done => {
             const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
             const objmd = new ObjectMD()
-                                .setKey(KEY)
-                                .setVersionId(VERSION_ID);
+                .setKey(KEY)
+                .setVersionId(VERSION_ID);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
-            testGetZenkoObjectMetadata(entry, (err, res) => {
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, VERSION_ID, (err, res) => {
+                assert.ifError(err);
+
+                assert(res);
+                assert.strictEqual(res.versionId, VERSION_ID);
+                return done();
+            });
+        });
+
+        it('should return object metadata for existing version from DeleteOpQueueEntry', done => {
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, VERSION_ID, (err, res) => {
+                assert.ifError(err);
+
+                assert(res);
+                assert.strictEqual(res.versionId, VERSION_ID);
+                return done();
+            });
+        });
+
+        it('should return object metadata for null "master" version', done => {
+            const versionKey = `${KEY}`;
+            const objmd = new ObjectMD()
+                .setKey(KEY);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, null, (err, res) => {
+                assert.ifError(err);
+
+                assert(res);
+                assert.strictEqual(res.versionId, VERSION_ID);
+                return done();
+            });
+        });
+
+        it('should return object metadata for null "suspended" version', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID)
+                .setNullVersionId(NEW_VERSION_ID)
+                .setIsNull(true);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            mqp._getZenkoObjectMetadata(fakeLogger, entry, NEW_VERSION_ID, (err, res) => {
                 assert.ifError(err);
 
                 assert(res);
@@ -306,6 +326,7 @@ describe('MongoQueueProcessor', function mqp() {
 
         afterEach(() => {
             mqp.resetMetricsStore();
+            sinon.restore();
         });
 
         it('should save to mongo a new version entry and update fields',
@@ -544,6 +565,256 @@ describe('MongoQueueProcessor', function mqp() {
                 validateMetricReport('completed', done);
             });
         });
+
+        it('should fail when mongo is not available', done => {
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(errors.InternalError);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ok(err?.is?.InternalError);
+
+                sinon.assert.calledOnce(getObject);
+                assert.strictEqual(getObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(getObject.getCall(0).args[1], KEY);
+                assert.strictEqual(getObject.getCall(0).args[2].versionId, VERSION_ID);
+
+                validateMetricReport('pendingOnly', done);
+            });
+        });
+
+        it('should save to mongo a new version entry when no replication', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(errors.InternalError);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => next(null,
+                    bucketInfo.setReplicationConfiguration(null)),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(getObject);
+
+                const added = mqp.getAdded();
+                assert.strictEqual(added.length, 1);
+                const objVal = added[0].objVal;
+                assert.strictEqual(added[0].key, versionKey);
+                // key shall now be always populated
+                assert.deepStrictEqual(objVal.key, KEY);
+                // acl should reset
+                assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+                // owner md should update
+                assert.strictEqual(objVal['owner-display-name'],
+                    authdata.accounts[0].name);
+                assert.strictEqual(objVal['owner-id'],
+                    authdata.accounts[0].canonicalID);
+                // dataStoreName should update
+                assert.strictEqual(objVal.dataStoreName, LOCATION);
+                // locations should update, no data in object
+                assert.strictEqual(objVal.location.length, 1);
+                const loc = objVal.location[0];
+                assert.strictEqual(loc.key, KEY);
+                assert.strictEqual(loc.size, 0);
+                assert.strictEqual(loc.start, 0);
+                assert.strictEqual(loc.dataStoreName, LOCATION);
+                assert.strictEqual(loc.dataStoreType, 'aws_s3');
+                assert.strictEqual(decode(loc.dataStoreVersionId),
+                    NEW_VERSION_ID);
+
+                // replication info should be empty
+                const repInfo = objVal.replicationInfo;
+                assert.strictEqual(repInfo.status, '');
+                assert.deepStrictEqual(repInfo.backends, []);
+                assert.deepStrictEqual(repInfo.content, []);
+                assert.strictEqual(repInfo.storageClass, '');
+                assert.strictEqual(repInfo.storageType, '');
+                assert.strictEqual(repInfo.dataStoreVersionId, '');
+
+                done();
+            });
+        });
+
+        it('should save to mongo a new version entry when scal-version-id not found', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd)
+                .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) });
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(errors.NoSuchKey);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => next(null,
+                    bucketInfo.setReplicationConfiguration(null)),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                sinon.assert.calledOnce(getObject);
+                assert.strictEqual(getObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(getObject.getCall(0).args[1], KEY);
+                assert.strictEqual(getObject.getCall(0).args[2].versionId, VERSION_ID);
+
+                const added = mqp.getAdded();
+                assert.strictEqual(added.length, 1);
+                const objVal = added[0].objVal;
+                assert.strictEqual(added[0].key, versionKey);
+                // key shall now be always populated
+                assert.deepStrictEqual(objVal.key, KEY);
+                // acl should reset
+                assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+                // owner md should update
+                assert.strictEqual(objVal['owner-display-name'],
+                    authdata.accounts[0].name);
+                assert.strictEqual(objVal['owner-id'],
+                    authdata.accounts[0].canonicalID);
+                // dataStoreName should update
+                assert.strictEqual(objVal.dataStoreName, LOCATION);
+                // locations should update, no data in object
+                assert.strictEqual(objVal.location.length, 1);
+                const loc = objVal.location[0];
+                assert.strictEqual(loc.key, KEY);
+                assert.strictEqual(loc.size, 0);
+                assert.strictEqual(loc.start, 0);
+                assert.strictEqual(loc.dataStoreName, LOCATION);
+                assert.strictEqual(loc.dataStoreType, 'aws_s3');
+                assert.strictEqual(decode(loc.dataStoreVersionId),
+                    NEW_VERSION_ID);
+
+                // replication info should be empty
+                const repInfo = objVal.replicationInfo;
+                assert.strictEqual(repInfo.status, '');
+                assert.deepStrictEqual(repInfo.backends, []);
+                assert.deepStrictEqual(repInfo.content, []);
+                assert.strictEqual(repInfo.storageClass, '');
+                assert.strictEqual(repInfo.storageType, '');
+                assert.strictEqual(repInfo.dataStoreVersionId, '');
+
+                done();
+            });
+        });
+
+        it('should save to mongo a new version entry when scal-version-id does not match the data location', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd)
+                .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) });
+            const getObject = sinon.stub(mongoClient, 'getObject').callThrough();
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => next(null,
+                    bucketInfo.setReplicationConfiguration(null)),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                sinon.assert.calledOnce(getObject);
+
+                const added = mqp.getAdded();
+                assert.strictEqual(added.length, 1);
+                const objVal = added[0].objVal;
+                assert.strictEqual(added[0].key, versionKey);
+                // key shall now be always populated
+                assert.deepStrictEqual(objVal.key, KEY);
+                // acl should reset
+                assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
+                // owner md should update
+                assert.strictEqual(objVal['owner-display-name'],
+                    authdata.accounts[0].name);
+                assert.strictEqual(objVal['owner-id'],
+                    authdata.accounts[0].canonicalID);
+                // dataStoreName should update
+                assert.strictEqual(objVal.dataStoreName, LOCATION);
+                // locations should update, no data in object
+                assert.strictEqual(objVal.location.length, 1);
+                const loc = objVal.location[0];
+                assert.strictEqual(loc.key, KEY);
+                assert.strictEqual(loc.size, 0);
+                assert.strictEqual(loc.start, 0);
+                assert.strictEqual(loc.dataStoreName, LOCATION);
+                assert.strictEqual(loc.dataStoreType, 'aws_s3');
+                assert.strictEqual(decode(loc.dataStoreVersionId),
+                    NEW_VERSION_ID);
+
+                // replication info should be empty
+                const repInfo = objVal.replicationInfo;
+                assert.strictEqual(repInfo.status, '');
+                assert.deepStrictEqual(repInfo.backends, []);
+                assert.deepStrictEqual(repInfo.content, []);
+                assert.strictEqual(repInfo.storageClass, '');
+                assert.strictEqual(repInfo.storageType, '');
+                assert.strictEqual(repInfo.dataStoreVersionId, '');
+
+                done();
+            });
+        });
+
+        it('should skip restored entry scal-version-id', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const objmd = new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setVersionId(NEW_VERSION_ID);
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd)
+                .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) });
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(null,
+                new ObjectMD()
+                    .setVersionId(VERSION_ID)
+                    .setTags({ mytag: 'mytags-value' })
+                    .setDataStoreName(LOCATION)
+                    .setAmzStorageClass('cold')
+                    .setLocation([{
+                        key: KEY,
+                        start: 0,
+                        size: 50,
+                        dataStoreName: LOCATION,
+                        dataStoreVersionId: NEW_VERSION_ID,
+                    }])._data
+            );
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => next(null,
+                    bucketInfo.setReplicationConfiguration(null)),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                sinon.assert.calledOnce(getObject);
+                assert.strictEqual(getObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(getObject.getCall(0).args[1], KEY);
+                assert.strictEqual(getObject.getCall(0).args[2].versionId, VERSION_ID);
+
+                const added = mqp.getAdded();
+                assert.strictEqual(added.length, 0);
+
+                done();
+            });
+        });
     });
 
     describe('::_processDeleteOpQueueEntry', () => {
@@ -551,8 +822,9 @@ describe('MongoQueueProcessor', function mqp() {
             // use existing version id
             const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
             const objmd = new ObjectMD()
-                                .setKey(KEY)
-                                .setVersionId(VERSION_ID);
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setDataStoreName(LOCATION);
             const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
@@ -571,8 +843,17 @@ describe('MongoQueueProcessor', function mqp() {
         });
 
         it('should delete an existing non versioned object from mongo', done => {
-            const objmd = new ObjectMD().setKey(KEY);
-            const entry = new ObjectQueueEntry(BUCKET, KEY, objmd);
+            const objmd = new ObjectMD()
+                .setKey(KEY)
+                .setDataStoreName(LOCATION);
+            const entry = new DeleteOpQueueEntry(BUCKET, KEY);
+            sinon.stub(mqp._mongoClient, 'getObject').yields(null, objmd
+                .setLocation([{
+                    key: KEY,
+                    dataStoreVersionId: '',
+                    dataStoreName: LOCATION,
+                }])
+                .getValue());
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
@@ -585,6 +866,76 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(deleted.length, 1);
                 assert.strictEqual(deleted[0].key, KEY);
                 assert.strictEqual(deleted[0].versionId, undefined);
+                done();
+            });
+        });
+
+        it('should not delete object from mongo when object is in another location', done => {
+            // use existing version id
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            sinon.stub(mqp._mongoClient, 'getObject').yields(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setDataStoreName('cold')
+                .setLocation([{
+                    key: KEY,
+                    dataStoreVersionId: encode(VERSION_ID),
+                    dataStoreName: LOCATION,
+                }])
+                .getValue());
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, next),
+            ], err => {
+                assert.ifError(err);
+
+                const deleted = mqp.getDeleted();
+                assert.strictEqual(deleted.length, 0);
+                done();
+            });
+        });
+
+        it('should not fail if object to delete does not exist anymore in mongo', done => {
+            // use existing version id
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            const deleteObject = sinon.stub(mongoClient, 'deleteObject').yields(errors.NoSuchKey);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger, next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, next),
+            ], err => {
+                assert.ifError(err);
+
+                assert.ok(deleteObject.calledOnce);
+                assert.strictEqual(deleteObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(deleteObject.getCall(0).args[1], KEY);
+                assert.strictEqual(deleteObject.getCall(0).args[2].versionId, VERSION_ID);
+
+                done();
+            });
+        });
+
+        it('should fail if deleteObject fails', done => {
+            // use existing version id
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            const deleteObject = sinon.stub(mongoClient, 'deleteObject').yields(errors.InternalError);
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger, next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, next),
+            ], err => {
+                assert.ok(err?.is?.InternalError);
+
+                assert.ok(deleteObject.calledOnce);
+                assert.strictEqual(deleteObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(deleteObject.getCall(0).args[1], KEY);
+                assert.strictEqual(deleteObject.getCall(0).args[2].versionId, VERSION_ID);
+
                 done();
             });
         });
