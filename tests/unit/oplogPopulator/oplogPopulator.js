@@ -19,6 +19,8 @@ const LeastFullConnector = require('../../../extensions/oplogPopulator/allocatio
 const ImmutableConnector = require('../../../extensions/oplogPopulator/allocationStrategy/ImmutableConnector');
 const AllocationStrategy = require('../../../extensions/oplogPopulator/allocationStrategy/AllocationStrategy');
 const constants = require('../../../extensions/oplogPopulator/constants');
+const UniqueConnector = require('../../../extensions/oplogPopulator/allocationStrategy/UniqueConnector');
+const PipelineFactory = require('../../../extensions/oplogPopulator/pipeline/PipelineFactory');
 
 const oplogPopulatorConfig = {
     topic: 'oplog',
@@ -131,25 +133,32 @@ describe('OplogPopulator', () => {
         });
     });
 
-    describe('initStrategy', () => {
+    describe('initConfiguration', () => {
         afterEach(() => {
             sinon.restore();
         });
 
         it('should return an instance of RetainBucketsDecorator for immutable pipelines', () => {
             const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(true);
-            const strategy = oplogPopulator.initStrategy();
-            assert(strategy instanceof RetainBucketsDecorator);
-            assert(strategy._strategy instanceof ImmutableConnector);
+            const configuration = oplogPopulator.initConfiguration();
+            assert(configuration.allocationStrategy instanceof RetainBucketsDecorator);
+            assert(configuration.allocationStrategy._strategy instanceof ImmutableConnector);
             assert(arePipelinesImmutableStub.calledOnce);
         });
 
         it('should return an instance of RetainBucketsDecorator for immutable pipelines', () => {
             const arePipelinesImmutableStub = sinon.stub(oplogPopulator, '_arePipelinesImmutable').returns(false);
-            const strategy = oplogPopulator.initStrategy();
-            assert(strategy instanceof RetainBucketsDecorator);
-            assert(strategy._strategy instanceof LeastFullConnector);
+            const configuration = oplogPopulator.initConfiguration();
+            assert(configuration.allocationStrategy instanceof RetainBucketsDecorator);
+            assert(configuration.allocationStrategy._strategy instanceof LeastFullConnector);
             assert(arePipelinesImmutableStub.calledOnce);
+        });
+
+        it('should return an instance of RetainBucketsDecorator for unique pipelines', () => {
+            sinon.stub(oplogPopulator._config, 'numberOfConnectors').value(0);
+            const configuration = oplogPopulator.initConfiguration();
+            assert(configuration.allocationStrategy instanceof RetainBucketsDecorator);
+            assert(configuration.allocationStrategy._strategy instanceof UniqueConnector);
         });
     });
 
@@ -259,6 +268,7 @@ describe('OplogPopulator', () => {
                 kafkaConnectPort: oplogPopulator._config.kafkaConnectPort,
                 metricsHandler: oplogPopulator._metricsHandler,
                 allocationStrategy: new AllocationStrategy({ logger }),
+                pipelineFactory: new PipelineFactory(),
                 logger: oplogPopulator._logger,
             });
             const connectorsManagerStub = sinon.stub(oplogPopulator._connectorsManager, 'initializeConnectors');

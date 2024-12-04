@@ -20,4 +20,12 @@ describe('AllocationStrategy', () => {
             type: 'NotImplemented',
         });
     });
+
+    it('should throw NotImplemented when calling maximumBucketsPerConnector', async () => {
+        const allocationStrategy = new AllocationStrategy({ logger });
+        assert.throws(() => allocationStrategy.maximumBucketsPerConnector(), {
+            name: 'Error',
+            type: 'NotImplemented',
+        });
+    });
 });

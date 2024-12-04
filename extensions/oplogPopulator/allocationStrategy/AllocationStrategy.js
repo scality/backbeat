@@ -37,6 +37,7 @@ class AllocationStrategy {
     get maximumBucketsPerConnector() {
         throw errors.NotImplemented;
     }
+
 }
 
 module.exports = AllocationStrategy;

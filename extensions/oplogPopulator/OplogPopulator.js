@@ -14,6 +14,9 @@ const { mongoJoi } = require('../../lib/config/configItems.joi');
 const ImmutableConnector = require('./allocationStrategy/ImmutableConnector');
 const RetainBucketsDecorator = require('./allocationStrategy/RetainBucketsDecorator');
 const LeastFullConnector = require('./allocationStrategy/LeastFullConnector');
+const UniqueConnector = require('./allocationStrategy/UniqueConnector');
+const WildcardPipelineFactory = require('./pipeline/WildcardPipelineFactory');
+const MultipleBucketsPipelineFactory = require('./pipeline/MultipleBucketsPipelineFactory');
 
 const paramsJoi = joi.object({
     config: OplogPopulatorConfigJoiSchema.required(),
@@ -263,7 +266,9 @@ class OplogPopulator {
             this._loadOplogHelperClasses();
             // initialize mongo client
             await this._setupMongoClient();
-            this._allocationStrategy = this.initStrategy();
+            const configuration = this.initConfiguration();
+            this._allocationStrategy = configuration.allocationStrategy;
+            this._pipelineFactory = configuration.pipelineFactory;
             this._connectorsManager = new ConnectorsManager({
                 nbConnectors: this._config.numberOfConnectors,
                 database: this._database,
@@ -276,6 +281,7 @@ class OplogPopulator {
                 kafkaConnectPort: this._config.kafkaConnectPort,
                 metricsHandler: this._metricsHandler,
                 allocationStrategy: this._allocationStrategy,
+                pipelineFactory: this._pipelineFactory,
                 logger: this._logger,
             });
             await this._initializeConnectorsManager();
@@ -285,18 +291,8 @@ class OplogPopulator {
                 allocationStrategy: this._allocationStrategy,
                 logger: this._logger,
             });
-            // For now, we always use the RetainBucketsDecorator
-            // so, we map the events from the classes
-            this._connectorsManager.on(constants.connectorUpdatedEvent, connector =>
-                this._allocationStrategy.onConnectorUpdatedOrDestroyed(connector));
-            this._allocator.on(constants.bucketRemovedFromConnectorEvent, (bucket, connector) =>
-                this._allocationStrategy.onBucketRemoved(bucket, connector));
-            this._connectorsManager.on(constants.connectorsReconciledEvent, bucketsExceedingLimit => {
-                this._metricsHandler.onConnectorsReconciled(
-                    bucketsExceedingLimit,
-                    this._allocationStrategy.retainedBucketsCount,
-                );
-            });
+            this._allocationStrategy.bindConnectorEvents(
+                this._connectorsManager, this._allocator, this._metricsHandler);
             // get currently valid buckets from mongo
             const validBuckets = await this._getBackbeatEnabledBuckets();
             // listen to valid buckets
@@ -327,38 +323,46 @@ class OplogPopulator {
     }
 
     /**
-     * Init the allocation strategy
-     * @returns {RetainBucketsDecorator} extended allocation strategy
-     * handling retained buckets
+     * Init the allocation strategy and the pipeline factory
+     * @returns {{
+     *     allocationStrategy: RetainBucketsDecorator,
+     *     pipelineFactory: PipelineFactory
+     * }} configuration object
      */
-    initStrategy() {
+    initConfiguration() {
         let strategy;
-        if (this._arePipelinesImmutable()) {
+        let pipelineFactory;
+        if (this._config.numberOfConnectors === 0) {
+            // If the number of connector is set to 0, then we
+            // use a single connector to listen to the whole DB.
+            pipelineFactory = new WildcardPipelineFactory();
+            strategy = new UniqueConnector({
+                logger: this._logger,
+            });
+        } else if (this._arePipelinesImmutable()) {
             // In this case, mongodb does not support reusing a
             // resume token from a different pipeline. In other
             // words, we cannot alter an existing pipeline. In this
             // case, the strategy is to allow a maximum of one
             // bucket per kafka connector.
+            pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new ImmutableConnector({
                 logger: this._logger,
-                metricsHandler: this._metricsHandler,
-                connectorsManager: this._connectorsManager,
             });
         } else {
             // In this case, we can have multiple buckets per
             // kafka connector. However, we want to proactively
             // ensure that the pipeline will be accepted by
             // mongodb.
+            pipelineFactory = new MultipleBucketsPipelineFactory();
             strategy = new LeastFullConnector({
                 logger: this._logger,
-                metricsHandler: this._metricsHandler,
-                connectorsManager: this._connectorsManager,
             });
         }
-        return new RetainBucketsDecorator(
-            strategy,
-            { logger: this._logger },
-        );
+        return {
+            allocationStrategy: new RetainBucketsDecorator(strategy),
+            pipelineFactory,
+        };
     }
 
     /**
