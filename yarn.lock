@@ -577,7 +577,7 @@
   resolved "https://registry.yarnpkg.com/@log4js-node/log4js-api/-/log4js-api-1.0.2.tgz#7a8143fb33f077df3e579dca7f18fea74a02ec8b"
   integrity sha512-6SJfx949YEWooh/CUPpJ+F491y4BYJmknz4hUN1+RHvKoUEynKbRmhnwbk/VLmh4OthLLDNCyWXfbh4DG1cTXA==
 
-"@mongodb-js/saslprep@^1.1.0":
+"@mongodb-js/saslprep@^1.1.9":
   version "1.1.9"
   resolved "https://registry.yarnpkg.com/@mongodb-js/saslprep/-/saslprep-1.1.9.tgz#e974bab8eca9faa88677d4ea4da8d09a52069004"
   integrity sha512-tVkljjeEaAhCqTzajSdgbQ6gE6f3oneVwa3iXR6csiEwXXOFsiC6Uh9iAjAhXPtqa/XMDHWjjeNH/77m/Yq2dw==
@@ -907,14 +907,6 @@
   dependencies:
     "@types/webidl-conversions" "*"
 
-"@types/whatwg-url@^8.2.1":
-  version "8.2.2"
-  resolved "https://registry.yarnpkg.com/@types/whatwg-url/-/whatwg-url-8.2.2.tgz#749d5b3873e845897ada99be4448041d4cc39e63"
-  integrity sha512-FtQu10RWgn3D9U4aazdwIE2yzphmTJREDqNdODHrbrZmmMqI0vMheC/6NE/J1Yveaj8H+ela+YwWTjq5PGmuhA==
-  dependencies:
-    "@types/node" "*"
-    "@types/webidl-conversions" "*"
-
 "@ungap/structured-clone@^1.2.0":
   version "1.2.0"
   resolved "https://registry.yarnpkg.com/@ungap/structured-clone/-/structured-clone-1.2.0.tgz#756641adb587851b5ccb3e095daf27ae581c8406"
@@ -1152,10 +1144,10 @@ arraybuffer.prototype.slice@^1.0.3:
     is-array-buffer "^3.0.4"
     is-shared-array-buffer "^1.0.2"
 
-"arsenal@git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e":
+"arsenal@git+https://github.com/scality/Arsenal#7e142a1bfca7f516c107d2072baeae54cbbe379c":
   version "8.2.0"
-  uid "03503cb9ec0b13358873414c58ff9066f309146e"
-  resolved "git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
+  uid "7e142a1bfca7f516c107d2072baeae54cbbe379c"
+  resolved "git+https://github.com/scality/Arsenal#7e142a1bfca7f516c107d2072baeae54cbbe379c"
   dependencies:
     "@azure/identity" "^4.5.0"
     "@azure/storage-blob" "^12.25.0"
@@ -1183,7 +1175,7 @@ arraybuffer.prototype.slice@^1.0.3:
     joi "^17.13.3"
     level "~5.0.1"
     level-sublevel "~6.6.5"
-    mongodb "^5.2.0"
+    mongodb "^6.11.0"
     node-forge "^1.3.1"
     prom-client "^15.1.3"
     simple-glob "^0.2.0"
@@ -1192,14 +1184,14 @@ arraybuffer.prototype.slice@^1.0.3:
     sproxydclient "github:scality/sproxydclient#8.1.0"
     utf8 "^3.0.0"
     uuid "^10.0.0"
-    werelogs scality/werelogs#8.2.0
+    werelogs scality/werelogs#8.2.2
     xml2js "^0.6.2"
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#03503cb9ec0b13358873414c58ff9066f309146e":
+"arsenal@git+https://github.com/scality/arsenal#7e142a1bfca7f516c107d2072baeae54cbbe379c":
   version "8.2.0"
-  resolved "git+https://github.com/scality/arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
+  resolved "git+https://github.com/scality/arsenal#7e142a1bfca7f516c107d2072baeae54cbbe379c"
   dependencies:
     "@azure/identity" "^4.5.0"
     "@azure/storage-blob" "^12.25.0"
@@ -1227,7 +1219,7 @@ arraybuffer.prototype.slice@^1.0.3:
     joi "^17.13.3"
     level "~5.0.1"
     level-sublevel "~6.6.5"
-    mongodb "^5.2.0"
+    mongodb "^6.11.0"
     node-forge "^1.3.1"
     prom-client "^15.1.3"
     simple-glob "^0.2.0"
@@ -1236,7 +1228,7 @@ arraybuffer.prototype.slice@^1.0.3:
     sproxydclient "github:scality/sproxydclient#8.1.0"
     utf8 "^3.0.0"
     uuid "^10.0.0"
-    werelogs scality/werelogs#8.2.0
+    werelogs scality/werelogs#8.2.2
     xml2js "^0.6.2"
   optionalDependencies:
     ioctl "^2.0.2"
@@ -1393,21 +1385,21 @@ bson@^1.1.4:
   resolved "https://registry.yarnpkg.com/bson/-/bson-1.1.6.tgz#fb819be9a60cd677e0853aee4ca712a785d6618a"
   integrity sha512-EvVNVeGo4tHxwi8L6bPj3y3itEvStdwvvlojVxxbyYfoaxJ6keLgrTuKdyfEAszFK+H3olzBuafE0yoh0D1gdg==
 
-bson@^5.5.0:
-  version "5.5.1"
-  resolved "https://registry.yarnpkg.com/bson/-/bson-5.5.1.tgz#f5849d405711a7f23acdda9a442375df858e6833"
-  integrity sha512-ix0EwukN2EpC0SRWIj/7B5+A6uQMQy6KMREI9qQqvgpkV2frH63T0UDVd1SYedL6dNCmDBYB3QtXi4ISk9YT+g==
+bson@^6.10.0:
+  version "6.10.1"
+  resolved "https://registry.yarnpkg.com/bson/-/bson-6.10.1.tgz#dcd04703178f5ecf5b25de04edd2a95ec79385d3"
+  integrity sha512-P92xmHDQjSKPLHqFxefqMxASNq/aWJMEZugpCjf+AF/pgcUpMMQCg7t7+ewko0/u8AapvF3luf/FoehddEK+sA==
 
 bson@^6.8.0:
   version "6.10.0"
   resolved "https://registry.yarnpkg.com/bson/-/bson-6.10.0.tgz#559c767cc8b605c3ab14e5896214c8f2abdd6a12"
   integrity sha512-ROchNosXMJD2cbQGm84KoP7vOGPO6/bOAW0veMMbzhXLqoZptcaYRVLitwvuhwhjjpU1qP4YZRWLhgETdgqUQw==
 
-bucketclient@scality/bucketclient#e390a59f0eef300e0d713234c1d563faf8b2ecd5:
+bucketclient@scality/bucketclient#735550971f36842eac2285b448d781cdd4f60238:
   version "8.1.11"
-  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/e390a59f0eef300e0d713234c1d563faf8b2ecd5"
+  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/735550971f36842eac2285b448d781cdd4f60238"
   dependencies:
-    arsenal "git+https://github.com/scality/Arsenal#03503cb9ec0b13358873414c58ff9066f309146e"
+    arsenal "git+https://github.com/scality/Arsenal#7e142a1bfca7f516c107d2072baeae54cbbe379c"
     httpagent "git+https://github.com/scality/httpagent#1.0.6"
     werelogs scality/werelogs#8.1.5
 
@@ -2618,7 +2610,6 @@ http-proxy-agent@^7.0.0:
 
 "httpagent@git+https://github.com/scality/httpagent#1.1.0":
   version "1.1.0"
-  uid "8f9958eb9cde086db7819a86582fba640a5f8876"
   resolved "git+https://github.com/scality/httpagent#8f9958eb9cde086db7819a86582fba640a5f8876"
   dependencies:
     agentkeepalive "^4.5.0"
@@ -3719,13 +3710,13 @@ moment@^2.29.4:
   resolved "https://registry.yarnpkg.com/moment/-/moment-2.30.1.tgz#f8c91c07b7a786e30c59926df530b4eac96974ae"
   integrity sha512-uEmtNhbDOrWPFS+hdjFCBfy9f2YoyzRpwcl+DqpC6taX21FzsTLQVbMV/W7PzNSX6x/bhC1zA3c2UQ5NzH6how==
 
-mongodb-connection-string-url@^2.6.0:
-  version "2.6.0"
-  resolved "https://registry.yarnpkg.com/mongodb-connection-string-url/-/mongodb-connection-string-url-2.6.0.tgz#57901bf352372abdde812c81be47b75c6b2ec5cf"
-  integrity sha512-WvTZlI9ab0QYtTYnuMLgobULWhokRjtC7db9LtcVfJ+Hsnyr5eo6ZtNAt3Ly24XZScGMelOcGtm7lSn0332tPQ==
+mongodb-connection-string-url@^3.0.0:
+  version "3.0.1"
+  resolved "https://registry.yarnpkg.com/mongodb-connection-string-url/-/mongodb-connection-string-url-3.0.1.tgz#c13e6ac284ae401752ebafdb8cd7f16c6723b141"
+  integrity sha512-XqMGwRX0Lgn05TDB4PyG2h2kKO/FfWJyCzYQbIhXUxz7ETt0I/FqHjUeqj37irJ+Dl1ZtU82uYyj14u2XsZKfg==
   dependencies:
-    "@types/whatwg-url" "^8.2.1"
-    whatwg-url "^11.0.0"
+    "@types/whatwg-url" "^11.0.2"
+    whatwg-url "^13.0.0"
 
 mongodb@^3.1.13:
   version "3.7.4"
@@ -3740,16 +3731,14 @@ mongodb@^3.1.13:
   optionalDependencies:
     saslprep "^1.0.0"
 
-mongodb@^5.2.0:
-  version "5.9.2"
-  resolved "https://registry.yarnpkg.com/mongodb/-/mongodb-5.9.2.tgz#39a73b9fbc87ac9d9c1aaf8aab5c5bb69e2b913e"
-  integrity sha512-H60HecKO4Bc+7dhOv4sJlgvenK4fQNqqUIlXxZYQNbfEWSALGAwGoyJd/0Qwk4TttFXUOHJ2ZJQe/52ScaUwtQ==
+mongodb@^6.11.0:
+  version "6.11.0"
+  resolved "https://registry.yarnpkg.com/mongodb/-/mongodb-6.11.0.tgz#d09bc055e1e784849279dc41eb2cd1537a0488a0"
+  integrity sha512-yVbPw0qT268YKhG241vAMLaDQAPbRyTgo++odSgGc9kXnzOujQI60Iyj23B9sQQFPSvmNPvMZ3dsFz0aN55KgA==
   dependencies:
-    bson "^5.5.0"
-    mongodb-connection-string-url "^2.6.0"
-    socks "^2.7.1"
-  optionalDependencies:
-    "@mongodb-js/saslprep" "^1.1.0"
+    "@mongodb-js/saslprep" "^1.1.9"
+    bson "^6.10.0"
+    mongodb-connection-string-url "^3.0.0"
 
 mongodb@^6.11.0:
   version "6.11.0"
@@ -4273,7 +4262,7 @@ punycode@1.3.2:
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-1.3.2.tgz#9653a036fb7c1ee42342f2325cceefea3926c48d"
   integrity sha512-RofWgt/7fL5wP1Y7fxE7/EmTLzQVnB0ycyibJ0OOHIlJqTNzglYFxVwETOcIoJqJmpDXJ9xImDv+Fq34F/d4Dw==
 
-punycode@^2.1.0, punycode@^2.1.1:
+punycode@^2.1.0, punycode@^2.3.0:
   version "2.3.1"
   resolved "https://registry.yarnpkg.com/punycode/-/punycode-2.3.1.tgz#027422e2faec0b25e1549c3e1bd8309b9133b6e5"
   integrity sha512-vYt7UD1U9Wg6138shLtLOvdAu+8DsC/ilFtEVHcH+wydcSpNE20AfSOduf6MkRFahL5FY7X1oU7nKVZFtfq8Fg==
@@ -4622,7 +4611,7 @@ socks-proxy-agent@^6.0.0:
     debug "^4.3.3"
     socks "^2.6.2"
 
-socks@^2.6.2, socks@^2.7.1:
+socks@^2.6.2:
   version "2.8.3"
   resolved "https://registry.yarnpkg.com/socks/-/socks-2.8.3.tgz#1ebd0f09c52ba95a09750afe3f3f9f724a800cb5"
   integrity sha512-l5x7VUUWbjVFbafGLxPWkYsHIhEvmF85tbIeFZWc8ZPtoMyybuEhL7Jye/ooC4/d48FgOjSJXgsF/AJPYCW8Zw==
@@ -4842,12 +4831,12 @@ text-table@^0.2.0:
   resolved "https://registry.yarnpkg.com/through/-/through-2.3.8.tgz#0dd4c9ffaabc357960b1b724115d7e0e86a2e1f5"
   integrity sha512-w89qg7PI8wAdvX60bMDP+bFoD5Dvhm9oLheFp5O4a2QF0cSBGsBX4qZmadPMvVqlLJBBci+WqGGOAPvcDeNSVg==
 
-tr46@^3.0.0:
-  version "3.0.0"
-  resolved "https://registry.yarnpkg.com/tr46/-/tr46-3.0.0.tgz#555c4e297a950617e8eeddef633c87d4d9d6cbf9"
-  integrity sha512-l7FvfAHlcmulp8kr+flpQZmVwtu7nfRV7NZujtN0OqES8EL4O4e0qqzL0DC5gAvx/ZC/9lk6rhcUwYvkBnBnYA==
+tr46@^4.1.1:
+  version "4.1.1"
+  resolved "https://registry.yarnpkg.com/tr46/-/tr46-4.1.1.tgz#281a758dcc82aeb4fe38c7dfe4d11a395aac8469"
+  integrity sha512-2lv/66T7e5yNyhAAC4NaKe5nVavzuGJQVVtRYLyQ2OI8tsJ61PMLlelehb0wi2Hx6+hT/OJUWZcw8MjlSRnxvw==
   dependencies:
-    punycode "^2.1.1"
+    punycode "^2.3.0"
 
 tsconfig-paths@^3.15.0:
   version "3.15.0"
@@ -5142,12 +5131,19 @@ werelogs@scality/werelogs#8.2.1:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-whatwg-url@^11.0.0:
-  version "11.0.0"
-  resolved "https://registry.yarnpkg.com/whatwg-url/-/whatwg-url-11.0.0.tgz#0a849eebb5faf2119b901bb76fd795c2848d4018"
-  integrity sha512-RKT8HExMpoYx4igMiVMY83lN6UeITKJlBQ+vR/8ZJ8OCdSiN3RwCq+9gH0+Xzj0+5IrM6i4j/6LuvzbZIQgEcQ==
+werelogs@scality/werelogs#8.2.2:
+  version "8.2.2"
+  resolved "https://codeload.github.com/scality/werelogs/tar.gz/e53bef5145697bf8af940dcbe59408988d64854f"
   dependencies:
-    tr46 "^3.0.0"
+    fast-safe-stringify "^2.1.1"
+    safe-json-stringify "^1.2.0"
+
+whatwg-url@^13.0.0:
+  version "13.0.0"
+  resolved "https://registry.yarnpkg.com/whatwg-url/-/whatwg-url-13.0.0.tgz#b7b536aca48306394a34e44bda8e99f332410f8f"
+  integrity sha512-9WWbymnqj57+XEuqADHrCJ2eSXzn8WXIW/YSGaZtb2WKAInQ6CHfaUUcTyyver0p8BDg5StLQq8h1vtZuwmOig==
+  dependencies:
+    tr46 "^4.1.1"
     webidl-conversions "^7.0.0"
 
 which-boxed-primitive@^1.0.2:
