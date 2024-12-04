@@ -65,7 +65,7 @@ describe('PipelineFactory', () => {
         });
     });
 
-    it('should return the list of buckets if the list is valid against the pipeline factory (wildcard)', async () => {
+    it('should return the list of buckets if the list is valid against the pipeline factory', async () => {
         const config = {
             pipeline: JSON.stringify([
                 {
