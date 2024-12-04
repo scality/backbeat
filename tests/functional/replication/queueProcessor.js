@@ -1065,7 +1065,7 @@ describe('queue processor functional tests with mocking', () => {
                                 assert(!s3mock.hasPutTargetData);
                                 assert(!s3mock.hasPutTargetMd);
                                 assert.strictEqual(s3mock.partsDeleted.length, 0);
-                                done();
+                                setTimeout(done, 1000);
                             });
                     });
                 });
