@@ -125,7 +125,9 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                   versionId: version,
                   eTag,
               })
-              .setAttribute('source', entry.getAttribute('source'))
+              // For restored object expiration, there is no actual `source`: the object to cleanup
+              // is actually the target object itself (the field used by GC is `source`)
+              .setAttribute('source', entry.getAttribute('target'))
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.locations', locations)
               .setAttribute('target.accountId', accountId)
