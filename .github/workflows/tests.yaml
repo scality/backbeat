@@ -90,7 +90,7 @@ jobs:
                -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
 
-    - uses: codecov/codecov-action@v4
+    - uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: bucket-scanner
@@ -143,7 +143,7 @@ jobs:
       run: yarn run cover:test
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
-    - uses: codecov/codecov-action@v4
+    - uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: ./coverage/test
