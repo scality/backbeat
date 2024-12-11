@@ -27,7 +27,7 @@ runs:
       env:
         BACKBEAT_CONFIG_FILE: ${{ inputs.config }}
 
-    - uses: codecov/codecov-action@v4
+    - uses: codecov/codecov-action@v5
       with:
         token: ${{ inputs.token }}
         directory: ./coverage/ft_test:${{ inputs.testsuite }}
