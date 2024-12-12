@@ -87,7 +87,7 @@ describe('LocationStatusStream', () => {
         const lss = new LocationStatusStream('lifecycle', mongoConfig, pauseStub, null, FakeLogger);
         lss._locationStatusColl = {
             find: () => ({
-                toArray: sinon.stub().yields(null, locations),
+                toArray: sinon.stub().resolves(locations),
             }),
         };
         lss._initializeLocationStatuses(err => {
@@ -158,6 +158,30 @@ describe('LocationStatusStream', () => {
             lss._handleChangeStreamChangeEvent(params.event);
             const fn = params.expectedFunctionCall === 'pause' ? pauseStub : resumeStub;
             assert(fn.calledOnceWith(params.event.documentKey._id));
+        });
+    });
+
+    it('_initializeLocationStatuses:: should handle errors when fetching location statuses', done => {
+        const error = new Error('MongoDB error');
+        const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
+        lss._locationStatusColl = {
+            find: () => ({
+                toArray: sinon.stub().rejects(error),
+            }),
+        };
+        const errorSpy = sinon.spy(lss._log, 'error');
+        lss._initializeLocationStatuses(err => {
+            assert(err);
+            assert.strictEqual(err.message, 'MongoDB error');
+            assert(errorSpy.calledOnce);
+            assert(errorSpy.calledWith(
+                'Could not fetch location statuses from mongo',
+                sinon.match({
+                    method: 'ServiceStatusManager._initializeLocationStatuses',
+                    error: 'MongoDB error',
+                })
+            ));
+            return done();
         });
     });
 
