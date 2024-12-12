@@ -2,7 +2,6 @@ const assert = require('assert');
 const async = require('async');
 const http = require('http');
 const kafka = require('node-rdkafka');
-const jsutil = require('arsenal').jsutil;
 const { MetadataMock, mockLogs } = require('../utils/MetadataMock');
 const MongoClient = require('mongodb').MongoClient;
 
@@ -103,110 +102,83 @@ describe('ingestion reader tests with mock', function fD() {
     let httpServer;
     let producer;
     let zkClient;
-
-    before(done => {
+    const mongoUrl =
+    `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
+    '/db?replicaSet=rs0';
+    const client = new MongoClient(mongoUrl, {});
+    let db;
+    before(async () => {
         testConfig.s3.port = testPort;
-        const mongoUrl =
-            `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
-            '/db?replicaSet=rs0';
         const topic = testConfig.extensions.ingestion.topic;
-        async.waterfall([
-            next => {
-                const client = new MongoClient(mongoUrl, {});
-                client.connect().then(client => {
-                    this.client = client;
-                    this.db = this.client.db('metadata', {
-                        ignoreUndefined: true,
-                    });
-                    next();
-                }).catch(next);
-            },
-            next => kafkaAdminClient.createTopic({
+        await client.connect();
+        db = client.db('metadata', { ignoreUndefined: true });
+        try {
+            await new Promise((resolve, reject) => {
+                kafkaAdminClient.createTopic({
                     topic,
                     num_partitions: 1, // eslint-disable-line camelcase
                     replication_factor: 1, // eslint-disable-line camelcase
                 }, err => {
                     if (err && err.code === 36) {
                         // if topic already exits.
-                        return next();
+                        return resolve();
                     }
-                    return next(err);
-                }),
-            next => {
-                producer = new BackbeatProducer({
-                    kafka: testConfig.kafka,
-                    topic,
+                    return err ? reject(err) : resolve();
                 });
-                producer.once('ready', () => {
-                    next();
-                });
-            },
-            next => {
-                consumer.connect({ timeout: 1000 }, () => { });
-                consumer.once('ready', () => {
-                    next();
-                });
-            },
-            next => {
-                consumer.subscribe([testConfig.extensions.ingestion.topic]);
-                setTimeout(next, 2000);
-            },
-            next => this.db.createCollection('PENSIEVE').catch(err => {
-                assert.ifError(err);
-                return next();
-            }).then(next),
-            next => {
-                this.m = this.db.collection('PENSIEVE');
-                this.m.insertOne(dummyPensieveCredentials, {});
-                return next();
-            },
-            next => {
-                this.m.insertOne({
-                    _id: 'configuration/overlay-version',
-                    value: 6,
-                }, {});
-                return next();
-            },
-            next => {
-                this.m.insertOne(dummySSHKey, {});
-                return next();
-            },
-            next => {
-                const cbOnce = jsutil.once(next);
-                zkClient = new ZookeeperManager('localhost:2181', { autoCreateNamespace: true }, dummyLogger);
-                zkClient.once('error', cbOnce);
-                zkClient.once('ready', () => {
-                    zkClient.removeAllListeners('error');
-                    return cbOnce();
-                });
-            },
-            next => initManagement(testConfig, next),
-            next => {
-                const metadataMock = new MetadataMock();
-                httpServer = http.createServer(
-                    (req, res) => metadataMock.onRequest(req, res))
-                    .listen(testPort);
-                next();
-            }
-        ], done);
+            });
+        } catch (err) {
+            throw err;
+        }
+        producer = new BackbeatProducer({
+            kafka: testConfig.kafka,
+            topic: testConfig.extensions.ingestion.topic,
+        });
+        await new Promise(resolve => producer.once('ready', resolve));
+        await new Promise(resolve => {
+            consumer.connect({ timeout: 1000 }, () => {});
+            consumer.once('ready', resolve);
+        });
+
+        consumer.subscribe([testConfig.extensions.ingestion.topic]);
+        await new Promise(resolve => setTimeout(resolve, 2000));
+        await db.createCollection('PENSIEVE');
+        const collection = db.collection('PENSIEVE');
+        await collection.insertOne(dummyPensieveCredentials);
+        await collection.insertOne({
+            _id: 'configuration/overlay-version',
+            value: 6,
+        });
+        await collection.insertOne(dummySSHKey);
+        zkClient = new ZookeeperManager('localhost:2181', { autoCreateNamespace: true }, dummyLogger);
+        await new Promise((resolve, reject) => {
+            zkClient.once('error', reject);
+            zkClient.once('ready', resolve);
+        });
+        await new Promise((resolve, reject) => {
+            initManagement(testConfig, err => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve();
+            });
+        });
+        const metadataMock = new MetadataMock();
+        httpServer = http.createServer((req, res) => metadataMock.onRequest(req, res))
+            .listen(testPort);
     });
 
-    after(done => {
-        async.waterfall([
-            next => {
-                httpServer.close();
-                next();
-            },
-            next => {
-                consumer.unsubscribe();
-                next();
-            },
-            next => this.db.collection('PENSIEVE').drop(err => {
-                assert.ifError(err);
-                this.client.close();
-                next();
-            }),
-        ], done);
+    after(async () =>  {
+        await new Promise((resolve, reject) => {
+            httpServer.close(err => {
+                if (err) {
+                    return reject(err);
+                }
+                return resolve();
+            });
+        });
+        consumer.unsubscribe();
+        await db.collection('PENSIEVE').drop();
+        await client.close();
     });
 
     describe('testing with `bucket1` configuration', () => {
