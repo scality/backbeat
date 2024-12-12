@@ -466,6 +466,8 @@ class ReplicateObject extends BackbeatTask {
             ContentLength: partSize,
             ContentMD5: partObj.getPartETag(),
             Body: incomingMsg,
+            // destination bucket has to be versioning enabled.
+            VersioningRequired: true,
         });
         attachReqUids(destReq, log);
         const writeStartTime = Date.now();
@@ -537,6 +539,8 @@ class ReplicateObject extends BackbeatTask {
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
             ReplicationContent: replicationContent,
+            // destination bucket has to be versioning enabled.
+            VersioningRequired: true,
         });
         attachReqUids(req, log);
         const writeStartTime = Date.now();
