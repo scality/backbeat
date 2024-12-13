@@ -400,6 +400,8 @@ class LifecycleTask extends BackbeatTask {
                 });
             }
 
+            const promises = [];
+
             // sending bucket entry - only once - for checking next listing
             if (data.IsTruncated && allVersions.length > 0 && nbRetries === 0) {
                 // Uses last version whether Version or DeleteMarker
@@ -414,31 +416,30 @@ class LifecycleTask extends BackbeatTask {
                         prevDate: last.LastModified,
                     },
                 });
-                this._sendBucketEntry(entry, err => {
+                promises.push(new Promise(resolve => this._sendBucketEntry(entry, err => {
                     if (!err) {
                         log.debug('sent kafka entry for bucket ' +
                         'consumption', {
                             method: 'LifecycleTask._getObjectVersions',
                         });
                     }
-                });
+                    resolve(); // safe to ignore the error, we will retry lifecycle eventually
+                })));
             }
 
-            // if no versions to process, skip further processing for this
-            // batch
+            // if no versions to process, skip further processing for this batch
             if (allVersionsWithStaleDate.length === 0) {
-                return done(null);
+                return Promise.allSettled(promises).then(() => done(), done);
             }
 
             // for each version, get their relative rules, compare with
             // bucket rules, match with `staleDate` to
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                allVersionsWithStaleDate, log, versioningStatus,
-                err => {
+            promises.push(new Promise((resolve, reject) => this._compareRulesToList(bucketData,
+                bucketLCRules, allVersionsWithStaleDate, log, versioningStatus, err => {
                     if (err) {
-                        return done(err);
+                        return reject(err);
                     }
 
                     if (!data.IsTruncated) {
@@ -453,8 +454,10 @@ class LifecycleTask extends BackbeatTask {
                         );
                     }
 
-                    return done();
-                });
+                    return resolve();
+                })));
+
+            return Promise.allSettled(promises).then(() => done(), done);
         });
     }
 

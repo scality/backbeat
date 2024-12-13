@@ -1,6 +1,7 @@
 'use strict'; // eslint-disable-line
 
 const async = require('async');
+const util = require('util');
 const { errors } = require('arsenal');
 
 const LifecycleTask = require('./LifecycleTask');
@@ -39,33 +40,33 @@ class LifecycleTaskV2 extends LifecycleTask {
      * @param {array} remainings - array of { prefix, listType, beforeDate }
      * @param {object} bucketData - bucket data
      * @param {Logger.newRequestLogger} log - logger object
+     * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _handleRemainingListings(remainings, bucketData, log) {
-        if (remainings && remainings.length) {
-            remainings.forEach(l => {
-                const {
-                    prefix,
-                    listType,
-                    beforeDate,
-                    storageClass,
-                } = l;
+    _handleRemainingListings(remainings, bucketData, log, done) {
+        async.forEach(remainings || [], (l, cb) => {
+            const {
+                prefix,
+                listType,
+                beforeDate,
+                storageClass,
+            } = l;
 
-                const entry = Object.assign({}, bucketData, {
-                    contextInfo: { requestId: log.getSerializedUids() },
-                    details: { beforeDate, prefix, listType, storageClass },
-                });
-
-                this._sendBucketEntry(entry, err => {
-                    if (!err) {
-                        log.debug(
-                            'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTaskV2._getVersionList',
-                            });
-                    }
-                });
+            const entry = Object.assign({}, bucketData, {
+                contextInfo: { requestId: log.getSerializedUids() },
+                details: { beforeDate, prefix, listType, storageClass },
             });
-        }
+
+            this._sendBucketEntry(entry, err => {
+                if (!err) {
+                    log.debug(
+                        'sent kafka entry for bucket consumption', {
+                        method: 'LifecycleTaskV2._getVersionList',
+                    });
+                }
+                cb();
+            });
+        }, done);
     }
 
     /**
@@ -101,15 +102,19 @@ class LifecycleTaskV2 extends LifecycleTask {
             return process.nextTick(done);
         }
 
+        const promises = [];
+
         // re-queue remaining listings only once
         if (nbRetries === 0) {
-            this._handleRemainingListings(remainings, bucketData, log);
+            promises.push(util.promisify(this._handleRemainingListings).bind(this)(
+                remainings, bucketData, log,
+            ));
         }
 
         return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
         (err, contents, isTruncated, markerInfo) => {
             if (err) {
-                return done(err);
+                return Promise.allSettled(promises).then(() => done(err), () => done(err));
             }
 
             // re-queue truncated listing only once.
@@ -125,17 +130,22 @@ class LifecycleTaskV2 extends LifecycleTask {
                     },
                 });
 
-                this._sendBucketEntry(entry, err => {
+                promises.push(new Promise(resolve => this._sendBucketEntry(entry, err => {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTaskV2._getObjectList',
-                            });
+                            method: 'LifecycleTaskV2._getObjectList',
+                        });
                     }
-                });
+                    resolve(); // safe to ignore the error, we will retry lifecycle eventually
+                })));
             }
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                contents, log, done);
+
+            promises.push(util.promisify(this._compareRulesToList).bind(this)(
+                bucketData, bucketLCRules, contents, log,
+            ));
+
+            return Promise.allSettled(promises).then(() => done(), done);
         });
     }
 
@@ -173,15 +183,19 @@ class LifecycleTaskV2 extends LifecycleTask {
             return process.nextTick(done);
         }
 
+        const promises = [];
+
         // re-queue remaining listings only once
         if (nbRetries === 0) {
-            this._handleRemainingListings(remainings, bucketData, log);
+            promises.push(util.promisify(this._handleRemainingListings).bind(this)(
+                remainings, bucketData, log,
+            ));
         }
 
         return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
         (err, contents, isTruncated, markerInfo) => {
             if (err) {
-                return done(err);
+                return Promise.allSettled(promises).then(() => done(err), () => done(err));
             }
 
             // create Set of unique keys not matching the next marker to
@@ -209,19 +223,21 @@ class LifecycleTaskV2 extends LifecycleTask {
                     },
                 });
 
-                this._sendBucketEntry(entry, err => {
+                promises.push(new Promise(resolve => this._sendBucketEntry(entry, err => {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTaskV2._getObjectList',
-                            });
+                            method: 'LifecycleTaskV2._getObjectVersions',
+                        });
                     }
-                });
+                    resolve(); // safe to ignore the error, we will retry lifecycle eventually
+                })));
             }
-            return this._compareRulesToList(bucketData, bucketLCRules,
-                contents, log, err => {
+
+            promises.push(new Promise((resolve, reject) => this._compareRulesToList(
+                bucketData, bucketLCRules, contents, log, err => {
                     if (err) {
-                        return done(err);
+                        return reject(err);
                     }
 
                     if (!isTruncated) {
@@ -236,8 +252,10 @@ class LifecycleTaskV2 extends LifecycleTask {
                         );
                     }
 
-                    return done();
-                });
+                    return resolve();
+                })));
+
+            return Promise.allSettled(promises).then(() => done(), done);
         });
     }
 
