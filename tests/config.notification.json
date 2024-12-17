@@ -58,7 +58,7 @@
         }
     },
     "log": {
-        "logLevel": "info",
+        "logLevel": "debug",
         "dumpLevel": "error"
     },
     "server": {

@@ -166,6 +166,11 @@ jobs:
         testsuite: replication
         token: ${{ secrets.CODECOV_TOKEN }}
 
+    - name: Debug wait
+      uses: ./.github/actions/debug-wait
+      timeout-minutes: 60
+      if: always()
+  
     - name: run feature lifecycle tests
       uses: ./.github/actions/ft-test
       with:
@@ -197,9 +202,3 @@ jobs:
         # will crash if they end up in memory all at the same time (circuit breaking
         # ineffective) while waiting to be committed to the kafka topic.
         NODE_OPTIONS: '--max-old-space-size=150'
-
-    - name: Debug wait
-      uses: ./.github/actions/debug-wait
-      timeout-minutes: 60
-      if: failure() && runner.debug == '1'
-
