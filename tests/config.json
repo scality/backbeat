@@ -237,7 +237,7 @@
         }
     },
     "log": {
-        "logLevel": "info",
+        "logLevel": "debug",
         "dumpLevel": "error"
     },
     "metrics": {
