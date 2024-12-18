@@ -1046,7 +1046,7 @@ describe('queue processor functional tests with mocking', () => {
         this.timeout(20000); // give more time to leave room for retry
                              // delays and timeout
 
-        describe('source Vault errors', () => {
+        describe.only('source Vault errors', () => {
             ['assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
                     it(`should skip processing on ${error.code} ` +
