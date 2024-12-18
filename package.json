@@ -46,16 +46,16 @@
   "homepage": "https://github.com/scality/backbeat#readme",
   "dependencies": {
     "JSONStream": "^1.3.5",
-    "arsenal": "git+https://github.com/scality/arsenal#03503cb9ec0b13358873414c58ff9066f309146e",
+    "arsenal": "git+https://github.com/scality/arsenal#e293f894917cd375f8e1ab6d03f4fb6869df136a",
     "async": "^2.3.0",
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
     "breakbeat": "scality/breakbeat#v1.0.3",
-    "bucketclient": "scality/bucketclient#e390a59f0eef300e0d713234c1d563faf8b2ecd5",
+    "bucketclient": "scality/bucketclient#0fe349950922700af82b57b157f6ef5fe29c6f12",
     "commander": "^2.11.0",
     "eslint-plugin-mocha": "^10.2.0",
     "fcntl": "github:scality/node-fcntl#0.2.2",
-    "httpagent": "git+https://github.com/scality/httpagent#1.1.0",
+    "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
     "ioredis": "^4.9.5",
     "joi": "^17.6.0",
     "minimatch": "^3.0.4",
@@ -76,6 +76,7 @@
     "node-rdkafka-prometheus/prom-client": "14.2.0"
   },
   "devDependencies": {
+    "@zenko/cloudserver": "git+https://github.com/scality/cloudserver#b5e6e014368c8f0bdd5911ba53f3337b6b145239",
     "c8": "^8.0.1",
     "eslint": "^8.14.0",
     "eslint-config-airbnb-base": "^13.1.0",
