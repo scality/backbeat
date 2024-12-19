@@ -227,7 +227,7 @@ class ReplicationStatusProcessor {
                 key: internalHttpsConfig.key,
                 cert: internalHttpsConfig.cert,
                 ca: internalHttpsConfig.ca,
-                keepAlive: true,
+                keepAlive: false,
             });
         } else {
             this.sourceHTTPAgent = new HttpAgent.Agent({ keepAlive: true });

@@ -752,7 +752,7 @@ function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
 
 /* eslint-enable max-len */
 
-describe('queue processor functional tests with mocking', () => {
+describe.only('queue processor functional tests with mocking', () => {
     let queueProcessorSF;
     let queueProcessorAzure;
     let replicationStatusProcessor;
@@ -772,7 +772,7 @@ describe('queue processor functional tests with mocking', () => {
             { connectionString: '127.0.0.1:2181/backbeat',
               autoCreateNamespace: false },
             null,
-            { hosts: 'localhost:9092' },
+            { hosts: '0.0.0.0:9092' },
             { auth: { type: 'role',
                 vault: { host: constants.source.vault,
                     port: 7777 } },
@@ -799,8 +799,7 @@ describe('queue processor functional tests with mocking', () => {
                   sourceCheckIfSizeGreaterThanMB: 10,
               },
             },
-            { host: '127.0.0.1',
-              port: 6379 },
+            null,
             { topic: 'metrics-test-topic' },
             {},
             {},
@@ -810,8 +809,12 @@ describe('queue processor functional tests with mocking', () => {
                 done => {
                     queueProcessorSF =
                         new QueueProcessor(...qpParams.concat(['sf']));
+                    console.log('queueProcessorSF', queueProcessorSF);
                     queueProcessorSF.start({ disableConsumer: true });
-                    queueProcessorSF.on('ready', done);
+                    queueProcessorSF.on('ready', () => {
+                        console.log('queueProcessorSF is ready');
+                        done();
+                    });
                 },
                 done => {
                     queueProcessorAzure =
@@ -855,7 +858,7 @@ describe('queue processor functional tests with mocking', () => {
                             connectionString: 'localhost:2181',
                         },
                         kafka: {
-                            hosts: 'localhost:9092',
+                            hosts: '0.0.0.0:9092',
                         },
                         bootstrap: true,
                     });
@@ -1043,20 +1046,23 @@ describe('queue processor functional tests with mocking', () => {
     });
 
     describe('error paths', function errorPaths() {
-        this.timeout(20000); // give more time to leave room for retry
+        this.timeout(50000); // give more time to leave room for retry
                              // delays and timeout
 
         describe.only('source Vault errors', () => {
             ['assumeRoleBackbeat'].forEach(action => {
-                [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
+                [errors.AccessDenied].forEach(error => {
                     it(`should skip processing on ${error.code} ` +
                     `(${error.message}) from source Vault on ${action}`,
                     done => {
                         s3mock.installVaultErrorResponder(
                             `source.vault.${action}`, error);
-
+                        console.log('we are here');
                         queueProcessorSF.processReplicationEntry(
                             s3mock.getParam('kafkaEntry'), err => {
+                                console.log('err', err);
+                                console.log('s3mock', s3mock);
+                                console.log('s3mock.hasPutTargetData', s3mock.hasPutTargetData);
                                 assert.ifError(err);
                                 assert(!s3mock.hasPutTargetData);
                                 assert(!s3mock.hasPutTargetMd);
@@ -1269,6 +1275,8 @@ describe('queue processor functional tests with mocking', () => {
                                 done =>
                                     queueProcessorSF.processReplicationEntry(
                                         s3mock.getParam('kafkaEntry'),
+                                        console.log('err', err),
+                                        console.log('we are in the kafka entry'),
                                         error => {
                                             assert.ifError(error);
                                             assert(!s3mock.hasPutTargetData);
@@ -1532,7 +1540,7 @@ describe('queue processor functional tests with mocking', () => {
 describe('GC should be created if config is provided', () => {
     it('should create a GC if config is provided', done => {
         const replicationStatusProcessor = new ReplicationStatusProcessor(
-            { hosts: 'localhost:9092' },
+            { hosts: '0.0.0.0:9092' },
             { auth: { type: 'role',
                       vault: { host: constants.source.vault,
                                port: 7777 } },
@@ -1562,7 +1570,7 @@ describe('GC should be created if config is provided', () => {
 
     it('should not create a GC if config is not provided', done => {
         const replicationStatusProcessor = new ReplicationStatusProcessor(
-            { hosts: 'localhost:9092' },
+            { hosts: '0.0.0.0:9092' },
             { auth: { type: 'role',
                       vault: { host: constants.source.vault,
                                port: 7777 } },

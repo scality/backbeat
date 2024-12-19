@@ -15,7 +15,7 @@ class VaultClientWrapper {
         this.logger = logger;
 
         const Agent = this._transport === 'https' ? HttpsAgent.Agent : HttpAgent.Agent;
-        this.stsAgent = new Agent({ keepAlive: true });
+        this.stsAgent = new Agent({ keepAlive: false });
 
         this._tempCredsPromiseResolved = false;
     }

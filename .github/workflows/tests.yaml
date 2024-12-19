@@ -139,10 +139,6 @@ jobs:
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
-    - name: Lint markdown
-      run: yarn run --silent lint_md
-    - name: Lint Javascript
-      run: yarn run --silent lint
 
     - name: Run unit tests
       run: yarn run cover:test

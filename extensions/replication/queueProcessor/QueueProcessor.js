@@ -241,7 +241,7 @@ class QueueProcessor extends EventEmitter {
                 key: internalHttpsConfig.key,
                 cert: internalHttpsConfig.cert,
                 ca: internalHttpsConfig.ca,
-                keepAlive: true,
+                keepAlive: false,
             });
         } else {
             this.sourceHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
@@ -251,7 +251,7 @@ class QueueProcessor extends EventEmitter {
                 key: httpsConfig.key,
                 cert: httpsConfig.cert,
                 ca: httpsConfig.ca,
-                keepAlive: true,
+                keepAlive: false,
             });
         } else {
             this.destHTTPAgent = new HttpAgent.Agent({ keepAlive: true });
@@ -740,6 +740,7 @@ class QueueProcessor extends EventEmitter {
                 if (err) {
                     this.logger.info('error setting up kafka producer',
                                      { error: err.message });
+                    
                     process.exit(1);
                 }
                 return done();
