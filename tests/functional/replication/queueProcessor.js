@@ -752,7 +752,7 @@ function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
 
 /* eslint-enable max-len */
 
-describe.only('queue processor functional tests with mocking', () => {
+describe('queue processor functional tests with mocking', () => {
     let queueProcessorSF;
     let queueProcessorAzure;
     let replicationStatusProcessor;
@@ -799,7 +799,8 @@ describe.only('queue processor functional tests with mocking', () => {
                   sourceCheckIfSizeGreaterThanMB: 10,
               },
             },
-            null,
+            { host: '127.0.0.1',
+            port: 6379 },
             { topic: 'metrics-test-topic' },
             {},
             {},
@@ -1049,7 +1050,7 @@ describe.only('queue processor functional tests with mocking', () => {
         this.timeout(50000); // give more time to leave room for retry
                              // delays and timeout
 
-        describe.only('source Vault errors', () => {
+        describe('source Vault errors', () => {
             ['assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied].forEach(error => {
                     it(`should skip processing on ${error.code} ` +
