@@ -46,6 +46,11 @@
                         "location": "header",
                         "locationName": "X-Scal-Canonical-Id"
                     },
+                    "VersioningRequired": {
+                        "location": "header",
+                        "locationName": "x-scal-versioning-required",
+                        "type": "boolean"
+                    },
                     "Body": {
                         "streaming": true,
                         "type": "blob"
@@ -738,6 +743,11 @@
                         "location": "header",
                         "locationName": "x-scal-replication-content",
                         "type": "string"
+                    },
+                    "VersioningRequired": {
+                        "location": "header",
+                        "locationName": "x-scal-versioning-required",
+                        "type": "boolean"
                     }
                 },
                 "payload": "Body"
