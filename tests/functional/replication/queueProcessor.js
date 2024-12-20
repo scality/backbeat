@@ -874,7 +874,7 @@ describe('queue processor functional tests with mocking', () => {
         s3mock = new S3Mock();
         httpServer = http.createServer(
             (req, res) => s3mock.onRequest(req, res));
-        httpServer.listen(7777);
+        httpServer.listen(7777,'0.0.0.0');
     });
 
     after(done => {
