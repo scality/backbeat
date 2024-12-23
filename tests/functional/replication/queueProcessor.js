@@ -893,9 +893,10 @@ describe('queue processor functional tests with mocking', () => {
             queueProcessorSF.on('ready', done);
     })
 
-    afterEach(() => {
+    afterEach(done => {
         s3mock.resetTest();
-    });
+        queueProcessorSF.stop(done);
+    })
 
     describe('success path tests', function successPath() {
         this.timeout(30000);
