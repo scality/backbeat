@@ -766,57 +766,52 @@ describe('queue processor functional tests with mocking', () => {
 
     const QueueProcessor = require('../../../extensions/replication/queueProcessor/QueueProcessor');
 
-    before(function before(done) {
-        this.timeout(60000);
-        const serverList =
+    const serverList =
                   constants.target.hosts.map(h => `${h.host}:${h.port}`);
 
-        const qpParams = [
-            'backbeat-func-test-dummy-topic',
-            { connectionString: '127.0.0.1:2181/backbeat',
-              autoCreateNamespace: false },
-            null,
-            { hosts: 'localhost:9092' },
-            { auth: { type: 'role',
-                vault: { host: constants.source.vault,
-                    port: 7777 } },
-                s3: { host: constants.source.s3,
-                    port: 7777 },
-                transport: 'http',
+    const qpParams = [
+        'backbeat-func-test-dummy-topic',
+        { connectionString: '127.0.0.1:2181/backbeat',
+            autoCreateNamespace: false },
+        null,
+        { hosts: 'localhost:9092' },
+        { auth: { type: 'role',
+            vault: { host: constants.source.vault,
+                port: 7777 } },
+            s3: { host: constants.source.s3,
+                port: 7777 },
+            transport: 'http',
+        },
+        { auth: { type: 'role' },
+            bootstrapList: [{
+                site: 'sf', servers: serverList,
+            }, {
+                site: 'toazure', type: 'azure',
+            }],
+            transport: 'http' },
+        { topic: 'backbeat-func-test-dummy-topic',
+            replicationStatusTopic: 'backbeat-func-test-repstatus',
+            queueProcessor: {
+                retry: {
+                    scality: { timeoutS: 5 },
+                    azure: { timeoutS: 5 },
+                },
+                groupId: 'backbeat-func-test-group-id',
+                mpuPartsConcurrency: 10,
+                sourceCheckIfSizeGreaterThanMB: 10,
             },
-            { auth: { type: 'role' },
-                bootstrapList: [{
-                    site: 'sf', servers: serverList,
-                }, {
-                    site: 'toazure', type: 'azure',
-                }],
-                transport: 'http' },
-            { topic: 'backbeat-func-test-dummy-topic',
-              replicationStatusTopic: 'backbeat-func-test-repstatus',
-              queueProcessor: {
-                  retry: {
-                      scality: { timeoutS: 5 },
-                      azure: { timeoutS: 5 },
-                  },
-                  groupId: 'backbeat-func-test-group-id',
-                  mpuPartsConcurrency: 10,
-                  sourceCheckIfSizeGreaterThanMB: 10,
-              },
-            },
-            { host: '127.0.0.1',
-              port: 6379 },
-            { topic: 'metrics-test-topic' },
-            {},
-            {},
-        ];
+        },
+        { host: '127.0.0.1',
+            port: 6379 },
+        { topic: 'metrics-test-topic' },
+        {},
+        {},
+    ];
+
+    before(function before(done) {
+        this.timeout(60000);
         async.series([
             done => async.parallel([
-                done => {
-                    queueProcessorSF =
-                        new QueueProcessor(...qpParams.concat(['sf']));
-                    queueProcessorSF.start({ disableConsumer: true });
-                    queueProcessorSF.on('ready', done);
-                },
                 done => {
                     queueProcessorAzure =
                         new QueueProcessor(...qpParams.concat(['toazure']));
@@ -890,6 +885,13 @@ describe('queue processor functional tests with mocking', () => {
             done => copyLocationResultsConsumer.close(done),
         ], done);
     });
+
+    beforeEach(done => {
+            queueProcessorSF =
+                new QueueProcessor(...qpParams.concat(['sf']));
+            queueProcessorSF.start({ disableConsumer: true });
+            queueProcessorSF.on('ready', done);
+    })
 
     afterEach(() => {
         s3mock.resetTest();
@@ -1051,13 +1053,12 @@ describe('queue processor functional tests with mocking', () => {
                              // delays and timeout
 
         describe('source Vault errors', () => {
-            ['assumeRoleBackbeat'].forEach(action => {
                 [errors.AccessDenied, errors.NoSuchEntity].forEach(error => {
                     it(`should skip processing on ${error.code} ` +
-                    `(${error.message}) from source Vault on ${action}`,
+                    `(${error.message}) from source Vault on assumeRoleBackbeat`,
                     done => {
                         s3mock.installVaultErrorResponder(
-                            `source.vault.${action}`, error);
+                            `source.vault.assumeRoleBackbeat`, error);
 
                         queueProcessorSF.processReplicationEntry(
                             s3mock.getParam('kafkaEntry'), err => {
@@ -1069,7 +1070,6 @@ describe('queue processor functional tests with mocking', () => {
                             });
                     });
                 });
-            });
         });
 
         describe('source S3 errors', () => {
