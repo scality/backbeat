@@ -891,12 +891,12 @@ describe('queue processor functional tests with mocking', () => {
                 new QueueProcessor(...qpParams.concat(['sf']));
             queueProcessorSF.start({ disableConsumer: true });
             queueProcessorSF.on('ready', done);
-    })
+    });
 
     afterEach(done => {
         s3mock.resetTest();
         queueProcessorSF.stop(done);
-    })
+    });
 
     describe('success path tests', function successPath() {
         this.timeout(30000);
@@ -1059,7 +1059,7 @@ describe('queue processor functional tests with mocking', () => {
                     `(${error.message}) from source Vault on assumeRoleBackbeat`,
                     done => {
                         s3mock.installVaultErrorResponder(
-                            `source.vault.assumeRoleBackbeat`, error);
+                            'source.vault.assumeRoleBackbeat', error);
 
                         queueProcessorSF.processReplicationEntry(
                             s3mock.getParam('kafkaEntry'), err => {
