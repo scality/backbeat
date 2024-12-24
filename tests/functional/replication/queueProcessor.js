@@ -879,7 +879,6 @@ describe('queue processor functional tests with mocking', () => {
     after(done => {
         httpServer.close();
         async.parallel([
-            done => queueProcessorSF.stop(done),
             done => queueProcessorAzure.stop(done),
             done => replicationStatusProcessor.stop(done),
             done => copyLocationResultsConsumer.close(done),
