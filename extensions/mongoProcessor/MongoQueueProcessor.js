@@ -393,10 +393,11 @@ class MongoQueueProcessor {
      * @param {Logger.newRequestLogger} log - request logger object
      * @param {DeleteOpQueueEntry} sourceEntry - delete object entry
      * @param {string} location - zenko storage location name
+     * @param {BucketInfo} bucketInfo - bucket info object
      * @param {function} done - callback(error)
      * @return {undefined}
      */
-    _processDeleteOpQueueEntry(log, sourceEntry, location, done) {
+    _processDeleteOpQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
         const versionId = extractVersionId(sourceEntry.getObjectVersionedKey());
@@ -427,14 +428,25 @@ class MongoQueueProcessor {
                 return cb();
             },
             cb => {
-                // Calling deleteObject with undefined options to use deleteObjectNoVer which is used for
-                // deleting non versioned objects that only have master keys.
-                // When deleting a versioned object however we supply the version id in the options, which
-                // causes the function to call the deleteObjectVer function that is used to handle objects that
-                // have both a master and version keys. This handles the deletion of both the version and the master
-                // keys in the case where no other version is available, or deleting the version and updating the
-                // master key otherwise.
-                const options = versionId ? { versionId } : undefined;
+                const options = {};
+
+                // Calling deleteObject with empty options to use deleteObjectNoVer which is used
+                // for deleting non versioned objects that only have master keys.
+                // When deleting a versioned object however we supply the version id in the options,
+                // which causes the function to call the deleteObjectVer function that is used to
+                // handle objects that have both a master and version keys. This handles the
+                // deletion of both the version and the master keys in the case where no other
+                // version is available, or deleting the version and updating the master key
+                // otherwise.
+                if (versionId) {
+                    options.versionId = versionId;
+                }
+
+                // If the bucket has no lifecycle or notification configuration, we don't need the
+                // oplog update, and can skip it to lower the load on mongo
+                if (!bucketInfo.lifecycleConfiguration && !bucketInfo.notificationConfiguration) {
+                    options.doesNotNeedOpogUpdate = true;
+                }
 
                 return this._mongoClient.deleteObject(bucket, key, options, log, cb);
             },
