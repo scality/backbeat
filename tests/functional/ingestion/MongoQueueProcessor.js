@@ -16,7 +16,7 @@ const authdata = require('../../../conf/authdata.json');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const DeleteOpQueueEntry = require('../../../lib/models/DeleteOpQueueEntry');
 const fakeLogger = require('../../utils/fakeLogger');
-const { ObjectMDArchive } = require('arsenal/build/lib/models');
+const { ObjectMDArchive, LifecycleConfiguration, NotificationConfiguration } = require('arsenal/build/lib/models');
 
 const kafkaConfig = config.kafka;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
@@ -829,19 +829,41 @@ describe('MongoQueueProcessor', function mqp() {
     });
 
     describe('::_processDeleteOpQueueEntry', () => {
-        it('should delete an existing versioned object from mongo', done => {
+        [
+            {
+                title: '',
+                patchBucketInfo: (bucketInfo, next) => next(null, bucketInfo),
+                options: { doesNotNeedOpogUpdate: true, versionId: VERSION_ID },
+            },
+            {
+                title: ' with bucket notification',
+                patchBucketInfo: (bucketInfo, next) => next(null, {
+                    ...bucketInfo,
+                    notificationConfiguration: new NotificationConfiguration(),
+                }),
+                options: { versionId: VERSION_ID },
+            },
+            {
+                title: ' with lifecycle configuration',
+                patchBucketInfo: (bucketInfo, next) => next(null, {
+                    ...bucketInfo,
+                    lifecycleConfiguration: new LifecycleConfiguration(null, { replicationEndpoints: [] }),
+                }),
+                options: { versionId: VERSION_ID },
+            },
+        ].forEach(({
+            title, patchBucketInfo, options,
+        }) => it(`should delete an existing versioned object from mongo${title}`, done => {
             // use existing version id
             const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
-            const objmd = new ObjectMD()
-                .setKey(KEY)
-                .setVersionId(VERSION_ID)
-                .setDataStoreName(LOCATION);
-            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            const deleteObject = sinon.stub(mongoClient, 'deleteObject').callThrough();
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
+                patchBucketInfo,
                 (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
-                    entry, LOCATION, next),
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -849,9 +871,13 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(deleted.length, 1);
                 assert.strictEqual(deleted[0].key, KEY);
                 assert.strictEqual(deleted[0].versionId, VERSION_ID);
+
+                sinon.assert.calledOnce(deleteObject);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[2], options);
+
                 done();
             });
-        });
+        }));
 
         it('should delete an existing non versioned object from mongo', done => {
             const objmd = new ObjectMD()
@@ -869,7 +895,7 @@ describe('MongoQueueProcessor', function mqp() {
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
                 (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
-                    entry, LOCATION, next),
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -899,7 +925,7 @@ describe('MongoQueueProcessor', function mqp() {
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
                     next),
                 (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
-                    entry, LOCATION, next),
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
@@ -917,14 +943,17 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger, next),
                 (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
-                    entry, LOCATION, next),
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ifError(err);
 
                 assert.ok(deleteObject.calledOnce);
                 assert.strictEqual(deleteObject.getCall(0).args[0], BUCKET);
                 assert.strictEqual(deleteObject.getCall(0).args[1], KEY);
-                assert.strictEqual(deleteObject.getCall(0).args[2].versionId, VERSION_ID);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[2], {
+                    doesNotNeedOpogUpdate: true,
+                    versionId: VERSION_ID
+                });
 
                 done();
             });
@@ -938,14 +967,17 @@ describe('MongoQueueProcessor', function mqp() {
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger, next),
                 (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
-                    entry, LOCATION, next),
+                    entry, LOCATION, bucketInfo, next),
             ], err => {
                 assert.ok(err?.is?.InternalError);
 
                 assert.ok(deleteObject.calledOnce);
                 assert.strictEqual(deleteObject.getCall(0).args[0], BUCKET);
                 assert.strictEqual(deleteObject.getCall(0).args[1], KEY);
-                assert.strictEqual(deleteObject.getCall(0).args[2].versionId, VERSION_ID);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[2], {
+                    doesNotNeedOpogUpdate: true,
+                    versionId: VERSION_ID,
+                });
 
                 done();
             });
