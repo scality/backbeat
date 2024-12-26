@@ -16,6 +16,7 @@ const authdata = require('../../../conf/authdata.json');
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const DeleteOpQueueEntry = require('../../../lib/models/DeleteOpQueueEntry');
 const fakeLogger = require('../../utils/fakeLogger');
+const { ObjectMDArchive } = require('arsenal/build/lib/models');
 
 const kafkaConfig = config.kafka;
 const mongoProcessorConfig = config.extensions.mongoProcessor;
@@ -30,6 +31,12 @@ const LOCATION = 'us-east-1';
 const VERSION_ID = '98445230573829999999RG001  15.144.0';
 // new version id > existing version id
 const NEW_VERSION_ID = '98445235075994999999RG001  14.90.2';
+
+const mockArchive = new ObjectMDArchive(
+    { archiveId: '123456789' },
+    Date.now() - 3600 * 1000, 1,
+    Date.now(), Date.now() + 23 * 3600 * 1000,
+);
 
 const mockReplicationInfo = {
     role: 'arn:aws:iam::root:role/s3-replication-role',
@@ -712,80 +719,21 @@ describe('MongoQueueProcessor', function mqp() {
             });
         });
 
-        it('should save to mongo a new version entry when scal-version-id does not match the data location', done => {
+        it('should not update restored entry', done => {
             const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
             const objmd = new ObjectMD()
                 .setAcl()
                 .setKey(KEY)
-                .setVersionId(NEW_VERSION_ID);
-            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd)
+                .setVersionId(NEW_VERSION_ID)
                 .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) });
-            const getObject = sinon.stub(mongoClient, 'getObject').callThrough();
-            async.waterfall([
-                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
-                    next),
-                (bucketInfo, next) => next(null,
-                    bucketInfo.setReplicationConfiguration(null)),
-                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
-                    entry, LOCATION, bucketInfo, next),
-            ], err => {
-                assert.ifError(err);
-
-                sinon.assert.calledOnce(getObject);
-
-                const added = mqp.getAdded();
-                assert.strictEqual(added.length, 1);
-                const objVal = added[0].objVal;
-                assert.strictEqual(added[0].key, versionKey);
-                // key shall now be always populated
-                assert.deepStrictEqual(objVal.key, KEY);
-                // acl should reset
-                assert.deepStrictEqual(objVal.acl, new ObjectMD().getAcl());
-                // owner md should update
-                assert.strictEqual(objVal['owner-display-name'],
-                    authdata.accounts[0].name);
-                assert.strictEqual(objVal['owner-id'],
-                    authdata.accounts[0].canonicalID);
-                // dataStoreName should update
-                assert.strictEqual(objVal.dataStoreName, LOCATION);
-                // locations should update, no data in object
-                assert.strictEqual(objVal.location.length, 1);
-                const loc = objVal.location[0];
-                assert.strictEqual(loc.key, KEY);
-                assert.strictEqual(loc.size, 0);
-                assert.strictEqual(loc.start, 0);
-                assert.strictEqual(loc.dataStoreName, LOCATION);
-                assert.strictEqual(loc.dataStoreType, 'aws_s3');
-                assert.strictEqual(decode(loc.dataStoreVersionId),
-                    NEW_VERSION_ID);
-
-                // replication info should be empty
-                const repInfo = objVal.replicationInfo;
-                assert.strictEqual(repInfo.status, '');
-                assert.deepStrictEqual(repInfo.backends, []);
-                assert.deepStrictEqual(repInfo.content, []);
-                assert.strictEqual(repInfo.storageClass, '');
-                assert.strictEqual(repInfo.storageType, '');
-                assert.strictEqual(repInfo.dataStoreVersionId, '');
-
-                done();
-            });
-        });
-
-        it('should skip restored entry scal-version-id', done => {
-            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
-            const objmd = new ObjectMD()
-                .setAcl()
-                .setKey(KEY)
-                .setVersionId(NEW_VERSION_ID);
-            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd)
-                .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) });
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, objmd);
             const getObject = sinon.stub(mongoClient, 'getObject').yields(null,
                 new ObjectMD()
+                    .setKey(KEY)
                     .setVersionId(VERSION_ID)
-                    .setTags({ mytag: 'mytags-value' })
                     .setDataStoreName(LOCATION)
                     .setAmzStorageClass('cold')
+                    .setArchive(mockArchive)
                     .setLocation([{
                         key: KEY,
                         start: 0,
@@ -811,6 +759,69 @@ describe('MongoQueueProcessor', function mqp() {
 
                 const added = mqp.getAdded();
                 assert.strictEqual(added.length, 0);
+
+                done();
+            });
+        });
+
+        it('should update tags on restored entry', done => {
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const entry = new ObjectQueueEntry(BUCKET, versionKey, new ObjectMD()
+                .setAcl()
+                .setKey(KEY)
+                .setTags({ mytag: 'mytags-value' })
+                .setVersionId(NEW_VERSION_ID)
+                .setUserMetadata({ 'x-amz-meta-scal-version-id': encode(VERSION_ID) }));
+            const objmd = new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setDataStoreName(LOCATION)
+                .setAmzStorageClass('cold')
+                .setArchive(mockArchive)
+                .setLocation([{
+                    key: KEY,
+                    start: 0,
+                    size: 50,
+                    dataStoreName: LOCATION,
+                    dataStoreVersionId: NEW_VERSION_ID,
+                }]);
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(null, objmd.getValue());
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processObjectQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                sinon.assert.calledOnce(getObject);
+                assert.strictEqual(getObject.getCall(0).args[0], BUCKET);
+                assert.strictEqual(getObject.getCall(0).args[1], KEY);
+                assert.strictEqual(getObject.getCall(0).args[2].versionId, VERSION_ID);
+
+                const added = mqp.getAdded();
+                assert.strictEqual(added.length, 1);
+
+                // Expect tags and replicationInfo to have been updated
+                const objVal = added[0].objVal;
+                assert.deepStrictEqual(objVal, objmd
+                    .setTags({ mytag: 'mytags-value' })
+                    .setReplicationInfo({
+                        backends: [{
+                            dataStoreVersionId: '',
+                            site: 'test-site-2',
+                            status: 'PENDING'
+                        }],
+                        content: ['METADATA', 'PUT_TAGGING'],
+                        dataStoreVersionId: '',
+                        destination: 'arn:aws:s3:::mqp-test-bucket',
+                        isNFS: null,
+                        role: 'arn:aws:iam::root:role/s3-replication-role',
+                        status: 'PENDING',
+                        storageClass: 'test-site-2',
+                        storageType: 'aws_s3'
+                    })
+                    .getValue());
 
                 done();
             });
