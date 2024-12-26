@@ -235,7 +235,7 @@ class MongoQueueProcessor {
 
     /**
      * get dataStoreVersionId, if exists
-     * @param {Object} objMd - object md fetched from mongo
+     * @param {ObjectMDData} objMd - object md fetched from mongo
      * @param {String} site - storage location name
      * @return {String} dataStoreVersionId
      */
@@ -510,46 +510,6 @@ class MongoQueueProcessor {
                 return done(err);
             }
 
-            // If the object has `x-amz-meta-scal-version-id`, we need to use it instead of the id.
-            // This should only happen for objects restored onto the OOB location, and the location
-            // should match in that case
-            if (scalVersionId) {
-                if (!zenkoObjMd) {
-                    this.logger.warn('missing source entry, ignoring x-amz-meta-scal-version-id', {
-                        method: 'MongoQueueProcessor._processObjectQueueEntry',
-                        location,
-                    });
-                    // This may happen if the object has been deleted from Zenko, but we processed
-                    // the create/update event from oplog after the object was deleted. We can
-                    // proceed normally and create the entry, as we will get a followup "delete"
-                    // operation and will thus eventually be consistent.
-                } else if (zenkoObjMd.location?.length !== 1 ||
-                    zenkoObjMd.location[0].dataStoreName !== location ||
-                    zenkoObjMd.location[0].dataStoreVersionId !== sourceEntry.getVersionId()) {
-                    this.logger.warn('mismatched source entry, skipping entry', {
-                        method: 'MongoQueueProcessor._processObjectQueueEntry',
-                        location,
-                    });
-
-                    // If the versionId does not match, it mean the object metadata has been updated
-                    // in Zenko already, and we are thus processing an outdated oplog entry: which
-                    // should be ignored. Not much of an issue though, as we have retrieved Zenko
-                    // object, so `getContentType()` will pickup tag changes only.
-                } else {
-                    this.logger.info('restored oob object', {
-                        bucket, key, scalVersionId, zenkoObjMd, sourceEntry
-                    });
-
-                    sourceEntry.setVersionId(scalVersionId);
-
-                    // TODO: do we need to update the (mongo) metadata in that case???
-                    // - This may happen if object is re-tagged while restored?
-                    // - Need to cleanup scal version id: delete objVal['x-amz-meta-scal-version-id'];
-                    // - Need to keep the archive & restore fields in the metadata
-                    return done();
-                }
-            }
-
             const content = getContentType(sourceEntry, zenkoObjMd);
             if (content.length === 0) {
                 this._normalizePendingMetric(location);
@@ -562,11 +522,20 @@ class MongoQueueProcessor {
                 return done();
             }
 
-            // update necessary metadata fields before saving to Zenko MongoDB
-            this._updateOwnerMD(sourceEntry, bucketInfo);
-            this._updateObjectDataStoreName(sourceEntry, location);
-            this._updateLocations(sourceEntry, location);
-            this._updateAcl(sourceEntry);
+            if (zenkoObjMd) {
+                // Keep existing metadata fields, only need to update the tags
+                const tags = sourceEntry.getTags();
+                sourceEntry._data = { ...zenkoObjMd }; // eslint-disable-line no-param-reassign
+                sourceEntry.setTags(tags);
+            } else {
+                // Update necessary metadata fields before saving to Zenko MongoDB
+                this._updateOwnerMD(sourceEntry, bucketInfo);
+                this._updateObjectDataStoreName(sourceEntry, location);
+                this._updateLocations(sourceEntry, location);
+                this._updateAcl(sourceEntry);
+            }
+
+            // Try to update replication info, if applicable
             this._updateReplicationInfo(sourceEntry, bucketInfo, content,
                 zenkoObjMd);
 
