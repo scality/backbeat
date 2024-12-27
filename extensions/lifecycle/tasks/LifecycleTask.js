@@ -429,7 +429,7 @@ class LifecycleTask extends BackbeatTask {
 
             // if no versions to process, skip further processing for this batch
             if (allVersionsWithStaleDate.length === 0) {
-                return Promise.allSettled(promises).then(() => done(), done);
+                return Promise.allSettled(promises).then(() => done());
             }
 
             // for each version, get their relative rules, compare with
@@ -457,7 +457,9 @@ class LifecycleTask extends BackbeatTask {
                     return resolve();
                 })));
 
-            return Promise.allSettled(promises).then(() => done(), done);
+            return Promise.allSettled(promises).then(results => done(
+                results.find(r => r.status === 'rejected')?.reason
+            ));
         });
     }
 

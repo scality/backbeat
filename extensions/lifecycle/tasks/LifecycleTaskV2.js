@@ -114,7 +114,7 @@ class LifecycleTaskV2 extends LifecycleTask {
         return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
         (err, contents, isTruncated, markerInfo) => {
             if (err) {
-                return Promise.allSettled(promises).then(() => done(err), () => done(err));
+                return Promise.allSettled(promises).then(() => done(err));
             }
 
             // re-queue truncated listing only once.
@@ -145,7 +145,9 @@ class LifecycleTaskV2 extends LifecycleTask {
                 bucketData, bucketLCRules, contents, log,
             ));
 
-            return Promise.allSettled(promises).then(() => done(), done);
+            return Promise.allSettled(promises).then(results => done(
+                results.find(r => r.status === 'rejected')?.reason
+            ));
         });
     }
 
@@ -195,7 +197,7 @@ class LifecycleTaskV2 extends LifecycleTask {
         return this.backbeatMetadataProxy.listLifecycle(listType, params, log,
         (err, contents, isTruncated, markerInfo) => {
             if (err) {
-                return Promise.allSettled(promises).then(() => done(err), () => done(err));
+                return Promise.allSettled(promises).then(() => done(err));
             }
 
             // create Set of unique keys not matching the next marker to
@@ -255,7 +257,9 @@ class LifecycleTaskV2 extends LifecycleTask {
                     return resolve();
                 })));
 
-            return Promise.allSettled(promises).then(() => done(), done);
+            return Promise.allSettled(promises).then(results => done(
+                results.find(r => r.status === 'rejected')?.reason
+            ));
         });
     }
 
