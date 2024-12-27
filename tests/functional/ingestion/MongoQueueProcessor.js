@@ -849,7 +849,7 @@ describe('MongoQueueProcessor', function mqp() {
                     ...bucketInfo,
                     lifecycleConfiguration: new LifecycleConfiguration(null, { replicationEndpoints: [] }),
                 }),
-                options: { versionId: VERSION_ID },
+                options: { doesNotNeedOpogUpdate: true, versionId: VERSION_ID },
             },
         ].forEach(({
             title, patchBucketInfo, options,
@@ -922,6 +922,8 @@ describe('MongoQueueProcessor', function mqp() {
                     dataStoreVersionId: encode(NEW_VERSION_ID),
                     dataStoreName: LOCATION,
                 }])
+                .setAmzStorageClass('cold')
+                .setArchive(mockArchive)
                 .getValue());
             const deleteObject = sinon.stub(mongoClient, 'deleteObject').callThrough();
             async.waterfall([
@@ -943,10 +945,35 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.deepStrictEqual(deleteObject.getCall(0).args[0], BUCKET);
                 assert.deepStrictEqual(deleteObject.getCall(0).args[1], KEY);
                 assert.deepStrictEqual(deleteObject.getCall(0).args[2], {
-                    doesNotNeedOpogUpdate: true,
                     versionId: VERSION_ID
                 });
 
+                done();
+            });
+        });
+
+        it('should not delete object from mongo when object is archived', done => {
+            // use existing version id
+            const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey);
+            sinon.stub(mqp._mongoClient, 'getObject').yields(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setDataStoreName('cold')
+                .setAmzStorageClass('cold')
+                .setArchive(mockArchive)
+                .setLocation([])
+                .getValue());
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                const deleted = mqp.getDeleted();
+                assert.strictEqual(deleted.length, 0);
                 done();
             });
         });
@@ -964,6 +991,8 @@ describe('MongoQueueProcessor', function mqp() {
                     dataStoreVersionId: encode(VERSION_ID),
                     dataStoreName: LOCATION,
                 }])
+                .setAmzStorageClass('cold')
+                .setArchive(mockArchive)
                 .getValue());
             async.waterfall([
                 next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
