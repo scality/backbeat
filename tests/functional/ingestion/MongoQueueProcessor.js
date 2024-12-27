@@ -907,6 +907,50 @@ describe('MongoQueueProcessor', function mqp() {
             });
         });
 
+        it('should use scal-version-id overhead field', done => {
+            // use existing version id
+            const versionKey = `${KEY}${VID_SEP}${NEW_VERSION_ID}`;
+            const entry = new DeleteOpQueueEntry(BUCKET, versionKey, {
+                'x-amz-meta-scal-version-id': encode(VERSION_ID),
+            });
+            const getObject = sinon.stub(mongoClient, 'getObject').yields(null, new ObjectMD()
+                .setKey(KEY)
+                .setVersionId(VERSION_ID)
+                .setDataStoreName(LOCATION)
+                .setLocation([{
+                    key: KEY,
+                    dataStoreVersionId: encode(NEW_VERSION_ID),
+                    dataStoreName: LOCATION,
+                }])
+                .getValue());
+            const deleteObject = sinon.stub(mongoClient, 'deleteObject').callThrough();
+            async.waterfall([
+                next => mongoClient.getBucketAttributes(BUCKET, fakeLogger,
+                    next),
+                (bucketInfo, next) => mqp._processDeleteOpQueueEntry(fakeLogger,
+                    entry, LOCATION, bucketInfo, next),
+            ], err => {
+                assert.ifError(err);
+
+                sinon.assert.calledOnce(getObject);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[0], BUCKET);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[1], KEY);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[2], {
+                    versionId: VERSION_ID
+                });
+
+                sinon.assert.calledOnce(deleteObject);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[0], BUCKET);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[1], KEY);
+                assert.deepStrictEqual(deleteObject.getCall(0).args[2], {
+                    doesNotNeedOpogUpdate: true,
+                    versionId: VERSION_ID
+                });
+
+                done();
+            });
+        });
+
         it('should not delete object from mongo when object is in another location', done => {
             // use existing version id
             const versionKey = `${KEY}${VID_SEP}${VERSION_ID}`;

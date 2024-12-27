@@ -398,7 +398,14 @@ class MongoQueueProcessor {
     _processDeleteOpQueueEntry(log, sourceEntry, location, bucketInfo, done) {
         const bucket = sourceEntry.getBucket();
         const key = sourceEntry.getObjectKey();
-        const versionId = extractVersionId(sourceEntry.getObjectVersionedKey());
+        const entryVersionId = extractVersionId(sourceEntry.getObjectVersionedKey());
+
+        // Use x-amz-meta-scal-version-id if provided, instead of the actual versionId of the object.
+        // This should happen only for restored objects : in all other situations, both the source
+        // and ingested objects should have the same version id (and no x-amz-meta-scal-version-id
+        // metadata).
+        const scalVersionId = sourceEntry.getOverheadField('x-amz-meta-scal-version-id');
+        const versionId = scalVersionId ? VersionID.decode(scalVersionId) : entryVersionId;
 
         this.logger.debug('processing object delete', { bucket, key, versionId });
 
@@ -414,7 +421,7 @@ class MongoQueueProcessor {
                     zenkoObjMd.location?.length !== 1 ||
                     zenkoObjMd.location[0].dataStoreName !== location ||
                     zenkoObjMd.location[0].key !== key ||
-                    (zenkoObjMd.location[0].dataStoreVersionId || 'null') !== encode(versionId)
+                    (zenkoObjMd.location[0].dataStoreVersionId || 'null') !== encode(entryVersionId)
                 ) {
                     log.end().info('ignore delete entry, transitioned to another location', {
                         entry: sourceEntry.getLogInfo(),
