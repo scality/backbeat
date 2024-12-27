@@ -117,7 +117,6 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
-                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -163,7 +162,6 @@ describe('LogReader', () => {
             overheadFields: {
                 commitTimestamp: record.timestamp,
                 opTimestamp: '2023-11-29T15:05:57.065Z',
-                versionId: undefined,
             },
         };
         assert(mockExtension.filter.firstCall.calledWith(expectedArgs));
@@ -295,7 +293,6 @@ describe('LogReader', () => {
                         overheadFields: {
                             commitTimestamp: date,
                             opTimestamp: date,
-                            versionId: undefined,
                             ...params.overhead,
                         },
                     }));
