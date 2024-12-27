@@ -432,9 +432,9 @@ class MongoQueueProcessor {
                     return done();
                 }
 
-                return cb();
+                return cb(null, zenkoObjMd);
             },
-            cb => {
+            (zenkoObjMd, cb) => {
                 const options = {};
 
                 // Calling deleteObject with empty options to use deleteObjectNoVer which is used
@@ -449,9 +449,9 @@ class MongoQueueProcessor {
                     options.versionId = versionId;
                 }
 
-                // If the bucket has no lifecycle or notification configuration, we don't need the
-                // oplog update, and can skip it to lower the load on mongo
-                if (!bucketInfo.lifecycleConfiguration && !bucketInfo.notificationConfiguration) {
+                // If the bucket has notification configuration and the object is not archived, we
+                // don't need the oplog update, and can skip it to lower the load on mongo
+                if (!zenkoObjMd.archive && !bucketInfo.notificationConfiguration) {
                     options.doesNotNeedOpogUpdate = true;
                 }
 
