@@ -71,7 +71,7 @@ PAST.setUTCHours(0, 0, 0, 0);
 // 5 days after currentDate
 const FUTURE = new Date(CURRENT);
 FUTURE.setDate(FUTURE.getDate() + 5);
-FUTURE.setUTCHours(0, 0, 0, 0); 
+FUTURE.setUTCHours(0, 0, 0, 0);
 
 const OWNER = 'testOwner';
 const ncd = 'NoncurrentDays';
