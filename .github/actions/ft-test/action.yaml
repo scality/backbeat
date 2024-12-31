@@ -17,10 +17,6 @@ inputs:
     description: name to the runner script
     required: false
     default: run_ft_tests.bash
-  cloudserver_image:
-    description: name of the cloudserver image
-    required: false
-    default: "ghcr.io/scality/cloudserver:8.6.8"
 
 runs:
   using: composite
@@ -30,7 +26,6 @@ runs:
       run: .github/scripts/${{ inputs.runner }} ft_test:${{ inputs.testsuite }}
       env:
         BACKBEAT_CONFIG_FILE: ${{ inputs.config }}
-        CLOUDSERVER_IMAGE: ${{ inputs.cloudserver_image }}
 
     - uses: codecov/codecov-action@v4
       with:
