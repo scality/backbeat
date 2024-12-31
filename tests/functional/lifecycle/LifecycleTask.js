@@ -63,12 +63,15 @@ const backbeatMetadataProxyMock = {
 // current date
 const CURRENT = new Date();
 CURRENT.setDate(CURRENT.getDate() - 2);
+CURRENT.setUTCHours(0, 0, 0, 0);
 // 5 days prior to currentDate
 const PAST = new Date(CURRENT);
 PAST.setDate(PAST.getDate() - 5);
+PAST.setUTCHours(0, 0, 0, 0);
 // 5 days after currentDate
 const FUTURE = new Date(CURRENT);
 FUTURE.setDate(FUTURE.getDate() + 5);
+FUTURE.setUTCHours(0, 0, 0, 0); 
 
 const OWNER = 'testOwner';
 const ncd = 'NoncurrentDays';
