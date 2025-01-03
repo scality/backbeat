@@ -1653,7 +1653,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: Array(7).fill('test/obj-1'),
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 7,
                 },
             },
@@ -1679,7 +1679,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: Array(2).fill('src/obj-2'),
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 2,
                 },
             },
