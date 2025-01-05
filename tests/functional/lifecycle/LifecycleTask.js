@@ -1826,7 +1826,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: [],
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 0,
                 },
             },
