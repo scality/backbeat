@@ -1793,7 +1793,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: ['src/obj-2'],
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 1,
                 },
             },
