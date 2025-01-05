@@ -445,6 +445,12 @@ class LifecycleBucketProcessorMock {
             ncvHeap: this.ncvHeap,
             lcOptions: timeOptions,
             circuitBreakers: this._circuitBreakers,
+            supportedRules: [
+                'expiration',
+                'noncurrentVersionExpiration',
+                'abortIncompleteMultipartUpload',
+                'transitions',
+            ],
         };
     }
 
@@ -506,12 +512,6 @@ describe('lifecycle task functional tests', function dF() {
         lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
-        lcTask.setSupportedRules([
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
-            'transitions',
-        ]);
         s3Helper = new S3Helper(s3);
     });
 
