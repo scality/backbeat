@@ -4,6 +4,8 @@ const http = require('http');
 const kafka = require('node-rdkafka');
 const { MetadataMock, mockLogs } = require('../utils/MetadataMock');
 const MongoClient = require('mongodb').MongoClient;
+const { promisify } = require('util');
+const timers  = require('timers/promises');
 
 const dummyLogger = require('../../utils/DummyLogger');
 const dummyPensieveCredentials = require('./DummyPensieveCredentials.json');
@@ -113,21 +115,16 @@ describe('ingestion reader tests with mock', function fD() {
         await client.connect();
         db = client.db('metadata', { ignoreUndefined: true });
         try {
-            await new Promise((resolve, reject) => {
-                kafkaAdminClient.createTopic({
-                    topic,
-                    num_partitions: 1, // eslint-disable-line camelcase
-                    replication_factor: 1, // eslint-disable-line camelcase
-                }, err => {
-                    if (err && err.code === 36) {
-                        // if topic already exits.
-                        return resolve();
-                    }
-                    return err ? reject(err) : resolve();
-                });
+            const createTopic = promisify(kafkaAdminClient.createTopic).bind(kafkaAdminClient);
+            await createTopic({
+                topic,
+                num_partitions: 1, // eslint-disable-line camelcase
+                replication_factor: 1, // eslint-disable-line camelcase
             });
         } catch (err) {
-            throw err;
+            if (err.code !== 36) { // if topic does not already exist
+                throw err;
+            }
         }
         producer = new BackbeatProducer({
             kafka: testConfig.kafka,
@@ -140,7 +137,7 @@ describe('ingestion reader tests with mock', function fD() {
         });
 
         consumer.subscribe([testConfig.extensions.ingestion.topic]);
-        await new Promise(resolve => setTimeout(resolve, 2000));
+        await timers.setTimeout(2000);
         await db.createCollection('PENSIEVE');
         const collection = db.collection('PENSIEVE');
         await collection.insertOne(dummyPensieveCredentials);
@@ -154,28 +151,14 @@ describe('ingestion reader tests with mock', function fD() {
             zkClient.once('error', reject);
             zkClient.once('ready', resolve);
         });
-        await new Promise((resolve, reject) => {
-            initManagement(testConfig, err => {
-                if (err) {
-                    return reject(err);
-                }
-                return resolve();
-            });
-        });
+        await promisify(initManagement)(testConfig);
         const metadataMock = new MetadataMock();
         httpServer = http.createServer((req, res) => metadataMock.onRequest(req, res))
             .listen(testPort);
     });
 
     after(async () =>  {
-        await new Promise((resolve, reject) => {
-            httpServer.close(err => {
-                if (err) {
-                    return reject(err);
-                }
-                return resolve();
-            });
-        });
+        await promisify(httpServer.close.bind(httpServer))();
         consumer.unsubscribe();
         await db.collection('PENSIEVE').drop();
         await client.close();

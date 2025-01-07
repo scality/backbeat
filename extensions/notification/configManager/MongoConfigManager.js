@@ -91,50 +91,49 @@ class MongoConfigManager extends BaseConfigManager {
 
     /**
      * Connects to MongoDB using the MongoClientInterface
-     * and retreives the metastore collection
+     * and retrieves the metastore collection
      * @param {Function} cb callback
      * @returns {undefined}
      */
-    _setupMongoClient(cb) {
+    async _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
-        const client = new MongoClient(mongoUrl, {
+        let client = new MongoClient(mongoUrl, {
             replicaSet: this._mongoConfig.replicaSet,
             useNewUrlParser: true,
             readPreference: this._mongoConfig.readPreference,
         });
 
-        return client.connect().then(client => {
+        try {
+            client = await client.connect();
+
             this._logger.debug('Connected to MongoDB', {
                 method: 'MongoConfigManager._setupMongoClient',
             });
-            try {
-                this._mongoClient = client.db(this._mongoConfig.database, {
-                    ignoreUndefined: true,
-                });
-                this._metastore = this._mongoClient.collection(this._bucketMetastore);
+
+            this._mongoClient = client.db(this._mongoConfig.database, {
+                ignoreUndefined: true,
+            });
+            this._metastore = this._mongoClient.collection(this._bucketMetastore);
                 // get mongodb version
-                getMongoVersion(this._mongoClient, (err, version) => {
-                    if (err) {
-                        this._logger.error('Could not get MongoDB version', {
-                            method: 'MongoConfigManager._setupMongoClient',
-                            error: err.message,
-                        });
-                        return cb(err);
-                    }
-                    this._mongoVersion = version;
-                    return cb();
-                });
-                return undefined;
-            } catch (error) {
-                return cb(error);
-            }
-        }).catch(err => {
+            getMongoVersion(this._mongoClient, (err, version) => {
+                if (err) {
+                    this._logger.error('Could not get MongoDB version', {
+                        method: 'MongoConfigManager._setupMongoClient',
+                        error: err.message,
+                    });
+                    return cb(err);
+                }
+                this._mongoVersion = version;
+                return cb();
+            });
+            return undefined;
+        } catch (err) {
             this._logger.error('Could not connect to MongoDB', {
                 method: 'MongoConfigManager._setupMongoClient',
                 error: err.message,
             });
             return cb(err);
-        });
+        }
     }
 
     /**

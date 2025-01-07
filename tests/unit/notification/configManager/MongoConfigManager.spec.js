@@ -150,7 +150,7 @@ describe('MongoConfigManager ::', () => {
             const getDbStub = sinon.stub().returns({
                 collection: getCollectionStub,
                 });
-            sinon.stub(MongoClient, 'connect').callsArgWith(2, null, {
+            sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: getDbStub,
             });
             manager._setupMongoClient(err => {
