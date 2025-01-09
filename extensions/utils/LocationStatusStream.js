@@ -66,7 +66,6 @@ class LocationStatusStream {
         const client = new MongoClient(mongoUrl, {
                 replicaSet: this._mongoConfig.replicaSet,
                 useNewUrlParser: true,
-                useUnifiedTopology: true,
         });
         return client.connect().then(client => {
             // connect to metadata DB

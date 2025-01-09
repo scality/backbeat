@@ -108,12 +108,11 @@ describe('ingestion reader tests with mock', function fD() {
     `mongodb://${testConfig.queuePopulator.mongo.replicaSetHosts}` +
     '/db?replicaSet=rs0';
     const client = new MongoClient(mongoUrl, {});
-    let db;
+    const db = client.db('metadata', { ignoreUndefined: true });
     before(async () => {
         testConfig.s3.port = testPort;
         const topic = testConfig.extensions.ingestion.topic;
         await client.connect();
-        db = client.db('metadata', { ignoreUndefined: true });
         try {
             const createTopic = promisify(kafkaAdminClient.createTopic).bind(kafkaAdminClient);
             await createTopic({

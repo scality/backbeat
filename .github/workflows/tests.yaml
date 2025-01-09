@@ -3,11 +3,6 @@ name: tests
 
 env:
   GINKGO_VERSION: v1.15.2
-  # DEBUG WAIT
-  TMATE_SERVER_HOST: ${{ secrets.TMATE_SERVER_HOST }}
-  TMATE_SERVER_PORT: ${{ secrets.TMATE_SERVER_PORT }}
-  TMATE_SERVER_RSA_FINGERPRINT: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
-  TMATE_SERVER_ED25519_FINGERPRINT: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
 
 on:
   push:
@@ -199,7 +194,12 @@ jobs:
         NODE_OPTIONS: '--max-old-space-size=150'
 
     - name: Debug wait
-      uses: ./.github/actions/debug-wait
+      uses: scality/actions/action-ssh-to-runner@1.8.0
+      with:
+        tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
+        tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
+        tmate-server-rsa-fingerprint: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
+        tmate-server-ed25519-fingerprint: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
+      continue-on-error: true
       timeout-minutes: 60
       if: failure() && runner.debug == '1'
-

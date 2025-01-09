@@ -43,7 +43,6 @@ describe('LocationStatusStream', () => {
                     {
                         replicaSet: 'rs0',
                         useNewUrlParser: true,
-                        useUnifiedTopology: true,
                     }
                 ));
                 assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));

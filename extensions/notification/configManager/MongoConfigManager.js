@@ -90,21 +90,20 @@ class MongoConfigManager extends BaseConfigManager {
     }
 
     /**
-     * Connects to MongoDB using the MongoClientInterface
-     * and retrieves the metastore collection
+     * Connect to MongoDB using the MongoClientInterface
+     * and retrieve the metastore collection
      * @param {Function} cb callback
      * @returns {undefined}
      */
     async _setupMongoClient(cb) {
         const mongoUrl = constructConnectionString(this._mongoConfig);
-        let client = new MongoClient(mongoUrl, {
-            replicaSet: this._mongoConfig.replicaSet,
-            useNewUrlParser: true,
-            readPreference: this._mongoConfig.readPreference,
-        });
 
         try {
-            client = await client.connect();
+            const client = await new MongoClient(mongoUrl, {
+                replicaSet: this._mongoConfig.replicaSet,
+                useNewUrlParser: true,
+                readPreference: this._mongoConfig.readPreference,
+            }).connect();
 
             this._logger.debug('Connected to MongoDB', {
                 method: 'MongoConfigManager._setupMongoClient',
@@ -115,7 +114,7 @@ class MongoConfigManager extends BaseConfigManager {
             });
             this._metastore = this._mongoClient.collection(this._bucketMetastore);
                 // get mongodb version
-            getMongoVersion(this._mongoClient, (err, version) => {
+            return getMongoVersion(this._mongoClient, (err, version) => {
                 if (err) {
                     this._logger.error('Could not get MongoDB version', {
                         method: 'MongoConfigManager._setupMongoClient',
@@ -126,7 +125,6 @@ class MongoConfigManager extends BaseConfigManager {
                 this._mongoVersion = version;
                 return cb();
             });
-            return undefined;
         } catch (err) {
             this._logger.error('Could not connect to MongoDB', {
                 method: 'MongoConfigManager._setupMongoClient',
