@@ -1,0 +1,171 @@
+{
+  "zookeeper": {
+    "connectionString": "127.0.0.1:2181/backbeat",
+    "autoCreateNamespace": true
+  },
+  "kafka": {
+    "hosts": "127.0.0.1:9092",
+    "site": "0",
+    "backlogMetrics": {
+      "zkPath": "/run/kafka-backlog-metrics",
+      "intervalS": 60
+    }
+  },
+  "queuePopulator": {
+    "cronRule": "*/5 * * * * *",
+    "batchMaxRead": 10,
+    "batchTimeoutMs": 30,
+    "zookeeperPath": "/replication-populator",
+    "logSource": "bucketd",
+    "bucketd": {
+      "host": "localhost",
+      "port": 9000
+    },
+    "probeServer": {
+      "bindAddress": "127.0.0.1",
+      "port": 7900
+    }
+  },
+  "metrics": {
+    "topic": "backbeat-metrics"
+  },
+  "s3": {
+    "host": "127.0.0.1",
+    "port": 8000
+  },
+  "extensions": {
+    "replication": {
+      "source": {
+        "s3": {
+          "host": "127.0.0.1",
+          "port": 8000
+        },
+        "auth": {
+          "type": "role",
+          "vault": {
+            "host": "localhost",
+            "port": 8500,
+            "adminPort": 8600
+          }
+        }
+      },
+      "destination": {
+        "bootstrapList": [{
+          "site": "aws-location",
+          "servers": ["127.0.0.1:8001"],
+          "default": true
+        }],
+        "auth": {
+          "type": "role",
+          "vault": {}
+        }
+      },
+      "topic": "backbeat-replication",
+      "replicationStatusTopic": "backbeat-replication-status",
+      "replicationFailedTopic": "backbeat-replication-failed",
+      "monitorReplicationFailures": true,
+      "monitorReplicationFailureExpiryTimeS": 86400,
+      "queueProcessor": {
+        "groupId": "backbeat-replication-group",
+        "mpuPartsConcurrency": 10,
+        "concurrency": 10,
+        "probeServer": [],
+        "sourceCheckIfSizeGreaterThanMB": 100
+      },
+      "replayTopics": [
+        {
+          "topicName": "backbeat-replication-replay-0",
+          "retries": "5"
+        }
+      ],
+      "replayProcessor": {
+        "probeServer": []
+      },
+      "replicationStatusProcessor": {
+        "groupId": "backbeat-replication-group",
+        "probeServer": {
+          "bindAddress": "127.0.0.1",
+          "port": 7700
+        }
+      }
+    },
+    "lifecycle": {
+      "forceLegacyListing": false,
+      "auth": {
+        "type": "assumeRole",
+        "roleName": "scality-internal/service-backbeat-lifecycle-1",
+        "sts": {
+          "host": "localhost",
+          "port": 8650,
+          "accessKey": "OG4509TSQHQNCSQODDTV",
+          "secretKey": "IxO6u+r6IR21xXfoxcHvXmHqVLyezL9x7Yx2PjHG"
+        },
+        "vault": {
+          "host": "localhost",
+          "port": 8500
+        }
+      },
+      "zookeeperPath": "/lifecycle",
+      "bucketTasksTopic": "backbeat-lifecycle-bucket-tasks",
+      "objectTasksTopic": "backbeat-lifecycle-object-tasks",
+      "conductor": {
+        "backlogControl": {
+          "enabled": true
+        },
+        "bucketSource": "bucketd",
+        "bucketd": {
+          "host": "localhost",
+          "port": 9000
+        },
+        "cronRule": "5 * * * * * *",
+        "concurrency": 1000,
+        "probeServer": {
+          "bindAddress": "127.0.0.1",
+          "port": 7200
+        }
+      },
+      "bucketProcessor": {
+        "groupId": "backbeat-lifecycle-bucket-processor-group",
+        "concurrency": 1,
+        "probeServer": {
+          "bindAddress": "127.0.0.1",
+          "port": 7300
+        }
+      },
+      "objectProcessor": {
+        "groupId": "backbeat-lifecycle-object-processor-group",
+        "concurrency": 20,
+        "probeServer": {
+          "bindAddress": "127.0.0.1",
+          "port": 7400
+        }
+      },
+      "supportedLifecycleRules": [
+        "expiration",
+        "noncurrentVersionExpiration",
+        "abortIncompleteMultipartUpload"
+    ]
+    }
+  },
+  "log": {
+    "logLevel": "info",
+    "dumpLevel": "error"
+  },
+  "server": {
+    "healthChecks": {
+      "allowFrom": [
+        "127.0.0.1/8",
+        "::1"
+      ]
+    },
+    "host": "localhost",
+    "port": 8900
+  },
+  "certFilePaths": {},
+  "redis": {
+      "name": "scality-s3",
+      "password": "",
+      "host": "127.0.0.1",
+      "port": 6379
+  }
+}

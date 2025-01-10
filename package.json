@@ -19,6 +19,8 @@
     "garbage_collector": "node extensions/gc/service.js",
     "test": "mocha --recursive tests/unit --timeout 30000 --exit",
     "cover:test": "nyc --clean --silent yarn run test && nyc report --report-dir ./coverage/test --reporter=lcov",
+    "e2e": "mocha --recursive $(find tests/e2e -name '*.js') --timeout 30000",
+    "cover:e2e": "nyc --clean --silent yarn run e2e && nyc report --report-dir ./coverage/e2e --reporter=lcov",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000 --exit",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000 --exit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000 --exit",

@@ -248,6 +248,30 @@ jobs:
           docker compose --profile ${{ matrix.profile }} up -d --quiet-pull
           bash ../../scripts/wait_for_local_port.bash 8000 120
         working-directory: .github/dockerfiles/e2e
+      - name: Create Zookeeper paths for tests with metadata
+        run: |-
+          # Setup zookeeper paths for backbeat like we do in federation 
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/owners ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/leaders ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions ""
+          # provision raft ids, we configure 4 raft sessions in metadata config
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/0 ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/1 ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/2 ""
+          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/3 ""
+        if: ${{ matrix.profile == 's3c' }}
+      - name: Run E2E tests
+        env:
+          PROFILE: ${{ matrix.profile }}
+        run: yarn run cover:e2e
+      - uses: codecov/codecov-action@v4
+        with:
+          token: ${{ secrets.CODECOV_TOKEN }}
+          directory: ./coverage/e2e
+          flags: e2e
       - name: Debug wait
         uses: scality/actions/action-ssh-to-runner@1.8.0
         with:
