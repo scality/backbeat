@@ -213,3 +213,48 @@ jobs:
       continue-on-error: true
       timeout-minutes: 60
       if: failure() && runner.debug == '1'
+
+  e2e-tests:
+    needs: build
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        profile: [ 's3c' ]
+        cloudserver_tag: [ '7.70.47' ]
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: '22'
+          cache: yarn
+      - name: Install node dependencies
+        run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+      - name: Login to Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ghcr.io
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+      - name: Setup services
+        env:
+          KAFKA_IMAGE: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+          REDIS_IMAGE: redis:alpine
+          METADATA_IMAGE: ghcr.io/scality/metadata:7.70.45-standalone
+          CLOUDSERVER_IMAGE: ghcr.io/scality/cloudserver:${{ matrix.cloudserver_tag }}
+        run: |-
+          set -e -o pipefail;
+          docker compose --profile ${{ matrix.profile }} up -d --quiet-pull
+          bash ../../scripts/wait_for_local_port.bash 8000 120
+        working-directory: .github/dockerfiles/e2e
+      - name: Debug wait
+        uses: scality/actions/action-ssh-to-runner@1.8.0
+        with:
+          tmate-server-host: ${{ secrets.TMATE_SERVER_HOST }}
+          tmate-server-port: ${{ secrets.TMATE_SERVER_PORT }}
+          tmate-server-rsa-fingerprint: ${{ secrets.TMATE_SERVER_RSA_FINGERPRINT }}
+          tmate-server-ed25519-fingerprint: ${{ secrets.TMATE_SERVER_ED25519_FINGERPRINT }}
+        continue-on-error: true
+        timeout-minutes: 60
+        if: failure() && runner.debug == '1'
