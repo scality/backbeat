@@ -420,11 +420,6 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             return;
         }
 
-        // cold delete only supported for archived objects in DMF backend
-        if (locationConfig.type !== 'dmf') {
-            return;
-        }
-
         const isMaster = isMasterKey(entry.key);
         const isVersionedMaster = isMaster && !!value.versionId && !value.isNull;
         const isNullVersion = !isMaster && value.isNull;
