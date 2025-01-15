@@ -1,12 +1,28 @@
-{
-    "extends": "scality",
-    "parserOptions": {
-        "ecmaVersion": 2020
+import mocha from "eslint-plugin-mocha";
+import path from "node:path";
+import { fileURLToPath } from "node:url";
+import js from "@eslint/js";
+import { FlatCompat } from "@eslint/eslintrc";
+
+const __filename = fileURLToPath(import.meta.url);
+const __dirname = path.dirname(__filename);
+const compat = new FlatCompat({
+    baseDirectory: __dirname,
+    recommendedConfig: js.configs.recommended,
+    allConfig: js.configs.all
+});
+
+export default [...compat.extends("scality"), {
+    plugins: {
+        mocha,
     },
-    "plugins": [
-        "mocha"
-    ],
-    "rules": {
+
+    languageOptions: {
+        ecmaVersion: 2020,
+        sourceType: "script",
+    },
+
+    rules: {
         "object-curly-newline": "off",
         "import/newline-after-import": "off",
         "import/order": "off",
@@ -37,13 +53,15 @@
         "no-undef-init": "off",
         "newline-per-chained-call": "off",
         "no-useless-escape": "off",
+        "no-redeclare":"off",
         "mocha/no-exclusive-tests": "error"
     },
-    "settings": {
-        "import/resolver": {
-          "node": {
-            "paths": ["/backbeat/node_modules", "node_modules"]
-          }
+
+    settings: {
+        'import/resolver': {
+            node: {
+                paths: ["/backbeat/node_modules", "node_modules"]
+            }
         }
-      }
-}
+    },
+}];
