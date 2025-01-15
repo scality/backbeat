@@ -1,6 +1,7 @@
 # Zenko Backbeat
 
 ![backbeat logo](res/backbeat-logo.png)
+[![Build Status][badgepriv]][badgepub]
 
 ## OVERVIEW
 
