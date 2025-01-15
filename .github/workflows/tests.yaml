@@ -196,7 +196,7 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: run ballooning tests for lifecycle conductor
-      run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js
+      run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js --exit
       env:
         # Constrain heap long-lived heap size to 150MB, so that pushing 200K messages
         # will crash if they end up in memory all at the same time (circuit breaking
