@@ -1,5 +1,5 @@
 const joi = require('joi');
-const uuid = require('uuid');
+const { v4: uuid } = require('uuid');
 const { errors } = require('arsenal');
 const { EventEmitter } = require('stream');
 const KafkaConnectWrapper = require('../../../lib/wrappers/KafkaConnectWrapper');
@@ -121,7 +121,7 @@ class Connector extends EventEmitter {
      * @returns {undefined}
      */
     updatePartitionName() {
-        this._config['offset.partition.name'] = `partition-${uuid.v4()}`;
+        this._config['offset.partition.name'] = `partition-${uuid()}`;
     }
 
     /**

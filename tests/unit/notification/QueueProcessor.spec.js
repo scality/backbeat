@@ -85,8 +85,7 @@ describe('notification QueueProcessor', () => {
         let pendingDeliveryReports = [];
         const flushDeliveryReportsInterval = setInterval(() => {
             const _pendingDeliveryReports = pendingDeliveryReports;
-            pendingDeliveryReports = [];
-            // eslint-disable-next-line no-restricted-syntax
+            pendingDeliveryReports = [];             
             for (const deliveryReportCb of _pendingDeliveryReports) {
                 deliveryReportCb();
             }

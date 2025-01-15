@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const assert = require('assert');
 const sinon = require('sinon');
@@ -30,21 +30,12 @@ describe('LocationStatusStream', () => {
                 collection: collectionStub,
                 command: mongoCommandStub,
             });
-            const mongoConnectStub = sinon.stub(MongoClient, 'connect').resolves({
+            sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: dbStub,
             });
             const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
             lss._setupMongoClient(err => {
                 assert.ifError(err);
-                const mongoUrl = 'mongodb://user:password@localhost:27017,localhost:27018,' +
-                'localhost:27019/?w=majority&readPreference=primary&replicaSet=rs0';
-                assert(mongoConnectStub.calledOnceWith(
-                    mongoUrl,
-                    {
-                        replicaSet: 'rs0',
-                        useNewUrlParser: true,
-                    }
-                ));
                 assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
                 assert(collectionStub.calledOnceWith('__locationStatusStore'));
                 assert(mongoCommandStub.calledOnceWith({

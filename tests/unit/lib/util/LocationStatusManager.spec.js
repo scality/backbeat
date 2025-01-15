@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const sinon = require('sinon');
 const async = require('async');

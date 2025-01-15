@@ -1,5 +1,5 @@
 const async = require('async');
-const uuid = require('uuid/v4');
+const { v4: uuid } = require('uuid');
 
 const { errors, jsutil, models } = require('arsenal');
 const { ObjectMD } = models;
@@ -227,7 +227,6 @@ class CopyLocationTask extends BackbeatTask {
             });
             attachReqUids(sourceReq, log);
             sourceReq.on('error', err => {
-                // eslint-disable-next-line no-param-reassign
                 if (err.statusCode === 404) {
                     log.error('the source object was not found', Object.assign({
                         method: 'CopyLocationTask._getAndPutObjectOnce',

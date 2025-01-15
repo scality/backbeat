@@ -1,5 +1,5 @@
 const async = require('async');
-const uuid = require('uuid/v4');
+const { v4: uuid } = require('uuid');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;

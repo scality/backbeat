@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 // get Bucket Info from Mongo for given location every 1 minute per consumer
 const REFRESH_TIMER = 60000;

@@ -100,7 +100,7 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
             try {
                 const metaHeaders = JSON.parse(userMD);
                 existingIDHeader = metaHeaders[zenkoIDHeader];
-            } catch (err) {
+            } catch {
                 this.log.trace('malformed user metadata', {
                     method: 'IngestionQueuePopulator.filter',
                     bucket: entry.bucket,

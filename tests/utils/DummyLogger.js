@@ -42,7 +42,7 @@ class DummyRequestLogger {
         this.counts.fatal += 1;
     }
 
-    getSerializedUids() { // eslint-disable-line class-methods-use-this
+    getSerializedUids() {  
         return 'dummy:Serialized:Uids';
     }
 

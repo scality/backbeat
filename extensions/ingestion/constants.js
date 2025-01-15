@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const testIsOn = process.env.CI === 'true';
 

@@ -193,7 +193,7 @@ describe('Credentials Manager', () => {
                     // Simulate error returned by the vault client
                     const errorWithCode = new Error(testCase.error.message);
                     Object.assign(errorWithCode, testCase.error);
-                    callback(errorWithCode, null, testCase.statusCode);
+                    return callback(errorWithCode, null, testCase.statusCode);
                 }
             };
 

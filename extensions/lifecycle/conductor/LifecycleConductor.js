@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const async = require('async');
 const schedule = require('node-schedule');

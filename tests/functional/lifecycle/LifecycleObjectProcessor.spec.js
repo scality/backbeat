@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const werelogs = require('werelogs');
 const { ObjectMD } = require('arsenal').models;

@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const { EventEmitter } = require('events');
 const Logger = require('werelogs').Logger;

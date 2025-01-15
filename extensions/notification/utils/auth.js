@@ -9,7 +9,7 @@ function getAuthFilePath(fileName) {
         try {
             fs.accessSync(path, fs.F_OK | fs.R_OK);
             return path;
-        } catch (e) {
+        } catch {
             return null;
         }
     }

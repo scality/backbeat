@@ -1,6 +1,6 @@
 const joi = require('joi');
 const async = require('async');
-const uuid = require('uuid');
+const { v4: uuid } = require('uuid');
 const util = require('util');
 const schedule = require('node-schedule');
 const { errors } = require('arsenal');
@@ -111,7 +111,7 @@ class ConnectorsManager extends EventEmitter {
      * @returns {string} generated connector name
      */
     _generateConnectorName() {
-        return `${this._prefix}${constants.defaultConnectorName}-${uuid.v4()}`;
+        return `${this._prefix}${constants.defaultConnectorName}-${uuid()}`;
     }
 
     /**

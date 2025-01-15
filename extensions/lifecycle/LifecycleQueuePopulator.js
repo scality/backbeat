@@ -7,7 +7,7 @@ const { mpuBucketPrefix } = constants;
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { authTypeAssumeRole } = require('../../lib/constants');
-const uuid = require('uuid/v4');
+const { v4: uuid } = require('uuid');
 const safeJsonParse = require('./util/safeJsonParse');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';

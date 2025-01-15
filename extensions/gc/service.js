@@ -1,4 +1,4 @@
-'use strict'; // eslint-disable-line
+'use strict';
 
 const { errors } = require('arsenal');
 const werelogs = require('werelogs');
