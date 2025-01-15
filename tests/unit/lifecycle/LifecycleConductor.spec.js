@@ -242,19 +242,19 @@ describe('Lifecycle Conductor', () => {
     });
 
     describe('_indexesGetOrCreate', () => {
-        it('should return v1 for bucketd bucket sources', () => {
+        it('should return v2 for bucketd bucket sources', () => {
             conductor._bucketSource = 'bucketd';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
-                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
             });
         });
 
-        it('should return v1 for zookeeper bucket sources', () => {
+        it('should return v2 for zookeeper bucket sources', () => {
             conductor._bucketSource = 'zookeeper';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
-                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
             });
         });
 

@@ -124,7 +124,7 @@ describe('BackbeatConsumer main tests', () => {
                 setTimeout(() => {
                     _checkZkMetrics(() => {
                         consumeCb();
-                        consumer.unsubscribe();
+                        consumer._consumer.unsubscribe();
                     });
                 }, 5000);
                 assert.deepStrictEqual(
