@@ -12,7 +12,7 @@ on:
 
 jobs:
   build:
-    runs-on: ubuntu-22.04-2core
+    runs-on: ubuntu-latest
     permissions:
       # Need to explicitely add package write permissions for dependabot
       contents: read
@@ -65,7 +65,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=ci-mongodb
 
   bucket-scanner:
-    runs-on: ubuntu-22.04-2core
+    runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
@@ -98,7 +98,7 @@ jobs:
 
   tests:
     needs: build
-    runs-on: ubuntu-22.04-2core
+    runs-on: ubuntu-latest
     services:
       redis:
         image: redis:alpine
