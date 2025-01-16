@@ -462,7 +462,7 @@ queue_populator_lag = TimeSeries(
             '   max(mongodb_mongod_replset_oplog_head_timestamp{',
             '           namespace="${namespace}", job="${job_mongod}"})',
             '   -',
-            '   min(s3_replication_log_timestamp{namespace="${namespace}",',
+            '   min(s3_backbeat_populator_log_timestamp{namespace="${namespace}",',
             '             job="${job_queue_populator}"}),',
             '0)',
         ]),

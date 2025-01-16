@@ -1972,7 +1972,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "clamp_min(\n   max(mongodb_mongod_replset_oplog_head_timestamp{\n           namespace=\"${namespace}\", job=\"${job_mongod}\"})\n   -\n   min(s3_replication_log_timestamp{namespace=\"${namespace}\",\n             job=\"${job_queue_populator}\"}),\n0)",
+          "expr": "clamp_min(\n   max(mongodb_mongod_replset_oplog_head_timestamp{\n           namespace=\"${namespace}\", job=\"${job_mongod}\"})\n   -\n   min(s3_backbeat_populator_log_timestamp{namespace=\"${namespace}\",\n             job=\"${job_queue_populator}\"}),\n0)",
           "format": "time_series",
           "hide": false,
           "instant": false,
