@@ -9,6 +9,10 @@ const { errors } = require('arsenal');
 const { Logger } = require('werelogs');
 
 const LogReader = require('../../../../lib/queuePopulator/LogReader');
+const KafkaLogReader = require('../../../../lib/queuePopulator/KafkaLogReader');
+const BucketFileLogReader = require('../../../../lib/queuePopulator/BucketFileLogReader');
+const RaftLogReader = require('../../../../lib/queuePopulator/RaftLogReader');
+const MongoLogReader = require('../../../../lib/queuePopulator/MongoLogReader');
 
 
 class MockLogConsumer {
@@ -499,6 +503,69 @@ describe('LogReader', () => {
                 assert.strictEqual(batchState.logStats.nbLogRecordsRead, 3);
                 assert.strictEqual(batchState.logStats.hasMoreLog, false);
                 done();
+            });
+        });
+    });
+
+    describe('getMetricLabels', () => {
+        [{
+            name: 'KafkaLogReader',
+            Reader: KafkaLogReader,
+            config: {
+                kafkaConfig: {
+                    hosts: 'localhost:9092',
+                },
+                qpKafkaConfig: {
+                    logName: 'test-log',
+                },
+            },
+            logName: 'kafka-log',
+        }, {
+            name: 'BucketFileLogReader',
+            Reader: BucketFileLogReader,
+            config: {
+                dmdConfig: {
+                    logName: 'test-log',
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            logName: 'bucket-file',
+        }, {
+            name: 'RaftLogReader',
+            Reader: RaftLogReader,
+            config: {
+                raftId: 'test-log',
+                bucketdConfig: {
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            logName: 'raft-log',
+        }, {
+            name: 'RaftLogReader',
+            Reader: MongoLogReader,
+            config: {
+                mongoConfig: {
+                    logName: 'test-log',
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            logName: 'mongo-log',
+        }].forEach(params => {
+            it(`should return proper ${params.name} metrics labels`, () => {
+                const reader = new params.Reader({
+                    ...params.config,
+                    logger: new Logger('test:LogReader'),
+                    extensionNames: 'replication,lifecycle,notification',
+                });
+                const expectedLabels = {
+                    logId: 'test-log',
+                    logName: params.logName,
+                    origin: 'replication,lifecycle,notification',
+                };
+                assert.deepStrictEqual(reader.getMetricLabels(), expectedLabels);
             });
         });
     });
