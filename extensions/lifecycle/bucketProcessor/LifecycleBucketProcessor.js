@@ -108,7 +108,7 @@ class LifecycleBucketProcessor {
         this.s3Clients = {};
         this.backbeatClients = {};
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
-        this.retryWrapper = new BackbeatTask();
+        this.retryWrapper = new BackbeatTask({ retryTimeoutS: 180 });
 
         // helper object to facilitate the tracking of the the latest x
         // noncurrent versions of an object when the field
