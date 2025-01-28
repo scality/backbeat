@@ -120,6 +120,7 @@ describe('LifecycleDeleteObjectTask', () => {
 
     [
         'COMPLETED',
+        'REPLICA',
         undefined,
     ].forEach(status => {
         it(`should delete replicating object with status: ${status}`, done => {
