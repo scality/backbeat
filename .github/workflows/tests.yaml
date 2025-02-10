@@ -247,8 +247,7 @@ jobs:
           CLOUDSERVER_IMAGE: ghcr.io/scality/cloudserver:${{ matrix.cloudserver_tag }}
         run: |-
           set -e -o pipefail;
-          docker compose --profile ${{ matrix.profile }} up -d --quiet-pull
-          bash ../../scripts/wait_for_local_port.bash 8000 120
+          docker compose --profile ${{ matrix.profile }} up -d --quiet-pull --wait
         working-directory: .github/dockerfiles/e2e
       - name: Create Zookeeper paths for tests with metadata
         run: |-

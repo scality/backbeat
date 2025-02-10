@@ -40,7 +40,7 @@
         "readonly": true
     },
     "bucketd": {
-        "bootstrap": ["localhost:9000"]
+        "bootstrap": ["metadata:9000"]
     },
     "vaultd": {
         "host": "localhost",

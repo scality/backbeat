@@ -7,6 +7,12 @@ services:
       - 8181
     user: 0:0
     privileged: true
+    healthcheck:
+      test: curl http://localhost:8181 || exit 1
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 10s
   metadata:
     profiles: ['s3c']
     image: ${METADATA_IMAGE}
@@ -17,10 +23,16 @@ services:
       SPROXYD: sproxyd:8181
     volumes:
         - ./metadata-config.json:/mnt/standalone_workdir/config.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl http://localhost:9000 || exit 1"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 10s
   cloudserver:
     profiles: ['s3c']
-    image: ${CLOUDSERVER_IMAGE}
-    network_mode: host
+    build:
+      context: ../cloudserver
     depends_on:
       - metadata
     environment:
@@ -31,8 +43,12 @@ services:
       S3_CONFIG_FILE: /conf/config.json
       REMOTE_MANAGEMENT_DISABLE: 1
     command: yarn start
-    volumes:
-      - ./cloudserver-config.json:/conf/config.json:ro
+    healthcheck:
+      test: ["CMD-SHELL", "curl http://localhost:8000 || exit 1"]
+      interval: 10s
+      timeout: 30s
+      retries: 12
+      start_period: 10s
   redis:
     profiles: ['s3c']
     image: ${REDIS_IMAGE}
