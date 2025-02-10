@@ -140,9 +140,11 @@ jobs:
       run: yarn run --silent lint
 
     - name: Run unit tests
-      run: yarn run cover:test
+      run: yarn run cover
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
+        TEST_SUITE: test
+
     - uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
@@ -266,7 +268,8 @@ jobs:
       - name: Run E2E tests
         env:
           PROFILE: ${{ matrix.profile }}
-        run: yarn run cover:e2e
+          TEST_SUITE: e2e
+        run: yarn run cover
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
