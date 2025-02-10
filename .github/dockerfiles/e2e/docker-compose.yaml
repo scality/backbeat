@@ -3,8 +3,6 @@ services:
     profiles: ['s3c']
     build:
       context: ../sproxyd
-    ports:
-      - 8181
     user: 0:0
     privileged: true
     healthcheck:
@@ -16,9 +14,10 @@ services:
   metadata:
     profiles: ['s3c']
     image: ${METADATA_IMAGE}
-    network_mode: host
     depends_on:
       - sproxyd
+    ports:
+      - 9000:9000
     environment:
       SPROXYD: sproxyd:8181
     volumes:
@@ -35,11 +34,12 @@ services:
       context: ../cloudserver
     depends_on:
       - metadata
+    ports:
+      - 8000:8000
     environment:
       S3DATA: file
       S3METADATA: scality
       S3VAULT: mem
-      BUCKETD_BOOTSTRAP: localhost:9000
       S3_CONFIG_FILE: /conf/config.json
       REMOTE_MANAGEMENT_DISABLE: 1
     command: yarn start
@@ -52,11 +52,14 @@ services:
   redis:
     profiles: ['s3c']
     image: ${REDIS_IMAGE}
-    network_mode: host
+    ports:
+      - 6379:6379
   kafka:
     profiles: ['s3c']
     image: ${KAFKA_IMAGE}
-    network_mode: host
+    ports:
+      - 9092:9092
+      - 2181:2181
     environment:
       ADVERTISED_HOST: "localhost"
       ADVERTISED_PORT: 9092
