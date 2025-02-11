@@ -4,13 +4,8 @@ services:
     build:
       context: ../sproxyd
     user: 0:0
-    privileged: true
-    healthcheck:
-      test: curl http://localhost:8181 || exit 1
-      interval: 10s
-      timeout: 30s
-      retries: 12
-      start_period: 10s
+    entrypoint: /usr/bin/sproxyd
+    command: -dlw -Vinfo -c /conf/sproxyd.conf -P /run/sproxyd-0 --no-sysfs
   metadata:
     profiles: ['s3c']
     image: ${METADATA_IMAGE}
