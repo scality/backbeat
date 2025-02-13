@@ -1,7 +1,7 @@
 # Zenko Backbeat
 
 ![backbeat logo](res/backbeat-logo.png)
-[![Build Status][badgepriv]][badgepub]
+![Build Status](https://github.com/scality/backbeat/actions/workflows/release.yaml/badge.svg)
 
 ## OVERVIEW
 
@@ -375,6 +375,3 @@ $HOME
     ├── cloudserver
     └── vault
 ```
-
-[badgepriv]: http://ci.ironmann.io/gh/scality/backbeat.svg?style=svg&circle-token=32e5dfd968e673450c44f0a255d1a812bae9b00c
-[badgepub]: https://circleci.com/gh/scality/backbeat.svg?style=svg
