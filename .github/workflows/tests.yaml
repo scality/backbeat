@@ -37,7 +37,7 @@ jobs:
         password: ${{ github.token }}
 
     - name: Build and push kafka
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         push: true
         context: .github/dockerfiles/kafka
@@ -46,7 +46,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=ci-kafka
 
     - name: Build and push syntheticbucketd
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         push: true
         context: .
@@ -56,7 +56,7 @@ jobs:
         cache-to: type=gha,mode=max,scope=syntheticbucketd
 
     - name: Build and push MongoDB
-      uses: docker/build-push-action@v5
+      uses: docker/build-push-action@v6
       with:
         push: true
         context: .github/dockerfiles/mongodb
