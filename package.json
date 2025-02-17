@@ -51,7 +51,7 @@
     "aws-sdk": "^2.938.0",
     "backo": "^1.1.0",
     "breakbeat": "scality/breakbeat#v1.0.3",
-    "bucketclient": "scality/bucketclient#7c3a20ab36e080d66762bc88365c01c5f13909c7",
+    "bucketclient": "scality/bucketclient#8.2.0",
     "commander": "^2.11.0",
     "fcntl": "github:scality/node-fcntl#0.2.2",
     "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
