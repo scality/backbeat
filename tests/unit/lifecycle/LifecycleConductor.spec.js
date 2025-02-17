@@ -242,36 +242,40 @@ describe('Lifecycle Conductor', () => {
     });
 
     describe('_indexesGetOrCreate', () => {
-        it('should return v2 for bucketd bucket sources', () => {
+        it('should return v2 for bucketd bucket sources', done => {
             conductor._bucketSource = 'bucketd';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
+                done();
             });
         });
 
-        it('should return v2 for zookeeper bucket sources', () => {
+        it('should return v2 for zookeeper bucket sources', done => {
             conductor._bucketSource = 'zookeeper';
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
+                done();
             });
         });
 
-        it('should return v1 for non-lifecyled buckets', () => {
+        it('should return v1 for non-lifecyled buckets', done => {
             conductor._bucketSource = 'mongodb';
             const task = Object.assign({}, testTask, { isLifecyled: false });
             conductor._indexesGetOrCreate(task, log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
             });
         });
 
-        it('should return v1 if backbeat client cannot be created', () => {
+        it('should return v1 if backbeat client cannot be created', done => {
             conductor.clientManager.getBackbeatMetadataProxy = () => null;
             conductor._indexesGetOrCreate(testTask, log, (err, taskVersion) => {
                 assert.ifError(err);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
             });
         });
 
