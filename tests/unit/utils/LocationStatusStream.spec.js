@@ -30,12 +30,13 @@ describe('LocationStatusStream', () => {
                 collection: collectionStub,
                 command: mongoCommandStub,
             });
-            sinon.stub(MongoClient.prototype, 'connect').resolves({
+            const mongoConnectStub = sinon.stub(MongoClient.prototype, 'connect').resolves({
                 db: dbStub,
             });
             const lss = new LocationStatusStream('lifecycle', mongoConfig, null, null, FakeLogger);
             lss._setupMongoClient(err => {
                 assert.ifError(err);
+                assert(mongoConnectStub.calledOnce);
                 assert(dbStub.calledOnceWith('metadata', { ignoreUndefined: true }));
                 assert(collectionStub.calledOnceWith('__locationStatusStore'));
                 assert(mongoCommandStub.calledOnceWith({
