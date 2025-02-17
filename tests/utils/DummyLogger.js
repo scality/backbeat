@@ -42,7 +42,7 @@ class DummyRequestLogger {
         this.counts.fatal += 1;
     }
 
-    getSerializedUids() {  
+    getSerializedUids() {
         return 'dummy:Serialized:Uids';
     }
 

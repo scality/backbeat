@@ -219,7 +219,6 @@ describe('Credentials Manager', () => {
         });
     });
 
-
     it('RoleCredentials should use a default renewal anticipation delay if not explicit', () => {
         const vaultclient = new Client(
             vaultHost, vaultPort, undefined,
