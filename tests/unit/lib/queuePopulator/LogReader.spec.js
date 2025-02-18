@@ -49,6 +49,7 @@ describe('LogReader', () => {
             logConsumer: new MockLogConsumer(),
             logger: new Logger('test:LogReader'),
         });
+        sinon.restore();
     });
 
     // Currently the initial offset is set to 1 with mongodb backend,
@@ -198,6 +199,23 @@ describe('LogReader', () => {
                 assert(processFilterEntryStb.calledTwice);
                 return done();
             });
+        });
+    });
+
+    describe('_readLogOffset', () => {
+        [true, false].forEach(managed => {
+            it(`should ${managed ? '' : 'not '}read offset from ` +
+                `zookeeper when offset is ${managed ? '' : 'not '}managed`, done => {
+                    const offsetManagedStub = sinon.stub(logReader, 'isOffsetManaged').returns(managed);
+                    const zkClientStub = sinon.stub(logReader.zkClient, 'getData').yields();
+                    logReader._readLogOffset(err => {
+                        assert.ifError(err);
+                        assert(offsetManagedStub.calledOnce);
+                        assert(managed ? zkClientStub.calledOnce : zkClientStub.notCalled);
+                        done();
+                    });
+                });
+
         });
     });
 
@@ -507,6 +525,70 @@ describe('LogReader', () => {
         });
     });
 
+    describe('_processSaveLogOffset', () => {
+        [
+            {
+                desc: 'should save the offset when offsets are managed',
+                managed: true,
+                currentOffset: 0,
+                nextLogOffset: 1,
+                shouldSave: true,
+            },
+            {
+                desc: 'should not save the offset when the next offset is undefined',
+                managed: true,
+                currentOffset: 0,
+                nextLogOffset: undefined,
+                shouldSave: false,
+            },
+            {
+                desc: 'should not save the offset if the offset did not change',
+                managed: true,
+                currentOffset: 0,
+                nextLogOffset: 0,
+                shouldSave: false,
+            },
+            {
+                desc: 'should not save the offset if offsets are not managed',
+                managed: false,
+                currentOffset: 0,
+                nextLogOffset: 1,
+                shouldSave: false,
+            },
+        ].forEach(params => {
+            it(params.desc, done => {
+                const batchState = {
+                    logRes: {
+                        log: new MockRecordStream(),
+                        tailable: true,
+                    },
+                    logStats: {
+                        nbLogRecordsRead: 0,
+                        nbLogEntriesRead: 0,
+                        hasMoreLog: false,
+                    },
+                    nextLogOffset: params.nextLogOffset,
+                    entriesToPublish: {},
+                    publishedEntries: {},
+                    currentRecords: [],
+                    maxRead: 3,
+                    startTime: Date.now(),
+                    timeoutMs: 60000,
+                    logger: logReader.log,
+                };
+                sinon.stub(logReader, 'logOffset').value(params.currentOffset);
+                const offsetManagedStub = sinon.stub(logReader, 'isOffsetManaged').returns(params.managed);
+                const writeLogOffsetStub = sinon.stub(logReader, '_writeLogOffset').yields();
+                logReader._processSaveLogOffset(batchState, err => {
+                    assert.ifError(err);
+                    assert(offsetManagedStub.calledOnce);
+                    assert(params.shouldSave ? writeLogOffsetStub.calledOnce : writeLogOffsetStub.notCalled);
+                    done();
+                });
+            });
+        });
+    });
+
     describe('getMetricLabels', () => {
         [{
             name: 'KafkaLogReader',
@@ -543,7 +625,7 @@ describe('LogReader', () => {
             },
             logName: 'raft-log',
         }, {
-            name: 'RaftLogReader',
+            name: 'MongoLogReader',
             Reader: MongoLogReader,
             config: {
                 mongoConfig: {
@@ -566,6 +648,64 @@ describe('LogReader', () => {
                     origin: 'replication,lifecycle,notification',
                 };
                 assert.deepStrictEqual(reader.getMetricLabels(), expectedLabels);
+            });
+        });
+    });
+
+    describe('isOffsetManaged', () => {
+        [{
+            name: 'KafkaLogReader',
+            Reader: KafkaLogReader,
+            config: {
+                kafkaConfig: {
+                    hosts: 'localhost:9092',
+                },
+                qpKafkaConfig: {
+                    logName: 'test-log',
+                },
+            },
+            expected: false,
+        }, {
+            name: 'BucketFileLogReader',
+            Reader: BucketFileLogReader,
+            config: {
+                dmdConfig: {
+                    logName: 'test-log',
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            expected: true,
+        }, {
+            name: 'RaftLogReader',
+            Reader: RaftLogReader,
+            config: {
+                raftId: 'test-log',
+                bucketdConfig: {
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            expected: true,
+        }, {
+            name: 'MongoLogReader',
+            Reader: MongoLogReader,
+            config: {
+                mongoConfig: {
+                    logName: 'test-log',
+                    host: 'localhost',
+                    port: 8000,
+                },
+            },
+            expected: true,
+        }].forEach(params => {
+            it(`should ${params.expected ? '' : 'not'} manage ${params.name} offsets`, () => {
+                const reader = new params.Reader({
+                    ...params.config,
+                    logger: new Logger('test:LogReader'),
+                    extensionNames: 'replication,lifecycle,notification',
+                });
+                assert.deepStrictEqual(reader.isOffsetManaged(), params.expected);
             });
         });
     });
