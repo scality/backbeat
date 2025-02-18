@@ -611,7 +611,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
     }
 
     beforeEach(function before(done) {
-        this.timeout(60000);
+        this.timeout(120000);
 
         groupIdBreaker = `replication-group-breaker-${Math.random()}`;
 

@@ -2,7 +2,7 @@ const assert = require('assert');
 const http = require('http');
 const { Client } = require('vaultclient');
 const { Logger } = require('werelogs');
-const { errors } = require('arsenal');
+const { errors, ArsenalError } = require('arsenal');
 const { proxyPath } = require('../../extensions/replication/constants');
 const RoleCredentials = require('../../lib/credentials/RoleCredentials');
 
@@ -144,20 +144,79 @@ describe('Credentials Manager', () => {
         });
     });
 
-    it('should handle non arsenal errors on refresh', function test(done) {
-        this.timeout(10000);
-        const retryTimeout = (roleCredentials.expiration - Date.now()) +
-            1000;
-        return setTimeout(() => {
-            simulateServerError = true;
-            roleCredentials.get(err => {
-                assert(err);
-                // check that err is another instance distinct from
-                // the global arsenal error
-                assert.notStrictEqual(err, errors.InternalError);
-                done();
+    it('should properly handle Arsenal and non-Arsenal errors', done => {
+        const testCases = [
+            {
+                name: 'non-Arsenal error',
+                error: Object.assign(new Error('custom error'), {
+                    code: 'CustomError',
+                    description: 'test description'
+                }),
+                statusCode: 400,
+                expectedResult: error => {
+                    assert(error instanceof ArsenalError);
+                    assert.strictEqual(error.code, 400);
+                    assert.strictEqual(error.description, 'test description');
+                }
+            },
+            {
+                name: 'retryable Internal error',
+                error: Object.assign(new Error('internal error'), {
+                    code: 'InternalError',
+                    InternalError: true
+                }),
+                statusCode: 500,
+                expectedResult: error => {
+                    assert(error.retryable === true);
+                }
+            },
+            {
+                name: 'Arsenal error',
+                error: errors.InternalError.customizeDescription('some error'),
+                statusCode: 500,
+                expectedResult: error => {
+                    assert(error instanceof ArsenalError);
+                    assert.strictEqual(error.code, 500);
+                    assert.strictEqual(error.description, 'some error');
+                }
+            }
+        ];
+
+        let completedTests = 0;
+
+        testCases.forEach(testCase => {
+            const mockVaultClient = {
+                assumeRoleBackbeat: (roleArn, roleSessionName, options, callback) => {
+                    if (testCase.error instanceof ArsenalError) {
+                        return callback(testCase.error, null, testCase.statusCode);
+                    }
+                    // Simulate error returned by the vault client
+                    const errorWithCode = new Error(testCase.error.message);
+                    Object.assign(errorWithCode, testCase.error);
+                    callback(errorWithCode, null, testCase.statusCode);
+                }
+            };
+
+            const credentials = new RoleCredentials(
+                mockVaultClient,
+                role,
+                extension,
+                new Logger('test:RoleCredentials').newRequestLogger('request-uid')
+            );
+
+            credentials.refresh(err => {
+                try {
+                    testCase.expectedResult(err);
+                    completedTests += 1;
+
+                    if (completedTests === testCases.length) {
+                        done();
+                    }
+                } catch (assertError) {
+                    done(assertError);
+                }
             });
-        }, retryTimeout);
+        });
     });
 
     it('RoleCredentials should use a default renewal anticipation delay if not explicit', () => {

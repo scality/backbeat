@@ -84,6 +84,13 @@ const lp = {
             ncvHeap: new Map(),
             lcOptions: timeOptions,
             log: fakeLogger,
+            supportedRules: [
+                'expiration',
+                'noncurrentVersionExpiration',
+                'abortIncompleteMultipartUpload',
+                'transitions',
+                'noncurrentVersionTransition',
+            ],
         }
     ),
 };
@@ -93,13 +100,6 @@ describe('lifecycle task helper methods', () => {
 
     before(() => {
         lct = new LifecycleTask(lp);
-        lct.setSupportedRules([
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
-            'transitions',
-            'noncurrentVersionTransitions',
-        ]);
     });
 
     afterEach(() => {

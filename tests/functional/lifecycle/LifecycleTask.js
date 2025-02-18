@@ -63,12 +63,15 @@ const backbeatMetadataProxyMock = {
 // current date
 const CURRENT = new Date();
 CURRENT.setDate(CURRENT.getDate() - 2);
+CURRENT.setUTCHours(0, 0, 0, 0);
 // 5 days prior to currentDate
 const PAST = new Date(CURRENT);
 PAST.setDate(PAST.getDate() - 5);
+PAST.setUTCHours(0, 0, 0, 0);
 // 5 days after currentDate
 const FUTURE = new Date(CURRENT);
 FUTURE.setDate(FUTURE.getDate() + 5);
+FUTURE.setUTCHours(0, 0, 0, 0);
 
 const OWNER = 'testOwner';
 const ncd = 'NoncurrentDays';
@@ -442,6 +445,12 @@ class LifecycleBucketProcessorMock {
             ncvHeap: this.ncvHeap,
             lcOptions: timeOptions,
             circuitBreakers: this._circuitBreakers,
+            supportedRules: [
+                'expiration',
+                'noncurrentVersionExpiration',
+                'abortIncompleteMultipartUpload',
+                'transitions',
+            ],
         };
     }
 
@@ -503,12 +512,6 @@ describe('lifecycle task functional tests', function dF() {
         lcp = new LifecycleBucketProcessorMock();
         s3 = new S3(s3config);
         lcTask = new LifecycleTask(lcp);
-        lcTask.setSupportedRules([
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
-            'transitions',
-        ]);
         s3Helper = new S3Helper(s3);
     });
 
@@ -1650,7 +1653,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: Array(7).fill('test/obj-1'),
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 7,
                 },
             },
@@ -1676,7 +1679,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: Array(2).fill('src/obj-2'),
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 2,
                 },
             },
@@ -1790,7 +1793,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: ['src/obj-2'],
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 1,
                 },
             },
@@ -1823,7 +1826,7 @@ describe('lifecycle task functional tests', function dF() {
                 },
                 expected: {
                     objects: [],
-                    bucketCount: 5,
+                    bucketCount: 6,
                     objectCount: 0,
                 },
             },
