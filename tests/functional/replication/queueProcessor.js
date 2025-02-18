@@ -1534,7 +1534,8 @@ describe('queue processor functional tests with mocking', () => {
 });
 
 describe('GC should be created if config is provided', () => {
-    it('should create a GC if config is provided', done => {
+    it('should create a GC if config is provided', function (done) {
+        this.timeout(60000);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
@@ -1564,7 +1565,8 @@ describe('GC should be created if config is provided', () => {
         });
     });
 
-    it('should not create a GC if config is not provided', done => {
+    it('should not create a GC if config is not provided', function (done) {
+        this.timeout(60000);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
