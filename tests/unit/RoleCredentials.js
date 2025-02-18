@@ -2,7 +2,7 @@ const assert = require('assert');
 const http = require('http');
 const { Client } = require('vaultclient');
 const { Logger } = require('werelogs');
-const { ArsenalError } = require('arsenal/build/lib/errors');
+const { errors, ArsenalError } = require('arsenal');
 const { proxyPath } = require('../../extensions/replication/constants');
 const RoleCredentials = require('../../lib/credentials/RoleCredentials');
 
@@ -169,6 +169,16 @@ describe('Credentials Manager', () => {
                 expectedResult: error => {
                     assert(error.retryable === true);
                 }
+            },
+            {
+                name: 'Arsenal error',
+                error: errors.InternalError.customizeDescription('some error'),
+                statusCode: 500,
+                expectedResult: error => {
+                    assert(error instanceof ArsenalError);
+                    assert.strictEqual(error.code, 500);
+                    assert.strictEqual(error.description, 'some error');
+                }
             }
         ];
 
@@ -177,6 +187,9 @@ describe('Credentials Manager', () => {
         testCases.forEach(testCase => {
             const mockVaultClient = {
                 assumeRoleBackbeat: (roleArn, roleSessionName, options, callback) => {
+                    if (testCase.error instanceof ArsenalError) {
+                        return callback(testCase.error, null, testCase.statusCode);
+                    }
                     // Simulate error returned by the vault client
                     const errorWithCode = new Error(testCase.error.message);
                     Object.assign(errorWithCode, testCase.error);
