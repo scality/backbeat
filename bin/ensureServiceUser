@@ -6,7 +6,7 @@
 const fs = require('fs');
 
 const { errors, errorUtils } = require('arsenal');
-const program = require('commander');
+const { program } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;
 const async = require('async');

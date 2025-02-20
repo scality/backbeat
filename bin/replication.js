@@ -1,4 +1,4 @@
-const program = require('commander');
+const { program } = require('commander');
 const { SharedIniFileCredentials } = require('aws-sdk');
 
 const werelogs = require('werelogs');
