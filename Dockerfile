@@ -40,6 +40,7 @@ FROM node:${NODE_VERSION}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         jq \
+        openssl \
         tini \
     && rm -rf /var/lib/apt/lists/*
 
