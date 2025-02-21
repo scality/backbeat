@@ -51,6 +51,8 @@ COPY . /usr/src/app
 COPY --from=builder /usr/src/app/node_modules ./node_modules/
 COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
+ENV AWS_SDK_JS_SUPPRESS_MAINTENANCE_MODE_MESSAGE=1
+
 ENTRYPOINT ["tini", "--", "/usr/src/app/docker-entrypoint.sh"]
 
 EXPOSE 8900
