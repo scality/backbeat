@@ -369,15 +369,17 @@ function apply(iamClient, stsClient, serviceName, policyFile, log, cb) {
     ], cb);
 }
 
-function wrapAction(actionFunc, serviceName, options) {
+function wrapAction(actionFunc, serviceName, _, cmd) {
+    const options = cmd.optsWithGlobals();
+
     werelogs.configure({
-        level: options.parent.logLevel,
-        dump: options.parent.logDumpLevel,
+        level: options.logLevel,
+        dump: options.logDumpLevel,
     });
 
     const log = new werelogs.Logger(process.argv[1]).newRequestLogger();
-    const iamClient = createIAMClient(options.parent);
-    const stsClient = createSTSClient(options.parent);
+    const iamClient = createIAMClient(options);
+    const stsClient = createSTSClient(options);
 
     actionFunc(iamClient, stsClient, serviceName, options.policy, log, (err, data) => {
         if (err) {
@@ -410,7 +412,7 @@ program
         ' and attach it to a role that the service user is allowed to assume, instead' +
         ' of only allowing the user to assume one (seeded) role named <service-name> in all accounts.')
     .action(wrapAction.bind(null, apply));
-
+    
 const validCommands = program.commands.map(n => n._name);
 
 // Is the command given invalid or are there too few arguments passed
