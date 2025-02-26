@@ -59,7 +59,9 @@ describe('LocationStatusManager', () => {
 
     describe('pauseService', () => {
         it('should pause selected service', done => {
-            sinon.stub(lsm, '_updateServiceStatusForLocation').yields();
+            sinon.stub(lsm, '_locationStatusColl').value({
+                updateOne: sinon.stub().resolves(),
+            });
             lsm._locationStatusStore['us-east-1'] = new LocationStatus(['lifecycle']);
             lsm._locationStatusStore['us-east-2'] = new LocationStatus(['lifecycle']);
             lsm.pauseService('lifecycle', ['us-east-1', 'us-east-2'], err => {
@@ -68,6 +70,18 @@ describe('LocationStatusManager', () => {
                     .getServicePauseStatus('lifecycle'), true);
                 assert.strictEqual(lsm._locationStatusStore['us-east-2']
                     .getServicePauseStatus('lifecycle'), true);
+                return done();
+            });
+        });
+
+        it('should fail when mongo call fails', done => {
+            sinon.stub(lsm, '_locationStatusColl').value({
+                updateOne: sinon.stub().rejects(new Error('mongo error')),
+            });
+            lsm._locationStatusStore['us-east-1'] = new LocationStatus(['lifecycle']);
+            lsm._locationStatusStore['us-east-2'] = new LocationStatus(['lifecycle']);
+            lsm.pauseService('lifecycle', ['us-east-1', 'us-east-2'], (_, err) => {
+                assert(err instanceof Error);
                 return done();
             });
         });
@@ -116,6 +130,20 @@ describe('LocationStatusManager', () => {
                     .getServicePauseStatus('lifecycle'), false);
                 assert.strictEqual(lsm._locationStatusStore['us-east-2']
                     .getServicePauseStatus('lifecycle'), false);
+                return done();
+            });
+        });
+
+        it('should fail when mongo call fails', done => {
+            sinon.stub(lsm, '_locationStatusColl').value({
+                updateOne: sinon.stub().rejects(new Error('mongo error')),
+            });
+            lsm._locationStatusStore['us-east-1'] = new LocationStatus(['lifecycle']);
+            lsm._locationStatusStore['us-east-1'].pauseLocation('lifecycle');
+            lsm._locationStatusStore['us-east-2'] = new LocationStatus(['lifecycle']);
+            lsm._locationStatusStore['us-east-2'].pauseLocation('lifecycle');
+            lsm.resumeService('lifecycle', ['us-east-1', 'us-east-2'], null, null, (_, err) => {
+                assert(err instanceof Error);
                 return done();
             });
         });
