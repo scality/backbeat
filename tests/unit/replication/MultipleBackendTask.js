@@ -55,7 +55,7 @@ describe('MultipleBackendTask', function test() {
             const doneOnce = jsutil.once(done);
             setTimeout(() => {
                 // inhibits further retries
-                multipleBackendTask.config.retryTimeoutS = 0;
+                multipleBackendTask.retryParams.timeoutS = 0;
                 doneOnce();
             }, 4000); // Retries will exceed test timeout.
             requestInitiateMPU({ retryable: true }, doneOnce);
