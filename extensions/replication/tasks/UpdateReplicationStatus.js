@@ -20,7 +20,7 @@ class UpdateReplicationStatus extends BackbeatTask {
     constructor(rsp, metricsHandler) {
         const rspState = rsp.getStateVars();
         super({
-            retryTimeoutS:
+            timeoutS:
             rspState.repConfig.replicationStatusProcessor.retryTimeoutS,
         });
         Object.assign(this, rspState);

@@ -15,7 +15,7 @@ class EchoBucket extends BackbeatTask {
     constructor(qp) {
         const qpState = qp.getStateVars();
         super({
-            retryTimeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
+            timeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
         });
         Object.assign(this, qpState);
     }

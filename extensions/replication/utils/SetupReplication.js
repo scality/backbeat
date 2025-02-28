@@ -103,7 +103,7 @@ class SetupReplication extends BackbeatTask {
     constructor(params) {
         const { source, target, https, internalHttps, checkSanity,
                 retryTimeoutS, skipSourceBucketCreation, log } = params;
-        super({ retryTimeoutS });
+        super({ timeoutS: retryTimeoutS });
         this._log = log;
         this._sourceBucket = source.bucket;
         this._targetBucket = target.bucket;
