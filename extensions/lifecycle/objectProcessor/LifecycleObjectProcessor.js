@@ -83,7 +83,7 @@ class LifecycleObjectProcessor extends EventEmitter {
         this.s3Clients = {};
         this.backbeatClients = {};
         this.credentialsManager = new CredentialsManager('lifecycle', this._log);
-        this.retryWrapper = new BackbeatTask();
+        this.retryWrapper = new BackbeatTask(lcConfig.objectProcessor.retry);
     }
 
     _setupConsumer(cb) {
