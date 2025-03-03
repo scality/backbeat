@@ -216,7 +216,7 @@ jobs:
       timeout-minutes: 60
       if: failure() && runner.debug == '1'
 
-  e2e-tests:
+  ft-tests:
     needs: build
     runs-on: ubuntu-latest
     strategy:
@@ -248,32 +248,32 @@ jobs:
         run: |-
           set -e -o pipefail;
           docker compose --profile ${{ matrix.profile }} up -d --quiet-pull --wait
-        working-directory: .github/dockerfiles/e2e
+        working-directory: .github/dockerfiles/ft
       - name: Create Zookeeper paths for tests with metadata
         run: |-
           # Setup zookeeper paths for backbeat like we do in federation 
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/owners ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/leaders ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/owners ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/leaders ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions ""
           # provision raft ids, we configure 4 raft sessions in metadata config
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/0 ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/1 ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/2 ""
-          docker exec e2e-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/3 ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/0 ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/1 ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/2 ""
+          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/3 ""
         if: ${{ matrix.profile == 's3c' }}
-      - name: Run E2E tests
+      - name: Run QueuePopulator functional tests
         env:
           PROFILE: ${{ matrix.profile }}
-          TEST_SUITE: e2e
+          TEST_SUITE: ft_test:queuepopulator
         run: yarn run cover
       - uses: codecov/codecov-action@v4
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
-          directory: ./coverage/e2e
-          flags: e2e
+          directory: ./coverage/ft_test:queuepopulator
+          flags: ft_test:queuepopulator
       - name: Debug wait
         uses: scality/actions/action-ssh-to-runner@1.8.0
         with:

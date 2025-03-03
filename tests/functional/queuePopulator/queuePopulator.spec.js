@@ -1,4 +1,4 @@
-process.env.BACKBEAT_CONFIG_FILE = 'tests/e2e/queuePopulator/config/s3c-config.json';
+process.env.BACKBEAT_CONFIG_FILE = 'tests/functional/queuePopulator/config/s3c-config.json';
 
 const assert = require('assert');
 const async = require('async');
