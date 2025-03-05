@@ -15,7 +15,7 @@ const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
 
 const destinationAuthJoi = joi.object({
-    type: joi.alternatives().try('account', 'role', 'service')
+    type: joi.alternatives().try('account', 'role', 'service', 'assumeRole')
         .required(),
     account: joi.string()
         .when('type', { is: 'account', then: joi.required() }),
@@ -25,6 +25,8 @@ const destinationAuthJoi = joi.object({
         adminPort: joi.number().greater(0).optional(),
         adminCredentialsFile: joi.string().optional(),
     }).when('type', { is: 'role', then: joi.required() }),
+    sts: hostPortJoi
+        .when('type', { is: 'assumeRole', then: joi.required() }),
 });
 
 const joiSchema = joi.object({

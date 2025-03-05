@@ -3,6 +3,8 @@ const sinon = require('sinon');
 
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicateObject = require('../../../extensions/replication/tasks/ReplicateObject');
+const ClientManager = require('../../../lib/clients/ClientManager');
+const locations = require('../../../conf/locationConfig.json');
 
 const { replicationEntry } = require('../../utils/kafkaEntries');
 const fakeLogger = require('../../utils/fakeLogger');
@@ -11,6 +13,21 @@ describe('ReplicateObject', () => {
     let task;
 
     beforeEach(() => {
+        locations.site = {
+            details: {
+                awsEndpoint: 'https://s3.amazonaws.com',
+                bucketMatch: true,
+                bucketName: 'ring-bucket-1',
+                credentials: {
+                    accessKey: 'accessKey1',
+                    secretKey: 'verySecretKey1',
+                },
+            },
+            isTransient: false,
+            legacyAwsBehavior: false,
+            objectId: '06a862b3-fee4-11eb-a6ba-26bd22419be2',
+            type: 'aws_s3'
+        };
         task = new ReplicateObject({
             getStateVars: () => ({
                 site: 'site',
@@ -35,13 +52,23 @@ describe('ReplicateObject', () => {
                     bootstrapList: [{
                         site: 'site',
                         servers: ['localhost:9095'],
-                    }]
+                    }],
+                    transport: 'http',
                 },
                 destHosts: {
                     pickNextHost: () => 'localhost:9095',
-                }
+                    pickHost: () => ({
+                        host: 'localhost',
+                        port: 9095,
+                    }),
+                },
+                logger: fakeLogger,
             }),
         });
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     describe('_setTargetAccountMd', () => {
@@ -105,6 +132,52 @@ describe('ReplicateObject', () => {
                 assert(task.backbeatDest.putMetadata.calledOnce);
                 assert.strictEqual(task.backbeatDest.putMetadata.firstCall.args[0].AccountId, undefined);
                 done();
+            });
+        });
+    });
+
+    describe('_setupDestClients', () => {
+        it('should setup destination client with proper creds when using assumeRole', () => {
+            sinon.stub(ClientManager.prototype, 'initCredentialsManager').returns(null);
+            sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns(null);
+            task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
+            assert.deepStrictEqual(task.clientManager._id, '123456789012');
+            assert.deepStrictEqual(task.clientManager._authConfig, {
+                type: 'assumeRole',
+                roleName: 'crr-role',
+                sts: {
+                    host: 'sts.enpoint.com',
+                    port: 80,
+                    accessKey: 'accessKey1',
+                    secretKey: 'verySecretKey1',
+                },
+            });
+            assert.deepStrictEqual(task.clientManager._s3Config, {
+                host: 'localhost',
+                port: 9095,
+            });
+            assert.deepStrictEqual(task.clientManager._transport, 'http');
+            assert.deepStrictEqual(task.clientManager._stsConfig.endpoint, 'http://sts.enpoint.com:80');
+            assert.deepStrictEqual(task.clientManager._stsConfig.credentials, {
+                accessKeyId: 'accessKey1',
+                secretAccessKey: 'verySecretKey1',
+            });
+        });
+
+        it('should setup destination BackbeatClient with proper creds when not in assumeRole', () => {
+            task.destConfig.auth = {
+                type: 'service',
+                account: 'replication-service',
+            };
+            sinon.stub(task, '_createCredentials').returns({
+                accessKeyId: 'accessKeyNoAssumeRole',
+                secretAccessKey: 'secretKeyNoAssumeRole',
+            });
+            task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
+            assert.strictEqual(task.backbeatDest.config.endpoint, 'http://localhost:9095');
+            assert.deepStrictEqual(task.backbeatDest.config.credentials, {
+                accessKeyId: 'accessKeyNoAssumeRole',
+                secretAccessKey: 'secretKeyNoAssumeRole',
             });
         });
     });

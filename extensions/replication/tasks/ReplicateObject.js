@@ -5,6 +5,7 @@ const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
+const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
@@ -17,11 +18,17 @@ const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted, replicationStages } = require('../constants');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const { authTypeAssumeRole } = require('../../../lib/constants');
+const locations = require('../../../conf/locationConfig.json');
 
 const errorAlreadyCompleted = {};
 
 function _extractAccountIdFromRole(role) {
     return role.split(':')[4];
+}
+
+function _extractRoleNameFromRole(role) {
+    return role.split(':role/')[1];
 }
 
 // BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
@@ -716,11 +723,38 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _setupDestClients(targetRole, log) {
+        this.destBackbeatHost = this.destHosts.pickHost();
+
+        if (this.destConfig.auth.type === authTypeAssumeRole) {
+            const accountId = _extractAccountIdFromRole(targetRole);
+            const roleName = _extractRoleNameFromRole(targetRole);
+            this.clientManager = new ClientManager({
+                id: accountId,
+                authConfig: {
+                    type: authTypeAssumeRole,
+                    roleName,
+                    sts: {
+                        ...this.destConfig.auth.sts,
+                        accessKey: locations[this.site].details.credentials.accessKey,
+                        secretKey: locations[this.site].details.credentials.secretKey,
+                    },
+                },
+                s3Config: {
+                    host: this.destBackbeatHost.host,
+                    port: this.destBackbeatHost.port,
+                },
+                transport: this.destConfig.transport,
+            }, this.logger);
+            this.clientManager.initSTSConfig();
+            this.clientManager.initCredentialsManager();
+            this.backbeatDest = this.clientManager.getBackbeatClient(accountId);
+            return;
+        }
+
         this.s3destCredentials =
             this._createCredentials('target', this.destConfig.auth,
                 targetRole, log);
 
-        this.destBackbeatHost = this.destHosts.pickHost();
         this.backbeatDest = new BackbeatClient({
             endpoint: `${this.destConfig.transport}://` +
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
