@@ -169,23 +169,31 @@ function initAndStart(zkClient) {
         log.info('management init done');
 
         const bootstrapList = config.getBootstrapList();
+        const siteNames = bootstrapList.map(i => i.site);
 
-        const destConfig = Object.assign({}, repConfig.destination);
-        destConfig.bootstrapList = bootstrapList;
+        // initialize per site destination configs
+        const destConfig = {};
+        siteNames.forEach(site => {
+            destConfig[site] = config.getReplicationSiteDestConfig(site);
+        });
 
         config.on('bootstrap-list-update', () => {
-            destConfig.bootstrapList = config.getBootstrapList();
-
+            const updatedBootstrapList = config.getBootstrapList();
             const activeSites = Object.keys(activeQProcessors);
-            const updatedSites = destConfig.bootstrapList.map(i => i.site);
+            const updatedSites = updatedBootstrapList.map(i => i.site);
             const allSites = [...new Set(activeSites.concat(updatedSites))];
 
             async.each(allSites, (site, next) => {
                 if (updatedSites.includes(site)) {
+                    if (!destConfig[site]) {
+                        destConfig[site] = config.getReplicationSiteDestConfig(site);
+                    } else {
+                        destConfig[site].bootstrapList = updatedBootstrapList;
+                    }
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(
                             topic, zkConfig, zkClient, kafkaConfig,
-                            sourceConfig, destConfig,
+                            sourceConfig, destConfig[site],
                             repConfig, redisConfig, mConfig,
                             httpsConfig, internalHttpsConfig,
                             site, repConfig.queueProcessor.circuitBreaker);
@@ -206,6 +214,7 @@ function initAndStart(zkClient) {
                         }
                         activeQProcessors[site].stop(() => { });
                         delete activeQProcessors[site];
+                        delete destConfig[site];
                         return next();
                     });
                 }
@@ -217,11 +226,10 @@ function initAndStart(zkClient) {
         });
 
         // Start QueueProcessor for each site
-        const siteNames = bootstrapList.map(i => i.site);
         async.each(siteNames, (site, next) => {
             const qp = new QueueProcessor(
                 topic, zkConfig, zkClient, kafkaConfig,
-                sourceConfig, destConfig, repConfig, redisConfig,
+                sourceConfig, destConfig[site], repConfig, redisConfig,
                 mConfig, httpsConfig, internalHttpsConfig,
                 site, repConfig.queueProcessor.circuitBreaker);
             activeQProcessors[site] = qp;

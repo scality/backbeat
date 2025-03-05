@@ -1,0 +1,214 @@
+{
+    "zookeeper": {
+        "connectionString": "127.0.0.1:2181/backbeat",
+        "autoCreateNamespace": false
+    },
+    "kafka": {
+        "hosts": "127.0.0.1:9092",
+        "backlogMetrics": {
+            "zkPath": "/backbeat/run/kafka-backlog-metrics",
+            "intervalS": 60
+        },
+        "maxRequestSize": 5000020
+    },
+    "s3": {
+        "host": "127.0.0.1",
+        "port": 8000
+    },
+    "vaultAdmin": {
+        "host": "127.0.0.1",
+        "port": 8500
+    },
+    "replicationGroupId": "RG001  ",
+    "queuePopulator": {
+        "cronRule": "*/5 * * * * *",
+        "batchMaxRead": 10000,
+        "batchTimeoutMs": 9000,
+        "zookeeperPath": "/queue-populator",
+        "logSource": "mongo",
+        "bucketd": {
+            "host": "127.0.0.1",
+            "port": 9000
+        },
+        "dmd": {
+            "host": "127.0.0.1",
+            "port": 9990
+        },
+        "mongo": {
+            "replicaSetHosts":
+                "localhost:27017,localhost:27018,localhost:27019",
+            "writeConcern": "majority",
+            "replicaSet": "rs0",
+            "readPreference": "primary",
+            "database": "metadata"
+        },
+        "kafka": {
+            "topic": "backbeat-oplog",
+            "consumerGroupId": "backbeat-qp-oplog-group"
+        },
+        "probeServer": {
+            "bindAddress": "0.0.0.0",
+            "port": 4042
+        }
+    },
+    "extensions": {
+        "replication": {
+            "source": {
+                "transport": "http",
+                "s3": {
+                    "host": "127.0.0.1",
+                    "port": 8000
+                },
+                "auth": {
+                    "type": "service",
+                    "account": "service-replication",
+                    "vault": {
+                        "host": "127.0.0.1",
+                        "port": 8500,
+                        "adminPort": 8600
+                    }
+                }
+            },
+            "destination": {
+                "transport": "http",
+                "sites": {
+                    "aws1": {
+                        "transport": "http",
+                        "auth": {
+                            "type": "service",
+                            "account": "service-replication-1"
+                        }
+                    },
+                    "aws2": {
+                        "transport": "http",
+                        "auth": {
+                            "type": "service",
+                            "account": "service-replication-2"
+                        }
+                    },
+                    "aws3": {
+                        "transport": "https",
+                        "auth": {
+                            "type": "service",
+                            "account": "service-replication-3"
+                        }
+                    }
+                },
+                "bootstrapList": [
+                    { "site": "aws1", "type": "aws_s3" },
+                    { "site": "aws2", "type": "aws_s3" },
+                    { "site": "aws3", "type": "aws_s3" }
+                ]
+            },
+            "topic": "backbeat-replication",
+            "dataMoverTopic": "backbeat-data-mover",
+            "replicationStatusTopic": "backbeat-replication-status",
+            "replicationFailedTopic": "backbeat-replication-failed",
+            "monitorReplicationFailures": true,
+            "monitorReplicationFailureExpiryTimeS": 86400,
+            "replayTopics": [
+                {
+                    "topicName": "backbeat-replication-replay-0",
+                    "retries": 5
+                }
+            ],
+            "queueProcessor": {
+                "groupId": "backbeat-replication-group",
+                "retry": {
+                    "aws_s3": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "azure": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "gcp": {
+                        "maxRetries": 5,
+                        "timeoutS": 900,
+                        "backoff": {
+                            "min": 60000,
+                            "max": 900000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    },
+                    "scality": {
+                        "maxRetries": 5,
+                        "timeoutS": 300,
+                        "backoff": {
+                            "min": 1000,
+                            "max": 300000,
+                            "jitter": 0.1,
+                            "factor": 1.5
+                        }
+                    }
+                },
+                "concurrency": 10,
+                "mpuPartsConcurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4043
+                }
+            },
+            "replicationStatusProcessor": {
+                "groupId": "backbeat-replication-group",
+                "retry": {
+                    "maxRetries": 5,
+                    "timeoutS": 300,
+                    "backoff": {
+                        "min": 1000,
+                        "max": 300000,
+                        "jitter": 0.1,
+                        "factor": 1.5
+                    }
+                },
+                "concurrency": 10,
+                "probeServer": {
+                    "bindAddress": "localhost",
+                    "port": 4045
+                }
+            },
+            "objectSizeMetrics": [
+                66560,
+                8388608,
+                68157440
+            ]
+        }
+    },
+    "log": {
+        "logLevel": "info",
+        "dumpLevel": "error"
+    },
+    "metrics": {
+        "topic": "backbeat-metrics"
+    },
+    "server": {
+        "healthChecks": {
+            "allowFrom": ["127.0.0.1/8", "::1"]
+        },
+        "host": "127.0.0.1",
+        "port": 8900
+    },
+    "redis": {
+        "host": "localhost",
+        "port": 6379
+    },
+    "certFilePaths": {
+        "key": "",
+        "cert": "",
+        "ca": ""
+    }
+}

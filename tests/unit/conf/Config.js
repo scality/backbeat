@@ -2,6 +2,7 @@
 
 const assert = require('assert');
 const joi = require('joi');
+const sinon = require('sinon');
 const config = require('../../../lib/Config');
 const { Config } = require('../../../lib/Config');
 const { authJoi, inheritedAuthJoi } = require('../../../lib/config/configItems.joi');
@@ -87,5 +88,69 @@ describe('Site name', () => {
         const expectedBootstrapList = conf.bootstrapList;
         const newConfig = new Config();
         assert.deepStrictEqual(newConfig.bootstrapList, expectedBootstrapList);
+    });
+});
+
+describe('Config', () => {
+    describe('getReplicationSiteDestConfig', () => {
+        let ogConfigFileEnv;
+        before(() => {
+            ogConfigFileEnv = process.env.BACKBEAT_CONFIG_FILE;
+        });
+        afterEach(() => {
+            sinon.restore();
+        });
+        after(() => {
+            if (ogConfigFileEnv) {
+                process.env.BACKBEAT_CONFIG_FILE = ogConfigFileEnv;
+            }
+        });
+        it('should return replication site destination config', () => {
+            process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
+            const conf = new Config();
+            const destConfig = conf.getReplicationSiteDestConfig('aws3');
+            assert.deepStrictEqual(destConfig, {
+                transport: 'https',
+                auth: {
+                    type: 'service',
+                    account: 'service-replication-3',
+                },
+                bootstrapList: [
+                    { site: 'aws1', type: 'aws_s3' },
+                    { site: 'aws2', type: 'aws_s3' },
+                    { site: 'aws3', type: 'aws_s3' }
+                ]
+            });
+        });
+
+        it('should return default replication destination config when site one is not available', () => {
+            process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
+            const conf = new Config();
+            sinon.stub(conf.extensions.replication, 'destination').value({
+                transport: 'https',
+                auth: {
+                    type: 'service',
+                    account: 'service-replication',
+                },
+                bootstrapList: [
+                    { site: 'aws1', type: 'aws_s3' },
+                    { site: 'aws2', type: 'aws_s3' },
+                    { site: 'aws3', type: 'aws_s3' }
+                ]
+            });
+            const destConfig = conf.getReplicationSiteDestConfig('aws3');
+            assert.deepStrictEqual(destConfig, {
+                transport: 'https',
+                auth: {
+                    type: 'service',
+                    account: 'service-replication',
+                },
+                bootstrapList: [
+                    { site: 'aws1', type: 'aws_s3' },
+                    { site: 'aws2', type: 'aws_s3' },
+                    { site: 'aws3', type: 'aws_s3' }
+                ]
+            });
+        });
     });
 });
