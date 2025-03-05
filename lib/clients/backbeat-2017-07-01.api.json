@@ -727,6 +727,11 @@
                         "location": "querystring",
                         "locationName": "versionId"
                     },
+                    "AccountId": {
+                        "type": "string",
+                        "location": "querystring",
+                        "locationName": "accountId"
+                    },
                     "ContentLength": {
                         "location": "header",
                         "locationName": "Content-Length",

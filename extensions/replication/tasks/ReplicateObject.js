@@ -103,6 +103,13 @@ class ReplicateObject extends BackbeatTask {
         }
         this._setupDestClients(this.targetRole, log);
 
+        // Destination Vault admin API is not accessible when
+        // using assumeRole i.e when targeting an Zenko
+        // We delegate this task to the destination's Cloudserver
+        if (this.destConfig.auth.type === authTypeAssumeRole) {
+            return process.nextTick(cb);
+        }
+
         return this.retry({
             actionDesc: 'lookup target account attributes',
             logFields: { entry: destEntry.getLogInfo() },
@@ -584,6 +591,14 @@ class ReplicateObject extends BackbeatTask {
         });
         const cbOnce = jsutil.once(cb);
 
+        // accountid is only needed when using assumeRole auth
+        // to delegate the task of updating metadata with
+        // the target account info to the destination's Cloudserver
+        let accountId = undefined;
+        if (this.destConfig.auth.type === authTypeAssumeRole) {
+            accountId = _extractAccountIdFromRole(this.targetRole);
+        }
+
         // sends extra header x-scal-replication-content to the target
         // if it's a metadata operation only
         const replicationContent = (mdOnly ? 'METADATA' : undefined);
@@ -592,6 +607,7 @@ class ReplicateObject extends BackbeatTask {
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             VersionId: entry.getEncodedVersionId(),
+            AccountId: accountId,
             ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
             ReplicationContent: replicationContent,
