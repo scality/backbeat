@@ -12,6 +12,7 @@ describe('BackbeatTask', () => {
             const task = new BackbeatTask();
             const expectedParams = {
                 timeoutS: 300,
+                maxRetries: undefined,
                 backoff: {
                     min: 1000,
                     max: 300000,
@@ -25,6 +26,7 @@ describe('BackbeatTask', () => {
         it('should use provided retryParams', () => {
             const customParams = {
                 timeoutS: 100,
+                maxRetries: 3,
                 backoff: {
                     min: 2000,
                     max: 600000,
@@ -43,6 +45,7 @@ describe('BackbeatTask', () => {
 
             const expectedParams = {
                 timeoutS: 100,
+                maxRetries: undefined,
                 backoff: {
                     min: 1000,
                     max: 300000,
@@ -63,6 +66,7 @@ describe('BackbeatTask', () => {
 
             const expectedParams = {
                 timeoutS: 300,
+                maxRetries: undefined,
                 backoff: {
                     min: 2000,
                     max: 300000,
