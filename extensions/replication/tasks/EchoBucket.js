@@ -14,7 +14,9 @@ class EchoBucket extends BackbeatTask {
      */
     constructor(qp) {
         const qpState = qp.getStateVars();
-        super();
+        super({
+            timeoutS: qpState.repConfig.queueProcessor.retryTimeoutS,
+        });
         Object.assign(this, qpState);
     }
 
@@ -228,6 +230,7 @@ class EchoBucket extends BackbeatTask {
                     internalHttps: this.internalHttpsConfig,
                     skipSourceBucketCreation: true,
                     log,
+                    retryTimeoutS: this.repConfig.queueProcessor.retryTimeoutS,
                 });
                 setupReplication.setupReplication(done);
             },
