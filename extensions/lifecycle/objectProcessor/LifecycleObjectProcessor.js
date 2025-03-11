@@ -83,6 +83,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             topic,
             groupId: this._processConfig.groupId,
             concurrency: this._processConfig.concurrency,
+            maxQueued: this._processConfig.maxQueued,
             queueProcessor: this.processObjectTaskEntry.bind(this),
             circuitBreaker: this._lcConfig.objectProcessor.circuitBreaker,
             circuitBreakerMetrics: {

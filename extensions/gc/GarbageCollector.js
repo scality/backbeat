@@ -138,6 +138,10 @@ class GarbageCollector extends EventEmitter {
             topic: this._gcConfig.topic,
             groupId: this._gcConfig.consumer.groupId,
             concurrency: this._gcConfig.consumer.concurrency,
+            // respecting the order of messages for the same object
+            // is not required in the garbage collector (messages
+            // sent to the gc don't have a key anyways)
+            orderByFunc: null,
             queueProcessor: this.processKafkaEntry.bind(this),
         });
         this._consumer.on('error', () => {

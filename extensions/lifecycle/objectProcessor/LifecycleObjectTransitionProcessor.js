@@ -129,6 +129,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 topic,
                 groupId: this._processConfig.groupId,
                 concurrency: this._processConfig.concurrency,
+                maxQueued: this._processConfig.maxQueued,
                 queueProcessor: this.processColdStorageStatusEntry.bind(this),
                 circuitBreaker,
             };

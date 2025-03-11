@@ -4,6 +4,8 @@ const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi, probeServerJoi, probeServerPerSite } =
     require('../../lib/config/configItems.joi');
 
+const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+
 const qpRetryJoi = joi.object({
     aws_s3: retryParamsJoi, // eslint-disable-line camelcase
     azure: retryParamsJoi,
@@ -85,6 +87,7 @@ const joiSchema = joi.object({
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: joi.alternatives().try(
             probeServerJoi,
@@ -97,6 +100,7 @@ const joiSchema = joi.object({
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.default(),
     },
     replayProcessor: joi.object({

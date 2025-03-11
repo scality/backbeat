@@ -1,6 +1,8 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
 
+const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
+
 const authSchema = joi.object({
     type: joi.string(),
     ssl: joi.boolean(),
@@ -42,6 +44,7 @@ const joiSchema = joi.object({
     queueProcessor: {
         groupId: joi.string().required(),
         concurrency: joi.number().greater(0).default(1000),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
     },
     destinations: joi.array().items(destinationSchema).default([]),
     // TODO: BB-625 reset to being required after supporting probeserver in S3C
