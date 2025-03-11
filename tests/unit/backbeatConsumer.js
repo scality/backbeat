@@ -156,4 +156,79 @@ describe('pause/resume topic partitions on circuit breaker', () => {
             assert(pauseStub.notCalled);
         });
     });
+
+    describe('_getAvailableSlotsInPipeline', () => {
+        [
+            {
+                // should take into account pending requests
+                state: {
+                    maxQueued : 10,
+                    concurrency : 10,
+                    processingQueue: {
+                        length: () => 0,
+                        running: () => 0,
+                    },
+                    nConsumePendingRequests: 5,
+                },
+                expectedSlots: 5,
+            },{
+                // should not exceed max running tasks
+                state: {
+                    maxQueued : 10,
+                    concurrency : 10,
+                    processingQueue: {
+                        length: () => 0,
+                        running: () => 9,
+                    },
+                    nConsumePendingRequests: 0,
+                },
+                expectedSlots: 1,
+            },{
+                // should not exceed max queued
+                state: {
+                    maxQueued : 10,
+                    concurrency : 10,
+                    processingQueue: {
+                        length: () => 9,
+                        running: () => 1,
+                    },
+                    nConsumePendingRequests: 0,
+                },
+                expectedSlots: 1,
+            },{
+                // should return 0 when exceeding max queued tasks
+                state: {
+                    maxQueued : 10,
+                    concurrency : 10,
+                    processingQueue: {
+                        length: () => 12,
+                        running: () => 1,
+                    },
+                    nConsumePendingRequests: 0,
+                },
+                expectedSlots: 0,
+            },{
+                // should return 0 when exceeding max running tasks
+                state: {
+                    maxQueued : 10,
+                    concurrency : 10,
+                    processingQueue: {
+                        length: () => 3,
+                        running: () => 13,
+                    },
+                    nConsumePendingRequests: 0,
+                },
+                expectedSlots: 0,
+            },
+        ].forEach((params, i) => {
+            it(`should return available slots in pipeline (scenario ${i})`, () => {
+                consumer._maxQueued = params.state.maxQueued;
+                consumer._concurrency = params.state.concurrency;
+                consumer._processingQueue = params.state.processingQueue;
+                consumer._nConsumePendingRequests = params.state.nConsumePendingRequests;
+                const availableSlots = consumer._getAvailableSlotsInPipeline();
+                assert.strictEqual(availableSlots, params.expectedSlots);
+            });
+        });
+    });
 });
