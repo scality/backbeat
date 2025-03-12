@@ -323,7 +323,7 @@ function buildServiceUserForCrossAccountAssumeRoleHandlers(serviceName, client, 
         new UserHandler(serviceName, client, log),
         new PolicyHandler(serviceName, client, log, {
             name: 'user',
-            policy: generateUserAssumeRolePolicyDocument(serviceName),
+            policy: generateUserAssumeRolePolicyDocument(serviceName, '*'),
         }),
         new PolicyUserAttachmentHandler(serviceName, client, log),
         new AccessKeyHandler(serviceName, client, log),
