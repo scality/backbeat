@@ -30,4 +30,4 @@ COPY --from=builder --chown=${USER}:0 /tmp/build/node_modules ./node_modules/
 
 USER ${USER}
 
-CMD bash -c "source ${CONF_DIR}/env && export && supervisord -c ${CONF_DIR}/${SUPERVISORD_CONF}"
+CMD bash -c "ulimit -c 0 && source ${CONF_DIR}/env && export && supervisord -c ${CONF_DIR}/${SUPERVISORD_CONF}"
