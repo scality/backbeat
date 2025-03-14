@@ -24,11 +24,11 @@ const params = {
 const coldLocationConfigs = {
     'dmf-v1': {
         isCold: true,
-        type: 'dmf',
+        type: 'tlp',
     },
     'dmf-v2': {
         isCold: true,
-        type: 'dmf',
+        type: 'tlp',
     },
 };
 const locationConfigs = {
