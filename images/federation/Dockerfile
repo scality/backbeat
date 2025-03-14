@@ -43,5 +43,5 @@ WORKDIR ${HOME_DIR}/backbeat
 COPY --chown=${USER}:0 --from=builder /usr/src/app ${HOME_DIR}/backbeat
 
 # Run supervisord with the provided configuration (and remove entrypoint from parent image)
-CMD [ "/bin/bash", "-c", "source ${CONF_DIR}/env && export && exec supervisord -c ${CONF_DIR}/${SUPERVISORD_CONF}" ]
+CMD [ "/bin/bash", "-c", "ulimit -c 0 && source ${CONF_DIR}/env && export && exec supervisord -c ${CONF_DIR}/${SUPERVISORD_CONF}" ]
 ENTRYPOINT []
