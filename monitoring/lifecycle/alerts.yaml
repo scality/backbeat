@@ -311,7 +311,7 @@ groups:
 
   - alert: KafkaConsumerSlowTask
     Expr: |
-      sum(s3_backbeat_queue_slowTasks_count{namespace="${namespace}"}) by(job) > 0
+      sum(s3_backbeat_queue_slowtasks_count{namespace="${namespace}"}) by(job) > 0
     For: "5m"
     Labels:
      severity: warning
