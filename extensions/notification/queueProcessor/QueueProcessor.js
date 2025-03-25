@@ -48,8 +48,15 @@ class QueueProcessor extends EventEmitter {
      * the time they are consumed from the internal Kafka queue and
      * the time a delivery report is received from the external Kafka
      * broker (see also {@link destinationConfig.pollIntervalMs})
-     * @param {String} notifConfig.queueProcessor.retryTimeoutS -
-     *   number of seconds before giving up retries of an entry
+     * @param {Object} notifConfig.queueProcessor.retry - Object keyed by location type
+     * (e.g., `aws_s3`, `azure`, `gcp`, `scality`), defining retry parameters for each location type.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.maxRetries - Maximum number of retry attempts.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.timeoutS - Timeout in seconds before giving up.
+     * @param {Object} notifConfig.queueProcessor.retry.<locationType>.backoff - Exponential backoff configuration.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.backoff.min - Minimum backoff interval in ms.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.backoff.max - Maximum backoff interval in ms.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.backoff.jitter - Jitter factor.
+     * @param {number} notifConfig.queueProcessor.retry.<locationType>.backoff.factor - Exponential backoff multiplier.
      * @param {String} destinationConfig.type - destination type
      * @param {String} destinationConfig.host - destination host
      * @param {String} destinationConfig.auth - destination auth configuration

@@ -167,20 +167,15 @@ class QueueProcessor extends EventEmitter {
      *   specific to queue processor
      * @param {String} repConfig.queueProcessor.groupId - kafka
      *   consumer group ID
-     * @param {number} [repConfig.queueProcessor.retry.timeoutS] -
-     *  retry timeout in secs.
-     * @param {number} [repConfig.queueProcessor.retry.maxRetries] -
-     *  max retries before giving up
-     * @param {Object} [repConfig.queueProcessor.retry.backoff] -
-     *  backoff params
-     * @param {number} [repConfig.queueProcessor.retry.backoff.min] -
-     *  min. backoff in ms.
-     * @param {number} [repConfig.queueProcessor.retry.backoff.max] -
-     *  max. backoff in ms.
-     * @param {number} [repConfig.queueProcessor.retry.backoff.jitter] -
-     *  randomness
-     * @param {number} [repConfig.queueProcessor.retry.backoff.factor] -
-     *  backoff factor
+     * @param {Object} repConfig.queueProcessor.retry - Object keyed by location type
+     * (e.g., `aws_s3`, `azure`, `gcp`, `scality`), defining retry parameters for each location type.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.maxRetries - Maximum number of retry attempts.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.timeoutS - Timeout in seconds before giving up.
+     * @param {Object} repConfig.queueProcessor.retry.<locationType>.backoff - Exponential backoff configuration.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.backoff.min - Minimum backoff interval in ms.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.backoff.max - Maximum backoff interval in ms.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.backoff.jitter - Jitter factor.
+     * @param {number} repConfig.queueProcessor.retry.<locationType>.backoff.factor - Exponential backoff multiplier.
      * @param {Object} redisConfig - redis configuration
      * @param {Object} mConfig - metrics config
      * @param {String} mConfig.topic - metrics config kafka topic

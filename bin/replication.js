@@ -61,6 +61,7 @@ function _createSetupReplication(command, options, log) {
         internalHttps: config.internalHttps,
         checkSanity: true,
         log,
+        repConfig: config.extensions.replication,
     });
 }
 
