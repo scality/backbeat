@@ -65,21 +65,22 @@ describe('LogReader', () => {
         processedKey: 'v1-version-key\u0000version-id',
     }].forEach(testCase => {
         it(`LogReader::_processLogEntry() should process entry with a ${testCase.desc}`, () => {
-            logReader._processLogEntry(null, { db: 'db' }, {
+            logReader._processLogEntry(null, { db: 'db', method: 8 }, {
                 type: 'put',
                 key: testCase.key,
                 value: '{}',
-            });
-            assert.deepStrictEqual(filteredEntry, {
-                type: 'put',
-                bucket: 'db',
-                key: testCase.processedKey,
-                value: '{}',
-                logReader,
-                overheadFields: {
-                    versionId: undefined,
-                    commitTimestamp: undefined,
-                },
+            }, () => {
+                assert.deepStrictEqual(filteredEntry, {
+                    type: 'put',
+                    bucket: 'db',
+                    key: testCase.processedKey,
+                    value: '{}',
+                    logReader,
+                    overheadFields: {
+                        versionId: undefined,
+                        commitTimestamp: undefined,
+                    },
+                });
             });
         });
     });
@@ -87,6 +88,7 @@ describe('LogReader', () => {
     it('should pass through overhead.versionId if available in record', () => {
         const record = {
             db: 'db',
+            method: 8,
         };
         const versionId = 'v1';
         const entry = {
@@ -97,17 +99,18 @@ describe('LogReader', () => {
                 versionId,
             },
         };
-        logReader._processLogEntry(null, record, entry);
-        assert.deepStrictEqual(filteredEntry, {
-            type: 'put',
-            bucket: 'db',
-            key: 'k1',
-            value: '{}',
-            logReader,
-            overheadFields: {
-                versionId,
-                commitTimestamp: undefined,
-            },
+        logReader._processLogEntry(null, record, entry, () => {
+            assert.deepStrictEqual(filteredEntry, {
+                type: 'put',
+                bucket: 'db',
+                key: 'k1',
+                value: '{}',
+                logReader,
+                overheadFields: {
+                    versionId,
+                    commitTimestamp: undefined,
+                },
+            });
         });
     });
 
@@ -116,23 +119,25 @@ describe('LogReader', () => {
         const record = {
             db: 'db',
             timestamp,
+            method: 8,
         };
         const entry = {
             type: 'put',
             key: 'k1',
             value: '{}',
         };
-        logReader._processLogEntry(null, record, entry);
-        assert.deepStrictEqual(filteredEntry, {
-            type: 'put',
-            bucket: 'db',
-            key: 'k1',
-            value: '{}',
-            logReader,
-            overheadFields: {
-                versionId: undefined,
-                commitTimestamp: timestamp,
-            },
+        logReader._processLogEntry(null, record, entry, () => {
+            assert.deepStrictEqual(filteredEntry, {
+                type: 'put',
+                bucket: 'db',
+                key: 'k1',
+                value: '{}',
+                logReader,
+                overheadFields: {
+                    versionId: undefined,
+                    commitTimestamp: timestamp,
+                },
+            });
         });
     });
 
@@ -156,6 +161,74 @@ describe('LogReader', () => {
         errorLogReader.setup(err => {
             assert.ifError(err);
             assert.strictEqual(errorLogReader.logOffset, 1);
+            done();
+        });
+    });
+
+    it('should ignore operations with method === 10', done => {
+        const filteredEntries = [];
+        const reader = new LogReader({
+            logId: 'test-log-reader',
+            zkClient: zkMock.createClient('localhost:2181'),
+            logConsumer: new MockLogConsumer(),
+            extensions: [{
+                filter: entry => { filteredEntries.push(entry); },
+                setBatch: () => {},
+                unsetBatch: () => {},
+            }],
+            logger: new Logger('test:logReader'),
+        });
+        reader._processReadRecords = (params, batchState, done) => done();
+        reader._processSaveLogOffset = (batchState, done) => done();
+        reader._processPrepareEntries = (batchState, done) => {
+            // eslint-disable-next-line no-param-reassign
+            batchState.logRes = {
+                info: {
+                    cseq: 12345,
+                },
+            };
+            batchState.currentRecords.push({
+                db: 'db',
+                method: 8,
+                entries: [
+                    {
+                        type: 'put',
+                        key: 'key',
+                        value: '{}',
+                    },
+                ],
+                timestamp: 't1',
+            });
+            batchState.currentRecords.push({
+                db: 'db',
+                method: 10,
+                entries: [
+                    {
+                        type: 'bucket_migration',
+                        value: '{}',
+                    },
+                ],
+                timestamp: 't2',
+            });
+            done();
+        };
+
+        reader.processLogEntries({}, () => {
+            assert.deepStrictEqual(filteredEntries,
+                [
+                    {
+                        type: 'put',
+                        bucket: 'db',
+                        key: 'key',
+                        value: '{}',
+                        logReader: reader,
+                        overheadFields: {
+                            versionId: undefined,
+                            commitTimestamp: 't1',
+                        },
+                    },
+                ]
+            );
             done();
         });
     });
