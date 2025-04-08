@@ -391,6 +391,75 @@ describe('LogReader', () => {
                 done();
             });
         });
+
+        it('should ignore operations with method === 10', done => {
+            const filteredEntries = [];
+            const reader = new LogReader({
+                logId: 'test-log-reader',
+                zkClient: zkMock.createClient('localhost:2181'),
+                logConsumer: new MockLogConsumer(),
+                extensions: [{
+                    filter: entry => { filteredEntries.push(entry); },
+                    setBatch: () => {},
+                    unsetBatch: () => {},
+                }],
+                logger: new Logger('test:logReader'),
+            });
+            reader._processReadRecords = (params, batchState, done) => done();
+            reader._processSaveLogOffset = (batchState, done) => done();
+            reader._processPrepareEntries = (batchState, done) => {
+                // eslint-disable-next-line no-param-reassign
+                batchState.logRes = {
+                    info: {
+                        cseq: 12345,
+                    },
+                    log: {},
+                };
+                batchState.currentRecords.push({
+                    db: 'db',
+                    method: 8,
+                    entries: [
+                        {
+                            type: 'put',
+                            key: 'key',
+                            value: '{}',
+                        },
+                    ],
+                    timestamp: 't1',
+                });
+                batchState.currentRecords.push({
+                    db: 'db',
+                    method: 10,
+                    entries: [
+                        {
+                            type: 'bucket_migration',
+                            value: '{}',
+                        },
+                    ],
+                    timestamp: 't2',
+                });
+                done();
+            };
+
+            reader.processLogEntries({}, () => {
+                assert.deepStrictEqual(filteredEntries,
+                    [
+                        {
+                            type: 'put',
+                            bucket: 'db',
+                            key: 'key',
+                            value: '{}',
+                            logReader: reader,
+                            overheadFields: {
+                                opTimestamp: undefined,
+                                commitTimestamp: 't1',
+                            },
+                        },
+                    ]
+                );
+                done();
+            });
+        });
     });
 
     describe('_processPrepareEntries', () => {
