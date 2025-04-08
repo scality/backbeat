@@ -185,10 +185,13 @@ function initAndStart(zkClient) {
 
             async.each(allSites, (site, next) => {
                 if (updatedSites.includes(site)) {
+                    const siteConfig = config.getReplicationSiteDestConfig(site);
                     if (!destConfig[site]) {
-                        destConfig[site] = config.getReplicationSiteDestConfig(site);
+                        destConfig[site] = siteConfig;
                     } else {
-                        destConfig[site].bootstrapList = updatedBootstrapList;
+                        // Only updating replicationEndpoint to keep maintaining reference
+                        // in the queue processor instance
+                        destConfig[site].replicationEndpoint = siteConfig.replicationEndpoint;
                     }
                     if (!activeSites.includes(site)) {
                         const qp = new QueueProcessor(

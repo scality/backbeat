@@ -25,9 +25,15 @@ const repConfig = config.extensions.replication;
 const sourceConfig = {
     auth: { type: 'skip' },
 };
-const destConfig = {
+const firstSite = repConfig.destination.bootstrapList[0].site;
+const firstSiteConf = {
     auth: { type: 'skip', vault: 'skip' },
-    bootstrapList: repConfig.destination.bootstrapList,
+    replicationEndpoint: repConfig.destination.bootstrapList[0],
+};
+const secondSite = repConfig.destination.bootstrapList[1].site;
+const secondSiteConf = {
+    auth: { type: 'skip', vault: 'skip' },
+    replicationEndpoint: repConfig.destination.bootstrapList[1],
 };
 const mConfig = config.metrics;
 
@@ -48,8 +54,6 @@ describe('CRR Pause/Resume status updates', function d() {
     this.timeout(10000);
     let zkHelper;
     let mockAPI;
-    const firstSite = destConfig.bootstrapList[0].site;
-    const secondSite = destConfig.bootstrapList[1].site;
     let qpSite1;
     let qpSite2;
     let consumer1;
@@ -74,14 +78,14 @@ describe('CRR Pause/Resume status updates', function d() {
             // qpSite1 (first site) is not paused
             qpSite1 = new QueueProcessor(
                 'backbeat-func-test-dummy-topic', zkConfig, zkClient,
-                kafkaConfig, sourceConfig, destConfig, repConfig,
+                kafkaConfig, sourceConfig, firstSiteConf, repConfig,
                 redisConfig, mConfig, {}, {}, firstSite);
             qpSite1.start();
 
             // qpSite2 (second site) is paused and has a scheduled resume
             qpSite2 = new QueueProcessor(
                 'backbeat-func-test-dummy-topic', zkConfig, zkClient,
-               kafkaConfig, sourceConfig, destConfig, repConfig,
+               kafkaConfig, sourceConfig, secondSiteConf, repConfig,
                redisConfig, mConfig, {}, {}, secondSite);
             qpSite2.start({ paused: true });
             qpSite2.scheduleResume(futureDate);
@@ -112,14 +116,14 @@ describe('CRR Pause/Resume status updates', function d() {
             // replay processor
             replayProcessor1 = new QueueProcessor(
                 ZK_TEST_CRR_REPLAY_TOPIC, zkConfig, zkClient,
-                kafkaConfig, sourceConfig, destConfig, replayConfig,
+                kafkaConfig, sourceConfig, firstSiteConf, replayConfig,
                 redisConfig, mConfig, {}, {}, firstSite);
             replayProcessor1.start();
 
             // replay processor 2 (second site) is paused
             replayProcessor2 = new QueueProcessor(
                 ZK_TEST_CRR_REPLAY_TOPIC, zkConfig, zkClient,
-                kafkaConfig, sourceConfig, destConfig, replayConfig,
+                kafkaConfig, sourceConfig, secondSiteConf, replayConfig,
                 redisConfig, mConfig, {}, {}, secondSite);
             replayProcessor2.start({ paused: true });
             replayProcessor2.scheduleResume(futureDate);

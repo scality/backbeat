@@ -23,18 +23,15 @@ const MPU_GCP_MAX_PARTS = 1024;
 class CopyLocationTask extends BackbeatTask {
 
     _getReplicationEndpointType() {
-        const replicationEndpoint = this.destConfig.bootstrapList
-            .find(endpoint => endpoint.site === this.site);
-        return replicationEndpoint.type;
+        return this.destConfig?.replicationEndpoint?.type;
     }
 
     constructor(qp) {
         const qpState = qp.getStateVars();
         super();
         Object.assign(this, qpState);
-        this.destType = null;
-        if (this.destConfig && this.destConfig.bootstrapList) {
-            this.destType = this._getReplicationEndpointType();
+        this.destType = this._getReplicationEndpointType();
+        if (this.destConfig && this.destType) {
             const retryParams =
                   this.repConfig.queueProcessor.retry[this.destType];
             if (retryParams) {

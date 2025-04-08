@@ -115,11 +115,10 @@ describe('Config', () => {
                     type: 'service',
                     account: 'service-replication-3',
                 },
-                bootstrapList: [
-                    { site: 'aws1', type: 'aws_s3' },
-                    { site: 'aws2', type: 'aws_s3' },
-                    { site: 'aws3', type: 'aws_s3' }
-                ]
+                replicationEndpoint: {
+                    site: 'aws3',
+                    type: 'aws_s3',
+                },
             });
         });
 
@@ -145,11 +144,10 @@ describe('Config', () => {
                     type: 'service',
                     account: 'service-replication',
                 },
-                bootstrapList: [
-                    { site: 'aws1', type: 'aws_s3' },
-                    { site: 'aws2', type: 'aws_s3' },
-                    { site: 'aws3', type: 'aws_s3' }
-                ]
+                replicationEndpoint: {
+                    site: 'aws3',
+                    type: 'aws_s3',
+                },
             });
         });
     });

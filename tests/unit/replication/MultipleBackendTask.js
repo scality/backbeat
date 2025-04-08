@@ -51,10 +51,15 @@ describe('MultipleBackendTask', function test() {
                 repConfig: {
                     queueProcessor: {
                         retry: retryConfig,
+                        mpuPartsConcurrency: 2,
                     },
                 },
                 sourceConfig: config.extensions.replication.source,
-                destConfig: config.extensions.replication.destination,
+                destConfig: {
+                    ...config.extensions.replication.destination,
+                    replicationEndpoint: config.extensions.replication.destination.bootstrapList
+                        .find(e => e.site === 'test-site-2'),
+                },
                 site: 'test-site-2',
                 notificationConfigManager: {
                     getConfig: () => null
@@ -435,6 +440,119 @@ describe('MultipleBackendTask', function test() {
                 assert(putObjectHandler.calledOnce);
                 delete task.repConfig.queueProcessor.minMPUSizeMB;
                 return done();
+            });
+        });
+    });
+
+    describe('_initiateMPU', () => {
+        it('should init mpu when location type is not azure', done => {
+            task.backbeatSource = {
+                multipleBackendInitiateMPU: sinon.stub().returns({
+                    send: cb => cb(null, {}),
+                    on: () => {},
+                }),
+            };
+            task.destConfig = {
+                replicationEndpoint: {
+                    site: 'test-site',
+                    type: 'aws_s3',
+                },
+            };
+            task._initiateMPU(sourceEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(task.backbeatSource.multipleBackendInitiateMPU.calledOnce);
+                done();
+            });
+        });
+        it('should not init mpu when location type is azure', done => {
+            task.backbeatSource = {
+                multipleBackendInitiateMPU: sinon.stub().returns({
+                    send: cb => cb(null, {}),
+                    on: () => {},
+                }),
+            };
+            task.destConfig = {
+                replicationEndpoint: {
+                    site: 'test-site',
+                    type: 'azure',
+                },
+            };
+            task._initiateMPU(sourceEntry, fakeLogger, err => {
+                assert.ifError(err);
+                assert(task.backbeatSource.multipleBackendInitiateMPU.notCalled);
+                done();
+            });
+        });
+    });
+
+    describe('_completeRangedMPU', () => {
+        it('should abort MPU on part upload error', done => {            
+            sinon.stub(task, '_getRanges').returns([
+                { start: 0, end: 100 },
+                { start: 101, end: 199 }
+            ]);
+            
+            const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
+            putRangeFunc.onCall(0).yields(null, {
+                partNumber: 0,
+                ETag: 'etag1',
+            });
+            putRangeFunc.onCall(1).yields(new Error('Upload failed'));
+            
+            const abortMpuFunc = sinon.stub(task, '_multipleBackendAbortMPU').yields();
+            const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
+            
+            task.destConfig = {
+                replicationEndpoint: {
+                    site: 'test-site',
+                    type: 'aws_s3',
+                },
+            };
+            
+            const uploadId = 'test-upload-id';
+            task._completeRangedMPU(sourceEntry, uploadId, fakeLogger, err => {
+                assert(err);
+                assert.strictEqual(err.message, 'Upload failed');
+                assert(abortMpuFunc.calledOnce);
+                assert(completeMpuFunc.notCalled);
+                done();
+            });
+        });
+            
+        it('should handle Azure special case for MPU parts', done => {
+            sinon.stub(task, '_getRanges').returns([
+                { start: 0, end: 100 },
+                { start: 101, end: 199 }
+            ]);
+            
+            const putRangeFunc = sinon.stub(task, '_getRangeAndPutMPUPart');
+            putRangeFunc.onCall(0).yields(null, {
+                partNumber: 0,
+                ETag: 'etag1',
+                numberSubParts: 2
+            });
+            putRangeFunc.onCall(1).yields(null, {
+                partNumber: 1,
+                ETag: 'etag2',
+                numberSubParts: 1
+            });
+            
+            const completeMpuFunc = sinon.stub(task, '_completeMPU').yields();
+            
+            task.destConfig = {
+                replicationEndpoint: {
+                    site: 'test-site',
+                    type: 'azure',
+                },
+            };
+            
+            task._completeRangedMPU(sourceEntry, 'test-upload-id', fakeLogger, err => {
+                assert.ifError(err);
+                assert(completeMpuFunc.calledOnce);
+                const completionData = completeMpuFunc.firstCall.args[2];
+                assert(completionData[0].NumberSubParts);
+                assert(completionData[1].NumberSubParts);
+                done();
             });
         });
     });

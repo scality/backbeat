@@ -5,47 +5,55 @@ const constants = require('../../../lib/constants');
 const QueueProcessor =
     require('../../../extensions/replication/queueProcessor/QueueProcessor');
 
+function getQueueProcessorConfig() {
+    return [
+        'backbeat-func-test-dummy-topic',
+        { connectionString: '127.0.0.1:2181/backbeat',
+          autoCreateNamespace: false },
+        null,
+        { hosts: 'localhost:9092' },
+        { auth: { type: 'role',
+            vault: { host: 'localhost:9093',
+                port: 7777 } },
+            s3: { host: 'localhost:9094',
+                port: 7777 },
+            transport: 'http',
+        },
+        {
+            transport: 'http',
+            auth: { type: 'role' },
+            replicationEndpoint: {
+                site: 'site-crr',
+                servers: ['site-crr:8000'],
+            },
+        },
+        { topic: 'backbeat-func-test-dummy-topic',
+          replicationStatusTopic: 'backbeat-func-test-repstatus',
+          queueProcessor: {
+              retry: {
+                  scality: { timeoutS: 5 },
+                  azure: { timeoutS: 5 },
+              },
+              groupId: 'backbeat-func-test-group-id',
+              mpuPartsConcurrency: 10,
+          },
+        },
+        null,
+        { topic: 'metrics-test-topic' },
+        {},
+        {},
+        'site-crr',
+    ];
+}
+
 describe('Queue Processor', () => {
     let qp;
     beforeEach(() => {
-        qp = new QueueProcessor(
-            'backbeat-func-test-dummy-topic',
-            { connectionString: '127.0.0.1:2181/backbeat',
-              autoCreateNamespace: false },
-            null,
-            { hosts: 'localhost:9092' },
-            { auth: { type: 'role',
-                vault: { host: 'localhost:9093',
-                    port: 7777 } },
-                s3: { host: 'localhost:9094',
-                    port: 7777 },
-                transport: 'http',
-            },
-            { auth: { type: 'role' },
-                bootstrapList: [{
-                    site: 'site', servers: ['localhost:9095'],
-                }, {
-                    site: 'toazure', type: 'azure',
-                }],
-                transport: 'http' },
-            { topic: 'backbeat-func-test-dummy-topic',
-              replicationStatusTopic: 'backbeat-func-test-repstatus',
-              queueProcessor: {
-                  retry: {
-                      scality: { timeoutS: 5 },
-                      azure: { timeoutS: 5 },
-                  },
-                  groupId: 'backbeat-func-test-group-id',
-                  mpuPartsConcurrency: 10,
-              },
-            },
-            { host: '127.0.0.1',
-              port: 6379 },
-            { topic: 'metrics-test-topic' },
-            {},
-            {},
-            'site',
-        );
+        qp = new QueueProcessor(...getQueueProcessorConfig());
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     describe('handle liveness', () => {
@@ -81,11 +89,11 @@ describe('Queue Processor', () => {
                     {
                         component: 'Replication Status Producer',
                         status: constants.statusUndefined,
-                        site: 'site',
+                        site: 'site-crr',
                     }, {
                         component: 'Consumer',
                         status: constants.statusUndefined,
-                        site: 'site',
+                        site: 'site-crr',
                     },
                 ]
             );
@@ -117,14 +125,56 @@ describe('Queue Processor', () => {
                     {
                         component: 'Replication Status Producer',
                         status: constants.statusNotReady,
-                        site: 'site',
+                        site: 'site-crr',
                     }, {
                         component: 'Consumer',
                         status: constants.statusNotReady,
-                        site: 'site',
+                        site: 'site-crr',
                     },
                 ]
             );
+        });
+    });
+
+    describe('constructor', () => {
+        it('should use s3c site\'s host as a destination host', () => {
+            const config = getQueueProcessorConfig();
+            config[5].replicationEndpoint = {
+                site: 'site-crr',
+                servers: ['site-crr:8000'],
+            };
+            config[11] = 'site-crr';
+            const qp = new QueueProcessor(...config);
+            assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                host: 'site-crr',
+                port: 8000,
+            });
+        });
+        it('should setup echo mode when configured for site', () => {
+            const config = getQueueProcessorConfig();
+            config[5].replicationEndpoint = {
+                site: 'site-crr',
+                servers: ['site-crr:8000'],
+                echo: true,
+            };
+            config[11] = 'site-crr';
+            const setupEchoStub = sinon.stub(QueueProcessor.prototype, '_setupEcho').returns();
+            const qp = new QueueProcessor(...config);
+            assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                host: 'site-crr',
+                port: 8000,
+            });
+            assert(setupEchoStub.calledOnce);
+        });
+        it('should not set destination host when using a non scality type site', () => {
+            const config = getQueueProcessorConfig();
+            config[5].replicationEndpoint = {
+                site: 'site_aws',
+                type: 's3_aws',
+            };
+            config[11] = 'site_aws';
+            const qp = new QueueProcessor(...config);
+            assert.strictEqual(qp.destHosts, null);
         });
     });
 });

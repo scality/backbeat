@@ -39,9 +39,9 @@ const qpParams = [
       transport: 'http',
     },
     { auth: { type: 'account', account: 'bart' },
-      bootstrapList: [{
+      replicationEndpoint: {
           site: 'sf', servers: ['127.0.0.2:7777'],
-      }],
+      },
       transport: 'http' },
     { topic: 'backbeat-func-test-dummy-topic',
       replicationStatusTopic: 'backbeat-func-test-repstatus',
