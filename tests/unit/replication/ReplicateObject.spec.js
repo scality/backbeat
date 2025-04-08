@@ -181,4 +181,32 @@ describe('ReplicateObject', () => {
             });
         });
     });
+
+    describe('constructor', () => {
+        it('should use retry config of the relevent type', () => {
+            const task = new ReplicateObject({
+                getStateVars: () => ({
+                    repConfig: {
+                        queueProcessor: {
+                            retry: {
+                                scality: {
+                                    maxRetries: 5,
+                                },
+                                azure: {
+                                    maxRetries: 4,
+                                },
+                            },
+                        },
+                    },
+                    destConfig: {
+                        replicationEndpoint: {
+                            site: 'test-site',
+                            type: 'scality',
+                        },
+                    },
+                }),
+            });
+            assert.strictEqual(task.retryParams.maxRetries, 5);
+        });
+    });
 });

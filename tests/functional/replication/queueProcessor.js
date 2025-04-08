@@ -756,6 +756,56 @@ function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
 
 /* eslint-enable max-len */
 
+function getQueueProcessorSiteConfig(site) {
+    const replicationEndpoints = {
+        sf: {
+            site: 'sf',
+            servers: constants.target.hosts.map(h => `${h.host}:${h.port}`),
+        },
+        toazure: {
+            site: 'toazure',
+            type: 'azure',
+        },
+    };
+    return [
+        'backbeat-func-test-dummy-topic',
+        { connectionString: '127.0.0.1:2181/backbeat',
+          autoCreateNamespace: false },
+        null,
+        { hosts: 'localhost:9092' },
+        { auth: { type: 'role',
+            vault: { host: constants.source.vault,
+                port: 7777 } },
+            s3: { host: constants.source.s3,
+                port: 7777 },
+            transport: 'http',
+        },
+        {
+            auth: { type: 'role' },
+            replicationEndpoint: replicationEndpoints[site],
+            transport: 'http',
+        },
+        { topic: 'backbeat-func-test-dummy-topic',
+          replicationStatusTopic: 'backbeat-func-test-repstatus',
+          queueProcessor: {
+              retry: {
+                  scality: { timeoutS: 5 },
+                  azure: { timeoutS: 5 },
+              },
+              groupId: 'backbeat-func-test-group-id',
+              mpuPartsConcurrency: 10,
+              sourceCheckIfSizeGreaterThanMB: 10,
+          },
+        },
+        { host: '127.0.0.1',
+          port: 6379 },
+        { topic: 'metrics-test-topic' },
+        {},
+        {},
+        site,
+    ];
+}
+
 describe('queue processor functional tests with mocking', () => {
     let queueProcessorSF;
     let queueProcessorAzure;
@@ -768,58 +818,17 @@ describe('queue processor functional tests with mocking', () => {
 
     before(function before(done) {
         this.timeout(60000);
-        const serverList =
-                  constants.target.hosts.map(h => `${h.host}:${h.port}`);
-
-        const qpParams = [
-            'backbeat-func-test-dummy-topic',
-            { connectionString: '127.0.0.1:2181/backbeat',
-              autoCreateNamespace: false },
-            null,
-            { hosts: 'localhost:9092' },
-            { auth: { type: 'role',
-                vault: { host: constants.source.vault,
-                    port: 7777 } },
-                s3: { host: constants.source.s3,
-                    port: 7777 },
-                transport: 'http',
-            },
-            { auth: { type: 'role' },
-                bootstrapList: [{
-                    site: 'sf', servers: serverList,
-                }, {
-                    site: 'toazure', type: 'azure',
-                }],
-                transport: 'http' },
-            { topic: 'backbeat-func-test-dummy-topic',
-              replicationStatusTopic: 'backbeat-func-test-repstatus',
-              queueProcessor: {
-                  retry: {
-                      scality: { timeoutS: 5 },
-                      azure: { timeoutS: 5 },
-                  },
-                  groupId: 'backbeat-func-test-group-id',
-                  mpuPartsConcurrency: 10,
-                  sourceCheckIfSizeGreaterThanMB: 10,
-              },
-            },
-            { host: '127.0.0.1',
-              port: 6379 },
-            { topic: 'metrics-test-topic' },
-            {},
-            {},
-        ];
         async.series([
             done => async.parallel([
                 done => {
                     queueProcessorSF =
-                        new QueueProcessor(...qpParams.concat(['sf']));
+                        new QueueProcessor(...getQueueProcessorSiteConfig('sf'));
                     queueProcessorSF.start({ disableConsumer: true });
                     queueProcessorSF.on('ready', done);
                 },
                 done => {
                     queueProcessorAzure =
-                        new QueueProcessor(...qpParams.concat(['toazure']));
+                        new QueueProcessor(...getQueueProcessorSiteConfig('toazure'));
                     queueProcessorAzure.start({ disableConsumer: true });
                     queueProcessorAzure.on('ready', done);
                 },

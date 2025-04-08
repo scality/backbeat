@@ -257,17 +257,12 @@ class QueueProcessor extends EventEmitter {
             this._setupRedis(redisConfig);
         }
 
-        // FIXME support multiple scality destination sites
-        if (Array.isArray(destConfig.bootstrapList)) {
-            destConfig.bootstrapList.forEach(dest => {
-                if (Array.isArray(dest.servers)) {
-                    this.destHosts =
-                        new RoundRobin(dest.servers, { defaultPort: 80 });
-                    if (dest.echo) {
-                        this._setupEcho();
-                    }
-                }
-            });
+        if (Array.isArray(this.destConfig.replicationEndpoint.servers)) {
+            this.destHosts =
+                new RoundRobin(this.destConfig.replicationEndpoint.servers, { defaultPort: 80 });
+            if (this.destConfig.replicationEndpoint.echo) {
+                this._setupEcho();
+            }
         }
 
         this.taskScheduler = new TaskScheduler(
@@ -889,10 +884,8 @@ class QueueProcessor extends EventEmitter {
                 sourceEntry.getReplicationStorageClass();
             const sites = getLocationsFromStorageClass(replicationStorageClass);
             if (sites.includes(this.site)) {
-                const replicationEndpoint = this.destConfig.bootstrapList
-                    .find(endpoint => endpoint.site === this.site);
-                if (replicationEndpoint &&
-                replicationBackends.includes(replicationEndpoint.type)) {
+                if (this.destConfig.replicationEndpoint &&
+                    replicationBackends.includes(this.destConfig.replicationEndpoint.type)) {
                     task = new MultipleBackendTask(this);
                 } else {
                     task = new ReplicateObject(this);

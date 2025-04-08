@@ -38,9 +38,7 @@ const BACKBEAT_INJECT_REPLICATION_ERROR_DELTAG =
 class MultipleBackendTask extends ReplicateObject {
 
     _getReplicationEndpointType() {
-        const replicationEndpoint = this.destConfig.bootstrapList
-            .find(endpoint => endpoint.site === this.site);
-        return replicationEndpoint.type;
+        return this.destConfig.replicationEndpoint.type;
     }
 
     _setupRolesOnce(entry, log, cb) {
