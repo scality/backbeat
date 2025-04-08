@@ -174,6 +174,7 @@ class QueueProcessor extends EventEmitter {
                     topic: internalTopic,
                     groupId: consumerGroupId,
                     concurrency,
+                    maxQueued: this.notifConfig.queueProcessor.maxQueued,
                     queueProcessor: this.processKafkaEntry.bind(this),
                 });
                 this._consumer.on('error', err => {

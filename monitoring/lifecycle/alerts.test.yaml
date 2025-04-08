@@ -517,9 +517,9 @@ tests:
   - name: KafkaConsumerSlowTask
     interval: 1m
     input_series:
-      - series: s3_backbeat_queue_slowTasks_count{namespace="zenko",job="artesca-data-backbeat-object-processor-headless"}
+      - series: s3_backbeat_queue_slowtasks_count{namespace="zenko",job="artesca-data-backbeat-object-processor-headless"}
         values: 0 0 0 0 1 0 0 0 0 0
-      - series: s3_backbeat_queue_slowTasks_count{namespace="zenko",job="artesca-data-backbeat-bucket-processor-headless"}
+      - series: s3_backbeat_queue_slowtasks_count{namespace="zenko",job="artesca-data-backbeat-bucket-processor-headless"}
         values: 0 0 1 1 1 1 1 1 1 0
     alert_rule_test:
       - alertname: KafkaConsumerSlowTask

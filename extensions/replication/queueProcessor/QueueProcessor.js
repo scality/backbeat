@@ -404,6 +404,7 @@ class QueueProcessor extends EventEmitter {
             topic,
             groupId,
             concurrency: this.repConfig.queueProcessor.concurrency,
+            maxQueued: this.repConfig.queueProcessor.maxQueued,
             queueProcessor: queueProcessorFunc,
             canary: true,
             circuitBreaker: this.circuitBreakerConfig,

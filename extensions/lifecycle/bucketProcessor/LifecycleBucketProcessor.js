@@ -427,6 +427,9 @@ class LifecycleBucketProcessor {
             topic: this._lcConfig.bucketTasksTopic,
             groupId: this._lcConfig.bucketProcessor.groupId,
             concurrency: this._lcConfig.bucketProcessor.concurrency,
+            // respecting the order of messages for the same bucket
+            // is not required in the bucket processor
+            orderByFunc: null,
             queueProcessor: this._processBucketEntry.bind(this),
             circuitBreaker: this._circuitBreakerConfig,
             circuitBreakerMetrics: {

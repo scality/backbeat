@@ -3203,7 +3203,7 @@
       "targets": [
         {
           "datasource": null,
-          "expr": "label_replace(\nlabel_replace(\n  sum(s3_backbeat_queue_slowTasks_count{job=~\"$jobs\", namespace=\"${namespace}\"}) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
+          "expr": "label_replace(\nlabel_replace(\n  sum(s3_backbeat_queue_slowtasks_count{job=~\"$jobs\", namespace=\"${namespace}\"}) by (job)\n, \"job\", \"$1\", \"job\", \"${zenkoName}-backbeat-(?:lifecycle-)?(.*?)-headless\")\n, \"job\", \"$1-processor\", \"job\", \"(gc|transition)\")",
           "format": "time_series",
           "hide": false,
           "instant": false,

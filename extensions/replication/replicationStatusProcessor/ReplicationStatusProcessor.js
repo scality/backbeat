@@ -395,8 +395,8 @@ class ReplicationStatusProcessor {
                     },
                     topic: this.repConfig.replicationStatusTopic,
                     groupId: this.repConfig.replicationStatusProcessor.groupId,
-                    concurrency:
-                    this.repConfig.replicationStatusProcessor.concurrency,
+                    concurrency: this.repConfig.replicationStatusProcessor.concurrency,
+                    maxQueued: this.repConfig.replicationStatusProcessor.maxQueued,
                     queueProcessor: this.processKafkaEntry.bind(this),
                     bootstrap: (options && options.bootstrap) || false,
                 });

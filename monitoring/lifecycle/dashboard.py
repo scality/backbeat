@@ -139,7 +139,7 @@ class BacklogMetrics:
     )
 
     SLOW_TASKS = metrics.Metric(
-        's3_backbeat_queue_slowTasks_count',
+        's3_backbeat_queue_slowtasks_count',
         'topic', 'partition', 'group', job=['$jobs'], namespace='${namespace}',
     )
 

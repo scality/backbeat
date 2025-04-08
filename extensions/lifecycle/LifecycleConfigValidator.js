@@ -8,7 +8,7 @@ const {
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi');
 
-const { supportedLifecycleRules }  = require('../../lib/constants');
+const { supportedLifecycleRules, backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
@@ -59,6 +59,7 @@ const joiSchema = joi.object({
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.default(),
         circuitBreaker: joi.object().optional(),
     },
@@ -67,6 +68,7 @@ const joiSchema = joi.object({
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
+        maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.default(),
         circuitBreaker: joi.object().optional(),
     },
