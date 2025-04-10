@@ -3,11 +3,12 @@ const sinon = require('sinon');
 
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicateObject = require('../../../extensions/replication/tasks/ReplicateObject');
-const ClientManager = require('../../../lib/clients/ClientManager');
+const ClientsManager = require('../../../lib/clients/ClientsManager');
 const locations = require('../../../conf/locationConfig.json');
 
 const { replicationEntry } = require('../../utils/kafkaEntries');
 const fakeLogger = require('../../utils/fakeLogger');
+const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 
 describe('ReplicateObject', () => {
     let task;
@@ -137,33 +138,11 @@ describe('ReplicateObject', () => {
     });
 
     describe('_setupDestClients', () => {
-        it('should setup destination client with proper creds when using assumeRole', () => {
-            sinon.stub(ClientManager.prototype, 'initCredentialsManager').returns(null);
-            sinon.stub(ClientManager.prototype, 'getBackbeatClient').returns(null);
+        it('should create assumeRole client when using assumeRole', () => {
+            const setupClient = sinon.stub(task, '_setupAssumeRoleDestClient').returns();
             task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
-            assert.deepStrictEqual(task.clientManager._id, '123456789012');
-            assert.deepStrictEqual(task.clientManager._authConfig, {
-                type: 'assumeRole',
-                roleName: 'crr-role',
-                sts: {
-                    host: 'sts.enpoint.com',
-                    port: 80,
-                    accessKey: 'accessKey1',
-                    secretKey: 'verySecretKey1',
-                },
-            });
-            assert.deepStrictEqual(task.clientManager._s3Config, {
-                host: 'localhost',
-                port: 9095,
-            });
-            assert.deepStrictEqual(task.clientManager._transport, 'http');
-            assert.deepStrictEqual(task.clientManager._stsConfig.endpoint, 'http://sts.enpoint.com:80');
-            assert.deepStrictEqual(task.clientManager._stsConfig.credentials, {
-                accessKeyId: 'accessKey1',
-                secretAccessKey: 'verySecretKey1',
-            });
+            assert(setupClient.calledOnce);
         });
-
         it('should setup destination BackbeatClient with proper creds when not in assumeRole', () => {
             task.destConfig.auth = {
                 type: 'service',
@@ -207,6 +186,44 @@ describe('ReplicateObject', () => {
                 }),
             });
             assert.strictEqual(task.retryParams.maxRetries, 5);
+        });
+    });
+
+    describe('_setupAssumeRoleDestClient', () => {
+        it('should create a new client if no client exists', () => {
+            task.destBackbeatHost = {
+                host: 'localhost',
+                port: 9095,
+            };
+            task.clientsManager = new ClientsManager('test', fakeLogger);
+            task._setupAssumeRoleDestClient('arn:aws:iam::123456789012:role/crr-role');
+            assert(task.backbeatDest instanceof BackbeatClient);
+        });
+        it('should reuse old client if it exists', () => {
+            task.destBackbeatHost = {
+                host: 'host1',
+                port: 9095,
+            };
+            task.clientsManager = new ClientsManager('test', fakeLogger);
+            task._setupAssumeRoleDestClient('arn:aws:iam::123456789012:role/crr-role');
+            const oldBackbeatClient = task.backbeatDest;
+            task._setupAssumeRoleDestClient('arn:aws:iam::123456789012:role/crr-role');
+            assert.deepStrictEqual(oldBackbeatClient, task.backbeatDest);
+            assert(task.backbeatDest instanceof BackbeatClient);
+        });
+        it('should create a new client if s3 config changed', () => {
+            task.destBackbeatHost = {
+                host: 'host1',
+                port: 9095,
+            };
+            task.clientsManager = new ClientsManager('test', fakeLogger);
+            task._setupAssumeRoleDestClient('arn:aws:iam::123456789012:role/crr-role');
+            const oldBackbeatClient = task.backbeatDest;
+            task.destBackbeatHost.host = 'host2';
+            task._setupAssumeRoleDestClient('arn:aws:iam::123456789012:role/crr-role');
+            assert.notDeepStrictEqual(oldBackbeatClient, task.backbeatDest);
+            assert(task.backbeatDest instanceof BackbeatClient);
+            assert.strictEqual(task.backbeatDest.endpoint.host, 'host2:9095');
         });
     });
 });

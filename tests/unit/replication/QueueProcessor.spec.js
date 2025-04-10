@@ -177,4 +177,24 @@ describe('Queue Processor', () => {
             assert.strictEqual(qp.destHosts, null);
         });
     });
+
+    describe('_setupClientsManager', () => {
+        let qp;
+        afterEach(done => {
+            clearInterval(qp.clientsManager?._deleteInactiveCredentialsInterval);
+            qp.stop(done);
+        });
+        it('should set up clients manager if auth type us AssumeRole', () => {
+            const config = getQueueProcessorConfig();
+            config[5].auth.type = 'assumeRole';
+            qp = new QueueProcessor(...config);
+            assert.strictEqual(qp.clientsManager?._id, 'crr-site-crr');
+        });
+        it('should set up clients manager if auth type is not AssumeRole', () => {
+            const config = getQueueProcessorConfig();
+            config[5].auth.type = 'role';
+            qp = new QueueProcessor(...config);
+            assert.deepStrictEqual(qp.clientsManager, null);
+        });
+    });
 });

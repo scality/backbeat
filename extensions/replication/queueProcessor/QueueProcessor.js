@@ -14,6 +14,7 @@ const RoundRobin = require('arsenal').network.RoundRobin;
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
 const VaultClientCache = require('../../../lib/clients/VaultClientCache');
+const ClientsManager = require('../../../lib/clients/ClientsManager');
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
 const { getTaskSchedulerQueueKey,
@@ -226,6 +227,7 @@ class QueueProcessor extends EventEmitter {
         this.echoMode = false;
         this.scheduledResume = null;
         this.circuitBreakerConfig = circuitBreakerConfig;
+        this.clientsManager = null;
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
@@ -253,6 +255,8 @@ class QueueProcessor extends EventEmitter {
         }
 
         this._setupVaultclientCache();
+        this._setupClientsManager();
+        
         if (redisConfig) {
             this._setupRedis(redisConfig);
         }
@@ -356,6 +360,14 @@ class QueueProcessor extends EventEmitter {
                     this.httpsConfig.ca);
             }
         }
+    }
+
+    _setupClientsManager() {
+        if (this.destConfig.auth.type !== libConstants.authTypeAssumeRole) {
+            return;
+        }
+        this.clientsManager = new ClientsManager(`crr-${this.site}`, this.logger);
+        this.clientsManager.initCredentialsManager();
     }
 
     _setupProducer(done) {
@@ -689,6 +701,7 @@ class QueueProcessor extends EventEmitter {
             destHTTPAgent: this.destHTTPAgent,
             vaultclientCache: this.vaultclientCache,
             accountCredsCache: this.accountCredsCache,
+            clientsManager: this.clientsManager,
             replicationStatusProducer: this.replicationStatusProducer,
             mProducer: this._mProducer,
             logger: this.logger,

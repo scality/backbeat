@@ -5,7 +5,6 @@ const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
-const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
@@ -29,6 +28,10 @@ function _extractAccountIdFromRole(role) {
 
 function _extractRoleNameFromRole(role) {
     return role.split(':role/')[1];
+}
+
+function _buildClientId(accountId, targetRole) {
+    return `${accountId}-${targetRole}`;
 }
 
 // BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable can be set to randomly introduce errors.
@@ -719,17 +722,17 @@ class ReplicateObject extends BackbeatTask {
         this.backbeatSourceProxy.setBackbeatClient(this.backbeatSource);
     }
 
-    _setupDestClients(targetRole, log) {
-        this.destBackbeatHost = this.destHosts.pickHost();
-
-        if (this.destConfig.auth.type === authTypeAssumeRole) {
-            const accountId = _extractAccountIdFromRole(targetRole);
-            const roleName = _extractRoleNameFromRole(targetRole);
-            this.clientManager = new ClientManager({
-                id: accountId,
+    _setupAssumeRoleDestClient(targetRole) {
+        const accountId = _extractAccountIdFromRole(targetRole);
+        const clientId = _buildClientId(accountId, targetRole);
+        const clientConfig = this.clientsManager.getClientConfig(clientId);
+        // Create a new client if it doesn't exist
+        if (!clientConfig) {
+            this.clientsManager.setClientConfig(clientId, {
+                accountId,
                 authConfig: {
                     type: authTypeAssumeRole,
-                    roleName,
+                    roleName: _extractRoleNameFromRole(targetRole),
                     sts: {
                         ...this.destConfig.auth.sts,
                         accessKey: locations[this.site].details.credentials.accessKey,
@@ -741,10 +744,29 @@ class ReplicateObject extends BackbeatTask {
                     port: this.destBackbeatHost.port,
                 },
                 transport: this.destConfig.transport,
-            }, this.logger);
-            this.clientManager.initSTSConfig();
-            this.clientManager.initCredentialsManager();
-            this.backbeatDest = this.clientManager.getBackbeatClient(accountId);
+            });
+        } else {
+            // S3 endpoint can change with retries, in this case update the s3 config
+            // and remove previously created clients
+            const s3HostUpdated =
+                (clientConfig.s3Config.host !== this.destBackbeatHost.host) ||
+                (clientConfig.s3Config.port !== this.destBackbeatHost.port);
+            if (s3HostUpdated) {
+                clientConfig.s3Config = {
+                    host: this.destBackbeatHost.host,
+                    port : this.destBackbeatHost.port,
+                };
+                this.clientsManager.removeClients(clientId);
+            }
+        }
+        this.backbeatDest = this.clientsManager.getBackbeatClient(clientId);
+    }
+
+    _setupDestClients(targetRole, log) {
+        this.destBackbeatHost = this.destHosts.pickHost();
+
+        if (this.destConfig.auth.type === authTypeAssumeRole) {
+            this._setupAssumeRoleDestClient(targetRole);
             return;
         }
 
