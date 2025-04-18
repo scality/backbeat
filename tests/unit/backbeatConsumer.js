@@ -239,6 +239,16 @@ describe('backbeatConsumer', () => {
     });
 
     describe('_getAvailableSlotsInPipeline', () => {
+        let consumer;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+        });
+
         [
             {
                 // should take into account pending requests
