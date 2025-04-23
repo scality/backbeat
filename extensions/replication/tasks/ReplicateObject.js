@@ -688,6 +688,7 @@ class ReplicateObject extends BackbeatTask {
                 `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
+            signatureVersion: 'v4',
             httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS, connectTimeout: TIMEOUT_MS },
             maxRetries: 0,
         });
@@ -710,6 +711,7 @@ class ReplicateObject extends BackbeatTask {
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destCredentials,
             sslEnabled: this.destConfig.transport === 'https',
+            signatureVersion: 'v4',
             httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });

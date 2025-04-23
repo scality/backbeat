@@ -77,6 +77,7 @@ class CopyLocationTask extends BackbeatTask {
             endpoint: `${transport}://${s3.host}:${s3.port}`,
             credentials: s3Credentials,
             sslEnabled: transport === 'https',
+            signatureVersion: 'v4',
             httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS },
             maxRetries: 0,
         });
