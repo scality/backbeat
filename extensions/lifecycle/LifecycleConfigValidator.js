@@ -8,7 +8,7 @@ const {
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi');
 
-const { supportedLifecycleRules }  = require('../../lib/constants');
+const { ValidLifecycleRules: supportedLifecycleRules } = require('arsenal').models;
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),

@@ -994,29 +994,29 @@ describe('rulesToParams with versioning Disabled', () => {
 describe('rulesSupportTransition', () => {
     it('sould return false if no transition rule supported', () => {
         const rules = [
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
+            'Expiration',
+            'NoncurrentVersionExpiration',
+            'AbortIncompleteMultipartUpload',
         ];
         assert.strictEqual(rulesSupportTransition(rules), false);
     });
 
     it('sould return true if "transitions" rule supported', () => {
         const rules = [
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
-            'transitions',
+            'Expiration',
+            'NoncurrentVersionExpiration',
+            'AbortIncompleteMultipartUpload',
+            'Transition',
         ];
         assert.strictEqual(rulesSupportTransition(rules), true);
     });
 
     it('sould return true if "noncurrentVersionTransition" rule supported', () => {
         const rules = [
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
-            'noncurrentVersionTransition',
+            'Expiration',
+            'NoncurrentVersionExpiration',
+            'AbortIncompleteMultipartUpload',
+            'NoncurrentVersionTransition',
         ];
         assert.strictEqual(rulesSupportTransition(rules), true);
     });

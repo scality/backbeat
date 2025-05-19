@@ -7,6 +7,8 @@ const { timeOptions } = require('./configObjects');
 const { BackbeatMetadataProxyMock, expectNominalListingParams, KeyMock, TestKafkaEntry } = require('./utils');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 
+const { ValidLifecycleRules } = require('arsenal').models;
+
 const log = new Logger('LifecycleTaskV2:test:versioned');
 
 const nonCurrentExpirationRule = [{
@@ -83,13 +85,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 circuitBreakers: {
                     tripped: () => false,
                 },
-                supportedRules: [
-                    'expiration',
-                    'noncurrentVersionExpiration',
-                    'abortIncompleteMultipartUpload',
-                    'transitions',
-                    'noncurrentVersionTransition'
-                ],
+                supportedRules: ValidLifecycleRules,
             }),
         };
         lifecycleTask = new LifecycleTaskV2(lp);

@@ -7,6 +7,9 @@ const async = require('async');
 const LocationStatusStream = require('../../../extensions/utils/LocationStatusStream');
 const LifecycleBucketProcessor = require(
     '../../../extensions/lifecycle/bucketProcessor/LifecycleBucketProcessor');
+const { formatSupportedLifecycleRules } = require('../../../extensions/lifecycle/util/rules.js');
+
+const { ValidLifecycleRules } = require('arsenal').models;
 
 const {
     zkConfig,
@@ -56,13 +59,7 @@ describe('Lifecycle Bucket Processor', () => {
                 lcConfig: {
                     Rules: [],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                    'Transitions',
-                    'NoncurrentVersionTransitions',
-                ],
+                supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: false,
             }, {
@@ -92,13 +89,7 @@ describe('Lifecycle Bucket Processor', () => {
                         }
                     ],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                    'Transitions',
-                    'NoncurrentVersionTransitions',
-                ],
+                supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: false,
             }, {
@@ -122,13 +113,7 @@ describe('Lifecycle Bucket Processor', () => {
                         }
                     ],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                    'Transitions',
-                    'NoncurrentVersionTransitions',
-                ],
+                supportedRules: ValidLifecycleRules,
                 pauseLocations: [],
                 expected: true,
             }, {
@@ -145,13 +130,7 @@ describe('Lifecycle Bucket Processor', () => {
                         }
                     ],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                    'Transitions',
-                    'NoncurrentVersionTransitions',
-                ],
+                supportedRules: ValidLifecycleRules,
                 pauseLocations: ['azure'],
                 expected: false,
             }, {
@@ -168,13 +147,7 @@ describe('Lifecycle Bucket Processor', () => {
                         }
                     ],
                 },
-                supportedRules: [
-                    'Expiration',
-                    'NoncurrentVersionExpiration',
-                    'AbortIncompleteMultipartUpload',
-                    'Transitions',
-                    'NoncurrentVersionTransitions',
-                ],
+                supportedRules: ValidLifecycleRules,
                 pauseLocations: ['azure'],
                 expected: false,
             }, {
@@ -201,7 +174,9 @@ describe('Lifecycle Bucket Processor', () => {
             },
         ].forEach(params => {
             it(params.title, () => {
-                lbp._supportedRules = params.supportedRules;
+                lbp._supportedRules = formatSupportedLifecycleRules({
+                    supportedLifecycleRules: params.supportedRules,
+                });
                 lbp._pausedLocations = new Set(params.pauseLocations);
                 assert.strictEqual(lbp._shouldProcessConfig(params.lcConfig), params.expected);
             });

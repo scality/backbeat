@@ -1,3 +1,5 @@
+const { ValidLifecycleRules } = require('arsenal').models;
+
 const bucketTasksTopic = 'bucket-tasks';
 const objectTasksTopic = 'object-tasks';
 const transitionTasksTopic = 'transition-tasks';
@@ -42,13 +44,7 @@ const lcConfig = {
             enabled: true,
         },
     },
-    supportedLifecycleRules: [
-        'expiration',
-        'noncurrentVersionExpiration',
-        'abortIncompleteMultipartUpload',
-        'transitions',
-        'noncurrentVersionTransition'
-    ]
+    supportedLifecycleRules: ValidLifecycleRules,
 };
 
 const repConfig = {

@@ -95,11 +95,7 @@ class LifecycleTask extends BackbeatTask {
             timeProgressionFactor,
         });
 
-        this._lifecycleUtils = new LifecycleUtils(
-            this.supportedRules,
-            this._lifecycleDateTime
-        );
-        this._supportedRules = this.supportedRules;
+        this.setSupportedRules(this.supportedRules);
         this._totalRetries = 0;
     }
 
@@ -811,7 +807,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {boolean} true if rule applies - false otherwise.
      */
     _isRuleApplying(rule, daysSinceInitiated, currentDate) {
-        if (rule.Expiration && this._supportedRules.includes('expiration')) {
+        if (rule.Expiration && this._supportedRules.includes('Expiration')) {
             if (rule.Expiration.Days !== undefined && daysSinceInitiated >= rule.Expiration.Days) {
                 return true;
             }
@@ -826,7 +822,7 @@ class LifecycleTask extends BackbeatTask {
         }
 
         if (rule.Transitions && rule.Transitions.length > 0
-        && this._supportedRules.includes('transitions')) {
+            && this._supportedRules.includes('Transition')) {
             return rule.Transitions.some(t => {
                 if (t.Days !== undefined && daysSinceInitiated >= t.Days) {
                     return true;
@@ -883,7 +879,7 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 if (rule.NoncurrentVersionExpiration
-                && this._supportedRules.includes('noncurrentVersionExpiration')) {
+                    && this._supportedRules.includes('NoncurrentVersionExpiration')) {
                     if (rule.NoncurrentVersionExpiration.NoncurrentDays !== undefined &&
                     daysSinceStaled >= rule.NoncurrentVersionExpiration.NoncurrentDays) {
                         return true;
@@ -891,7 +887,7 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
-                && this._supportedRules.includes('noncurrentVersionTransition')) {
+                    && this._supportedRules.includes('NoncurrentVersionTransition')) {
                     return rule.NoncurrentVersionTransitions.some(t =>
                         (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
                 }
