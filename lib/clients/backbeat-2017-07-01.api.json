@@ -8,7 +8,7 @@
         "protocol": "rest-json",
         "serviceAbbreviation": "Backbeat",
         "serviceFullName": "Backbeat Internal Routes",
-        "signatureVersion": "s3",
+        "signatureVersion": "v4",
         "timestampFormat": "rfc822",
         "uid": "backbeat-2017-07-01"
     },
@@ -95,7 +95,8 @@
                     }
                 },
                 "payload": "Location"
-            }
+            },
+            "authtype": "v4-unsigned-body"
         },
         "MultipleBackendPutObject": {
             "http": {
@@ -187,7 +188,8 @@
                         }
                     }
                 }
-            }
+            },
+            "authtype": "v4-unsigned-body"
         },
         "DeleteObjectFromExpiration": {
             "http": {
@@ -381,7 +383,8 @@
                         "type": "long"
                     }
                 }
-            }
+            },
+            "authtype": "v4-unsigned-body"
         },
         "MultipleBackendInitiateMPU": {
             "http": {
