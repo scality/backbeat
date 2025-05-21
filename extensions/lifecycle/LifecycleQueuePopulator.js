@@ -161,8 +161,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
     _updateZkBucketNode(attributes) {
         const path = this._getBucketNodeZkPath(attributes);
         // Remove existing node if deleting the bucket or its configuration.
-        if (attributes.deleted ||
-            attributes.lifecycleConfiguration === null) {
+        if (attributes.deleted || !attributes.lifecycleConfiguration) {
             return this.zkClient.remove(path, err => {
                 if (err && err.name !== 'NO_NODE') {
                     this.log.error('could not remove zookeeper node', {
@@ -540,14 +539,13 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
                 return undefined;
             }
             bucketValue = result;
+        } else {
+            // not a bucket entry
+            return undefined;
         }
 
-        const { lifecycleConfiguration } = bucketValue;
-        if (lifecycleConfiguration !== undefined) {
-            return this._updateZkBucketNode(bucketValue);
-        }
+        return this._updateZkBucketNode(bucketValue);
 
-        return undefined;
     }
 }
 module.exports = LifecycleQueuePopulator;
