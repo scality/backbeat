@@ -345,13 +345,7 @@
             "mdBucketModelVersion": 5,
             "transient": false,
             "deleted": false,
-            "serverSideEncryption": null,
-            "versioningConfiguration": null,
             "locationConstraint": "us-east-1",
-            "websiteConfiguration": null,
-            "replicationConfiguration": null,
-            "cors": null,
-            "lifecycleConfiguration": null,
             "uid": null
         },
         "bucket2": {
