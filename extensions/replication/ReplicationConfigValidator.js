@@ -26,7 +26,7 @@ const destinationAuthJoi = joi.object({
         port: joi.number().greater(0).optional(),
         adminPort: joi.number().greater(0).optional(),
         adminCredentialsFile: joi.string().optional(),
-    }).when('type', { is: 'role', then: joi.required() }),
+    }),
     sts: hostPortJoi
         .when('type', { is: 'assumeRole', then: joi.required() }),
 });
