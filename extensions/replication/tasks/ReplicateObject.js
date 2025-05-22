@@ -19,7 +19,6 @@ const { metricsExtension, metricsTypeQueued, metricsTypeCompleted, replicationSt
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 const { authTypeAssumeRole } = require('../../../lib/constants');
-const locations = require('../../../conf/locationConfig.json');
 
 const errorAlreadyCompleted = {};
 
@@ -730,11 +729,7 @@ class ReplicateObject extends BackbeatTask {
                 authConfig: {
                     type: authTypeAssumeRole,
                     roleName,
-                    sts: {
-                        ...this.destConfig.auth.sts,
-                        accessKey: locations[this.site].details.credentials.accessKey,
-                        secretKey: locations[this.site].details.credentials.secretKey,
-                    },
+                    sts: this.destConfig.auth.sts,
                 },
                 s3Config: {
                     host: this.destBackbeatHost.host,

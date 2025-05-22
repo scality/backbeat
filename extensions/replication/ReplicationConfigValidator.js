@@ -1,7 +1,8 @@
 const fs = require('fs');
 const joi = require('joi');
 const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
-        retryParamsJoi, probeServerJoi, probeServerPerSite } =
+        retryParamsJoi, probeServerJoi, probeServerPerSite, 
+        stsConfigJoi } =
     require('../../lib/config/configItems.joi');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
@@ -27,7 +28,7 @@ const destinationAuthJoi = joi.object({
         adminPort: joi.number().greater(0).optional(),
         adminCredentialsFile: joi.string().optional(),
     }),
-    sts: hostPortJoi
+    sts: stsConfigJoi
         .when('type', { is: 'assumeRole', then: joi.required() }),
 });
 
