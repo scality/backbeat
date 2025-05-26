@@ -31,11 +31,11 @@ describe('Config', () => {
     it('should throw an error when dataMoverTopic is not provided and transition is supported', () => {
         delete testConfig.extensions.replication.dataMoverTopic;
         testConfig.extensions.lifecycle.supportedLifecycleRules = [
-            'transitions',
-            'noncurrentVersionTransition',
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
+            'Transition',
+            'NoncurrentVersionTransition',
+            'Expiration',
+            'NoncurrentVersionExpiration',
+            'AbortIncompleteMultipartUpload',
         ];
         assert.throws(() => config._parseConfig(testConfig));
     });
@@ -43,9 +43,9 @@ describe('Config', () => {
     it('should make dataMoverTopic optional when transitions are not supported', () => {
         delete testConfig.extensions.replication.dataMoverTopic;
         testConfig.extensions.lifecycle.supportedLifecycleRules = [
-            'expiration',
-            'noncurrentVersionExpiration',
-            'abortIncompleteMultipartUpload',
+            'Expiration',
+            'NoncurrentVersionExpiration',
+            'AbortIncompleteMultipartUpload',
         ];
         assert.doesNotThrow(() => config._parseConfig(testConfig));
     });

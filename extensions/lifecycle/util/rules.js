@@ -6,7 +6,7 @@ const { scaleMsPerDay } = s3middleware.objectUtils;
 
 // Default max AWS limit is 1000 for both list objects and list object versions
 const MAX_KEYS = process.env.CI === 'true' ? 3 : 1000;
-const TRANSITION_RULES = ['transitions', 'noncurrentVersionTransition'];
+const TRANSITION_RULES = ['Transition', 'NoncurrentVersionTransition'];
 
 function _getBeforeDate(currentDate, days, options) {
     const { timeProgressionFactor } = options;
@@ -202,7 +202,10 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
  * @returns {string[]} formatted supported lifecycle rules
  */
 function formatSupportedLifecycleRules(lcConfig) {
-   return lcConfig.supportedLifecycleRules.map(rule => {
+    return lcConfig.supportedLifecycleRules.map(rule => {
+        if (rule === 'Transition') {
+            return 'Transitions';
+        }
         if (rule === 'noncurrentVersionTransition') {
             return 'NoncurrentVersionTransitions';
         }

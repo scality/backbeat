@@ -378,14 +378,27 @@ describe('LifecycleQueuePopulator', () => {
     });
 
     describe(':filter', () => {
+        const bucketMD = {
+            name: 'lc-queue-populator-test-bucket',
+            owner: '79a59df900b949e55d96a1e698fbacedfd6e09d98eacf8f8d5218e7cd47ef2be',
+            ownerDisplayName: 'Bart',
+            creationDate: '2017-07-13T02:44:25.519Z',
+            mdBucketModelVersion: 10
+        };
+
         let lcqp;
         beforeEach(() => {
-            lcqp = new LifecycleQueuePopulator(params);
+            lcqp = new LifecycleQueuePopulator({
+                ...params,
+                config: config.extensions.lifecycle,
+            });
             lcqp.locationConfigs = Object.assign({}, coldLocationConfigs, locationConfigs);
         });
+
         afterEach(() => {
             sinon.restore();
         });
+
         it('should call _handleDeleteOp on delete message', () => {
             const handleDeleteStub = sinon.stub(lcqp, '_handleDeleteOp').returns();
             lcqp.filter({
@@ -395,6 +408,132 @@ describe('LifecycleQueuePopulator', () => {
                 value: JSON.stringify(templateEntry),
             });
             assert(handleDeleteStub.calledOnce);
+        });
+
+        it('should not update zookeeper when bucketSource is mongodb (default)', () => {
+            lcqp.extConfig.conductor.bucketSource = 'mongodb';
+            const putEntry = {
+                type: 'put',
+                bucket: 'lc-queue-populator-test-bucket',
+                key: 'attributes',
+                value: JSON.stringify(bucketMD),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.called);
+        });
+
+        it('should not call _updateZkBucketNode for non-bucket entries', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: 'filemd',
+                key: 'some/object/key',
+                value: JSON.stringify(templateEntry),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.called);
+        });
+
+        it('should call _updateZkBucketNode for filemd bucket entry', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: '__metastore',
+                key: 'lc-queue-populator-test-bucket',
+                value: JSON.stringify(bucketMD),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(updateZkStub.calledOnce);
+            assert(updateZkStub.calledWithMatch(bucketMD));
+        });
+
+        it('should not call _updateZkBucketNode for filemd shadow bucket entry', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: '__metastore',
+                key: 'mpuShadowBucket-lc-queue-populator-test-bucket',
+                value: JSON.stringify(bucketMD),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.called);
+        });
+
+        it('should handle error parsing filemd bucket entry', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: '__metastore',
+                key: 'lc-queue-populator-test-bucket',
+                value: 'foo{}',
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.calledOnce);
+        });
+
+        it('should call _updateZkBucketNode for bucketd bucket entry', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: 'lc-queue-populator-test-bucket',
+                value: JSON.stringify({
+                    attributes: JSON.stringify(bucketMD),
+                }),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(updateZkStub.calledOnce);
+            assert(updateZkStub.calledWithMatch(bucketMD));
+        });
+
+        it('should handle error parsing bucketd bucket entry', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: 'lc-queue-populator-test-bucket',
+                value: 'foo{}',
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.calledOnce);
+        });
+
+        it('should handle bucketd bucket entry without attributes', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+            const putEntry = {
+                type: 'put',
+                bucket: 'lc-queue-populator-test-bucket',
+                value: JSON.stringify({}),
+            };
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode');
+            lcqp.filter(putEntry);
+            assert(!updateZkStub.calledOnce);
+        });
+
+        it('should not call _updateZkBucketNode for delete operations', () => {
+            lcqp.extConfig.conductor.bucketSource = 'zookeeper';
+
+            const updateZkStub = sinon.stub(lcqp, '_updateZkBucketNode').yields();
+            const deleteEntry = {
+                type: 'delete',
+                bucket: '__metastore',
+                key: 'lc-queue-populator-test-bucket',
+            };
+            lcqp.filter(deleteEntry);
+            assert(!updateZkStub.called);
         });
     });
 

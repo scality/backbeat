@@ -8,7 +8,8 @@ const {
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi');
 
-const { supportedLifecycleRules, backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
+const { backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
+const { ValidLifecycleRules: supportedLifecycleRules } = require('arsenal').models;
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),

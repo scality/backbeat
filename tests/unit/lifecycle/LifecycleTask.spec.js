@@ -4,6 +4,7 @@ const assert = require('assert');
 const async = require('async');
 const sinon = require('sinon');
 const { errors } = require('arsenal');
+const { ValidLifecycleRules } = require('arsenal').models;
 
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
@@ -84,13 +85,7 @@ const lp = {
             ncvHeap: new Map(),
             lcOptions: timeOptions,
             log: fakeLogger,
-            supportedRules: [
-                'expiration',
-                'noncurrentVersionExpiration',
-                'abortIncompleteMultipartUpload',
-                'transitions',
-                'noncurrentVersionTransition',
-            ],
+            supportedRules: ValidLifecycleRules,
         }
     ),
 };
@@ -2155,13 +2150,7 @@ describe('lifecycle task helper methods', () => {
                 Rules: [],
             };
             const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
-            lct.setSupportedRules([
-                'expiration',
-                'noncurrentVersionExpiration',
-                'abortIncompleteMultipartUpload',
-                'transitions',
-                'noncurrentVersionTransitions',
-            ]);
+            lct.setSupportedRules(ValidLifecycleRules);
             lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);
                 assert(snapshot.calledOnce);
@@ -2190,9 +2179,9 @@ describe('lifecycle task helper methods', () => {
             };
             const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
             lct.setSupportedRules([
-                'expiration',
-                'noncurrentVersionExpiration',
-                'abortIncompleteMultipartUpload',
+                'Expiration',
+                'NoncurrentVersionExpiration',
+                'AbortIncompleteMultipartUpload',
             ]);
             lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);

@@ -141,10 +141,10 @@
         }
       },
       "supportedLifecycleRules": [
-        "expiration",
-        "noncurrentVersionExpiration",
-        "abortIncompleteMultipartUpload"
-    ]
+        "Expiration",
+        "NoncurrentVersionExpiration",
+        "AbortIncompleteMultipartUpload"
+      ]
     }
   },
   "log": {

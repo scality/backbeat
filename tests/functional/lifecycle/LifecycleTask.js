@@ -446,10 +446,10 @@ class LifecycleBucketProcessorMock {
             lcOptions: timeOptions,
             circuitBreakers: this._circuitBreakers,
             supportedRules: [
-                'expiration',
-                'noncurrentVersionExpiration',
-                'abortIncompleteMultipartUpload',
-                'transitions',
+                'Expiration',
+                'NoncurrentVersionExpiration',
+                'AbortIncompleteMultipartUpload',
+                'Transition',
             ],
         };
     }
