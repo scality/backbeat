@@ -1,6 +1,6 @@
 {
   "name": "backbeat",
-  "version": "9.0.8",
+  "version": "9.0.9",
   "description": "Asynchronous queue and job manager",
   "main": "index.js",
   "scripts": {
@@ -52,7 +52,7 @@
     "aws-sdk": "^2.1691.0",
     "backo": "^1.1.0",
     "breakbeat": "scality/breakbeat#v1.0.3",
-    "bucketclient": "scality/bucketclient#8.2.0",
+    "bucketclient": "scality/bucketclient#8.2.4",
     "commander": "^13.0.0",
     "fcntl": "github:scality/node-fcntl#0.2.2",
     "httpagent": "git+https://github.com/scality/httpagent#1.0.6",
