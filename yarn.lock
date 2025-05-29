@@ -1205,9 +1205,9 @@ bson@~1.0.4:
   resolved "https://registry.yarnpkg.com/bson/-/bson-1.0.9.tgz#12319f8323b1254739b7c6bef8d3e89ae05a2f57"
   integrity sha512-IQX9/h7WdMBIW/q/++tGd+emQr0XMdeZ6icnT/74Xk9fnabWn+gZgpE+9V+gujL3hhJOoNrnDVY7tWdzc7NUTg==
 
-"bucketclient@git+https://github.com/scality/bucketclient#7.10.6":
-  version "7.10.6"
-  resolved "git+https://github.com/scality/bucketclient#115ab1ae974781aafaba455cf83228b1732191af"
+"bucketclient@git+https://github.com/scality/bucketclient#7.10.21":
+  version "7.10.21"
+  resolved "git+https://github.com/scality/bucketclient#95fb3d4c48ed51c68a048cb01021c7a1eb339922"
   dependencies:
     agentkeepalive "^4.1.4"
     arsenal "git+https://github.com/scality/Arsenal#7.10.46"
