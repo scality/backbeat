@@ -42,7 +42,7 @@
     "aws-sdk": "^2.1326.0",
     "backo": "^1.1.0",
     "breakbeat": "scality/breakbeat#v1.0.1",
-    "bucketclient": "git+https://github.com/scality/bucketclient#7.10.6",
+    "bucketclient": "git+https://github.com/scality/bucketclient#7.10.21",
     "commander": "^2.11.0",
     "fcntl": "git+https://github.com/scality/node-fcntl#0.2.1",
     "node-rdkafka": "^2.12.0",
