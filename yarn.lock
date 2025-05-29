@@ -1506,6 +1506,14 @@ bson@~1.0.4:
   resolved "https://registry.yarnpkg.com/bson/-/bson-1.0.9.tgz#12319f8323b1254739b7c6bef8d3e89ae05a2f57"
   integrity sha512-IQX9/h7WdMBIW/q/++tGd+emQr0XMdeZ6icnT/74Xk9fnabWn+gZgpE+9V+gujL3hhJOoNrnDVY7tWdzc7NUTg==
 
+bucketclient@scality/bucketclient#8.1.14:
+  version "8.1.14"
+  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/b63aea763c3ce04bf315511aaca51f410ab75cfa"
+  dependencies:
+    arsenal "git+https://github.com/scality/Arsenal#8.1.87"
+    httpagent "git+https://github.com/scality/httpagent#1.0.5"
+    werelogs scality/werelogs#8.1.2
+
 bucketclient@scality/bucketclient#8.1.5:
   version "8.1.5"
   resolved "https://codeload.github.com/scality/bucketclient/tar.gz/3941311c147a36178caf02dfeea8c4041f017ef6"
@@ -1513,14 +1521,6 @@ bucketclient@scality/bucketclient#8.1.5:
     agentkeepalive "^4.1.4"
     arsenal "git+https://github.com/scality/Arsenal#8.1.62"
     werelogs scality/werelogs#8.1.0
-
-bucketclient@scality/bucketclient#8.1.9:
-  version "8.1.9"
-  resolved "https://codeload.github.com/scality/bucketclient/tar.gz/acbd1c4f6a0e337d19fc6ebc18d31504cec88b35"
-  dependencies:
-    arsenal "git+https://github.com/scality/Arsenal#8.1.87"
-    httpagent "git+https://github.com/scality/httpagent#1.0.5"
-    werelogs scality/werelogs#8.1.2
 
 buffer-equal-constant-time@1.0.1:
   version "1.0.1"
