@@ -194,7 +194,7 @@
         "DeleteObjectFromExpiration": {
             "http": {
                 "method": "DELETE",
-                "requestUri": "/_/backbeat/expiration/{Bucket}/{Key}"
+                "requestUri": "/_/backbeat/expiration/{Bucket}/{Key+}"
             },
             "input": {
                 "type": "structure",
