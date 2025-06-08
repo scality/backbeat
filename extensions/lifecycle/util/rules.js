@@ -199,14 +199,15 @@ function rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData,
  * they correspond to how they are written in the lifecycle configuration.
  * @param {Object} lcConfig - Lifecycle configuration object
  * @param {string[]} lcConfig.supportedLifecycleRules - List of supported lifecycle rules
- * @returns {string[]} formatted supported lifecycle rules
+ * @returns {string[]} formatted supported lifecycle rules. These must match the field
+ * names in arsenal's LifecycleRuleData type
  */
 function formatSupportedLifecycleRules(lcConfig) {
     return lcConfig.supportedLifecycleRules.map(rule => {
         if (rule === 'Transition') {
             return 'Transitions';
         }
-        if (rule === 'noncurrentVersionTransition') {
+        if (rule === 'NoncurrentVersionTransition') {
             return 'NoncurrentVersionTransitions';
         }
         return rule.charAt(0).toUpperCase() + rule.slice(1);

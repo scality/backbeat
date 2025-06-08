@@ -183,6 +183,20 @@ describe('Lifecycle Bucket Processor', () => {
         });
     });
 
+    describe('formatSupportedLifecycleRules', () => {
+        it('should return the list of supported lifecycle rules', () => {
+            assert.deepStrictEqual(formatSupportedLifecycleRules({
+                supportedLifecycleRules: ValidLifecycleRules
+            }), [
+                'Expiration',
+                'NoncurrentVersionExpiration',
+                'AbortIncompleteMultipartUpload',
+                'Transitions',
+                'NoncurrentVersionTransitions',
+            ]);
+        });
+    });
+
     describe('_processBucketEntry', () => {
 
         [
