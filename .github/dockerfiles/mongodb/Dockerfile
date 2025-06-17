@@ -12,8 +12,7 @@ RUN mkdir -p /logs && \
 
 # Set up environment variables and directories for scality user
 RUN mkdir ${CONF_DIR} && \
-    chown -R ${USER} ${CONF_DIR} && \
-    chown -R ${USER} ${DATA_DIR}
+    chown -R ${USER} ${CONF_DIR}
 
 # copy the mongo config file
 COPY /conf/mongod.conf /conf/mongod.conf
