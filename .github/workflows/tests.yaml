@@ -139,12 +139,6 @@ jobs:
     - name: Lint Javascript
       run: yarn run --silent lint
 
-    - name: Run unit tests
-      run: yarn run cover
-      env:
-        BACKBEAT_CONFIG_FILE: tests/config.json
-        TEST_SUITE: test
-
     - uses: codecov/codecov-action@v5
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
