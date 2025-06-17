@@ -6,9 +6,9 @@ ENV USER=scality \
     DATA_DIR=/data
 
 # Set up directories and permissions
-RUN mkdir -p /data/db /data/configdb && chown -R mongodb:mongodb /data/db /data/configdb; \
-    mkdir /logs; \
-    adduser --uid 1000 --disabled-password --gecos --quiet --shell /bin/bash scality
+RUN mkdir -p /logs && \
+    chown -R mongodb:mongodb /data/db /data/configdb && \
+    adduser --uid 1001 --disabled-password --gecos --quiet --shell /bin/bash scality
 
 # Set up environment variables and directories for scality user
 RUN mkdir ${CONF_DIR} && \
