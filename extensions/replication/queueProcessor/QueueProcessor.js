@@ -243,9 +243,9 @@ class QueueProcessor extends EventEmitter {
         }
         if (destConfig.transport === 'https') {
             this.destHTTPAgent = new HttpsAgent.Agent({
-                key: httpsConfig.key,
-                cert: httpsConfig.cert,
-                ca: httpsConfig.ca,
+                key: httpsConfig?.key,
+                cert: httpsConfig?.cert,
+                ca: httpsConfig?.ca,
                 keepAlive: true,
             });
         } else {

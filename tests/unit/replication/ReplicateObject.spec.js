@@ -15,18 +15,17 @@ describe('ReplicateObject', () => {
     beforeEach(() => {
         locations.site = {
             details: {
-                awsEndpoint: 'https://s3.amazonaws.com',
-                bucketMatch: true,
-                bucketName: 'ring-bucket-1',
-                credentials: {
+                servers: ['s3.zenko.local:80'],
+                bucketName: 'crr-bucket-1',
+                sts: {
+                    host: 'sts.zenko.local',
+                    port: 80,
                     accessKey: 'accessKey1',
                     secretKey: 'verySecretKey1',
                 },
             },
-            isTransient: false,
-            legacyAwsBehavior: false,
             objectId: '06a862b3-fee4-11eb-a6ba-26bd22419be2',
-            type: 'aws_s3'
+            type: 'crr'
         };
         task = new ReplicateObject({
             getStateVars: () => ({
@@ -45,21 +44,23 @@ describe('ReplicateObject', () => {
                         site: 'zenko',
                         type: 'assumeRole',
                         sts: {
-                            host: 'sts.enpoint.com',
-                            port: 80
+                            host: 'sts.zenko.local',
+                            port: 80,
+                            accessKey: 'accessKey1',
+                            secretKey: 'verySecretKey1',
                         },
                     },
                     bootstrapList: [{
                         site: 'site',
-                        servers: ['localhost:9095'],
+                        servers: ['s3.zenko.local:80'],
                     }],
                     transport: 'http',
                 },
                 destHosts: {
-                    pickNextHost: () => 'localhost:9095',
+                    pickNextHost: () => {},
                     pickHost: () => ({
-                        host: 'localhost',
-                        port: 9095,
+                        host: 's3.zenko.local',
+                        port: 80,
                     }),
                 },
                 logger: fakeLogger,
@@ -146,18 +147,18 @@ describe('ReplicateObject', () => {
                 type: 'assumeRole',
                 roleName: 'crr-role',
                 sts: {
-                    host: 'sts.enpoint.com',
+                    host: 'sts.zenko.local',
                     port: 80,
                     accessKey: 'accessKey1',
                     secretKey: 'verySecretKey1',
                 },
             });
             assert.deepStrictEqual(task.clientManager._s3Config, {
-                host: 'localhost',
-                port: 9095,
+                host: 's3.zenko.local',
+                port: 80,
             });
             assert.deepStrictEqual(task.clientManager._transport, 'http');
-            assert.deepStrictEqual(task.clientManager._stsConfig.endpoint, 'http://sts.enpoint.com:80');
+            assert.deepStrictEqual(task.clientManager._stsConfig.endpoint, 'http://sts.zenko.local:80');
             assert.deepStrictEqual(task.clientManager._stsConfig.credentials, {
                 accessKeyId: 'accessKey1',
                 secretAccessKey: 'verySecretKey1',
@@ -174,7 +175,7 @@ describe('ReplicateObject', () => {
                 secretAccessKey: 'secretKeyNoAssumeRole',
             });
             task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
-            assert.strictEqual(task.backbeatDest.config.endpoint, 'http://localhost:9095');
+            assert.strictEqual(task.backbeatDest.config.endpoint, 'http://s3.zenko.local:80');
             assert.deepStrictEqual(task.backbeatDest.config.credentials, {
                 accessKeyId: 'accessKeyNoAssumeRole',
                 secretAccessKey: 'secretKeyNoAssumeRole',

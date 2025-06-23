@@ -182,7 +182,9 @@ describe('ReplicationConfigValidator', () => {
                             type: 'assumeRole',
                             sts: {
                                 host: 'sts.enpoint.com',
-                                port: 80
+                                port: 80,
+                                accessKey: 'accessKey',
+                                secretKey: 'secretKey',
                             },
                         },
                     },
