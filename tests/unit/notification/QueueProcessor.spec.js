@@ -646,7 +646,7 @@ describe('notification QueueProcessor destination id not matching the rule desti
             'arn:scality:bucketnotif:::destId2',
         ];
 
-        mismatchedARN.forEach(arn => {
+        async.each(mismatchedARN, (arn, cb) => {
             qp.bnConfigManager = {
                 setConfig: () => {},
                 getConfig: (bucket, cb) => cb(null, {
@@ -682,9 +682,9 @@ describe('notification QueueProcessor destination id not matching the rule desti
             qp.processKafkaEntry(kafkaEntry, err => {
                 assert.ifError(err);
                 assert(sendStub.notCalled);
-            });
-        });
 
-        done();
+                cb();
+            });
+        }, done);
     });
 });

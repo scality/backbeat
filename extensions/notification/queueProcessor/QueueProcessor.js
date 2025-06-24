@@ -248,9 +248,8 @@ class QueueProcessor extends EventEmitter {
                             c => c.queueArn.split(':').pop() === this.destinationId
                     );
                     if (!queueConfig.length) {
-                        // skip, if there is no config for the current
-                        // destination resource
-                        return undefined;
+                        // skip, if there is no config for the current destination resource
+                        return done();
                     }
                     this.logger.debug('validating entry', {
                         method: 'QueueProcessor.processKafkaEntry',
