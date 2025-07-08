@@ -98,7 +98,7 @@ describe('NotificationQueuePopulator ::', () => {
                     'md-model-version': '1',
                 });
                 assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination2');
-            });
+        });
 
         it('should not publish object entry in notification topic if ' +
             'config validation failed', async () => {
@@ -564,7 +564,21 @@ describe('NotificationQueuePopulator ::', () => {
             });
         });
     });
+
+    describe('_processObjectEntryCb ::', () => {
+        it('should properly throw an error if entry value parse fails', done => {
+            notificationQueuePopulator._metricsStore = {
+                notifEvent: sinon.stub().throws(new Error('Error processing entry')),
+            };
+            notificationQueuePopulator._processObjectEntryCb('example-bucket', 'example-key', {}, 'put', {}, err => {
+                assert(err);
+                assert.strictEqual(err.message, 'Error processing entry');
+                return done();
+            });
+        });
+    });
 });
+
 
 describe('NotificationQueuePopulator with multiple rules ::', () => {
     let bnConfigManager;
