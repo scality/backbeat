@@ -599,6 +599,7 @@ describe('LogReader', () => {
             {
                 desc: 'should save the offset when offsets are managed',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: 1,
                 shouldSave: true,
@@ -606,6 +607,7 @@ describe('LogReader', () => {
             {
                 desc: 'should not save the offset when the next offset is undefined',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: undefined,
                 shouldSave: false,
@@ -613,6 +615,7 @@ describe('LogReader', () => {
             {
                 desc: 'should not save the offset if the offset did not change',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: 0,
                 shouldSave: false,
@@ -620,9 +623,18 @@ describe('LogReader', () => {
             {
                 desc: 'should not save the offset if offsets are not managed',
                 managed: false,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: 1,
                 shouldSave: false,
+            },
+            {
+                desc: 'should use storeOffsets to save the offset when offsets are not managed',
+                managed: false,
+                hasStoreOffsetsFn: true,
+                currentOffset: 0,
+                nextLogOffset: 1,
+                shouldSave: true,
             },
         ].forEach(params => {
             it(params.desc, done => {
@@ -646,12 +658,15 @@ describe('LogReader', () => {
                     logger: logReader.log,
                 };
                 sinon.stub(logReader, 'logOffset').value(params.currentOffset);
-                const offsetManagedStub = sinon.stub(logReader, 'isOffsetManaged').returns(params.managed);
-                const writeLogOffsetStub = sinon.stub(logReader, '_writeLogOffset').yields();
+                sinon.stub(logReader, 'isOffsetManaged').returns(params.managed);
+                let storeOffsetStub = sinon.stub(logReader, '_writeLogOffset').yields();
+                if (params.hasStoreOffsetsFn) {
+                    logReader.logConsumer.storeOffsets = () => {};
+                    storeOffsetStub = sinon.stub(logReader.logConsumer, 'storeOffsets').returns();
+                }
                 logReader._processSaveLogOffset(batchState, err => {
                     assert.ifError(err);
-                    assert(offsetManagedStub.calledOnce);
-                    assert(params.shouldSave ? writeLogOffsetStub.calledOnce : writeLogOffsetStub.notCalled);
+                    assert(params.shouldSave  ? storeOffsetStub.calledOnce : storeOffsetStub.notCalled);
                     done();
                 });
             });

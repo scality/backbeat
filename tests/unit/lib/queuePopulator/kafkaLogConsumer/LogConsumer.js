@@ -2,6 +2,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 const werelogs = require('werelogs');
 const { errors } = require('arsenal');
+const kafka = require('node-rdkafka');
 const logger = new werelogs.Logger('KafkaLogConsumer');
 const ListRecordStream =
     require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
@@ -35,20 +36,30 @@ const changeStreamDocument = {
         }
     }
 };
-const kafkaMessage = {
-    value: Buffer.from(JSON.stringify(changeStreamDocument)),
-    timestamp: Date.now(),
-    size: 2,
-    topic: 'oplog-topic',
-    offset: 1337,
-    partition: 0,
-    key: Buffer.from('key'),
-};
+
+function getKafkaMessage(partition = 0, offset = 0) {
+    return {
+        value: Buffer.from(JSON.stringify(changeStreamDocument)),
+        timestamp: Date.now(),
+        size: 2,
+        topic: 'oplog-topic',
+        offset,
+        partition,
+        key: Buffer.from('key'),
+    };
+}
 
 describe('LogConsumer', () => {
     let logConsumer;
     beforeEach(() => {
         logConsumer = new LogConsumer(kafkaConfig, logger);
+        logConsumer._consumer = {
+            offsetsStore: () => null,
+        };
+    });
+
+    afterEach(() => {
+        sinon.restore();
     });
 
     describe('_waitForAssignment', () => {
@@ -70,29 +81,6 @@ describe('LogConsumer', () => {
         }).timeout(5000);
     });
 
-    describe('_storeCurrentOffsets', () => {
-        it('should store offsets', done => {
-            const committedStub = sinon.stub();
-            committedStub.callsArgWith(1, null, [{
-                topic: 'backbeat-oplog-topic',
-                partition: 0,
-                offset: 0
-            }]);
-            logConsumer._consumer = {
-                committed: committedStub,
-            };
-            logConsumer._storeCurrentOffsets(err => {
-                assert.ifError(err);
-                assert.deepEqual(logConsumer._offsets, [{
-                    topic: 'backbeat-oplog-topic',
-                    partition: 0,
-                    offset: 0
-                }]);
-                return done();
-            });
-        });
-    });
-
     describe('_resetRecordStream', () => {
         it('should initialize record stream', () => {
             logConsumer._resetRecordStream();
@@ -104,6 +92,7 @@ describe('LogConsumer', () => {
     describe('_consumeKafkaMessages', () => {
         it('should consume kafka messages', done => {
             const consumeStub = sinon.stub();
+            const kafkaMessage = getKafkaMessage(0, 0);
             consumeStub.callsArgWith(1, null, [kafkaMessage]);
             logConsumer._consumer = {
                 consume: consumeStub,
@@ -128,20 +117,40 @@ describe('LogConsumer', () => {
                 });
             });
         });
+
+        it('should save next partition offsets', done => {
+            const consumeStub = sinon.stub();
+            consumeStub.callsArgWith(1, null, [
+                getKafkaMessage(0, 10),
+                getKafkaMessage(1, 20),
+                getKafkaMessage(2, 30),
+            ]);
+            logConsumer._consumer = {
+                consume: consumeStub,
+            };
+            logConsumer._consumeKafkaMessages(3, err => {
+                assert.ifError(err);
+                logConsumer._listRecordStream.once('data', () => {
+                    assert.deepEqual(logConsumer._topicPartition, [
+                        { topic: 'oplog-topic', partition: 0, offset: 11 },
+                        { topic: 'oplog-topic', partition: 1, offset: 21 },
+                        { topic: 'oplog-topic', partition: 2, offset: 31 },
+                    ]);
+                });
+                return done();
+            });
+        });
     });
 
     describe('readRecords', () => {
         it('should return stream', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArg(1);
-            const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')
-                .callsArg(0);
             const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages')
                 .callsArg(1);
             logConsumer._resetRecordStream();
             logConsumer.readRecords({ limit: 1 }, (err, res) => {
                 assert(waitAssignementStub.called);
-                assert(storeOffsetsStub.called);
                 assert(consumeKafkaStub.called);
                 assert.ifError(err);
                 assert(res.log instanceof ListRecordStream);
@@ -161,33 +170,59 @@ describe('LogConsumer', () => {
             });
         });
 
-        it('should fail if it can\'t store offsets', done => {
-            const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
-                .callsArg(1);
-            const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')
-                .callsArgWith(0, errors.InternalError);
-            logConsumer.readRecords({ limit: 1 }, err => {
-                assert(waitAssignementStub.called);
-                assert(storeOffsetsStub.called);
-                assert.deepEqual(err, errors.InternalError);
-                return done();
-            });
-        });
-
         it('should fail if it can\'t consume kafka messages', done => {
             const waitAssignementStub = sinon.stub(logConsumer, '_waitForAssignment')
                 .callsArg(1);
-            const storeOffsetsStub = sinon.stub(logConsumer, '_storeCurrentOffsets')
-                .callsArg(0);
             const consumeKafkaStub = sinon.stub(logConsumer, '_consumeKafkaMessages')
                 .callsArgWith(1, errors.InternalError);
             logConsumer.readRecords({ limit: 1 }, err => {
                 assert(waitAssignementStub.called);
-                assert(storeOffsetsStub.called);
                 assert(consumeKafkaStub.called);
                 assert.deepEqual(err, errors.InternalError);
                 return done();
             });
+        });
+    });
+
+    describe('storeOffsets', () => {
+        it('should not store offsets if there are none', () => {
+            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
+            logConsumer.storeOffsets();
+            assert(offsetsStore.notCalled);
+        });
+        it('should reset topicPartition after storing offsets', () => {
+            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
+            logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 1 }];
+            logConsumer.storeOffsets();
+            assert(offsetsStore.calledWithMatch([{ topic: 'oplog-topic', partition: 0, offset: 1 }]));
+            assert.strictEqual(logConsumer._topicPartition, null);
+        });
+    });
+
+    describe('_getOffset', () => {
+        it('should return null', () => {
+            const result = logConsumer._getOffset();
+            assert.strictEqual(result, null);
+        });
+    });
+
+    describe('_onOffsetCommit', () => {
+        it('should not log an error if it receives a NO_OFFSET error', () => {
+            const logErrorSpy = sinon.spy(logConsumer._log, 'error');
+            logConsumer._onOffsetCommit({ code: kafka.CODES.ERRORS.ERR__NO_OFFSET }, null);
+            assert(logErrorSpy.notCalled);
+        });
+        it('should log an error if it receives an error other than NO_OFFSET', () => {
+            const logErrorSpy = sinon.spy(logConsumer._log, 'error');
+            const error = { code: kafka.CODES.ERRORS.ERR__UNKNOWN_TOPIC };
+            logConsumer._onOffsetCommit(error, null);
+            assert(logErrorSpy.calledOnce);
+        });
+        it('should log debug message on successful commit', () => {
+            const logDebugSpy = sinon.spy(logConsumer._log, 'debug');
+            const topicPartitions = [{ topic: 'oplog-topic', partition: 0, offset: 1 }];
+            logConsumer._onOffsetCommit(null, topicPartitions);
+            assert(logDebugSpy.calledOnce);
         });
     });
 });
