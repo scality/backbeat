@@ -278,6 +278,31 @@ describe('MongoConfigManager ::', () => {
                 notificationConfiguration);
             assert.strictEqual(manager._cachedConfigs.count(), 1);
         });
+
+        it('should remove a bucket config when it has been disabled', () => {
+            const changeStreamEvent = {
+                _id: 'resumeToken',
+                operationType: 'update',
+                documentKey: {
+                    _id: 'example-bucket-1',
+                },
+                fullDocument: {
+                    _id: 'example-bucket-1',
+                    value: {
+                        notificationConfiguration: {},
+                    }
+                }
+            };
+            const manager = new MongoConfigManager(params);
+            // populating cache
+            manager._cachedConfigs.add('example-bucket-1', notificationConfiguration);
+            assert.strictEqual(manager._cachedConfigs.count(), 1);
+            assert(manager._cachedConfigs.get('example-bucket-1'));
+            // handling change stream event
+            manager._handleChangeStreamChangeEvent(changeStreamEvent);
+            // cache should be empty
+            assert.strictEqual(manager._cachedConfigs.count(), 0);
+        });
     });
 
     describe('_setMetastoreChangeStream ::', () =>  {
@@ -360,6 +385,24 @@ describe('MongoConfigManager ::', () => {
                 assert.deepEqual(err, errors.InternalError);
                 done();
             });
+        });
+
+        it('should return undefined when bucket doesn\'t have notification configuration', async () => {
+            const manager = new MongoConfigManager(params);
+            manager._metastore = {
+                findOne: () => ({ value: { notificationConfiguration: null } }),
+            };
+            const config = await manager.getConfig('example-bucket-1');
+            assert.deepEqual(config, undefined);
+        });
+
+        it('should return undefined when notification configuration have been disabled in the bucket', async () => {
+            const manager = new MongoConfigManager(params);
+            manager._metastore = {
+                findOne: () => ({ value: { notificationConfiguration: {} } }),
+            };
+            const config = await manager.getConfig('example-bucket-1');
+            assert.deepEqual(config, undefined);
         });
     });
 

@@ -155,9 +155,18 @@ class MongoConfigManager extends BaseConfigManager {
             case 'replace':
             case 'update':
                 if (cachedConfig) {
-                    // add() replaces the value of an entry if it exists in cache
-                    this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
-                    onConfigManagerCacheUpdate('update');
+                    // disabling bucket notification works by setting
+                    // the configuration to an empty object
+                    if (!bucketNotificationConfiguration ||
+                        !Object.keys(bucketNotificationConfiguration).length
+                    ) {
+                        this._cachedConfigs.remove(change.documentKey._id);
+                        onConfigManagerCacheUpdate('delete');
+                    } else {
+                        // add() replaces the value of an entry if it exists in cache
+                        this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
+                        onConfigManagerCacheUpdate('update');
+                    }
                 }
                 break;
             default:
@@ -269,7 +278,8 @@ class MongoConfigManager extends BaseConfigManager {
             const notificationConfiguration = bucketMetadata?.value?.notificationConfiguration;
             const delay = (Date.now() - startTime) / 1000;
             onConfigManagerConfigGet(false, delay);
-            if (!notificationConfiguration) {
+            // when disabled after being enabled bucket notification configuration is set to an empty object
+            if (!notificationConfiguration || !Object.keys(notificationConfiguration).length) {
                 return undefined;
             }
             // caching the bucket configuration
