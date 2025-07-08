@@ -217,91 +217,101 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
      * @return {undefined}
      */
     async _processObjectEntry(bucket, key, value, type, overheadFields) {
-        this._metricsStore.notifEvent();
-        if (!this._shouldProcessEntry(key, value)) {
+        try {
+            this._metricsStore.notifEvent();
+            if (!this._shouldProcessEntry(key, value)) {
+                return undefined;
+            }
+            const { eventMessageProperty, deleteEvent } = notifConstants;
+            let eventType = value[eventMessageProperty.eventType];
+            if (eventType === undefined && type === 'del') {
+                eventType = deleteEvent;
+            }
+            if (!this._isNotificationEventSupported(eventType)) {
+                return undefined;
+            }
+            const baseKey = this._extractVersionedBaseKey(key);
+            const versionId = this._getVersionId(value, overheadFields);
+            const dateTime = this._getEventDateTime(value, overheadFields);
+            const config = await this.bnConfigManager.getConfig(bucket);
+            if (config && Object.keys(config).length > 0) {
+                const ent = {
+                    bucket,
+                    key: baseKey,
+                    eventType,
+                    versionId,
+                    dateTime,
+                };
+                this.log.debug('validating entry', {
+                    method: 'NotificationQueuePopulator._processObjectEntry',
+                    bucket,
+                    key,
+                    eventType,
+                });
+                const pushedToTopic = new Map();
+                // validate and push kafka message foreach destination topic
+                this.notificationConfig.destinations.forEach(destination => {
+                    const topic = destination.internalTopic ||
+                        this.notificationConfig.topic;
+                    // avoid pushing a message multiple times to the
+                    // same internal topic
+                    if (pushedToTopic[topic]) {
+                        return undefined;
+                    }
+                    // get destination specific notification config
+                    const queueConfig = config.notificationConfiguration.queueConfig.filter(
+                        c => c.queueArn.split(':').pop() === destination.resource
+                    );
+                    if (!queueConfig.length) {
+                        // skip, if there is no config for the current
+                        // destination resource
+                        return undefined;
+                    }
+                    // pass only destination resource specific config to
+                    // validate entry
+                    const destConfig = {
+                        bucket,
+                        notificationConfiguration: {
+                            queueConfig,
+                        },
+                    };
+                    const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, ent);
+                    if (isValid) {
+                        const message
+                            = messageUtil.addLogAttributes(value, ent);
+                        this.log.info('publishing message', {
+                            method: 'NotificationQueuePopulator._processObjectEntry',
+                            bucket,
+                            key: message.key,
+                            versionId,
+                            eventType,
+                            eventTime: message.dateTime,
+                            matchingConfig,
+                        });
+                        this.publish(topic,
+                            // keeping all messages for same object
+                            // in the same partition to keep the order.
+                            // here we use the object name and not the
+                            // "_id" which also includes the versionId
+                            `${bucket}/${message.key}`,
+                            JSON.stringify(message));
+                        // keep track of internal topics we have pushed to
+                        pushedToTopic[topic] = true;
+                    }
+                    return undefined;
+                });
+            }
+            // skip if there is no bucket notification configuration
             return undefined;
-        }
-        const { eventMessageProperty, deleteEvent } = notifConstants;
-        let eventType = value[eventMessageProperty.eventType];
-        if (eventType === undefined && type === 'del') {
-            eventType = deleteEvent;
-        }
-        if (!this._isNotificationEventSupported(eventType)) {
-            return undefined;
-        }
-        const baseKey = this._extractVersionedBaseKey(key);
-        const versionId = this._getVersionId(value, overheadFields);
-        const dateTime = this._getEventDateTime(value, overheadFields);
-        const config = await this.bnConfigManager.getConfig(bucket);
-        if (config && Object.keys(config).length > 0) {
-            const ent = {
-                bucket,
-                key: baseKey,
-                eventType,
-                versionId,
-                dateTime,
-            };
-            this.log.debug('validating entry', {
+        } catch (error) {
+            this.log.error('Error processing object entry', {
                 method: 'NotificationQueuePopulator._processObjectEntry',
                 bucket,
                 key,
-                eventType,
+                error: error.message,
             });
-            const pushedToTopic = new Map();
-            // validate and push kafka message foreach destination topic
-            this.notificationConfig.destinations.forEach(destination => {
-                const topic = destination.internalTopic ||
-                    this.notificationConfig.topic;
-                // avoid pushing a message multiple times to the
-                // same internal topic
-                if (pushedToTopic[topic]) {
-                    return undefined;
-                }
-                // get destination specific notification config
-                const queueConfig = config.notificationConfiguration.queueConfig.filter(
-                    c => c.queueArn.split(':').pop() === destination.resource
-                );
-                if (!queueConfig.length) {
-                    // skip, if there is no config for the current
-                    // destination resource
-                    return undefined;
-                }
-                // pass only destination resource specific config to
-                // validate entry
-                const destConfig = {
-                    bucket,
-                    notificationConfiguration: {
-                        queueConfig,
-                    },
-                };
-                const { isValid, matchingConfig } = configUtil.validateEntry(destConfig, ent);
-                if (isValid) {
-                    const message
-                        = messageUtil.addLogAttributes(value, ent);
-                    this.log.info('publishing message', {
-                        method: 'NotificationQueuePopulator._processObjectEntry',
-                        bucket,
-                        key: message.key,
-                        versionId,
-                        eventType,
-                        eventTime: message.dateTime,
-                        matchingConfig,
-                    });
-                    this.publish(topic,
-                        // keeping all messages for same object
-                        // in the same partition to keep the order.
-                        // here we use the object name and not the
-                        // "_id" which also includes the versionId
-                        `${bucket}/${message.key}`,
-                        JSON.stringify(message));
-                    // keep track of internal topics we have pushed to
-                    pushedToTopic[topic] = true;
-                }
-                return undefined;
-            });
+            throw error;
         }
-        // skip if there is no bucket notification configuration
-        return undefined;
     }
 
     /**
