@@ -46,15 +46,11 @@ const cachedBuckets = ZenkoMetrics.createGauge({
     help: 'Total number of cached buckets in the notification config manager',
 });
 
-function onConfigManagerCacheUpdate(op) {
+function onConfigManagerCacheUpdate(op, nbCachedBuckets) {
     cacheUpdates.inc({
         [CONFIG_MANAGER_OPERATION_TYPE]: op,
     });
-    if (op === 'add') {
-        cachedBuckets.inc({});
-    } else if (op === 'delete') {
-        cachedBuckets.dec({});
-    }
+    cachedBuckets.set({}, nbCachedBuckets);
 }
 
 function onConfigManagerConfigGet(cacheHit, delay) {
@@ -149,7 +145,7 @@ class MongoConfigManager extends BaseConfigManager {
             case 'delete':
                 if (cachedConfig) {
                     this._cachedConfigs.remove(change.documentKey._id);
-                    onConfigManagerCacheUpdate('delete');
+                    onConfigManagerCacheUpdate('delete', this._cachedConfigs.count());
                 }
                 break;
             case 'replace':
@@ -161,11 +157,11 @@ class MongoConfigManager extends BaseConfigManager {
                         !Object.keys(bucketNotificationConfiguration).length
                     ) {
                         this._cachedConfigs.remove(change.documentKey._id);
-                        onConfigManagerCacheUpdate('delete');
+                        onConfigManagerCacheUpdate('delete', this._cachedConfigs.count());
                     } else {
                         // add() replaces the value of an entry if it exists in cache
                         this._cachedConfigs.add(change.documentKey._id, bucketNotificationConfiguration);
-                        onConfigManagerCacheUpdate('update');
+                        onConfigManagerCacheUpdate('update', this._cachedConfigs.count());
                     }
                 }
                 break;
@@ -284,7 +280,7 @@ class MongoConfigManager extends BaseConfigManager {
             }
             // caching the bucket configuration
             this._cachedConfigs.add(bucket, notificationConfiguration);
-            onConfigManagerCacheUpdate('add');
+            onConfigManagerCacheUpdate('add', this._cachedConfigs.count());
             return {
                 bucket,
                 notificationConfiguration
