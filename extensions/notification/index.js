@@ -1,4 +1,4 @@
-const NotificationConfigValidator = require('./NotificationConfigValidator');
+const { NotificationConfigValidator } = require('./NotificationConfigValidator');
 const NotificationOplogPopulatorUtils = require('./NotificationOplogPopulatorUtils');
 
 module.exports = {

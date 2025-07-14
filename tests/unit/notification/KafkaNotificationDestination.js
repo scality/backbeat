@@ -12,6 +12,7 @@ describe('KafkaNotificationDestination ::', () => {
     afterEach(() => {
         sinon.restore();
     });
+
     it('should properly configure producer', done => {
         const destConfig = {
             host: 'localhost',

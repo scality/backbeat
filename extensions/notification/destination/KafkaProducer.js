@@ -1,4 +1,5 @@
 const joi = require('joi');
+const { authSchema } = require('../NotificationConfigValidator');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const authUtil = require('../utils/auth');
@@ -6,11 +7,9 @@ const authUtil = require('../utils/auth');
 class KafkaProducer extends BackbeatProducer {
 
     getConfigJoi() {
-        return super.getConfigJoi().append(
-            { auth: joi.object().optional() }
-        ).keys(
-            { topic: joi.string() }
-        );
+        return super.getConfigJoi()
+            .append({ auth: authSchema })
+            .keys({ topic: joi.string() });
     }
 
     getClientId() {
