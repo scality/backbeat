@@ -27,6 +27,8 @@ services:
     profiles: ['s3c']
     build:
       context: ../cloudserver
+      args:
+        CLOUDSERVER_IMAGE: "${CLOUDSERVER_IMAGE}"
     depends_on:
       - metadata
     ports:
