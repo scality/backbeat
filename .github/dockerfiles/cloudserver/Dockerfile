@@ -1,4 +1,4 @@
-ARG CLOUDSERVER_IMAGE=ghcr.io/scality/cloudserver:7.70.47
+ARG CLOUDSERVER_IMAGE=ghcr.io/scality/cloudserver:9.0.19
 
 FROM ${CLOUDSERVER_IMAGE}
 
