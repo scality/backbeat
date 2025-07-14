@@ -1,9 +1,10 @@
 const fs = require('fs');
+const joi = require('joi');
 
-const constants = require('../constants');
+const { authFilesFolder, supportedSaslProtocols } = require('../constants');
+const { credentialsFileSchema } = require('../NotificationConfigValidator');
 
 function getAuthFilePath(fileName) {
-    const { authFilesFolder } = constants;
     if (process.env.CONF_DIR !== undefined) {
         const path = `${process.env.CONF_DIR}/${authFilesFolder}/${fileName}`;
         try {
@@ -13,7 +14,13 @@ function getAuthFilePath(fileName) {
             return null;
         }
     }
-    return '';
+    return null;
+}
+
+function readCredentialsFile(filePath) {
+    const raw = fs.readFileSync(filePath, 'utf8');
+    const data = JSON.parse(raw);
+    return joi.attempt(data, credentialsFileSchema);
 }
 
 /**
@@ -23,51 +30,81 @@ function getAuthFilePath(fileName) {
  */
 function generateKafkaAuthObject(auth) {
     const authObject = {};
-    const { supportedAuthTypes } = constants;
-    // TODO: S3C-3985 auth object should be validated/checked
-    const {
-        type,
-        ssl,
-        protocol,
-        ca,
-        client,
-        key,
-        keyPassword,
-        keytab,
-        principal,
-        serviceName,
-    } = auth;
+
+    const { type, ssl, ca, client, key } = auth;
+
     if (ssl) {
         authObject['security.protocol'] = 'ssl';
-        const caPath = getAuthFilePath(ca);
-        if (caPath) {
+        if (ca) {
+            const caPath = getAuthFilePath(ca);
+            if (caPath === null) {
+                throw new Error(`CA file ${ca} not found in ${authFilesFolder}`);
+            }
             authObject['ssl.ca.location'] = caPath;
         }
-        const keyPath = getAuthFilePath(key);
-        if (keyPath) {
+
+        if (key) {
+            authObject['ssl.key.password'] = auth.keyPassword;
+            const keyPath = getAuthFilePath(key);
+            if (keyPath === null) {
+                throw new Error(`Key file ${key} not found in ${authFilesFolder}`);
+            }
             authObject['ssl.key.location'] = keyPath;
         }
-        const clientPath = getAuthFilePath(client);
-        if (clientPath) {
+
+        if (client) {
+            const clientPath = getAuthFilePath(client);
+            if (clientPath === null) {
+                throw new Error(`Client certificate file ${client} not found in ${authFilesFolder}`);
+            }
             authObject['ssl.certificate.location'] = clientPath;
         }
-        authObject['ssl.key.password'] = keyPassword;
     }
-    // only kereberos is supported now
-    if (type && supportedAuthTypes.includes(type)) {
-        authObject['security.protocol'] = protocol;
-        authObject['sasl.kerberos.service.name'] = serviceName;
-        authObject['sasl.kerberos.principal'] = principal;
-        // optional, sasl protocols will have GSSAPI as their default mechanism
-        authObject['sasl.mechanisms'] = 'GSSAPI';
-        const keytabPath = getAuthFilePath(keytab);
-        if (keytabPath) {
-            authObject['sasl.kerberos.keytab'] = keytabPath;
-            // default kinit command
-            const kinitCommand = `kinit -k ${principal} -t ${keytabPath}`;
-            authObject['sasl.kerberos.kinit.cmd'] = kinitCommand;
+
+    switch (type) {
+        case undefined:
+            break;
+        case 'kerberos': {
+            const { protocol, serviceName, principal, keytab } = auth;
+            if (!supportedSaslProtocols.includes(protocol)) {
+                throw new Error(`Unsupported security.protocol: ${protocol}`);
+            }
+            // optional, sasl protocols will have GSSAPI as their default mechanism
+            authObject['sasl.mechanisms'] = 'GSSAPI';
+            authObject['security.protocol'] = protocol;
+            authObject['sasl.kerberos.service.name'] = serviceName;
+            authObject['sasl.kerberos.principal'] = principal;
+            if (keytab) {
+                const keytabPath = getAuthFilePath(keytab);
+                if (keytabPath === null) {
+                    throw new Error(`Keytab file ${keytab} not found in ${authFilesFolder}`);
+                }
+                authObject['sasl.kerberos.keytab'] = keytabPath;
+                authObject['sasl.kerberos.kinit.cmd'] = `kinit -k ${principal} -t ${keytabPath}`;
+            }
+            break;
+        }
+        case 'basic': {
+            const { protocol, credentialsFile } = auth;
+            if (!supportedSaslProtocols.includes(protocol)) {
+                throw new Error(`Unsupported security.protocol: ${protocol}`);
+            }
+            const credsFilePath = getAuthFilePath(credentialsFile);
+            if (credsFilePath === null) {
+                throw new Error(`Credentials file ${credentialsFile} not found in ${authFilesFolder}`);
+            }
+            const credentials = readCredentialsFile(credsFilePath);
+            authObject['sasl.mechanisms'] = 'PLAIN';
+            authObject['security.protocol'] = protocol;
+            authObject['sasl.username'] = credentials.username;
+            authObject['sasl.password'] = credentials.password;
+            break;
+        }
+        default: {
+            throw new Error(`Unsupported auth type: ${type}`);
         }
     }
+
     return authObject;
 }
 

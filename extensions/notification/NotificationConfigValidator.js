@@ -1,5 +1,6 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
+const { supportedSaslProtocols } = require('./constants');
 
 const sslSchema = joi.object({
     ssl: joi.boolean().default(false),
@@ -10,7 +11,7 @@ const sslSchema = joi.object({
 });
 
 const saslAuthSchema = sslSchema.append({
-    protocol: joi.string().valid('SASL_PLAINTEXT', 'SASL_SSL').required(),
+    protocol: joi.string().valid(...supportedSaslProtocols).required(),
 });
 
 const kerberosAuthSchema = saslAuthSchema.append({
