@@ -24,6 +24,7 @@ const constants = {
     eventVersion: '1.0',
     eventSource: 'scality:s3',
     eventS3SchemaVersion: '1.0',
+    supportedSaslProtocols: ['SASL_PLAINTEXT', 'SASL_SSL']
 };
 
 module.exports = constants;
