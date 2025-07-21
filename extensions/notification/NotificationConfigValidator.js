@@ -3,18 +3,36 @@ const { probeServerJoi } = require('../../lib/config/configItems.joi');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 
-const authSchema = joi.object({
-    type: joi.string(),
-    ssl: joi.boolean(),
-    protocol: joi.string(),
+const sslSchema = joi.object({
+    ssl: joi.boolean().default(false),
     ca: joi.string(),
     client: joi.string(),
     key: joi.string(),
     keyPassword: joi.string(),
-    keytab: joi.string(),
-    principal: joi.string(),
-    serviceName: joi.string(),
 });
+
+const saslAuthSchema = sslSchema.append({
+    protocol: joi.string().valid('SASL_PLAINTEXT', 'SASL_SSL').required(),
+});
+
+const kerberosAuthSchema = saslAuthSchema.append({
+    type: joi.string().valid('kerberos').required(),
+    keytab: joi.string().required(),
+    principal: joi.string().required(),
+    serviceName: joi.string().required(),
+});
+
+const basicAuthSchema = saslAuthSchema.append({
+    type: joi.string().valid('basic').required(),
+    credentialsFile: joi.string().required(),
+});
+
+const credentialsFileSchema = joi.object({
+    username: joi.string().required(),
+    password: joi.string().required(),
+});
+
+const authSchema = joi.alternatives().try(sslSchema, kerberosAuthSchema, basicAuthSchema).default({});
 
 const destinationSchema = joi.object({
     resource: joi.string().required(),
@@ -23,7 +41,7 @@ const destinationSchema = joi.object({
     port: joi.number().optional(),
     internalTopic: joi.string(),
     topic: joi.string().required(),
-    auth: authSchema.default({}),
+    auth: authSchema,
     requiredAcks: joi.number().when('type', {
         is: joi.string().not('kafka'),
         then: joi.forbidden(),
@@ -41,11 +59,11 @@ const joiSchema = joi.object({
     monitorNotificationFailures: joi.boolean().default(true),
     notificationFailedTopic: joi.string().optional(),
     zookeeperPath: joi.string().optional(),
-    queueProcessor: {
+    queueProcessor: joi.object({
         groupId: joi.string().required(),
         concurrency: joi.number().greater(0).default(1000),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
-    },
+    }),
     destinations: joi.array().items(destinationSchema).default([]),
     // TODO: BB-625 reset to being required after supporting probeserver in S3C
     // for bucket notification proceses
@@ -62,4 +80,8 @@ function configValidator(backbeatConfig, extConfig) {
     return validatedConfig;
 }
 
-module.exports = configValidator;
+module.exports = {
+    NotificationConfigValidator: configValidator,
+    authSchema,
+    credentialsFileSchema,
+};
