@@ -185,6 +185,8 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                     coldLocation, startTime - restoreExpirationDate);
 
                 // Reset archive flags to no longer show it as restored
+                const oldLocation = objMD.getLocation();
+                objMD.setLocation();
                 objMD.setArchive({
                     archiveInfo: archive.archiveInfo,
                 });
@@ -196,11 +198,11 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
                 return this._putMetadata(entry, objMD, log, err => {
                     LifecycleMetrics.onLifecycleCompleted(log, 'restore:delete',
                         coldLocation, Date.now() - restoreExpirationDate);
-                    next(err, objMD);
+                    next(err, objMD, oldLocation);
                 });
             },
-            (objMD, next) => this._garbageCollectLocation(
-                entry, objMD.getLocation(), log, next,
+            (objMD, oldLocation, next) => this._garbageCollectLocation(
+                entry, oldLocation, log, next,
             ),
         ], done);
     }
