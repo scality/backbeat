@@ -540,6 +540,11 @@
     "@jridgewell/resolve-uri" "^3.1.0"
     "@jridgewell/sourcemap-codec" "^1.4.14"
 
+"@js-sdsl/ordered-set@^4.4.2":
+  version "4.4.2"
+  resolved "https://registry.yarnpkg.com/@js-sdsl/ordered-set/-/ordered-set-4.4.2.tgz#ab857eb63cf358b5a0f74fdd458b4601423779b7"
+  integrity sha512-ieYQ8WlBPKYzEo81H3q0DFbd8WtFRXXABb4+vRCF0AO3WWtJZFxYvRGdipUXGrd6tlSySmqhcPuO3J6SCodCxg==
+
 "@log4js-node/log4js-api@^1.0.0":
   version "1.0.2"
   resolved "https://registry.yarnpkg.com/@log4js-node/log4js-api/-/log4js-api-1.0.2.tgz#7a8143fb33f077df3e579dca7f18fea74a02ec8b"
@@ -1136,12 +1141,13 @@ arraybuffer.slice@~0.0.7:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#8.1.115":
-  version "8.1.115"
-  resolved "git+https://github.com/scality/arsenal#d800179f86e81a9632b4e4b935ae106a6fdf1871"
+"arsenal@git+https://github.com/scality/arsenal#8.1.163":
+  version "8.1.163"
+  resolved "git+https://github.com/scality/arsenal#a8517be0f4dd485a47f6fae83940e61f3dee1661"
   dependencies:
     "@azure/identity" "^3.1.1"
     "@azure/storage-blob" "^12.12.0"
+    "@js-sdsl/ordered-set" "^4.4.2"
     "@types/async" "^3.2.12"
     "@types/utf8" "^3.0.1"
     JSONStream "^1.0.0"
@@ -1173,7 +1179,7 @@ arraybuffer.slice@~0.0.7:
     sproxydclient "git+https://github.com/scality/sproxydclient#8.0.10"
     utf8 "3.0.0"
     uuid "^3.0.1"
-    werelogs scality/werelogs#8.1.2
+    werelogs scality/werelogs#8.1.7
     xml2js "~0.4.23"
   optionalDependencies:
     ioctl "^2.0.2"
@@ -6604,6 +6610,13 @@ werelogs@scality/werelogs#8.1.0:
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/e8f828725642c54c511cdbe580b18f43d3589313"
   dependencies:
     safe-json-stringify "1.0.3"
+
+werelogs@scality/werelogs#8.1.7:
+  version "8.1.7"
+  resolved "https://codeload.github.com/scality/werelogs/tar.gz/ede35ff2a0a42904903a989c8372f99e4d308c30"
+  dependencies:
+    fast-safe-stringify "^2.1.1"
+    safe-json-stringify "^1.2.0"
 
 werelogs@scality/werelogs#GA7.2.0.5:
   version "7.2.0"
