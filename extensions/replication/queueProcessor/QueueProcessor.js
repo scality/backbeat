@@ -489,67 +489,96 @@ class QueueProcessor extends EventEmitter {
     }
 
     /**
-     * Pause replication consumers
+     * Pause replication consumers - transactional version
+     * Uses backend state as source of truth and proper optimistic locking
      * @return {undefined}
      */
     _pauseService() {
-        const enabled = this._consumer.getServiceStatus();
-        if (enabled) {
-            // if currently resumed/active, attempt to pause
-            this._updateZkStateNode('paused', true, err => {
+        // Check current backend state before attempting to pause
+        this._getZkState((err, currentState) => {
+            if (err) {
+                this.logger.error('error reading current state from zookeeper', {
+                    method: 'QueueProcessor._pauseService',
+                    error: err.message,
+                });
+                return;
+            }
+
+            if (currentState.paused === true) {
+                this.logger.debug('service already paused according to backend state', {
+                    method: 'QueueProcessor._pauseService',
+                    site: this.site,
+                });
+                return;
+            }
+
+            // Use transactional update with optimistic locking
+            this._updateZkStateNodeTransactional('paused', true, err => {
                 if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
+                    this.logger.error('error occurred saving state to zookeeper', {
                         method: 'QueueProcessor._pauseService',
+                        error: err.message,
                     });
                 } else {
+                    // Only update in-memory state after successful backend update
                     this._consumer.pause(this.site);
                     if (this._dataMoverConsumer) {
                         this._dataMoverConsumer.pause(this.site);
                     }
-                    this.logger.info('paused replication for location: ' +
-                        `${this.site}`);
+                    this.logger.info('paused replication for location: ' + `${this.site}`);
                     this._deleteScheduledResumeService();
                 }
             });
-        }
+        });
     }
 
     /**
-     * Resume replication consumers
+     * Resume replication consumers - transactional version
+     * Uses backend state as source of truth and proper optimistic locking
      * @param {Date} [date] - optional date object for scheduling resume
      * @return {undefined}
      */
     _resumeService(date) {
-        const enabled = this._consumer.getServiceStatus();
         const now = new Date();
 
-        if (enabled) {
-            this.logger.info(`cannot resume, site ${this.site} is not paused`);
-            return;
-        }
+        // Check current backend state before attempting to resume
+        this._getZkState((err, currentState) => {
+            if (err) {
+                this.logger.error('error reading current state from zookeeper', {
+                    method: 'QueueProcessor._resumeService',
+                    error: err.message,
+                });
+                return;
+            }
 
-        if (date && now < new Date(date)) {
-            // if date is in the future, attempt to schedule job
-            this.scheduleResume(date);
-        } else {
-            this._updateZkStateNode('paused', false, err => {
-                if (err) {
-                    this.logger.trace('error occurred saving state to ' +
-                    'zookeeper', {
-                        method: 'QueueProcessor._resumeService',
-                    });
-                } else {
-                    this._consumer.resume(this.site);
-                    if (this._dataMoverConsumer) {
-                        this._dataMoverConsumer.resume(this.site);
+            if (currentState.paused !== true) {
+                this.logger.info(`cannot resume, site ${this.site} is not paused according to backend state`);
+                return;
+            }
+
+            if (date && now < new Date(date)) {
+                // if date is in the future, attempt to schedule job
+                this.scheduleResume(date);
+            } else {
+                // Use transactional update with optimistic locking
+                this._updateZkStateNodeTransactional('paused', false, err => {
+                    if (err) {
+                        this.logger.error('error occurred saving state to zookeeper', {
+                            method: 'QueueProcessor._resumeService',
+                            error: err.message,
+                        });
+                    } else {
+                        // Only update in-memory state after successful backend update
+                        this._consumer.resume(this.site);
+                        if (this._dataMoverConsumer) {
+                            this._dataMoverConsumer.resume(this.site);
+                        }
+                        this.logger.info('resumed replication for location: ' + `${this.site}`);
+                        this._deleteScheduledResumeService();
                     }
-                    this.logger.info('resumed replication for location: ' +
-                        `${this.site}`);
-                    this._deleteScheduledResumeService();
-                }
-            });
-        }
+                });
+            }
+        });
     }
 
     /**
@@ -634,6 +663,120 @@ class QueueProcessor extends EventEmitter {
                 return next();
             }),
         ], cb);
+    }
+
+    /**
+     * Update zookeeper state node with optimistic locking (transactional)
+     * @param {String} key - key name to store in zk state node
+     * @param {String|Boolean} value - value
+     * @param {Function} cb - callback(error)
+     * @return {undefined}
+     */
+    _updateZkStateNodeTransactional(key, value, cb) {
+        if (!zkStateProperties.includes(key)) {
+            const errorMsg = 'incorrect zookeeper state property given';
+            this.logger.error(errorMsg, {
+                method: 'QueueProcessor._updateZkStateNodeTransactional',
+            });
+            return cb(new Error(errorMsg));
+        }
+
+        const path = this._getZkSiteNode();
+        
+        // Use version-based optimistic locking
+        this.zkClient.getData(path, (err, data, stat) => {
+            if (err) {
+                this.logger.error('could not get state from zookeeper', {
+                    method: 'QueueProcessor._updateZkStateNodeTransactional',
+                    zookeeperPath: path,
+                    error: err.message,
+                });
+                return cb(err);
+            }
+
+            try {
+                const state = JSON.parse(data.toString());
+                
+                // Check if the state change is actually needed
+                if (state[key] === value) {
+                    this.logger.debug('state already has desired value, skipping update', {
+                        method: 'QueueProcessor._updateZkStateNodeTransactional',
+                        key,
+                        value,
+                    });
+                    return cb();
+                }
+
+                // Set revised status
+                state[key] = value;
+                const bufferedData = Buffer.from(JSON.stringify(state));
+                
+                // Use version for optimistic locking
+                this.zkClient.setData(path, bufferedData, stat.version, err => {
+                    if (err) {
+                        if (err.name === 'BAD_VERSION') {
+                            // Retry with exponential backoff
+                            const retryDelay = Math.random() * 100; // 0-100ms
+                            this.logger.debug('version conflict, retrying update', {
+                                method: 'QueueProcessor._updateZkStateNodeTransactional',
+                                retryDelay,
+                            });
+                            setTimeout(() => this._updateZkStateNodeTransactional(key, value, cb), retryDelay);
+                            return;
+                        }
+                        this.logger.error('could not save state data in zookeeper', {
+                            method: 'QueueProcessor._updateZkStateNodeTransactional',
+                            zookeeperPath: path,
+                            error: err.message,
+                        });
+                        return cb(err);
+                    }
+                    return cb();
+                });
+            } catch (parseErr) {
+                this.logger.error('could not parse state data from zookeeper', {
+                    method: 'QueueProcessor._updateZkStateNodeTransactional',
+                    zookeeperPath: path,
+                    error: parseErr.message,
+                });
+                return cb(parseErr);
+            }
+        });
+    }
+
+    /**
+     * Check if service is paused according to backend state (not in-memory state)
+     * This provides the authoritative source of truth
+     * @param {Function} cb - callback(error, isPaused)
+     * @return {undefined}
+     */
+    isServicePausedInBackend(cb) {
+        this._getZkState((err, state) => {
+            if (err) {
+                return cb(err);
+            }
+            return cb(null, state.paused === true);
+        });
+    }
+
+    /**
+     * Get current state from ZooKeeper
+     * @param {Function} cb - callback(error, state)
+     * @return {undefined}
+     */
+    _getZkState(cb) {
+        const path = this._getZkSiteNode();
+        this.zkClient.getData(path, (err, data) => {
+            if (err) {
+                return cb(err);
+            }
+            try {
+                const state = JSON.parse(data.toString());
+                return cb(null, state);
+            } catch (parseErr) {
+                return cb(parseErr);
+            }
+        });
     }
 
     scheduleResume(date) {
