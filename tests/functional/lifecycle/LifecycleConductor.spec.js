@@ -37,12 +37,12 @@ const s3Config = {
 
 const bucketTasksTopic = 'backbeat-lifecycle-bucket-tasks-spec';
 
-const expected2Messages = [
+const expected2Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
+            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: version },
             details: {},
         },
     },
@@ -50,18 +50,18 @@ const expected2Messages = [
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
+            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: version },
             details: {},
         },
     },
-];
+]);
 
-const expected4Messages = [
+const expected4Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: 'v1' },
+            target: { bucket: 'bucket1', owner: 'owner1', taskVersion: version },
             details: {},
         },
     },
@@ -69,7 +69,7 @@ const expected4Messages = [
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: 'v1' },
+            target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: version },
             details: {},
         },
     },
@@ -77,7 +77,7 @@ const expected4Messages = [
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket3', owner: 'owner3', taskVersion: 'v1' },
+            target: { bucket: 'bucket3', owner: 'owner3', taskVersion: version },
             details: {},
         },
     },
@@ -85,11 +85,11 @@ const expected4Messages = [
         value: {
             action: 'processObjects',
             contextInfo: { reqId: 'test-request-id' },
-            target: { bucket: 'bucket4', owner: 'owner4', taskVersion: 'v1' },
+            target: { bucket: 'bucket4', owner: 'owner4', taskVersion: version },
             details: {},
         },
     },
-];
+]);
 
 const baseLCConfig = {
     zookeeperPath: '/test/lifecycle',
@@ -430,6 +430,8 @@ describe('lifecycle conductor', function lifecycleConductor() {
             };
         }
 
+        const expectedTaskVersion = validatedLifecycleConfig.forceLegacyListing ? 'v1' : 'v2';
+
         return describe(description, () => {
             beforeEach(done => {
                 bucketdListing = [];
@@ -519,13 +521,15 @@ describe('lifecycle conductor', function lifecycleConductor() {
                     bucketPopulatorStep1,
                     next => {
                         lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(transformExpectedMessages(expected2Messages),
+                        consumer.expectUnorderedMessages(
+                            transformExpectedMessages(expected2Messages(expectedTaskVersion)),
                             CONSUMER_TIMEOUT, next);
                     },
                     bucketPopulatorStep2,
                     next => {
                         lcConductor.processBuckets();
-                        consumer.expectUnorderedMessages(transformExpectedMessages(expected4Messages),
+                        consumer.expectUnorderedMessages(
+                            transformExpectedMessages(expected4Messages(expectedTaskVersion)),
                             CONSUMER_TIMEOUT, next);
                     },
                 ], err => {
@@ -553,8 +557,35 @@ describe('lifecycle conductor', function lifecycleConductor() {
     });
 
     describeConductorSpec({
+        description: 'with auth `account` and buckets from bucketd (legacy listing mode)',
+        lifecycleConfig: {
+            ...baseLCConfig,
+            forceLegacyListing: true,
+            conductor: {
+                ...baseLCConfig.conductor,
+                bucketSource: 'bucketd',
+                bucketd: {
+                    host: '127.0.0.1',
+                },
+            },
+        },
+        mockBucketd: true,
+        transformExpectedMessages: identity,
+    });
+
+    describeConductorSpec({
         description: 'with auth `account` and buckets from zookeeper (compat mode)',
         lifecycleConfig: baseLCConfig,
+        setupZookeeper: true,
+        transformExpectedMessages: identity,
+    });
+
+    describeConductorSpec({
+        description: 'with auth `account` and buckets from zookeeper (legacy listing mode)',
+        lifecycleConfig: {
+            ...baseLCConfig,
+            forceLegacyListing: true,
+        },
         setupZookeeper: true,
         transformExpectedMessages: identity,
     });
