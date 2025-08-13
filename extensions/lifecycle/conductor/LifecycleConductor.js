@@ -226,12 +226,12 @@ class LifecycleConductor {
     }
 
     _indexesGetOrCreate(task, log, cb) {
-        if (!task.isLifecycled) {
-            return process.nextTick(cb, null, lifecycleTaskVersions.v1);
-        }
-
         if (this._bucketSource !== 'mongodb') {
             return process.nextTick(cb, null, lifecycleTaskVersions.v2);
+        }
+
+        if (!task.isLifecycled) {
+            return process.nextTick(cb, null, lifecycleTaskVersions.v1);
         }
 
         const backbeatMetadataProxy = this.clientManager.getBackbeatMetadataProxy(
