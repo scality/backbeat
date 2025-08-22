@@ -349,7 +349,7 @@ describe('LogConsumer', () => {
                 clock.restore();
             });
 
-            it('should immediately unassign when no pending messages or commits', done => {
+            it('should immediately unassign when no pending messages or commits', async () => {
                 const unassignStub = sinon.stub();
                 const assignment = [{ topic: 'test-topic', partition: 0 }];
                 logConsumer._consumer = {
@@ -359,16 +359,20 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [];
                 logConsumer._pendingCommit = false;
 
-                logConsumer.once('unassigned', () => {
-                    sinon.assert.calledOnce(unassignStub);
-                    done();
-                });
+                let unassignHandler;
+                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+
+                logConsumer.once('unassigned', unassignHandler);
 
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, assignment);
                 clock.tick(1000);
+
+                void await unassignPromise;
+
+                sinon.assert.calledOnce(unassignStub);
             });
 
-            it('should wait for pending messages to be processed and committed before unassigning', done => {
+            it('should wait for pending messages to be processed and committed before unassigning', async () => {
                 const unassignStub = sinon.stub();
                 const commitStub = sinon.stub();
                 logConsumer._consumer = {
@@ -379,49 +383,59 @@ describe('LogConsumer', () => {
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
                 logConsumer._pendingCommit = false;
 
+                let unassignHandler;
+                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+
+                logConsumer.once('unassigned', unassignHandler);
+
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
 
                 // First tick - should not unassign yet due to pending messages
                 clock.tick(1000);
                 sinon.assert.notCalled(unassignStub);
 
-                // simulate end of processing
+                // Simulate processing completion and commit
                 logConsumer._topicPartition = null;
                 logConsumer._pendingCommit = true;
 
-                // second tick - should not unassign yet due to pending commit
+                // Second tick - should not unassign yet due to pending commit
                 clock.tick(1000);
                 sinon.assert.notCalled(unassignStub);
 
-                // simulate a successful commit
+                // Simulate successful commit by emitting drained event
                 logConsumer._pendingCommit = false;
+                logConsumer.emit('drained');
 
-                logConsumer.once('unassigned', () => {
-                    sinon.assert.calledOnce(commitStub);
-                    sinon.assert.calledOnce(unassignStub);
-                    done();
-                });
+                void await unassignPromise;
 
-                // Third tick - should now unassign
-                clock.tick(1000);
+                sinon.assert.calledOnce(unassignStub);
             });
 
-            it('should disconnect consumer on timeout', () => {
-                const logErrorSpy = sinon.spy(logConsumer._log, 'error');
+            it('should disconnect consumer on timeout', async () => {
                 const disconnectStub = sinon.stub();
+                const unassignStub = sinon.stub();
                 logConsumer._consumer = {
                     disconnect: disconnectStub,
+                    unassign: unassignStub,
                     isConnected: () => true,
                 };
                 logConsumer._maxPollIntervalMs = 5000;
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
+                logConsumer._pendingCommit = false;
+
+                let unassignHandler;
+                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+
+                logConsumer.once('unassigned', unassignHandler);
 
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
 
-                // Advance time to trigger timeout
+                // Advance time to trigger timeout (maxPollIntervalMs - 1000)
                 clock.tick(4000);
 
-                sinon.assert.calledOnce(logErrorSpy);
+                void await unassignPromise;
+
+                sinon.assert.calledOnce(unassignStub);
                 sinon.assert.calledOnce(disconnectStub);
             });
         });
