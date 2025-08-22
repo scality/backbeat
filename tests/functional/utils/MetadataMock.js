@@ -96,6 +96,14 @@ class MetadataMock {
                         res.end('ok');
                 });
             }
+        } else if (req.method === 'PUT') {
+            const resObj = mockRes.PUT.responses[req.url];
+            if (resObj && resObj.resType === 'htmlError') {
+                res.writeHead(resObj.statusCode, resObj.statusMessage, {
+                    'Content-Type': resObj['content-type'],
+                });
+                res.end(resObj.body);
+            }
         }
     }
 }
