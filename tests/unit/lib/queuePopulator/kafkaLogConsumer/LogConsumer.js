@@ -113,6 +113,20 @@ describe('LogConsumer', () => {
             });
         });
 
+        it('should skip consuming when previously consumed batch was not processed yet', done => {
+            const consumeStub = sinon.stub();
+            logConsumer._consumer = {
+                consume: consumeStub,
+                isConnected: () => true,
+            };
+            logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 1 }];
+            logConsumer._consumeKafkaMessages(5, err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(consumeStub);
+                return done();
+            });
+        });
+
         it('should store topicPartitions correctly after consuming messages with duplicate partitions', done => {
             const consumeStub = sinon.stub();
             consumeStub.callsArgWith(1, null, [
