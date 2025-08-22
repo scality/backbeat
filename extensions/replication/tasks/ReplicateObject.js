@@ -243,6 +243,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
+                        err,
                         httpStatus: err.statusCode,
                     });
                 return cb(err);
@@ -325,6 +326,7 @@ class ReplicateObject extends BackbeatTask {
                             origin: 'target',
                             peer,
                             error: err.message,
+                            err,
                         });
                     return cb(err);
                 }
@@ -495,6 +497,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
+                        err,
                         httpStatus: err.statusCode,
                     });
             }
@@ -523,6 +526,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
+                        err,
                     });
             }
             return doneOnce(err);
@@ -558,6 +562,7 @@ class ReplicateObject extends BackbeatTask {
                             origin: 'target',
                             peer: this.destBackbeatHost,
                             error: err.message,
+                            err,
                         });
                 }
                 return doneOnce(err);
@@ -614,6 +619,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message,
+                        err,
                     });
                 return cbOnce(err);
             }
@@ -650,6 +656,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message,
+                        err,
                     });
                 writtenLocations.forEach(location => {
                     log.error('orphan data location was not deleted', {
