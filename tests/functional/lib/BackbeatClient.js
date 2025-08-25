@@ -151,4 +151,26 @@ describe('BackbeatClient unit tests with mock server', () => {
             return done();
         });
     });
+
+    it('should handle openresty HTML error response for putData', done => {
+        const destReq = backbeatClient.putData({
+            Bucket: 'bkterr',
+            Key: 'objerr',
+            CanonicalID: 'test-canonical-id',
+            ContentLength: 0,
+            Body: '',
+            VersioningRequired: true,
+        });
+        return destReq.send(err => {
+            assert(err, 'Expected an error');
+            assert.strictEqual(err.code, 'HTML Bad Request');
+            assert.strictEqual(err.message, '400 Request Header Or Cookie Too Large');
+            assert.strictEqual(err.statusCode, 400);
+            assert(err.rawBody);
+            assert(err.rawBody.includes('<title>400 Request Header Or Cookie Too Large</title>'));
+            assert(err.rawBody.includes('<center>Request Header Or Cookie Too Large</center>'));
+            assert(err.rawBody.includes('<center>openresty</center>'));
+            return done();
+        });
+    });
 });

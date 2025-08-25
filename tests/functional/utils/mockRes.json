@@ -62,6 +62,17 @@
     "POST": {
         "responses": {}
     },
+    "PUT": {
+        "responses": {
+            "/_/backbeat/data/bkterr/objerr?v2": {
+                "resType": "htmlError",
+                "statusCode": 400,
+                "statusMessage": "Bad Request",
+                "content-type": "text/html",
+                "body": "<html>\r\n<head><title>400 Request Header Or Cookie Too Large</title></head>\r\n<body>\r\n<center><h1>400 Bad Request</h1></center>\r\n<center>Request Header Or Cookie Too Large</center>\r\n<hr><center>openresty</center>\r\n</body>\r\n</html>"
+            }
+        }
+    },
     "healthcheck": {
         "ok": {}
     },
