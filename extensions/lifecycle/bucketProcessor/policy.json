@@ -13,7 +13,8 @@
                 "s3:GetObjectTagging",
                 "s3:GetObjectVersionTagging",
                 "s3:GetObject",
-                "s3:GetObjectVersion"
+                "s3:GetObjectVersion",
+                "s3:ReplicateObject"
             ],
             "Resource": [
                 "*"
