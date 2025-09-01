@@ -1164,6 +1164,11 @@ class LifecycleTask extends BackbeatTask {
             ruleType: 'transition',
             reqId: log.getSerializedUids(),
         });
+        entry.setAttribute('source', {
+            bucket: params.bucket,
+            objectKey: params.objectKey,
+            storageClass: objectMD.getDataStoreName(),
+        });
 
         if (this._canUnconditionallyGarbageCollect(objectMD)) {
             return cb(null, entry);
@@ -1174,12 +1179,7 @@ class LifecycleTask extends BackbeatTask {
                 if (err) {
                     return cb(err);
                 }
-                entry.setAttribute('source', {
-                    bucket: params.bucket,
-                    objectKey: params.objectKey,
-                    storageClass: objectMD.getDataStoreName(),
-                    lastModified,
-                });
+                entry.setAttribute('source.lastModified', lastModified);
                 return cb(null, entry);
         });
     }
