@@ -51,6 +51,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
             mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
+            mockLogReader.isLogConsumerReady = sinon.fake(() => true);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -75,6 +76,7 @@ describe('QueuePopulator', () => {
             mockLogReader.getProducerStatus = sinon.fake(() => prodStatus);
             mockLogReader.getLogInfo = sinon.fake(() => logInfo);
             mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
+            mockLogReader.isLogConsumerReady = sinon.fake(() => true);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -102,6 +104,7 @@ describe('QueuePopulator', () => {
             }));
             mockLogReader.getLogInfo = sinon.fake(() => {});
             mockLogReader.batchProcessTimedOut = sinon.fake(() => true);
+            mockLogReader.isLogConsumerReady = sinon.fake(() => true);
             qp.logReaders = [
                 mockLogReader,
             ];
@@ -116,6 +119,33 @@ describe('QueuePopulator', () => {
                     {
                         component: 'log reader',
                         status: constants.statusTimedOut,
+                    },
+                ])
+            );
+        });
+
+        it('returns proper details when log consumer is not ready', () => {
+            const mockLogReader = sinon.spy();
+            mockLogReader.getProducerStatus = sinon.fake(() => ({
+                topicA: true,
+            }));
+            mockLogReader.getLogInfo = sinon.fake(() => {});
+            mockLogReader.batchProcessTimedOut = sinon.fake(() => false);
+            mockLogReader.isLogConsumerReady = sinon.fake(() => false);
+            qp.logReaders = [
+                mockLogReader,
+            ];
+            qp.zkClient = {
+                getState: () => zookeeper.State.SYNC_CONNECTED,
+            };
+            qp.handleLiveness(mockRes, mockLog);
+            sinon.assert.calledOnceWithExactly(mockRes.writeHead, 500);
+            sinon.assert.calledOnceWithExactly(
+                mockRes.end,
+                JSON.stringify([
+                    {
+                        component: 'log consumer',
+                        status: constants.statusNotReady,
                     },
                 ])
             );
@@ -186,6 +216,147 @@ describe('QueuePopulator', () => {
             qp._processLogEntries({}, err => {
                 assert.deepEqual(err, errors.InternalError);
                 assert(qp.logReaders[0].processLogEntries.calledOnce);
+                return done();
+            });
+        });
+    });
+
+    describe('close', () => {
+        let mockLogReader1;
+        let mockLogReader2;
+        let mockCircuitBreaker;
+        let mockMProducer;
+        let mockMConsumer;
+
+        beforeEach(() => {
+            mockLogReader1 = {
+                close: sinon.stub().yields(),
+            };
+            mockLogReader2 = {
+                close: sinon.stub().yields(),
+            };
+            mockCircuitBreaker = {
+                stop: sinon.stub(),
+            };
+            mockMProducer = {
+                close: sinon.stub().yields(),
+            };
+            mockMConsumer = {
+                close: sinon.stub().yields(),
+            };
+
+            qp.logReaders = [mockLogReader1, mockLogReader2];
+            qp._circuitBreaker = mockCircuitBreaker;
+            qp._mProducer = mockMProducer;
+            qp._mConsumer = mockMConsumer;
+            qp.raftIdDispatcher = undefined;
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should call close on all logReaders', done => {
+            qp.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.calledOnce(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                sinon.assert.calledOnce(mockMProducer.close);
+                sinon.assert.calledOnce(mockMConsumer.close);
+                return done();
+            });
+        });
+
+        it('should call close on single logReader', done => {
+            qp.logReaders = [mockLogReader1];
+            qp.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.notCalled(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                return done();
+            });
+        });
+
+        it('should handle empty logReaders array', done => {
+            qp.logReaders = [];
+            qp.close(err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(mockLogReader1.close);
+                sinon.assert.notCalled(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                return done();
+            });
+        });
+
+        it('should handle logReader close error', done => {
+            const closeError = new Error('Close failed');
+            mockLogReader1.close = sinon.stub().yields(closeError);
+            
+            qp.close(err => {
+                assert.strictEqual(err, closeError);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.notCalled(mockLogReader2.close);
+                sinon.assert.notCalled(mockCircuitBreaker.stop);
+                return done();
+            });
+        });
+
+        it('should handle metrics producer close error', done => {
+            const closeError = new Error('Metrics producer close failed');
+            mockMProducer.close = sinon.stub().yields(closeError);
+            
+            qp.close(err => {
+                assert.strictEqual(err, closeError);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.calledOnce(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                sinon.assert.calledOnce(mockMProducer.close);
+                sinon.assert.notCalled(mockMConsumer.close);
+                return done();
+            });
+        });
+
+        it('should handle metrics consumer close error', done => {
+            const closeError = new Error('Metrics consumer close failed');
+            mockMConsumer.close = sinon.stub().yields(closeError);
+            
+            qp.close(err => {
+                assert.strictEqual(err, closeError);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.calledOnce(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                sinon.assert.calledOnce(mockMProducer.close);
+                sinon.assert.calledOnce(mockMConsumer.close);
+                return done();
+            });
+        });
+
+        it('should work when no metrics producer exists', done => {
+            qp._mProducer = null;
+            
+            qp.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.calledOnce(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                sinon.assert.notCalled(mockMProducer.close);
+                sinon.assert.calledOnce(mockMConsumer.close);
+                return done();
+            });
+        });
+
+        it('should work when no metrics consumer exists', done => {
+            qp._mConsumer = null;
+            
+            qp.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockLogReader1.close);
+                sinon.assert.calledOnce(mockLogReader2.close);
+                sinon.assert.calledOnce(mockCircuitBreaker.stop);
+                sinon.assert.calledOnce(mockMProducer.close);
+                sinon.assert.notCalled(mockMConsumer.close);
                 return done();
             });
         });

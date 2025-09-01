@@ -599,6 +599,7 @@ describe('LogReader', () => {
             {
                 desc: 'should save the offset when offsets are managed',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: 1,
                 shouldSave: true,
@@ -606,6 +607,7 @@ describe('LogReader', () => {
             {
                 desc: 'should not save the offset when the next offset is undefined',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: undefined,
                 shouldSave: false,
@@ -613,16 +615,18 @@ describe('LogReader', () => {
             {
                 desc: 'should not save the offset if the offset did not change',
                 managed: true,
+                hasStoreOffsetsFn: false,
                 currentOffset: 0,
                 nextLogOffset: 0,
                 shouldSave: false,
             },
             {
-                desc: 'should not save the offset if offsets are not managed',
+                desc: 'should use storeOffsets to save the offset when offsets are not managed',
                 managed: false,
+                hasStoreOffsetsFn: true,
                 currentOffset: 0,
                 nextLogOffset: 1,
-                shouldSave: false,
+                shouldSave: true,
             },
         ].forEach(params => {
             it(params.desc, done => {
@@ -646,12 +650,15 @@ describe('LogReader', () => {
                     logger: logReader.log,
                 };
                 sinon.stub(logReader, 'logOffset').value(params.currentOffset);
-                const offsetManagedStub = sinon.stub(logReader, 'isOffsetManaged').returns(params.managed);
-                const writeLogOffsetStub = sinon.stub(logReader, '_writeLogOffset').yields();
+                sinon.stub(logReader, 'isOffsetManaged').returns(params.managed);
+                let storeOffsetStub = sinon.stub(logReader, '_writeLogOffset').yields();
+                if (params.hasStoreOffsetsFn) {
+                    logReader.logConsumer.storeOffsets = () => {};
+                    storeOffsetStub = sinon.stub(logReader.logConsumer, 'storeOffsets').returns();
+                }
                 logReader._processSaveLogOffset(batchState, err => {
                     assert.ifError(err);
-                    assert(offsetManagedStub.calledOnce);
-                    assert(params.shouldSave ? writeLogOffsetStub.calledOnce : writeLogOffsetStub.notCalled);
+                    assert(params.shouldSave  ? storeOffsetStub.calledOnce : storeOffsetStub.notCalled);
                     done();
                 });
             });
@@ -776,6 +783,156 @@ describe('LogReader', () => {
                 });
                 assert.deepStrictEqual(reader.isOffsetManaged(), params.expected);
             });
+        });
+    });
+
+    describe('close', () => {
+        let mockProducer1;
+        let mockProducer2;
+        let mockLogConsumer;
+
+        beforeEach(() => {
+            mockProducer1 = {
+                close: sinon.stub().yields(),
+            };
+            mockProducer2 = {
+                close: sinon.stub().yields(),
+            };
+            mockLogConsumer = {
+                close: sinon.stub().yields(),
+            };
+
+            // Set up producers
+            logReader._producers = {
+                producer1: mockProducer1,
+                producer2: mockProducer2,
+            };
+        });
+
+        it('should call close on all producers', done => {
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockProducer1.close);
+                sinon.assert.calledOnce(mockProducer2.close);
+                return done();
+            });
+        });
+
+        it('should call close on logConsumer if it exists and has close method', done => {
+            logReader.logConsumer = mockLogConsumer;
+            
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockProducer1.close);
+                sinon.assert.calledOnce(mockProducer2.close);
+                sinon.assert.calledOnce(mockLogConsumer.close);
+                return done();
+            });
+        });
+
+        it('should not call close on logConsumer if it does not exist', done => {
+            logReader.logConsumer = null;
+            
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockProducer1.close);
+                sinon.assert.calledOnce(mockProducer2.close);
+                sinon.assert.notCalled(mockLogConsumer.close);
+                return done();
+            });
+        });
+
+        it('should not call close on logConsumer if it does not have close method', done => {
+            logReader.logConsumer = {
+                someOtherMethod: sinon.stub(),
+            };
+            
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(mockProducer1.close);
+                sinon.assert.calledOnce(mockProducer2.close);
+                sinon.assert.notCalled(mockLogConsumer.close);
+                return done();
+            });
+        });
+
+        it('should handle producer close error', done => {
+            const closeError = new Error('Producer close failed');
+            mockProducer1.close = sinon.stub().yields(closeError);
+            
+            logReader.close(err => {
+                assert.strictEqual(err, closeError);
+                sinon.assert.calledOnce(mockProducer1.close);
+                return done();
+            });
+        });
+
+        it('should handle logConsumer close error', done => {
+            const closeError = new Error('LogConsumer close failed');
+            mockLogConsumer.close = sinon.stub().yields(closeError);
+            logReader.logConsumer = mockLogConsumer;
+            
+            logReader.close(err => {
+                assert.strictEqual(err, closeError);
+                sinon.assert.calledOnce(mockLogConsumer.close);
+                return done();
+            });
+        });
+
+        it('should handle empty producers object', done => {
+            logReader._producers = {};
+            logReader.logConsumer = mockLogConsumer;
+            
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(mockProducer1.close);
+                sinon.assert.notCalled(mockProducer2.close);
+                sinon.assert.calledOnce(mockLogConsumer.close);
+                return done();
+            });
+        });
+
+        it('should work with no producers and no logConsumer', done => {
+            logReader._producers = {};
+            logReader.logConsumer = null;
+            
+            logReader.close(err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(mockProducer1.close);
+                sinon.assert.notCalled(mockProducer2.close);
+                sinon.assert.notCalled(mockLogConsumer.close);
+                return done();
+            });
+        });
+    });
+
+    describe('isLogConsumerReady', () => {
+        it('should return true when logConsumer is undefined', () => {
+            logReader.logConsumer = undefined;
+            assert.strictEqual(logReader.isLogConsumerReady(), true);
+        });
+
+        it('should return true when logConsumer exists but has no isReady method', () => {
+            logReader.logConsumer = {
+                someOtherMethod: sinon.stub(),
+            };
+            assert.strictEqual(logReader.isLogConsumerReady(), true);
+        });
+
+        it('should return true when logConsumer.isReady() returns true', () => {
+            logReader.logConsumer = {
+                isReady: sinon.stub().returns(true),
+            };
+            assert.strictEqual(logReader.isLogConsumerReady(), true);
+            sinon.assert.calledOnce(logReader.logConsumer.isReady);
+        });
+
+        it('should return false when logConsumer.isReady() returns false', () => {
+            logReader.logConsumer = {
+                isReady: sinon.stub().returns(false),
+            };
+            assert.strictEqual(logReader.isLogConsumerReady(), false);
+            sinon.assert.calledOnce(logReader.logConsumer.isReady);
         });
     });
 });
