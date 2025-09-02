@@ -132,15 +132,33 @@ class LifecycleBucketProcessor {
 
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
+            console.log("AAAAA 34 - Task scheduler processing", { 
+                taskName: ctx.task.constructor.name,
+                bucket: ctx.value.target.bucket,
+                rulesCount: ctx.rules.length
+            });
+            
             const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
             return this.retryWrapper.retry({
                 actionDesc: 'process bucket lifecycle entry',
                 logFields: { value },
-                actionFunc: (done, nbRetries) => task.processBucketEntry(
-                    rules, value, s3target, backbeatMetadataProxy, nbRetries, done),
+                actionFunc: (done, nbRetries) => {
+                    console.log("AAAAA 35 - Calling task.processBucketEntry", { 
+                        nbRetries,
+                        bucket: value.target.bucket
+                    });
+                    return task.processBucketEntry(rules, value, s3target, backbeatMetadataProxy, nbRetries, done);
+                },
                 shouldRetryFunc: err => err.retryable,
                 log: this._log,
-            }, cb);
+            }, (err) => {
+                if (err) {
+                    console.log("AAAAA 36 - Task completed with error", { error: err });
+                } else {
+                    console.log("AAAAA 37 - Task completed successfully");
+                }
+                cb(err);
+            });
         }, this._lcConfig.bucketProcessor.concurrency);
 
         // Listen for errors from any task being processed.
@@ -230,21 +248,54 @@ class LifecycleBucketProcessor {
      * @return {Boolean} Whether the config should be processed
      */
     _shouldProcessConfig(config) {
-        return config.Rules.some(rule => {
+        console.log("AAAAA 24 - _shouldProcessConfig called", { 
+            config,
+            rulesCount: config?.Rules?.length,
+            supportedRules: this._supportedRules,
+            pausedLocations: Array.from(this._pausedLocations)
+        });
+        
+        const result = config.Rules.some(rule => {
+            console.log("AAAAA 25 - Checking rule", { rule, status: rule.Status });
+            
             if (rule.Status === 'Disabled') {
+                console.log("AAAAA 26 - Rule disabled, skipping");
                 return false;
             }
-            return Object.keys(rule).some(key => {
+            
+            const ruleResult = Object.keys(rule).some(key => {
+                console.log("AAAAA 27 - Checking rule key", { key, supported: this._supportedRules.includes(key) });
+                
                 if (!this._supportedRules.includes(key)) {
+                    console.log("AAAAA 28 - Rule key not supported");
                     return false;
                 }
+                
                 if (isExpirationRule(key)) {
+                    console.log("AAAAA 29 - Expiration rule found, will process");
                     return true;
                 }
-                return rule[key].some(transitionRule =>
-                    !this._pausedLocations.has(transitionRule.StorageClass));
+                
+                const transitionResult = rule[key].some(transitionRule => {
+                    const isPaused = this._pausedLocations.has(transitionRule.StorageClass);
+                    console.log("AAAAA 30 - Checking transition rule", { 
+                        storageClass: transitionRule.StorageClass,
+                        isPaused,
+                        willProcess: !isPaused
+                    });
+                    return !isPaused;
+                });
+                
+                console.log("AAAAA 31 - Transition rule check result", { transitionResult });
+                return transitionResult;
             });
+            
+            console.log("AAAAA 32 - Rule check result", { ruleResult });
+            return ruleResult;
         });
+        
+        console.log("AAAAA 33 - _shouldProcessConfig final result", { result });
+        return result;
     }
 
     /**
@@ -259,24 +310,40 @@ class LifecycleBucketProcessor {
      * @return {undefined}
      */
     _processBucketEntry(entry, cb) {
+        console.log("AAAAA 1 - _processBucketEntry called", { entryValue: entry.value });
+        
         const { error, result } = safeJsonParse(entry.value);
         if (error) {
+            console.log("AAAAA 2 - JSON parse error", { error, value: entry.value });
             this._log.error('could not parse bucket entry',
                             { value: entry.value, error });
             return process.nextTick(() => cb(error));
         }
+        
+        console.log("AAAAA 3 - Parsed entry result", { result });
+        
         if (result.action !== PROCESS_OBJECTS_ACTION) {
+            console.log("AAAAA 4 - Skipping entry, wrong action", { action: result.action, expected: PROCESS_OBJECTS_ACTION });
             return process.nextTick(cb);
         }
+        
         if (typeof result.target !== 'object') {
+            console.log("AAAAA 5 - Malformed entry, invalid target", { target: result.target });
             this._log.error('malformed kafka bucket entry', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 entry: result,
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
+        
         const { bucket, owner, accountId, taskVersion } = result.target;
+        console.log("AAAAA 6 - Extracted target fields", { bucket, owner, accountId, taskVersion });
+        if (bucket !== 'lifecycle-expiration') {
+            console.log("AAAAA 6.1 SKIPPING for bucket", { bucket });
+            return cb()
+        }
         if (!bucket || !owner || (!accountId && this._authConfig.type === authTypeAssumeRole)) {
+            console.log("AAAAA 7 - Missing required fields", { bucket, owner, accountId, authType: this._authConfig?.type });
             this._log.error('kafka bucket entry missing required fields', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
@@ -285,6 +352,7 @@ class LifecycleBucketProcessor {
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
+        
         this._log.debug('processing bucket entry', {
             method: 'LifecycleBucketProcessor._processBucketEntry',
             bucket,
@@ -292,32 +360,43 @@ class LifecycleBucketProcessor {
             accountId,
         });
 
+        console.log("AAAAA 8 - Getting S3 client for accountId", { accountId });
         const s3 = this.clientManager.getS3Client(accountId);
         if (!s3) {
+            console.log("AAAAA 9 - Failed to get S3 client");
             return cb(errors.InternalError
                 .customizeDescription('failed to obtain a s3 client'));
         }
 
+        console.log("AAAAA 10 - Getting backbeat metadata proxy for accountId", { accountId });
         const backbeatMetadataProxy =
             this.clientManager.getBackbeatMetadataProxy(accountId);
         if (!backbeatMetadataProxy) {
+            console.log("AAAAA 11 - Failed to get backbeat metadata proxy");
             return cb(errors.InternalError
                 .customizeDescription('failed to obtain a backbeat client'));
         }
 
         const params = { Bucket: bucket };
+        console.log("AAAAA 12 - Getting bucket lifecycle configuration", { params });
+        
         return this._getBucketLifecycleConfiguration(s3, params, (err, config) => {
             if (err) {
+                console.log("AAAAA 13 - Error getting lifecycle config", { error: err, code: err.code });
+                
                 if (err.code === 'NoSuchLifecycleConfiguration') {
+                    console.log("AAAAA 14 - No lifecycle config found, skipping bucket", { bucket });
                     this._log.debug('skipping non-lifecycled bucket', { bucket });
                     return cb();
                 }
 
                 if (err.code === 'NoSuchBucket') {
+                    console.log("AAAAA 15 - Bucket does not exist", { bucket });
                     this._log.error('skipping non-existent bucket', { bucket });
                     return cb();
                 }
 
+                console.log("AAAAA 16 - Other error getting lifecycle config", { error: err });
                 this._log.error('error getting bucket lifecycle config', {
                     method: 'LifecycleBucketProcessor._processBucketEntry',
                     bucket,
@@ -326,18 +405,34 @@ class LifecycleBucketProcessor {
                 });
                 return cb(err);
             }
+            
+            console.log("AAAAA 17 - Got lifecycle config", { params: params.Bucket, config, rules: config?.Rules });
+            
             if (!this._shouldProcessConfig(config)) {
+                console.log("AAAAA 18 - Should not process config, skipping");
                 return cb();
             }
 
             let task;
+            console.log("AAAAA 19 - Determining task version", { taskVersion, forceLegacy: this._lcConfig.forceLegacyListing });
 
             if (taskVersion === lifecycleTaskVersions.v1 || (!taskVersion && this._lcConfig.forceLegacyListing)) {
+                console.log("AAAAA 20 - Creating LifecycleTask (v1)");
                 task = new LifecycleTask(this);
             } else {
-                task = new LifecycleTaskV2(this);
+                console.log("AAAAA 21 - Creating LifecycleTaskV2");
+                // task = new LifecycleTaskV2(this);
+                task = new LifecycleTask(this);
             }
 
+            console.log("AAAAA 22 - Scheduling task", { 
+                taskName: task.constructor.name,
+                bucket,
+                owner,
+                details: result.details,
+                rulesCount: config.Rules.length
+            });
+            
             this._log.info('scheduling new task for bucket lifecycle', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
@@ -345,6 +440,7 @@ class LifecycleBucketProcessor {
                 details: result.details,
                 taskName: task.constructor.name,
             });
+            
             return this._internalTaskScheduler.push({
                 task,
                 rules: config.Rules,

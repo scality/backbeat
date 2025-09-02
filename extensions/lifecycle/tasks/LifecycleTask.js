@@ -193,6 +193,12 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getObjectList(bucketData, bucketLCRules, nbRetries, log, done) {
+        console.log("AAAAA 71 - _getObjectList called", {
+            bucket: bucketData.target.bucket,
+            marker: bucketData.details.marker,
+            nbRetries
+        });
+        
         const params = {
             Bucket: bucketData.target.bucket,
             MaxKeys: MAX_KEYS,
@@ -201,24 +207,43 @@ class LifecycleTask extends BackbeatTask {
             params.Marker = bucketData.details.marker;
         }
 
+        console.log("AAAAA 72 - listObjects params", { params });
+        
         const req = this.s3target.listObjects(params);
         attachReqUids(req, log);
         async.waterfall([
-            next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
-
-                if (err) {
-                    log.error('error listing bucket objects', {
-                        method: 'LifecycleTask._getObjectList',
-                        error: err,
-                        bucket: params.Bucket,
+            next => {
+                console.log("AAAAA 73 - Calling listObjects");
+                req.send((err, data) => {
+                    console.log("AAAAA 74 - listObjects response", { 
+                        error: err, 
+                        objectCount: data?.Contents?.length,
+                        isTruncated: data?.IsTruncated,
+                        nextMarker: data?.NextMarker
                     });
-                    return next(err);
-                }
+                    
+                    LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
 
-                return next(null, data);
-            }),
+                    if (err) {
+                        console.log("AAAAA 75 - Error listing objects", { error: err });
+                        log.error('error listing bucket objects', {
+                            method: 'LifecycleTask._getObjectList',
+                            error: err,
+                            bucket: params.Bucket,
+                        });
+                        return next(err);
+                    }
+
+                    return next(null, data);
+                });
+            },
             (data, next) => {
+                console.log("AAAAA 76 - Processing listObjects results", {
+                    isTruncated: data.IsTruncated,
+                    nbRetries,
+                    objectCount: data.Contents.length
+                });
+                
                 if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to Kafka topic bucketTasksTopic
                     // with bucket name and `data.marker` only once.
@@ -226,6 +251,8 @@ class LifecycleTask extends BackbeatTask {
                     if (!marker && data.Contents.length > 0) {
                         marker = data.Contents[data.Contents.length - 1].Key;
                     }
+
+                    console.log("AAAAA 77 - Re-queuing truncated listing", { marker });
 
                     const entry = Object.assign({}, bucketData, {
                         contextInfo: { reqId: log.getSerializedUids() },
@@ -241,10 +268,18 @@ class LifecycleTask extends BackbeatTask {
                     });
                 }
 
+                console.log("AAAAA 78 - Comparing rules to object list");
                 this._compareRulesToList(bucketData, bucketLCRules,
                     data.Contents, log, 'Disabled', next);
             },
-        ], done);
+        ], (err) => {
+            if (err) {
+                console.log("AAAAA 79 - _getObjectList completed with error", { error: err });
+            } else {
+                console.log("AAAAA 80 - _getObjectList completed successfully");
+            }
+            done(err);
+        });
     }
 
     /**
@@ -264,45 +299,81 @@ class LifecycleTask extends BackbeatTask {
      * @return {object | null} - null or the version to be expired
      */
     _ncvHeapAdd(bucketName, rule, version) {
+        console.log('AAAAA 112 - Entering _ncvHeapAdd for NewerNoncurrentVersions logic', {
+            bucketName,
+            objectKey: version.Key,
+            versionId: version.VersionId,
+            staleDate: version.staleDate
+        });
+
         const ncve = 'NoncurrentVersionExpiration';
         const nncv = 'NewerNoncurrentVersions';
 
         if (!rule[ncve] || !rule[ncve][nncv]) {
+            console.log('AAAAA 113 - No NCV expiration rule or NewerNoncurrentVersions setting, returning null');
             return null;
         }
 
+        const nncvSize = parseInt(rule[ncve][nncv], 10);
+        const ruleId = rule[ncve].ID;
+        
+        console.log('AAAAA 114 - NewerNoncurrentVersions rule details', {
+            newerNoncurrentVersionsLimit: nncvSize,
+            ruleId: ruleId
+        });
+
         if (!this.ncvHeap.has(bucketName)) {
+            console.log('AAAAA 115 - Creating new bucket entry in ncvHeap');
             this.ncvHeap.set(bucketName, new Map());
         }
 
         if (!this.ncvHeap.get(bucketName).has(version.Key)) {
+            console.log('AAAAA 116 - Creating new object key entry in ncvHeap');
             this.ncvHeap.get(bucketName).set(version.Key, new Map());
         }
 
         const ncvHeapObject = this.ncvHeap.get(bucketName).get(version.Key);
 
-        const nncvSize = parseInt(rule[ncve][nncv], 10);
-
-        const ruleId = rule[ncve].ID;
-
         if (!ncvHeapObject.get(ruleId)) {
+            console.log('AAAAA 117 - Creating new MinHeap for rule', {
+                ruleId,
+                heapSize: nncvSize
+            });
             ncvHeapObject.set(ruleId, new MinHeap(nncvSize, noncurrentVersionCompare));
         }
 
         const heap = ncvHeapObject.get(ruleId);
+        console.log('AAAAA 118 - Current heap state', {
+            currentHeapSize: heap.size,
+            maxHeapSize: nncvSize,
+            isHeapFull: heap.size >= nncvSize
+        });
 
         if (heap.size < nncvSize) {
+            console.log('AAAAA 119 - Heap not full, adding version and returning null');
             heap.add(version);
             return null;
         }
 
         const heapTop = heap.peek();
+        console.log('AAAAA 120 - Heap is full, comparing with top element', {
+            heapTopVersionId: heapTop.VersionId,
+            heapTopStaleDate: heapTop.staleDate,
+            currentVersionId: version.VersionId,
+            currentStaleDate: version.staleDate
+        });
+
         if (noncurrentVersionCompare(version, heapTop) === CompareResult.LT) {
+            console.log('AAAAA 121 - Current version is older than heap top, should expire immediately');
             return version;
         }
 
         const toExpire = heap.remove();
         heap.add(version);
+        console.log('AAAAA 122 - Replaced heap top, returning oldest version for expiration', {
+            expiredVersionId: toExpire.VersionId,
+            expiredStaleDate: toExpire.staleDate
+        });
         return toExpire;
     }
 
@@ -360,6 +431,15 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getObjectVersions(bucketData, bucketLCRules, versioningStatus, nbRetries, log, done) {
+        console.log("AAAAA 1006 - _getObjectVersions called", {
+            bucket: bucketData.target.bucket,
+            versioningStatus: versioningStatus,
+            statusType: typeof versioningStatus,
+            nbRetries: nbRetries,
+            hasKeyMarker: !!bucketData.details.keyMarker,
+            hasVersionIdMarker: !!bucketData.details.versionIdMarker
+        });
+
         const paramDetails = {};
 
         if (bucketData.details.versionIdMarker &&
@@ -430,6 +510,18 @@ class LifecycleTask extends BackbeatTask {
             // bucket rules, match with `staleDate` to
             // NoncurrentVersionExpiration Days and send expiration if
             // rules all apply
+            console.log("AAAAA 1007 - About to call _compareRulesToList with versioning status", {
+                bucket: bucketData.target.bucket,
+                versioningStatus: versioningStatus,
+                versionCount: allVersionsWithStaleDate.length,
+                versionsWithStaleDate: allVersionsWithStaleDate.map(v => ({
+                    Key: v.Key,
+                    VersionId: v.VersionId,
+                    IsLatest: v.IsLatest,
+                    staleDate: v.staleDate
+                }))
+            });
+            
             return this._compareRulesToList(bucketData, bucketLCRules,
                 allVersionsWithStaleDate, log, versioningStatus,
                 err => {
@@ -848,6 +940,16 @@ class LifecycleTask extends BackbeatTask {
      * @return {boolean} true if eligible - false otherwise.
      */
     _isEntityEligible(rules, entity, versioningStatus) {
+        console.log("AAAAA 1019 - _isEntityEligible called", {
+            key: entity.Key,
+            versionId: entity.VersionId,
+            isLatest: entity.IsLatest,
+            versioningStatus: versioningStatus,
+            statusType: typeof versioningStatus,
+            isVersioned: versioningStatus === 'Enabled' || versioningStatus === 'Suspended',
+            rulesCount: rules.length
+        });
+
         const currentDate = this._lifecycleDateTime.getCurrentDate();
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
             new Date(entity.LastModified)
@@ -859,22 +961,56 @@ class LifecycleTask extends BackbeatTask {
         // Always eligible if object is a current version delete marker because
         // it requires extra s3 call (list versions).
         if (entity.IsLatest && this._isDeleteMarker(entity)) {
+            console.log("AAAAA 1020 - Entity is eligible: current version delete marker", {
+                key: entity.Key,
+                versionId: entity.VersionId
+            });
             return true;
         }
 
-        return rules.some(rule => {
+        const eligible = rules.some(rule => {
             if (rule.Status === 'Disabled') {
                 return false;
             }
 
+            console.log("AAAAA 1021 - Checking rule eligibility", {
+                key: entity.Key,
+                versionId: entity.VersionId,
+                versioningStatus: versioningStatus,
+                isLatest: entity.IsLatest,
+                ruleId: rule.ID,
+                ruleStatus: rule.Status
+            });
+
             if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                console.log("AAAAA 1022 - Processing versioned bucket entity", {
+                    key: entity.Key,
+                    versionId: entity.VersionId,
+                    isLatest: entity.IsLatest,
+                    versioningStatus: versioningStatus,
+                    hasStaleDate: !!staleDate,
+                    staleDate: staleDate
+                });
+
                 if (entity.IsLatest) {
-                    return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+                    const isRuleApplying = this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+                    console.log("AAAAA 1023 - Latest version rule check", {
+                        key: entity.Key,
+                        versionId: entity.VersionId,
+                        ruleApplies: isRuleApplying,
+                        daysSinceInitiated: daysSinceInitiated
+                    });
+                    return isRuleApplying;
                 }
 
                 if (!staleDate) {
                     // NOTE: this should never happen. A non-current version should always have
                     // a stale date. If it is the case, we will log later for debug purposes.
+                    console.log("AAAAA 1024 - WARNING: Non-current version missing staleDate", {
+                        key: entity.Key,
+                        versionId: entity.VersionId,
+                        versioningStatus: versioningStatus
+                    });
                     return true;
                 }
 
@@ -882,21 +1018,55 @@ class LifecycleTask extends BackbeatTask {
                     && this._supportedRules.includes('NoncurrentVersionExpiration')) {
                     if (rule.NoncurrentVersionExpiration.NoncurrentDays !== undefined &&
                     daysSinceStaled >= rule.NoncurrentVersionExpiration.NoncurrentDays) {
+                        console.log("AAAAA 1025 - Entity eligible via NoncurrentVersionExpiration", {
+                            key: entity.Key,
+                            versionId: entity.VersionId,
+                            daysSinceStaled: daysSinceStaled,
+                            requiredDays: rule.NoncurrentVersionExpiration.NoncurrentDays
+                        });
                         return true;
                     }
                 }
 
                 if (rule.NoncurrentVersionTransitions && rule.NoncurrentVersionTransitions.length > 0
                     && this._supportedRules.includes('NoncurrentVersionTransition')) {
-                    return rule.NoncurrentVersionTransitions.some(t =>
+                    const ncvTransitionApplies = rule.NoncurrentVersionTransitions.some(t =>
                         (t.NoncurrentDays !== undefined && daysSinceInitiated >= t.NoncurrentDays));
+                    console.log("AAAAA 1026 - NoncurrentVersionTransition check", {
+                        key: entity.Key,
+                        versionId: entity.VersionId,
+                        transitionApplies: ncvTransitionApplies
+                    });
+                    return ncvTransitionApplies;
                 }
 
+                console.log("AAAAA 1027 - No versioned rules apply to non-current version", {
+                    key: entity.Key,
+                    versionId: entity.VersionId
+                });
                 return false;
             }
 
-            return this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+            console.log("AAAAA 1028 - Processing non-versioned bucket entity", {
+                key: entity.Key,
+                versioningStatus: versioningStatus
+            });
+            const nonVersionedRuleApplies = this._isRuleApplying(rule, daysSinceInitiated, currentDate);
+            console.log("AAAAA 1029 - Non-versioned rule result", {
+                key: entity.Key,
+                ruleApplies: nonVersionedRuleApplies
+            });
+            return nonVersionedRuleApplies;
         });
+
+        console.log("AAAAA 1030 - Final eligibility result", {
+            key: entity.Key,
+            versionId: entity.VersionId,
+            versioningStatus: versioningStatus,
+            isEligible: eligible
+        });
+
+        return eligible;
     }
 
 
@@ -912,12 +1082,39 @@ class LifecycleTask extends BackbeatTask {
      */
     _compareRulesToList(bucketData, lcRules, contents, log, versioningStatus,
         done) {
+        console.log("AAAAA 1008 - _compareRulesToList called", {
+            bucket: bucketData.target.bucket,
+            versioningStatus: versioningStatus,
+            statusType: typeof versioningStatus,
+            rulesCount: lcRules.length,
+            contentCount: contents.length,
+            isVersioned: versioningStatus === 'Enabled' || versioningStatus === 'Suspended'
+        });
+
         if (!contents.length) {
+            console.log("AAAAA 1009 - No contents to process, returning early");
             return done();
         }
         return async.eachLimit(contents, CONCURRENCY_DEFAULT, (obj, cb) => {
-            const eligible =
-                this._isEntityEligible(lcRules, obj, versioningStatus);
+            console.log("AAAAA 1010 - Processing individual object in _compareRulesToList", {
+                bucket: bucketData.target.bucket,
+                key: obj.Key,
+                versionId: obj.VersionId,
+                isLatest: obj.IsLatest,
+                versioningStatus: versioningStatus,
+                staleDate: obj.staleDate
+            });
+
+            const eligible = this._isEntityEligible(lcRules, obj, versioningStatus);
+            
+            console.log("AAAAA 1011 - Entity eligibility check result", {
+                bucket: bucketData.target.bucket,
+                key: obj.Key,
+                versionId: obj.VersionId,
+                versioningStatus: versioningStatus,
+                isEligible: eligible
+            });
+
             if (!eligible) {
                 log.debug('entity is not eligible for lifecycle', {
                     bucket: bucketData.target.bucket,
@@ -930,6 +1127,13 @@ class LifecycleTask extends BackbeatTask {
                 });
                 return process.nextTick(cb);
             }
+
+            console.log("AAAAA 1012 - Entity is eligible, proceeding with rule processing", {
+                bucket: bucketData.target.bucket,
+                key: obj.Key,
+                versionId: obj.VersionId,
+                versioningStatus: versioningStatus
+            });
 
             // We don't want to retry the _whole_ list if only a single entry fails,
             // so we possibly retry each individual entry here, and ignore errors.
@@ -946,10 +1150,30 @@ class LifecycleTask extends BackbeatTask {
                 actionFunc: done => async.waterfall([
                     next => this._getRules(bucketData, lcRules, obj, log, next),
                     (applicableRules, next) => {
+                        console.log("AAAAA 1013 - About to route to version or object comparison", {
+                            bucket: bucketData.target.bucket,
+                            key: obj.Key,
+                            versionId: obj.VersionId,
+                            versioningStatus: versioningStatus,
+                            isVersioned: versioningStatus === 'Enabled' || versioningStatus === 'Suspended',
+                            applicableRulesKeys: Object.keys(applicableRules)
+                        });
+
                         if (versioningStatus === 'Enabled' || versioningStatus === 'Suspended') {
+                            console.log("AAAAA 1014 - Routing to _compareVersion for versioned bucket", {
+                                bucket: bucketData.target.bucket,
+                                key: obj.Key,
+                                versionId: obj.VersionId,
+                                versioningStatus: versioningStatus
+                            });
                             return this._compareVersion(bucketData, obj, contents,
                                 applicableRules, versioningStatus, log, next);
                         }
+                        console.log("AAAAA 1015 - Routing to _compareObject for non-versioned bucket", {
+                            bucket: bucketData.target.bucket,
+                            key: obj.Key,
+                            versioningStatus: versioningStatus
+                        });
                         return this._compareObject(bucketData, obj, applicableRules, log,
                             next);
                     },
@@ -1016,13 +1240,32 @@ class LifecycleTask extends BackbeatTask {
      *   (i.e. transition) should not apply.
      */
     _checkAndApplyExpirationRule(bucketData, obj, rules, log) {
+        console.log('AAAAA 123 - Entering _checkAndApplyExpirationRule for current version expiration', {
+            bucketName: bucketData.target.bucket,
+            objectKey: obj.Key,
+            versionId: obj.VersionId || 'no-version',
+            lastModified: obj.LastModified,
+            hasExpirationRule: !!(rules.Expiration),
+            expirationRule: rules.Expiration
+        });
+
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(
             new Date(obj.LastModified)
         );
         const currentDate = this._lifecycleDateTime.getCurrentDate();
 
+        console.log('AAAAA 124 - Expiration rule evaluation details', {
+            daysSinceLastModified: daysSinceInitiated,
+            currentDate: currentDate,
+            hasExpirationDate: !!(rules.Expiration.Date),
+            expirationDate: rules.Expiration.Date,
+            hasExpirationDays: rules.Expiration.Days !== undefined,
+            expirationDays: rules.Expiration.Days
+        });
+
         if (rules.Expiration.Date &&
             rules.Expiration.Date < currentDate) {
+            console.log('AAAAA 125 - Expiration by date: date has passed, creating delete action');
             // expiration date passed for this object
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
@@ -1040,18 +1283,29 @@ class LifecycleTask extends BackbeatTask {
                     this._lifecycleDateTime.getTransitionTimestamp(
                         rules.Expiration, obj.LastModified)
                 );
+            
+            console.log('AAAAA 126 - Created delete action for date-based expiration', {
+                entryInfo: entry.getLogInfo()
+            });
+
             this._sendObjectAction(entry, err => {
                 if (!err) {
+                    console.log('AAAAA 127 - Successfully sent date-based expiration to queue');
                     log.debug('sent object entry for consumption',
                     Object.assign({
                         method: 'LifecycleTask._checkAndApplyExpirationRule',
                     }, entry.getLogInfo()));
+                } else {
+                    console.log('AAAAA 128 - Error sending date-based expiration to queue', {
+                        error: err.message || err
+                    });
                 }
             });
             return true;
         }
         if (rules.Expiration.Days !== undefined &&
             daysSinceInitiated >= rules.Expiration.Days) {
+            console.log('AAAAA 129 - Expiration by days: threshold met, creating delete action');
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
                     origin: 'lifecycle',
@@ -1068,16 +1322,27 @@ class LifecycleTask extends BackbeatTask {
                     this._lifecycleDateTime.getTransitionTimestamp(
                         rules.Expiration, obj.LastModified)
                 );
+            
+            console.log('AAAAA 130 - Created delete action for days-based expiration', {
+                entryInfo: entry.getLogInfo()
+            });
+
             this._sendObjectAction(entry, err => {
                 if (!err) {
+                    console.log('AAAAA 131 - Successfully sent days-based expiration to queue');
                     log.debug('sent object entry for consumption',
                     Object.assign({
                         method: 'LifecycleTask._checkAndApplyExpirationRule',
                     }, entry.getLogInfo()));
+                } else {
+                    console.log('AAAAA 132 - Error sending days-based expiration to queue', {
+                        error: err.message || err
+                    });
                 }
             });
             return true;
         }
+        console.log('AAAAA 133 - No expiration rule applies to this object');
         return false;
     }
 
@@ -1481,18 +1746,46 @@ class LifecycleTask extends BackbeatTask {
      *   (i.e. transition) should not apply.
      */
     _checkAndApplyNCVExpirationRule(bucketData, version, rules, log) {
+        console.log('AAAAA 99 - Entering _checkAndApplyNCVExpirationRule', {
+            bucketName: bucketData.target.bucket,
+            objectKey: version.Key,
+            versionId: version.VersionId,
+            staleDate: version.staleDate,
+            hasNCVExpirationRule: !!(rules.NoncurrentVersionExpiration),
+            ncvRuleDetails: rules.NoncurrentVersionExpiration
+        });
+
         const staleDate = version.staleDate;
         const daysSinceInitiated = this._lifecycleDateTime.findDaysSince(new Date(staleDate));
         const ncve = 'NoncurrentVersionExpiration';
         const ncd = 'NoncurrentDays';
         const nncv = 'NewerNoncurrentVersions';
+        
+        console.log('AAAAA 100 - Calculated days since stale date', {
+            staleDate,
+            daysSinceInitiated,
+            noncurrentDaysRequired: rules[ncve] ? rules[ncve][ncd] : 'N/A'
+        });
+
         const doesNCVExpirationRuleApply = (rules[ncve] &&
             rules[ncve][ncd] !== undefined &&
             daysSinceInitiated >= rules[ncve][ncd]);
+            
+        console.log('AAAAA 101 - NCV expiration rule evaluation', {
+            hasRule: !!(rules[ncve]),
+            noncurrentDaysSet: rules[ncve] ? (rules[ncve][ncd] !== undefined) : false,
+            daysCheck: rules[ncve] ? (daysSinceInitiated >= rules[ncve][ncd]) : false,
+            doesRuleApply: doesNCVExpirationRuleApply
+        });
+
         if (doesNCVExpirationRuleApply) {
+            console.log('AAAAA 102 - NCV expiration rule applies, processing version');
             let verToExpire = version;
 
             if (rules[ncve][nncv]) {
+                console.log('AAAAA 103 - Rule contains NewerNoncurrentVersions, checking heap', {
+                    newerNoncurrentVersionsLimit: rules[ncve][nncv]
+                });
                 log.debug('Rule contains NewerNoncurrentVersion. Checking heap for smallest', {
                     method: '_checkAndApplyNCVExpirationRule',
                     bucket: bucketData.target.bucket,
@@ -1500,9 +1793,24 @@ class LifecycleTask extends BackbeatTask {
                 });
                 verToExpire = this._ncvHeapAdd(bucketData.target.bucket, rules, version);
                 if (verToExpire === null) {
+                    console.log('AAAAA 104 - Heap returned null, version should not expire yet');
                     return false;
                 }
+                console.log('AAAAA 105 - Heap returned version to expire', {
+                    versionToExpire: verToExpire.VersionId,
+                    originalVersion: version.VersionId
+                });
             }
+
+            console.log('AAAAA 106 - Creating ActionQueueEntry for NCV expiration', {
+                action: 'deleteObject',
+                targetBucket: bucketData.target.bucket,
+                targetKey: verToExpire.Key,
+                targetVersion: verToExpire.VersionId,
+                storageClass: verToExpire.StorageClass || '',
+                transitionTimestamp: this._lifecycleDateTime.getTransitionTimestamp(
+                    { Days: rules[ncve][ncd] }, staleDate)
+            });
 
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
@@ -1520,16 +1828,28 @@ class LifecycleTask extends BackbeatTask {
                     this._lifecycleDateTime.getTransitionTimestamp(
                         { Days: rules[ncve][ncd] }, staleDate)
                 );
+            
+            console.log('AAAAA 107 - ActionQueueEntry created, about to send to queue', {
+                entryInfo: entry.getLogInfo()
+            });
+
             this._sendObjectAction(entry, err => {
                 if (!err) {
+                    console.log('AAAAA 108 - Successfully sent NCV expiration entry to queue');
                     log.debug('sent object entry for consumption',
                     Object.assign({
                         method: 'LifecycleTask._checkAndApplyNCVExpirationRule',
                     }, entry.getLogInfo()));
+                } else {
+                    console.log('AAAAA 109 - Error sending NCV expiration entry to queue', {
+                        error: err.message || err
+                    });
                 }
             });
+            console.log('AAAAA 110 - Returning true from _checkAndApplyNCVExpirationRule');
             return true;
         }
+        console.log('AAAAA 111 - NCV expiration rule does not apply, returning false');
         return false;
     }
 
@@ -1626,13 +1946,52 @@ class LifecycleTask extends BackbeatTask {
      */
     _compareVersion(bucketData, version, listOfVersions, rules,
     versioningStatus, log, done) {
+        console.log("AAAAA 1016 - _compareVersion called", {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+            versionId: version.VersionId,
+            isLatest: version.IsLatest,
+            staleDate: version.staleDate,
+            versioningStatus: versioningStatus,
+            statusType: typeof versioningStatus,
+            availableRules: Object.keys(rules)
+        });
+        
+        console.log("AAAAA 90 - _compareVersion called", {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+            versionId: version.VersionId,
+            isLatest: version.IsLatest,
+            staleDate: version.staleDate,
+            versioningStatus,
+            availableRules: Object.keys(rules)
+        });
+        
         // if version is latest, only expiration action applies
         if (version.IsLatest) {
+            console.log("AAAAA 1017 - Version is latest, delegating to _compareIsLatestVersion", {
+                bucket: bucketData.target.bucket,
+                key: version.Key,
+                versionId: version.VersionId,
+                versioningStatus: versioningStatus
+            });
+            console.log("AAAAA 91 - Version is latest, delegating to _compareIsLatestVersion");
             return this._compareIsLatestVersion(bucketData, version,
                 listOfVersions, rules, versioningStatus, log, done);
         }
 
+        console.log("AAAAA 92 - Processing non-current version", {
+            key: version.Key,
+            versionId: version.VersionId,
+            staleDate: version.staleDate
+        });
+
         if (!version.staleDate) {
+            console.log("AAAAA 93 - ERROR: Missing staleDate on non-current version", {
+                bucket: bucketData.target.bucket,
+                key: version.Key,
+                versionId: version.VersionId
+            });
             // NOTE: this should never happen. Logging here for debug purposes
             log.error('missing staleDate on the version', {
                 method: 'LifecycleTask._compareVersion',
@@ -1644,15 +2003,32 @@ class LifecycleTask extends BackbeatTask {
             return done(errors.InternalError.customizeDescription(errMsg));
         }
 
+        console.log("AAAAA 94 - Checking NoncurrentVersionExpiration rule", {
+            hasRule: !!rules.NoncurrentVersionExpiration,
+            rule: rules.NoncurrentVersionExpiration
+        });
+
         if (rules.NoncurrentVersionExpiration &&
             this._checkAndApplyNCVExpirationRule(bucketData, version, rules, log)) {
+            console.log("AAAAA 95 - NoncurrentVersionExpiration rule applied, done");
             return done();
         }
 
+        console.log("AAAAA 96 - Checking NoncurrentVersionTransition rule", {
+            hasRule: !!rules.NoncurrentVersionTransition,
+            rule: rules.NoncurrentVersionTransition
+        });
+
         if (rules.NoncurrentVersionTransition) {
+            console.log("AAAAA 97 - Applying NoncurrentVersionTransition rule");
             return this._checkAndApplyNCVTransitionRule(bucketData, version, rules, log, done);
         }
 
+        console.log("AAAAA 98 - No action taken on versioned object", {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+            versioningStatus,
+        });
         log.debug('no action taken on versioned object', {
             bucket: bucketData.target.bucket,
             key: version.Key,
@@ -1675,6 +2051,15 @@ class LifecycleTask extends BackbeatTask {
      */
     _compareIsLatestVersion(bucketData, version, listOfVersions, rules,
     versioningStatus, log, done) {
+        console.log("AAAAA 1018 - _compareIsLatestVersion called", {
+            bucket: bucketData.target.bucket,
+            key: version.Key,
+            versionId: version.VersionId,
+            versioningStatus: versioningStatus,
+            statusType: typeof versioningStatus,
+            isDeleteMarker: this._isDeleteMarker(version)
+        });
+
         const isDeleteMarker = this._isDeleteMarker(version);
 
         if (isDeleteMarker) {
@@ -1817,26 +2202,45 @@ class LifecycleTask extends BackbeatTask {
      */
     processBucketEntry(bucketLCRules, bucketData, s3target,
     backbeatMetadataProxy, nbRetries, done) {
+        console.log("AAAAA 50 - LifecycleTask.processBucketEntry called", {
+            bucket: bucketData.target?.bucket,
+            rulesCount: bucketLCRules?.length,
+            nbRetries,
+            bucketData
+        });
+        
         const log = this.log.newRequestLogger();
         this.s3target = s3target;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
+        
         if (!this.backbeatMetadataProxy) {
+            console.log("AAAAA 51 - No backbeatMetadataProxy, returning");
             return process.nextTick(done);
         }
         if (!this.s3target) {
+            console.log("AAAAA 52 - No s3target, returning");
             return process.nextTick(done);
         }
         if (typeof bucketData !== 'object' ||
             typeof bucketData.target !== 'object' ||
             typeof bucketData.details !== 'object') {
+            console.log("AAAAA 53 - Wrong format for bucket entry", { bucketData });
             log.error('wrong format for bucket entry',
                       { entry: bucketData });
             return process.nextTick(done);
         }
 
         if (this._skipEntry(bucketData, log)) {
+            console.log("AAAAA 54 - Skipping entry");
             return process.nextTick(done);
         }
+
+        console.log("AAAAA 55 - Processing bucket entry", {
+            bucket: bucketData.target.bucket,
+            owner: bucketData.target.owner,
+            details: bucketData.details,
+            contextInfo: bucketData.contextInfo
+        });
 
         log.debug('processing bucket entry', {
             bucket: bucketData.target.bucket,
@@ -1849,12 +2253,19 @@ class LifecycleTask extends BackbeatTask {
         // (versioned OR non-versioned) objects
         return async.series([
             cb => {
+                console.log("AAAAA 56 - Starting MPU processing phase");
                 // if any of these markers exists on the Bucket entry, the entry
                 // is handling a specific request that is not an MPU request
                 if (bucketData.details.versionIdMarker ||
                 bucketData.details.marker) {
+                    console.log("AAAAA 57 - Skipping MPU processing (has version/marker)", {
+                        versionIdMarker: bucketData.details.versionIdMarker,
+                        marker: bucketData.details.marker
+                    });
                     return cb();
                 }
+                
+                console.log("AAAAA 58 - Processing MPUs");
                 const mpuParams = {
                     Bucket: bucketData.target.bucket,
                     MaxUploads: MAX_KEYS,
@@ -1863,23 +2274,35 @@ class LifecycleTask extends BackbeatTask {
                     UploadIdMarker: bucketData.details.keyMarker &&
                         bucketData.details.uploadIdMarker,
                 };
+                console.log("AAAAA 59 - MPU params", { mpuParams });
                 return this._getMPUs(bucketData, bucketLCRules,
                     mpuParams, nbRetries, log, cb);
             },
             cb => {
+                console.log("AAAAA 60 - Starting object/version processing phase");
                 // if this marker exists on the Bucket entry, the entry is
                 // handling an MPU request
                 if (bucketData.details.uploadIdMarker) {
+                    console.log("AAAAA 61 - Skipping object processing (has uploadIdMarker)");
                     return cb();
                 }
 
                 return async.waterfall([
                     next => {
+                        console.log("AAAAA 62 - Getting bucket versioning status");
                         const req = this.s3target.getBucketVersioning({
                             Bucket: bucketData.target.bucket,
                         });
                         attachReqUids(req, log);
                         req.send((err, data) => {
+                            console.log("AAAAA 1000 - getBucketVersioning API response received", { 
+                                bucket: bucketData.target.bucket,
+                                error: err, 
+                                rawResponse: data,
+                                versioningStatus: data?.Status,
+                                responseKeys: data ? Object.keys(data) : 'no-data'
+                            });
+                            
                             LifecycleMetrics.onS3Request(
                                 log,
                                 'getBucketVersioning',
@@ -1888,28 +2311,76 @@ class LifecycleTask extends BackbeatTask {
                             );
 
                             if (err) {
+                                console.log("AAAAA 1001 - Error in getBucketVersioning API call", { 
+                                    bucket: bucketData.target.bucket,
+                                    error: err,
+                                    errorMessage: err.message,
+                                    errorCode: err.code
+                                });
                                 log.error('error checking bucket versioning', {
                                     method: 'LifecycleTask.processBucketEntry',
                                     error: err,
                                 });
                                 return next(err);
                             }
-                            return next(null, data.Status);
+                            
+                            const detectedVersioningStatus = data.Status;
+                            console.log("AAAAA 1002 - Versioning status determination", {
+                                bucket: bucketData.target.bucket,
+                                rawStatus: data.Status,
+                                normalizedStatus: detectedVersioningStatus,
+                                isEnabled: detectedVersioningStatus === 'Enabled',
+                                isSuspended: detectedVersioningStatus === 'Suspended',
+                                isVersioned: detectedVersioningStatus === 'Enabled' || detectedVersioningStatus === 'Suspended',
+                                willUseVersionedListing: detectedVersioningStatus === 'Enabled' || detectedVersioningStatus === 'Suspended'
+                            });
+                            
+                            return next(null, detectedVersioningStatus);
                         });
                     },
                     (versioningStatus, next) => {
+                        console.log("AAAAA 1003 - Processing phase: determining object listing strategy", { 
+                            bucket: bucketData.target.bucket,
+                            receivedVersioningStatus: versioningStatus,
+                            statusType: typeof versioningStatus,
+                            isEnabled: versioningStatus === 'Enabled',
+                            isSuspended: versioningStatus === 'Suspended',
+                            willUseVersionedAPI: versioningStatus === 'Enabled' || versioningStatus === 'Suspended'
+                        });
+                        
                         if (versioningStatus === 'Enabled'
                         || versioningStatus === 'Suspended') {
+                            console.log("AAAAA 1004 - Calling _getObjectVersions for versioned bucket", {
+                                bucket: bucketData.target.bucket,
+                                versioningStatus: versioningStatus,
+                                rulesCount: bucketLCRules.length
+                            });
                             return this._getObjectVersions(bucketData,
                                 bucketLCRules, versioningStatus, nbRetries, log, next);
                         }
 
+                        console.log("AAAAA 1005 - Calling _getObjectList for non-versioned bucket", {
+                            bucket: bucketData.target.bucket,
+                            versioningStatus: versioningStatus,
+                            rulesCount: bucketLCRules.length
+                        });
                         return this._getObjectList(bucketData, bucketLCRules, nbRetries,
                             log, next);
                     },
                 ], cb);
             },
         ], err => {
+            if (err) {
+                console.log("AAAAA 68 - LifecycleTask completed with error", { 
+                    error: err,
+                    bucket: bucketData.target.bucket
+                });
+            } else {
+                console.log("AAAAA 69 - LifecycleTask completed successfully", {
+                    bucket: bucketData.target.bucket
+                });
+            }
+            
             log.info('finished processing task for bucket lifecycle', {
                 method: 'LifecycleTask.processBucketEntry',
                 bucket: bucketData.target.bucket,
@@ -1921,6 +2392,7 @@ class LifecycleTask extends BackbeatTask {
             // finishing a complete bucket listing, let it aside for
             // simplicity as it is just updating a few zookeeper nodes
             if (rulesSupportTransition(this._supportedRules)) {
+                console.log("AAAAA 70 - Snapshotting data mover topic offsets");
                 this._snapshotDataMoverTopicOffsets(log);
             }
             return done(err);
