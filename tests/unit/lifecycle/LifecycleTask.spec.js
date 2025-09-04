@@ -1686,12 +1686,12 @@ describe('lifecycle task helper methods', () => {
             lct2.reset();
         });
 
-        it('should popuplate and return null if heap has space', () => {
+        it('should populate and return null if heap has space', () => {
             const ret = lct2._ncvHeapAdd('testbucket', rules, versions[0]);
             assert.strictEqual(ret, null);
         });
 
-        it('should popuplate and return oldest items from if heap is at capacity', () => {
+        it('should populate and return oldest items from if heap is at capacity', () => {
             let ret = lct2._ncvHeapAdd('testbucket', rules, versions[0]); // 4
             assert.strictEqual(ret, null);
             ret = lct2._ncvHeapAdd('testbucket', rules, versions[2]); // 1
@@ -2186,6 +2186,158 @@ describe('lifecycle task helper methods', () => {
             lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);
                 assert(snapshot.notCalled);
+                done();
+            });
+        });
+    });
+
+    describe('_getTransitionActionEntry', () => {
+        let lifecycleTask;
+
+        const testParams = {
+            bucket: 'test-bucket',
+            owner: 'test-owner',
+            objectKey: 'test-key',
+            versionId: 'test-version-id',
+            eTag: '"test-etag"',
+            lastModified: '2023-01-01T00:00:00.000Z',
+            site: 'test-site',
+            accountId: 'test-account-id',
+            transitionTime: Date.now(),
+        };
+
+        before(() => {
+            class LifecycleTaskMock extends LifecycleTask {
+                constructor(lp) {
+                    super(lp);
+                    this.transitionTasksTopic = 'test-transition-topic';
+                    this.headLocationResponse = null;
+                    this.headLocationError = null;
+                }
+
+                _headLocation(params, locations, log, cb) {
+                    if (this.headLocationError) {
+                        return cb(this.headLocationError);
+                    }
+                    return cb(null, this.headLocationResponse);
+                }
+
+                setHeadLocationResponse(response) {
+                    this.headLocationResponse = response;
+                    this.headLocationError = null;
+                }
+
+                setHeadLocationError(error) {
+                    this.headLocationError = error;
+                    this.headLocationResponse = null;
+                }
+            }
+            lifecycleTask = new LifecycleTaskMock(lp);
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should create transition entry for object that can be unconditionally garbage collected', done => {
+            const mockObjectMD = {
+                getDataStoreName: () => 'local-site',
+                getDataStoreVersionId: () => 'version-123',
+                getContentLength: () => 1024,
+                getUserMetadata: () => null,
+            };
+
+            sinon.stub(lifecycleTask, '_canUnconditionallyGarbageCollect').returns(true);
+
+            lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
+                assert.ifError(err);
+                
+                assert.strictEqual(entry.getActionType(), 'copyLocation');
+                
+                const target = entry.getAttribute('target');
+                assert.strictEqual(target.bucket, testParams.bucket);
+                assert.strictEqual(target.key, testParams.objectKey);
+                assert.strictEqual(target.version, testParams.versionId);
+                assert.strictEqual(target.eTag, testParams.eTag);
+                assert.strictEqual(target.lastModified, testParams.lastModified);
+                assert.strictEqual(target.owner, testParams.owner);
+                assert.strictEqual(target.accountId, testParams.accountId);
+                assert.strictEqual(target.attempt, undefined);
+                
+                assert.strictEqual(entry.getAttribute('toLocation'), testParams.site);
+                
+                const source = entry.getAttribute('source');
+                assert.strictEqual(source.bucket, testParams.bucket);
+                assert.strictEqual(source.objectKey, testParams.objectKey);
+                assert.strictEqual(source.storageClass, 'local-site');
+                assert.strictEqual(source.lastModified, undefined);
+                
+                const context = entry.getContext();
+                assert.strictEqual(context.origin, 'lifecycle');
+                assert.strictEqual(context.ruleType, 'transition');
+                
+                done();
+            });
+        });
+
+        it('should create transition entry with attempt number from user metadata', done => {
+            const mockObjectMD = {
+                getDataStoreName: () => 'local-site',
+                getDataStoreVersionId: () => 'version-123',
+                getContentLength: () => 1024,
+                getUserMetadata: () => JSON.stringify({
+                    'x-amz-meta-scal-s3-transition-attempt': '3'
+                }),
+            };
+
+            sinon.stub(lifecycleTask, '_canUnconditionallyGarbageCollect').returns(true);
+
+            lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
+                assert.ifError(err);
+                assert.strictEqual(entry.getAttribute('target.attempt'), 3);
+                done();
+            });
+        });
+
+        it('should create transition entry for object requiring head location check', done => {
+            const mockObjectMD = {
+                getDataStoreName: () => 'aws-location',
+                getDataStoreVersionId: () => null,
+                getContentLength: () => 2048,
+                getUserMetadata: () => null,
+                getLocation: () => [{ name: 'aws-location', dataStoreVersionId: null }],
+            };
+
+            const expectedLastModified = '2023-01-01T12:00:00.000Z';
+            lifecycleTask.setHeadLocationResponse(expectedLastModified);
+
+            sinon.stub(lifecycleTask, '_canUnconditionallyGarbageCollect').returns(false);
+
+            lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
+                assert.ifError(err);
+                assert.strictEqual(entry.getActionType(), 'copyLocation');
+                assert.strictEqual(entry.getAttribute('source.lastModified'), expectedLastModified);
+                done();
+            });
+        });
+
+        it('should return error when head location fails', done => {
+            const mockObjectMD = {
+                getDataStoreName: () => 'aws-location',
+                getDataStoreVersionId: () => null,
+                getContentLength: () => 2048,
+                getUserMetadata: () => null,
+                getLocation: () => [{ name: 'aws-location', dataStoreVersionId: null }],
+            };
+
+            const expectedError = new Error('Head location failed');
+            lifecycleTask.setHeadLocationError(expectedError);
+
+            sinon.stub(lifecycleTask, '_canUnconditionallyGarbageCollect').returns(false);
+
+            lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
+                assert.deepStrictEqual(err, expectedError);
+                assert.strictEqual(entry, undefined);
                 done();
             });
         });
