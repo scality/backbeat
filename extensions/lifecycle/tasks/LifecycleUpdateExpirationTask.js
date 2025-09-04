@@ -113,7 +113,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
     }
 
     _garbageCollectLocation(entry, locations, log, done) {
-        const { bucket, key, version, eTag, accountId, owner } = entry.getAttribute('target');
+        const { bucket, key, version, eTag, accountId, owner, location } = entry.getAttribute('target');
         const gcEntry = ActionQueueEntry.create('deleteData')
               .addContext({
                   origin: 'lifecycle',
@@ -126,7 +126,11 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
               })
               // For restored object expiration, there is no actual `source`: the object to cleanup
               // is actually the target object itself (the field used by GC is `source`)
-              .setAttribute('source', entry.getAttribute('target'))
+              .setAttribute('source', {
+                bucket,
+                objectKey: key,
+                storageClass: location,
+              })
               .setAttribute('serviceName', 'lifecycle-transition')
               .setAttribute('target.locations', locations)
               .setAttribute('target.accountId', accountId)
