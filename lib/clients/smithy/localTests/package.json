@@ -1,0 +1,15 @@
+{
+  "name": "test-client-isolated",
+  "version": "1.0.0",
+  "private": true,
+  "scripts": {
+    "test": "tsc --noEmit"
+  },
+  "dependencies": {
+    "@aws-sdk/client-s3": "^3.896.0",
+    "@backbeat-service/client": "file:../build/smithy/source/typescript-codegen"
+  },
+  "devDependencies": {
+    "typescript": "^5.7.3"
+  }
+}
