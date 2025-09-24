@@ -33,7 +33,9 @@
     "lint_md": "mdlint $(git ls-files '[^bucket-scanner/]*.md')",
     "start": "node bin/backbeat.js",
     "notification_populator": "BACKBEAT_QUEUEPOPULATOR_EXTENSIONS=notification node bin/queuePopulator.js",
-    "notification_processor": "node extensions/notification/queueProcessor/task.js"
+    "notification_processor": "node extensions/notification/queueProcessor/task.js",
+    "generate-smithy-client": "cd lib/clients/smithy && smithy build",
+    "build-smithy-client": "cd lib/clients/smithy/build/smithy/source/typescript-codegen && yarn install && yarn build"
   },
   "repository": {
     "type": "git",
