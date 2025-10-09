@@ -346,5 +346,12 @@ describe('Ingestion Populator', () => {
                 assert(logReaderMock.processLogEntries.calledOnce);
             });
         });
+
+        it('should handle undefined logReader gracefully', done => {
+            ip._processLogReaderEntries(undefined, {}, err => {
+                assert.ifError(err);
+                done();
+            });
+        });
     });
 });
