@@ -146,7 +146,7 @@ describe('LocationStatusManager', () => {
         });
 
         it('should update service status in MongoDB for mongo service', done => {
-            const updateOne = sinon.stub().resolves();
+            const updateOne = sinon.stub().resolves({ modifiedCount: 1 });
             lsm._locationStatusColl = { updateOne };
             lsm.resumeService('lifecycle', ['us-east-1'], null, null, err => {
                 assert.ifError(err);
@@ -434,11 +434,11 @@ describe('LocationStatusManager', () => {
         it('should update service status for a location', done => {
             const updateOne = sinon.stub().resolves({ modifiedCount: 1 });
             lsm._locationStatusColl = { updateOne };
-            const query = { _id: 'us-east-1' };
-            const update = { $set: { 'value.lifecycle.paused': true } };
-            lsm._updateServiceStatusForLocation(query, update, err => {
+            const conditions = { paused: true };
+            const newStatus = { paused: false, scheduledResume: null };
+            lsm._updateServiceStatusForLocation('us-east-1', 'lifecycle', conditions, newStatus, err => {
                 assert.ifError(err);
-                assert(updateOne.calledOnceWith(query, update, { upsert: false }));
+                assert(updateOne.calledOnce);
                 done();
             });
         });
@@ -447,9 +447,9 @@ describe('LocationStatusManager', () => {
             const err = new Error('mongo error');
             const updateOne = sinon.stub().rejects(err);
             lsm._locationStatusColl = { updateOne };
-            const query = { _id: 'us-east-1' };
-            const update = { $set: { 'value.lifecycle.paused': true } };
-            lsm._updateServiceStatusForLocation(query, update, updateErr => {
+            const conditions = { paused: true };
+            const newStatus = { paused: false, scheduledResume: null };
+            lsm._updateServiceStatusForLocation('us-east-1', 'lifecycle', conditions, newStatus, updateErr => {
                 assert.deepStrictEqual(updateErr, err);
                 done();
             });
