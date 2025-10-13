@@ -157,7 +157,7 @@ describe('LocationStatusManager', () => {
 
         it('should schedule resume for a mongo service', done => {
             const clock = sinon.useFakeTimers();
-            const updateOne = sinon.stub().resolves();
+            const updateOne = sinon.stub().resolves({ modifiedCount: 1 });
             lsm._locationStatusColl = { updateOne };
 
             lsm.resumeService('lifecycle', ['us-east-1'], true, '{ "hours": 1 }', err => {
@@ -233,8 +233,8 @@ describe('LocationStatusManager', () => {
         it('should run setup if process is primary', done => {
             sinon.stub(cluster, 'isWorker').value(false);
             const listCollectionDocuments = sinon.stub(lsm, '_listCollectionDocuments').yields(null, []);
-            const deleteInvalidLocations = sinon.stub(lsm, '_deleteInvalidLocations').yields(null, []);
-            const handleScheduledResume = sinon.stub(lsm, '_handleScheduledResume').yields(null, []);
+            const deleteInvalidLocations = sinon.stub(lsm, '_deleteInvalidLocations').yields(null, {});
+            const handleScheduledResume = sinon.stub(lsm, '_handleScheduledResume').yields(null, {});
             const addNewLocations = sinon.stub(lsm, '_addNewLocations').yields(null);
 
             lsm._setupLocationStatusStore(err => {
@@ -378,9 +378,10 @@ describe('LocationStatusManager', () => {
         });
 
         it('should schedule resume jobs for locations', done => {
-            const locations = [
-                { _id: 'us-east-1', value: { lifecycle: { scheduledResume: new Date() } } },
-            ];
+            const currentDate = new Date();
+            const locations = {
+                'us-east-1': { lifecycle: { scheduledResume: currentDate.setHours(currentDate.getHours() + 1) } },
+            };
             lsm._handleScheduledResume(locations, err => {
                 assert.ifError(err);
                 assert(schedule.scheduleJob.calledOnce);
@@ -399,7 +400,7 @@ describe('LocationStatusManager', () => {
             ];
             lsm._deleteInvalidLocations(locations, (err, validLocations) => {
                 assert.ifError(err);
-                assert.deepStrictEqual(validLocations, [{ _id: 'us-east-1', value: {} }]);
+                assert(validLocations['us-east-1']);
                 assert(deleteMany.calledOnceWith({ _id: { $in: ['invalid-location'] } }));
                 done();
             });
@@ -431,7 +432,7 @@ describe('LocationStatusManager', () => {
 
     describe('_updateServiceStatusForLocation', () => {
         it('should update service status for a location', done => {
-            const updateOne = sinon.stub().resolves();
+            const updateOne = sinon.stub().resolves({ modifiedCount: 1 });
             lsm._locationStatusColl = { updateOne };
             const query = { _id: 'us-east-1' };
             const update = { $set: { 'value.lifecycle.paused': true } };
