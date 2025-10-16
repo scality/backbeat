@@ -103,9 +103,11 @@ const lifecycleKafkaPublish = {
 };
 
 class LifecycleMetrics {
-    static handleError(log, err, method) {
+    static handleError(log, err, method, params = {}) {
         if (log) {
-            log.error('failed to update prometheus metrics', { error: err.toString(), method, });
+            log.error('failed to update prometheus metrics', {
+                error: err.toString(), method, ...params
+            });
         }
     }
 
@@ -156,7 +158,7 @@ class LifecycleMetrics {
         try {
             lifecycleActiveIndexingJobs.set({ origin: 'conductor' }, count);
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onActiveIndexingJobs');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onActiveIndexingJobs', { count });
         }
     }
 
@@ -164,7 +166,7 @@ class LifecycleMetrics {
         try {
             lifecycleLegacyTask.inc({ origin: 'conductor', status });
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLegacyTask');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLegacyTask', { status });
         }
     }
 
@@ -176,7 +178,9 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, latencyMs / 1000);
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleTriggered', {
+                process, type, location, latencyMs,
+            });
         }
     }
 
@@ -187,7 +191,9 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, durationMs / 1000);
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleStarted');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleStarted', {
+                type, location, durationMs,
+            });
         }
     }
 
@@ -203,12 +209,14 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_LOCATION]: location,
             }, new Date().getTime());
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleCompleted');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleCompleted', {
+                type, location, durationMs,
+            });
         }
     }
 
-    static onS3Request(log, op, process, err) {
-        const statusCode = err && err.statusCode ? err.statusCode : '200';
+    static onS3Request(log, op, process, s3Err) {
+        const statusCode = s3Err && s3Err.statusCode ? s3Err.statusCode : '200';
         try {
             lifecycleS3Operations.inc({
                 [LIFECYCLE_LABEL_ORIGIN]: process,
@@ -216,18 +224,22 @@ class LifecycleMetrics {
                 [LIFECYCLE_LABEL_STATUS]: statusCode,
             });
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onS3Request');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onS3Request', {
+                op, process, statusCode,
+            });
         }
     }
 
-    static onKafkaPublish(log, op, process, err, count) {
+    static onKafkaPublish(log, op, process, kafkaErr, count) {
         try {
-            lifecycleKafkaPublish[err ? 'error' : 'success'].inc({
+            lifecycleKafkaPublish[kafkaErr ? 'error' : 'success'].inc({
                 [LIFECYCLE_LABEL_ORIGIN]: process,
                 [LIFECYCLE_LABEL_OP]: op,
             }, count);
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onKafkaPublish');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onKafkaPublish', {
+                op, process, count, kafkaErr,
+            });
         }
     }
 }
