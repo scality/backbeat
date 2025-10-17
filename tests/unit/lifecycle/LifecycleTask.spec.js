@@ -526,6 +526,12 @@ describe('lifecycle task helper methods', () => {
             });
         });
 
+        const assertNow = time => {
+            assert(time, 'transitionTime is not set');
+            const now = Date.now();
+            assert.ok(time <= now && time >= now - 1000, 'transitionTime is not the current time');
+        };
+
         it('should send any entry to Kafka when delete marker meets the age criteria and ' +
         'ExpiredObjectDeleteMarker is not set', () => {
             const rules = {
@@ -545,6 +551,7 @@ describe('lifecycle task helper methods', () => {
                 assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
                 assert.deepStrictEqual(
                     latestEntry.getAttribute('target'), expectedTarget);
+                assertNow(latestEntry.getAttribute('transitionTime'));
             });
         });
 
@@ -567,6 +574,7 @@ describe('lifecycle task helper methods', () => {
                 assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
                 assert.deepStrictEqual(
                     latestEntry.getAttribute('target'), expectedTarget);
+                assertNow(latestEntry.getAttribute('transitionTime'));
             });
         });
 
@@ -588,6 +596,7 @@ describe('lifecycle task helper methods', () => {
                 assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
                 assert.deepStrictEqual(
                     latestEntry.getAttribute('target'), expectedTarget);
+                assertNow(latestEntry.getAttribute('transitionTime'));
             });
         });
 
@@ -610,6 +619,7 @@ describe('lifecycle task helper methods', () => {
                 assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
                 assert.deepStrictEqual(
                     latestEntry.getAttribute('target'), expectedTarget);
+                assertNow(latestEntry.getAttribute('transitionTime'));
             });
         });
 
