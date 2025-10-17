@@ -1653,7 +1653,7 @@ class LifecycleTask extends BackbeatTask {
             return done();
         }
 
-        if (rules.NoncurrentVersionTransition) {
+        if (rules.NoncurrentVersionTransition && !this._isDeleteMarker(version)) {
             return this._checkAndApplyNCVTransitionRule(bucketData, version, rules, log, done);
         }
 
