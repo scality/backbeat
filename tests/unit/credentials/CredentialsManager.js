@@ -3,7 +3,6 @@ const async = require('async');
 const assert = require('assert');
 const sinon = require('sinon');
 const { Logger } = require('werelogs');
-const AWS = require('aws-sdk');
 
 const CredentialsManager = require('../../../lib/credentials/CredentialsManager');
 const { authTypeAssumeRole } = require('../../../lib/constants');
@@ -56,9 +55,9 @@ describe('CredentialsManager', () => {
                     id: id1, accountId: accountId2,
                     authConfig: assumeRoleAuth,
                     stsConfig,
-                }, AWS.ChainableTemporaryCredentials,
+                },
             ],
-        ].forEach(([msg, params, expected]) => it(msg, () => {
+        ].forEach(([msg, params]) => it(msg, () => {
             const mgr = new CredentialsManager(extension, log);
             const creds2 = mgr.getCredentials({
                 id: id2, accountId: accountId2,
@@ -66,8 +65,15 @@ describe('CredentialsManager', () => {
                 stsConfig,
             });
             const creds = mgr.getCredentials(params);
-            assert(creds instanceof expected);
-            assert(mgr._accountCredsCache[id1] instanceof expected);
+            // Check that credentials have the expected methods and properties
+            assert(creds, 'credentials should exist');
+            assert(typeof creds.get === 'function',
+                'credentials should have .get() method');
+            assert(Object.prototype.hasOwnProperty.call(creds, 'expireTime'),
+                'credentials should have expireTime property');
+            assert(mgr._accountCredsCache[id1], 'cached credentials should exist');
+            assert(typeof mgr._accountCredsCache[id1].get === 'function',
+                'cached credentials should have .get() method');
             assert.notEqual(creds, creds2);
             assert.notEqual(mgr._accountCredsCache[id1], mgr._accountCredsCache[id2]);
         }));

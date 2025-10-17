@@ -10,7 +10,10 @@ const { program } = require('commander');
 const werelogs = require('werelogs');
 const version = require('../package.json').version;
 const async = require('async');
-const { IAM, STS } = require('aws-sdk');
+const { IAMClient, GetUserCommand, CreateUserCommand, ListPoliciesCommand, CreatePolicyCommand,
+        ListAttachedUserPoliciesCommand, AttachUserPolicyCommand, GetRoleCommand, CreateRoleCommand,
+        ListAttachedRolePoliciesCommand, AttachRolePolicyCommand, ListAccessKeysCommand, CreateAccessKeyCommand } = require('@aws-sdk/client-iam');
+const { STSClient, GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
 
 const systemPrefix = '/scality-internal/';
 
@@ -42,14 +45,14 @@ function generateRoleTrustPolicyDocument(userArn) {
 }
 
 function createIAMClient(opts) {
-    return new IAM({
+    return new IAMClient({
         endpoint: opts.iamEndpoint,
         region: opts.region,
     });
 }
 
 function createSTSClient(opts) {
-    return new STS({
+    return new STSClient({
         endpoint: opts.stsEndpoint,
         region: opts.region,
     });
@@ -111,21 +114,21 @@ class UserHandler extends BaseHandler {
         return 'user';
     }
 
-    collect() {
-        return this.iamClient.getUser({
+    async collect() {
+        const command = new GetUserCommand({
             UserName: this.resourceName,
-        })
-        .promise()
-        .then(res => res.User);
+        });
+        const res = await this.iamClient.send(command);
+        return res.User;
     }
 
-    create(allResources) {
-        return this.iamClient.createUser({
+    async create(allResources) {
+        const command = new CreateUserCommand({
             UserName: this.resourceName,
             Path: systemPrefix,
-        })
-        .promise()
-        .then(res => res.User);
+        });
+        const res = await this.iamClient.send(command);
+        return res.User;
     }
 
     conflicts(u) {
@@ -138,49 +141,44 @@ class PolicyHandler extends BaseHandler {
         return 'policy';
     }
 
-    collect() {
-        return this.iamClient.listPolicies({
+    async collect() {
+        const command = new ListPoliciesCommand({
             MaxItems: 100,
             OnlyAttached: false,
             Scope: 'All',
-        })
-        .promise()
-        .then(res => res.Policies.find(p => p.PolicyName === this.resourceName));
+        });
+        const res = await this.iamClient.send(command);
+        return res.Policies.find(p => p.PolicyName === this.resourceName);
     }
 
-    create(allResources) {
-        return new Promise((resolve, reject) => {
-            if (!this.options.constrainToThisAccount) {
-                return resolve('*');
+    async create(allResources) {
+        let accountId;
+        
+        if (!this.options.constrainToThisAccount) {
+            accountId = '*';
+        } else {
+            try {
+                const command = new GetCallerIdentityCommand({});
+                const res = await this.stsClient.send(command);
+                accountId = res.Account;
+            } catch (err) {
+                // Workaround a Vault issue on 8.3 branch
+                // https://scality.atlassian.net/browse/VAULT-238
+                accountId = '000000000000';
             }
+        }
 
-            return this.stsClient.getCallerIdentity((err, res) => {
-                if (err) {
-                    // return reject(err);
-                    // Workaround a Vault issue on 8.3 branch
-                    // https://scality.atlassian.net/browse/VAULT-238
-                    return resolve('000000000000');
-                }
-
-                return resolve(res.Account);
-            });
-        })
-        .then(accountId => {
-            if (this.options.policy) {
-                return this.options.policy;
-            }
-
-            return generateUserAssumeRolePolicyDocument(this.serviceName, accountId);
-        })
-        .then(policyDocument =>
-            this.iamClient.createPolicy({
-                PolicyName: this.resourceName,
-                PolicyDocument: JSON.stringify(policyDocument),
-                Path: systemPrefix,
-            })
-            .promise()
-        )
-        .then(res => res.Policy);
+        const policyDocument = this.options.policy || 
+            generateUserAssumeRolePolicyDocument(this.serviceName, accountId);
+        
+        const command = new CreatePolicyCommand({
+            PolicyName: this.resourceName,
+            PolicyDocument: JSON.stringify(policyDocument),
+            Path: systemPrefix,
+        });
+        
+        const res = await this.iamClient.send(command);
+        return res.Policy;
     }
 
     conflicts(p) {
@@ -193,24 +191,25 @@ class RoleHandler extends BaseHandler {
         return 'role';
     }
 
-    collect() {
-        return this.iamClient.getRole({
+    async collect() {
+        const command = new GetRoleCommand({
             RoleName: this.resourceName,
-        })
-        .promise()
-        .then(res => res.Role);
+        });
+        const res = await this.iamClient.send(command);
+        return res.Role;
     }
 
-    create(allResources) {
+    async create(allResources) {
         const trustPolicy = generateRoleTrustPolicyDocument(allResources.user.Arn);
 
-        return this.iamClient.createRole({
+        const command = new CreateRoleCommand({
             RoleName: this.resourceName,
             Path: systemPrefix,
             AssumeRolePolicyDocument: JSON.stringify(trustPolicy),
-        })
-        .promise()
-        .then(res => res.Role);
+        });
+        
+        const res = await this.iamClient.send(command);
+        return res.Role;
     }
 
     conflicts(p) {
@@ -223,21 +222,21 @@ class PolicyUserAttachmentHandler extends BaseHandler {
         return 'policyAttachment';
     }
 
-    collect() {
-        return this.iamClient.listAttachedUserPolicies({
+    async collect() {
+        const command = new ListAttachedUserPoliciesCommand({
             UserName: this.resourceName,
             MaxItems: 100,
-        })
-        .promise()
-        .then(res => res.AttachedPolicies);
+        });
+        const res = await this.iamClient.send(command);
+        return res.AttachedPolicies;
     }
 
-    create(allResources) {
-        return this.iamClient.attachUserPolicy({
+    async create(allResources) {
+        const command = new AttachUserPolicyCommand({
             PolicyArn: allResources.policy_user.Arn,
             UserName: this.resourceName,
-        })
-        .promise();
+        });
+        await this.iamClient.send(command);
     }
 
     conflicts(p) {
@@ -250,21 +249,21 @@ class PolicyRoleAttachmentHandler extends BaseHandler {
         return 'policyRoleAttachment';
     }
 
-    collect() {
-        return this.iamClient.listAttachedRolePolicies({
+    async collect() {
+        const command = new ListAttachedRolePoliciesCommand({
             RoleName: this.resourceName,
             MaxItems: 100,
-        })
-        .promise()
-        .then(res => res.AttachedPolicies);
+        });
+        const res = await this.iamClient.send(command);
+        return res.AttachedPolicies;
     }
 
-    create(allResources) {
-        return this.iamClient.attachRolePolicy({
+    async create(allResources) {
+        const command = new AttachRolePolicyCommand({
             PolicyArn: allResources.policy_role.Arn,
             RoleName: this.resourceName,
-        })
-        .promise();
+        });
+        await this.iamClient.send(command);
     }
 
     conflicts(p) {
@@ -277,21 +276,21 @@ class AccessKeyHandler extends BaseHandler {
         return 'accessKey';
     }
 
-    collect() {
-        return this.iamClient.listAccessKeys({
+    async collect() {
+        const command = new ListAccessKeysCommand({
             UserName: this.resourceName,
             MaxItems: 100,
-        })
-        .promise()
-        .then(res => res.AccessKeyMetadata);
+        });
+        const res = await this.iamClient.send(command);
+        return res.AccessKeyMetadata;
     }
 
-    create(allResources) {
-        return this.iamClient.createAccessKey({
+    async create(allResources) {
+        const command = new CreateAccessKeyCommand({
             UserName: this.resourceName,
-        })
-        .promise()
-        .then(res => res.AccessKey);
+        });
+        const res = await this.iamClient.send(command);
+        return res.AccessKey;
     }
 
     conflicts(a) {

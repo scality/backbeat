@@ -1,4 +1,8 @@
-const AWS = require('aws-sdk');
+const {
+    S3Client,
+    PutBucketLifecycleConfigurationCommand,
+    DeleteBucketLifecycleCommand,
+} = require('@aws-sdk/client-s3');
 const werelogs = require('werelogs');
 
 const config = require('../../lib/Config');
@@ -12,15 +16,21 @@ function getS3Client(endpoint) {
           management.getLatestServiceAccountCredentials();
     // FIXME
     const keys = serviceCredentials.accounts[0].keys;
-    const credentials = new AWS.Credentials(keys.access, keys.secret);
-    const s3Client = new AWS.S3({
+    const credentials = {
+        accessKeyId: keys.access,
+        secretAccessKey: keys.secret,
+    };
+    const s3Client = new S3Client({
         endpoint,
-        sslEnabled: false,
         credentials,
-        s3ForcePathStyle: true,
-        signatureVersion: 'v4',
-        httpOptions: { timeout: TIMEOUT_MS },
-        maxRetries: 3,
+        region: 'us-east-1',
+        forcePathStyle: true,
+        tls: false,
+        maxAttempts: 4,
+        requestHandler: {
+            connectionTimeout: TIMEOUT_MS,
+            socketTimeout: TIMEOUT_MS,
+        },
     });
     return s3Client;
 }
@@ -68,14 +78,24 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
             }),
         },
     };
-    getS3Client(endpoint).putBucketLifecycleConfiguration(params, err => {
-        logger.debug('lifecycle configuration apply done', {
-            bucket: bucketName, error: err });
-        if (err && err.code === 'NoSuchBucket') {
-            return cb();
+    
+    (async () => {
+        try {
+            const command = new PutBucketLifecycleConfigurationCommand(params);
+            await getS3Client(endpoint).send(command);
+            logger.debug('lifecycle configuration apply done', {
+                bucket: bucketName });
+            cb();
+        } catch (err) {
+            logger.debug('lifecycle configuration apply done', {
+                bucket: bucketName, error: err });
+            if (err.name === 'NoSuchBucket') {
+                cb();
+            } else {
+                cb(err);
+            }
         }
-        return cb(err);
-    });
+    })();
 }
 
 function deleteLifecycleConfiguration(bucketName, cb) {
@@ -86,14 +106,24 @@ function deleteLifecycleConfiguration(bucketName, cb) {
     const params = {
         Bucket: bucketName,
     };
-    getS3Client(endpoint).deleteBucketLifecycle(params, err => {
-        logger.debug('lifecycle configuration deleted', {
-            bucket: bucketName, error: err });
-        if (err && err.code === 'NoSuchBucket') {
-            return cb();
+    
+    (async () => {
+        try {
+            const command = new DeleteBucketLifecycleCommand(params);
+            await getS3Client(endpoint).send(command);
+            logger.debug('lifecycle configuration deleted', {
+                bucket: bucketName });
+            cb();
+        } catch (err) {
+            logger.debug('lifecycle configuration deleted', {
+                bucket: bucketName, error: err });
+            if (err.name === 'NoSuchBucket') {
+                cb();
+            } else {
+                cb(err);
+            }
         }
-        return cb(err);
-    });
+    })();
 }
 
 function applyBucketLifecycleWorkflows(bucketName, bucketWorkflows,

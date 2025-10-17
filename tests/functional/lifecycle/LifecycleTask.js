@@ -1,7 +1,23 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const async = require('async');
-const AWS = require('aws-sdk');
+const {
+    S3Client,
+    CreateBucketCommand,
+    PutBucketVersioningCommand,
+    GetBucketVersioningCommand,
+    PutObjectCommand,
+    DeleteObjectCommand,
+    CreateMultipartUploadCommand,
+    ListObjectVersionsCommand,
+    ListObjectsCommand,
+    DeleteObjectsCommand,
+    DeleteBucketCommand,
+    GetBucketLifecycleConfigurationCommand,
+    PutBucketLifecycleConfigurationCommand,
+    ListMultipartUploadsCommand,
+    AbortMultipartUploadCommand,
+} = require('@aws-sdk/client-s3');
 
 const Logger = require('werelogs').Logger;
 const LifecycleRule = require('arsenal').models.LifecycleRule;
@@ -22,11 +38,98 @@ const timeOptions = {
     timeProgressionFactor: 1,
 };
 
-const S3 = AWS.S3;
+// Create wrapper to add v2-style methods to v3 S3Client for test compatibility
+function createS3ClientWithV2Methods(config) {
+    const client = new S3Client(config);
+    
+    // Add ALL v2-style method wrappers needed by tests
+    client.createBucket = function (params, cb) {
+        const command = new CreateBucketCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.getBucketVersioning = function (params, cb) {
+        const command = new GetBucketVersioningCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.putBucketVersioning = function (params, cb) {
+        const command = new PutBucketVersioningCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.getBucketLifecycleConfiguration = function (params, cb) {
+        const command = new GetBucketLifecycleConfigurationCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.putBucketLifecycleConfiguration = function (params, cb) {
+        const command = new PutBucketLifecycleConfigurationCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.putObject = function (params, cb) {
+        const command = new PutObjectCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.deleteObject = function (params, cb) {
+        const command = new DeleteObjectCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.listObjectVersions = function (params, cb) {
+        const command = new ListObjectVersionsCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.listObjects = function (params, cb) {
+        const command = new ListObjectsCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.deleteObjects = function (params, cb) {
+        const command = new DeleteObjectsCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.createMultipartUpload = function (params, cb) {
+        const command = new CreateMultipartUploadCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.listMultipartUploads = function (params, cb) {
+        const command = new ListMultipartUploadsCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.abortMultipartUpload = function (params, cb) {
+        const command = new AbortMultipartUploadCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    client.deleteBucket = function (params, cb) {
+        const command = new DeleteBucketCommand(params);
+        this.send(command).then(result => cb(null, result)).catch(cb);
+    };
+    
+    return client;
+}
+
+const S3 = createS3ClientWithV2Methods;
 const s3config = {
     endpoint: `http://${testConfig.s3.host}:${testConfig.s3.port}`,
-    s3ForcePathStyle: true,
-    credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
+    forcePathStyle: true,
+    region: 'us-east-1',
+    credentials: {
+        accessKeyId: 'accessKey1',
+        secretAccessKey: 'verySecretKey1',
+    },
+    requestHandler: {
+        connectionTimeout: 5000,
+        socketTimeout: 5000,
+    },
+    maxAttempts: 1,
 };
 
 const backbeatMetadataProxyMock = {
