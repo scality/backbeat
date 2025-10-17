@@ -1498,26 +1498,36 @@ describe('lifecycle task helper methods', () => {
                 Key: 'testkey',
                 VersionId: '4',
                 staleDate: new Date(testDate - (1 * DAY)).toISOString(),
+                LastModified: new Date(testDate - (1 * DAY)).toISOString(),
+                StorageClass: 'eu-west-1',
             },
             {
                 Key: 'testkey',
                 VersionId: '3',
                 staleDate: new Date(testDate - (2 * DAY)).toISOString(),
+                LastModified: new Date(testDate - (2 * DAY)).toISOString(),
+                StorageClass: 'eu-west-2',
             },
             {
                 Key: 'testkey',
                 VersionId: '1',
                 staleDate: new Date(testDate - (4 * DAY)).toISOString(),
+                LastModified: new Date(testDate - (4 * DAY)).toISOString(),
+                // no storage class, to "simulate" a delete marker
             },
             {
                 Key: 'testkey',
                 VersionId: '2',
                 staleDate: new Date(testDate - (3 * DAY)).toISOString(),
+                LastModified: new Date(testDate - (3 * DAY)).toISOString(),
+                StorageClass: 'eu-west-4',
             },
             {
                 Key: 'testkey',
                 VersionId: '0',
                 staleDate: new Date(testDate - (5 * DAY)).toISOString(),
+                LastModified: new Date().toISOString(),
+                StorageClass: 'eu-west-5',
             },
         ];
 
@@ -1580,9 +1590,15 @@ describe('lifecycle task helper methods', () => {
                         }
                     );
 
+                    const expectedStorageClass = expectedEntries[idx].StorageClass || '-delete-marker-';
+
                     assert.strictEqual(latestEntry.getActionType(), 'deleteObject');
                     assert.deepStrictEqual(
                         latestEntry.getAttribute('target'), expectedTarget);
+                    assert.deepStrictEqual(
+                        latestEntry.getAttribute('details.dataStoreName'), expectedStorageClass);
+                    assert.deepStrictEqual(
+                        latestEntry.getAttribute('details.lastModified'), expectedEntries[idx].LastModified);
                 });
             });
         });

@@ -6,6 +6,8 @@ const LIFECYCLE_LABEL_STATUS = 'status';
 const LIFECYCLE_LABEL_LOCATION = 'location';
 const LIFECYCLE_LABEL_TYPE = 'type';
 
+const LIFECYCLE_MARKER_METRICS_LOCATION = '-delete-marker-';
+
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
     help: 'Timestamp of latest lifecycle batch start time',
@@ -246,4 +248,5 @@ class LifecycleMetrics {
 
 module.exports = {
     LifecycleMetrics,
+    LIFECYCLE_MARKER_METRICS_LOCATION,
 };
