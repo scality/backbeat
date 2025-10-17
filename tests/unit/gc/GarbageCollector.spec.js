@@ -17,6 +17,8 @@ describe('garbage collector', function garbageCollector() {
     let gcTask;
     let httpServer;
     let expectBatchDeleteLocations;
+    const bucketName = 'gcTestBucket';
+    const keyName = 'gcTestKey';
 
     before(() => {
         gc = new GarbageCollector({
@@ -44,7 +46,7 @@ describe('garbage collector', function garbageCollector() {
                     assert.fail('did not expect a batch delete request');
                 }
                 assert.strictEqual(req.url,
-                    '/_/backbeat/batchdelete/{Bucket}/{Key+}');
+                    `/_/backbeat/batchdelete/${bucketName}/${keyName}`);
                 const buffers = [];
                 req.on('data', data => {
                     buffers.push(data);
@@ -75,8 +77,10 @@ describe('garbage collector', function garbageCollector() {
             size: 10,
         }];
         const action = ActionQueueEntry.create('deleteData')
-              .setAttribute('target.locations', expectBatchDeleteLocations)
-              .setAttribute('target.owner', ownerId);
+            .setAttribute('target.locations', expectBatchDeleteLocations)
+            .setAttribute('target.owner', ownerId)
+            .setAttribute('source.bucket', bucketName)
+            .setAttribute('source.objectKey', keyName);
         gcTask.processActionEntry(action, done);
     });
     it('should send batch delete request with locations array with ' +
@@ -88,8 +92,10 @@ describe('garbage collector', function garbageCollector() {
             dataStoreVersionId: 'someversion',
         }];
         const action = ActionQueueEntry.create('deleteData')
-              .setAttribute('target.locations', expectBatchDeleteLocations)
-              .setAttribute('target.owner', ownerId);
+            .setAttribute('target.locations', expectBatchDeleteLocations)
+            .setAttribute('target.owner', ownerId)
+            .setAttribute('source.bucket', bucketName)
+            .setAttribute('source.objectKey', keyName);
         gcTask.processActionEntry(action, done);
     });
 });

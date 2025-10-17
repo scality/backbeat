@@ -6,9 +6,10 @@ const { errors } = require('arsenal');
 class BackbeatClientMock {
     constructor(failures) {
         this.failures = failures;
-
         this.calls = {};
-        this.stubMethod('deleteObjectFromExpiration', {});
+        Object.keys(failures).forEach(commandName => {
+            this.calls[commandName] = 0;
+        });
     }
 
     makeRetryableError() {
@@ -17,34 +18,20 @@ class BackbeatClientMock {
         return err;
     }
 
-    stubMethod(methodName, successResult, stubError) {
-        this.calls[methodName] = 0;
+    send(command) {
+        const commandName = command.constructor.name;
 
-        this[methodName] = (params, done) => {
-            this.calls[methodName]++;
+        if (!this.calls[commandName]) {
+            this.calls[commandName] = 0;
+        }
 
-            if (this.failures[methodName] >= this.calls[methodName]) {
-                const error = stubError || this.makeRetryableError();
+        this.calls[commandName]++;
 
-                if (done) {
-                    return process.nextTick(done, error);
-                }
+        if (this.failures[commandName] && this.failures[commandName] >= this.calls[commandName]) {
+            return Promise.reject(this.makeRetryableError());
+        }
 
-                return {
-                    send: cb => process.nextTick(cb, error),
-                    on: () => {},
-                };
-            }
-
-            if (done) {
-                return process.nextTick(done, null, successResult);
-            }
-
-            return {
-                send: cb => process.nextTick(cb, null, successResult),
-                on: () => {},
-            };
-        };
+        return Promise.resolve({});
     }
 
     verifyRetries() {

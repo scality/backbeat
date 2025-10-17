@@ -181,7 +181,7 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
-    it('should retry delete operation if gc failed with retryable error', done => {
+    it('should retry delete archived source data if gc failed with retryable error', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
@@ -324,7 +324,7 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
-    it('should retry delete operation if gc failed with retryable error', done => {
+    it('should retry delete data if gc failed with retryable error', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
 
         const entry = ActionQueueEntry.create('deleteData')

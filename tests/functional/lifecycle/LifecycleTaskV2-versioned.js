@@ -99,7 +99,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         backbeatMetadataProxy.objectMetadata = objMd;
 
         s3 = new S3ClientMock({});
-        s3.stubMethod('getBucketVersioning', { Status: 'Enabled' });
+        s3.stubCommand('GetBucketVersioningCommand', { Status: 'Enabled' });
     });
 
     afterEach(() => {

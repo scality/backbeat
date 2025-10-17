@@ -3,6 +3,7 @@
 const async = require('async');
 const { Logger } = require('werelogs');
 const { errors } = require('arsenal');
+const { GetBucketLifecycleConfigurationCommand } = require('@aws-sdk/client-s3');
 
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -292,8 +293,8 @@ class LifecycleBucketProcessor {
             accountId,
         });
 
-        const s3 = this.clientManager.getS3Client(accountId);
-        if (!s3) {
+        const s3Client = this.clientManager.getS3Client(accountId);
+        if (!s3Client) {
             return cb(errors.InternalError
                 .customizeDescription('failed to obtain a s3 client'));
         }
@@ -306,14 +307,14 @@ class LifecycleBucketProcessor {
         }
 
         const params = { Bucket: bucket };
-        return this._getBucketLifecycleConfiguration(s3, params, (err, config) => {
+        return this._getBucketLifecycleConfiguration(s3Client, params, (err, config) => {
             if (err) {
-                if (err.code === 'NoSuchLifecycleConfiguration') {
+                if (err.name === 'NoSuchLifecycleConfiguration') {
                     this._log.debug('skipping non-lifecycled bucket', { bucket });
                     return cb();
                 }
 
-                if (err.code === 'NoSuchBucket') {
+                if (err.name === 'NoSuchBucket') {
                     this._log.error('skipping non-existent bucket', { bucket });
                     return cb();
                 }
@@ -349,7 +350,7 @@ class LifecycleBucketProcessor {
                 task,
                 rules: config.Rules,
                 value: result,
-                s3target: s3,
+                s3target: s3Client,
                 backbeatMetadataProxy,
             }, cb);
         });
@@ -357,16 +358,21 @@ class LifecycleBucketProcessor {
 
     /**
      * Call AWS.S3.GetBucketLifecycleConfiguration in a retry wrapper.
-     * @param {AWS.S3} s3 - the s3 client
+     * @param {S3Client} s3Client - the s3 client
      * @param {object} params - the parameters to pass to getBucketLifecycleConfiguration
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _getBucketLifecycleConfiguration(s3, params, cb) {
+    _getBucketLifecycleConfiguration(s3Client, params, cb) {
         return this.retryWrapper.retry({
             actionDesc: 'get bucket lifecycle',
             logFields: { params },
-            actionFunc: done => s3.getBucketLifecycleConfiguration(params, done),
+            actionFunc: done => {
+                const command = new GetBucketLifecycleConfigurationCommand(params);
+                s3Client.send(command)
+                    .then(data => done(null, data))
+                    .catch(done);
+            },
             shouldRetryFunc: err => err.retryable,
             log: this._log,
         }, cb);

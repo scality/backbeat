@@ -119,10 +119,7 @@ describe('CopyLocationTask', () => {
                 toLocation: 'test-site',
             });
             task.backbeatClient = {
-                multipleBackendInitiateMPU: sinon.stub().returns({
-                    send: cb => cb(null, {}),
-                    on: () => {},
-                }),
+                send: sinon.stub().resolves({}),
             };
             task.destConfig = {
                 replicationEndpoint: {
@@ -132,7 +129,7 @@ describe('CopyLocationTask', () => {
             };
             task._initiateMPU(entry, new ObjectMD(), fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatClient.multipleBackendInitiateMPU.calledOnce);
+                assert(task.backbeatClient.send.calledOnce);
                 done();
             });
         });
@@ -145,10 +142,7 @@ describe('CopyLocationTask', () => {
                 toLocation: 'test-site',
             });
             task.backbeatClient = {
-                multipleBackendInitiateMPU: sinon.stub().returns({
-                    send: cb => cb(null, {}),
-                    on: () => {},
-                }),
+                send: sinon.stub().resolves({}),
             };
             task.destConfig = {
                 replicationEndpoint: {
@@ -158,7 +152,7 @@ describe('CopyLocationTask', () => {
             };
             task._initiateMPU(entry, new ObjectMD(), fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatClient.multipleBackendInitiateMPU.notCalled);
+                assert(task.backbeatClient.send.notCalled);
                 done();
             });
         });

@@ -1,5 +1,4 @@
 const assert = require('assert');
-const { EventEmitter } = require('events');
 const { ObjectMD } = require('arsenal').models;
 
 class GarbageCollectorProducerMock {
@@ -37,29 +36,6 @@ class BackbeatProducerMock {
     }
 }
 
-class MockRequestAPI extends EventEmitter {
-    /**
-     * @param {object} args -
-     * @param {object} response -
-     * @param {object} response.error -
-     * @param {object} response.res -
-     */
-    constructor(args, response) {
-        super();
-        this.response = response;
-        this.args = args;
-        this.doFn = null;
-    }
-
-    send(cb) {
-        if (typeof this.doFn === 'function') {
-            this.doFn(this.args);
-        }
-
-        cb(this.response.error, this.response.res);
-    }
-}
-
 class BackbeatClientMock {
     constructor() {
         this.response = null;
@@ -70,26 +46,36 @@ class BackbeatClientMock {
         };
     }
 
-    deleteObjectFromExpiration(params) {
-        this.times.deleteObjectFromExpiration += 1;
-        return new MockRequestAPI(params, this.response);
+    send(command) {
+        const commandName = command.constructor.name;
+        if (commandName === 'DeleteObjectFromExpirationCommand') {
+            this.times.deleteObjectFromExpiration += 1;
+            
+            if (this.response?.error) {
+                const err = this.response.error;
+                if (err.statusCode && !err.$metadata) {
+                    err.$metadata = { httpStatusCode: err.statusCode };
+                }
+                return Promise.reject(err);
+            }
+            return Promise.resolve(this.response?.data || {});
+        }
+        
+        if (commandName === 'BatchDeleteCommand') {
+            this.times.batchDeleteResponse += 1;
+            
+            const resp = this.batchDeleteResponse;
+            if (resp.error) {
+                return Promise.reject(resp.error);
+            }
+            return Promise.resolve(resp.res || {});
+        }
+        
+        return Promise.resolve({});
     }
 
     setResponse(error, data) {
         this.response = { error, data };
-    }
-
-    batchDelete(params, cb) {
-        this.times.batchDeleteResponse += 1;
-
-        const resp = this.batchDeleteResponse;
-        const req = new MockRequestAPI(params, resp);
-
-        if (typeof cb !== 'function') {
-            return req;
-        }
-
-        return cb(resp.error, resp.res);
     }
 }
 
@@ -171,18 +157,6 @@ class ProcessorMock {
     }
 }
 
-class S3RequestMock extends EventEmitter {
-    constructor(error, data) {
-        super();
-        this.error = error;
-        this.data = data;
-    }
-
-    send(cb) {
-        cb(this.error, this.data);
-    }
-}
-
 class S3ClientMock {
     constructor() {
         this.response = null;
@@ -206,28 +180,28 @@ class S3ClientMock {
         assert(typeof this.response === 'object');
     }
 
-    headObject() {
-        this.calls.headObject += 1;
+    send(command) {
         this.assertRespIsSet();
-        return new S3RequestMock(this.response.error, this.response.data);
-    }
-
-    deleteObject() {
-        this.calls.deleteObject += 1;
-        this.assertRespIsSet();
-        return new S3RequestMock(this.response.error, this.response.data);
-    }
-
-    deleteMultipartObject() {
-        this.calls.deleteMultipartObject += 1;
-        this.assertRespIsSet();
-        return new S3RequestMock(this.response.error, this.response.data);
-    }
-
-    abortMultipartUpload() {
-        this.calls.abortMultipartUpload += 1;
-        this.assertRespIsSet();
-        return new S3RequestMock(this.response.error, this.response.data);
+        
+        const commandName = command.constructor.name;
+        if (commandName === 'HeadObjectCommand') {
+            this.calls.headObject += 1;
+        } else if (commandName === 'DeleteObjectCommand') {
+            this.calls.deleteObject += 1;
+        } else if (commandName === 'AbortMultipartUploadCommand') {
+            this.calls.abortMultipartUpload += 1;
+        } else if (commandName === 'DeleteMultipartObjectCommand') {
+            this.calls.deleteMultipartObject += 1;
+        }
+        
+        const { error, data } = this.response;
+        if (error) {
+            if (error.statusCode && !error.$metadata) {
+                error.$metadata = { httpStatusCode: error.statusCode };
+            }
+            return Promise.reject(error);
+        }
+        return Promise.resolve(data || {});
     }
 }
 

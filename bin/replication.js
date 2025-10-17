@@ -1,5 +1,5 @@
 const { program } = require('commander');
-const { SharedIniFileCredentials } = require('aws-sdk');
+const { fromIni } = require('@aws-sdk/credential-providers');
 
 const werelogs = require('werelogs');
 const Logger = werelogs.Logger;
@@ -33,10 +33,8 @@ function _createSetupReplication(command, options, log) {
     }
 
     const { source, destination } = config.extensions.replication;
-    const sourceCredentials =
-              new SharedIniFileCredentials({ profile: sourceProfile });
-    const targetCredentials =
-              new SharedIniFileCredentials({ profile: targetProfile });
+    const sourceCredentials = fromIni({ profile: sourceProfile });
+    const targetCredentials = fromIni({ profile: targetProfile });
     const destinationEndpoint =
         config.getBootstrapList()
         .find(dest => Array.isArray(dest.servers));

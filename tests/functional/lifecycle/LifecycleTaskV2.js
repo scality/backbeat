@@ -99,7 +99,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
         backbeatMetadataProxy.objectMetadata = objMd;
 
         s3 = new S3ClientMock({});
-        s3.stubMethod('getBucketVersioning', { Status: 'Disabled' });
+        s3.stubCommand('GetBucketVersioningCommand', { Status: 'Disabled' });
     });
 
     afterEach(() => {
@@ -897,7 +897,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
                 }
             ],
         };
-        s3.stubMethod('listMultipartUploads', mpuResponse);
+        s3.stubCommand('ListMultipartUploadsCommand', mpuResponse);
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,
@@ -947,7 +947,7 @@ describe('LifecycleTaskV2 with bucket non-versioned', () => {
             ],
         };
 
-        s3.stubMethod('listMultipartUploads', mpuResponse);
+        s3.stubCommand('ListMultipartUploadsCommand', mpuResponse);
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(mpuRule, bucketData, s3,

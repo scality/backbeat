@@ -1,7 +1,22 @@
 const async = require('async');
-const { S3, IAM } = require('aws-sdk');
-
+const {
+    S3Client,
+    CreateBucketCommand,
+    HeadBucketCommand,
+    GetBucketVersioningCommand,
+    PutBucketVersioningCommand,
+    GetBucketReplicationCommand,
+    PutBucketReplicationCommand,
+} = require('@aws-sdk/client-s3');
+const {
+    IAMClient,
+    GetRoleCommand,
+    CreateRoleCommand,
+    CreatePolicyCommand,
+    AttachRolePolicyCommand,
+} = require('@aws-sdk/client-iam');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const { isRetryableMiddleware } = require('../../../lib/clients/utils');
 
 const trustPolicy = {
     Version: '2012-10-17',
@@ -17,39 +32,54 @@ const trustPolicy = {
 };
 
 function _setupS3Client(transport, endpoint, credentials, https) {
-    const httpOptions = {
-        timeout: 0,
-        key: https && https.key,
-        cert: https && https.cert,
-        ca: https && https.ca,
-    };
-    return new S3({
-        endpoint: `${endpoint}`,
-        sslEnabled: transport === 'https',
+    const client = new S3Client({
+        endpoint: `${transport}://${endpoint}`,
         credentials,
-        s3ForcePathStyle: true,
-        signatureVersion: 'v4',
-        httpOptions,
-        maxRetries: 0,
+        region: 'us-east-1',
+        forcePathStyle: true,
+        tls: transport === 'https',
+        maxAttempts: 1,
+        requestHandler: {
+            connectionTimeout: 0,
+            socketTimeout: 0,
+            httpsAgent: https && {
+                key: https.key,
+                cert: https.cert,
+                ca: https.ca,
+            },
+        },
     });
+    client.middlewareStack.add(isRetryableMiddleware(), {
+        step: 'deserialize',
+        priority: 'high',
+    });
+
+    return client;
 }
 
 function _setupIAMClient(transport, endpoint, credentials, https) {
-    const httpOptions = {
-        timeout: 30000,
-        key: https && https.key,
-        cert: https && https.cert,
-        ca: https && https.ca,
-    };
-    return new IAM({
-        endpoint: `${endpoint}`,
-        sslEnabled: transport === 'https',
+    const client = new IAMClient({
+        endpoint: `${transport}://${endpoint}`,
         credentials,
-        maxRetries: 0,
         region: 'us-east-2',
-        signatureCache: false,
-        httpOptions,
+        tls: transport === 'https',
+        maxAttempts: 1,
+        requestHandler: {
+            connectionTimeout: 30000,
+            socketTimeout: 30000,
+            httpsAgent: https && {
+                key: https.key,
+                cert: https.cert,
+                ca: https.ca,
+            },
+        },
     });
+    client.middlewareStack.add(isRetryableMiddleware(), {
+        step: 'deserialize',
+        priority: 'high',
+    });
+
+    return client;
 }
 
 class SetupReplication extends BackbeatTask {
@@ -163,39 +193,28 @@ class SetupReplication extends BackbeatTask {
         // Does the bucket exist and is it reachable?
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
-        this._s3Clients[where].headBucket({ Bucket: bucket }, err => {
-            if (err) {
+        const command = new HeadBucketCommand({ Bucket: bucket });
+        this._s3Clients[where].send(command)
+            .then(() => cb())
+            .catch(err => {
                 this._log.error('bucket sanity check error', {
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._isValidBucket',
                 });
-                return cb(err);
-            }
-            return cb();
-        });
+                cb(err);
+            });
     }
 
     _isVersioningEnabled(where, cb) {
         // Does the bucket have versioning enabled?
         const bucket = where === 'source' ? this._sourceBucket :
             this._targetBucket;
-        this._s3Clients[where].getBucketVersioning({ Bucket: bucket },
-            (err, res) => {
-                if (err) {
-                    this._log.error('versioning sanity check error: ' +
-                        'Cannot retrieve versioning configuration', {
-                            bucket: where === 'source' ? this._sourceBucket :
-                                this._targetBucket,
-                            errCode: err.code,
-                            error: err.message,
-                            method: 'SetupReplication._isVersioningEnabled',
-                        }
-                    );
-                    return cb(err);
-                }
+        const command = new GetBucketVersioningCommand({ Bucket: bucket });
+        this._s3Clients[where].send(command)
+            .then(res => {
                 if (res.Status === 'Disabled') {
                     const error = new Error('Expected bucket versioning to ' +
                         'be Enabled. Status is still Disabled.');
@@ -210,8 +229,19 @@ class SetupReplication extends BackbeatTask {
                     return cb(error);
                 }
                 return cb();
-            }
-        );
+            })
+            .catch(err => {
+                this._log.error('versioning sanity check error: ' +
+                    'Cannot retrieve versioning configuration', {
+                        bucket: where === 'source' ? this._sourceBucket :
+                            this._targetBucket,
+                        errCode: err.name,
+                        error: err.message,
+                        method: 'SetupReplication._isVersioningEnabled',
+                    }
+                );
+                cb(err);
+            });
     }
 
     _isValidRole(where, arnObj, cb) {
@@ -222,52 +252,46 @@ class SetupReplication extends BackbeatTask {
         const arn = arnObj[where];
         const roleName = arn.split('/').pop();
 
-        this._iamClients[where].getRole({ RoleName: roleName }, (err, res) => {
-            if (err) {
+        const command = new GetRoleCommand({ RoleName: roleName });
+        this._iamClients[where].send(command)
+            .then(res => {
+                if (arn !== res.Role.Arn) {
+                    const error = new Error('Expected ARN to match. A mis-match ' +
+                        'was found between the ARN found in ' +
+                        '`getBucketReplication` and ARN found in `getRole`.');
+                    this._log.error('role validation sanity check error: ' +
+                        'ARN mis-match', {
+                            bucket: where === 'source' ? this._sourceBucket :
+                                this._targetBucket,
+                            error: error.message,
+                            method: 'SetupReplication._isVersioningEnabled',
+                        }
+                    );
+                    return cb(error);
+                }
+                return cb(null, arnObj);
+            })
+            .catch(err => {
                 this._log.error('role validation sanity check error: ' +
                     'Cannot retrieve role configuration', {
                         bucket: where === 'source' ? this._sourceBucket :
                             this._targetBucket,
-                        errCode: err.code,
+                        errCode: err.name,
                         error: err.message,
                         method: 'SetupReplication._isValidRole',
                     }
                 );
-                return cb(err);
-            }
-            if (arn !== res.Role.Arn) {
-                const error = new Error('Expected ARN to match. A mis-match ' +
-                    'was found between the ARN found in ' +
-                    '`getBucketReplication` and ARN found in `getRole`.');
-                this._log.error('role validation sanity check error: ' +
-                    'ARN mis-match', {
-                        bucket: where === 'source' ? this._sourceBucket :
-                            this._targetBucket,
-                        error: err.message,
-                        method: 'SetupReplication._isVersioningEnabled',
-                    }
-                );
-                return cb(error);
-            }
-            return cb(null, arnObj);
-        });
+                cb(err);
+            });
     }
 
     _isReplicationEnabled(src, cb) {
         // Is the Replication config enabled?
-        this._s3Clients[src].getBucketReplication(
-            { Bucket: this._sourceBucket },
-            (err, res) => {
-                if (err) {
-                    this._log.error('replication status sanity check error: ' +
-                        'Cannot retrieve replication configuration', {
-                            errCode: err.code,
-                            error: err.message,
-                            method: 'SetupReplication._isReplicationEnabled',
-                        }
-                    );
-                    return cb(err);
-                }
+        const command = new GetBucketReplicationCommand({
+            Bucket: this._sourceBucket,
+        });
+        this._s3Clients[src].send(command)
+            .then(res => {
                 const r = res.ReplicationConfiguration;
                 if (r.Rules[0].Status === 'Disabled') {
                     const error = new Error('Expected bucket replication ' +
@@ -281,8 +305,17 @@ class SetupReplication extends BackbeatTask {
                     return cb(error);
                 }
                 return cb(null, r.Role);
-            }
-        );
+            })
+            .catch(err => {
+                this._log.error('replication status sanity check error: ' +
+                    'Cannot retrieve replication configuration', {
+                        errCode: err.name,
+                        error: err.message,
+                        method: 'SetupReplication._isReplicationEnabled',
+                    }
+                );
+                cb(err);
+            });
     }
 
     _createBucket(where, cb) {
@@ -301,37 +334,39 @@ class SetupReplication extends BackbeatTask {
     _createBucketOnce(where, cb) {
         const bucket = where === 'source' ?
                   this._sourceBucket : this._targetBucket;
-        this._s3Clients[where].createBucket({ Bucket: bucket }, (err, res) => {
-            if (err && err.code !== 'BucketAlreadyOwnedByYou') {
-                this._log.error('error creating a bucket', {
-                    where,
-                    bucket: where === 'source' ? this._sourceBucket :
-                        this._targetBucket,
-                    errCode: err.code,
-                    error: err.message,
-                    method: 'SetupReplication._createBucket',
-                });
-                return cb(err);
-            }
-            if (err && err.code === 'BucketAlreadyOwnedByYou') {
-                this._log.debug('Bucket already exists. Continuing setup.', {
-                    where,
-                    bucket: where === 'source' ? this._sourceBucket :
-                        this._targetBucket,
-                    errCode: err.code,
-                    error: err.message,
-                    method: 'SetupReplication._createBucket',
-                });
-            } else {
+        const command = new CreateBucketCommand({ Bucket: bucket });
+        this._s3Clients[where].send(command)
+            .then(res => {
                 this._log.debug('Created bucket', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
                     method: 'SetupReplication._createBucket',
                 });
-            }
-            return cb(null, res);
-        });
+                cb(null, res);
+            })
+            .catch(err => {
+                if (err.name === 'BucketAlreadyOwnedByYou') {
+                    this._log.debug('Bucket already exists. Continuing setup.', {
+                        where,
+                        bucket: where === 'source' ? this._sourceBucket :
+                            this._targetBucket,
+                        errCode: err.name,
+                        error: err.message,
+                        method: 'SetupReplication._createBucket',
+                    });
+                    return cb(null, {});
+                }
+                this._log.error('error creating a bucket', {
+                    where,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    errCode: err.name,
+                    error: err.message,
+                    method: 'SetupReplication._createBucket',
+                });
+                return cb(err);
+            });
     }
 
     _createRole(where, cb) {
@@ -351,26 +386,28 @@ class SetupReplication extends BackbeatTask {
             Path: '/',
         };
 
-        this._iamClients[where].createRole(params, (err, res) => {
-            if (err) {
+        const command = new CreateRoleCommand(params);
+        this._iamClients[where].send(command)
+            .then(res => {
+                this._log.debug('Created role', {
+                    where,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    method: 'SetupReplication._createRole',
+                });
+                cb(null, res);
+            })
+            .catch(err => {
                 this._log.error('error creating a role', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._createRole',
                 });
-                return cb(err);
-            }
-            this._log.debug('Created role', {
-                where,
-                bucket: where === 'source' ? this._sourceBucket :
-                    this._targetBucket,
-                method: 'SetupReplication._createRole',
+                cb(err);
             });
-            return cb(null, res);
-        });
     }
 
     _createPolicy(where, cb) {
@@ -388,26 +425,29 @@ class SetupReplication extends BackbeatTask {
             PolicyDocument: JSON.stringify(this._buildResourcePolicy(where)),
             PolicyName: `bb-replication-${Date.now()}`,
         };
-        this._iamClients[where].createPolicy(params, (err, res) => {
-            if (err) {
+        
+        const command = new CreatePolicyCommand(params);
+        this._iamClients[where].send(command)
+            .then(res => {
+                this._log.debug('Created policy', {
+                    where,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    method: 'SetupReplication._createPolicy',
+                });
+                cb(null, res);
+            })
+            .catch(err => {
                 this._log.error('error creating policy', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._createPolicy',
                 });
-                return cb(err);
-            }
-            this._log.debug('Created policy', {
-                where,
-                bucket: where === 'source' ? this._sourceBucket :
-                    this._targetBucket,
-                method: 'SetupReplication._createPolicy',
+                cb(err);
             });
-            return cb(null, res);
-        });
     }
 
     _buildResourcePolicy(where) {
@@ -476,26 +516,29 @@ class SetupReplication extends BackbeatTask {
                 Status: 'Enabled',
             },
         };
-        this._s3Clients[where].putBucketVersioning(params, (err, res) => {
-            if (err) {
+        
+        const command = new PutBucketVersioningCommand(params);
+        this._s3Clients[where].send(command)
+            .then(res => {
+                this._log.debug('Versioning enabled', {
+                    where,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    method: 'SetupReplication._enableVersioning',
+                });
+                cb(null, res);
+            })
+            .catch(err => {
                 this._log.error('error enabling versioning', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._enableVersioning',
                 });
-                return cb(err);
-            }
-            this._log.debug('Versioning enabled', {
-                where,
-                bucket: where === 'source' ? this._sourceBucket :
-                    this._targetBucket,
-                method: 'SetupReplication._enableVersioning',
+                cb(err);
             });
-            return cb(null, res);
-        });
     }
 
     _attachResourcePolicy(policyArn, roleName, where, cb) {
@@ -515,26 +558,29 @@ class SetupReplication extends BackbeatTask {
             PolicyArn: policyArn,
             RoleName: roleName,
         };
-        this._iamClients[where].attachRolePolicy(params, (err, res) => {
-            if (err) {
+        
+        const command = new AttachRolePolicyCommand(params);
+        this._iamClients[where].send(command)
+            .then(res => {
+                this._log.debug('Attached resource policy', {
+                    where,
+                    bucket: where === 'source' ? this._sourceBucket :
+                        this._targetBucket,
+                    method: 'SetupReplication._attachResourcePolicy',
+                });
+                cb(null, res);
+            })
+            .catch(err => {
                 this._log.error('error attaching resource policy', {
                     where,
                     bucket: where === 'source' ? this._sourceBucket :
                         this._targetBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._attachResourcePolicy',
                 });
-                return cb(err);
-            }
-            this._log.debug('Attached resource policy', {
-                where,
-                bucket: where === 'source' ? this._sourceBucket :
-                    this._targetBucket,
-                method: 'SetupReplication._attachResourcePolicy',
+                cb(err);
             });
-            return cb(null, res);
-        });
     }
 
     _enableReplication(roleArns, cb) {
@@ -563,21 +609,24 @@ class SetupReplication extends BackbeatTask {
                 }],
             },
         };
-        this._s3Clients.source.putBucketReplication(params, (err, res) => {
-            if (err) {
+        
+        const command = new PutBucketReplicationCommand(params);
+        this._s3Clients.source.send(command)
+            .then(res => {
+                this._log.debug('Bucket replication enabled', {
+                    method: 'SetupReplication._enableReplication',
+                });
+                cb(null, res);
+            })
+            .catch(err => {
                 this._log.error('error enabling replication', {
                     bucket: this._sourceBucket,
-                    errCode: err.code,
+                    errCode: err.name,
                     error: err.message,
                     method: 'SetupReplication._enableReplication',
                 });
-                return cb(err);
-            }
-            this._log.debug('Bucket replication enabled', {
-                method: 'SetupReplication._enableReplication',
+                cb(err);
             });
-            return cb(null, res);
-        });
     }
 
     setupReplication(cb) {

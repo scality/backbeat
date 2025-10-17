@@ -1,10 +1,14 @@
 const async = require('async');
 const { errors } = require('arsenal');
 const ObjectMD = require('arsenal').models.ObjectMD;
+const { HeadObjectCommand, AbortMultipartUploadCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { 
+    DeleteObjectFromExpirationCommand
+} = require('@scality/cloudserverclient');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
 class ObjectLockedError extends Error {}
@@ -52,7 +56,8 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 // In this case, instead of logging an error, it should be logged as a debug message,
                 // to avoid causing unnecessary concern to the customer.
                 // TODO: BB-612
-                const logLevel = err.code === 'InvalidBucketState' ? 'debug' : 'error';
+                const errStr = err.code || err.name;
+                const logLevel = errStr === 'InvalidBucketState' ? 'debug' : 'error';
                 log[logLevel]('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleDeleteObjectTask._getMetadata',
                     error: err.message,
@@ -86,19 +91,23 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         const bucket = entry.getAttribute('target.bucket');
         const key = entry.getAttribute('target.key');
         const lastModified = entry.getAttribute('details.lastModified');
-
         if (lastModified) {
             const reqParams = {
                 Bucket: bucket,
                 Key: key,
                 IfUnmodifiedSince: lastModified,
             };
-            const req = s3Client.headObject(reqParams);
-            attachReqUids(req, log);
-            return req.send((err, res) => {
-                LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', err);
-                return done(err, res);
-            });
+            const command = new HeadObjectCommand(reqParams);
+            attachReqUids(command, log);
+            return s3Client.send(command)
+                .then(res => {
+                    LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', null);
+                    return done(null, res);
+                })
+                .catch(err => {
+                    LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', err);
+                    return done(err);
+                });
         }
 
         return done();
@@ -119,9 +128,11 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         LifecycleMetrics.onLifecycleStarted(log,
             'expiration:mpu',
             location, startTime - transitionTime);
-        const req = client.abortMultipartUpload(reqParams);
-        attachReqUids(req, log);
-        req.send(done);
+        const command = new AbortMultipartUploadCommand(reqParams);
+        attachReqUids(command, log);
+        client.send(command)
+            .then(() => done(null))
+            .catch(done);
     }
 
     _deleteObject(reqParams, accountId, transitionTime, startTime, location, log, done) {
@@ -140,26 +151,35 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
         LifecycleMetrics.onLifecycleStarted(log,
             'expiration',
             location, startTime - transitionTime);
-        const req = client.deleteObjectFromExpiration(reqParams);
-        attachReqUids(req, log);
-        req.send(err => {
-            if (err?.statusCode === errors.MethodNotAllowed.code) {
-                log.warn('deleteObjectFromExpiration API not supported, falling back to deleteObject',
-                    logDetails);
-                // fallback to s3 deleteObject when using a cloudserver that
-                // doesn't support deleteObjectFromExpiration
-                const s3Client = this.getS3Client(accountId);
-                if (!s3Client) {
-                    log.error('failed to get s3 client', logDetails);
-                    return done(errors.InternalError
-                        .customizeDescription('Unable to obtain client'));
-                }
-                const s3Req = s3Client.deleteObject(reqParams);
-                attachReqUids(s3Req, log);
-                return s3Req.send(done);
-            }
-            return done(err);
+        const command = new DeleteObjectFromExpirationCommand({
+            ...reqParams,
+            RequestUids: log.getSerializedUids(),
         });
+        
+        client.send(command)
+            .then(() => {
+                done(null);
+            })
+            .catch(err => {
+                if (err?.$metadata?.httpStatusCode === errors.MethodNotAllowed.code) {
+                    log.warn('deleteObjectFromExpiration API not supported, falling back to deleteObject',
+                        logDetails);
+                    // fallback to s3 deleteObject when using a cloudserver that
+                    // doesn't support deleteObjectFromExpiration
+                    const s3Client = this.getS3Client(accountId);
+                    if (!s3Client) {
+                        log.error('failed to get s3 client', logDetails);
+                        return done(errors.InternalError
+                            .customizeDescription('Unable to obtain client'));
+                    }
+                    const s3Command = new DeleteObjectCommand(reqParams);
+                    attachReqUids(s3Command, log);
+                    return s3Client.send(s3Command)
+                        .then(() => done(null))
+                        .catch(done);
+                }
+                return done(err);
+            });
     }
 
     _executeDelete(entry, startTime, log, done) {
@@ -259,7 +279,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned,
                 // so we can skip checking object replication for non-versioned buckets.
                 // TODO: BB-612
-                if (err.code === 'InvalidBucketState') {
+                if (err.code === 'InvalidBucketState' || err.name === 'InvalidBucketState') {
                     return done();
                 }
                 return done(err);

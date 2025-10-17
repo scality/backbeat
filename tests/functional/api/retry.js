@@ -151,16 +151,33 @@ describe('CRR Retry routes', () => {
 });
 
 describe('CRR Retry feature', () => {
+    let s3Server;
+    let vaultServer;
+
     before(done => {
         const S3Mock = require('../utils/S3Mock');
         const VaultMock = require('../utils/VaultMock');
         const s3Mock = new S3Mock();
         const vaultMock = new VaultMock();
-        http.createServer((req, res) => s3Mock.onRequest(req, res))
-            .listen(config.extensions.replication.source.s3.port);
-        http.createServer((req, res) => vaultMock.onRequest(req, res))
-            .listen(config.extensions.replication.source.auth.vault.port);
-        deleteKeys(redisClient, done);
+        
+        async.series([
+            next => {
+                s3Server = http.createServer((req, res) => s3Mock.onRequest(req, res));
+                s3Server.listen(config.extensions.replication.source.s3.port, next);
+            },
+            next => {
+                vaultServer = http.createServer((req, res) => vaultMock.onRequest(req, res));
+                vaultServer.listen(config.extensions.replication.source.auth.vault.port, next);
+            },
+            next => deleteKeys(redisClient, next),
+        ], done);
+    });
+
+    after(done => {
+        async.series([
+            next => s3Server ? s3Server.close(next) : next(),
+            next => vaultServer ? vaultServer.close(next) : next(),
+        ], done);
     });
 
     afterEach(done => deleteKeys(redisClient, done));

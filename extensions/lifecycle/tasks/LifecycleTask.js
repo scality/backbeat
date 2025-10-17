@@ -8,6 +8,14 @@ const {
     LifecycleUtils,
 } = require('arsenal').s3middleware.lifecycleHelpers;
 const { CompareResult, MinHeap } = require('arsenal').algorithms.Heap;
+const {
+    ListObjectsCommand,
+    ListObjectVersionsCommand,
+    ListMultipartUploadsCommand,
+    GetObjectTaggingCommand,
+    HeadObjectCommand,
+    GetBucketVersioningCommand,
+} = require('@aws-sdk/client-s3');
 
 const config = require('../../../lib/Config');
 const { attachReqUids } = require('../../../lib/clients/utils');
@@ -201,30 +209,31 @@ class LifecycleTask extends BackbeatTask {
             params.Marker = bucketData.details.marker;
         }
 
-        const req = this.s3target.listObjects(params);
-        attachReqUids(req, log);
+        const command = new ListObjectsCommand(params);
+        attachReqUids(command, log);
         async.waterfall([
-            next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
-
-                if (err) {
+            next => this.s3target.send(command)
+                .then(data => {
+                    LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', null);
+                    return next(null, data);
+                })
+                .catch(err => {
+                    LifecycleMetrics.onS3Request(log, 'listObjects', 'bucket', err);
                     log.error('error listing bucket objects', {
                         method: 'LifecycleTask._getObjectList',
                         error: err,
                         bucket: params.Bucket,
                     });
                     return next(err);
-                }
-
-                return next(null, data);
-            }),
+                }),
             (data, next) => {
+                const contents = data.Contents || [];
                 if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to Kafka topic bucketTasksTopic
                     // with bucket name and `data.marker` only once.
                     let marker = data.NextMarker;
-                    if (!marker && data.Contents.length > 0) {
-                        marker = data.Contents[data.Contents.length - 1].Key;
+                    if (!marker && contents.length > 0) {
+                        marker = contents[contents.length - 1].Key;
                     }
 
                     const entry = Object.assign({}, bucketData, {
@@ -242,7 +251,7 @@ class LifecycleTask extends BackbeatTask {
                 }
 
                 this._compareRulesToList(bucketData, bucketLCRules,
-                    data.Contents, log, 'Disabled', next);
+                    contents, log, 'Disabled', next);
             },
         ], done);
     }
@@ -375,7 +384,7 @@ class LifecycleTask extends BackbeatTask {
             }
             // all versions including delete markers
             const { error, sortedList: allVersions } = this._mergeSortedVersionsAndDeleteMarkers(
-                data.Versions, data.DeleteMarkers, log,
+                data.Versions || [], data.DeleteMarkers || [], log,
             );
             if (error) {
                 return done(error);
@@ -465,23 +474,23 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _getMPUs(bucketData, bucketLCRules, params, nbRetries, log, done) {
-        const req = this.s3target.listMultipartUploads(params);
-        attachReqUids(req, log);
+        const command = new ListMultipartUploadsCommand(params);
+        attachReqUids(command, log);
         async.waterfall([
-            next => req.send((err, data) => {
-                LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
-
-                if (err) {
+            next => this.s3target.send(command)
+                .then(data => {
+                    LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', null);
+                    return next(null, data);
+                })
+                .catch(err => {
+                    LifecycleMetrics.onS3Request(log, 'listMultipartUploads', 'bucket', err);
                     log.error('error checking buckets MPUs', {
                         method: 'LifecycleTask._getMPUs',
                         error: err,
                         bucket: params.Bucket,
                     });
                     return next(err);
-                }
-
-                return next(null, data);
-            }),
+                }),
             (data, next) => {
                 if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to kafka with `NextUploadIdMarker` &
@@ -513,7 +522,7 @@ class LifecycleTask extends BackbeatTask {
             }
 
             this._compareMPUUploads(bucketData, bucketLCRules,
-                data.Uploads, log);
+                data.Uploads || [], log);
             return done();
         });
     }
@@ -685,12 +694,15 @@ class LifecycleTask extends BackbeatTask {
             params.Prefix = paramDetails.Prefix;
         }
 
-        const req = this.s3target.listObjectVersions(params);
-        attachReqUids(req, log);
-        req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', err);
-
-            if (err) {
+        const command = new ListObjectVersionsCommand(params);
+        attachReqUids(command, log);
+        this.s3target.send(command)
+            .then(data => {
+                LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', null);
+                return cb(null, data);
+            })
+            .catch(err => {
+                LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', err);
                 log.error('error listing versioned bucket objects', {
                     method: 'LifecycleTask._listVersions',
                     error: err,
@@ -698,9 +710,7 @@ class LifecycleTask extends BackbeatTask {
                     prefix: params.Prefix,
                 });
                 return cb(err);
-            }
-            return cb(null, data);
-        });
+            });
     }
 
     /**
@@ -737,11 +747,15 @@ class LifecycleTask extends BackbeatTask {
             return process.nextTick(() => cb(null, { TagSet: [] }));
         }
 
-        const req = this.s3target.getObjectTagging(tagParams);
-        attachReqUids(req, log);
-        return req.send((err, tags) => {
-            LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', err);
-            if (err) {
+        const command = new GetObjectTaggingCommand(tagParams);
+        attachReqUids(command, log);
+        return this.s3target.send(command)
+            .then(tags => {
+                LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', null);
+                return cb(null, tags);
+            })
+            .catch(err => {
+                LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', err);
                 log.error('failed to get tags', {
                     method: 'LifecycleTask._getObjectTagging',
                     error: err,
@@ -750,9 +764,7 @@ class LifecycleTask extends BackbeatTask {
                     objectVersion: tagParams.VersionId,
                 });
                 return cb(err);
-            }
-            return cb(null, tags);
-        });
+            });
     }
 
     /**
@@ -1407,8 +1419,8 @@ class LifecycleTask extends BackbeatTask {
                             // error already logged at source
                             return next(err);
                         }
-                        const allVersions = [...data.Versions,
-                            ...data.DeleteMarkers];
+                        const allVersions = [...(data.Versions || []),
+                            ...(data.DeleteMarkers || [])];
                         return next(null, allVersions);
                     });
                 }
@@ -1568,12 +1580,39 @@ class LifecycleTask extends BackbeatTask {
         if (obj.VersionId) {
             params.VersionId = obj.VersionId;
         }
-        const req = this.s3target.headObject(params);
-        attachReqUids(req, log);
-        return req.send((err, data) => {
-            LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', err);
+        const command = new HeadObjectCommand(params);
+        attachReqUids(command, log);
+        return this.s3target.send(command)
+            .then(data => {
+                LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', null);
+                const object = Object.assign({}, obj,
+                    { LastModified: data.LastModified });
 
-            if (err) {
+                // There is an order of importance in cases of conflicts
+                // Expiration and NoncurrentVersionExpiration should be priority
+                // AbortIncompleteMultipartUpload should run regardless since
+                // it's in its own category
+                if (rules.Expiration &&
+                    this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
+                    return done();
+                }
+                if (rules.Transition) {
+                    return this._applyTransitionRule({
+                        owner: bucketData.target.owner,
+                        accountId: bucketData.target.accountId,
+                        bucket: bucketData.target.bucket,
+                        objectKey: obj.Key,
+                        eTag: obj.ETag,
+                        lastModified: obj.LastModified,
+                        site: rules.Transition.StorageClass,
+                        transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
+                            rules.Transition, object.LastModified),
+                    }, log, done);
+                }
+                return done();
+            })
+            .catch(err => {
+                LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', err);
                 log.error('failed to get object', {
                     method: 'LifecycleTask._compareObject',
                     error: err,
@@ -1581,35 +1620,7 @@ class LifecycleTask extends BackbeatTask {
                     objectKey: obj.Key,
                 });
                 return done(err);
-            }
-
-            const object = Object.assign({}, obj,
-                { LastModified: data.LastModified });
-
-            // There is an order of importance in cases of conflicts
-            // Expiration and NoncurrentVersionExpiration should be priority
-            // AbortIncompleteMultipartUpload should run regardless since
-            // it's in its own category
-            if (rules.Expiration &&
-                this._checkAndApplyExpirationRule(bucketData, object, rules, log)) {
-                return done();
-            }
-            if (rules.Transition) {
-                return this._applyTransitionRule({
-                    owner: bucketData.target.owner,
-                    accountId: bucketData.target.accountId,
-                    bucket: bucketData.target.bucket,
-                    objectKey: obj.Key,
-                    eTag: obj.ETag,
-                    lastModified: obj.LastModified,
-                    site: rules.Transition.StorageClass,
-                    transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
-                        rules.Transition, object.LastModified),
-                }, log, done);
-            }
-
-            return done();
-        });
+            });
     }
 
     /**
@@ -1874,27 +1885,33 @@ class LifecycleTask extends BackbeatTask {
 
                 return async.waterfall([
                     next => {
-                        const req = this.s3target.getBucketVersioning({
+                        const command = new GetBucketVersioningCommand({
                             Bucket: bucketData.target.bucket,
                         });
-                        attachReqUids(req, log);
-                        req.send((err, data) => {
-                            LifecycleMetrics.onS3Request(
-                                log,
-                                'getBucketVersioning',
-                                'bucket',
-                                err
-                            );
-
-                            if (err) {
+                        attachReqUids(command, log);
+                        this.s3target.send(command)
+                            .then(data => {
+                                LifecycleMetrics.onS3Request(
+                                    log,
+                                    'getBucketVersioning',
+                                    'bucket',
+                                    null
+                                );
+                                return next(null, data.Status);
+                            })
+                            .catch(err => {
+                                LifecycleMetrics.onS3Request(
+                                    log,
+                                    'getBucketVersioning',
+                                    'bucket',
+                                    err
+                                );
                                 log.error('error checking bucket versioning', {
                                     method: 'LifecycleTask.processBucketEntry',
                                     error: err,
                                 });
                                 return next(err);
-                            }
-                            return next(null, data.Status);
-                        });
+                            });
                     },
                     (versioningStatus, next) => {
                         if (versioningStatus === 'Enabled'

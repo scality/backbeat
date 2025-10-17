@@ -102,36 +102,31 @@ describe('ReplicateObject', () => {
         it('should pass extract accountId from role and pass it when using AssumeRole auth', done => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            const sendStub = sinon.stub().resolves({});
             task.backbeatDest = {
-                putMetadata: sinon.stub().returns({
-                    send: sinon.stub().yields(),
-                    on: sinon.stub(),
-                }),
+                send: sendStub,
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
             task._putMetadataOnce(entry, true, fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatDest.putMetadata.calledOnce);
-                assert.deepStrictEqual(task.backbeatDest.putMetadata
-                    .firstCall.args[0].AccountId, '123456789012');
+                assert(sendStub.calledOnce);
+                assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
                 done();
             });
         });
         it('should not pass accountId when not in assumeRole', done => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            const sendStub = sinon.stub().resolves({});
             task.backbeatDest = {
-                putMetadata: sinon.stub().returns({
-                    send: sinon.stub().yields(),
-                    on: sinon.stub(),
-                }),
+                send: sendStub,
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
             sinon.stub(task.destConfig.auth, 'type').value('role');
             task._putMetadataOnce(entry, true, fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatDest.putMetadata.calledOnce);
-                assert.strictEqual(task.backbeatDest.putMetadata.firstCall.args[0].AccountId, undefined);
+                assert(sendStub.calledOnce);
+                assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
                 done();
             });
         });
@@ -165,21 +160,27 @@ describe('ReplicateObject', () => {
             });
         });
 
-        it('should setup destination BackbeatClient with proper creds when not in assumeRole', () => {
+        it('should setup destination BackbeatClient with proper creds when not in assumeRole', async () => {
             task.destConfig.auth = {
                 type: 'service',
                 account: 'replication-service',
             };
             sinon.stub(task, '_createCredentials').returns({
-                accessKeyId: 'accessKeyNoAssumeRole',
-                secretAccessKey: 'secretKeyNoAssumeRole',
+                getCredentialsProvider: () => async () => ({
+                    accessKeyId: 'accessKeyNoAssumeRole',
+                    secretAccessKey: 'secretKeyNoAssumeRole',
+                }),
             });
             task._setupDestClients('arn:aws:iam::123456789012:role/crr-role', fakeLogger);
-            assert.strictEqual(task.backbeatDest.config.endpoint, 'http://s3.zenko.local:80');
-            assert.deepStrictEqual(task.backbeatDest.config.credentials, {
-                accessKeyId: 'accessKeyNoAssumeRole',
-                secretAccessKey: 'secretKeyNoAssumeRole',
-            });
+            const endpointObject = await task.backbeatDest.config.endpoint();
+            const port = endpointObject.port || (endpointObject.protocol === 'https:' ? 443 : 80);
+            const endpoint = `${endpointObject.protocol}//` +
+                `${endpointObject.hostname}:${port}` +
+                `${endpointObject.path}`;
+            const credentials = await task.backbeatDest.config.credentials();
+            assert.strictEqual(credentials.accessKeyId, 'accessKeyNoAssumeRole');
+            assert.strictEqual(credentials.secretAccessKey, 'secretKeyNoAssumeRole');
+            assert.strictEqual(endpoint, 'http://s3.zenko.local:80/');
         });
     });
 

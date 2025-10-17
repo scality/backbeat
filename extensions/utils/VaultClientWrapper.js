@@ -1,4 +1,4 @@
-const { ChainableTemporaryCredentials } = require('aws-sdk');
+const { fromTemporaryCredentials } = require('@aws-sdk/credential-providers');
 const { errorUtils } = require('arsenal');
 
 const { authTypeAssumeRole, authTypeNone } = require('../../lib/constants');
@@ -34,7 +34,7 @@ class VaultClientWrapper {
 
 
     // directly manages temp creds lifecycle, not going through CredentialsManager,
-    // as vaultclient does not use `AWS.Credentials` objects, and the same set
+    // as vaultclient does not use credential provider functions, and the same set
     // can be reused forever as the role is assumed in only one account
     _storeAWSCredentialsPromise() {
         const { sts, roleName, type } = this._authConfig;
@@ -44,37 +44,41 @@ class VaultClientWrapper {
         }
 
         const stsWithCreds = CredentialsManager.resolveExternalFileSync(sts, this.logger);
-        const stsConfig = {
-            endpoint: `${this._transport}://${sts.host}:${sts.port}`,
-            credentials: {
-                accessKeyId: stsWithCreds.accessKey,
-                secretAccessKey: stsWithCreds.secretKey,
-            },
-            region: 'us-east-1',
-            signatureVersion: 'v4',
-            sslEnabled: this._transport === 'https',
-            httpOptions: { agent: this.stsAgent, timeout: 0 },
-            maxRetries: 0,
-        };
 
         // FIXME: works with vault 7.10 but not 8.3 (return 501)
         // https://scality.atlassian.net/browse/VAULT-238
-        // new STS(stsConfig)
-        //     .getCallerIdentity()
-        //     .promise()
-        this._tempCredsPromise =
-            Promise.resolve({
-                Account: '000000000000',
-            })
-            .then(res =>
-                new ChainableTemporaryCredentials({
+        this._tempCredsPromise = Promise.resolve({ Account: '000000000000' })
+            .then(res => {
+                const roleArn = `arn:aws:iam::${res.Account}:role/${roleName}`;
+                const roleSessionName = `${this._clientId}`;
+
+                const masterCredentials = {
+                    accessKeyId: stsWithCreds.accessKey,
+                    secretAccessKey: stsWithCreds.secretKey,
+                };
+
+                // Create a credential provider that assumes the role
+                return fromTemporaryCredentials({
+                    masterCredentials,
                     params: {
-                        RoleArn: `arn:aws:iam::${res.Account}:role/${roleName}`,
-                        RoleSessionName: `${this._clientId}`,
-                        // default expiration: 1 hour,
+                        RoleArn: roleArn,
+                        RoleSessionName: roleSessionName,
+                        // default expiration: 1 hour
                     },
-                    stsConfig,
-                }))
+                    clientConfig: {
+                        endpoint: `${this._transport}://${sts.host}:${sts.port}`,
+                        region: 'us-east-1',
+                        tls: this._transport === 'https',
+                        maxAttempts: 1,
+                        requestHandler: {
+                            httpAgent: this._transport === 'http' ? this.stsAgent : undefined,
+                            httpsAgent: this._transport === 'https' ? this.stsAgent : undefined,
+                            connectionTimeout: 0,
+                            socketTimeout: 0,
+                        },
+                    },
+                });
+            })
             .then(creds => {
                 this._tempCredsPromiseResolved = true;
                 return creds;
@@ -85,7 +89,7 @@ class VaultClientWrapper {
 
                     this.logger.error('could not set up temporary credentials, retrying', {
                         retryDelayMs,
-                        error: err,
+                        error: errorUtils.reshapeExceptionError(err),
                     });
 
                     setTimeout(() => this._storeAWSCredentialsPromise(), retryDelayMs);

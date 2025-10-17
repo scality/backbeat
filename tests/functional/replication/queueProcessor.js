@@ -178,7 +178,7 @@ class S3Mock extends TestConfigurator {
                 s3: {
                     getBucketReplication: () => ({
                         method: 'GET',
-                        path: `/${this.getParam('source.bucket')}`,
+                        path: `/${this.getParam('source.bucket')}/`,
                         query: {
                             replication: '',
                         },
@@ -224,7 +224,7 @@ class S3Mock extends TestConfigurator {
                 putData: () => ({
                     method: 'PUT',
                     path: `/_/backbeat/data/${this.getParam('target.bucket')}/${this.getParam('encodedKey')}`,
-                    query: {},
+                    query: { v2: '' },
                     handler: () => this._putData,
                 }),
                 putMetadata: () => ({
@@ -354,10 +354,11 @@ class S3Mock extends TestConfigurator {
         const routes = this.getParam(routesKey);
         const action = Object.keys(routes).find(key => {
             const route = routes[key];
-            return (route.method === req.method &&
+            const queryMatches = Object.keys(route.query).every(k =>
+                query[k] === route.query[k]);
+            return route.method === req.method &&
                     route.path === url.pathname &&
-                    Object.keys(route.query).every(
-                        k => query[k] === route.query[k]));
+                    queryMatches;
         });
         if (action === undefined) {
             return undefined;
@@ -555,8 +556,8 @@ class S3Mock extends TestConfigurator {
         const { dataStoreETag } = srcLocations.find(
             location => location.dataStoreETag.includes(md5));
         const partNumber = Number(dataStoreETag.split(':')[0]);
-        assert.strictEqual(
-            reqBody, this.getParam('partsContents')[partNumber - 1]);
+        assert.strictEqual(reqBody,
+            this.getParam('partsContents')[partNumber - 1]);
 
         res.setHeader('content-type', 'application/json');
         if (this.getParam('target.bucketIsEncrypted')) {
@@ -696,62 +697,66 @@ class S3Mock extends TestConfigurator {
         this.hasPutTargetData =
             reqBody === this.getParam('partsContents').join('');
         res.writeHead(200);
-        res.end(JSON.stringify({
-            location: [{
-                key: `${this.getParam('source.bucket')}/` +
-                    `${this.getParam('key')}`,
-                start: 0,
-                size: 30,
-                dataStoreName: 'sf',
-                dataStoreType: 'aws',
-                dataStoreETag:
-                this.getParam('source.md.location')[0].dataStoreETag,
-                dataStoreVersionId: 'awsversion',
-            }],
-        }));
+        const sourceLocation = this.getParam('source.md.location');
+        const location = [{
+            key: `${this.getParam('source.bucket')}/` +
+                `${this.getParam('key')}`,
+            start: 0,
+            size: sourceLocation && sourceLocation.length > 0 ? 30 : 0,
+            dataStoreName: 'sf',
+            dataStoreType: 'aws',
+            dataStoreETag: sourceLocation && sourceLocation.length > 0 
+                ? sourceLocation[0].dataStoreETag 
+                : '1:d41d8cd98f00b204e9800998ecf8427e', // MD5 of empty string
+            dataStoreVersionId: 'awsversion',
+        }];
+        res.end(JSON.stringify({ location }));
     }
 }
 
-let copyLocationResultsCb = null;
-
+const copyLocationCallbacks = new Map();
 function onCopyLocationResultsMessage(kafkaEntry, cb) {
-    if (copyLocationResultsCb) {
-        copyLocationResultsCb(kafkaEntry);
+    const response = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+    const actionId = response.getActionId();
+    const callback = copyLocationCallbacks.get(actionId);
+    if (callback) {
+        copyLocationCallbacks.delete(actionId);
+        callback(response);
     }
     cb();
 }
 
-function sendCopyLocationAction(s3mock, queueProcessor, resultsCb) {
-    const actionEntry = ReplicationAPI.createCopyLocationAction({
-        bucketName: s3mock.getParam('source.bucket'),
-        objectKey: s3mock.getParam('key'),
-        versionId: s3mock.getParam('versionIdEncoded'),
-        toLocation: 'sf',
-        originLabel: 'functionalTest',
-        fromLocation: 'local',
-        contentLength: s3mock.getParam('source.md.contentLength'),
-        resultsTopic: constants.copyLocationResultsTopic,
-    });
-    // use role-based authentication here to ease test integration
-    // with CRR, lifecycle will normally use its own service account
-    // so will not need to provide the "auth" attribute.
-    actionEntry.setAttribute('auth', {
-        roleArn: s3mock.getParam('source.role'),
-    });
-    const actionId = actionEntry.getActionId();
-    copyLocationResultsCb = kafkaEntry => {
-        const response = ActionQueueEntry
-              .createFromKafkaEntry(kafkaEntry);
-        assert.strictEqual(response.getActionId(), actionId);
-        copyLocationResultsCb = null;
-        return resultsCb(response);
+function createCopyLocationSender(s3mock, queueProcessor) {
+    return function sendCopyLocationAction(resultsCb) {
+        const actionEntry = ReplicationAPI.createCopyLocationAction({
+            bucketName: s3mock.getParam('source.bucket'),
+            objectKey: s3mock.getParam('key'),
+            versionId: s3mock.getParam('versionIdEncoded'),
+            toLocation: 'sf',
+            originLabel: 'functionalTest',
+            fromLocation: 'local',
+            contentLength: s3mock.getParam('source.md.contentLength'),
+            resultsTopic: constants.copyLocationResultsTopic,
+        });
+        actionEntry.setAttribute('auth', {
+            roleArn: s3mock.getParam('source.role'),
+        });
+        const actionId = actionEntry.getActionId();
+        const wrappedCallback = response => {
+            copyLocationCallbacks.delete(actionId);
+            resultsCb(response);
+        };
+        
+        copyLocationCallbacks.set(actionId, wrappedCallback);
+        queueProcessor.processDataMoverEntry({
+            key: 'somekey',
+            value: actionEntry.toKafkaMessage(),
+        }, err => {
+            assert.ifError(err);
+        });
+        
+        return () => copyLocationCallbacks.delete(actionId);
     };
-    queueProcessor.processDataMoverEntry({
-        key: 'somekey',
-        value: actionEntry.toKafkaMessage(),
-    }, err => {
-        assert.ifError(err);
-    });
 }
 
 /* eslint-enable max-len */
@@ -943,18 +948,18 @@ describe('queue processor functional tests with mocking', () => {
                 });
 
                 it('should complete a "copy location" action', done => {
-                    sendCopyLocationAction(
-                        s3mock, queueProcessorSF, response => {
-                            assert.strictEqual(response.getError(), undefined);
-                            assert.strictEqual(response.getStatus(), 'success');
-                            const results = response.getResults();
-                            assert.strictEqual(
-                                Array.isArray(results.location), true);
-                            assert.strictEqual(results.location.length, 1);
-                            // 0-byte objects must also be copied
-                            assert.strictEqual(s3mock.hasPutTargetData, true);
-                            done();
-                        });
+                    const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
+                    sendAction(response => {
+                        assert.strictEqual(response.getError(), undefined);
+                        assert.strictEqual(response.getStatus(), 'success');
+                        const results = response.getResults();
+                        assert.strictEqual(
+                            Array.isArray(results.location), true);
+                        assert.strictEqual(results.location.length, 1);
+                        // 0-byte objects must also be copied
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        done();
+                    });
                 });
             }));
 
@@ -1101,25 +1106,25 @@ describe('queue processor functional tests with mocking', () => {
                 `(${error.message}) from source S3 on getObject`, done => {
                     s3mock.installS3ErrorResponder('source.s3.getObject',
                                                    error);
-                    sendCopyLocationAction(
-                        s3mock, queueProcessorSF, response => {
-                            assert(!s3mock.hasPutTargetData);
-                            assert.strictEqual(response.getStatus(), 'error');
-                            // FIXME this is not ideal, but errors are
-                            // reported this way internally for
-                            // now. If we make use of those errors
-                            // they should be reported in a cleaner
-                            // way.
-                            let expectedErrorMsg;
-                            if (error.message === 'AccessDenied') {
-                                expectedErrorMsg = 'Forbidden';
-                            } else if (error.message === 'ObjNotFound') {
-                                expectedErrorMsg = 'Not Found';
-                            }
-                            assert.strictEqual(
-                                response.getError().message, expectedErrorMsg);
-                            done();
-                        });
+                    const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
+                    sendAction(response => {
+                        assert(!s3mock.hasPutTargetData);
+                        assert.strictEqual(response.getStatus(), 'error');
+                        // FIXME this is not ideal, but errors are
+                        // reported this way internally for
+                        // now. If we make use of those errors
+                        // they should be reported in a cleaner
+                        // way.
+                        let expectedErrorMsg;
+                        if (error.message === 'AccessDenied') {
+                            expectedErrorMsg = 'Access Denied';
+                        } else if (error.message === 'ObjNotFound') {
+                            expectedErrorMsg = 'This object does not exist';
+                        }
+                        assert.strictEqual(
+                            response.getError().message, expectedErrorMsg);
+                        done();
+                    });
                 });
             });
 
@@ -1202,7 +1207,8 @@ describe('queue processor functional tests with mocking', () => {
                                     assert(s3mock.hasPutTargetMd);
                                     assert.strictEqual(s3mock.partsDeleted.length, 0);
                                     done();
-                                }),
+                                },
+                            ),
                         ], done);
                     });
                 });
@@ -1224,7 +1230,8 @@ describe('queue processor functional tests with mocking', () => {
                     s3mock.getParam('source.md.location')[0].dataStoreETag,
                     dataStoreVersionId: 'awsversion',
                 }];
-                sendCopyLocationAction(s3mock, queueProcessorSF, response => {
+                const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
+                sendAction(response => {
                     assert(s3mock.hasPutTargetData);
                     assert.strictEqual(response.getStatus(), 'success');
                     assert.deepStrictEqual(response.getResults(), {
@@ -1402,7 +1409,8 @@ describe('queue processor functional tests with mocking', () => {
                     s3mock.getParam('source.md.location')[0].dataStoreETag,
                     dataStoreVersionId: 'awsversion',
                 }];
-                sendCopyLocationAction(s3mock, queueProcessorSF, response => {
+                const sendAction = createCopyLocationSender(s3mock, queueProcessorSF);
+                sendAction(response => {
                     assert(s3mock.hasPutTargetData);
                     assert.strictEqual(response.getStatus(), 'success');
                     assert.deepStrictEqual(response.getResults(), {

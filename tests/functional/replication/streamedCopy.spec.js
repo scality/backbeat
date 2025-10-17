@@ -140,7 +140,7 @@ class S3Mock {
             const expectedUrls = ['putobject', 'putpart'].map(
                 op => `/_/backbeat/multiplebackenddata/${constants.bucket}` +
                     `/${constants.objectKey}?operation=${op}`)
-                  .concat([`/_/backbeat/data/${constants.bucket}/${constants.objectKey}?v2`]);
+                  .concat([`/_/backbeat/data/${constants.bucket}/${constants.objectKey}?v2=`]);
             assert(expectedUrls.includes(req.url));
             const chunks = [];
             req.on('data', chunk => {
@@ -159,10 +159,15 @@ class S3Mock {
                 res.end();
             });
         } else if (req.method === 'GET') {
-            const expectedUrls = ['', 'partNumber=1&'].map(
-                partArg => `/${constants.bucket}/${constants.objectKey}` +
-                    `?${partArg}versionId=${constants.versionId}`);
-            assert(expectedUrls.includes(req.url));
+            const expectedUrls = [
+                `/${constants.bucket}/${constants.objectKey}?versionId=${constants.versionId}`,
+                `/${constants.bucket}/${constants.objectKey}?versionId=${constants.versionId}&x-id=GetObject`,
+                `/${constants.bucket}/${constants.objectKey}?partNumber=1&versionId=${constants.versionId}`,
+                `/${constants.bucket}/${constants.objectKey}?partNumber=1&versionId=${constants.versionId}` + 
+                    '&x-id=GetObject',
+            ];
+            assert(expectedUrls.includes(req.url), 
+                `Unexpected URL: ${req.url}, expected one of: ${JSON.stringify(expectedUrls)}`);
             if (this.testScenario === 'abortGet') {
                 log.info('aborting GET request');
                 res.socket.end();
@@ -185,20 +190,27 @@ describe('streamed copy functional tests', () => {
         s3mock = new S3Mock();
         httpServer = http.createServer(
             (req, res) => s3mock.onRequest(req, res));
-        httpServer.listen(7777);
-        qp = new QueueProcessor(...qpParams);
-        qp._mProducer = {
-            getProducer: () => ({
-                send: () => {},
-            }),
-            publishMetrics: () => {},
-        };
-        process.nextTick(done);
+        httpServer.listen(7777, err => {
+            if (err) {
+                return done(err);
+            }
+            qp = new QueueProcessor(...qpParams);
+            qp._mProducer = {
+                getProducer: () => ({
+                    send: () => {},
+                }),
+                publishMetrics: () => {},
+            };
+            return done();
+        });
     });
 
     afterEach(done => {
-        httpServer.close();
-        process.nextTick(done);
+        if (httpServer && httpServer.listening) {
+            httpServer.close(done);
+        } else {
+            done();
+        }
     });
 
     [{ name: 'ReplicateObject::_getAndPutPartOnce',
@@ -248,8 +260,8 @@ describe('streamed copy functional tests', () => {
        },
      }].forEach(testedFunc => {
          ['noError', 'abortGet', 'abortPut'].forEach(testScenario => {
-             it(`${testedFunc.name} with test scenario ${testScenario}`,
-               done => {
+            it(`${testedFunc.name} with test scenario ${testScenario}`,
+                done => {
                    s3mock.setTestScenario(testScenario);
                    testedFunc.call(err => {
                        if (testScenario === 'noError') {

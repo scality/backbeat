@@ -98,14 +98,14 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
             // S3 API call from inside the bucket processor's async queue
             name: 'listObjects',
             failures: {
-                listObjects: 2,
+                ListObjectsCommand: 2,
             },
         },
         {
             // S3 API call from inside the bucket processor's async queue
             name: 'headObject',
             failures: {
-                listObjects: 2,
+                HeadObjectCommand: 2,
             },
         },
         {
@@ -114,7 +114,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
             // dispatching to the async queue
             name: 'getBucketLifecycleConfiguration',
             failures: {
-                getBucketLifecycleConfiguration: 4,
+                GetBucketLifecycleConfigurationCommand: 4,
             },
         },
     ].forEach(testCase => {
@@ -140,7 +140,7 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     // to the backbeat-lifecycle-bucket-tasks topic with the action name: processObjects.
     // It should happen only once even if process is retrying because of failures.
     it('should only requeue batch of objects once if retryable failures occurred', () => {
-        const failures = { getObjectTagging: 2 };
+        const failures = { GetObjectTaggingCommand: 2 };
         const s3Client = new S3ClientMock(failures);
         s3Client.stubGetBucketLcWithTag().stubListObjectsTruncated();
 
@@ -155,9 +155,9 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     });
 
     it('should only requeue batch of versions once if retryable failures occurred', () => {
-        const failures = { getObjectTagging: 2 };
+        const failures = { GetObjectTaggingCommand: 2 };
         const s3Client = new S3ClientMock(failures);
-        s3Client.stubMethod('getBucketVersioning', { Status: 'Enabled' });
+        s3Client.stubCommand('GetBucketVersioningCommand', { Status: 'Enabled' });
         s3Client.stubGetBucketLcWithTag().stubListVersionsTruncated();
 
         return generateRetryTest(s3Client).then(messages => {
@@ -171,17 +171,17 @@ describe('Lifecycle Bucket Processor', function lifecycleBucketProcessor() {
     });
 
     it('should not retry for NoSuchBucket errors', () => {
-        const s3Client = new S3ClientMock({ getBucketLifecycleConfiguration: 2 });
-        s3Client.stubMethod('getBucketLifecycleConfiguration', null, errors.NoSuchBucket);
+        const s3Client = new S3ClientMock({ GetBucketLifecycleConfigurationCommand: 2 });
+        s3Client.stubCommand('GetBucketLifecycleConfigurationCommand', null, errors.NoSuchBucket);
 
         return generateRetryTest(s3Client, false).then(messages => {
             assert.deepStrictEqual(messages, []);
-            assert.deepStrictEqual(s3Client.calls.getBucketLifecycleConfiguration, 1);
+            assert.deepStrictEqual(s3Client.calls.GetBucketLifecycleConfigurationCommand, 1);
         });
     });
 
     it('should only requeue batch of MPUs once if retryable failures occurred', () => {
-        const failures = { getObjectTagging: 2 };
+        const failures = { GetObjectTaggingCommand: 2 };
         const s3Client = new S3ClientMock(failures);
         s3Client.stubGetBucketLcWithTag().stubListObjectsTruncated().stubListMpuTruncated();
 

@@ -76,6 +76,10 @@ class MetadataMock {
                     }));
                     return;
                 }
+                if (resObj.resType === 'bucketList') {
+                    res.end(JSON.stringify(mockRes.bucketList));
+                    return;
+                }
                 res.end(JSON.stringify(resContent));
             }
         } else if (req.method === 'POST') {

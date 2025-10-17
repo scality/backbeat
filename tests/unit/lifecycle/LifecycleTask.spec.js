@@ -2164,11 +2164,8 @@ describe('lifecycle task helper methods', () => {
     describe('processBucketEntry', () => {
         it('should snapshot datamover topic offsets when transition is supported', done => {
             const s3target = {
-                listMultipartUploads: () => ({
-                    on: sinon.stub().returns(),
-                    // deliberatly failing to avoid going through all the logic
-                    send: sinon.stub().yields(errors.NoSuchBucket),
-                }),
+                // deliberately failing to avoid going through all the logic
+                send: sinon.stub().rejects(errors.NoSuchBucket),
             };
             const backbeatMetadataProxy = sinon.stub();
             const bucketData = {
@@ -2192,11 +2189,8 @@ describe('lifecycle task helper methods', () => {
 
         it('should not snapshot datamover topic offsets when transition is not supported', done => {
             const s3target = {
-                listMultipartUploads: () => ({
-                    on: sinon.stub().returns(),
-                    // deliberatly failing to avoid going through all the logic
-                    send: sinon.stub().yields(errors.NoSuchBucket),
-                }),
+                // deliberately failing to avoid going through all the logic
+                send: sinon.stub().rejects(errors.NoSuchBucket),
             };
             const backbeatMetadataProxy = sinon.stub();
             const bucketData = {

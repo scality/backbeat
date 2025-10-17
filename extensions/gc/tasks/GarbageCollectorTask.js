@@ -2,8 +2,8 @@ const async = require('async');
 const errors = require('arsenal').errors;
 const { ObjectMD } = require('arsenal').models;
 
-const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const { BatchDeleteCommand } = require('@scality/cloudserverclient');
 const { GarbageCollectorMetrics } = require('../GarbageCollectorMetrics');
 /** @typedef { import('../GarbageCollector.js') } GarbageCollector */
 
@@ -122,16 +122,20 @@ class GarbageCollectorTask extends BackbeatTask {
             }
 
             const backbeatClient = this.getBackbeatClient(accountId);
-
             if (!backbeatClient) {
                 log.error('failed to get backbeat client', { accountId });
                 return done(errors.InternalError
                     .customizeDescription('Unable to obtain client'));
             }
 
-            const req = backbeatClient.batchDelete(params);
-            attachReqUids(req, log);
-            return req.send(done);
+            const command = new BatchDeleteCommand({
+                ...params,
+                RequestUids: log.getSerializedUids(),
+            });
+
+            return backbeatClient.send(command)
+                .then(() => done())
+                .catch(err => done(err));
         });
     }
 
@@ -289,8 +293,9 @@ class GarbageCollectorTask extends BackbeatTask {
             if (err) {
                 // if error occurs, do not commit offset unless the error is ObjNotFound
                 // because it means the object has been deleted by other means and we don't need to retry
-                if (err.code === 'ObjNotFound' || err.code === 'NoSuchBucket') {
-                    return done(err, { committable: true });
+                if (err.code === 'ObjNotFound' || err.code === 'NoSuchBucket' ||
+                        err.name === 'ObjNotFound' || err.name === 'NoSuchBucket') {
+                        return done(err, { committable: true });
                 }
                 return done(err, { committable: false });
             }

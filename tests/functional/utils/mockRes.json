@@ -41,6 +41,10 @@
                 "resType": "raftLogs",
                 "name": "1"
             },
+            "/_/metadata/admin/raft_sessions/1/bucket": {
+                "resType": "bucketList",
+                "name": "bucketList"
+            },
             "/_/metadata/default/bucket/bucket1": {
                 "resType": "objectList",
                 "name": "objectList1"
@@ -64,7 +68,7 @@
     },
     "PUT": {
         "responses": {
-            "/_/backbeat/data/bkterr/objerr?v2": {
+            "/_/backbeat/data/bkterr/objerr?v2=": {
                 "resType": "htmlError",
                 "statusCode": 400,
                 "statusMessage": "Bad Request",
@@ -681,10 +685,10 @@
         "bucket2": 5
     },
     "raftInformation": {
-        "1": {
-            "info": {
+        "1": [
+            {
                 "cseq": 7
             }
-        }
+        ]
     }
 }

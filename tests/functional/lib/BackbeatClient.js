@@ -1,11 +1,21 @@
 const http = require('http');
 const assert = require('assert');
 const BucketInfo = require('arsenal').models.BucketInfo;
-const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const { getAccountCredentials } =
     require('../../../lib/credentials/AccountCredentials');
 const { MetadataMock, mockLogs, objectList, dummyBucketMD, objectMD } =
     require('../utils/MetadataMock');
+const { 
+    CloudserverClient,
+    GetRaftIdCommand,
+    GetRaftBucketsCommand,
+    GetRaftLogCommand,
+    GetBucketMetadataCommand,
+    GetObjectListCommand,
+    GetMetadataCommand,
+    GetBucketCseqCommand,
+    PutDataCommand
+} = require('@scality/cloudserverclient');
 const backbeatClientTestPort = 9004;
 const bucketName = 'bucket1';
 const bucketName2 = 'bucket2';
@@ -20,10 +30,10 @@ const accountCreds = getAccountCredentials({
     account: 'bart',
 });
 
-const backbeatClient = new BackbeatClient({
+const backbeatClient = new CloudserverClient({
     endpoint: `http://localhost:${backbeatClientTestPort}`,
-    sslEnabled: false,
-    credentials: accountCreds,
+    credentials: accountCreds.getCredentialsProvider(),
+    region: 'us-east-1',
 });
 
 const serverMock = new MetadataMock();
@@ -50,127 +60,99 @@ describe('BackbeatClient unit tests with mock server', () => {
 
     after(() => httpServer.close());
 
-    // skipping this test because ingestion does not need list bucket per raft
-    it.skip('should get list of buckets managed by raft session', done => {
-        const destReq = backbeatClient.getRaftBuckets({
+    // this test may be skipped because ingestion does not need list bucket per raft
+    it('should get list of buckets managed by raft session', async () => {
+        const data = await backbeatClient.send(new GetRaftBucketsCommand({
             LogId: '1',
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            const expectedRes = {
-                0: bucketName,
-                1: bucketName2,
-            };
-            assert.deepStrictEqual(data, expectedRes);
-            return done();
-        });
+        }));
+        assert.deepStrictEqual(data.Buckets, [bucketName, bucketName2]);
     });
-    it('should get raftId', done => {
-        const destReq = backbeatClient.getRaftId({
+    
+    it('should get raftId', async () => {
+        const data = await backbeatClient.send(new GetRaftIdCommand({
             Bucket: bucketName,
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            assert.strictEqual(data[0], '1');
-            return done();
-        });
+        }));
+        assert.strictEqual(data.RaftId, '1');
     });
 
-    it('should get raftLogs', done => {
-        const destReq = backbeatClient.getRaftLog({
+    it('should get raftLogs', async () => {
+        const data = await backbeatClient.send(new GetRaftLogCommand({
             LogId: '1',
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            assert.deepStrictEqual(data, expectedLogs);
-            return done();
-        });
+        }));
+        const dataStr = await data.Body.transformToString();
+        const jsonData = JSON.parse(dataStr);
+        assert.deepStrictEqual(jsonData, expectedLogs);
     });
 
-    it('should get bucket metadata', done => {
-        const destReq = backbeatClient.getBucketMetadata({
+    it('should get bucket metadata', async () => {
+        const data = await backbeatClient.send(new GetBucketMetadataCommand({
             Bucket: bucketName,
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            const bucketMd = dummyBucketMD[bucketName];
-            const expectedBucketMD = new BucketInfo(bucketMd.name,
-                bucketMd.owner, bucketMd.ownerDisplayName,
-                bucketMd.creationDate, bucketMd.mdBucketModelVersion,
-                bucketMd.acl, bucketMd.transient, bucketMd.deleted,
-                bucketMd.serverSideEncryption,
-                bucketMd.versioningConfiguration, bucketMd.locationConstraint,
-                bucketMd.websiteConfiguration, bucketMd.cors,
-                bucketMd.lifeCycle);
-            const recBucketMD = new BucketInfo(data.name, data.owner,
-                data.ownerDisplayName, data.creationDate,
-                data.mdBucketModelVersion, data.acl, data.transient,
-                data.deleted, data.serverSideEncryption,
-                data.versioningConfiguration, data.locationConstraint,
-                data.websiteConfiguration, data.cors, data.lifeCycle);
-            delete expectedBucketMD._uid;
-            delete recBucketMD._uid;
-            assert.deepStrictEqual(recBucketMD, expectedBucketMD);
-            return done();
-        });
+        }));
+        const bucketMd = dummyBucketMD[bucketName];
+        const expectedBucketMD = new BucketInfo(bucketMd.name,
+            bucketMd.owner, bucketMd.ownerDisplayName,
+            bucketMd.creationDate, bucketMd.mdBucketModelVersion,
+            bucketMd.acl, bucketMd.transient, bucketMd.deleted,
+            bucketMd.serverSideEncryption,
+            bucketMd.versioningConfiguration, bucketMd.locationConstraint,
+            bucketMd.websiteConfiguration, bucketMd.cors,
+            bucketMd.lifeCycle);
+        const recBucketMD = new BucketInfo(data.name, data.owner,
+            data.ownerDisplayName, data.creationDate,
+            data.mdBucketModelVersion, data.acl, data.transient,
+            data.deleted, data.serverSideEncryption,
+            data.versioningConfiguration, data.locationConstraint,
+            data.websiteConfiguration, data.cors, data.lifeCycle);
+        delete expectedBucketMD._uid;
+        delete recBucketMD._uid;
+        assert.deepStrictEqual(recBucketMD, expectedBucketMD);
     });
 
-    it('should get object list', done => {
-        const destReq = backbeatClient.getObjectList({
+    it('should get object list', async () => {
+        const data = await backbeatClient.send(new GetObjectListCommand({
             Bucket: bucketName,
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            assert.deepStrictEqual(data, expectedObjectList);
-            return done();
-        });
+        }));
+        assert.deepStrictEqual(data.Contents, expectedObjectList.Contents);
+        assert.deepStrictEqual(data.IsTruncated, expectedObjectList.IsTruncated);
+        assert.deepStrictEqual(data.Delimiter, expectedObjectList.Delimiter);
+        assert.deepStrictEqual(data.CommonPrefixes, expectedObjectList.CommonPrefixes);
     });
 
-    it('should get object metadata', done => {
-        const destReq = backbeatClient.getMetadata({
+    it('should get object metadata', async () => {
+        const data = await backbeatClient.send(new GetMetadataCommand({
             Bucket: bucketName,
             Key: objectName,
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            assert(data.Body);
-            const dataValue = JSON.parse(data.Body);
-            assert.deepStrictEqual(dataValue, expectedObjectMD);
-            return done();
-        });
+        }));
+        const dataValue = JSON.parse(data.Body);
+        assert.deepStrictEqual(dataValue, expectedObjectMD);
     });
 
-    it('should get bucket specified cseq', done => {
-        const destReq = backbeatClient.getBucketCseq({
+    it('should get bucket specified cseq', async () => {
+        const data = await backbeatClient.send(new GetBucketCseqCommand({
             Bucket: bucketName,
-        });
-        return destReq.send((err, data) => {
-            assert.ifError(err);
-            assert(data[0] && data[0].cseq);
-            assert.strictEqual(data[0].cseq, 7);
-            return done();
-        });
+        }));
+        assert.strictEqual(data.CseqInfo[0].cseq, 7);
     });
 
-    it('should handle openresty HTML error response for putData', done => {
-        const destReq = backbeatClient.putData({
-            Bucket: 'bkterr',
-            Key: 'objerr',
-            CanonicalID: 'test-canonical-id',
-            ContentLength: 0,
-            Body: '',
-            VersioningRequired: true,
-        });
-        return destReq.send(err => {
-            assert(err, 'Expected an error');
-            assert.strictEqual(err.code, 'HTML Bad Request');
+    it('should handle openresty HTML error response for putData', async () => {
+        try {
+            await backbeatClient.send(new PutDataCommand({
+                Bucket: 'bkterr',
+                Key: 'objerr',
+                CanonicalID: 'test-canonical-id',
+                ContentLength: 0,
+                Body: '',
+                VersioningRequired: true,
+            }));
+            throw new Error('Expected an error but got success');
+        } catch (err) {
+            assert.strictEqual(err.name, 'HTML Bad Request');
             assert.strictEqual(err.message, '400 Request Header Or Cookie Too Large');
-            assert.strictEqual(err.statusCode, 400);
+            assert.strictEqual(err.$metadata.httpStatusCode, 400);
             assert(err.rawBody);
             assert(err.rawBody.includes('<title>400 Request Header Or Cookie Too Large</title>'));
             assert(err.rawBody.includes('<center>Request Header Or Cookie Too Large</center>'));
             assert(err.rawBody.includes('<center>openresty</center>'));
-            return done();
-        });
+        }
     });
 });

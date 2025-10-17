@@ -72,7 +72,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
         {
             name: 'deleteObject',
             failures: {
-                deleteObjectFromExpiration: 2,
+                DeleteObjectFromExpirationCommand: 2,
             },
             message: {
                 key: '12345',
@@ -96,7 +96,7 @@ describe('Lifecycle Object Processor', function lifecycleObjectProcessor() {
         {
             name: 'abortMultipartUpload',
             failures: {
-                abortMultipartUpload: 2,
+                AbortMultipartUploadCommand: 2,
             },
             message: {
                 key: '12345',

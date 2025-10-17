@@ -1,31 +1,41 @@
-const async = require('async');
-const AWS = require('aws-sdk');
+const {
+    S3Client,
+    CreateBucketCommand,
+    PutBucketVersioningCommand,
+    PutObjectCommand,
+    ListObjectVersionsCommand,
+    DeleteObjectsCommand,
+    DeleteBucketCommand,
+} = require('@aws-sdk/client-s3');
 
-const BackbeatClient = require('../../../lib/clients/BackbeatClient');
+const { CloudserverClient, GetObjectListCommand } = require('@scality/cloudserverclient');
 
 function getClients(sourceInfo) {
     const { port } = sourceInfo;
 
-    const s3sourceCredentials = new AWS.Credentials({
-        accessKeyId: 'accessKey1',
-        secretAccessKey: 'verySecretKey1',
-    });
-
-    const backbeatClient = new BackbeatClient({
+    const backbeatClient = new CloudserverClient({
         endpoint: `http://localhost:${port}`,
-        credentials: s3sourceCredentials,
-        sslEnabled: false,
-        maxRetries: 0,
-        httpOptions: { timeout: 0 },
+        credentials: {
+            accessKeyId: 'accessKey1',
+            secretAccessKey: 'verySecretKey1',
+        },
+        region: 'us-east-1',
     });
-    const awsClient = new AWS.S3({
+    
+    const awsClient = new S3Client({
         endpoint: 'http://localhost:8000',
-        credentials: s3sourceCredentials,
-        sslEnabled: false,
-        maxRetries: 0,
-        httpOptions: { timeout: 0 },
-        s3ForcePathStyle: true,
-        signatureVersion: 'v4',
+        credentials: {
+            accessKeyId: 'accessKey1',
+            secretAccessKey: 'verySecretKey1',
+        },
+        region: 'us-east-1',
+        forcePathStyle: true,
+        tls: false,
+        maxAttempts: 1,
+        requestHandler: {
+            connectionTimeout: 0,
+            socketTimeout: 0,
+        },
     });
 
     return { backbeatClient, awsClient };
@@ -42,25 +52,28 @@ function setupS3Mock(sourceInfo, cb) {
     const { bucket } = sourceInfo;
     const { backbeatClient, awsClient } = getClients(sourceInfo);
 
-    async.series([
-        next => awsClient.createBucket({ Bucket: bucket }, next),
-        next => awsClient.putBucketVersioning({
-            Bucket: bucket,
-            VersioningConfiguration: { Status: 'Enabled' },
-        }, next),
-        next => backbeatClient.getObjectList({ Bucket: bucket },
-            (err, res) => {
-                if (err) {
-                    return next(err);
-                }
-                return async.each(res.Contents, (entry, done) => {
-                    awsClient.putObject({
-                        Bucket: bucket,
-                        Key: entry.key,
-                    }, done);
-                }, next);
-            }),
-    ], cb);
+    const createCommand = new CreateBucketCommand({ Bucket: bucket });
+    awsClient.send(createCommand)
+        .then(() => {
+            const versionCommand = new PutBucketVersioningCommand({
+                Bucket: bucket,
+                VersioningConfiguration: { Status: 'Enabled' },
+            });
+            return awsClient.send(versionCommand);
+        })
+        .then(() => backbeatClient.send(new GetObjectListCommand({ Bucket: bucket })))
+        .then(res => {
+            const promises = res.Contents.map(entry => {
+                const putCommand = new PutObjectCommand({
+                    Bucket: bucket,
+                    Key: entry.key,
+                });
+                return awsClient.send(putCommand);
+            });
+            return Promise.all(promises);
+        })
+        .then(() => cb())
+        .catch(err => cb(err));
 }
 
 /**
@@ -74,41 +87,39 @@ function emptyAndDeleteVersionedBucket(sourceInfo, cb) {
     const { bucket } = sourceInfo;
     const { awsClient } = getClients(sourceInfo);
 
-    // won't need to worry about 1k+ objects pagination
-    async.series([
-        next => awsClient.listObjectVersions({ Bucket: bucket },
-            (err, data) => {
-                if (err) {
-                    return next(err);
-                }
+    const listCommand = new ListObjectVersionsCommand({ Bucket: bucket });
+    awsClient.send(listCommand)
+        .then(data => {
+            const list = [
+                ...(data.Versions || []).map(v => ({
+                    Key: v.Key,
+                    VersionId: v.VersionId,
+                })),
+                ...(data.DeleteMarkers || []).map(dm => ({
+                    Key: dm.Key,
+                    VersionId: dm.VersionId,
+                })),
+            ];
 
-                const list = [
-                    ...data.Versions.map(v => ({
-                        Key: v.Key,
-                        VersionId: v.VersionId,
-                    })),
-                    ...data.DeleteMarkers.map(dm => ({
-                        Key: dm.Key,
-                        VersionId: dm.VersionId,
-                    })),
-                ];
-
-                if (list.length === 0) {
-                    return next();
-                }
-
-                return awsClient.deleteObjects({
+            if (list.length > 0) {
+                const deleteCommand = new DeleteObjectsCommand({
                     Bucket: bucket,
                     Delete: { Objects: list },
-                }, next);
-            }),
-        next => awsClient.deleteBucket({ Bucket: bucket }, next),
-    ], cb);
+                });
+                return awsClient.send(deleteCommand);
+            }
+            return Promise.resolve();
+        })
+        .then(() => {
+            const deleteBucketCommand = new DeleteBucketCommand({ Bucket: bucket });
+            return awsClient.send(deleteBucketCommand);
+        })
+        .then(() => cb())
+        .catch(err => cb(err));
 }
 
 
 module.exports = {
-    getClients,
     setupS3Mock,
     emptyAndDeleteVersionedBucket
 };

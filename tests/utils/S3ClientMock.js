@@ -8,24 +8,24 @@ class S3ClientMock {
         this.failures = failures;
 
         this.calls = {};
-        this.stubMethod('deleteObject', {});
-        this.stubMethod('abortMultipartUpload', {});
-        this.stubMethod('getBucketVersioning', {});
-        this.stubMethod('listObjects', {
+        this.stubCommand('DeleteObjectCommand', {});
+        this.stubCommand('AbortMultipartUploadCommand', {});
+        this.stubCommand('GetBucketVersioningCommand', {});
+        this.stubCommand('ListObjectsCommand', {
             Contents: [
                 {
                     Key: 'obj1',
-                    LastModified: '2021-10-04T21:46:49.157Z',
+                    LastModified: new Date('2021-10-04T21:46:49.157Z'),
                 },
             ],
         });
-        this.stubMethod('headObject', {
-            LastModified: '2021-10-04T21:46:49.157Z',
+        this.stubCommand('HeadObjectCommand', {
+            LastModified: new Date('2021-10-04T21:46:49.157Z'),
         });
-        this.stubMethod('listMultipartUploads', {
+        this.stubCommand('ListMultipartUploadsCommand', {
             Uploads: [],
         });
-        this.stubMethod('getBucketLifecycleConfiguration', {
+        this.stubCommand('GetBucketLifecycleConfigurationCommand', {
             Rules: [
                 {
                     Expiration: {
@@ -37,10 +37,10 @@ class S3ClientMock {
                 },
             ],
         });
-        this.stubMethod('getObjectTagging', {
+        this.stubCommand('GetObjectTaggingCommand', {
             TagSet: [{ Key: 'key', Value: 'val' }],
         });
-        this.stubMethod('listObjectVersions', {
+        this.stubCommand('ListObjectVersionsCommand', {
             IsTruncated: true,
             DeleteMarkers: [],
             Versions: [],
@@ -53,34 +53,30 @@ class S3ClientMock {
         return err;
     }
 
-    stubMethod(methodName, successResult, stubError) {
-        this.calls[methodName] = 0;
+    send(command) {
+        const commandName = command.constructor.name;
+        
+        if (!this.calls[commandName]) {
+            this.calls[commandName] = 0;
+        }
+        
+        this.calls[commandName]++;
+        
+        const stubData = this[`_${commandName}Result`];
+        const stubError = this[`_${commandName}Error`];
+        
+        if (this.failures[commandName] >= this.calls[commandName]) {
+            const error = stubError || this.makeRetryableError();
+            return Promise.reject(error);
+        }
+        
+        return Promise.resolve(stubData);
+    }
 
-        this[methodName] = (params, done) => {
-            this.calls[methodName]++;
-
-            if (this.failures[methodName] >= this.calls[methodName]) {
-                const error = stubError || this.makeRetryableError();
-
-                if (done) {
-                    return process.nextTick(done, error);
-                }
-
-                return {
-                    send: cb => process.nextTick(cb, error),
-                    on: () => {},
-                };
-            }
-
-            if (done) {
-                return process.nextTick(done, null, successResult);
-            }
-
-            return {
-                send: cb => process.nextTick(cb, null, successResult),
-                on: () => {},
-            };
-        };
+    stubCommand(commandName, successResult, stubError) {
+        this.calls[commandName] = 0;
+        this[`_${commandName}Result`] = successResult;
+        this[`_${commandName}Error`] = stubError;
     }
 
     verifyRetries() {
@@ -98,12 +94,12 @@ class S3ClientMock {
     }
 
     stubListObjectsTruncated() {
-        this.stubMethod('listObjects', {
+        this.stubCommand('ListObjectsCommand', {
             IsTruncated: true,
             Contents: [
                 {
                     Key: 'obj1',
-                    LastModified: '2021-10-04T21:46:49.157Z',
+                    LastModified: new Date('2021-10-04T21:46:49.157Z'),
                     ETag: '1:3749f52bb326ae96782b42dc0a97b4c1',
                     Size: 1,
                     StorageClass: 'site1',
@@ -114,7 +110,7 @@ class S3ClientMock {
     }
 
     stubListVersionsTruncated() {
-        this.stubMethod('listObjectVersions', {
+        this.stubCommand('ListObjectVersionsCommand', {
             IsTruncated: true,
             DeleteMarkers: [],
             Versions: [
@@ -124,7 +120,7 @@ class S3ClientMock {
                     Size: 1,
                     StorageClass: 'site1',
                     IsLatest: true,
-                    LastModified: '2021-10-04T21:46:49.157Z',
+                    LastModified: new Date('2021-10-04T21:46:49.157Z'),
                 },
             ],
         });
@@ -132,10 +128,10 @@ class S3ClientMock {
     }
 
     stubListMpuTruncated() {
-        this.stubMethod('listMultipartUploads', {
+        this.stubCommand('ListMultipartUploadsCommand', {
             IsTruncated: true,
             Uploads: [{
-                Initiated: '2021-10-04T21:46:49.157Z',
+                Initiated: new Date('2021-10-04T21:46:49.157Z'),
                 Key: 'mpu1',
             }],
             UploadIdMarker: 'id',
@@ -145,7 +141,7 @@ class S3ClientMock {
     }
 
     stubGetBucketLcWithTag() {
-        this.stubMethod('getBucketLifecycleConfiguration', {
+        this.stubCommand('GetBucketLifecycleConfigurationCommand', {
             Rules: [
                 {
                     Expiration: {

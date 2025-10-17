@@ -2,7 +2,18 @@ process.env.BACKBEAT_CONFIG_FILE = 'tests/functional/queuePopulator/config/s3c-c
 
 const assert = require('assert');
 const async = require('async');
-const AWS = require('aws-sdk');
+const {
+    S3Client,
+    CreateBucketCommand,
+    PutBucketVersioningCommand,
+    GetBucketVersioningCommand,
+    PutObjectCommand,
+    ListObjectVersionsCommand,
+    ListObjectsCommand,
+    DeleteObjectsCommand,
+    DeleteBucketCommand,
+    PutBucketReplicationCommand,
+} = require('@aws-sdk/client-s3');
 
 const config = require('../../../lib/Config');
 const zkConfig = config.zookeeper;
@@ -16,11 +27,14 @@ const vConfig = config.vaultAdmin;
 
 const QueuePopulator = require('../../../lib/queuePopulator/QueuePopulator');
 
-const S3 = AWS.S3;
 const s3config = {
     endpoint: `http://${config.s3.host}:${config.s3.port}`,
-    s3ForcePathStyle: true,
-    credentials: new AWS.Credentials('accessKey1', 'verySecretKey1'),
+    forcePathStyle: true,
+    region: 'us-east-1',
+    credentials: {
+        accessKeyId: 'accessKey1',
+        secretAccessKey: 'verySecretKey1',
+    },
 };
 
 const maxRead = qpConfig.batchMaxRead;
@@ -40,35 +54,45 @@ class S3Helper {
 
     setAndCreateBucket(name, cb) {
         this.bucket = name;
-        this.s3.createBucket({
+        const command = new CreateBucketCommand({
             Bucket: name,
-        }, err => {
-            assert.ifError(err);
-            cb();
         });
+        this.s3.send(command)
+            .then(() => cb())
+            .catch(err => {
+                assert.ifError(err);
+                cb(err);
+            });
     }
 
     setBucketVersioning(status, cb) {
-        this.s3.putBucketVersioning({
+        const command = new PutBucketVersioningCommand({
             Bucket: this.bucket,
             VersioningConfiguration: {
                 Status: status,
             },
-        }, cb);
+        });
+        this.s3.send(command)
+            .then(() => cb())
+            .catch(err => cb(err));
     }
 
     createObjects(scenarioNumber, cb) {
-        async.forEachOf(this._scenario[scenarioNumber].keyNames,
-        (key, i, done) => {
-            this.s3.putObject({
+        const promises = this._scenario[scenarioNumber].keyNames.map(key => {
+            const command = new PutObjectCommand({
                 Body: '',
                 Bucket: this.bucket,
                 Key: key,
-            }, done);
-        }, err => {
-            assert.ifError(err);
-            return cb();
+            });
+            return this.s3.send(command);
         });
+        
+        Promise.all(promises)
+            .then(() => cb())
+            .catch(err => {
+                assert.ifError(err);
+                cb(err);
+            });
     }
 
     createVersions(scenarioNumber, cb) {
@@ -85,52 +109,64 @@ class S3Helper {
         if (!this.bucket) {
             return cb();
         }
-        return async.waterfall([
-            next => this.s3.getBucketVersioning({ Bucket: this.bucket }, next),
-            (data, next) => {
+        
+        const getVersioningCommand = new GetBucketVersioningCommand({
+            Bucket: this.bucket,
+        });
+        return this.s3.send(getVersioningCommand)
+            .then(data => {
                 if (data.Status === 'Enabled' || data.Status === 'Suspended') {
-                    // listObjectVersions
-                    return this.s3.listObjectVersions({
+                    // List object versions
+                    const listVersionsCommand = new ListObjectVersionsCommand({
                         Bucket: this.bucket,
-                    }, (err, data) => {
-                        assert.ifError(err);
-
-                        const list = [
-                            ...data.Versions.map(v => ({
-                                Key: v.Key,
-                                VersionId: v.VersionId,
-                            })),
-                            ...data.DeleteMarkers.map(dm => ({
-                                Key: dm.Key,
-                                VersionId: dm.VersionId,
-                            })),
-                        ];
-
-                        if (list.length === 0) {
-                            return next(null, null);
-                        }
-
-                        return this.s3.deleteObjects({
-                            Bucket: this.bucket,
-                            Delete: { Objects: list },
-                        }, next);
                     });
+                    return this.s3.send(listVersionsCommand)
+                        .then(versionsData => {
+                            const list = [
+                                ...(versionsData.Versions || []).map(v => ({
+                                    Key: v.Key,
+                                    VersionId: v.VersionId,
+                                })),
+                                ...(versionsData.DeleteMarkers || []).map(dm => ({
+                                    Key: dm.Key,
+                                    VersionId: dm.VersionId,
+                                })),
+                            ];
+
+                            if (list.length === 0) {
+                                return null;
+                            }
+
+                            const deleteObjectsCommand = new DeleteObjectsCommand({
+                                Bucket: this.bucket,
+                                Delete: { Objects: list },
+                            });
+                            return this.s3.send(deleteObjectsCommand);
+                        });
                 }
 
-                return this.s3.listObjects({ Bucket: this.bucket },
-                (err, data) => {
-                    assert.ifError(err);
-
-                    const list = data.Contents.map(c => ({ Key: c.Key }));
-
-                    return this.s3.deleteObjects({
-                        Bucket: this.bucket,
-                        Delete: { Objects: list },
-                    }, next);
+                // List objects without versions
+                const listObjectsCommand = new ListObjectsCommand({
+                    Bucket: this.bucket,
                 });
-            },
-            (data, next) => this.s3.deleteBucket({ Bucket: this.bucket }, next),
-        ], cb);
+                return this.s3.send(listObjectsCommand)
+                    .then(objectsData => {
+                        const list = (objectsData.Contents || []).map(c => ({ Key: c.Key }));
+                        const deleteObjectsCommand = new DeleteObjectsCommand({
+                            Bucket: this.bucket,
+                            Delete: { Objects: list },
+                        });
+                        return this.s3.send(deleteObjectsCommand);
+                    });
+            })
+            .then(() => {
+                const deleteBucketCommand = new DeleteBucketCommand({
+                    Bucket: this.bucket,
+                });
+                return this.s3.send(deleteBucketCommand);
+            })
+            .then(() => cb())
+            .catch(err => cb(err));
     }
 
     setBucketReplicationConfigurations(cb) {
@@ -143,11 +179,15 @@ class S3Helper {
                         Bucket: 'arn:aws:s3:::destination-bucket',
                     },
                     Prefix: '',
-                    Status: 'Enabled'
-                }]
-            }
+                    Status: 'Enabled',
+                }],
+            },
         };
-        return this.s3.putBucketReplication(params, cb);
+        
+        const command = new PutBucketReplicationCommand(params);
+        this.s3.send(command)
+            .then(() => cb())
+            .catch(err => cb(err));
     }
 }
 
@@ -157,16 +197,18 @@ describe('Queue Populator', () => {
     let s3Helper;
 
     before(done => {
-        s3 = new S3(s3config);
+        s3 = new S3Client(s3config);
         s3Helper = new S3Helper(s3);
         qp = new QueuePopulator(zkConfig, kafkaConfig, qpConfig,
             httpsConfig, mConfig, rConfig, vConfig, extConfigs);
         qp.open(done);
     });
 
-    afterEach(done => {
-        s3Helper.emptyAndDeleteBucket(err => {
-            assert.ifError(err);
+    afterEach(function afterEachHook(done) {
+        // Add safety timeout
+        this.timeout(35000);
+        
+        s3Helper.emptyAndDeleteBucket(() => {
             done();
         });
     });

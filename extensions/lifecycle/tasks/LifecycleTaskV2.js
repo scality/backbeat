@@ -165,7 +165,7 @@ class LifecycleTaskV2 extends LifecycleTask {
         // Undefined params can happen when lifecycle configuration rule is disabled for example.
         if (!params) {
             log.debug('no appropriate listing found', {
-                method: 'LifecycleTaskV2._getObjectList',
+                method: 'LifecycleTaskV2._getObjectVersions',
                 bucketLCRules,
                 currentDate,
                 bucketData,
@@ -213,7 +213,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                     if (!err) {
                         log.debug(
                             'sent kafka entry for bucket consumption', {
-                                method: 'LifecycleTaskV2._getObjectList',
+                                method: 'LifecycleTaskV2._getObjectVersions',
                             });
                     }
                 });

@@ -27,18 +27,14 @@ describe('MultipleBackendTask', function test() {
 
     function requestInitiateMPU(params, done) {
         const { retryable } = params;
-
+        const error = { retryable };
         task.backbeatSource = {
-            multipleBackendInitiateMPU: () => ({
-                httpRequest: { headers: {} },
-                send: cb => cb({ retryable }),
-                on: (action, cb) => cb(),
-            }),
+            send: sinon.stub().rejects(error),
         };
 
         task._getAndPutMultipartUpload(sourceEntry, fakeLogger, err => {
             assert(err);
-            // in case of retryable error, this call shall be ignored
+            // in case of retryable error, this shall be ignored
             // thanks to jsutil.once(), where the non-retryable test
             // expects an error.
             return done(err);
@@ -86,21 +82,24 @@ describe('MultipleBackendTask', function test() {
     });
 
     describe('::initiateMultipartUpload', () => {
-        it('should use exponential backoff if retryable error ', done => {
+        it('should use exponential backoff if retryable error', done => {
             const doneOnce = jsutil.once(done);
             setTimeout(() => {
                 // inhibits further retries
                 task.retryParams.timeoutS = 0;
                 doneOnce();
             }, 4000); // Retries will exceed test timeout.
-            requestInitiateMPU({ retryable: true }, doneOnce);
+            requestInitiateMPU({ retryable: true }, err => {
+                assert(err);
+            });
         });
 
-        it('should not use exponential backoff if non-retryable error ', done =>
-           requestInitiateMPU({ retryable: false }, err => {
-               assert(err);
-               done();
-           }));
+        it('should not use exponential backoff if non-retryable error', done => {
+            requestInitiateMPU({ retryable: false }, err => {
+                assert(err);
+                done();
+            });
+        });
     });
 
     describe('::_getRangeSize', () => {
@@ -447,10 +446,7 @@ describe('MultipleBackendTask', function test() {
     describe('_initiateMPU', () => {
         it('should init mpu when location type is not azure', done => {
             task.backbeatSource = {
-                multipleBackendInitiateMPU: sinon.stub().returns({
-                    send: cb => cb(null, {}),
-                    on: () => {},
-                }),
+                send: sinon.stub().resolves({}),
             };
             task.destConfig = {
                 replicationEndpoint: {
@@ -460,16 +456,13 @@ describe('MultipleBackendTask', function test() {
             };
             task._initiateMPU(sourceEntry, fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatSource.multipleBackendInitiateMPU.calledOnce);
+                assert(task.backbeatSource.send.calledOnce);
                 done();
             });
         });
         it('should not init mpu when location type is azure', done => {
             task.backbeatSource = {
-                multipleBackendInitiateMPU: sinon.stub().returns({
-                    send: cb => cb(null, {}),
-                    on: () => {},
-                }),
+                send: sinon.stub().resolves({}),
             };
             task.destConfig = {
                 replicationEndpoint: {
@@ -479,7 +472,7 @@ describe('MultipleBackendTask', function test() {
             };
             task._initiateMPU(sourceEntry, fakeLogger, err => {
                 assert.ifError(err);
-                assert(task.backbeatSource.multipleBackendInitiateMPU.notCalled);
+                assert(task.backbeatSource.send.notCalled);
                 done();
             });
         });

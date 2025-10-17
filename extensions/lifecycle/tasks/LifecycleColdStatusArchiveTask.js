@@ -86,7 +86,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             next => this._getMetadata(entry, log, (err, res) => {
                 LifecycleMetrics.onS3Request(log, 'getMetadata', 'archive', err);
                 if (err) {
-                    if (err.code === 'ObjNotFound') {
+                    if (err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
                         log.info('object metadata not found, cleaning orphan cold object', {
                             entry: entry.getLogInfo(),
                             method: 'LifecycleColdStatusArchiveTask.processEntry',

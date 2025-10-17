@@ -1,5 +1,6 @@
 const async = require('async');
 const { v4: uuid } = require('uuid');
+const { GetBucketReplicationCommand } = require('@aws-sdk/client-s3');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
@@ -7,6 +8,18 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
 
 const ReplicateObject = require('./ReplicateObject');
+const { 
+    GetObjectCommand,
+    MultipleBackendPutObjectCommand,
+    MultipleBackendDeleteObjectCommand,
+    MultipleBackendInitiateMPUCommand,
+    MultipleBackendAbortMPUCommand,
+    MultipleBackendPutMPUPartCommand,
+    MultipleBackendCompleteMPUCommand,
+    MultipleBackendPutObjectTaggingCommand,
+    MultipleBackendDeleteObjectTaggingCommand,
+    addContentLengthMiddleware,
+} = require('@scality/cloudserverclient');
 const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const { metricsExtension, metricsTypeQueued } = require('../constants');
@@ -64,60 +77,61 @@ class MultipleBackendTask extends ReplicateObject {
 
         this._setupSourceClients(this.sourceRole, log);
 
-        const req = this.S3source.getBucketReplication({
+        const command = new GetBucketReplicationCommand({
             Bucket: entry.getBucket(),
         });
-        attachReqUids(req, log);
-        return req.send((err, data) => {
-            if (err) {
+        attachReqUids(command, log);
+        return this.S3source.send(command)
+            .then(data => {
+                const replicationEnabled = data.ReplicationConfiguration.Rules
+                    .some(rule => rule.Status === 'Enabled' &&
+                        entry.getObjectKey().startsWith(rule.Prefix));
+                if (!replicationEnabled) {
+                    errMessage = 'replication disabled for object';
+                    log.debug(errMessage, {
+                        method: 'MultipleBackendTask._setupRolesOnce',
+                        entry: entry.getLogInfo(),
+                    });
+                    return cb(errors.PreconditionFailed.customizeDescription(
+                        errMessage));
+                }
+                const roles = data.ReplicationConfiguration.Role.split(',');
+                if (roles.length > 2) {
+                    errMessage = 'expecting no more than two roles in bucket ' +
+                        'replication configuration when replicating to an ' +
+                        'external location';
+                    log.error(errMessage, {
+                        method: 'MultipleBackendTask._setupRolesOnce',
+                        entry: entry.getLogInfo(),
+                        roles,
+                    });
+                    return cb(errors.BadRole.customizeDescription(errMessage));
+                }
+                if (roles[0] !== entryRoles[0]) {
+                    log.error('role in replication entry for source does not ' +
+                    'match role in bucket replication configuration', {
+                        method: 'MultipleBackendTask._setupRolesOnce',
+                        entry: entry.getLogInfo(),
+                        entryRole: entryRoles[0],
+                        bucketRole: roles[0],
+                    });
+                    return cb(errors.BadRole);
+                }
+                return cb();
+            })
+            .catch(err => {
                 log.error('error getting replication configuration from S3', {
                     method: 'MultipleBackendTask._setupRolesOnce',
                     entry: entry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     error: err.message,
-                    httpStatus: err.statusCode,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 return cb(err);
-            }
-            const replicationEnabled = data.ReplicationConfiguration.Rules
-                .some(rule => rule.Status === 'Enabled' &&
-                    entry.getObjectKey().startsWith(rule.Prefix));
-            if (!replicationEnabled) {
-                errMessage = 'replication disabled for object';
-                log.debug(errMessage, {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                });
-                return cb(errors.PreconditionFailed.customizeDescription(
-                    errMessage));
-            }
-            const roles = data.ReplicationConfiguration.Role.split(',');
-            if (roles.length > 2) {
-                errMessage = 'expecting no more than two roles in bucket ' +
-                    'replication configuration when replicating to an ' +
-                    'external location';
-                log.error(errMessage, {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    roles,
-                });
-                return cb(errors.BadRole.customizeDescription(errMessage));
-            }
-            if (roles[0] !== entryRoles[0]) {
-                log.error('role in replication entry for source does not ' +
-                'match role in bucket replication configuration', {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    entryRole: entryRoles[0],
-                    bucketRole: roles[0],
-                });
-                return cb(errors.BadRole);
-            }
-            return cb();
-        });
+            });
     }
 
     _refreshSourceEntry(sourceEntry, log, cb) {
@@ -229,19 +243,44 @@ class MultipleBackendTask extends ReplicateObject {
         const doneOnce = jsutil.once(done);
         // A 0-byte object has no range, otherwise range is inclusive.
         const size = range ? range.end - range.start + 1 : 0;
-        let sourceReq = null;
-        if (size !== 0) {
-            sourceReq = this.backbeatSource.getObject({
-                Bucket: sourceEntry.getBucket(),
-                Key: sourceEntry.getObjectKey(),
-                VersionId: sourceEntry.getEncodedVersionId() || 'null',
-                // A 0-byte part has no range.
-                Range: range && `bytes=${range.start}-${range.end}`,
-                LocationConstraint: sourceEntry.getDataStoreName(),
-            });
+        if (size === 0) {
+            return this._putMPUPart(sourceEntry, undefined, 0,
+                uploadId, partNumber, log, undefined, undefined, doneOnce);
         }
-        return this._putMPUPart(sourceEntry, sourceReq, size,
-            uploadId, partNumber, log, doneOnce);
+
+        const abortController = new AbortController();
+        const command = new GetObjectCommand({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId() || 'null',
+            // A 0-byte part has no range.
+            Range: range && `bytes=${range.start}-${range.end}`,
+            LocationConstraint: sourceEntry.getDataStoreName(),
+            RequestUids: log.getSerializedUids(),
+        });
+        
+        const startReadTime = Date.now();
+        return this.backbeatSource.send(command, { abortSignal: abortController.signal })
+            .then(data => {
+                return this._putMPUPart(sourceEntry, data.Body, size,
+                    uploadId, partNumber, log, abortController, startReadTime, doneOnce);
+            })
+            .catch(err => {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.$metadata?.httpStatusCode === 404) {
+                    return doneOnce(err);
+                }
+                log.error('an error occurred on getObject from S3', {
+                    method: 'MultipleBackendTask._getRangeAndPutMPUPartOnce',
+                    entry: sourceEntry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
+                });
+                return doneOnce(err);
+            });
     }
 
     /**
@@ -277,16 +316,18 @@ class MultipleBackendTask extends ReplicateObject {
             uploadId,
         });
         const doneOnce = jsutil.once(cb);
-        const destReq = this.backbeatSource.multipleBackendAbortMPU({
+        const command = new MultipleBackendAbortMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
             UploadId: uploadId,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
-        return destReq.send(err => {
-            if (err) {
+        
+        return this.backbeatSource.send(command)
+            .then(() => doneOnce())
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred aborting multipart upload', {
@@ -295,11 +336,10 @@ class MultipleBackendTask extends ReplicateObject {
                     origin: 'source',
                     peer: this.destBackbeatHost,
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 return doneOnce(err);
-            }
-            return doneOnce();
-        });
+            });
     }
 
    /**
@@ -312,7 +352,7 @@ class MultipleBackendTask extends ReplicateObject {
     * @return {undefined}
     */
     _completeMPU(sourceEntry, uploadId, data, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendCompleteMPU({
+        const command = new MultipleBackendCompleteMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
@@ -328,10 +368,16 @@ class MultipleBackendTask extends ReplicateObject {
             UploadId: uploadId,
             Tags: JSON.stringify(sourceEntry.getTags()),
             Body: JSON.stringify(data),
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
+        
+        return this.backbeatSource.send(command)
+            .then(data => {
+                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                    data.versionId);
+                return doneOnce();
+            })
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on completing MPU to S3', {
@@ -340,102 +386,92 @@ class MultipleBackendTask extends ReplicateObject {
                     origin: 'target',
                     peer: this.destBackbeatHost,
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 // Attempt to abort the MPU, but pass the error from
                 // multipleBackendCompleteMPU because that operation's result
                 // should determine the replication's success or failure.
                 return this._handleMPUFailure(sourceEntry, uploadId,
                     log, () => doneOnce(err));
-            }
-            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                data.versionId);
-            return doneOnce();
-        });
+            });
     }
 
     /**
      * Get the ranged object, calculate the data's size, then put the part.
      * @param {ObjectQueueEntry} sourceEntry - The source object entry
-     * @param {AWS.Request} sourceReq - The source request for getting data
+     * @param {ReadableStream} body - The body of the data
      * @param {Number} size - The size of the content
      * @param {String} uploadId - The upload ID of the initiated MPU
      * @param {Number} partNumber - The part number of the part
      * @param {Werelogs} log - The logger instance
+     * @param {AbortController} abortController - The abort controller for the source GET request
+     * @param {Number} readStartTime - The timestamp when the read started
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
-    _putMPUPart(sourceEntry, sourceReq, size, uploadId, partNumber,
-        log, doneOnce) {
-        let incomingMsg = null;
-        let destReq = null;
-        let sourceReqAborted = false;
-        let destReqAborted = false;
-        if (sourceReq) {
-            attachReqUids(sourceReq, log);
-            sourceReq.on('error', err => {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                if (err.statusCode === 404) {
-                    return doneOnce(err);
-                }
-                if (!sourceReqAborted) {
-                    log.error('an error occurred on getObject from S3', {
-                        method: 'MultipleBackendTask._putMPUPart',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    });
-                }
-                return doneOnce(err);
-            });
-            incomingMsg = sourceReq.createReadStream();
-            const readStartTime = Date.now();
-            incomingMsg.on('error', err => {
-                if (!sourceReqAborted) {
-                    destReq.abort();
-                    destReqAborted = true;
-                }
-                if (err.statusCode === 404) {
-                    return doneOnce(errors.ObjNotFound);
-                }
-                if (!sourceReqAborted) {
+    _putMPUPart(sourceEntry, body, size, uploadId, partNumber,
+        log, abortController, readStartTime, doneOnce) {
+        let sourceStreamAborted = false;
+        let destRequestAborted = false;
+
+        if (body) {
+            body.on('error', err => {
+                if (!sourceStreamAborted) {
+                    sourceStreamAborted = true;
+                    destRequestAborted = true;
+                    if (abortController) {
+                        abortController.abort();
+                    }
+                    if (err.$metadata?.httpStatusCode === 404) {
+                        return doneOnce(errors.ObjNotFound);
+                    }
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'source';
-                    log.error('an error occurred when streaming data from S3', {
+                    log.error('an error occurred when streaming MPU part data from S3', {
                         entry: sourceEntry.getLogInfo(),
                         method: 'MultipleBackendTask._putMPUPart',
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
                     });
+                    return doneOnce(err);
                 }
-                return doneOnce(err);
+                return undefined;
             });
-            incomingMsg.on('end', () => {
+            body.on('end', () => {
                 this._publishReadMetrics(size, readStartTime);
             });
             log.debug('putting data', { entry: sourceEntry.getLogInfo() });
         }
 
-        destReq = this.backbeatSource.multipleBackendPutMPUPart({
+        const command = new MultipleBackendPutMPUPartCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            ContentLength: size,
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
             PartNumber: partNumber,
             UploadId: uploadId,
-            Body: incomingMsg,
+            Body: body,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
+        addContentLengthMiddleware(command, size);
+        
         const writeStartTime = Date.now();
-        return destReq.send((err, data) => {
-            if (err) {
-                if (!destReqAborted) {
-                    sourceReq.abort();
-                    sourceReqAborted = true;
+        return this.backbeatSource.send(command)
+            .then(data => {
+                this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
+                return doneOnce(null, data);
+            })
+            .catch(err => {
+                if (!destRequestAborted) {
+                    destRequestAborted = true;
+                    if (abortController) {
+                        abortController.abort();
+                        sourceStreamAborted = true;
+                    }
+                    if (body && body.destroy) {
+                        body.destroy();
+                    }
                     // eslint-disable-next-line no-param-reassign
                     err.origin = 'source';
                     log.error('an error occurred on putting MPU part to S3', {
@@ -444,14 +480,11 @@ class MultipleBackendTask extends ReplicateObject {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message,
+                        httpStatus: err.$metadata?.httpStatusCode,
                     });
                 }
                 return doneOnce(err);
-            }
-
-            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
-            return doneOnce(null, data);
-        });
+            });
     }
 
     _getAndPutMultipartUpload(sourceEntry, log, cb) {
@@ -472,7 +505,7 @@ class MultipleBackendTask extends ReplicateObject {
             const uploadId = uuid().replace(/-/g, '');
             return setImmediate(() => cb(null, uploadId));
         }
-        const destReq = this.backbeatSource.multipleBackendInitiateMPU({
+        const command = new MultipleBackendInitiateMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
@@ -485,10 +518,12 @@ class MultipleBackendTask extends ReplicateObject {
                 sourceEntry.getContentDisposition() || undefined,
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Tags: JSON.stringify(sourceEntry.getTags()),
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
-        return destReq.send((err, data) => {
-            if (err) {
+        
+        return this.backbeatSource.send(command)
+            .then(data => cb(null, data.uploadId))
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on initating MPU to S3', {
@@ -497,11 +532,10 @@ class MultipleBackendTask extends ReplicateObject {
                     origin: 'target',
                     peer: this.destBackbeatHost,
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 return cb(err);
-            }
-            return cb(null, data.uploadId);
-        });
+            });
     }
 
     /**
@@ -613,7 +647,7 @@ class MultipleBackendTask extends ReplicateObject {
                         return next(err);
                     }
                     const res = {
-                        PartNumber: [data.partNumber],
+                        PartNumber: [parseInt(data.partNumber, 10)],
                         ETag: [data.ETag],
                     };
                     if (isAzure) {
@@ -638,6 +672,7 @@ class MultipleBackendTask extends ReplicateObject {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message,
+                        httpStatus: err.$metadata?.httpStatusCode,
                     });
                     // Attempt to abort the MPU, but pass an error from
                     // multipleBackendPutMPUPart because that operation's result
@@ -661,7 +696,7 @@ class MultipleBackendTask extends ReplicateObject {
     _checkMPUState(sourceEntry, uploadId, log, cb) {
         return this._checkObjectState(sourceEntry, log, err => {
             if (err) {
-                if (err && !err.InvalidObjectState) {
+                if (!err.InvalidObjectState && err.name !== 'InvalidObjectState') {
                     return cb(err);
                 }
                 // The latest object has different content so an attempt at CRR
@@ -736,93 +771,116 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('getting object data', { entry: sourceEntry.getLogInfo() });
         const doneOnce = jsutil.once(done);
         const size = sourceEntry.getContentLength();
-        let sourceReq = null;
-        let incomingMsg = null;
-        let aborted = false;
-        if (size !== 0) {
-            sourceReq = this.backbeatSource.getObject({
-                Bucket: sourceEntry.getBucket(),
-                Key: sourceEntry.getObjectKey(),
-                VersionId: sourceEntry.getEncodedVersionId() || 'null',
-                LocationConstraint: sourceEntry.getDataStoreName(),
-            });
-            attachReqUids(sourceReq, log);
-            sourceReq.on('error', err => {
+        if (size === 0) {
+            log.debug('putting object', { entry: sourceEntry.getLogInfo() });
+            if (sourceEntry.getReplicationIsNFS()) {
+                return this._checkObjectState(sourceEntry, log, err => {
+                    if (err) {
+                        return doneOnce(err);
+                    }
+                    return this._sendMultipleBackendPutObject(sourceEntry,
+                        size, null, log, doneOnce);
+                });
+            }
+            return this._sendMultipleBackendPutObject(sourceEntry,
+                size, null, log, doneOnce);
+        }
+
+        const abortController = new AbortController();
+        let sourceStreamAborted = false;
+
+        const command = new GetObjectCommand({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            VersionId: sourceEntry.getEncodedVersionId() || 'null',
+            LocationConstraint: sourceEntry.getDataStoreName(),
+            RequestUids: log.getSerializedUids(),
+        });
+        
+        const readStartTime = Date.now();
+        return this.backbeatSource.send(command, { abortSignal: abortController.signal })
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
-                if (err.statusCode === 404) {
+                if (err.$metadata?.httpStatusCode === 404) {
                     log.error('the source object was not found', {
                         method: 'MultipleBackendTask._getAndPutObjectOnce',
                         entry: sourceEntry.getLogInfo(),
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
-                        httpStatus: err.statusCode,
+                        httpStatus: err.$metadata?.httpStatusCode,
                     });
-                    return doneOnce(err);
-                }
-                if (!aborted) {
+                } else {
                     log.error('an error occurred getting object from S3', {
                         method: 'MultipleBackendTask._getAndPutObjectOnce',
                         entry: sourceEntry.getLogInfo(),
                         origin: 'source',
                         peer: this.sourceConfig.s3,
                         error: err.message,
-                        httpStatus: err.statusCode,
+                        httpStatus: err.$metadata?.httpStatusCode,
                     });
                 }
                 return doneOnce(err);
-            });
-            incomingMsg = sourceReq.createReadStream();
-            const readStartTime = Date.now();
-            incomingMsg.on('error', err => {
-                if (err.statusCode === 404) {
-                    log.error('the source object was not found', {
-                        method: 'MultipleBackendTask._getAndPutObjectOnce',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        httpStatus: err.statusCode,
-                    });
-                    return doneOnce(errors.ObjNotFound);
-                }
-                if (!aborted) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('an error occurred when streaming data from S3', {
-                        entry: sourceEntry.getLogInfo(),
-                        method: 'MultipleBackendTask._getAndPutObjectOnce',
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                    });
-                }
-                return doneOnce(err);
-            });
-            incomingMsg.on('end', () => {
-                this._publishReadMetrics(size, readStartTime);
-            });
-            log.debug('putting object', { entry: sourceEntry.getLogInfo() });
-        }
-        const putDone = err => {
-            if (err && sourceReq) {
-                sourceReq.abort();
-                aborted = true;
-            }
-            doneOnce(err);
-        };
-        if (sourceEntry.getReplicationIsNFS()) {
-            return this._checkObjectState(sourceEntry, log, err => {
-                if (err) {
+            })
+            .then(data => {
+                const incomingMsg = data.Body;
+                incomingMsg.on('end', () => {
+                    this._publishReadMetrics(size, readStartTime);
+                });
+                incomingMsg.on('error', err => {
+                    if (!sourceStreamAborted) {
+                        sourceStreamAborted = true;
+                        abortController.abort();
+                        // eslint-disable-next-line no-param-reassign
+                        err.origin = 'source';
+                        if (err.$metadata?.httpStatusCode === 404) {
+                            log.error('the source object was not found', {
+                                method: 'MultipleBackendTask._getAndPutObjectOnce',
+                                entry: sourceEntry.getLogInfo(),
+                                origin: 'source',
+                                peer: this.sourceConfig.s3,
+                                error: err.message,
+                                httpStatus: err.$metadata?.httpStatusCode,
+                            });
+                            return doneOnce(errors.ObjNotFound);
+                        }
+                        log.error('an error occurred when streaming data from S3', {
+                            entry: sourceEntry.getLogInfo(),
+                            method: 'MultipleBackendTask._getAndPutObjectOnce',
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
+                            error: err.message,
+                        });
+                        return doneOnce(err);
+                    }
+                    return undefined;
+                });
+                
+                log.debug('putting object', { entry: sourceEntry.getLogInfo() });
+                const putDone = err => {
+                    if (err && !sourceStreamAborted) {
+                        sourceStreamAborted = true;
+                        abortController.abort();
+                        if (incomingMsg.destroy) {
+                            incomingMsg.destroy();
+                        }
+                    }
                     return doneOnce(err);
+                };
+                
+                if (sourceEntry.getReplicationIsNFS()) {
+                    return this._checkObjectState(sourceEntry, log, err => {
+                        if (err) {
+                            return putDone(err);
+                        }
+                        return this._sendMultipleBackendPutObject(sourceEntry,
+                            size, incomingMsg, log, putDone);
+                    });
                 }
                 return this._sendMultipleBackendPutObject(sourceEntry,
                     size, incomingMsg, log, putDone);
             });
-        }
-        return this._sendMultipleBackendPutObject(sourceEntry,
-            size, incomingMsg, log, putDone);
     }
 
     /**
@@ -835,7 +893,7 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _checkObjectState(sourceEntry, log, cb) {
         return this._getSourceMD(sourceEntry, log, (err, res) => {
-            if (err && err.code === 'ObjNotFound' &&
+            if (err && (err.code === 'ObjNotFound' || err.name === 'ObjNotFound') &&
             !sourceEntry.getIsDeleteMarker()) {
                 // The source object was unexpectedly deleted, so we skip CRR
                 // here.
@@ -883,18 +941,18 @@ class MultipleBackendTask extends ReplicateObject {
      * Send the put object request to Cloudserver.
      * @param {ObjectQueueEntry} sourceEntry - The source object entry
      * @param {Number} size - The size of object to stream
-     * @param {Readable} incomingMsg - The stream of data to put
+     * @param {StreamingBlobPayloadOutputTypes} incomingMsg - The stream of data to put
      * @param {Werelogs} log - The logger instance
      * @param {Function} doneOnce - The callback to call
      * @return {undefined}
      */
     _sendMultipleBackendPutObject(sourceEntry, size,
         incomingMsg, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendPutObject({
+        
+        const command = new MultipleBackendPutObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             CanonicalID: sourceEntry.getOwnerId(),
-            ContentLength: size,
             ContentMD5: sourceEntry.getContentMd5(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
@@ -907,37 +965,24 @@ class MultipleBackendTask extends ReplicateObject {
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Tags: JSON.stringify(sourceEntry.getTags()),
             Body: incomingMsg,
+            RequestUids: log.getSerializedUids(),
         });
-        let aborted = false;
-        if (incomingMsg) {
-            incomingMsg.once('error', () => {
-                destReq.abort();
-                aborted = true;
-            });
-        }
-        attachReqUids(destReq, log);
-        const writeStartTime = Date.now();
-        return destReq.send((err, data) => {
-            if (err) {
-                if (!aborted) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'source';
-                    log.error('an error occurred putting object to S3', {
-                        method: 'MultipleBackendTask._sendMultipleBackendPutObject',
-                        entry: sourceEntry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                    });
-                }
-                return doneOnce(err);
-            }
-            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                data.versionId);
+        addContentLengthMiddleware(command, size);
 
-            this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
-            return doneOnce(null, data);
-        });
+        const writeStartTime = Date.now();
+        return this.backbeatSource.send(command)
+            .then(data => {
+                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                    data.versionId);
+
+                this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
+                return doneOnce(null, data);
+            })
+            .catch(err => {
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                return doneOnce(err);
+            });
     }
 
     _putObjectTagging(sourceEntry, log, cb) {
@@ -963,36 +1008,39 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('replicating object tags', {
             entry: sourceEntry.getLogInfo(),
         });
-        const destReq = this.backbeatSource
-            .multipleBackendPutObjectTagging({
-                Bucket: sourceEntry.getBucket(),
-                Key: sourceEntry.getObjectKey(),
-                StorageType: sourceEntry.getReplicationStorageType(),
-                StorageClass: this.site,
-                DataStoreVersionId:
-                    sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
-                Tags: JSON.stringify(sourceEntry.getTags()),
-                SourceBucket: sourceEntry.getBucket(),
-                SourceVersionId: sourceEntry.getVersionId(),
-                ReplicationEndpointSite: this.site,
-            });
-        attachReqUids(destReq, log);
+        const command = new MultipleBackendPutObjectTaggingCommand({
+            Bucket: sourceEntry.getBucket(),
+            Key: sourceEntry.getObjectKey(),
+            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageClass: this.site,
+            DataStoreVersionId:
+                sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
+            Tags: JSON.stringify(sourceEntry.getTags()),
+            SourceBucket: sourceEntry.getBucket(),
+            SourceVersionId: sourceEntry.getVersionId(),
+            ReplicationEndpointSite: this.site,
+            RequestUids: log.getSerializedUids(),
+        });
+
         const writeStartTime = Date.now();
-        return destReq.send((err, data) => {
-            if (err) {
+        return this.backbeatSource.send(command)
+            .then(data => {
+                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                    data.versionId);
+                // TODO : follow-up BB-730 to provide better metrics
+                this._publishMetadataWriteMetrics(JSON.stringify(sourceEntry.getTags()), writeStartTime);
+                return doneOnce();
+            })
+            .catch(err => {
                 log.error('an error occurred putting object tagging to S3', {
                     method: 'MultipleBackendTask._putObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'target',
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 return doneOnce(err);
-            }
-            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                data.versionId);
-            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
-            return doneOnce();
-        });
+            });
     }
 
     _deleteObjectTagging(sourceEntry, log, cb) {
@@ -1017,7 +1065,7 @@ class MultipleBackendTask extends ReplicateObject {
         log.debug('replicating delete object tagging', {
             entry: sourceEntry.getLogInfo(),
         });
-        const destReq = this.backbeatSource.multipleBackendDeleteObjectTagging({
+        const command = new MultipleBackendDeleteObjectTaggingCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
@@ -1027,25 +1075,29 @@ class MultipleBackendTask extends ReplicateObject {
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
             ReplicationEndpointSite: this.site,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
+
         const writeStartTime = Date.now();
-        return destReq.send((err, data) => {
-            if (err) {
+        return this.backbeatSource.send(command)
+            .then(data => {
+                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                    data.versionId);
+                // TODO : follow-up BB-730 to provide better metrics
+                this._publishMetadataWriteMetrics('', writeStartTime);
+                return doneOnce();
+            })
+            .catch(err => {
                 log.error('an error occurred on deleting object tagging', {
                     method: 'MultipleBackendTask._deleteObjectTaggingOnce',
                     entry: sourceEntry.getLogInfo(),
                     origin: 'target',
                     peer: this.destBackbeatHost,
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 return doneOnce(err);
-            }
-            sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
-                data.versionId);
-            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
-            return doneOnce();
-        });
+            });
     }
 
     _putDeleteMarker(sourceEntry, log, cb) {
@@ -1072,7 +1124,7 @@ class MultipleBackendTask extends ReplicateObject {
         });
         if (sourceEntry.getReplicationIsNFS()) {
             return this._checkObjectState(sourceEntry, log, err => {
-                if (err && err.code !== 'ObjNotFound') {
+                if (err && err.code !== 'ObjNotFound' && err.name !== 'ObjNotFound') {
                     // If it is a non-versioned object, the object will not be
                     // found. However we still want to replicate a delete
                     // marker.
@@ -1094,16 +1146,22 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _sendMultipleBackendDeleteObject(sourceEntry, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendDeleteObject({
+        const command = new MultipleBackendDeleteObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             StorageType: sourceEntry.getReplicationStorageType(),
             StorageClass: this.site,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(destReq, log);
+
         const writeStartTime = Date.now();
-        return destReq.send(err => {
-            if (err) {
+        return this.backbeatSource.send(command)
+            .then(() => {
+                // TODO : follow-up BB-730 to provide better metrics
+                this._publishMetadataWriteMetrics('', writeStartTime);
+                return doneOnce();
+            })
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
                 log.error('an error occurred on putting delete marker to S3', {
@@ -1112,12 +1170,10 @@ class MultipleBackendTask extends ReplicateObject {
                     origin: 'target',
                     peer: this.destBackbeatHost,
                     error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
                 });
                 return doneOnce(err);
-            }
-            this._publishMetadataWriteMetrics(destReq.httpRequest.body, writeStartTime);
-            return doneOnce();
-        });
+            });
     }
 
     /**
@@ -1142,12 +1198,11 @@ class MultipleBackendTask extends ReplicateObject {
         return async.waterfall([
             next => this._setupClients(sourceEntry, log, next),
             next => this._refreshSourceEntry(sourceEntry, log, (err, res) => {
-                if (err && err.code === 'ObjNotFound' &&
-                    sourceEntry.getReplicationIsNFS() &&
-                    !sourceEntry.getIsDeleteMarker()) {
-                    // The object was deleted before entry is processed, we
-                    // can safely skip this entry.
-                    return next(errors.InvalidObjectState);
+                if (err && (err.code === 'ObjNotFound' || err.name === 'ObjNotFound') &&
+                    sourceEntry.getReplicationIsNFS() && !sourceEntry.getIsDeleteMarker()) {
+                        // The object was deleted before entry is processed, we
+                        // can safely skip this entry.
+                        return next(errors.InvalidObjectState);
                 }
                 if (err) {
                     return next(err);
@@ -1225,10 +1280,11 @@ class MultipleBackendTask extends ReplicateObject {
                 sourceEntry, 'COMPLETED', { kafkaEntry, log });
             return done(null, { committable: false });
         }
-        if (err.BadRole ||
+        if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
-             (err.NoSuchEntity || err.code === 'NoSuchEntity' ||
-              err.AccessDenied || err.code === 'AccessDenied'))) {
+             (err.NoSuchEntity || err.code === 'NoSuchEntity' || err.name === 'NoSuchEntity' ||
+              err.AccessDenied || err.code === 'AccessDenied' || err.name === 'AccessDenied' ||
+              err.InvalidAccessKeyId || err.code === 'InvalidAccessKeyId' || err.name === 'InvalidAccessKeyId'))) {
             log.error('replication failed permanently for object, ' +
                       'processing skipped',
                 { failMethod: err.method,
@@ -1237,13 +1293,13 @@ class MultipleBackendTask extends ReplicateObject {
                     error: err.description });
             return done();
         }
-        if (err.ObjNotFound || err.code === 'ObjNotFound') {
+        if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
             log.info('replication skipped: ' +
                      'source object version does not exist',
                      { entry: sourceEntry.getLogInfo() });
             return done();
         }
-        if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
+        if (err.InvalidObjectState || err.code === 'InvalidObjectState' || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
             return done();

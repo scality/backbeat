@@ -62,6 +62,7 @@ describe('BackbeatConsumer main tests', () => {
         ], done);
     });
     afterEach(() => {
+        consumer._consumer.unsubscribe();
         consumedMessages = [];
         consumer.removeAllListeners('consumed');
     });

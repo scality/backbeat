@@ -1,16 +1,23 @@
 const async = require('async');
-const AWS = require('aws-sdk');
+const { S3Client, GetBucketReplicationCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 
 const ClientManager = require('../../../lib/clients/ClientManager');
-const BackbeatClient = require('../../../lib/clients/BackbeatClient');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
+const { 
+    CloudserverClient,
+    PutDataCommand,
+    BatchDeleteCommand,
+    PutMetadataCommand,
+    GetMetadataCommand,
+    addContentLengthMiddleware,
+} = require('@scality/cloudserverclient');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
-const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
+const { attachReqUids, isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
@@ -121,8 +128,8 @@ class ReplicateObject extends BackbeatTask {
             // this call uses our own Vault client which does not set
             // the 'retryable' field
             shouldRetryFunc: err =>
-            (err.InternalError || err.code === 'InternalError' ||
-                err.ServiceUnavailable || err.code === 'ServiceUnavailable'),
+            (err.InternalError || err.code === 'InternalError' || err.name === 'InternalError' ||
+                err.ServiceUnavailable || err.code === 'ServiceUnavailable' || err.name === 'ServiceUnavailable'),
             onRetryFunc: () => {
                 this.destHosts.pickNextHost();
                 this._setupDestClients(this.targetRole, log);
@@ -238,27 +245,12 @@ class ReplicateObject extends BackbeatTask {
 
         this._setupSourceClients(this.sourceRole, log);
 
-        const req = this.S3source.getBucketReplication(
+        const command = new GetBucketReplicationCommand(
             { Bucket: entry.getBucket() });
-        attachReqUids(req, log);
-        return req.send((err, data) => {
-            if (err) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                log.error('error getting replication ' +
-                    'configuration from S3',
-                    {
-                        method: 'ReplicateObject._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        err,
-                        httpStatus: err.statusCode,
-                    });
-                return cb(err);
-            }
-            const replicationEnabled = (
+        attachReqUids(command, log);
+        return this.S3source.send(command)
+            .then(data => {
+                const replicationEnabled = (
                 data.ReplicationConfiguration.Rules.some(
                     rule => entry.getObjectKey().startsWith(rule.Prefix)
                         && rule.Status === 'Enabled'));
@@ -305,6 +297,22 @@ class ReplicateObject extends BackbeatTask {
                 return cb(errors.BadRole);
             }
             return cb(null, roles[0], roles[1]);
+        })
+        .catch(err => {
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            log.error('error getting replication ' +
+                'configuration from S3',
+                {
+                    method: 'ReplicateObject._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    err,
+                    httpStatus: err.$metadata?.httpStatusCode,
+                });
+            return cb(err);
         });
     }
 
@@ -357,28 +365,29 @@ class ReplicateObject extends BackbeatTask {
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
         };
-        return this.backbeatSource.getMetadata(params, (err, blob) => {
-            if (err) {
+        return this.backbeatSource.send(new GetMetadataCommand(params))
+            .then(data => {
+                const parsedEntry = ObjectQueueEntry.createFromBlob(data.Body);
+                if (parsedEntry.error) {
+                    log.error('error parsing metadata blob', {
+                        error: parsedEntry.error,
+                        method: 'ReplicateObject._refreshSourceEntry',
+                    });
+                    return cb(errors.InternalError.
+                        customizeDescription('error parsing metadata blob'));
+                }
+                const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
+                    sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+                return cb(null, refreshedEntry);
+            })
+            .catch(err => {
                 err.origin = 'source'; // eslint-disable-line no-param-reassign
                 log.error('error getting metadata blob from S3', {
                     method: 'ReplicateObject._refreshSourceEntry',
                     error: err,
                 });
                 return cb(err);
-            }
-            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
-            if (parsedEntry.error) {
-                log.error('error parsing metadata blob', {
-                    error: parsedEntry.error,
-                    method: 'ReplicateObject._refreshSourceEntry',
-                });
-                return cb(errors.InternalError.
-                    customizeDescription('error parsing metadata blob'));
-            }
-            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
-            return cb(null, refreshedEntry);
-        });
+            });
     }
 
     _checkSourceReplication(sourceEntry, log, cb) {
@@ -478,27 +487,121 @@ class ReplicateObject extends BackbeatTask {
         const partObj = new ObjectMDLocation(part);
         const partNumber = partObj.getPartNumber();
         const partSize = partObj.getPartSize();
-        let destReq = null;
-        let sourceReqAborted = false;
-        let destReqAborted = false;
-        const sourceReq = this.S3source.getObject({
+        
+        const abortController = new AbortController();
+        let sourceStreamAborted = false;
+        let destRequestAborted = false;
+        
+        const command = new GetObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: partNumber,
         });
-        attachReqUids(sourceReq, log);
-        sourceReq.on('error', err => {
-            if (!sourceReqAborted && !destReqAborted) {
-                destReq.abort();
-                destReqAborted = true;
-            }
-            // eslint-disable-next-line no-param-reassign
-            err.origin = 'source';
-            if (err.statusCode === 404) {
-                return doneOnce(err);
-            }
-            if (!sourceReqAborted) {
+        attachReqUids(command, log);
+        const readStartTime = Date.now();
+        
+        this.S3source.send(command, { abortSignal: abortController.signal })
+            .then(response => {
+                const incomingMsg = response.Body;
+                incomingMsg.on('error', err => {
+                    if (!sourceStreamAborted && !destRequestAborted) {
+                        abortController.abort();
+                        destRequestAborted = true;
+                    }
+                    if (err.$metadata?.httpStatusCode === 404) {
+                        return doneOnce(errors.ObjNotFound);
+                    }
+                    if (!sourceStreamAborted) {
+                        // eslint-disable-next-line no-param-reassign
+                        err.origin = 'source';
+                        // eslint-disable-next-line no-param-reassign
+                        err.retryable = true;
+                        log.error('an error occurred when streaming data from S3',
+                            {
+                                method: 'ReplicateObject._getAndPutPartOnce',
+                                entry: destEntry.getLogInfo(),
+                                part,
+                                origin: 'source',
+                                peer: this.sourceConfig.s3,
+                                error: err.message,
+                                err,
+                            });
+                    }
+                    return doneOnce(err);
+                });
+                
+                incomingMsg.on('end', () => {
+                    this._publishReadMetrics(partSize, readStartTime);
+                });
+                
+                log.debug('putting data', { entry: destEntry.getLogInfo(), part });
+                const putCommand = new PutDataCommand({
+                    Bucket: destEntry.getBucket(),
+                    Key: destEntry.getObjectKey(),
+                    CanonicalID: destEntry.getOwnerId(),
+                    ContentMD5: partObj.getPartETag(),
+                    Body: incomingMsg,
+                    // destination bucket has to be versioning enabled.
+                    VersioningRequired: true,
+                    RequestUids: log.getSerializedUids(),
+                });
+                addContentLengthMiddleware(
+                    putCommand,
+                    response.ContentLength,
+                );
+                const writeStartTime = Date.now();
+                return this.backbeatDest.send(putCommand, { abortSignal: abortController.signal })
+                    .then(data => {
+                        partObj.setDataLocation(data.Location[0]);
+
+                        // Set encryption parameters that were used to encrypt the
+                        // target data in the object metadata, or reset them if
+                        // there was no encryption
+                        const { ServerSideEncryption, SSECustomerAlgorithm, SSEKMSKeyId } = data;
+                        destEntry.setAmzServerSideEncryption(ServerSideEncryption || '');
+                        destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
+                        destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
+
+                        this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
+                        return doneOnce(null, partObj.getValue());
+                    })
+                    .catch(err => {
+                        if (!destRequestAborted) {
+                            // Abort the source stream
+                            abortController.abort();
+                            sourceStreamAborted = true;
+                            if (incomingMsg.destroy) {
+                                incomingMsg.destroy();
+                            }
+                        }
+                        // eslint-disable-next-line no-param-reassign
+                        err.origin = 'target';
+                        log.error('an error occurred on putData to S3',
+                            {
+                                method: 'ReplicateObject._getAndPutPartOnce',
+                                entry: destEntry.getLogInfo(),
+                                part,
+                                origin: 'target',
+                                peer: this.destBackbeatHost,
+                                error: err.message,
+                                httpStatus: err.$metadata?.httpStatusCode,
+                                err,
+                            });
+                        return doneOnce(err);
+                    });
+            })
+            .catch(err => {
+                if (!sourceStreamAborted) {
+                    // Abort controller in case the destination request is still pending
+                    abortController.abort();
+                    destRequestAborted = true;
+                }
+                // eslint-disable-next-line no-param-reassign
+                err.origin = 'source';
+                if (err.$metadata?.httpStatusCode === 404) {
+                    return doneOnce(err);
+                }
                 log.error('an error occurred on getObject from S3',
                     {
                         method: 'ReplicateObject._getAndPutPartOnce',
@@ -508,88 +611,10 @@ class ReplicateObject extends BackbeatTask {
                         peer: this.sourceConfig.s3,
                         error: err.message,
                         err,
-                        httpStatus: err.statusCode,
+                        httpStatus: err.$metadata?.httpStatusCode,
                     });
-            }
-            return doneOnce(err);
-        });
-        const incomingMsg = sourceReq.createReadStream();
-        const readStartTime = Date.now();
-        incomingMsg.on('error', err => {
-            if (!sourceReqAborted && !destReqAborted) {
-                destReq.abort();
-                destReqAborted = true;
-            }
-            if (err.statusCode === 404) {
-                return doneOnce(errors.ObjNotFound);
-            }
-            if (!sourceReqAborted) {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                // eslint-disable-next-line no-param-reassign
-                err.retryable = true;
-                log.error('an error occurred when streaming data from S3',
-                    {
-                        method: 'ReplicateObject._getAndPutPartOnce',
-                        entry: destEntry.getLogInfo(),
-                        part,
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        err,
-                    });
-            }
-            return doneOnce(err);
-        });
-        incomingMsg.on('end', () => {
-            this._publishReadMetrics(partSize, readStartTime);
-        });
-        log.debug('putting data', { entry: destEntry.getLogInfo(), part });
-        destReq = this.backbeatDest.putData({
-            Bucket: destEntry.getBucket(),
-            Key: destEntry.getObjectKey(),
-            CanonicalID: destEntry.getOwnerId(),
-            ContentLength: partSize,
-            ContentMD5: partObj.getPartETag(),
-            Body: incomingMsg,
-            // destination bucket has to be versioning enabled.
-            VersioningRequired: true,
-        });
-        attachReqUids(destReq, log);
-        const writeStartTime = Date.now();
-        return destReq.send((err, data) => {
-            if (err) {
-                if (!destReqAborted) {
-                    sourceReq.abort();
-                    sourceReqAborted = true;
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
-                    log.error('an error occurred on putData to S3',
-                        {
-                            method: 'ReplicateObject._getAndPutPartOnce',
-                            entry: destEntry.getLogInfo(),
-                            part,
-                            origin: 'target',
-                            peer: this.destBackbeatHost,
-                            error: err.message,
-                            err,
-                        });
-                }
                 return doneOnce(err);
-            }
-            partObj.setDataLocation(data.Location[0]);
-
-            // Set encryption parameters that were used to encrypt the
-            // target data in the object metadata, or reset them if
-            // there was no encryption
-            const { ServerSideEncryption, SSECustomerAlgorithm, SSEKMSKeyId } = data;
-            destEntry.setAmzServerSideEncryption(ServerSideEncryption || '');
-            destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
-            destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
-
-            this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
-            return doneOnce(null, partObj.getValue());
-        });
+            });
     }
 
     _putMetadataOnce(entry, mdOnly, log, cb) {
@@ -611,24 +636,27 @@ class ReplicateObject extends BackbeatTask {
         // if it's a metadata operation only
         const replicationContent = (mdOnly ? 'METADATA' : undefined);
         const mdBlob = entry.getSerialized();
-        const req = this.backbeatDest.putMetadata({
+        const command = new PutMetadataCommand({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             VersionId: entry.getEncodedVersionId(),
             AccountId: accountId,
-            ContentLength: Buffer.byteLength(mdBlob),
             Body: mdBlob,
             ReplicationContent: replicationContent,
             // destination bucket has to be versioning enabled.
             VersioningRequired: true,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(req, log);
         const writeStartTime = Date.now();
-        req.send((err, data) => {
-            if (err) {
+        return this.backbeatDest.send(command)
+            .then(data => {
+                this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
+                return cbOnce(null, data);
+            })
+            .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
-                if (err.ObjNotFound || err.code === 'ObjNotFound') {
+                if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
                     return cbOnce(err);
                 }
                 log.error('an error occurred when putting metadata to S3',
@@ -641,10 +669,7 @@ class ReplicateObject extends BackbeatTask {
                         err,
                     });
                 return cbOnce(err);
-            }
-            this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
-            return cbOnce(null, data);
-        });
+            });
     }
 
     _deleteOrphans(entry, locations, log, cb) {
@@ -660,14 +685,16 @@ class ReplicateObject extends BackbeatTask {
                 entry: entry.getLogInfo(),
                 peer: this.destBackbeatHost,
             });
-        const req = this.backbeatDest.batchDelete({
+        const command = new BatchDeleteCommand({
             Bucket: entry.getBucket(),
             Key: entry.getObjectKey(),
             Locations: writtenLocations,
+            RequestUids: log.getSerializedUids(),
         });
-        attachReqUids(req, log);
-        return req.send(err => {
-            if (err) {
+        
+        return this.backbeatDest.send(command)
+            .then(() => cb())
+            .catch(err => {
                 log.error('an error occurred during batch delete of orphan data',
                     {
                         method: 'ReplicateObject._deleteOrphans',
@@ -675,6 +702,7 @@ class ReplicateObject extends BackbeatTask {
                         origin: 'target',
                         peer: this.destBackbeatHost,
                         error: err.message,
+                        httpStatus: err.$metadata?.httpStatusCode,
                         err,
                     });
                 writtenLocations.forEach(location => {
@@ -684,10 +712,9 @@ class ReplicateObject extends BackbeatTask {
                         location,
                     });
                 });
-            }
-            // do not return the batch delete error, only log it
-            return cb();
-        });
+                // do not return the batch delete error, only log it
+                return cb();
+            });
     }
 
     _setupSourceClients(sourceRole, log) {
@@ -697,25 +724,43 @@ class ReplicateObject extends BackbeatTask {
 
         // Disable retries, use our own retry policy (mandatory for
         // putData route in order to fetch data again from source).
-
         const sourceS3 = this.sourceConfig.s3;
-        this.S3source = new AWS.S3({
+        this.S3source = new S3Client({
             endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
-            credentials: this.s3sourceCredentials,
-            sslEnabled: this.sourceConfig.transport === 'https',
-            s3ForcePathStyle: true,
-            signatureVersion: 'v4',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
-            maxRetries: 0,
+            credentials: this.s3sourceCredentials.getCredentialsProvider(),
+            region: 'us-east-1',
+            tls: this.sourceConfig.transport === 'https',
+            forcePathStyle: true,
+            requestHandler: {
+                [this.sourceConfig.transport === 'https' ? 'httpsAgent' : 'httpAgent']: this.sourceHTTPAgent,
+                connectionTimeout: 0,
+            },
+            maxAttempts: 1,
         });
-        this.backbeatSource = new BackbeatClient({
+        this.S3source.middlewareStack.add(isRetryableMiddleware(), {
+            step: 'deserialize',
+            priority: 'high',
+        });
+
+        const requestHandler = {
+            [this.sourceConfig.transport === 'https' ? 'httpsAgent' : 'httpAgent']: this.sourceHTTPAgent,
+            requestTimeout: TIMEOUT_MS,
+            connectionTimeout: TIMEOUT_MS,
+        };
+        this.backbeatSource = new CloudserverClient({
             endpoint: `${this.sourceConfig.transport}://` +
-                `${sourceS3.host}:${sourceS3.port}`,
-            credentials: this.s3sourceCredentials,
-            sslEnabled: this.sourceConfig.transport === 'https',
-            httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS, connectTimeout: TIMEOUT_MS },
-            maxRetries: 0,
+            `${sourceS3.host}:${sourceS3.port}`,
+            credentials: this.s3sourceCredentials.getCredentialsProvider(),
+            region: 'us-east-1',
+            maxAttempts: 1,
+            requestHandler,
+            disableHostPrefix: true,
+            signingEscapePath: false,
+        });
+        this.backbeatSource.middlewareStack.add(isRetryableMiddleware(), {
+            step: 'deserialize',
+            priority: 'high',
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
             `${this.sourceConfig.transport}://` +
@@ -754,13 +799,21 @@ class ReplicateObject extends BackbeatTask {
             this._createCredentials('target', this.destConfig.auth,
                 targetRole, log);
 
-        this.backbeatDest = new BackbeatClient({
+        const requestHandler = {
+            [this.destConfig.transport === 'https' ? 'httpsAgent' : 'httpAgent']: this.destHTTPAgent,
+            requestTimeout: TIMEOUT_MS,
+        };
+        this.backbeatDest = new CloudserverClient({
             endpoint: `${this.destConfig.transport}://` +
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
-            credentials: this.s3destCredentials,
-            sslEnabled: this.destConfig.transport === 'https',
-            httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
-            maxRetries: 0,
+            credentials: this.s3destCredentials.getCredentialsProvider(),
+            region: 'us-east-1',
+            maxAttempts: 1,
+            requestHandler,
+        });
+        this.backbeatDest.middlewareStack.add(isRetryableMiddleware(), {
+            step: 'deserialize',
+            priority: 'high',
         });
     }
 
@@ -866,10 +919,10 @@ class ReplicateObject extends BackbeatTask {
                 sourceEntry, 'COMPLETED', { kafkaEntry, log });
             return done(null, { committable: false });
         }
-        if (err.BadRole ||
+        if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
-                (err.NoSuchEntity || err.code === 'NoSuchEntity' ||
-                    err.AccessDenied || err.code === 'AccessDenied'))) {
+                (err.NoSuchEntity || err.code === 'NoSuchEntity' || err.name === 'NoSuchEntity' ||
+                    err.AccessDenied || err.code === 'AccessDenied' || err.name === 'AccessDenied'))) {
             log.error('replication failed permanently for object, ' +
                 'processing skipped',
                 {
@@ -886,7 +939,7 @@ class ReplicateObject extends BackbeatTask {
                      { entry: sourceEntry.getLogInfo() });
             return done();
         }
-        if (err.ObjNotFound || err.code === 'ObjNotFound') {
+        if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
             if (err.origin === 'source') {
                 log.info('replication skipped: ' +
                     'source object version does not exist',
@@ -900,7 +953,7 @@ class ReplicateObject extends BackbeatTask {
             return this._processQueueEntryRetryFull(
                 sourceEntry, destEntry, kafkaEntry, log, done);
         }
-        if (err.InvalidObjectState || err.code === 'InvalidObjectState') {
+        if (err.InvalidObjectState || err.code === 'InvalidObjectState' || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
             return done();
