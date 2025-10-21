@@ -223,7 +223,9 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                 return undefined;
             }
             const { eventMessageProperty, deleteEvent } = notifConstants;
-            let eventType = value[eventMessageProperty.eventType];
+            // Delete can have an overheadField originOp that should be used for lifecycle expiration (on metadata)
+            // This takes precedence over the originOp from the value object
+            let eventType = overheadFields?.[eventMessageProperty.eventType] || value[eventMessageProperty.eventType];
             if (eventType === undefined && type === 'del') {
                 eventType = deleteEvent;
             }
