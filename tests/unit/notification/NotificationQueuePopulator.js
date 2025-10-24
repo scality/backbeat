@@ -321,6 +321,48 @@ describe('NotificationQueuePopulator ::', () => {
             assert.strictEqual(publishStub.getCall(0).args.at(1), 'example-bucket/example-key');
             assert.deepEqual(JSON.parse(publishStub.getCall(0).args.at(2)), expectedMessage);
         });
+
+        it('should use originOp from overheadFields for delete operation with lifecycle expiration', async () => {
+            sinon.stub(bnConfigManager, 'getConfig').returns({
+                bucket: 'example-bucket',
+                notificationConfiguration: {
+                    queueConfig: [
+                        {
+                            events: ['s3:ObjectRemoved:Delete', 's3:LifecycleExpiration:Delete'],
+                            queueArn: 'arn:scality:bucketnotif:::destination1',
+                            filterRules: [],
+                        },
+                    ],
+                },
+            });
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish').returns();
+            const timestamp = new Date().toISOString();
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {},
+                'del',
+                {
+                    versionId: '123456',
+                    commitTimestamp: timestamp,
+                    originOp: 's3:LifecycleExpiration:Delete',
+                }
+            );
+            const expectedMessage = {
+                bucket: 'example-bucket',
+                key: 'example-key',
+                versionId: '123456',
+                dateTime: timestamp,
+                eventType: 's3:LifecycleExpiration:Delete',
+                region: null,
+                schemaVersion: null,
+                size: null,
+            };
+            assert(publishStub.calledOnce);
+            assert.strictEqual(publishStub.getCall(0).args.at(0), 'internal-notification-topic-destination1');
+            assert.strictEqual(publishStub.getCall(0).args.at(1), 'example-bucket/example-key');
+            assert.deepEqual(JSON.parse(publishStub.getCall(0).args.at(2)), expectedMessage);
+        });
     });
 
     describe('filterAsync ::', () => {
