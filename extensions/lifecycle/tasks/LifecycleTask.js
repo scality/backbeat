@@ -14,7 +14,7 @@ const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
-const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { LifecycleMetrics, LIFECYCLE_MARKER_METRICS_LOCATION } = require('../LifecycleMetrics');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 const { rulesSupportTransition } = require('../util/rules');
 const { decode } = versioning.VersionID;
@@ -1445,6 +1445,7 @@ class LifecycleTask extends BackbeatTask {
                         .setAttribute('target.key', deleteMarker.Key)
                         .setAttribute('target.accountId', bucketData.target.accountId)
                         .setAttribute('target.version', deleteMarker.VersionId)
+                        .setAttribute('details.dataStoreName', LIFECYCLE_MARKER_METRICS_LOCATION)
                         // EODM applies only once all other versions have been deleted, so transition
                         // time is not `lastModified`, but the time when the "last" version was
                         // removed. We still need to pass a transitionTime for metrics though, so
@@ -1500,6 +1501,8 @@ class LifecycleTask extends BackbeatTask {
                 }
             }
 
+            const storageClass = this._isDeleteMarker(verToExpire) ?
+                LIFECYCLE_MARKER_METRICS_LOCATION : verToExpire.StorageClass;
             const entry = ActionQueueEntry.create('deleteObject')
                 .addContext({
                     origin: 'lifecycle',
@@ -1511,8 +1514,8 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.accountId', bucketData.target.accountId)
                 .setAttribute('target.key', verToExpire.Key)
                 .setAttribute('target.version', verToExpire.VersionId)
-                .setAttribute('details.dataStoreName', verToExpire.StorageClass || '')
-                // details.lastModified is not set for NCVE...
+                .setAttribute('details.dataStoreName', storageClass || '')
+                .setAttribute('details.lastModified', verToExpire.LastModified)
                 .setAttribute('transitionTime',
                     this._lifecycleDateTime.getTransitionTimestamp(
                         { Days: rules[ncve][ncd] }, staleDate)
