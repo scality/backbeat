@@ -1421,19 +1421,14 @@ class LifecycleTask extends BackbeatTask {
                     new Date(deleteMarker.LastModified)
                 );
 
-                const eodm = rules.Expiration &&
-                    rules.Expiration.ExpiredObjectDeleteMarker;
-
                 // Backbeat performs automatic ExpiredObjectDeleteMarker cleanup
                 // for compatibility with Amazon S3,
                 // - either when the delete markers meet the age criteria
                 // - or when the ExpiredObjectDeleteMarker tag is set to true.
                 const applicableExpRule = rules.Expiration && (
-                    (rules.Expiration.Days !== undefined
-                     && daysSinceInitiated >= rules.Expiration.Days)
-                    || (rules.Expiration.Date !== undefined
-                     && rules.Expiration.Date < Date.now())
-                    || eodm === true
+                    (rules.Expiration.Days !== undefined && daysSinceInitiated >= rules.Expiration.Days)
+                    || (rules.Expiration.Date !== undefined && rules.Expiration.Date < Date.now())
+                    || rules.Expiration.ExpiredObjectDeleteMarker
                 );
 
                 // if there are no other versions with the same Key as this DM and
@@ -1450,10 +1445,11 @@ class LifecycleTask extends BackbeatTask {
                         .setAttribute('target.key', deleteMarker.Key)
                         .setAttribute('target.accountId', bucketData.target.accountId)
                         .setAttribute('target.version', deleteMarker.VersionId)
-                        .setAttribute('transitionTime',
-                            this._lifecycleDateTime.getTransitionTimestamp(
-                                rules.Expiration, deleteMarker.LastModified)
-                        );
+                        // EODM applies only once all other versions have been deleted, so transition
+                        // time is not `lastModified`, but the time when the "last" version was
+                        // removed. We still need to pass a transitionTime for metrics though, so
+                        // just use the current time to avoid alert for slow/stale lifecycle.
+                        .setAttribute('transitionTime', Date.now());
                     this._sendObjectAction(entry, err => {
                         if (!err) {
                             log.debug('sent object entry for consumption',
@@ -1516,6 +1512,7 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.key', verToExpire.Key)
                 .setAttribute('target.version', verToExpire.VersionId)
                 .setAttribute('details.dataStoreName', verToExpire.StorageClass || '')
+                // details.lastModified is not set for NCVE...
                 .setAttribute('transitionTime',
                     this._lifecycleDateTime.getTransitionTimestamp(
                         { Days: rules[ncve][ncd] }, staleDate)
