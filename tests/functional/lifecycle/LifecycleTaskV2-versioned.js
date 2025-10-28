@@ -427,6 +427,46 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
         });
     });
 
+    it('should not publish any object entry if object is a non-current delete marker with NCVT rule', done => {
+        const transitionRule = [
+            {
+                NoncurrentVersionTransitions: [{ NoncurrentDays: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        const versionId = 'versionid1';
+        // Create a delete marker (no ETag, no Size, no StorageClass)
+        const deleteMarker = keyMock.nonCurrent({ keyName, versionId, daysEarlier: 2 });
+        delete deleteMarker.ETag;
+        delete deleteMarker.Size;
+        delete deleteMarker.StorageClass;
+
+        const contents = [deleteMarker];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
+            backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the non-current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+
+                // test that no entries are pushed to kafka topic (delete markers cannot be transitioned)
+                assert.strictEqual(kafkaEntries.length, 0);
+                return done();
+            });
+    });
+
     it('should publish one bucket entry to list orphan delete markers if Expiration rule is set', done => {
         const expirationRule = [
             {
@@ -460,6 +500,45 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
                 hasBeforeDate: true,
                 prefix: '',
             });
+            return done();
+        });
+    });
+
+    it('should not publish any object entry if object is a delete marker if Transition rule is set', done => {
+        const transitionRule = [
+            {
+                Transitions: [{ Days: 2, StorageClass: destinationLocation }],
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const keyName = 'key1';
+        // Create a delete marker (no ETag, no StorageClass properties)
+        const deleteMarker = keyMock.current({ keyName, daysEarlier: 2 });
+        delete deleteMarker.ETag;
+        delete deleteMarker.Size;
+        delete deleteMarker.StorageClass;
+
+        const contents = [deleteMarker];
+        backbeatMetadataProxy.listLifecycleResponse = { contents, isTruncated: false, markerInfo: {} };
+
+        const nbRetries = 0;
+        return lifecycleTask.processBucketEntry(
+            transitionRule, bucketData, s3, backbeatMetadataProxy, nbRetries, err => {
+                assert.ifError(err);
+                // test that the current listing is triggered
+                assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
+
+                // test parameters used to list lifecycle keys
+                const { listLifecycleParams } = backbeatMetadataProxy;
+                assert.strictEqual(listLifecycleParams.Bucket, bucketName);
+                assert.strictEqual(listLifecycleParams.Prefix, '');
+                assert(!!listLifecycleParams.BeforeDate);
+                assert.strictEqual(listLifecycleParams.ExcludedDataStoreName, destinationLocation);
+
+            // test that no entries are pushed to kafka topic (delete markers cannot be transitioned)
+            assert.strictEqual(kafkaEntries.length, 0);
             return done();
         });
     });

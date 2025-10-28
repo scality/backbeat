@@ -338,7 +338,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             this._checkAndApplyExpirationRule(bucketData, obj, rules, log)) {
             return process.nextTick(cb);
         }
-        if (rules.Transition) {
+        if (rules.Transition && !this._isDeleteMarker(obj)) {
             return this._applyTransitionRule({
                 owner: bucketData.target.owner,
                 accountId: bucketData.target.accountId,
@@ -384,7 +384,7 @@ class LifecycleTaskV2 extends LifecycleTask {
             return process.nextTick(cb);
         }
 
-        if (rules.NoncurrentVersionTransition) {
+        if (rules.NoncurrentVersionTransition && !this._isDeleteMarker(obj)) {
             return this._checkAndApplyNCVTransitionRule(bucketData, obj, rules, log, cb);
         }
 
