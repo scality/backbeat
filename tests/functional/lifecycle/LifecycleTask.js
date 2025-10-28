@@ -1869,6 +1869,48 @@ describe('lifecycle task functional tests', function dF() {
                 });
             });
         });
+
+        it('should not transition a non-current delete marker with NoncurrentVersionTransition rule', done => {
+            const bucket = 'test-bucket';
+            const keyName = 'test-key';
+            const bucketEntry = {
+                action: 'testing-noncurrent-transition',
+                target: {
+                    bucket,
+                    owner: OWNER,
+                },
+                details: {},
+            };
+            const params = {
+                lcTask,
+                lcp,
+                counter: 0,
+            };
+            async.waterfall([
+                next => s3Helper.setAndCreateBucket(bucket, next),
+                next => s3Helper.setBucketVersioning('Enabled', next),
+                (data, next) => s3.putObject({ Bucket: bucket, Key: keyName, Body: 'test-content' }, next),
+                (data, next) => s3.deleteObject({ Bucket: bucket, Key: keyName }, next),
+                (data, next) => s3.putObject({ Bucket: bucket, Key: keyName, Body: 'new-content' }, next),
+                (data, next) => s3Helper.setBucketLifecycleConfigurations([
+                    new LifecycleRule().addID('task-1').addNCVTransitions([{
+                        NoncurrentDays: 0,
+                        StorageClass: 'us-east-2',
+                    }]).build(),
+                ], next),
+                (data, next) => s3.getBucketLifecycleConfiguration({ Bucket: bucket }, next),
+                (data, next) => wrapProcessBucketEntry(data.Rules, bucketEntry, s3, params, (err, data) => {
+                    assert.ifError(err);
+
+                    assertTransitionResult({ data, expectedKeys: [] });
+
+                    next();
+                }),
+            ], err => {
+                assert.ifError(err);
+                done();
+            });
+        });
     }); // end versioned describe block
 
     describe('incomplete mpu objects', () => {
