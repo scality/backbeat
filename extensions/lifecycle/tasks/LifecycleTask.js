@@ -1519,7 +1519,6 @@ class LifecycleTask extends BackbeatTask {
                 .setAttribute('target.key', verToExpire.Key)
                 .setAttribute('target.version', verToExpire.VersionId)
                 .setAttribute('details.dataStoreName', storageClass || '')
-                .setAttribute('details.lastModified', verToExpire.LastModified)
                 .setAttribute('transitionTime',
                     this._lifecycleDateTime.getTransitionTimestamp(
                         { Days: rules[ncve][ncd] }, staleDate)
