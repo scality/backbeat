@@ -1601,8 +1601,14 @@ describe('lifecycle task helper methods', () => {
                         latestEntry.getAttribute('target'), expectedTarget);
                     assert.deepStrictEqual(
                         latestEntry.getAttribute('details.dataStoreName'), expectedStorageClass);
+
+                    // `details.lastModified` must not be set for NCV expiration, as it is used to
+                    // check that the master version has not changed. This check is not relevant for
+                    // NCV (if anything, we may check that the current version is actually newer
+                    // than this one), and in particular may fail if current revision is a delete
+                    // marker
                     assert.deepStrictEqual(
-                        latestEntry.getAttribute('details.lastModified'), expectedEntries[idx].LastModified);
+                        latestEntry.getAttribute('details.lastModified'), undefined);
                 });
             });
         });
