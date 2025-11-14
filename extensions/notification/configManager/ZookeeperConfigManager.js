@@ -237,11 +237,20 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             (exists, next) => {
                 if (!exists) {
                     return this._createBucketNotifConfigNode(bucket,
-                        err => next(err));
+                        err => next(err, exists));
+                }
+                return next(null, exists);
+            },
+            (exists, next) => this._zkClient.setData(zkPath, Buffer.from(data), -1, err => next(err, exists)),
+            (exists, next) => {
+                if (!exists) {
+                    // if znode is created, run getData to set a watcher on the bucket config
+                    // in case another node becomes leader on the raft and modifies the config
+                    // while the current process keeps running
+                    return this._updateLocalStore([bucket], next);
                 }
                 return next();
             },
-            next => this._zkClient.setData(zkPath, Buffer.from(data), -1, next),
         ], err => {
             if (err) {
                 this.log.error('error saving config', { method, zkPath, data });
