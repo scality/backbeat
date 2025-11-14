@@ -132,10 +132,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         return `/${constants.zkConfigParentNode}/${bucket}`;
     }
 
-    _getConfigDataFromBuffer(data) {
+    _getConfigDataFromBuffer(data, bucket) {
         const { error, result } = safeJsonParse(data);
         if (error) {
-            this.log.error('invalid config', { error, config: data });
+            this.log.error('invalid config', { error, config: data, bucket });
             return undefined;
         }
         return result;
@@ -349,7 +349,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 if (err) {
                     return next(err);
                 }
-                const configObject = this._getConfigDataFromBuffer(data);
+                const configObject = this._getConfigDataFromBuffer(data, bucket);
                 if (configObject) {
                     this._configs.set(bucket, configObject);
                 }
