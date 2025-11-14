@@ -362,6 +362,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 });
                 this._callbackHandler(cb, error);
             }
+            this.log.debug('list of buckets', {
+                zkPath,
+                method,
+                buckets,
+            });
             this._callbackHandler(cb, null, buckets);
         });
     }
