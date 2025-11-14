@@ -50,6 +50,27 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         this._setupEventListeners();
     }
 
+    // https://github.com/alexguan/node-zookeeper-client/blob/master/lib/WatcherManager.js#L13-L39
+    // watchers should be reapplied only when their event is triggered, otherwise they will be duplicated
+    // and the lib will keep adding listeners
+    // (even if the functions are the same, they are js object so they don't match)
+    // warn early to catch leak more easily instead of waiting event emitter limit at 10 listeners.
+    _warnZkWatchersLeak(type, path) {
+        const watcherManager = this._zkClient?.client?.connectionManager?.watcherManager;
+
+        const watchers = watcherManager?.[`${type}Watchers`]?.[path];
+        if (!watchers) {
+            return;
+        }
+
+        const listeners = watchers.listenerCount('notification');
+        if (listeners > 0) {
+            process.emitWarning(`${type}Watchers[${path}] has already ${listeners} listeners`, {
+                code: 'ZkWatchersLeak',
+            });
+        }
+    }
+
     _errorListener(error, listener) {
         this.log.error('ZookeeperConfigManager.emitter.error', {
             listener,
@@ -150,6 +171,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             zkPath,
         });
+        this._warnZkWatchersLeak('data', zkPath);
         return this._zkClient.getData(zkPath, event => {
             this.log.debug('zookeeper getData watcher triggered', {
                 zkPath,
@@ -319,6 +341,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._listBucketsWithConfig';
         const zkPath = `/${constants.zkConfigParentNode}`;
+        this._warnZkWatchersLeak('child', zkPath);
         this._zkClient.getChildren(zkPath, event => {
             this.log.debug('zookeeper getChildren watcher triggered', {
                 zkPath,
