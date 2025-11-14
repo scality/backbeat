@@ -402,16 +402,20 @@ class ZookeeperConfigManager extends BaseConfigManager  {
      * Remove bucket notification configuration
      *
      * @param {String} bucket - bucket
+     * @param {boolean} [emitToZk = true] - whether to emit the event to zookeeper
      * @return {boolean} - true if removed
      */
-    removeConfig(bucket) {
+    removeConfig(bucket, emitToZk = true) {
         try {
             this.log.debug('remove config', {
                 method: 'ZookeeperConfigManager.removeConfig',
                 bucket,
+                emitToZk,
             });
             this._configs.delete(bucket);
-            this._emitter.emit('removeConfig', bucket);
+            if (emitToZk) {
+                this._emitter.emit('removeConfig', bucket);
+            }
             return true;
         } catch (err) {
             const errMsg
