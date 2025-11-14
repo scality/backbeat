@@ -93,28 +93,29 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         });
     }
 
-    _getConfigListener(updatedBucket = '') {
+    _getConfigListener(bucket) {
         this.log.debug('ZookeeperConfigManager.emitter.getConfig', {
             event: 'getConfig',
+            bucket,
+        });
+        this._updateLocalStore([bucket]);
+    }
+
+    _listConfigsListener() {
+        this.log.debug('ZookeeperConfigManager.emitter.listConfigs', {
+            event: 'listConfigs',
         });
         this._listBucketsWithConfig((err, buckets) => {
             if (err) {
-                this._emitter.emit('error', err, 'getConfigListener');
+                this._emitter.emit('error', err, 'listConfigsListener');
                 return undefined;
             }
-            this.log.debug('bucket config to be updated in map', {
-                bucket: updatedBucket,
-            });
             const newBuckets = this._getNewBucketNodes(buckets);
             this.log.debug('new bucket configs to be added to map', {
                 buckets: newBuckets,
             });
-            const bucketsToMap = updatedBucket ? [updatedBucket, ...newBuckets] : newBuckets;
-            this.log.debug('bucket configs to be added/updated to map', {
-                buckets: bucketsToMap,
-            });
-            if (bucketsToMap.length > 0) {
-                this._updateLocalStore(bucketsToMap);
+            if (newBuckets.length > 0) {
+                this._updateLocalStore(newBuckets);
             }
             return undefined;
         });
@@ -139,6 +140,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             .on('setConfig',
                 (bucket, config) => this._setConfigListener(bucket, config))
             .on('getConfig', bucket => this._getConfigListener(bucket))
+            .on('listConfigs', () => this._listConfigsListener())
             .on('removeConfig', bucket => this._removeConfigListener(bucket));
     }
 
@@ -349,7 +351,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 event,
             });
             if (event.type === zookeeper.Event.NODE_CHILDREN_CHANGED) {
-                this._emitter.emit('getConfig');
+                this._emitter.emit('listConfigs');
             }
         }, (error, buckets) => {
             if (error) {
