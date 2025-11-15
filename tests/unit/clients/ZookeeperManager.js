@@ -12,6 +12,17 @@ describe('ZookeeperManager', () => {
     beforeEach(() => {
         // Create a mock client
         mockClient = {
+            connectionManager: {
+                socket: {
+                    address: () => ({ address: '127.0.0.1', port: 42000 }),
+                },
+                xid: 1,
+                zxid: Buffer.from([0x00, 0x00, 0x00, 0x00, 0x00, 0x00, 0x11, 0xFF]),
+                nextServerIndex: 1,
+                serverAttempts: 1,
+            },
+            getSessionId: () => Buffer.from([0x11, 0x22, 0x33, 0x44, 0x55, 0x66, 0x77, 0x88]),
+            getState: () => ({ name: 'SYNC_CONNECTED', code: 3 }),
             on: sinon.stub(),
             once: sinon.stub(),
             connect: sinon.stub(),
