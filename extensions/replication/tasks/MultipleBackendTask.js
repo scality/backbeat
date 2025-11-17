@@ -890,7 +890,10 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _sendMultipleBackendPutObject(sourceEntry, size,
         incomingMsg, log, doneOnce) {
-        const destReq = this.backbeatSource.multipleBackendPutObject({
+
+        console.log('AAAAA 1', this.s3sourceCredentials);
+
+        const reqq = {
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             CanonicalID: sourceEntry.getOwnerId(),
@@ -907,7 +910,8 @@ class MultipleBackendTask extends ReplicateObject {
             ContentEncoding: sourceEntry.getContentEncoding() || undefined,
             Tags: JSON.stringify(sourceEntry.getTags()),
             Body: incomingMsg,
-        });
+        }
+        const destReq = this.backbeatSource.multipleBackendPutObject(reqq);
         let aborted = false;
         if (incomingMsg) {
             incomingMsg.once('error', () => {
@@ -915,6 +919,10 @@ class MultipleBackendTask extends ReplicateObject {
                 aborted = true;
             });
         }
+        console.log('AAAAA 2', this.backbeatSource);
+        console.log('AAAAA 3', this.destReq);
+        console.log('AAAAA 4', reqq);
+
         attachReqUids(destReq, log);
         const writeStartTime = Date.now();
         return destReq.send((err, data) => {
