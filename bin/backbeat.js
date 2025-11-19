@@ -17,6 +17,9 @@ werelogs.configure({
 function initAndStart() {
     const repConfig = config.extensions.replication;
     const sourceConfig = repConfig.source;
+    console.log("CCCCC 9", sourceConfig);
+    console.log("CCCCC 9.2", repConfig);
+
     initManagement({
         serviceName: 'replication',
         serviceAccount: sourceConfig.auth.account,

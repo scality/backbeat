@@ -890,6 +890,8 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _sendMultipleBackendPutObject(sourceEntry, size,
         incomingMsg, log, doneOnce) {
+        console.log("CCCCC 3", this.backbeatSource);
+
         const destReq = this.backbeatSource.multipleBackendPutObject({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),

@@ -71,6 +71,9 @@ class ReplicateObject extends BackbeatTask {
 
     _createCredentials(where, authConfig, roleArn, log) {
         const accountCredentials = getAccountCredentials(authConfig, log);
+        console.log("CCCCC 7", accountCredentials);
+        console.log("CCCCC 8", where);
+        
         if (accountCredentials) {
             return accountCredentials;
         }
@@ -691,6 +694,9 @@ class ReplicateObject extends BackbeatTask {
     }
 
     _setupSourceClients(sourceRole, log) {
+        console.log("CCCCC 5", this.sourceConfig);
+        console.log("CCCCC 6", this.sourceConfig.auth);
+
         this.s3sourceCredentials =
             this._createCredentials('source', this.sourceConfig.auth,
                 sourceRole, log);
@@ -709,6 +715,8 @@ class ReplicateObject extends BackbeatTask {
             httpOptions: { agent: this.sourceHTTPAgent, timeout: 0 },
             maxRetries: 0,
         });
+        console.log("CCCCC 4", this.s3sourceCredentials);
+
         this.backbeatSource = new BackbeatClient({
             endpoint: `${this.sourceConfig.transport}://` +
                 `${sourceS3.host}:${sourceS3.port}`,
