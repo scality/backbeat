@@ -404,6 +404,26 @@ describe('NotificationQueuePopulator ::', () => {
             });
         });
 
+        it('should ignore internal bucket operations', done => {
+            const processObjectEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
+            const processBucketEntryStub = sinon.stub(notificationQueuePopulator, '_processBucketEntry');
+            const entry = {
+                bucket: 'internal..backupIndex',
+                key: 'example-key',
+                type: 'put',
+                value: '{}',
+                overheadFields: {
+                    opTimestamp: new Date().toISOString(),
+                },
+            };
+            notificationQueuePopulator.filterAsync(entry, err => {
+                assert.ifError(err);
+                assert(processObjectEntryStub.notCalled);
+                assert(processBucketEntryStub.notCalled);
+                return done();
+            });
+        });
+
         it('should ignore mpu bucket operations', done => {
             const processObjectEntryStub = sinon.stub(notificationQueuePopulator, '_processObjectEntry');
             const processBucketEntryStub = sinon.stub(notificationQueuePopulator, '_processBucketEntry');

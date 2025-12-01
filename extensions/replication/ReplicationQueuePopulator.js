@@ -18,8 +18,13 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
             // bucket updates have no key in raft log
             return undefined;
         }
+        // users..bucket has a special role for "echo mode"
         if (entry.bucket === usersBucket) {
             return this._filterBucketOp(entry);
+        }
+        // internal buckets (other than users..bucket) are ignored
+        if (entry.bucket.includes('..')) {
+            return undefined;
         }
         return this._filterKeyOp(entry);
     }

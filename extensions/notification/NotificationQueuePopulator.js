@@ -2,7 +2,7 @@ const assert = require('assert');
 const util = require('util');
 
 const { isMasterKey } = require('arsenal').versioning;
-const { usersBucket, mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
+const { mpuBucketPrefix, supportedNotificationEvents } = require('arsenal').constants;
 const VID_SEPERATOR = require('arsenal').versioning.VersioningConstants.VersionId.Separator;
 const configUtil = require('./utils/config');
 const safeJsonParse = require('./utils/safeJsonParse');
@@ -332,8 +332,13 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             this.log.error('could not parse log entry', { value, error });
             return cb();
         }
-        // ignore bucket op, mpu's or if the entry has no bucket
-        if (!bucket || bucket === usersBucket || (key && key.startsWith(mpuBucketPrefix))) {
+        // ignore mpu's or if the entry has no bucket
+        if (!bucket || (key && key.startsWith(mpuBucketPrefix))) {
+            return cb();
+        }
+        // ignore internal buckets
+        if (bucket.includes('..')) {
+            this.log.trace('skipping internal bucket entry', { bucket });
             return cb();
         }
         // bucket notification configuration updates
