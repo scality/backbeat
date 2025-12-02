@@ -325,4 +325,35 @@ describe('replication queue populator', () => {
         const publishedMessage = rqp.getState();
         assert(!publishedMessage.key);
     });
+
+    it('should ignore internal buckets except users..bucket', () => {
+        const entry = {
+            bucket: 'internal..backupIndex',
+            key: 'key',
+            value: '{}',
+            type: 'put',
+            logReader: {
+                getMetricLabels: () => {},
+            },
+        };
+        rqp.filter(entry);
+        const publishedMessage = rqp.getState();
+        assert.deepStrictEqual(publishedMessage, {});
+    });
+
+    it('should not ignore users..bucket', () => {
+        const entry = {
+            bucket: 'users..bucket',
+            type: 'put',
+            key: 'owner..|..bucket',
+            value: '{}',
+            logReader: {
+                getMetricLabels: () => {},
+            },
+        };
+        rqp.filter(entry);
+        const publishedMessage = rqp.getState();
+        assert(publishedMessage.key);
+        assert.strictEqual(decodeURIComponent(publishedMessage.key), 'users..bucket');
+    });
 });
