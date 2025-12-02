@@ -429,6 +429,7 @@ class SetupReplication extends BackbeatTask {
             const objActions = [
                 's3:GetObjectVersion',
                 's3:GetObjectVersionAcl',
+                's3:ReplicateObject',
             ];
             if (this._targetIsExternal) {
                 objActions.push('s3:GetObjectVersionTagging');
