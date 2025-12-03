@@ -108,17 +108,26 @@ jobs:
         image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
         ports:
         - 9001:9001
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
       kafka:
         image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
         credentials:
           username: ${{ github.repository_owner }}
           password: ${{ github.token }}
         ports:
-        - 2181:2181
         - 9092:9092
         env:
-          ADVERTISED_HOST: "localhost"
-          ADVERTISED_PORT: 9092
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
       mongo:
         image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
         ports:
@@ -252,17 +261,17 @@ jobs:
       - name: Create Zookeeper paths for tests with metadata
         run: |-
           # Setup zookeeper paths for backbeat like we do in federation
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/owners ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/leaders ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/owners ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/leaders ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions ""
           # provision raft ids, we configure 4 raft sessions in metadata config
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/0 ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/1 ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/2 ""
-          docker exec ft-kafka-1 /opt/kafka_2.11-0.10.1.0/bin/zookeeper-shell.sh localhost:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/3 ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/0 ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/1 ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/2 ""
+          docker exec ft-kafka-1 /opt/kafka/bin/zookeeper-shell.sh zookeeper:2181 create /backbeat/replication-populator/raft-id-dispatcher/provisions/3 ""
         if: ${{ matrix.profile == 's3c' }}
       - name: Run QueuePopulator functional tests
         env:
