@@ -5,6 +5,8 @@
     },
     "kafka": {
         "hosts": "127.0.0.1:9092",
+        "compressionType": "none",
+        "requiredAcks": 1,
         "backlogMetrics": {
             "zkPath": "/backbeat/run/kafka-backlog-metrics",
             "intervalS": 60
@@ -25,9 +27,9 @@
         "batchMaxRead": 10000,
         "batchTimeoutMs": 9000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "mongo",
+        "logSource": "bucketd",
         "bucketd": {
-            "host": "127.0.0.1",
+            "host": "44.243.8.242",
             "port": 9000
         },
         "dmd": {
@@ -81,24 +83,6 @@
                 "port": 8550
             }
         },
-        "mongoProcessor": {
-            "topic": "backbeat-ingestion",
-            "groupId": "backbeat-mongo-processor-group",
-            "retry": {
-                "maxRetries": 5,
-                "timeoutS": 300,
-                "backoff": {
-                    "min": 1000,
-                    "max": 300000,
-                    "jitter": 0.1,
-                    "factor": 1.5
-                }
-            },
-            "probeServer": {
-                "bindAddress": "0.0.0.0",
-                "port": 8551
-            }
-        },
         "replication": {
             "source": {
                 "transport": "http",
@@ -107,26 +91,25 @@
                     "port": 8000
                 },
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication",
+                    "type": "role",
                     "vault": {
-                        "host": "127.0.0.1",
+                        "host": "localhost",
                         "port": 8500,
-                        "adminPort": 8600
+                        "adminPort": 8600,
+                        "adminCredentialsFile": "/Users/nicolashumbert/admin-backbeat.json"
                     }
                 }
             },
             "destination": {
                 "transport": "http",
                 "bootstrapList": [
-                    { "site": "zenko", "servers": ["localhost:8001"],
-                      "echo": false },
-                    { "site": "wontwork-location", "type": "aws_s3" },
-                    { "site": "aws-location", "type": "aws_s3" }
+                    { "site": "sf", "servers": ["127.0.0.1:8001"], "echo": false }
                 ],
                 "auth": {
-                    "type": "service",
-                    "account": "service-replication"
+                    "type": "role",
+                    "vault": {
+                        "adminCredentialsFile": "/Users/nicolashumbert/admin-backbeat.json"
+                    }
                 }
             },
             "topic": "backbeat-replication",

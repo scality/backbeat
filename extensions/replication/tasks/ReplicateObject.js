@@ -78,7 +78,13 @@ class ReplicateObject extends BackbeatTask {
         if (where === 'source') {
             vaultclient = this.vaultclientCache.getClient('source:s3');
         } else { // target
-            const { host, port } = this.destHosts.pickHost();
+            // const { host, port } = this.destHosts.pickHost();
+            // This process is runing on the source server. 
+            // To access the target Vault, S3C sends a request to the target server.
+            // The request will go throught nginx proxy and then to the target Vault.
+            // I hardcorded it here for now to avoid the need to run nginx on the destination server.
+            const host = 'localhost';
+            const port = 6500;
             vaultclient = this.vaultclientCache.getClient('dest:s3',
                 host, port);
         }
