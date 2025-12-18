@@ -85,19 +85,24 @@ function generateKafkaAuthObject(auth) {
             break;
         }
         case 'basic': {
-            const { protocol, credentialsFile } = auth;
+            const { protocol, credentialsFile, username, password } = auth;
             if (!supportedSaslProtocols.includes(protocol)) {
                 throw new Error(`Unsupported security.protocol: ${protocol}`);
             }
-            const credsFilePath = getAuthFilePath(credentialsFile);
-            if (credsFilePath === null) {
-                throw new Error(`Credentials file ${credentialsFile} not found in ${authFilesFolder}`);
-            }
-            const credentials = readCredentialsFile(credsFilePath);
             authObject['sasl.mechanisms'] = 'PLAIN';
             authObject['security.protocol'] = protocol;
-            authObject['sasl.username'] = credentials.username;
-            authObject['sasl.password'] = credentials.password;
+            if (credentialsFile) {
+                const credsFilePath = getAuthFilePath(credentialsFile);
+                if (credsFilePath === null) {
+                    throw new Error(`Credentials file ${credentialsFile} not found in ${authFilesFolder}`);
+                }
+                const credentials = readCredentialsFile(credsFilePath);
+                authObject['sasl.username'] = credentials.username;
+                authObject['sasl.password'] = credentials.password;
+            } else {
+                authObject['sasl.username'] = username;
+                authObject['sasl.password'] = password;
+            }
             break;
         }
         default: {

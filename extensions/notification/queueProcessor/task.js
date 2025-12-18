@@ -38,7 +38,15 @@ let destinationAuth = {
     keytab: process.env.KEYTAB,
     principal: process.env.PRINCIPAL,
     serviceName: process.env.SERVICE_NAME,
+    username: process.env.BASIC_USERNAME,
+    password: process.env.BASIC_PASSWORD,
 };
+// Drop undefined environment variables to prevent hitting unknown fields when validating the auth schema.
+Object.keys(destinationAuth).forEach(key => {
+    if (destinationAuth[key] === undefined) {
+        delete destinationAuth[key];
+    }
+});
 const isDestinationAuthEmpty = Object.values(destinationAuth)
     .every(x => !x);
 if (isDestinationAuthEmpty) {
