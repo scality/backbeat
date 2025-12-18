@@ -25,7 +25,9 @@ const kerberosAuthSchema = saslAuthSchema.append({
 
 const basicAuthSchema = saslAuthSchema.append({
     type: joi.string().valid('basic').required(),
-    credentialsFile: joi.string().required(),
+    credentialsFile: joi.string(),
+    username: joi.string(),
+    password: joi.string(),
 });
 
 const credentialsFileSchema = joi.object({

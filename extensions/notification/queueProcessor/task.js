@@ -38,6 +38,8 @@ let destinationAuth = {
     keytab: process.env.KEYTAB,
     principal: process.env.PRINCIPAL,
     serviceName: process.env.SERVICE_NAME,
+    username: process.env.USERNAME,
+    password: process.env.PASSWORD,
 };
 const isDestinationAuthEmpty = Object.values(destinationAuth)
     .every(x => !x);
