@@ -162,7 +162,7 @@ describe('NotificationConfigValidator ::', () => {
         },
         {
             valid: true,
-            description: 'basic auth',
+            description: 'basic auth credentialsFile',
             destinationConfig: {
                 resource: 'resource',
                 type: 'kafka',
@@ -177,8 +177,25 @@ describe('NotificationConfigValidator ::', () => {
             },
         },
         {
+            valid: true,
+            description: 'basic auth username/password',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                    username: 'foo',
+                    password: 'bar',
+                }
+            },
+        },
+        {
             valid: false,
-            description: 'basic auth no credentialsFile',
+            description: 'basic auth missing credentials',
             destinationConfig: {
                 resource: 'resource',
                 type: 'kafka',
