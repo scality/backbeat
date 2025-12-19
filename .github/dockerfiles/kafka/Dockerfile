@@ -5,8 +5,8 @@ RUN apt-get update && \
     apt-get install -y wget netcat-traditional && \
     rm -rf /var/lib/apt/lists/*
 
-# Download and install Kafka 3.9.0
-ENV KAFKA_VERSION=3.9.0
+# Download and install Kafka
+ENV KAFKA_VERSION=3.8.1
 ENV SCALA_VERSION=2.13
 ENV KAFKA_HOME=/opt/kafka
 
