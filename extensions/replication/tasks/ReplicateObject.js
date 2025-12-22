@@ -701,7 +701,7 @@ class ReplicateObject extends BackbeatTask {
         const sourceS3 = this.sourceConfig.s3;
         this.S3source = new AWS.S3({
             endpoint: `${this.sourceConfig.transport}://` +
-                `${sourceS3.host}:${sourceS3.port}`,
+                `${sourceS3.host}${sourceS3.port ? `:${sourceS3.port}` : ''}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
             s3ForcePathStyle: true,
@@ -755,8 +755,7 @@ class ReplicateObject extends BackbeatTask {
                 targetRole, log);
 
         this.backbeatDest = new BackbeatClient({
-            endpoint: `${this.destConfig.transport}://` +
-                `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
+            endpoint: `${this.destConfig.transport}://${this.destBackbeatHost.host}${this.destBackbeatHost.port ? `:${this.destBackbeatHost.port}` : ''}`,
             credentials: this.s3destCredentials,
             sslEnabled: this.destConfig.transport === 'https',
             httpOptions: { agent: this.destHTTPAgent, timeout: 0 },
