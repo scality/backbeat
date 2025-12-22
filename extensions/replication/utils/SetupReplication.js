@@ -114,19 +114,19 @@ class SetupReplication extends BackbeatTask {
             undefined : this.destHosts.pickHost();
         this._s3Clients = {
             source: _setupS3Client(
-                source.transport, `${source.s3.host}:${source.s3.port}`,
+                source.transport, `${source.s3.host}${source.s3.port ? `:${source.s3.port}` : ''}`,
                 source.credentials, internalHttps),
             target: target.isExternal ? undefined : _setupS3Client(
-                target.transport, `${destHost.host}:${destHost.port}`,
+                target.transport, `${destHost.host}${destHost.port ? `:${destHost.port}` : ''}`,
                 target.credentials, https),
         };
         this._iamClients = {
             source: _setupIAMClient(
                 source.transport,
-                `${source.vault.host}:${source.vault.adminPort}`,
+                `${source.vault.host}${source.vault.adminPort ? `:${source.vault.adminPort}` : ''}`,
                 source.credentials, internalHttps),
             target: target.isExternal ? undefined : _setupIAMClient(
-                target.transport, `${destHost.host}:${destHost.port}`,
+                target.transport, `${destHost.host}${destHost.port ? `:${destHost.port}` : ''}`,
                 target.credentials, https),
         };
     }

@@ -28,7 +28,7 @@ function getS3Client(endpoint) {
 function putLifecycleConfiguration(bucketName, workflows, cb) {
     logger.debug('updating lifecycle configuration');
     const cfg = config.s3;
-    const endpoint = `${cfg.host}:${cfg.port}`;
+    const endpoint = `${cfg.host}${cfg.port ? `:${cfg.port}` : ''}`;
     const params = {
         Bucket: bucketName,
         LifecycleConfiguration: {
@@ -81,7 +81,7 @@ function putLifecycleConfiguration(bucketName, workflows, cb) {
 function deleteLifecycleConfiguration(bucketName, cb) {
     logger.debug('deleting lifecycle configuration');
     const cfg = config.s3;
-    const endpoint = `${cfg.host}:${cfg.port}`;
+    const endpoint = `${cfg.host}:${cfg.port ? `:${cfg.port}` : ''}`;
 
     const params = {
         Bucket: bucketName,

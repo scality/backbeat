@@ -710,8 +710,7 @@ class ReplicateObject extends BackbeatTask {
             maxRetries: 0,
         });
         this.backbeatSource = new BackbeatClient({
-            endpoint: `${this.sourceConfig.transport}://` +
-                `${sourceS3.host}:${sourceS3.port}`,
+            endpoint: `${this.sourceConfig.transport}://${sourceS3.host}${sourceS3.port ? `:${sourceS3.port}` : ''}`,
             credentials: this.s3sourceCredentials,
             sslEnabled: this.sourceConfig.transport === 'https',
             httpOptions: { agent: this.sourceHTTPAgent, timeout: TIMEOUT_MS, connectTimeout: TIMEOUT_MS },
@@ -719,8 +718,10 @@ class ReplicateObject extends BackbeatTask {
         });
         this.backbeatSourceProxy = new BackbeatMetadataProxy(
             `${this.sourceConfig.transport}://` +
-                `${sourceS3.host}:${sourceS3.port}`,
-            this.sourceConfig.auth, this.sourceHTTPAgent);
+            `${sourceS3.host}${sourceS3.port ? `:${sourceS3.port}` : ''}`,
+            this.sourceConfig.auth, 
+            this.sourceHTTPAgent
+        );
         this.backbeatSourceProxy.setSourceRole(sourceRole);
         this.backbeatSourceProxy.setBackbeatClient(this.backbeatSource);
     }

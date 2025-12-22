@@ -77,7 +77,7 @@ function installReplicationConfiguration(bucketName, endpoint, workflows, cb) {
 function putReplication(bucketName, workflows, cb) {
     logger.debug('updating replication configuration');
     const cfg = config.extensions.replication.source.s3;
-    const endpoint = `${cfg.host}:${cfg.port}`;
+    const endpoint = `${cfg.host}${cfg.port ? `:${cfg.port}` : ''}`;
 
     async.series([
         done => putVersioning(bucketName, endpoint, done),
@@ -90,7 +90,7 @@ function putReplication(bucketName, workflows, cb) {
 function deleteReplication(bucketName, cb) {
     logger.debug('deleting replication configuration');
     const cfg = config.extensions.replication.source.s3;
-    const endpoint = `${cfg.host}:${cfg.port}`;
+    const endpoint = `${cfg.host}${cfg.port ? `:${cfg.port}` : ''}`;
 
     const params = {
         Bucket: bucketName,

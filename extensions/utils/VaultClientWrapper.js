@@ -45,7 +45,7 @@ class VaultClientWrapper {
 
         const stsWithCreds = CredentialsManager.resolveExternalFileSync(sts, this.logger);
         const stsConfig = {
-            endpoint: `${this._transport}://${sts.host}:${sts.port}`,
+            endpoint: `${this._transport}://${sts.host}${sts.port ? `:${sts.port}` : ''}`,
             credentials: {
                 accessKeyId: stsWithCreds.accessKey,
                 secretAccessKey: stsWithCreds.secretKey,
