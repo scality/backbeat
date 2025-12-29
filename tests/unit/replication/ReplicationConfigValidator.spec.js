@@ -90,7 +90,7 @@ const baseConfig = {
 };
 
 describe('ReplicationConfigValidator', () => {
-   it('should require all sites to have a config when destination auth is per site', () => {
+    it('should require all sites to have a config when destination auth is per site', () => {
         const config = {
             ...baseConfig,
             destination: {
@@ -108,8 +108,9 @@ describe('ReplicationConfigValidator', () => {
         delete config.destination.auth;
         assert.throws(() => configValidator({}, config),
             err => err.message === 'missing destination configuration for sites: aws2,aws3');
-   });
-   it('should not require all sites to have a config when destination.auth is defined', () => {
+    });
+
+    it('should not require all sites to have a config when destination.auth is defined', () => {
         const config = {
             ...baseConfig,
             destination: {
@@ -125,8 +126,9 @@ describe('ReplicationConfigValidator', () => {
             }
         };
         assert.doesNotThrow(() => configValidator({}, config));
-   });
-   it('should allow specifying a custom transport for a site', () => {
+    });
+
+    it('should allow specifying a custom transport for a site', () => {
         const config = {
             ...baseConfig,
             destination: {
@@ -139,8 +141,9 @@ describe('ReplicationConfigValidator', () => {
             }
         };
         assert.doesNotThrow(() => configValidator({}, config));
-   });
-   it('should require destination auth to contain sts config when type is assumeRole', () => {
+    });
+
+    it('should require destination auth to contain sts config when type is assumeRole', () => {
         const config = {
             ...baseConfig,
             destination: {
@@ -169,8 +172,9 @@ describe('ReplicationConfigValidator', () => {
         };
         assert.throws(() => configValidator({}, config),
             err => err.message === '"destination.sites.aws1.auth.sts" is required');
-   });
-   it('should validate new destination schema', () => {
+    });
+
+    it('should validate new destination schema', () => {
         const config = {
             ...baseConfig,
             destination: {
@@ -262,8 +266,9 @@ describe('ReplicationConfigValidator', () => {
             }
         };
         assert.doesNotThrow(() => configValidator({}, config));
-   });
-   it('should load admin credentials from file when adminCredentialsFile is set', () => {
+    });
+
+    it('should load admin credentials from file when adminCredentialsFile is set', () => {
         const config = {
             ...baseConfig,
             source: {
@@ -325,5 +330,5 @@ describe('ReplicationConfigValidator', () => {
             conf.destination.sites.aws1.auth.vault.adminCredentials,
             adminCredentials,
         );
-   });
+    });
 });
