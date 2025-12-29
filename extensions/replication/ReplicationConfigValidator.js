@@ -4,6 +4,12 @@ const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi, probeServerJoi, probeServerPerSite, 
         stsConfigJoi } =
     require('../../lib/config/configItems.joi');
+const {
+    authTypeAccount,
+    authTypeAssumeRole,
+    authTypeRole,
+    authTypeService,
+} = require('../../lib/constants');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 
@@ -18,10 +24,14 @@ const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
 
 const destinationAuthJoi = joi.object({
-    type: joi.alternatives().try('account', 'role', 'service', 'assumeRole')
-        .required(),
+    type: joi.alternatives().try(
+        authTypeAccount,
+        authTypeRole,
+        authTypeService,
+        authTypeAssumeRole
+    ).required(),
     account: joi.string()
-        .when('type', { is: 'account', then: joi.required() }),
+        .when('type', { is: authTypeAccount, then: joi.required() }),
     vault: joi.object({
         host: joi.string().optional(),
         port: joi.number().greater(0).optional(),
@@ -29,7 +39,14 @@ const destinationAuthJoi = joi.object({
         adminCredentialsFile: joi.string().optional(),
     }),
     sts: stsConfigJoi
-        .when('type', { is: 'assumeRole', then: joi.required() }),
+        .keys({
+            // override port to make it optional, with default based on transport
+            port: joi.alternatives().try(
+                stsConfigJoi.extract('port'),
+                joi.string().optional().valid('', null).empty(['', null])
+            ).default(joi.ref('....transport', { adjust: transport => transport === 'http' ? 80 : 443 })),
+        })
+        .when('type', { is: authTypeAssumeRole, then: joi.required() }),
 });
 
 const joiSchema = joi.object({
@@ -37,11 +54,14 @@ const joiSchema = joi.object({
         transport: transportJoi,
         s3: hostPortJoi.required(),
         auth: joi.object({
-            type: joi.alternatives().try('account', 'role', 'service').
-                required(),
+            type: joi.alternatives().try(
+                authTypeAccount,
+                authTypeRole,
+                authTypeService,
+            ).required(),
             account: joi.string()
-                .when('type', { is: 'account', then: joi.required() })
-                .when('type', { is: 'service', then: joi.required() }),
+                .when('type', { is: authTypeAccount, then: joi.required() })
+                .when('type', { is: authTypeService, then: joi.required() }),
             vault: joi.object({
                 host: joi.string().required(),
                 port: joi.number().greater(0).required(),
@@ -51,7 +71,7 @@ const joiSchema = joi.object({
                         then: joi.required(),
                     }),
                 adminCredentialsFile: joi.string().optional(),
-            }).when('type', { is: 'role', then: joi.required() }),
+            }).when('type', { is: authTypeRole, then: joi.required() }),
         }).required(),
     },
     destination: joi.object({

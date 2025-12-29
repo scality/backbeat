@@ -208,8 +208,48 @@ describe('ReplicationConfigValidator', () => {
         delete config.destination.auth;
         delete config.destination.transport;
         assert.doesNotThrow(() => configValidator({}, config));
-   });
-   it('should validate old destination schema', () => {
+    });
+
+    [
+        { transport: 'http', port: undefined, expected: 80 },
+        { transport: 'https', port: null, expected: 443 },
+        { transport: 'https', port: '', expected: 443 },
+        { transport: 'https', port: 7841, expected: 7841 },
+        { transport: 'https', port: '3426', expected: 3426 },
+    ].forEach(({ transport, port, expected }) =>
+        it(`should use default sts port when ${transport} port is ${port === '' ? '""' : port}`, () => {
+            const config = {
+                ...baseConfig,
+                destination: {
+                    ...baseConfig.destination,
+                    bootstrapList: [
+                        { site: 'aws', type: 'aws_s3' },
+                    ],
+                    sites: {
+                        aws: {
+                            transport,
+                            auth: {
+                                type: 'assumeRole',
+                                sts: {
+                                    host: 'sts.enpoint.com',
+                                    port,
+                                    accessKey: 'accessKey',
+                                    secretKey: 'secretKey',
+                                },
+                            },
+                        },
+                    },
+                },
+            };
+            delete config.destination.auth;
+            delete config.destination.transport;
+
+            const result = configValidator({}, config);
+            assert.strictEqual(result.destination.sites.aws.auth.sts.port, expected);
+        })
+    );
+
+    it('should validate old destination schema', () => {
         const config = {
             ...baseConfig,
             destination: {
