@@ -1,0 +1,49 @@
+name: 'Push Assets'
+description: 'Pushes dashboards and policies using Oras'
+inputs:
+  tag:
+    description: 'The tag to use for the images'
+    required: true
+runs:
+  using: "composite"
+  steps:
+    - name: Install Oras
+      shell: bash
+      run: |
+        curl -L https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz | \
+          tar -xz -C /usr/local/bin oras
+      env:
+        ORAS_VERSION: 1.2.2
+
+    - name: Push dashboards
+      shell: bash
+      run: |
+        oras push ghcr.io/${{ github.repository }}/${{ github.event.repository.name }}-dashboards:${{ inputs.tag }} \
+          ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
+          ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
+          ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
+          ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
+          ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml \
+          lifecycle/dashboard.json:application/grafana-dashboard+json \
+          lifecycle/alerts.yaml:application/prometheus-alerts+yaml \
+          cold-storage/dashboard.json:application/grafana-dashboard+json \
+          replication/dashboard.json:application/grafana-dashboard+json \
+          replication/alerts.yaml:application/prometheus-alerts+yaml \
+          notification/dashboard.json:application/grafana-dashboard+json \
+          notification/alerts.yaml:application/prometheus-alerts+yaml \
+          oplog-populator/dashboard.json:application/grafana-dashboard+json \
+          oplog-populator/alerts.yaml:application/prometheus-alerts+yaml
+      working-directory: monitoring
+
+    - name: Push policies
+      shell: bash
+      run: |
+        oras push ghcr.io/${{ github.repository }}/${{ github.event.repository.name }}-policies:${{ inputs.tag }} \
+          extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/conductor/policy_index_management.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
+          extensions/gc/policy.json:application/vnd.iam-policy+json \
+          policies/queue_populator_policy.json:application/vnd.iam-policy+json \
+          policies/read_accounts.json:application/vnd.iam-policy+json

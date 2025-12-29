@@ -7,9 +7,6 @@ on:
     - development/**
     - q/*/**
 
-env:
-  PROJECT_NAME: ${{ github.event.repository.name }}
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -46,39 +43,8 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
-        
-      - name: Install Oras
-        run: |
-          curl -L https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz | \
-            tar -xz -C /usr/local/bin oras
-        env:
-          ORAS_VERSION: 1.2.2
 
-      - name: Push dashboards to the development namespace
-        run: |
-          oras push ghcr.io/${{ github.repository }}/${{ env.PROJECT_NAME }}-dashboards:${{ github.sha }} \
-            ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
-            ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
-            ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
-            ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
-            ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml \
-            lifecycle/dashboard.json:application/grafana-dashboard+json \
-            lifecycle/alerts.yaml:application/prometheus-alerts+yaml \
-            cold-storage/dashboard.json:application/grafana-dashboard+json \
-            replication/dashboard.json:application/grafana-dashboard+json \
-            replication/alerts.yaml:application/prometheus-alerts+yaml \
-            notification/dashboard.json:application/grafana-dashboard+json \
-            notification/alerts.yaml:application/prometheus-alerts+yaml \
-            oplog-populator/dashboard.json:application/grafana-dashboard+json \
-            oplog-populator/alerts.yaml:application/prometheus-alerts+yaml
-        working-directory: monitoring
-
-      - name: Push policies into the development namespace
-        run: |
-          oras push ghcr.io/${{ github.repository }}/${{ env.PROJECT_NAME }}-policies:${{ github.sha }} \
-            extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
-            extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
-            extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
-            extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
-            extensions/gc/policy.json:application/vnd.iam-policy+json \
-            policies/queue_populator_policy.json:application/vnd.iam-policy+json
+      - name: Push Assets
+        uses: ./.github/actions/push-assets
+        with:
+          tag: ${{ github.sha }}
