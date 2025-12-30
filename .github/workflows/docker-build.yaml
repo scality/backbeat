@@ -6,6 +6,14 @@ on:
     branches-ignore:
     - development/**
     - q/*/**
+  workflow_call:
+    inputs:
+      tag:
+        required: true
+        type: string
+
+env:
+  TAG: ${{ inputs.tag || github.sha }}
 
 jobs:
   build:
@@ -29,7 +37,7 @@ jobs:
         with:
           context: .
           push: true
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}
+          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}
           cache-from: type=gha
           cache-to: type=gha,mode=max
 
@@ -39,12 +47,48 @@ jobs:
           context: images/federation
           push: true
           build-args:
-            BACKBEAT_VERSION=${{ github.sha }}
-          tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
+            BACKBEAT_VERSION=${{ env.TAG }}
+          tags: ghcr.io/${{ github.repository }}:${{ env.TAG }}-federation
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
 
-      - name: Push Assets
-        uses: ./.github/actions/push-assets
-        with:
-          tag: ${{ github.sha }}
+      - name: Install Oras
+        shell: bash
+        run: |
+          curl -L https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz | \
+            tar -xz -C /usr/local/bin oras
+        env:
+          ORAS_VERSION: 1.2.2
+
+      - name: Push dashboards
+        shell: bash
+        run: |
+          oras push ghcr.io/${{ github.repository }}/${{ github.event.repository.name }}-dashboards:${{ env.TAG }} \
+            ingestion/ingestion-processor-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-producer-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-global-dashboard.json:application/grafana-dashboard+json \
+            ingestion/ingestion-processor-alert.yaml:application/prometheus-alerts+yaml \
+            ingestion/ingestion-producer-alert.yaml:application/prometheus-alerts+yaml \
+            lifecycle/dashboard.json:application/grafana-dashboard+json \
+            lifecycle/alerts.yaml:application/prometheus-alerts+yaml \
+            cold-storage/dashboard.json:application/grafana-dashboard+json \
+            replication/dashboard.json:application/grafana-dashboard+json \
+            replication/alerts.yaml:application/prometheus-alerts+yaml \
+            notification/dashboard.json:application/grafana-dashboard+json \
+            notification/alerts.yaml:application/prometheus-alerts+yaml \
+            oplog-populator/dashboard.json:application/grafana-dashboard+json \
+            oplog-populator/alerts.yaml:application/prometheus-alerts+yaml
+        working-directory: monitoring
+
+      - name: Push policies
+        shell: bash
+        run: |
+          oras push ghcr.io/${{ github.repository }}/${{ github.event.repository.name }}-policies:${{ env.TAG }} \
+          extensions/lifecycle/conductor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/conductor/policy_index_management.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/bucketProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy.json:application/vnd.iam-policy+json \
+          extensions/lifecycle/objectProcessor/policy_transition.json:application/vnd.iam-policy+json \
+          extensions/gc/policy.json:application/vnd.iam-policy+json \
+          policies/queue_populator_policy.json:application/vnd.iam-policy+json \
+          policies/read_accounts.json:application/vnd.iam-policy+json
