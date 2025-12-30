@@ -10,14 +10,14 @@ on:
         required: true
 
 jobs:
+  build:
+    uses: ./.github/workflows/docker-build.yaml
+    with:
+      tag: ${{ github.event.inputs.tag }}
   release:
+    needs: build
     runs-on: ubuntu-latest
     steps:
-      - name: Build
-        uses: ./.github/workflows/docker-build.yaml
-        with:
-          tag: ${{ github.event.inputs.tag }}
-
       - name: Create Release
         uses: softprops/action-gh-release@v2
         env:
