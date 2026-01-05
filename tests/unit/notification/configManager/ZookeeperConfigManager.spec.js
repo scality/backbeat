@@ -94,21 +94,40 @@ function checkParentConfigZkNode(manager, cb) {
 
 describe('ZookeeperConfigManager', () => {
     const zk = new ZookeeperMock({ doLog: false });
-    const zkClient = zk.createClient();
-    const params = {
-        zkClient,
-        zkConcurrency: 10,
-        logger,
-    };
+    const zkMock = zk.createClient();
+    let zkClient;
+    let params;
+
+    before(() => {
+        // Stub _connect before instantiation to inject mock client
+        sinon.stub(ZookeeperManager.prototype, '_connect').callsFake(function () {
+            this.client = zkMock;
+        });
+
+        zkClient = new ZookeeperManager('localhost:2181', {}, logger);
+
+        params = {
+            zkClient,
+            zkConcurrency: 10,
+            logger,
+        };
+    });
+
+    after(() => {
+        sinon.restore();
+        zk._resetState();
+    });
 
     describe('Constructor', () => {
+        let stub;
         function checkConfigParentNodeStub(cb) {
             return cb(new Error('error checking config parent node'));
         }
 
-        after(() => {
-            sinon.restore();
-            zk._resetState();
+        afterEach(() => {
+            if (stub) {
+                stub.restore();
+            }
         });
 
         it('constructor and setup checks', done => {
@@ -128,7 +147,7 @@ describe('ZookeeperConfigManager', () => {
 
         it('should return error if checkConfigParentNode fails', done => {
             const manager = new ZookeeperConfigManager(params);
-            sinon.stub(manager, '_checkConfigurationParentNode')
+            stub = sinon.stub(manager, '_checkConfigurationParentNode')
                 .callsFake(checkConfigParentNodeStub);
             manager.setup(err => {
                 assert(err);
@@ -250,7 +269,7 @@ describe('ZookeeperConfigManager', () => {
             sinon.stub(manager, '_updateLocalStore').yields(null);
             manager.setup(err => {
                 assert.ifError(err);
-                assert(!(manager._zkClient instanceof ZookeeperManager));
+                assert.strictEqual(manager._zkClient, zkClient);
                 done();
             });
         });
