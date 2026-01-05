@@ -108,7 +108,7 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
             this.bnConfigManager.setConfig(bucketName, bnConfig);
             return undefined;
         }
-        // bucket was deleter or notification conf has been removed, so remove zk node
+        // bucket was deleted or notification conf has been removed, so remove zk node
         this.bnConfigManager.removeConfig(bucketName || bucket);
         return undefined;
     }
