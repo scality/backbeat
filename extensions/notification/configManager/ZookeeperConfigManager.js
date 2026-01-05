@@ -235,22 +235,12 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         return async.waterfall([
             next => this._checkNodeExists(zkPath, next),
             (exists, next) => {
-                if (!exists) {
-                    return this._createBucketNotifConfigNode(bucket,
-                        err => next(err, exists));
+                if (exists) {
+                    return this._zkClient.setData(zkPath, Buffer.from(data), -1, next);
+                } else {
+                    return this._createBucketNotifConfigNode(bucket, data, next);
                 }
-                return next(null, exists);
-            },
-            (exists, next) => this._zkClient.setData(zkPath, Buffer.from(data), -1, err => next(err, exists)),
-            (exists, next) => {
-                if (!exists) {
-                    // if znode is created, run getData to set a watcher on the bucket config
-                    // in case another node becomes leader on the raft and modifies the config
-                    // while the current process keeps running
-                    return this._updateLocalStore([bucket], next);
-                }
-                return next();
-            },
+            }
         ], err => {
             if (err) {
                 this.log.error('error saving config', { method, zkPath, data });
@@ -288,7 +278,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         });
     }
 
-    _createBucketNotifConfigNode(bucket, cb) {
+    _createBucketNotifConfigNode(bucket, data, cb) {
         const method
             = 'ZookeeperConfigManager._createBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
@@ -297,7 +287,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             zkPath,
         });
-        return this._zkClient.mkdirp(zkPath, err => {
+        // mkdirp to ensure parent path exists,
+        // then atomically create the znode while setting data immediately
+        // to avoid other watchers to read the znode because data is set at creation
+        return this._zkClient.mkdirpWithChildDataOnly(zkPath, Buffer.from(data), err => {
             if (err) {
                 this.log.error('Could not pre-create path in zookeeper', {
                     method,
@@ -306,7 +299,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 });
                 return this._callbackHandler(cb, err);
             }
-            return this._callbackHandler(cb);
+            // if znode is created, run getData to set a watcher on the bucket config
+            // in case another node becomes leader on the raft and modifies the config
+            // while the current process keeps running
+            return this._updateLocalStore([bucket], cb => this._callbackHandler(cb));
         });
     }
 
