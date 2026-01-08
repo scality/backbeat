@@ -136,6 +136,22 @@ describe('generateKafkaAuthObject', () => {
             },
         },
         {
+            description: 'Basic authentication with inline credentials',
+            valid: true,
+            input: {
+                type: 'basic',
+                protocol: 'SASL_PLAINTEXT',
+                username: 'testuser',
+                password: 'testpassword',
+            },
+            expected: {
+                'security.protocol': 'SASL_PLAINTEXT',
+                'sasl.mechanisms': 'PLAIN',
+                'sasl.username': 'testuser',
+                'sasl.password': 'testpassword',
+            },
+        },
+        {
             description: 'Basic authentication with missing credentials file',
             valid: false,
             input: {

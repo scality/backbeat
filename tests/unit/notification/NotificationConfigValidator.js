@@ -162,7 +162,7 @@ describe('NotificationConfigValidator ::', () => {
         },
         {
             valid: true,
-            description: 'basic auth',
+            description: 'basic auth credentialsFile',
             destinationConfig: {
                 resource: 'resource',
                 type: 'kafka',
@@ -177,8 +177,8 @@ describe('NotificationConfigValidator ::', () => {
             },
         },
         {
-            valid: false,
-            description: 'basic auth no credentialsFile',
+            valid: true,
+            description: 'basic auth username/password',
             destinationConfig: {
                 resource: 'resource',
                 type: 'kafka',
@@ -188,6 +188,90 @@ describe('NotificationConfigValidator ::', () => {
                 auth: {
                     type: 'basic',
                     protocol: 'SASL_PLAINTEXT',
+                    username: 'foo',
+                    password: 'bar',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'basic auth missing credentials',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'basic auth empty password',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                    username: 'foo',
+                    password: '',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'basic auth unset username',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                    password: 'bar',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'basic auth inline credentials and credentials file',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                    credentialsFile: 'credentials.json',
+                    username: 'testuser',
+                    password: 'testpassword',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'basic auth empty credentials file',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'basic',
+                    protocol: 'SASL_PLAINTEXT',
+                    credentialsFile: '',
                 }
             },
         },
