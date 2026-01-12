@@ -1810,12 +1810,13 @@ class LifecycleTask extends BackbeatTask {
      *   handling versioned buckets
      * @param {AWS.S3} s3target - s3 instance
      * @param {BackbeatMetadataProxy} backbeatMetadataProxy - The metadata proxy
+     * @param {object} entry - Kafka entry
      * @param {number} nbRetries - Number of time the process has been retried
      * @param {function} done - callback(error)
      * @return {undefined}
      */
     processBucketEntry(bucketLCRules, bucketData, s3target,
-    backbeatMetadataProxy, nbRetries, done) {
+    backbeatMetadataProxy, entry, nbRetries, done) {
         const log = this.log.newRequestLogger();
         this.s3target = s3target;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
@@ -1843,6 +1844,11 @@ class LifecycleTask extends BackbeatTask {
             contextInfo: bucketData.contextInfo,
             details: bucketData.details,
         });
+
+        // Commit now to avoid re-processing this entry after pushing continuation entries below.
+        if (entry) {
+            this.consumer.onEntryCommittable(entry);
+        }
 
         // Initially, processing a Bucket entry should check mpu AND
         // (versioned OR non-versioned) objects

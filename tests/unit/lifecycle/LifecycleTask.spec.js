@@ -2183,7 +2183,7 @@ describe('lifecycle task helper methods', () => {
             };
             const snapshot = sinon.stub(lct, '_snapshotDataMoverTopicOffsets').returns();
             lct.setSupportedRules(ValidLifecycleRules);
-            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
+            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, null, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);
                 assert(snapshot.calledOnce);
                 done();
@@ -2215,7 +2215,7 @@ describe('lifecycle task helper methods', () => {
                 'NoncurrentVersionExpiration',
                 'AbortIncompleteMultipartUpload',
             ]);
-            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, 0, err => {
+            lct.processBucketEntry(bucketLCRules, bucketData, s3target, backbeatMetadataProxy, null, 0, err => {
                 assert.deepEqual(err, errors.NoSuchBucket);
                 assert(snapshot.notCalled);
                 done();

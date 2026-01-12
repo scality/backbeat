@@ -85,6 +85,7 @@ class LifecycleBucketProcessor {
         this._repConfig = repConfig;
         this._mongoConfig = mongoConfig;
         this._lcOptions = lcOptions;
+        this._consumer = null;
         this._producer = null;
         this._kafkaBacklogMetrics = null;
 
@@ -132,12 +133,12 @@ class LifecycleBucketProcessor {
 
         // The task scheduler for processing lifecycle tasks concurrently.
         this._internalTaskScheduler = async.queue((ctx, cb) => {
-            const { task, rules, value, s3target, backbeatMetadataProxy } = ctx;
+            const { task, rules, value, s3target, backbeatMetadataProxy, entry } = ctx;
             return this.retryWrapper.retry({
                 actionDesc: 'process bucket lifecycle entry',
                 logFields: { value },
                 actionFunc: (done, nbRetries) => task.processBucketEntry(
-                    rules, value, s3target, backbeatMetadataProxy, nbRetries, done),
+                    rules, value, s3target, backbeatMetadataProxy, entry, nbRetries, done),
                 shouldRetryFunc: err => err.retryable,
                 log: this._log,
             }, cb);
@@ -175,6 +176,7 @@ class LifecycleBucketProcessor {
      */
     getStateVars() {
         return {
+            consumer: this._consumer,
             producer: this._producer,
             processConfig: this._lcConfig.bucketProcessor,
             bootstrapList: this._repConfig.destination.bootstrapList,
@@ -351,6 +353,7 @@ class LifecycleBucketProcessor {
                 value: result,
                 s3target: s3,
                 backbeatMetadataProxy,
+                entry,
             }, cb);
         });
     }
@@ -382,7 +385,8 @@ class LifecycleBucketProcessor {
             kafka: { hosts: this._kafkaConfig.hosts },
             maxRequestSize: this._kafkaConfig.maxRequestSize,
             compressionType: this._kafkaConfig.compressionType,
-            requiredAcks: this._kafkaConfig.requiredAcks,
+            // Duplicate processing can result in exponential continuation. Conservatively enable idempotence.
+            idempotent: true,
             topic: this._lcConfig.objectTasksTopic,
         });
         producer.once('error', err => {

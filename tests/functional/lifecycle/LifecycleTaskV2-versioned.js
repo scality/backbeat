@@ -114,7 +114,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the non-current listing is triggered
@@ -142,7 +142,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 0);
             // test that the non-current listing is triggered
@@ -179,7 +179,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bd, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -216,7 +216,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bd, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -265,7 +265,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(expirationRule, bd, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the orphan listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'orphan');
@@ -294,7 +294,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -329,7 +329,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -374,7 +374,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-            backbeatMetadataProxy, nbRetries, err => {
+            backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the non-current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -409,7 +409,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -449,7 +449,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-            backbeatMetadataProxy, nbRetries, err => {
+            backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the non-current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -483,7 +483,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(expirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -525,7 +525,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(
-            transitionRule, bucketData, s3, backbeatMetadataProxy, nbRetries, err => {
+            transitionRule, bucketData, s3, backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -561,7 +561,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -612,7 +612,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(rules, bucketData, s3,
-            backbeatMetadataProxy, nbRetries, err => {
+            backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -669,7 +669,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(rules, bucketData, s3,
-            backbeatMetadataProxy, nbRetries, err => {
+            backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -714,7 +714,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-            backbeatMetadataProxy, nbRetries, err => {
+            backbeatMetadataProxy, null, nbRetries, err => {
                 assert.ifError(err);
                 // test that the current listing is triggered
                 assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'current');
@@ -758,7 +758,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(expitationRule, bd, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the orphan listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'orphan');
@@ -805,7 +805,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(expitationRule, bd, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the orphan listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'orphan');
@@ -842,7 +842,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(expitationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the orphan listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'orphan');
@@ -871,7 +871,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -912,7 +912,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(transitionRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -949,7 +949,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             assert.strictEqual(kafkaEntries.length, 2);
             // test that the current listing is triggered
@@ -997,7 +997,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(multipleRules, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -1038,7 +1038,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -1074,7 +1074,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
             // test that the non-current listing is triggered
             assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
@@ -1116,7 +1116,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
 
         const nbRetries = 0;
         return lifecycleTask.processBucketEntry(nonCurrentExpirationRule, bucketData, s3,
-        backbeatMetadataProxy, nbRetries, err => {
+        backbeatMetadataProxy, null, nbRetries, err => {
             assert.ifError(err);
 
             kafkaEntries = [];
@@ -1131,7 +1131,7 @@ describe('LifecycleTaskV2 with bucket versioned', () => {
             }];
 
             return lifecycleTask.processBucketEntry(nonCurrentExpirationRule2, bucketData, s3,
-                backbeatMetadataProxy, nbRetries, err => {
+                backbeatMetadataProxy, null, nbRetries, err => {
                     assert.ifError(err);
                     // test that the non-current listing is triggered
                     assert.strictEqual(backbeatMetadataProxy.listLifecycleType, 'noncurrent');
