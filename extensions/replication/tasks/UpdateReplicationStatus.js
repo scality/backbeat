@@ -17,6 +17,7 @@ const {
     getSortedSetMember,
     getSortedSetKey,
 } = require('../../../lib/util/sortedSetHelper');
+const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../lib/util/replicationPermissionError');
 
 class UpdateReplicationStatus extends BackbeatTask {
     /**
@@ -63,10 +64,16 @@ class UpdateReplicationStatus extends BackbeatTask {
         return this.backbeatSourceClient
         .getMetadata(params, log, (err, blob) => {
             if (err) {
-                log.error('error getting metadata blob from S3', {
-                    method: 'ReplicateObject._refreshSourceEntry',
+                const logFields = {
+                    method: 'UpdateReplicationStatus._refreshSourceEntry',
                     error: err,
-                });
+                };
+                if (isAccessDeniedError(err)) {
+                    const sourceRole = sourceEntry.getReplicationRoles()?.split(',')[0];
+                    Object.assign(logFields, getAccessDeniedLogFields(
+                        sourceEntry.getBucket(), sourceRole));
+                }
+                log.error('error getting metadata blob from S3', logFields);
                 return cb(err);
             }
             const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
@@ -283,13 +290,20 @@ class UpdateReplicationStatus extends BackbeatTask {
         }, log, err => {
             const replicationStatus = updatedSourceEntry.getReplicationStatus();
             if (err) {
-                log.error('an error occurred when updating metadata', {
+                const logFields = {
+                    method: 'UpdateReplicationStatus._putMetadata',
                     entry: updatedSourceEntry.getLogInfo(),
                     origin: 'source',
                     peer: this.sourceConfig.s3,
                     replicationStatus,
                     error: err.message,
-                });
+                };
+                if (isAccessDeniedError(err)) {
+                    const sourceRole = updatedSourceEntry.getReplicationRoles()?.split(',')[0];
+                    Object.assign(logFields, getAccessDeniedLogFields(
+                        updatedSourceEntry.getBucket(), sourceRole));
+                }
+                log.error('an error occurred when updating metadata', logFields);
                 return cb(err);
             }
             this.metricsHandler.status({ replicationStatus });
