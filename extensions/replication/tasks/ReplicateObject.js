@@ -11,6 +11,7 @@ const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
 const { attachReqUids, TIMEOUT_MS } = require('../../../lib/clients/utils');
+const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../lib/util/replicationPermissionError');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { getAccountCredentials } = require('../../../lib/credentials/AccountCredentials');
@@ -360,10 +361,15 @@ class ReplicateObject extends BackbeatTask {
         return this.backbeatSource.getMetadata(params, (err, blob) => {
             if (err) {
                 err.origin = 'source'; // eslint-disable-line no-param-reassign
-                log.error('error getting metadata blob from S3', {
+                const logFields = {
                     method: 'ReplicateObject._refreshSourceEntry',
                     error: err,
-                });
+                };
+                if (isAccessDeniedError(err)) {
+                    Object.assign(logFields, getAccessDeniedLogFields(
+                        sourceEntry.getBucket(), this.sourceRole));
+                }
+                log.error('error getting metadata blob from S3', logFields);
                 return cb(err);
             }
             const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
