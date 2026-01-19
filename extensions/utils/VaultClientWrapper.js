@@ -1,5 +1,6 @@
 const { fromTemporaryCredentials } = require('@aws-sdk/credential-providers');
 const { errorUtils } = require('arsenal');
+const { GetCallerIdentityCommand } = require('@aws-sdk/client-sts');
 
 const { authTypeAssumeRole, authTypeNone } = require('../../lib/constants');
 const VaultClientCache = require('../../lib/clients/VaultClientCache');
@@ -44,10 +45,10 @@ class VaultClientWrapper {
         }
 
         const stsWithCreds = CredentialsManager.resolveExternalFileSync(sts, this.logger);
+        const endpoint = `${sts.transport || 'https'}://${sts.host}:${sts.port}`;
 
-        // FIXME: works with vault 7.10 but not 8.3 (return 501)
-        // https://scality.atlassian.net/browse/VAULT-238
-        this._tempCredsPromise = Promise.resolve({ Account: '000000000000' })
+        const getCallerIdentity = new GetCallerIdentityCommand({});
+        this._tempCredsPromise = stsWithCreds.send(getCallerIdentity)
             .then(res => {
                 const roleArn = `arn:aws:iam::${res.Account}:role/${roleName}`;
                 const roleSessionName = `${this._clientId}`;
@@ -57,48 +58,41 @@ class VaultClientWrapper {
                     secretAccessKey: stsWithCreds.secretKey,
                 };
 
-                // Create a credential provider that assumes the role
-                return fromTemporaryCredentials({
-                    masterCredentials,
+                const creds = fromTemporaryCredentials({
                     params: {
                         RoleArn: roleArn,
                         RoleSessionName: roleSessionName,
-                        // default expiration: 1 hour
                     },
                     clientConfig: {
-                        endpoint: `${this._transport}://${sts.host}:${sts.port}`,
-                        region: 'us-east-1',
-                        tls: this._transport === 'https',
-                        maxAttempts: 1,
-                        requestHandler: {
-                            httpAgent: this._transport === 'http' ? this.stsAgent : undefined,
-                            httpsAgent: this._transport === 'https' ? this.stsAgent : undefined,
-                            connectionTimeout: 0,
-                            socketTimeout: 0,
-                        },
+                        endpoint,
+                        region: sts.region,
+                        credentials: masterCredentials,
+                        requestHandler: this.stsAgent,
                     },
                 });
+                return creds();
             })
-            .then(creds => {
-                this._tempCredsPromiseResolved = true;
-                return creds;
+            .then(res => {
+                this._tempCreds = {
+                    accessKey: res.accessKeyId,
+                    secretKey: res.secretAccessKey,
+                    sessionToken: res.sessionToken,
+                };
             })
             .catch(err => {
-                if (err.retryable) {
-                    const retryDelayMs = 5000;
-
-                    this.logger.error('could not set up temporary credentials, retrying', {
-                        retryDelayMs,
-                        error: errorUtils.reshapeExceptionError(err),
-                    });
-
-                    setTimeout(() => this._storeAWSCredentialsPromise(), retryDelayMs);
-                } else {
-                    this.logger.error('could not set up temporary credentials', {
-                        error: errorUtils.reshapeExceptionError(err),
-                    });
-                }
+                this.logger.error('failed to get temporary credentials', {
+                    error: errorUtils.reshapeExceptionError(err),
+                });
+                throw err;
             });
+    }
+
+    getSTSCredentials() {
+        if (this._authConfig.type !== authTypeAssumeRole) {
+            return null;
+        }
+
+        return this._tempCreds;
     }
 
     getAccountId(canonicalId, cb) {

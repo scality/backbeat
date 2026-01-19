@@ -164,9 +164,10 @@ class PolicyHandler extends BaseHandler {
                 const res = await this.stsClient.send(command);
                 accountId = res.Account;
             } catch (err) {
-                // Workaround a Vault issue on 8.3 branch
-                // https://scality.atlassian.net/browse/VAULT-238
-                accountId = '000000000000';
+                this.log.error('failed to get caller identity', {
+                    error: errorUtils.reshapeExceptionError(err),
+                });
+                throw err;
             }
         }
 
