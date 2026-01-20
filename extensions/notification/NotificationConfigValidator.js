@@ -91,7 +91,7 @@ function configValidator(backbeatConfig, extConfig) {
 }
 
 module.exports = {
-    NotificationConfigValidator: configValidator,
+    notificationConfigValidator: configValidator,
     authSchema,
     credentialsFileSchema,
 };
