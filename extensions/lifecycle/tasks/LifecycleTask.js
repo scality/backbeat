@@ -16,9 +16,8 @@ const {
     HeadObjectCommand,
     GetBucketVersioningCommand,
 } = require('@aws-sdk/client-s3');
-
+const { attachReqUids } = require('@scality/cloudserverclient');
 const config = require('../../../lib/Config');
-const { attachReqUids } = require('../../../lib/clients/utils');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const ReplicationAPI = require('../../replication/ReplicationAPI');
@@ -210,7 +209,7 @@ class LifecycleTask extends BackbeatTask {
         }
 
         const command = new ListObjectsCommand(params);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         async.waterfall([
             next => this.s3target.send(command)
                 .then(data => {
@@ -475,7 +474,7 @@ class LifecycleTask extends BackbeatTask {
      */
     _getMPUs(bucketData, bucketLCRules, params, nbRetries, log, done) {
         const command = new ListMultipartUploadsCommand(params);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         async.waterfall([
             next => this.s3target.send(command)
                 .then(data => {
@@ -695,7 +694,7 @@ class LifecycleTask extends BackbeatTask {
         }
 
         const command = new ListObjectVersionsCommand(params);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         this.s3target.send(command)
             .then(data => {
                 LifecycleMetrics.onS3Request(log, 'listObjectVersions', 'bucket', null);
@@ -748,7 +747,7 @@ class LifecycleTask extends BackbeatTask {
         }
 
         const command = new GetObjectTaggingCommand(tagParams);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         return this.s3target.send(command)
             .then(tags => {
                 LifecycleMetrics.onS3Request(log, 'getObjectTagging', 'bucket', null);
@@ -1581,7 +1580,7 @@ class LifecycleTask extends BackbeatTask {
             params.VersionId = obj.VersionId;
         }
         const command = new HeadObjectCommand(params);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         return this.s3target.send(command)
             .then(data => {
                 LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', null);
@@ -1888,7 +1887,7 @@ class LifecycleTask extends BackbeatTask {
                         const command = new GetBucketVersioningCommand({
                             Bucket: bucketData.target.bucket,
                         });
-                        attachReqUids(command, log);
+                        attachReqUids(command, log.getSerializedUids());
                         this.s3target.send(command)
                             .then(data => {
                                 LifecycleMetrics.onS3Request(

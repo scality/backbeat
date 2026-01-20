@@ -19,8 +19,8 @@ const {
     MultipleBackendPutObjectTaggingCommand,
     MultipleBackendDeleteObjectTaggingCommand,
     addContentLengthMiddleware,
+    attachReqUids,
 } = require('@scality/cloudserverclient');
-const { attachReqUids } = require('../../../lib/clients/utils');
 const getExtMetrics = require('../utils/getExtMetrics');
 const { metricsExtension, metricsTypeQueued } = require('../constants');
 
@@ -80,7 +80,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new GetBucketReplicationCommand({
             Bucket: entry.getBucket(),
         });
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         return this.S3source.send(command)
             .then(data => {
                 const replicationEnabled = data.ReplicationConfiguration.Rules

@@ -14,10 +14,11 @@ const {
     PutMetadataCommand,
     GetMetadataCommand,
     addContentLengthMiddleware,
+    attachReqUids,
 } = require('@scality/cloudserverclient');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
-const { attachReqUids, isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
+const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../lib/util/replicationPermissionError');
 const getExtMetrics = require('../utils/getExtMetrics');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
@@ -248,7 +249,7 @@ class ReplicateObject extends BackbeatTask {
 
         const command = new GetBucketReplicationCommand(
             { Bucket: entry.getBucket() });
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         return this.S3source.send(command)
             .then(data => {
                 const replicationEnabled = (
@@ -365,6 +366,7 @@ class ReplicateObject extends BackbeatTask {
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
+            RequestUids: log.getSerializedUids(),
         };
         return this.backbeatSource.send(new GetMetadataCommand(params))
             .then(data => {
@@ -504,7 +506,7 @@ class ReplicateObject extends BackbeatTask {
             VersionId: sourceEntry.getEncodedVersionId(),
             PartNumber: partNumber,
         });
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         const readStartTime = Date.now();
         
         this.S3source.send(command, { abortSignal: abortController.signal })
