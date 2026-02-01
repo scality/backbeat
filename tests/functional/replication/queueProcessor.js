@@ -1031,7 +1031,44 @@ describe('queue processor functional tests with mocking', () => {
             });
         });
 
-        it('should not check object MD if size is smaller than sourceCheckIfSizeGreaterThanMB', done => {
+        it('should fetch object MD from S3 for location data when missing', done => {
+            // Create a Kafka entry with its location[] field stripped
+            const originalKafkaEntry = s3mock.getParam('kafkaEntry');
+            const kafkaValue = JSON.parse(originalKafkaEntry.value);
+            delete kafkaValue.location;
+            const kafkaEntry = {
+                ...originalKafkaEntry,
+                value: JSON.stringify(kafkaValue),
+            };
+
+            s3mock.setParam('contentLength', 1000);
+            let checkMdCalled = false;
+            s3mock.setParam('routes.source.s3.getMetadata.handler',
+                (req, url, query, res) => {
+                    checkMdCalled = true;
+                    s3mock.resetParam('routes.source.s3.getMetadata.handler');
+                    s3mock._getMetadataSource(req, url, query, res);
+                }, { _static: true });
+
+            async.parallel([
+                done => {
+                    s3mock.onPutSourceMd = done;
+                },
+                done => queueProcessorSF.processReplicationEntry(
+                    kafkaEntry, err => {
+                        assert.ifError(err);
+                        assert.strictEqual(s3mock.hasPutTargetData, true);
+                        assert(s3mock.hasPutTargetMd);
+                        assert(checkMdCalled);
+                        done();
+                    }),
+            ], () => {
+                s3mock.resetParam('contentLength');
+                done();
+            });
+        });
+
+        it('should not check object MD for small objects with location', done => {
             s3mock.setParam('contentLength', 1);
             let checkMdCalled = false;
             s3mock.setParam('routes.source.s3.getMetadata.handler',
