@@ -8,6 +8,14 @@ const { wildCardForAllBuckets } = require('../constants');
  */
 class PipelineFactory {
     /**
+     * @constructor
+     * @param {number} locationStrippingThreshold threshold for stripping location data
+     */
+    constructor(locationStrippingThreshold = 100) {
+        this._locationStrippingThreshold = locationStrippingThreshold;
+    }
+
+    /**
      * Checks if an existing pipeline is valid against the current
      * factory.
      * @param {string} pipeline pipeline
@@ -57,6 +65,31 @@ class PipelineFactory {
      */
     getPipeline(buckets) { // eslint-disable-line no-unused-vars
         throw errors.NotImplemented;
+    }
+
+    /**
+     * Builds a conditional location stripping stage.
+     * Excludes location[] from Kafka if there are too many items (to save space).
+     * Keeps location[] for small objects (to avoid extra S3 fetches).
+     * @returns {Object} MongoDB $set aggregation stage
+     */
+    _getLocationStrippingStage() {
+        return {
+            $set: {
+                'fullDocument.value.location': {
+                    $cond: {
+                        if: {
+                            $gte: [
+                                { $size: { $ifNull: ['$fullDocument.value.location', []] } },
+                                this._locationStrippingThreshold
+                            ]
+                        },
+                        then: '$$REMOVE',
+                        else: '$fullDocument.value.location'
+                    }
+                }
+            }
+        };
     }
 }
 

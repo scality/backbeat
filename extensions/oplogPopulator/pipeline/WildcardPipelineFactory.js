@@ -10,6 +10,16 @@ const PipelineFactory = require('./PipelineFactory');
  */
 class WildcardPipelineFactory extends PipelineFactory {
     /**
+     * @constructor
+     * @param {number} locationStrippingThreshold threshold for stripping location data
+     */
+    constructor(locationStrippingThreshold = 100) {
+        super(locationStrippingThreshold);
+        // getPipeline is used standalone later, make sure its this binds to us.
+        this.getPipeline = this.getPipeline.bind(this);
+    }
+
+    /**
      * Checks if an existing pipeline is valid against the current
      * factory.
      * @param {string[]} bucketList pipeline
@@ -38,7 +48,8 @@ class WildcardPipelineFactory extends PipelineFactory {
                         },
                     }
                 }
-            }
+            },
+            this._getLocationStrippingStage(),
         ]);
     }
 }

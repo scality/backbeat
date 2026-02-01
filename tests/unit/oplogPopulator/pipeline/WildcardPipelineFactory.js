@@ -3,7 +3,7 @@ const WildcardPipelineFactory = require('../../../../extensions/oplogPopulator/p
 const { constants } = require('arsenal');
 
 describe('WildcardPipelineFactory', () => {
-    const wildcardPipelineFactory = new WildcardPipelineFactory();
+    const wildcardPipelineFactory = new WildcardPipelineFactory(200);
 
     describe('isValid', () => {
         it('should detect a wildcard', () => {
@@ -32,10 +32,15 @@ describe('WildcardPipelineFactory', () => {
     });
 
     describe('getPipeline', () => {
-        it('should return the pipeline with wildcard', () => {
+        it('should return the pipeline with buckets and location stripping', () => {
             const buckets = ['bucket1', 'bucket2'];
             const result = wildcardPipelineFactory.getPipeline(buckets);
-            assert.strictEqual(result, '[{"$match":{"ns.coll":{"$not":{"$regex":"^(mpuShadowBucket|__).*"}}}}]');
+            const pipeline = JSON.parse(result);
+
+            assert.strictEqual(pipeline.length, 2);
+            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$not:{$regex:'^(mpuShadowBucket|__).*'}}}});
+            assert(pipeline[1].$set['fullDocument.value.location']);
+            assert(result.includes('200'));
         });
     });
 
