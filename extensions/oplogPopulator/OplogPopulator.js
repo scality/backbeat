@@ -335,7 +335,7 @@ class OplogPopulator {
         if (this._config.numberOfConnectors === 0) {
             // If the number of connector is set to 0, then we
             // use a single connector to listen to the whole DB.
-            pipelineFactory = new WildcardPipelineFactory();
+            pipelineFactory = new WildcardPipelineFactory(this._config.locationStrippingThreshold);
             strategy = new UniqueConnector({
                 logger: this._logger,
             });
@@ -345,7 +345,7 @@ class OplogPopulator {
             // words, we cannot alter an existing pipeline. In this
             // case, the strategy is to allow a maximum of one
             // bucket per kafka connector.
-            pipelineFactory = new MultipleBucketsPipelineFactory();
+            pipelineFactory = new MultipleBucketsPipelineFactory(this._config.locationStrippingThreshold);
             strategy = new ImmutableConnector({
                 logger: this._logger,
             });
@@ -354,7 +354,7 @@ class OplogPopulator {
             // kafka connector. However, we want to proactively
             // ensure that the pipeline will be accepted by
             // mongodb.
-            pipelineFactory = new MultipleBucketsPipelineFactory();
+            pipelineFactory = new MultipleBucketsPipelineFactory(this._config.locationStrippingThreshold);
             strategy = new LeastFullConnector({
                 logger: this._logger,
             });

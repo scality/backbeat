@@ -304,6 +304,7 @@
             "kafkaConnectHost": "127.0.0.1",
             "kafkaConnectPort": 8083,
             "numberOfConnectors": 1,
+            "locationStrippingThreshold": 100,
             "probeServer": {
                 "bindAddress": "0.0.0.0",
                 "port": 8556

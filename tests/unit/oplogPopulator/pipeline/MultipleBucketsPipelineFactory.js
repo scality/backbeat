@@ -4,7 +4,7 @@ const MultipleBucketsPipelineFactory =
 const { constants } = require('arsenal');
 
 describe('MultipleBucketsPipelineFactory', () => {
-    const multipleBucketsPipelineFactory = new MultipleBucketsPipelineFactory();
+    const multipleBucketsPipelineFactory = new MultipleBucketsPipelineFactory(200);
 
     describe('isValid', () => {
         it('should detect a valid list of buckets', () => {
@@ -45,10 +45,15 @@ describe('MultipleBucketsPipelineFactory', () => {
             assert.strictEqual(result, '[]');
         });
 
-        it('should return the pipeline with buckets', () => {
+        it('should return the pipeline with buckets and location stripping', () => {
             const buckets = ['bucket1', 'bucket2'];
             const result = multipleBucketsPipelineFactory.getPipeline(buckets);
-            assert.strictEqual(result, '[{"$match":{"ns.coll":{"$in":["bucket1","bucket2"]}}}]');
+            const pipeline = JSON.parse(result);
+
+            assert.strictEqual(pipeline.length, 2);
+            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1','bucket2']}}});
+            assert(pipeline[1].$set['fullDocument.value.location']);
+            assert(result.includes('200'));
         });
     });
 
