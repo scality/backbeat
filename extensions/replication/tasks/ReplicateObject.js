@@ -398,19 +398,6 @@ class ReplicateObject extends BackbeatTask {
             });
     }
 
-    _checkSourceReplication(sourceEntry, log, cb) {
-        this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
-            if (err) {
-                return cb(err);
-            }
-            const status = refreshedEntry.getReplicationSiteStatus(this.site);
-            if (status === 'COMPLETED') {
-                return cb(errorAlreadyCompleted);
-            }
-            return cb();
-        });
-    }
-
     _getAndPutData(sourceEntry, destEntry, log, cb) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
         if (sourceEntry.getLocation().some(part => {
@@ -825,7 +812,8 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    processQueueEntry(sourceEntry, kafkaEntry, done) {
+    processQueueEntry(_sourceEntry, kafkaEntry, done) {
+        let sourceEntry = _sourceEntry;
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(this.site);
 
@@ -866,12 +854,30 @@ class ReplicateObject extends BackbeatTask {
                 this._setTargetAccountMd(destEntry, targetRole, log, next);
             },
             next => {
-                if (!mdOnly &&
-                    sourceEntry.getContentLength() / 1000000 >=
-                    this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB) {
-                    return this._checkSourceReplication(sourceEntry, log, next);
+                if (mdOnly) {
+                    return next();
                 }
-                return next();
+                const isLargeObject = sourceEntry.getContentLength() / 1000000 >=
+                    this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB;
+                const isLocationStripped = sourceEntry.getContentLength() > 0 && sourceEntry.getLocation().length === 0;
+                if (!isLargeObject && !isLocationStripped) {
+                    return next();
+                }
+                return this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
+                    if (err) {
+                        return next(err);
+                    }
+                    const status = refreshedEntry.getReplicationSiteStatus(this.site);
+                    if (status === 'COMPLETED') {
+                        log.info('replication already completed, skipping', {
+                            entry: sourceEntry.getLogInfo(),
+                        });
+                        return next(errorAlreadyCompleted);
+                    }
+                    // Reassign sourceEntry to use fresh metadata
+                    sourceEntry = refreshedEntry;
+                    return next();
+                });
             },
             // Get data from source bucket and put it on the target bucket
             next => {
