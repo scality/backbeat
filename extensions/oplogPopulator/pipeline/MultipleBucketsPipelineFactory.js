@@ -9,6 +9,16 @@ const PipelineFactory = require('./PipelineFactory');
  */
 class MultipleBucketsPipelineFactory extends PipelineFactory {
     /**
+     * @constructor
+     * @param {number} locationStrippingThreshold threshold for stripping location data
+     */
+    constructor(locationStrippingThreshold) {
+        super(locationStrippingThreshold);
+        // getPipeline is used standalone later, make sure its `this` reference binds to us.
+        this.getPipeline = this.getPipeline.bind(this);
+    }
+
+    /**
      * Checks if an existing pipeline is valid against the current
      * factory.
      * @param {string[]} bucketList pipeline
@@ -22,24 +32,21 @@ class MultipleBucketsPipelineFactory extends PipelineFactory {
     }
 
     /**
-     * Makes new connector pipeline that includes
-     * buckets assigned to this connector.
+     * Makes connector pipeline stage, that includes buckets assigned to this connector.
      * @param {string[] | undefined} buckets buckets assigned to this connector
-     * @returns {string} new connector pipeline
+     * @returns {object} connector pipeline stage
      */
-    getPipeline(buckets) {
+    getPipelineStage(buckets) {
         if (!buckets || !buckets.length) {
-            return JSON.stringify([]);
+            return null;
         }
-        return JSON.stringify([
-            {
-                $match: {
-                    'ns.coll': {
-                        $in: buckets,
-                    }
+        return {
+            $match: {
+                'ns.coll': {
+                    $in: buckets,
                 }
             }
-        ]);
+        };
     }
 }
 

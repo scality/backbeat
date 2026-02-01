@@ -6,6 +6,7 @@ const joiSchema = joi.object({
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
     numberOfConnectors: joi.number().required().min(0),
+    locationStrippingThreshold: joi.number().default(5),
     prefix: joi.string().optional(),
     probeServer: probeServerJoi.default(),
     connectorsUpdateCronRule: joi.string().default('*/1 * * * * *'),

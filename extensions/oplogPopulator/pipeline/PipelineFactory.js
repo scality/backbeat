@@ -8,6 +8,14 @@ const { wildCardForAllBuckets } = require('../constants');
  */
 class PipelineFactory {
     /**
+     * @constructor
+     * @param {number} locationStrippingThreshold threshold for stripping location data
+     */
+    constructor(locationStrippingThreshold) {
+        this._locationStrippingThreshold = locationStrippingThreshold;
+    }
+
+    /**
      * Checks if an existing pipeline is valid against the current
      * factory.
      * @param {string} pipeline pipeline
@@ -55,7 +63,53 @@ class PipelineFactory {
      * @param {string[] | undefined} buckets buckets assigned to this connector
      * @returns {string} new connector pipeline
      */
-    getPipeline(buckets) { // eslint-disable-line no-unused-vars
+    getPipeline(buckets) {
+        const stage = this.getPipelineStage(buckets);
+        if (!stage) {
+            return JSON.stringify([]);
+        }
+        const pipeline = [
+            stage,
+        ];
+        if (this._locationStrippingThreshold >= 0) {
+            pipeline.push({
+                $set: {
+                    'fullDocument.value.location': {
+                        $cond: {
+                            if: {
+                                $gte: [
+                                    { $size: { $ifNull: ['$fullDocument.value.location', []] } },
+                                    this._locationStrippingThreshold
+                                ]
+                            },
+                            then: '$$REMOVE',
+                            else: { $ifNull: ['$fullDocument.value.location', '$$REMOVE'] },
+                        }
+                    },
+                    'updateDescription.updatedFields.value.location': {
+                        $cond: {
+                            if: {
+                                $gte: [
+                                    { $size: { $ifNull: ['$updateDescription.updatedFields.value.location', []] } },
+                                    this._locationStrippingThreshold
+                                ]
+                            },
+                            then: '$$REMOVE',
+                            else: { $ifNull: ['$updateDescription.updatedFields.value.location', '$$REMOVE'] },
+                        }
+                    },
+                }
+            });
+        }
+        return JSON.stringify(pipeline);
+    }
+
+    /**
+     * Makes connector pipeline stage, to then be used by getPipeline.
+     * @param {string[] | undefined} buckets buckets assigned to this connector
+     * @returns {object} connector pipeline stage
+     */
+    getPipelineStage(buckets) { // eslint-disable-line no-unused-vars
         throw errors.NotImplemented;
     }
 }
