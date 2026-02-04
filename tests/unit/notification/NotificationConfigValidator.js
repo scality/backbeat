@@ -1,6 +1,6 @@
 const assert = require('assert');
 
-const { NotificationConfigValidator } = require('../../../extensions/notification/NotificationConfigValidator');
+const { notificationConfigValidator } = require('../../../extensions/notification/NotificationConfigValidator');
 
 const defaultExtConfig = {
     topic: 'topic',
@@ -314,7 +314,7 @@ describe('NotificationConfigValidator ::', () => {
                 destinations: [testCase.destinationConfig],
             };
             const tester = testCase.valid ? assert.doesNotThrow : assert.throws;
-            tester(() => NotificationConfigValidator(null, extConfig));
+            tester(() => notificationConfigValidator(null, extConfig));
         })
     );
 });

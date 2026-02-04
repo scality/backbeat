@@ -261,10 +261,8 @@ class MultipleBackendTask extends ReplicateObject {
         
         const startReadTime = Date.now();
         return this.backbeatSource.send(command, { abortSignal: abortController.signal })
-            .then(data => {
-                return this._putMPUPart(sourceEntry, data.Body, size,
-                    uploadId, partNumber, log, abortController, startReadTime, doneOnce);
-            })
+            .then(data => this._putMPUPart(sourceEntry, data.Body, size,
+                    uploadId, partNumber, log, abortController, startReadTime, doneOnce))
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'source';
