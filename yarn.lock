@@ -2192,10 +2192,10 @@
   resolved "https://registry.yarnpkg.com/@rtsao/scc/-/scc-1.1.0.tgz#927dd2fae9bc3361403ac2c7a00c32ddce9ad7e8"
   integrity sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==
 
-"@scality/cloudserverclient@^1.0.1":
-  version "1.0.1"
-  resolved "https://registry.yarnpkg.com/@scality/cloudserverclient/-/cloudserverclient-1.0.1.tgz#e3f58027ff19610f6775045bf6af49aecdffb175"
-  integrity sha512-kSnNGmsoqpGqfKyEoakJScl70ZeYdAWNIzvi4hlOgP42HU0wnm/DsMLMuMWDkkZh6f7IzEk5AGm63tXmnEEeSA==
+"@scality/cloudserverclient@^1.0.3":
+  version "1.0.3"
+  resolved "https://registry.yarnpkg.com/@scality/cloudserverclient/-/cloudserverclient-1.0.3.tgz#add4dfdc0ddda93c9b6c6964b87592948af4228d"
+  integrity sha512-CXuZcAbHYQu17nnZhfvIGkZIYZZBQBIgkFSL51Taj6zksciznIhViqAqs0UOItsGg5qRGh1QULMcIbwt/3ULIQ==
   dependencies:
     "@aws-sdk/client-s3" "^3.896.0"
     JSONStream "^1.3.5"
