@@ -8,7 +8,7 @@ const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const { 
-    CloudserverClient,
+    BackbeatRoutesClient,
     PutDataCommand,
     BatchDeleteCommand,
     PutMetadataCommand,
@@ -754,7 +754,7 @@ class ReplicateObject extends BackbeatTask {
             requestTimeout: TIMEOUT_MS,
             connectionTimeout: TIMEOUT_MS,
         };
-        this.backbeatSource = new CloudserverClient({
+        this.backbeatSource = new BackbeatRoutesClient({
             endpoint: `${this.sourceConfig.transport}://` +
             `${sourceS3.host}:${sourceS3.port}`,
             credentials: this.s3sourceCredentials.getCredentialsProvider(),
@@ -809,7 +809,7 @@ class ReplicateObject extends BackbeatTask {
             [this.destConfig.transport === 'https' ? 'httpsAgent' : 'httpAgent']: this.destHTTPAgent,
             requestTimeout: TIMEOUT_MS,
         };
-        this.backbeatDest = new CloudserverClient({
+        this.backbeatDest = new BackbeatRoutesClient({
             endpoint: `${this.destConfig.transport}://` +
                 `${this.destBackbeatHost.host}:${this.destBackbeatHost.port}`,
             credentials: this.s3destCredentials.getCredentialsProvider(),

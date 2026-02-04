@@ -8,12 +8,12 @@ const {
     DeleteBucketCommand,
 } = require('@aws-sdk/client-s3');
 
-const { CloudserverClient, GetObjectListCommand } = require('@scality/cloudserverclient');
+const { BackbeatRoutesClient, GetObjectListCommand } = require('@scality/cloudserverclient');
 
 function getClients(sourceInfo) {
     const { port } = sourceInfo;
 
-    const backbeatClient = new CloudserverClient({
+    const backbeatClient = new BackbeatRoutesClient({
         endpoint: `http://localhost:${port}`,
         credentials: {
             accessKeyId: 'accessKey1',

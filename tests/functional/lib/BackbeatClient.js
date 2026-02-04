@@ -6,7 +6,7 @@ const { getAccountCredentials } =
 const { MetadataMock, mockLogs, objectList, dummyBucketMD, objectMD } =
     require('../utils/MetadataMock');
 const { 
-    CloudserverClient,
+    BackbeatRoutesClient,
     GetRaftIdCommand,
     GetRaftBucketsCommand,
     GetRaftLogCommand,
@@ -30,7 +30,7 @@ const accountCreds = getAccountCredentials({
     account: 'bart',
 });
 
-const backbeatClient = new CloudserverClient({
+const backbeatClient = new BackbeatRoutesClient({
     endpoint: `http://localhost:${backbeatClientTestPort}`,
     credentials: accountCreds.getCredentialsProvider(),
     region: 'us-east-1',
