@@ -120,7 +120,7 @@ class CopyLocationTask extends BackbeatTask {
                 return next();
             },
             next => this._getSourceMD(actionEntry, log, (err, objMD) => {
-                if (err && (err.code === 'ObjNotFound' || err.name === 'ObjNotFound')) {
+                if (err && (err.name === 'ObjNotFound')) {
                     // The object was deleted before entry is processed, we
                     // can safely skip this entry.
                     return next(errors.ObjNotFound);
@@ -867,7 +867,7 @@ class CopyLocationTask extends BackbeatTask {
         }
         log.info('action execution ended', actionEntry.getLogInfo());
         // skip object if it was already transitioned
-        if (err && (err.InvalidObjectState || err.code === 'InvalidObjectState' || err.name === 'InvalidObjectState')) {
+        if (err && (err.InvalidObjectState || err.name === 'InvalidObjectState')) {
             log.info('object skipped: invalid object state', actionEntry.getLogInfo());
             return { committable: true };
         }

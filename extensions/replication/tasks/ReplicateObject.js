@@ -129,8 +129,8 @@ class ReplicateObject extends BackbeatTask {
             // this call uses our own Vault client which does not set
             // the 'retryable' field
             shouldRetryFunc: err =>
-            (err.InternalError || err.code === 'InternalError' || err.name === 'InternalError' ||
-                err.ServiceUnavailable || err.code === 'ServiceUnavailable' || err.name === 'ServiceUnavailable'),
+            (err.InternalError || err.name === 'InternalError' ||
+                err.ServiceUnavailable || err.name === 'ServiceUnavailable'),
             onRetryFunc: () => {
                 this.destHosts.pickNextHost();
                 this._setupDestClients(this.targetRole, log);
@@ -662,7 +662,7 @@ class ReplicateObject extends BackbeatTask {
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
-                if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
+                if (err.ObjNotFound || err.name === 'ObjNotFound') {
                     return cbOnce(err);
                 }
                 log.error('an error occurred when putting metadata to S3',
@@ -927,8 +927,8 @@ class ReplicateObject extends BackbeatTask {
         }
         if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
-                (err.NoSuchEntity || err.code === 'NoSuchEntity' || err.name === 'NoSuchEntity' ||
-                    err.AccessDenied || err.code === 'AccessDenied' || err.name === 'AccessDenied'))) {
+                (err.NoSuchEntity || err.name === 'NoSuchEntity' ||
+                    err.AccessDenied || err.name === 'AccessDenied'))) {
             log.error('replication failed permanently for object, ' +
                 'processing skipped',
                 {
@@ -945,7 +945,7 @@ class ReplicateObject extends BackbeatTask {
                      { entry: sourceEntry.getLogInfo() });
             return done();
         }
-        if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
+        if (err.ObjNotFound || err.name === 'ObjNotFound') {
             if (err.origin === 'source') {
                 log.info('replication skipped: ' +
                     'source object version does not exist',
@@ -959,7 +959,7 @@ class ReplicateObject extends BackbeatTask {
             return this._processQueueEntryRetryFull(
                 sourceEntry, destEntry, kafkaEntry, log, done);
         }
-        if (err.InvalidObjectState || err.code === 'InvalidObjectState' || err.name === 'InvalidObjectState') {
+        if (err.InvalidObjectState || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
             return done();

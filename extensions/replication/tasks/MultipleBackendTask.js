@@ -891,8 +891,7 @@ class MultipleBackendTask extends ReplicateObject {
      */
     _checkObjectState(sourceEntry, log, cb) {
         return this._getSourceMD(sourceEntry, log, (err, res) => {
-            if (err && (err.code === 'ObjNotFound' || err.name === 'ObjNotFound') &&
-            !sourceEntry.getIsDeleteMarker()) {
+            if (err && err.name === 'ObjNotFound' && !sourceEntry.getIsDeleteMarker()) {
                 // The source object was unexpectedly deleted, so we skip CRR
                 // here.
                 return cb(errors.InvalidObjectState);
@@ -1122,7 +1121,7 @@ class MultipleBackendTask extends ReplicateObject {
         });
         if (sourceEntry.getReplicationIsNFS()) {
             return this._checkObjectState(sourceEntry, log, err => {
-                if (err && err.code !== 'ObjNotFound' && err.name !== 'ObjNotFound') {
+                if (err && err.name !== 'ObjNotFound') {
                     // If it is a non-versioned object, the object will not be
                     // found. However we still want to replicate a delete
                     // marker.
@@ -1196,7 +1195,7 @@ class MultipleBackendTask extends ReplicateObject {
         return async.waterfall([
             next => this._setupClients(sourceEntry, log, next),
             next => this._refreshSourceEntry(sourceEntry, log, (err, res) => {
-                if (err && (err.code === 'ObjNotFound' || err.name === 'ObjNotFound') &&
+                if (err && err.name === 'ObjNotFound' &&
                     sourceEntry.getReplicationIsNFS() && !sourceEntry.getIsDeleteMarker()) {
                         // The object was deleted before entry is processed, we
                         // can safely skip this entry.
@@ -1280,9 +1279,9 @@ class MultipleBackendTask extends ReplicateObject {
         }
         if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
-             (err.NoSuchEntity || err.code === 'NoSuchEntity' || err.name === 'NoSuchEntity' ||
-              err.AccessDenied || err.code === 'AccessDenied' || err.name === 'AccessDenied' ||
-              err.InvalidAccessKeyId || err.code === 'InvalidAccessKeyId' || err.name === 'InvalidAccessKeyId'))) {
+             (err.NoSuchEntity || err.name === 'NoSuchEntity' ||
+              err.AccessDenied || err.name === 'AccessDenied' ||
+              err.InvalidAccessKeyId || err.name === 'InvalidAccessKeyId'))) {
             log.error('replication failed permanently for object, ' +
                       'processing skipped',
                 { failMethod: err.method,
@@ -1291,13 +1290,13 @@ class MultipleBackendTask extends ReplicateObject {
                     error: err.description });
             return done();
         }
-        if (err.ObjNotFound || err.code === 'ObjNotFound' || err.name === 'ObjNotFound') {
+        if (err.ObjNotFound || err.name === 'ObjNotFound') {
             log.info('replication skipped: ' +
                      'source object version does not exist',
                      { entry: sourceEntry.getLogInfo() });
             return done();
         }
-        if (err.InvalidObjectState || err.code === 'InvalidObjectState' || err.name === 'InvalidObjectState') {
+        if (err.InvalidObjectState || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
             return done();

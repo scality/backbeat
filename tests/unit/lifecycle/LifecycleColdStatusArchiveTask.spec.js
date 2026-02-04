@@ -128,7 +128,7 @@ describe('LifecycleColdStatusArchiveTask', () => {
     it('should send kafka entry to delete orphan cold object when source object was deleted', done => {
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
 
-        sinon.stub(backbeatMetadataProxyClient, 'getMetadata').yields({ code: 'ObjNotFound' });
+        sinon.stub(backbeatMetadataProxyClient, 'getMetadata').yields({ name: 'ObjNotFound' });
 
         archiveTask.processEntry(coldLocation, entry, err => {
             assert.ifError(err);
