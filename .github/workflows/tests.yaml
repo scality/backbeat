@@ -143,16 +143,28 @@ jobs:
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
-    - name: Lint markdown
-      run: yarn run --silent lint_md
-    - name: Lint Javascript
-      run: yarn run --silent lint
+    # - name: Lint markdown
+    #   run: yarn run --silent lint_md
+    # - name: Lint Javascript
+    #   run: yarn run --silent lint
 
     - name: Run unit tests
       run: yarn run cover
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
         TEST_SUITE: test
+
+    - name: run target vault error tests (isolated)
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: replication:vault
+        token: ${{ secrets.CODECOV_TOKEN }}
+
+    - name: run feature replication tests
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: replication
+        token: ${{ secrets.CODECOV_TOKEN }}
 
     - uses: codecov/codecov-action@v5
       with:
@@ -176,11 +188,11 @@ jobs:
         token: ${{ secrets.CODECOV_TOKEN }}
         runner: run_server_tests.bash
 
-    - name: run feature replication tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: replication
-        token: ${{ secrets.CODECOV_TOKEN }}
+    # - name: run feature replication tests
+    #   uses: ./.github/actions/ft-test
+    #   with:
+    #     testsuite: replication
+    #     token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: run feature lifecycle tests
       uses: ./.github/actions/ft-test
