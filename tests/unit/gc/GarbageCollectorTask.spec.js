@@ -219,7 +219,7 @@ describe('GarbageCollectorTask', () => {
     });
 
     it('should send committable error when object is not found', done => {
-        backbeatMetadataProxyClient.error = { statusCode: 404, code: 'ObjNotFound' };
+        backbeatMetadataProxyClient.error = { statusCode: 404, code: 'ObjNotFound', name: 'ObjNotFound' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
               .addContext({
@@ -248,7 +248,7 @@ describe('GarbageCollectorTask', () => {
     });
 
     it('should send committable error when bucket is not found', done => {
-        backbeatMetadataProxyClient.error = { statusCode: 404, code: 'NoSuchBucket' };
+        backbeatMetadataProxyClient.error = { statusCode: 404, code: 'NoSuchBucket', name: 'NoSuchBucket' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
               .addContext({

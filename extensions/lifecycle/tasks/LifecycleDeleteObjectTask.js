@@ -56,8 +56,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 // In this case, instead of logging an error, it should be logged as a debug message,
                 // to avoid causing unnecessary concern to the customer.
                 // TODO: BB-612
-                const errStr = err.code || err.name;
-                const logLevel = errStr === 'InvalidBucketState' ? 'debug' : 'error';
+                const logLevel = err.name === 'InvalidBucketState' ? 'debug' : 'error';
                 log[logLevel]('error getting metadata blob from S3', Object.assign({
                     method: 'LifecycleDeleteObjectTask._getMetadata',
                     error: err.message,
@@ -279,7 +278,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 // <!> Only in S3C <!> Backbeat API returns 'InvalidBucketState' error if the bucket is not versioned,
                 // so we can skip checking object replication for non-versioned buckets.
                 // TODO: BB-612
-                if (err.code === 'InvalidBucketState' || err.name === 'InvalidBucketState') {
+                if (err.name === 'InvalidBucketState') {
                     return done();
                 }
                 return done(err);

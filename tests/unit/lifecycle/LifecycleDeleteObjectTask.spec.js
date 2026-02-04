@@ -12,6 +12,7 @@ const day = 1000 * 60 * 60 * 24;
 
 const invalidBucketStateError = {
     code: 'InvalidBucketState',
+    name: 'InvalidBucketState',
     requestId: 'd4c33f72964c85667de4:89ee7213ce42b2a8d420',
     statusCode: 409,
     retryable: false,
