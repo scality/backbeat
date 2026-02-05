@@ -22,7 +22,6 @@
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000 --exit",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000 --exit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000 --exit",
-    "ft_test:replication:vault": "mocha tests/functional/replication/queueProcessor.js --grep 'target Vault errors' --timeout 30000 --exit",
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000 --exit",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000 --exit",
     "ft_test:ingestion": "mocha --recursive $(find tests/functional/ingestion -name '*.js') --timeout  30000 --exit",
