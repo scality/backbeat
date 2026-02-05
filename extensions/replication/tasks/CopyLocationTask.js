@@ -7,7 +7,7 @@ const { ObjectMD } = models;
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const { 
-    CloudserverClient,
+    BackbeatRoutesClient,
     GetObjectCommand,
     MultipleBackendPutObjectCommand,
     MultipleBackendInitiateMPUCommand,
@@ -83,7 +83,7 @@ class CopyLocationTask extends BackbeatTask {
             [transport === 'https' ? 'httpsAgent' : 'httpAgent']: this.sourceHTTPAgent,
             requestTimeout: TIMEOUT_MS,
         };
-        this.backbeatClient = new CloudserverClient({
+        this.backbeatClient = new BackbeatRoutesClient({
             endpoint: `${transport}://${s3.host}:${s3.port}`,
             credentials: s3Credentials.getCredentialsProvider(),
             region: 'us-east-1',
