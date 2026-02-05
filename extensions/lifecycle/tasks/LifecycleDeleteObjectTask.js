@@ -4,10 +4,10 @@ const ObjectMD = require('arsenal').models.ObjectMD;
 const { HeadObjectCommand, AbortMultipartUploadCommand, DeleteObjectCommand } = require('@aws-sdk/client-s3');
 
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
-const { attachReqUids } = require('../../../lib/clients/utils');
 const { LifecycleMetrics } = require('../LifecycleMetrics');
 const { 
-    DeleteObjectFromExpirationCommand
+    DeleteObjectFromExpirationCommand,
+    attachReqUids,
 } = require('@scality/cloudserverclient');
 /** @typedef { import('../objectProcessor/LifecycleObjectProcessor.js') } LifecycleObjectProcessor */
 
@@ -98,7 +98,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 IfUnmodifiedSince: lastModified,
             };
             const command = new HeadObjectCommand(reqParams);
-            attachReqUids(command, log);
+            attachReqUids(command, log.getSerializedUids());
             return s3Client.send(command)
                 .then(res => {
                     LifecycleMetrics.onS3Request(log, 'headObject', 'expiration', null);
@@ -129,7 +129,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             'expiration:mpu',
             location, startTime - transitionTime);
         const command = new AbortMultipartUploadCommand(reqParams);
-        attachReqUids(command, log);
+        attachReqUids(command, log.getSerializedUids());
         client.send(command)
             .then(() => done(null))
             .catch(done);
@@ -173,7 +173,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                             .customizeDescription('Unable to obtain client'));
                     }
                     const s3Command = new DeleteObjectCommand(reqParams);
-                    attachReqUids(s3Command, log);
+                    attachReqUids(s3Command, log.getSerializedUids());
                     return s3Client.send(s3Command)
                         .then(() => done(null))
                         .catch(done);
