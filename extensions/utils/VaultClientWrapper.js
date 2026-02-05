@@ -47,6 +47,7 @@ class VaultClientWrapper {
 
         // FIXME: works with vault 7.10 but not 8.3 (return 501)
         // https://scality.atlassian.net/browse/VAULT-238
+        // Update : Should be possible to use now, but got TLS errors in Zenko CI, needs further testing
         this._tempCredsPromise = Promise.resolve({ Account: '000000000000' })
             .then(res => {
                 const roleArn = `arn:aws:iam::${res.Account}:role/${roleName}`;

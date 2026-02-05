@@ -166,6 +166,7 @@ class PolicyHandler extends BaseHandler {
             } catch (err) {
                 // Workaround a Vault issue on 8.3 branch
                 // https://scality.atlassian.net/browse/VAULT-238
+                // Update : Should be possible to use now, but got TLS errors in Zenko CI, needs further testing
                 accountId = '000000000000';
             }
         }
