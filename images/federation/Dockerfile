@@ -30,10 +30,12 @@ ENV HOME_DIR="/home/${USER}" \
     DATA_DIR="/data" \
     SUP_RUN_DIR="/var/run/supervisor"
 
-RUN mv /home/node ${HOME_DIR} && usermod --login ${USER} --shell /bin/bash -d ${HOME_DIR} node
-RUN mkdir ${LOG_DIR} && chown ${USER} ${LOG_DIR} &&\
-    mkdir ${CONF_DIR} && chown ${USER} ${CONF_DIR} &&\
-    mkdir ${DATA_DIR} && chown ${USER} ${DATA_DIR} &&\
+RUN mv /home/node ${HOME_DIR} && \
+    useradd -ms /bin/bash ${USER} && \
+    usermod -aG node ${USER} && \
+    mkdir ${LOG_DIR} && chown ${USER} ${LOG_DIR} && \
+    mkdir ${CONF_DIR} && chown ${USER} ${CONF_DIR} && \
+    mkdir ${DATA_DIR} && chown ${USER} ${DATA_DIR} && \
     mkdir -m 777 ${SUP_RUN_DIR} && chown ${USER} ${SUP_RUN_DIR}
 
 USER ${USER}
