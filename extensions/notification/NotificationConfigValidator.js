@@ -1,6 +1,6 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
-const { supportedSaslProtocols } = require('./constants');
+const { supportedSaslProtocols, supportedScramMechanisms } = require('./constants');
 
 const sslSchema = joi.object({
     ssl: joi.boolean().default(false),
@@ -35,12 +35,27 @@ const basicAuthSchema = joi.alternatives().try(
     }),
 );
 
+const scramAuthBaseSchema = saslAuthSchema.append({
+    type: joi.string().valid('scram').required(),
+    mechanism: joi.string().valid(...supportedScramMechanisms).required(),
+});
+
+const scramAuthSchema = joi.alternatives().try(
+    scramAuthBaseSchema.append({
+        credentialsFile: joi.string().required(),
+    }),
+    scramAuthBaseSchema.append({
+        username: joi.string().required(),
+        password: joi.string().required(),
+    }),
+);
+
 const credentialsFileSchema = joi.object({
     username: joi.string().required(),
     password: joi.string().required(),
 });
 
-const authSchema = joi.alternatives().try(sslSchema, kerberosAuthSchema, basicAuthSchema).default({});
+const authSchema = joi.alternatives().try(sslSchema, kerberosAuthSchema, basicAuthSchema, scramAuthSchema).default({});
 
 const destinationSchema = joi.object({
     resource: joi.string().required(),

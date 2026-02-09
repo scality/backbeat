@@ -275,6 +275,164 @@ describe('NotificationConfigValidator ::', () => {
                 }
             },
         },
+        // SCRAM auth
+        {
+            valid: true,
+            description: 'scram auth credentialsFile',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_SSL',
+                    mechanism: 'SHA-256',
+                    credentialsFile: 'path/to/credentials',
+                }
+            },
+        },
+        {
+            valid: true,
+            description: 'scram auth username/password',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-512',
+                    username: 'foo',
+                    password: 'bar',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth missing credentials',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-256',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth empty password',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-256',
+                    username: 'foo',
+                    password: '',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth unset username',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-256',
+                    password: 'bar',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth inline credentials and credentials file',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-256',
+                    credentialsFile: 'credentials.json',
+                    username: 'testuser',
+                    password: 'testpassword',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth empty credentialsFile',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-256',
+                    credentialsFile: '',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth missing mechanism',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    username: 'foo',
+                    password: 'bar',
+                }
+            },
+        },
+        {
+            valid: false,
+            description: 'scram auth invalid mechanism',
+            destinationConfig: {
+                resource: 'resource',
+                type: 'kafka',
+                host: 'host',
+                port: 8000,
+                topic: 'topic',
+                auth: {
+                    type: 'scram',
+                    protocol: 'SASL_PLAINTEXT',
+                    mechanism: 'SHA-1',
+                    username: 'foo',
+                    password: 'bar',
+                }
+            },
+        },
         {
             valid: true,
             description: 'empty auth',
