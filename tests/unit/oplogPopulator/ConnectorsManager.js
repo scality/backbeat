@@ -285,14 +285,34 @@ describe('ConnectorsManager', () => {
             assert(connectorDeleteStub.notCalled);
         });
 
-        it('should do nothing if the strategy does not allow to update', async () => {
+        it('should update non-match stages when canUpdate is false and match stages are the same', async () => {
             connector1._isRunning = true;
-            connector1._state.bucketsGotModified = false;
+            connector1._state.bucketsGotModified = true;
             connector1._buckets = new Set(['bucket1']);
             sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
-                .resolves(false);
+                .returns(false);
+            sinon.stub(connector1._kafkaConnect, 'getConnectorConfig').resolves({
+                pipeline: JSON.stringify([{ $match: { 'ns.coll': { $in: ['bucket1'] } } }]),
+            });
+            const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
+            assert.strictEqual(updated, true);
+            assert(connectorUpdateStub.calledOnce);
+            assert(connectorCreateStub.notCalled);
+            assert(connectorDeleteStub.notCalled);
+        });
+
+        it('should skip update when canUpdate is false and match stages differ', async () => {
+            connector1._isRunning = true;
+            connector1._state.bucketsGotModified = true;
+            connector1._buckets = new Set(['bucket1']);
+            sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
+                .returns(false);
+            sinon.stub(connector1._kafkaConnect, 'getConnectorConfig').resolves({
+                pipeline: JSON.stringify([{ $match: { 'ns.coll': { $in: ['different-bucket'] } } }]),
+            });
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, false);
+            assert(connectorUpdateStub.notCalled);
             assert(connectorCreateStub.notCalled);
             assert(connectorDeleteStub.notCalled);
         });

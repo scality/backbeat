@@ -84,14 +84,14 @@ class PipelineFactory {
         return JSON.stringify(pipeline);
     }
 
-    _locationStrippingExpression(fieldPath) {
+    _locationStrippingExpression(field) {
         return {
             $switch: {
                 branches: [
-                    { case: { $not: [{ $isArray: `$${fieldPath}` }] }, then: '$$REMOVE' },
-                    { case: { $gte: [{ $size: `$${fieldPath}` }, this._locationStrippingThreshold] }, then: '$$REMOVE' },
+                    { case: { $not: [{ $isArray: `$${field}` }] }, then: '$$REMOVE' },
+                    { case: { $gte: [{ $size: `$${field}` }, this._locationStrippingThreshold] }, then: '$$REMOVE' },
                 ],
-                default: `$${fieldPath}`,
+                default: `$${field}`,
             }
         };
     }

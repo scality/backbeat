@@ -257,6 +257,43 @@ describe('Connector', () => {
             assert(pipelineStub.calledOnceWith([]));
             assert(updateStub.notCalled);
         });
+
+        it('should update when updateSupported is false and match stages are the same', async () => {
+            const matchStage = { $match: { 'ns.coll': { $in: ['bucket1'] } } };
+            const newPipeline = JSON.stringify([matchStage, { $set: { 'fullDocument.value.location': {} } }]);
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            connector._isRunning = true;
+            sinon.stub(connector, '_getPipeline').returns(newPipeline);
+            sinon.stub(connector._kafkaConnect, 'getConnectorConfig').resolves({
+                pipeline: JSON.stringify([matchStage]),
+            });
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true, false);
+            assert.strictEqual(didUpdate, true);
+            assert(updateStub.calledOnce);
+        });
+
+        it('should skip update when updateSupported is false and match stages differ', async () => {
+            const newPipeline = JSON.stringify([
+                { $match: { 'ns.coll': { $in: ['bucket1'] } } },
+            ]);
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            connector._isRunning = true;
+            sinon.stub(connector, '_getPipeline').returns(newPipeline);
+            sinon.stub(connector._kafkaConnect, 'getConnectorConfig').resolves({
+                pipeline: JSON.stringify([
+                    { $match: { 'ns.coll': { $in: ['different-bucket'] } } },
+                ]),
+            });
+            const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
+                .resolves();
+            const didUpdate = await connector.updatePipeline(true, false);
+            assert.strictEqual(didUpdate, false);
+            assert(updateStub.notCalled);
+        });
     });
 
     describe('getConfigSizeInBytes', () => {
