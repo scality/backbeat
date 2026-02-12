@@ -267,8 +267,8 @@ class ConnectorsManager extends EventEmitter {
                     connector: connector.name,
                 });
                 return true;
-            } else if (connector.isRunning && this._allocationStrategy.canUpdate()) {
-                return connector.updatePipeline(true);
+            } else if (connector.isRunning) {
+                return connector.updatePipeline(true, this._allocationStrategy.canUpdate());
             }
 
             return false;

@@ -314,10 +314,13 @@ class Connector extends EventEmitter {
      * That is why we use updateConnectorConfig() instead of
      * updateConnectorPipeline()
      * @param {boolean} [doUpdate=false] updates connector if true
+     * @param {boolean} [updateMatchStage=true] when false, only update
+     * if the $match stage has not changed (to protect resume tokens
+     * on MongoDB >= 6.0)
      * @returns {Promise|boolean} connector did update
      * @throws {InternalError}
      */
-    async updatePipeline(doUpdate = false) {
+    async updatePipeline(doUpdate = false, updateMatchStage = true) {
         // Only update when buckets changed and when not already updating
         if (!this._state.bucketsGotModified || this._state.isUpdating) {
             return false;
@@ -325,6 +328,21 @@ class Connector extends EventEmitter {
         this._config.pipeline = this._getPipeline([...this._buckets]);
         try {
             if (doUpdate && this._isRunning) {
+                if (!updateMatchStage) {
+                    const currentConfig = await this._kafkaConnect.getConnectorConfig(this._name);
+                    const currentPipeline = currentConfig.pipeline
+                        ? JSON.parse(currentConfig.pipeline) : [];
+                    const newPipeline = JSON.parse(this._config.pipeline);
+                    const currentMatch = JSON.stringify(currentPipeline[0]?.$match);
+                    const newMatch = JSON.stringify(newPipeline[0]?.$match);
+                    if (currentMatch !== newMatch) {
+                        this._logger.info('Skipping pipeline update: match stage differs', {
+                            method: 'Connector.updatePipeline',
+                            connector: this._name,
+                        });
+                        return false;
+                    }
+                }
                 const timeBeforeUpdate = Date.now();
                 this._state.isUpdating = true;
                 this.emit(constants.connectorUpdatedEvent, this);
