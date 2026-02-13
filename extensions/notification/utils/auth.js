@@ -84,36 +84,20 @@ function generateKafkaAuthObject(auth) {
             }
             break;
         }
-        case 'basic': {
-            const { protocol, credentialsFile, username, password } = auth;
-            if (!supportedSaslProtocols.includes(protocol)) {
-                throw new Error(`Unsupported security.protocol: ${protocol}`);
-            }
-            authObject['sasl.mechanisms'] = 'PLAIN';
-            authObject['security.protocol'] = protocol;
-            if (credentialsFile) {
-                const credsFilePath = getAuthFilePath(credentialsFile);
-                if (credsFilePath === null) {
-                    throw new Error(`Credentials file ${credentialsFile} not found in ${authFilesFolder}`);
-                }
-                const credentials = readCredentialsFile(credsFilePath);
-                authObject['sasl.username'] = credentials.username;
-                authObject['sasl.password'] = credentials.password;
-            } else {
-                authObject['sasl.username'] = username;
-                authObject['sasl.password'] = password;
-            }
-            break;
-        }
+        case 'basic':
         case 'scram': {
             const { protocol, mechanism, credentialsFile, username, password } = auth;
             if (!supportedSaslProtocols.includes(protocol)) {
                 throw new Error(`Unsupported security.protocol: ${protocol}`);
             }
-            if (!supportedScramMechanisms.includes(mechanism)) {
-                throw new Error(`Unsupported SCRAM mechanism: ${mechanism}`);
+            if (type === 'basic') {
+                authObject['sasl.mechanisms'] = 'PLAIN';
+            } else {
+                if (!supportedScramMechanisms.includes(mechanism)) {
+                    throw new Error(`Unsupported SCRAM mechanism: ${mechanism}`);
+                }
+                authObject['sasl.mechanisms'] = `SCRAM-${mechanism}`;
             }
-            authObject['sasl.mechanisms'] = `SCRAM-${mechanism}`;
             authObject['security.protocol'] = protocol;
             if (credentialsFile) {
                 const credsFilePath = getAuthFilePath(credentialsFile);
