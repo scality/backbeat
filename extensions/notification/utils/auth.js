@@ -1,7 +1,7 @@
 const fs = require('fs');
 const joi = require('joi');
 
-const { authFilesFolder, supportedSaslProtocols } = require('../constants');
+const { authFilesFolder, supportedSaslProtocols, supportedScramMechanisms } = require('../constants');
 const { credentialsFileSchema } = require('../NotificationConfigValidator');
 
 function getAuthFilePath(fileName) {
@@ -84,12 +84,20 @@ function generateKafkaAuthObject(auth) {
             }
             break;
         }
-        case 'basic': {
-            const { protocol, credentialsFile, username, password } = auth;
+        case 'basic':
+        case 'scram': {
+            const { protocol, mechanism, credentialsFile, username, password } = auth;
             if (!supportedSaslProtocols.includes(protocol)) {
                 throw new Error(`Unsupported security.protocol: ${protocol}`);
             }
-            authObject['sasl.mechanisms'] = 'PLAIN';
+            if (type === 'basic') {
+                authObject['sasl.mechanisms'] = 'PLAIN';
+            } else {
+                if (!supportedScramMechanisms.includes(mechanism)) {
+                    throw new Error(`Unsupported SCRAM mechanism: ${mechanism}`);
+                }
+                authObject['sasl.mechanisms'] = `SCRAM-${mechanism}`;
+            }
             authObject['security.protocol'] = protocol;
             if (credentialsFile) {
                 const credsFilePath = getAuthFilePath(credentialsFile);

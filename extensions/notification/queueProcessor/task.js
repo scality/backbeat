@@ -40,6 +40,7 @@ let destinationAuth = {
     serviceName: process.env.SERVICE_NAME,
     username: process.env.BASIC_USERNAME,
     password: process.env.BASIC_PASSWORD,
+    mechanism: process.env.SCRAM_MECHANISM,
 };
 // Drop undefined environment variables to prevent hitting unknown fields when validating the auth schema.
 Object.keys(destinationAuth).forEach(key => {
