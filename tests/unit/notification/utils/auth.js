@@ -151,6 +151,72 @@ describe('generateKafkaAuthObject', () => {
                 'sasl.password': 'testpassword',
             },
         },
+        // SCRAM authentication
+        {
+            description: 'SCRAM-SHA-256 authentication with credentials file',
+            valid: true,
+            input: {
+                type: 'scram',
+                protocol: 'SASL_SSL',
+                mechanism: 'SHA-256',
+                credentialsFile: 'credentials.json',
+            },
+            expected: {
+                'security.protocol': 'SASL_SSL',
+                'sasl.mechanisms': 'SCRAM-SHA-256',
+                'sasl.username': 'testuser',
+                'sasl.password': 'testpassword',
+            },
+        },
+        {
+            description: 'SCRAM-SHA-512 authentication with inline credentials',
+            valid: true,
+            input: {
+                type: 'scram',
+                protocol: 'SASL_PLAINTEXT',
+                mechanism: 'SHA-512',
+                username: 'testuser',
+                password: 'testpassword',
+            },
+            expected: {
+                'security.protocol': 'SASL_PLAINTEXT',
+                'sasl.mechanisms': 'SCRAM-SHA-512',
+                'sasl.username': 'testuser',
+                'sasl.password': 'testpassword',
+            },
+        },
+        {
+            description: 'SCRAM authentication with missing credentials file',
+            valid: false,
+            input: {
+                type: 'scram',
+                protocol: 'SASL_PLAINTEXT',
+                mechanism: 'SHA-256',
+                credentialsFile: 'nonexistent.json',
+            },
+        },
+        {
+            description: 'SCRAM authentication with unsupported protocol',
+            valid: false,
+            input: {
+                type: 'scram',
+                protocol: 'UNSUPPORTED_PROTOCOL',
+                mechanism: 'SHA-256',
+                username: 'testuser',
+                password: 'testpassword',
+            },
+        },
+        {
+            description: 'SCRAM authentication with unsupported mechanism',
+            valid: false,
+            input: {
+                type: 'scram',
+                protocol: 'SASL_PLAINTEXT',
+                mechanism: 'SHA-1',
+                username: 'testuser',
+                password: 'testpassword',
+            },
+        },
         {
             description: 'Basic authentication with missing credentials file',
             valid: false,
