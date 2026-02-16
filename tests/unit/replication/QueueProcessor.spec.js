@@ -176,5 +176,97 @@ describe('Queue Processor', () => {
             const qp = new QueueProcessor(...config);
             assert.strictEqual(qp.destHosts, null);
         });
+
+        describe('default port based on transport', () => {
+            it('should use port 443 for HTTPS transport with explicit port 443', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'https';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com:443'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 443,
+                });
+            });
+
+            it('should use port 443 as default for HTTPS transport when server has no port', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'https';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 443,
+                });
+            });
+
+            it('should use port 80 for HTTP transport with explicit port 80', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'http';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com:80'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 80,
+                });
+            });
+
+            it('should use port 80 as default for HTTP transport when server has no port', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'http';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 80,
+                });
+            });
+
+            it('should use explicit non-standard port for HTTPS transport', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'https';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com:8443'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 8443,
+                });
+            });
+
+            it('should use explicit non-standard port for HTTP transport', () => {
+                const config = getQueueProcessorConfig();
+                config[5].transport = 'http';
+                config[5].replicationEndpoint = {
+                    site: 'site-crr',
+                    servers: ['s3.example.com:8080'],
+                };
+                config[11] = 'site-crr';
+                const qp = new QueueProcessor(...config);
+                assert.deepStrictEqual(qp.destHosts.pickHost(), {
+                    host: 's3.example.com',
+                    port: 8080,
+                });
+            });
+        });
     });
 });

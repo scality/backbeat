@@ -258,8 +258,9 @@ class QueueProcessor extends EventEmitter {
         }
 
         if (Array.isArray(this.destConfig.replicationEndpoint.servers)) {
+            const defaultPort = this.destConfig.transport === 'https' ? 443 : 80;
             this.destHosts =
-                new RoundRobin(this.destConfig.replicationEndpoint.servers, { defaultPort: 80 });
+                new RoundRobin(this.destConfig.replicationEndpoint.servers, { defaultPort });
             if (this.destConfig.replicationEndpoint.echo) {
                 this._setupEcho();
             }
