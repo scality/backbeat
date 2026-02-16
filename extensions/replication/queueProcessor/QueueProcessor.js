@@ -259,7 +259,7 @@ class QueueProcessor extends EventEmitter {
 
         if (Array.isArray(this.destConfig.replicationEndpoint.servers)) {
             this.destHosts =
-                new RoundRobin(this.destConfig.replicationEndpoint.servers, { defaultPort: 80 });
+                new RoundRobin(this.destConfig.replicationEndpoint.servers);
             if (this.destConfig.replicationEndpoint.echo) {
                 this._setupEcho();
             }

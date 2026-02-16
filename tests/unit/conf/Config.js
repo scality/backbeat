@@ -91,63 +91,99 @@ describe('Site name', () => {
     });
 });
 
+
 describe('Config', () => {
     describe('getReplicationSiteDestConfig', () => {
         let ogConfigFileEnv;
+
         before(() => {
             ogConfigFileEnv = process.env.BACKBEAT_CONFIG_FILE;
         });
-        afterEach(() => {
-            sinon.restore();
-        });
+
+        afterEach(() => sinon.restore());
+
         after(() => {
             if (ogConfigFileEnv) {
                 process.env.BACKBEAT_CONFIG_FILE = ogConfigFileEnv;
             }
         });
-        it('should return replication site destination config', () => {
-            process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
-            const conf = new Config();
-            const destConfig = conf.getReplicationSiteDestConfig('aws3');
-            assert.deepStrictEqual(destConfig, {
-                transport: 'https',
-                auth: {
-                    type: 'service',
-                    account: 'service-replication-3',
-                },
-                replicationEndpoint: {
-                    site: 'aws3',
-                    type: 'aws_s3',
-                },
+
+        describe('bootstrapList server normalization', () => {
+            let conf;
+
+            before(() => {
+                process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationServersConfig.json`;
+                conf = new Config();
+            });
+
+            it('should normalize server entries with default port 443 for https transport', () => {
+                const entry = conf.bootstrapList.find(e => e.site === 'https-site');
+                assert.deepStrictEqual(entry.servers, ['s3.example.com:443']);
+            });
+
+            it('should normalize server entries with default port 80 for http transport', () => {
+                const entry = conf.bootstrapList.find(e => e.site === 'http-site');
+                assert.deepStrictEqual(entry.servers, ['s3.example.com:80']);
+            });
+
+            it('should preserve explicit port in server entries', () => {
+                const entry = conf.bootstrapList.find(e => e.site === 'explicit-port-site');
+                assert.deepStrictEqual(entry.servers, ['s3.example.com:8443']);
+            });
+
+            it('should not modify endpoint without servers array', () => {
+                const entry = conf.bootstrapList.find(e => e.site === 'aws-site');
+                assert.strictEqual(entry.servers, undefined);
+                assert.strictEqual(entry.type, 'aws_s3');
             });
         });
 
-        it('should return default replication destination config when site one is not available', () => {
-            process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
-            const conf = new Config();
-            sinon.stub(conf.extensions.replication, 'destination').value({
-                transport: 'https',
-                auth: {
-                    type: 'service',
-                    account: 'service-replication',
-                },
-                bootstrapList: [
-                    { site: 'aws1', type: 'aws_s3' },
-                    { site: 'aws2', type: 'aws_s3' },
-                    { site: 'aws3', type: 'aws_s3' }
-                ]
+
+        describe('getReplicationSiteDestConfig', () => {
+            it('should return replication site destination config', () => {
+                process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
+                const conf = new Config();
+                const destConfig = conf.getReplicationSiteDestConfig('aws3');
+                assert.deepStrictEqual(destConfig, {
+                    transport: 'https',
+                    auth: {
+                        type: 'service',
+                        account: 'service-replication-3',
+                    },
+                    replicationEndpoint: {
+                        site: 'aws3',
+                        type: 'aws_s3',
+                    },
+                });
             });
-            const destConfig = conf.getReplicationSiteDestConfig('aws3');
-            assert.deepStrictEqual(destConfig, {
-                transport: 'https',
-                auth: {
-                    type: 'service',
-                    account: 'service-replication',
-                },
-                replicationEndpoint: {
-                    site: 'aws3',
-                    type: 'aws_s3',
-                },
+
+            it('should return default replication destination config when site one is not available', () => {
+                process.env.BACKBEAT_CONFIG_FILE = `${__dirname}/configs/replicationMultiDestConfig.json`;
+                const conf = new Config();
+                sinon.stub(conf.extensions.replication, 'destination').value({
+                    transport: 'https',
+                    auth: {
+                        type: 'service',
+                        account: 'service-replication',
+                    },
+                    bootstrapList: [
+                        { site: 'aws1', type: 'aws_s3' },
+                        { site: 'aws2', type: 'aws_s3' },
+                        { site: 'aws3', type: 'aws_s3' }
+                    ]
+                });
+                const destConfig = conf.getReplicationSiteDestConfig('aws3');
+                assert.deepStrictEqual(destConfig, {
+                    transport: 'https',
+                    auth: {
+                        type: 'service',
+                        account: 'service-replication',
+                    },
+                    replicationEndpoint: {
+                        site: 'aws3',
+                        type: 'aws_s3',
+                    },
+                });
             });
         });
     });
