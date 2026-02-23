@@ -81,7 +81,23 @@ jobs:
         directory: bucket-scanner
         flags: bucket-scanner
 
-  lint-and-unit:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+    - name: Lint markdown
+      run: yarn run --silent lint_md
+    - name: Lint Javascript
+      run: yarn run --silent lint
+
+  unit:
     needs: build
     runs-on: ubuntu-latest
     services:
@@ -89,10 +105,6 @@ jobs:
         image: redis:alpine
         ports:
         - 6379:6379
-      syntheticbucketd:
-        image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
-        ports:
-        - 9001:9001
       kafka:
         image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
         credentials:
@@ -119,10 +131,6 @@ jobs:
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
-    - name: Lint markdown
-      run: yarn run --silent lint_md
-    - name: Lint Javascript
-      run: yarn run --silent lint
 
     - name: Run unit tests
       run: yarn run cover
