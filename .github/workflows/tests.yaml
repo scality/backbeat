@@ -221,6 +221,18 @@ jobs:
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
 
+    - name: Wait for services
+      run: |
+        echo "Waiting for Kafka..."
+        timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+        echo "Waiting for Zookeeper..."
+        timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
+        echo "Waiting for Redis..."
+        timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
+        echo "Waiting for MongoDB..."
+        timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
+        echo "All services ready"
+
     - name: Run ${{ matrix.testsuite }} tests
       uses: ./.github/actions/ft-test
       with:
