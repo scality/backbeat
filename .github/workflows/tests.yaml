@@ -7,26 +7,33 @@ env:
 on:
   push:
     branches-ignore:
-    - development/**
     - q/*/**
 
 jobs:
   build:
+    name: build ${{ matrix.name }}
     runs-on: ubuntu-latest
     permissions:
       # Need to explicitely add package write permissions for dependabot
       contents: read
       packages: write
+    strategy:
+      matrix:
+        include:
+          - name: ci-kafka
+            context: .github/dockerfiles/kafka
+            file: ""
+          - name: syntheticbucketd
+            context: .
+            file: .github/dockerfiles/syntheticbucketd/Dockerfile
+          - name: ci-mongodb
+            context: .github/dockerfiles/mongodb
+            file: ""
     steps:
     - name: Checkout
       uses: actions/checkout@v4
 
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: yarn
-
-    - name: Set up Docker Buildk
+    - name: Set up Docker Buildx
       uses: docker/setup-buildx-action@v3
 
     - name: Login to Registry
@@ -36,44 +43,21 @@ jobs:
         username: ${{ github.repository_owner }}
         password: ${{ github.token }}
 
-    - name: Build and push kafka
+    - name: Build and push ${{ matrix.name }}
       uses: docker/build-push-action@v6
       with:
         push: true
-        context: .github/dockerfiles/kafka
-        tags: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
-        cache-from: type=gha,scope=ci-kafka
-        cache-to: type=gha,mode=max,scope=ci-kafka
-
-    - name: Build and push syntheticbucketd
-      uses: docker/build-push-action@v6
-      with:
-        push: true
-        context: .
-        file: .github/dockerfiles/syntheticbucketd/Dockerfile
-        tags: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
-        cache-from: type=gha,scope=syntheticbucketd
-        cache-to: type=gha,mode=max,scope=syntheticbucketd
-
-    - name: Build and push MongoDB
-      uses: docker/build-push-action@v6
-      with:
-        push: true
-        context: .github/dockerfiles/mongodb
-        tags: ghcr.io/${{ github.repository }}/ci-mongodb:${{ github.sha }}
-        cache-from: type=gha,scope=ci-mongodb
-        cache-to: type=gha,mode=max,scope=ci-mongodb
+        context: ${{ matrix.context }}
+        file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
+        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
+        cache-from: type=gha,scope=${{ matrix.name }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
 
   bucket-scanner:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-
-    - uses: actions/setup-node@v4
-      with:
-        node-version: '22'
-        cache: yarn
 
     - uses: actions/setup-go@v5
       with:
@@ -96,7 +80,156 @@ jobs:
         directory: bucket-scanner
         flags: bucket-scanner
 
-  tests:
+  lint:
+    runs-on: ubuntu-latest
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+    - name: Lint markdown
+      run: yarn run --silent lint_md
+    - name: Lint Javascript
+      run: yarn run --silent lint
+
+  unit:
+    needs: build
+    runs-on: ubuntu-latest
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+        - 6379:6379
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+        ports:
+        - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      mongo:
+        image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
+        ports:
+        - 27017:27017
+        - 27018:27018
+        - 27019:27019
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    - name: Run unit tests
+      run: yarn run cover
+      env:
+        BACKBEAT_CONFIG_FILE: tests/config.json
+        TEST_SUITE: test
+
+    - uses: codecov/codecov-action@v5
+      with:
+        token: ${{ secrets.CODECOV_TOKEN }}
+        directory: ./coverage/test
+        flags: unit
+
+  functional-tests:
+    needs: build
+    name: ${{ matrix.testsuite }} tests
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - testsuite: api:routes
+            runner: run_server_tests.bash
+            env:
+              MANAGEMENT_BACKEND: operator
+          - testsuite: api:retry
+            runner: run_server_tests.bash
+          - testsuite: replication
+            runner: run_ft_tests.bash
+          - testsuite: lifecycle
+            runner: run_ft_tests.bash
+          - testsuite: ingestion
+            runner: run_ft_tests.bash
+          - testsuite: lib
+            runner: run_ft_tests.bash
+          - testsuite: notification
+            runner: run_ft_tests.bash
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+        - 6379:6379
+      syntheticbucketd:
+        image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
+        ports:
+        - 9001:9001
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+        ports:
+        - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      mongo:
+        image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
+        ports:
+        - 27017:27017
+        - 27018:27018
+        - 27019:27019
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    - name: Run ${{ matrix.testsuite }} tests
+      uses: ./.github/actions/ft-test
+      with:
+        testsuite: ${{ matrix.testsuite }}
+        token: ${{ secrets.CODECOV_TOKEN }}
+        runner: ${{ matrix.runner }}
+      env: ${{ matrix.env || fromJSON('{}') }}
+
+  ft-ballooning:
     needs: build
     runs-on: ubuntu-latest
     services:
@@ -137,74 +270,12 @@ jobs:
     steps:
     - name: Checkout
       uses: actions/checkout@v4
-    - uses: actions/setup-node@v4
+    - uses: actions/setup-node@v6
       with:
         node-version: '22'
         cache: yarn
     - name: Install node dependencies
       run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
-    - name: Lint markdown
-      run: yarn run --silent lint_md
-    - name: Lint Javascript
-      run: yarn run --silent lint
-
-    - name: Run unit tests
-      run: yarn run cover
-      env:
-        BACKBEAT_CONFIG_FILE: tests/config.json
-        TEST_SUITE: test
-
-    - uses: codecov/codecov-action@v5
-      with:
-        token: ${{ secrets.CODECOV_TOKEN }}
-        directory: ./coverage/test
-        flags: unit
-
-    - name: Run backbeat routes test
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: api:routes
-        token: ${{ secrets.CODECOV_TOKEN }}
-        runner: run_server_tests.bash
-      env:
-        MANAGEMENT_BACKEND: operator
-
-    - name: Run backbeat retry tests with account authentication
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: api:retry
-        token: ${{ secrets.CODECOV_TOKEN }}
-        runner: run_server_tests.bash
-
-    - name: run feature replication tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: replication
-        token: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: run feature lifecycle tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: lifecycle
-        token: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: run feature ingestion tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: ingestion
-        token: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: run misc functional tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: lib
-        token: ${{ secrets.CODECOV_TOKEN }}
-
-    - name: run backbeat notification feature tests
-      uses: ./.github/actions/ft-test
-      with:
-        testsuite: notification
-        token: ${{ secrets.CODECOV_TOKEN }}
 
     - name: run ballooning tests for lifecycle conductor
       run: yarn mocha tests/performance/lifecycle/conductor-check-memory-balloon.js --exit
@@ -225,7 +296,7 @@ jobs:
       timeout-minutes: 60
       if: failure() && runner.debug == '1'
 
-  ft-tests:
+  queue-populator:
     needs: build
     runs-on: ubuntu-latest
     strategy:
@@ -236,7 +307,7 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@v6
         with:
           node-version: '22'
           cache: yarn
