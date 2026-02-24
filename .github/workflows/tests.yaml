@@ -209,7 +209,7 @@ jobs:
         testsuite: ${{ matrix.testsuite }}
         token: ${{ secrets.CODECOV_TOKEN }}
         runner: ${{ matrix.runner }}
-      env: ${{ matrix.env != '' && matrix.env || fromJSON('{}') }}
+      env: ${{ matrix.env || fromJSON('{}') }}
 
   ft-ballooning:
     needs: build
