@@ -45,6 +45,7 @@ class Connector extends EventEmitter {
         this._name = params.name;
         this._config = params.config;
         this._buckets = new Set(params.buckets);
+        this._liveBuckets = new Set(params.buckets);
         this._isRunning = params.isRunning;
         this._getPipeline = params.getPipeline;
         this._state = {
@@ -166,6 +167,7 @@ class Connector extends EventEmitter {
                 config: this._config,
             });
             this._isRunning = true;
+            this._liveBuckets = new Set(this._buckets);
         } catch (err) {
             this._logger.error('Error while spawning connector', {
                 method: 'Connector.spawn',
@@ -193,6 +195,7 @@ class Connector extends EventEmitter {
             this.emit(constants.connectorUpdatedEvent, this);
             await this._kafkaConnect.deleteConnector(this._name);
             this._isRunning = false;
+            this._liveBuckets = new Set();
             // resetting the resume point to set a new one on creation of the connector
             delete this._config['startup.mode.timestamp.start.at.operation.time'];
         } catch (err) {
@@ -330,13 +333,9 @@ class Connector extends EventEmitter {
         try {
             if (doUpdate && this._isRunning) {
                 if (!updateSupported) {
-                    const currentConfig = await this._kafkaConnect.getConnectorConfig(this._name);
-                    const currentPipeline = currentConfig.pipeline
-                        ? JSON.parse(currentConfig.pipeline) : [];
-                    const newPipeline = JSON.parse(this._config.pipeline);
-                    const currentMatch = JSON.stringify(currentPipeline[0]?.$match);
-                    const newMatch = JSON.stringify(newPipeline[0]?.$match);
-                    if (currentMatch !== newMatch) {
+                    const sameBuckets = this._liveBuckets.size === this._buckets.size &&
+                        this._liveBuckets.isSubsetOf(this._buckets);
+                    if (!sameBuckets) {
                         this._logger.info('Skipping pipeline update: match stage differs', {
                             method: 'Connector.updatePipeline',
                             connector: this._name,
@@ -348,6 +347,7 @@ class Connector extends EventEmitter {
                 this._state.isUpdating = true;
                 this.emit(constants.connectorUpdatedEvent, this);
                 await this._kafkaConnect.updateConnectorConfig(this._name, this._config);
+                this._liveBuckets = new Set(this._buckets);
                 this._updateConnectorState(false, timeBeforeUpdate);
                 this._state.isUpdating = false;
                 return true;

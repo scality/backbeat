@@ -62,6 +62,12 @@ describe('Connector', () => {
             await connector.spawn();
             assert.notStrictEqual(partitionName, connector.config['offset.partition.name']);
         });
+        it('should set liveBuckets to current buckets on spawn', async () => {
+            sinon.stub(connector._kafkaConnect, 'createConnector').resolves();
+            connector._buckets = new Set(['bucket1', 'bucket2']);
+            await connector.spawn();
+            assert.deepStrictEqual(connector._liveBuckets, new Set(['bucket1', 'bucket2']));
+        });
         it('should not try spawning a new connector when on is already existent', async () => {
             const createStub = sinon.stub(connector._kafkaConnect, 'createConnector')
                 .resolves();
@@ -80,6 +86,13 @@ describe('Connector', () => {
             await connector.destroy();
             assert(deleteStub.calledOnceWith('example-connector'));
             assert.strictEqual(connector.isRunning, false);
+        });
+        it('should clear liveBuckets on destroy', async () => {
+            sinon.stub(connector._kafkaConnect, 'deleteConnector').resolves();
+            connector._isRunning = true;
+            connector._liveBuckets = new Set(['bucket1']);
+            await connector.destroy();
+            assert.deepStrictEqual(connector._liveBuckets, new Set());
         });
         it('should not try destroying a new connector when connector is already destroyed', async () => {
             const deleteStub = sinon.stub(connector._kafkaConnect, 'deleteConnector')
@@ -258,16 +271,13 @@ describe('Connector', () => {
             assert(updateStub.notCalled);
         });
 
-        it('should update when updateSupported is false and match stages are the same', async () => {
-            const matchStage = { $match: { 'ns.coll': { $in: ['bucket1'] } } };
-            const newPipeline = JSON.stringify([matchStage, { $set: { 'fullDocument.value.location': {} } }]);
+        it('should update when updateSupported is false and live buckets match', async () => {
+            connector._buckets = new Set(['bucket1']);
+            connector._liveBuckets = new Set(['bucket1']);
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = true;
-            sinon.stub(connector, '_getPipeline').returns(newPipeline);
-            sinon.stub(connector._kafkaConnect, 'getConnectorConfig').resolves({
-                pipeline: JSON.stringify([matchStage]),
-            });
+            sinon.stub(connector, '_getPipeline').returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline(true, false);
@@ -275,24 +285,43 @@ describe('Connector', () => {
             assert(updateStub.calledOnce);
         });
 
-        it('should skip update when updateSupported is false and match stages differ', async () => {
-            const newPipeline = JSON.stringify([
-                { $match: { 'ns.coll': { $in: ['bucket1'] } } },
-            ]);
+        it('should skip update when updateSupported is false and live buckets differ', async () => {
+            connector._buckets = new Set(['bucket1']);
+            connector._liveBuckets = new Set(['different-bucket']);
             connector._state.bucketsGotModified = true;
             connector._state.isUpdating = false;
             connector._isRunning = true;
-            sinon.stub(connector, '_getPipeline').returns(newPipeline);
-            sinon.stub(connector._kafkaConnect, 'getConnectorConfig').resolves({
-                pipeline: JSON.stringify([
-                    { $match: { 'ns.coll': { $in: ['different-bucket'] } } },
-                ]),
-            });
+            sinon.stub(connector, '_getPipeline').returns('example-pipeline');
             const updateStub = sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
                 .resolves();
             const didUpdate = await connector.updatePipeline(true, false);
             assert.strictEqual(didUpdate, false);
             assert(updateStub.notCalled);
+        });
+
+        it('should sync liveBuckets after successful update', async () => {
+            connector._buckets = new Set(['bucket1', 'bucket2']);
+            connector._liveBuckets = new Set();
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            connector._isRunning = true;
+            sinon.stub(connector, '_getPipeline').returns('example-pipeline');
+            sinon.stub(connector._kafkaConnect, 'updateConnectorConfig').resolves();
+            await connector.updatePipeline(true);
+            assert.deepStrictEqual(connector._liveBuckets, new Set(['bucket1', 'bucket2']));
+        });
+
+        it('should not sync liveBuckets after failed update', async () => {
+            connector._buckets = new Set(['bucket1']);
+            connector._liveBuckets = new Set();
+            connector._state.bucketsGotModified = true;
+            connector._state.isUpdating = false;
+            connector._isRunning = true;
+            sinon.stub(connector, '_getPipeline').returns('example-pipeline');
+            sinon.stub(connector._kafkaConnect, 'updateConnectorConfig')
+                .rejects(errors.InternalError);
+            await assert.rejects(() => connector.updatePipeline(true));
+            assert.deepStrictEqual(connector._liveBuckets, new Set());
         });
     });
 
