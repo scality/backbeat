@@ -20,6 +20,12 @@ werelogs.configure({ level: config.log.logLevel,
 
 const mongoConfig = config.queuePopulator.mongo;
 const oplogPopulatorConfig = config.extensions.oplogPopulator;
+const replicationQPConfig = config.extensions.replication &&
+    config.extensions.replication.queueProcessor;
+if (replicationQPConfig && replicationQPConfig.sourceCheckIfSizeGreaterThanMB) {
+    oplogPopulatorConfig.locationStrippingBytesThreshold =
+        replicationQPConfig.sourceCheckIfSizeGreaterThanMB * 1000000;
+}
 
 const activeExtensions = [
     'notification',

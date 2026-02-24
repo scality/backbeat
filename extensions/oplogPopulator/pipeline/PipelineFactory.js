@@ -9,10 +9,10 @@ const { wildCardForAllBuckets } = require('../constants');
 class PipelineFactory {
     /**
      * @constructor
-     * @param {number} locationStrippingThreshold threshold for stripping location data
+     * @param {number} locationStrippingBytesThreshold threshold for stripping location data
      */
-    constructor(locationStrippingThreshold) {
-        this._locationStrippingThreshold = locationStrippingThreshold;
+    constructor(locationStrippingBytesThreshold) {
+        this._locationStrippingBytesThreshold = locationStrippingBytesThreshold;
     }
 
     /**
@@ -71,29 +71,33 @@ class PipelineFactory {
         const pipeline = [
             stage,
         ];
-        if (this._locationStrippingThreshold >= 0) {
+        if (this._locationStrippingBytesThreshold > 0) {
             pipeline.push({
                 $set: {
-                    'fullDocument.value.location':
-                        this._locationStrippingExpression('fullDocument.value.location'),
-                    'updateDescription.updatedFields.value.location':
-                        this._locationStrippingExpression('updateDescription.updatedFields.value.location'),
+                    'fullDocument.value.location': {
+                        $cond: {
+                            if: { $gte: [
+                                '$fullDocument.value.content-length',
+                                this._locationStrippingBytesThreshold,
+                            ] },
+                            then: '$$REMOVE',
+                            else: '$fullDocument.value.location',
+                        },
+                    },
+                    'updateDescription.updatedFields.value.location': {
+                        $cond: {
+                            if: { $gte: [
+                                '$updateDescription.updatedFields.value.content-length',
+                                this._locationStrippingBytesThreshold,
+                            ] },
+                            then: '$$REMOVE',
+                            else: '$updateDescription.updatedFields.value.location',
+                        },
+                    },
                 }
             });
         }
         return JSON.stringify(pipeline);
-    }
-
-    _locationStrippingExpression(field) {
-        return {
-            $switch: {
-                branches: [
-                    { case: { $not: [{ $isArray: `$${field}` }] }, then: '$$REMOVE' },
-                    { case: { $gte: [{ $size: `$${field}` }, this._locationStrippingThreshold] }, then: '$$REMOVE' },
-                ],
-                default: `$${field}`,
-            }
-        };
     }
 
     /**

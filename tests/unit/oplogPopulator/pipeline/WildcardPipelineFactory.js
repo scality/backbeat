@@ -3,7 +3,8 @@ const WildcardPipelineFactory = require('../../../../extensions/oplogPopulator/p
 const { constants } = require('arsenal');
 
 describe('WildcardPipelineFactory', () => {
-    const wildcardPipelineFactory = new WildcardPipelineFactory(200);
+    const thresholdBytes = 100 * 1000000;
+    const wildcardPipelineFactory = new WildcardPipelineFactory(thresholdBytes);
 
     describe('isValid', () => {
         it('should detect a wildcard', () => {
@@ -39,13 +40,24 @@ describe('WildcardPipelineFactory', () => {
 
             assert.strictEqual(pipeline.length, 2);
             assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$not:{$regex:'^(mpuShadowBucket|__).*'}}}});
-            assert(pipeline[1].$set['fullDocument.value.location']);
-            assert(pipeline[1].$set['updateDescription.updatedFields.value.location']);
-            assert(result.includes('200'));
+            assert.deepStrictEqual(pipeline[1].$set['fullDocument.value.location'], {
+                $cond: {
+                    if: { $gte: ['$fullDocument.value.content-length', thresholdBytes] },
+                    then: '$$REMOVE',
+                    else: '$fullDocument.value.location',
+                },
+            });
+            assert.deepStrictEqual(pipeline[1].$set['updateDescription.updatedFields.value.location'], {
+                $cond: {
+                    if: { $gte: ['$updateDescription.updatedFields.value.content-length', thresholdBytes] },
+                    then: '$$REMOVE',
+                    else: '$updateDescription.updatedFields.value.location',
+                },
+            });
         });
 
         it('should return the pipeline with buckets and no location stripping if disabled', () => {
-            const wildcardPipelineFactoryNoStripping = new WildcardPipelineFactory(-1);
+            const wildcardPipelineFactoryNoStripping = new WildcardPipelineFactory(0);
 
             const buckets = ['bucket1', 'bucket2'];
             const result = wildcardPipelineFactoryNoStripping.getPipeline(buckets);

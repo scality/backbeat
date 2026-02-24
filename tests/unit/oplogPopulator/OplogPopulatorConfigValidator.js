@@ -13,15 +13,15 @@ const defaultConfig = {
 };
 
 describe('OplogPopulatorConfigValidator', () => {
-    describe('locationStrippingThreshold validation', () => {
+    describe('locationStrippingBytesThreshold validation', () => {
         it('should accept valid threshold', () => {
             const config = {
                 ...defaultConfig,
-                locationStrippingThreshold: 50,
+                locationStrippingBytesThreshold: 100 * 1000000,
             };
             const result = OplogPopulatorConfigJoiSchema.validate(config);
             assert.ifError(result.error);
-            assert.strictEqual(result.value.locationStrippingThreshold, 50);
+            assert.strictEqual(result.value.locationStrippingBytesThreshold, 100 * 1000000);
         });
     });
 });

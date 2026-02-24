@@ -11,10 +11,10 @@ const PipelineFactory = require('./PipelineFactory');
 class WildcardPipelineFactory extends PipelineFactory {
     /**
      * @constructor
-     * @param {number} locationStrippingThreshold threshold for stripping location data
+     * @param {number} locationStrippingBytesThreshold threshold for stripping location data
      */
-    constructor(locationStrippingThreshold) {
-        super(locationStrippingThreshold);
+    constructor(locationStrippingBytesThreshold) {
+        super(locationStrippingBytesThreshold);
         // getPipeline is used standalone later, make sure its `this` reference binds to us.
         this.getPipeline = this.getPipeline.bind(this);
     }

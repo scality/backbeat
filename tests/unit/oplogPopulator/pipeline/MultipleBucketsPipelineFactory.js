@@ -4,7 +4,8 @@ const MultipleBucketsPipelineFactory =
 const { constants } = require('arsenal');
 
 describe('MultipleBucketsPipelineFactory', () => {
-    const multipleBucketsPipelineFactory = new MultipleBucketsPipelineFactory(200);
+    const thresholdBytes = 100 * 1000000;
+    const multipleBucketsPipelineFactory = new MultipleBucketsPipelineFactory(thresholdBytes);
 
     describe('isValid', () => {
         it('should detect a valid list of buckets', () => {
@@ -52,9 +53,20 @@ describe('MultipleBucketsPipelineFactory', () => {
 
             assert.strictEqual(pipeline.length, 2);
             assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1','bucket2']}}});
-            assert(pipeline[1].$set['fullDocument.value.location']);
-            assert(pipeline[1].$set['updateDescription.updatedFields.value.location']);
-            assert(result.includes('200'));
+            assert.deepStrictEqual(pipeline[1].$set['fullDocument.value.location'], {
+                $cond: {
+                    if: { $gte: ['$fullDocument.value.content-length', thresholdBytes] },
+                    then: '$$REMOVE',
+                    else: '$fullDocument.value.location',
+                },
+            });
+            assert.deepStrictEqual(pipeline[1].$set['updateDescription.updatedFields.value.location'], {
+                $cond: {
+                    if: { $gte: ['$updateDescription.updatedFields.value.content-length', thresholdBytes] },
+                    then: '$$REMOVE',
+                    else: '$updateDescription.updatedFields.value.location',
+                },
+            });
         });
     });
 

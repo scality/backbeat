@@ -285,15 +285,13 @@ describe('ConnectorsManager', () => {
             assert(connectorDeleteStub.notCalled);
         });
 
-        it('should update non-match stages when canUpdate is false and match stages are the same', async () => {
+        it('should update non-match stages when canUpdate is false and live buckets match', async () => {
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = true;
             connector1._buckets = new Set(['bucket1']);
+            connector1._liveBuckets = new Set(['bucket1']);
             sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
                 .returns(false);
-            sinon.stub(connector1._kafkaConnect, 'getConnectorConfig').resolves({
-                pipeline: JSON.stringify([{ $match: { 'ns.coll': { $in: ['bucket1'] } } }]),
-            });
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, true);
             assert(connectorUpdateStub.calledOnce);
@@ -301,15 +299,13 @@ describe('ConnectorsManager', () => {
             assert(connectorDeleteStub.notCalled);
         });
 
-        it('should skip update when canUpdate is false and match stages differ', async () => {
+        it('should skip update when canUpdate is false and live buckets differ', async () => {
             connector1._isRunning = true;
             connector1._state.bucketsGotModified = true;
             connector1._buckets = new Set(['bucket1']);
+            connector1._liveBuckets = new Set(['different-bucket']);
             sinon.stub(connectorsManager._allocationStrategy, 'canUpdate')
                 .returns(false);
-            sinon.stub(connector1._kafkaConnect, 'getConnectorConfig').resolves({
-                pipeline: JSON.stringify([{ $match: { 'ns.coll': { $in: ['different-bucket'] } } }]),
-            });
             const updated = await connectorsManager._spawnOrDestroyConnector(connector1);
             assert.strictEqual(updated, false);
             assert(connectorUpdateStub.notCalled);
