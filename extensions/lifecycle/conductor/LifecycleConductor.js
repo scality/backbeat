@@ -868,6 +868,8 @@ class LifecycleConductor {
                                  checkResults);
                 return done(errors.Throttling);
             }
+            this.logger.info('backlog control check passed, ' +
+                             'all consumers caught up', checkResults);
             return done();
         });
     }

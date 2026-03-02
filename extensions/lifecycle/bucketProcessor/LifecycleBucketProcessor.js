@@ -285,11 +285,15 @@ class LifecycleBucketProcessor {
             });
             return process.nextTick(() => cb(errors.InternalError));
         }
-        this._log.debug('processing bucket entry', {
+        this._log.info('consuming bucket task entry', {
             method: 'LifecycleBucketProcessor._processBucketEntry',
             bucket,
             owner,
             accountId,
+            kafkaPartition: entry.partition,
+            kafkaOffset: entry.offset,
+            contextInfo: result.contextInfo,
+            details: result.details,
         });
 
         const s3 = this.clientManager.getS3Client(accountId);
@@ -343,6 +347,7 @@ class LifecycleBucketProcessor {
                 bucket,
                 owner,
                 details: result.details,
+                contextInfo: result.contextInfo,
                 taskName: task.constructor.name,
             });
             return this._internalTaskScheduler.push({

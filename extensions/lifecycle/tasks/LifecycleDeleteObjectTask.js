@@ -308,14 +308,24 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
                 return done();
             }
             if (err && err.statusCode === 404) {
-                log.debug('Unable to find object to delete, skipping',
-                    entry.getLogInfo());
+                log.info('object already deleted, skipping',
+                    Object.assign({
+                        method: 'LifecycleDeleteObjectTask.processActionEntry',
+                        actionContext: entry.getContext(),
+                    }, entry.getLogInfo()));
                 return done();
             }
             if (err && err.statusCode === 412) {
                 log.info('Object was modified after delete entry ' +
                          'created so object was not deleted',
                          entry.getLogInfo());
+            }
+            if (!err) {
+                log.info('successfully deleted object', Object.assign({
+                    method: 'LifecycleDeleteObjectTask.processActionEntry',
+                    actionContext: entry.getContext(),
+                    durationMs: Date.now() - startTime,
+                }, entry.getLogInfo()));
             }
             return done(err);
         });

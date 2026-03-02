@@ -192,8 +192,12 @@ class LifecycleObjectProcessor extends EventEmitter {
             });
             return process.nextTick(done);
         }
-        this._log.debug('processing lifecycle object entry',
-                          actionEntry.getLogInfo());
+        this._log.info('processing lifecycle object entry',
+                       Object.assign({
+                           kafkaPartition: kafkaEntry.partition,
+                           kafkaOffset: kafkaEntry.offset,
+                           actionContext: actionEntry.getContext(),
+                       }, actionEntry.getLogInfo()));
         const task = this.getTask(actionEntry);
 
         if (task === null) {

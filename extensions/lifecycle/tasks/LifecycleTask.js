@@ -115,10 +115,23 @@ class LifecycleTask extends BackbeatTask {
      */
     _sendBucketEntry(entry, cb) {
         const entries = [{ message: JSON.stringify(entry) }];
-        this.producer.sendToTopic(this.bucketTasksTopic, entries, err => {
-            LifecycleMetrics.onKafkaPublish(null, 'BucketTopic', 'bucket', err, 1);
-            return cb(err);
-        });
+        this.producer.sendToTopic(this.bucketTasksTopic, entries,
+            (err, deliveryReports) => {
+                LifecycleMetrics.onKafkaPublish(
+                    null, 'BucketTopic', 'bucket', err, 1);
+                if (!err && deliveryReports && deliveryReports[0]) {
+                    const dr = deliveryReports[0];
+                    this.log.info('produced bucket task entry', {
+                        method: 'LifecycleTask._sendBucketEntry',
+                        bucket: entry.target && entry.target.bucket,
+                        kafkaPartition: dr.partition,
+                        kafkaOffset: dr.offset,
+                        contextInfo: entry.contextInfo,
+                        details: entry.details,
+                    });
+                }
+                return cb(err);
+            });
     }
 
     /**
@@ -177,10 +190,25 @@ class LifecycleTask extends BackbeatTask {
             Date.now() - entry.getAttribute('transitionTime'));
 
         const entries = [{ message: entry.toKafkaMessage() }];
-        this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
-            LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
-            return cb(err);
-        });
+        this.producer.sendToTopic(this.objectTasksTopic, entries,
+            (err, deliveryReports) => {
+                LifecycleMetrics.onKafkaPublish(
+                    null, 'ObjectTopic', 'bucket', err, 1);
+                if (!err) {
+                    const dr = deliveryReports && deliveryReports[0];
+                    this.log.info('queued object lifecycle action', {
+                        method: 'LifecycleTask._sendObjectAction',
+                        action: entry.getActionType(),
+                        bucket: entry.getAttribute('target.bucket'),
+                        key: entry.getAttribute('target.key'),
+                        version: entry.getAttribute('target.version'),
+                        kafkaPartition: dr && dr.partition,
+                        kafkaOffset: dr && dr.offset,
+                        actionContext: entry.getContext(),
+                    });
+                }
+                return cb(err);
+            });
     }
 
     /**
@@ -233,9 +261,13 @@ class LifecycleTask extends BackbeatTask {
                     });
                     this._sendBucketEntry(entry, err => {
                         if (!err) {
-                            log.debug(
-                                'sent kafka entry for bucket consumption', {
+                            log.info(
+                                're-queued truncated bucket listing ' +
+                                'for next page', {
                                     method: 'LifecycleTask._getObjectList',
+                                    bucket: bucketData.target.bucket,
+                                    marker,
+                                    contextInfo: entry.contextInfo,
                                 });
                         }
                     });
@@ -412,9 +444,13 @@ class LifecycleTask extends BackbeatTask {
                 });
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
-                        log.debug('sent kafka entry for bucket ' +
-                        'consumption', {
+                        log.info('re-queued truncated bucket listing ' +
+                        'for next page', {
                             method: 'LifecycleTask._getObjectVersions',
+                            bucket: bucketData.target.bucket,
+                            nextKeyMarker: data.NextKeyMarker,
+                            nextVersionIdMarker: data.NextVersionIdMarker,
+                            contextInfo: entry.contextInfo,
                         });
                     }
                 });
@@ -497,9 +533,14 @@ class LifecycleTask extends BackbeatTask {
                     });
                     return this._sendBucketEntry(entry, err => {
                         if (!err) {
-                            log.debug(
-                                'sent kafka entry for bucket consumption', {
+                            log.info(
+                                're-queued truncated MPU listing ' +
+                                'for next page', {
                                     method: 'LifecycleTask._getMPUs',
+                                    bucket: bucketData.target.bucket,
+                                    nextKeyMarker: data.NextKeyMarker,
+                                    nextUploadIdMarker: data.NextUploadIdMarker,
+                                    contextInfo: entry.contextInfo,
                                 });
                         }
                         return next(null, data);
