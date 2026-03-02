@@ -25,6 +25,7 @@
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000 --exit",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000 --exit",
     "ft_test:ingestion": "mocha --recursive $(find tests/functional/ingestion -name '*.js') --timeout  30000 --exit",
+    "ft_test:oplogPopulator": "mocha --recursive $(find tests/functional/oplogPopulator -name '*.js') --timeout 30000 --exit",
     "ft_test:api:routes": "mocha tests/functional/api/routes.js --timeout 30000 --exit",
     "ft_test:api:retry": "mocha tests/functional/api/retry.js --timeout 30000 --exit",
     "ft_test:queuepopulator": "mocha --recursive $(find tests/functional/queuePopulator -name '*.js') --timeout 30000 --exit",

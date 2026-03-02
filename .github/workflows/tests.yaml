@@ -176,6 +176,8 @@ jobs:
             runner: run_ft_tests.bash
           - testsuite: notification
             runner: run_ft_tests.bash
+          - testsuite: oplogPopulator
+            runner: run_ft_tests.bash
     services:
       redis:
         image: redis:alpine
