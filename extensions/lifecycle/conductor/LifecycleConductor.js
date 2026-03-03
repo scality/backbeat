@@ -870,8 +870,58 @@ class LifecycleConductor {
             }
             this.logger.info('backlog control check passed, ' +
                              'all consumers caught up', checkResults);
+            this._logRealTimeTopicOffsets(checkResults);
             return done();
         });
+    }
+
+    /**
+     * Query real-time topic high-water marks from Kafka and log them
+     * alongside the ZK-stored values from the backlog check. This
+     * reveals whether new messages were produced since the ZK snapshot.
+     *
+     * @return {undefined}
+     */
+    _logRealTimeTopicOffsets() {
+        if (!this._producer) {
+            return;
+        }
+        const kafkaClient = this._producer.getKafkaProducer();
+        const topics = [
+            this.lcConfig.bucketTasksTopic,
+            this.lcConfig.objectTasksTopic,
+        ];
+        async.each(topics, (topic, topicDone) => {
+            kafkaClient.getMetadata({ topic, timeout: 5000 },
+                (err, metadata) => {
+                    if (err) {
+                        return topicDone();
+                    }
+                    const topicMeta = metadata.topics.find(
+                        t => t.name === topic);
+                    if (!topicMeta) {
+                        return topicDone();
+                    }
+                    return async.each(topicMeta.partitions,
+                        (partMeta, partDone) => {
+                            kafkaClient.queryWatermarkOffsets(
+                                topic, partMeta.id, 5000,
+                                (err, offsets) => {
+                                    if (err) {
+                                        return partDone();
+                                    }
+                                    this.logger.info(
+                                        'real-time topic offset after ' +
+                                        'backlog check passed', {
+                                            topic,
+                                            partition: partMeta.id,
+                                            realtimeOffset: offsets.highOffset,
+                                        });
+                                    return partDone();
+                                });
+                        }, topicDone);
+                });
+        }, () => {});
     }
 
     _setupProducer(cb) {

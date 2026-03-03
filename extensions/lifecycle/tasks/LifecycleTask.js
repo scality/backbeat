@@ -273,6 +273,14 @@ class LifecycleTask extends BackbeatTask {
                     });
                 }
 
+                if (!data.IsTruncated) {
+                    log.info('pagination chain completed for bucket', {
+                        method: 'LifecycleTask._getObjectList',
+                        bucket: bucketData.target.bucket,
+                        lastMarker: bucketData.details.marker,
+                    });
+                }
+
                 this._compareRulesToList(bucketData, bucketLCRules,
                     data.Contents, log, 'Disabled', next);
             },
@@ -474,6 +482,11 @@ class LifecycleTask extends BackbeatTask {
                     }
 
                     if (!data.IsTruncated) {
+                        log.info('pagination chain completed for bucket', {
+                            method: 'LifecycleTask._getObjectVersions',
+                            bucket: bucketData.target.bucket,
+                            lastKeyMarker: bucketData.details.keyMarker,
+                        });
                         // end of bucket listing
                         // clear bucket level entry and all object entries
                         this._ncvHeapBucketClear(bucketData.target.bucket);
@@ -546,6 +559,11 @@ class LifecycleTask extends BackbeatTask {
                         return next(null, data);
                     });
                 }
+                log.info('pagination chain completed for bucket', {
+                    method: 'LifecycleTask._getMPUs',
+                    bucket: bucketData.target.bucket,
+                    lastKeyMarker: bucketData.details.keyMarker,
+                });
                 return process.nextTick(() => next(null, data));
             },
         ], (err, data) => {
