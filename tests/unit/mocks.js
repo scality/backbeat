@@ -100,20 +100,37 @@ class BackbeatMetadataProxyMock {
         this.indexesObj = null;
         this.receivedIdxObj = null;
         this.error = null;
+        this._mdByKey = {};
+        this._errorByKey = {};
+        this._putCalls = [];
     }
 
     setMdObj(mdObj) {
         this.mdObj = mdObj;
     }
 
+    setMdObjForKey(objectKey, mdObj) {
+        this._mdByKey[objectKey] = mdObj;
+    }
+
+    setErrorForKey(objectKey, error) {
+        this._errorByKey[objectKey] = error;
+    }
+
     getMetadata(params, log, cb) {
+        const keyError = this._errorByKey[params.objectKey];
+        if (keyError) {
+            return cb(keyError);
+        }
         if (this.error) {
             return cb(this.error);
         }
-        return cb(null, { Body: this.mdObj.getSerialized() });
+        const md = this._mdByKey[params.objectKey] || this.mdObj;
+        return cb(null, { Body: md.getSerialized() });
     }
 
     putMetadata(params, log, cb) {
+        this._putCalls.push(params.objectKey);
         this.receivedMd = JSON.parse(params.mdBlob);
         this.mdObj = ObjectMD.createFromBlob(params.mdBlob).result;
         return cb();
