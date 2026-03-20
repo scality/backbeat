@@ -145,7 +145,11 @@ class LifecycleObjectProcessor extends EventEmitter {
             clearInterval(this._deleteInactiveCredentialsInterval);
         }
 
-        this._consumer.close(cb);
+        if (this._consumers) {
+            this._consumers.close(cb);
+        } else {
+            cb();
+        }
     }
 
     /**
