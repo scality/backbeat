@@ -140,11 +140,18 @@ class LifecycleRequeueTask extends BackbeatTask {
                             rest.try,
                             log,
                             (err, res) => {
-                                if (err) {
-                                    return nextObject(err);
+                                if (!err) {
+                                    return nextObject(null, res + objsPerBucket);
                                 }
 
-                                return nextObject(null, res + objsPerBucket);
+                                if (err.name === 'ObjNotFound' || err.name === 'NoSuchBucket') {
+                                    log.warn(`${err.name}, skipping`, {
+                                        bucketName, objectKey, objectVersion,
+                                    });
+                                    return nextObject(null, objsPerBucket);
+                                }
+
+                                return nextObject(err);
                             }
                         ),
                     (err, res) => next(err, res)
