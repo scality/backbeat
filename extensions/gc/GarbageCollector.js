@@ -167,13 +167,17 @@ class GarbageCollector extends EventEmitter {
     }
 
     /**
-     * Close the lifecycle consumer
+     * Close the garbage collector consumer
      * @param {function} cb - callback function
      * @return {undefined}
      */
     close(cb) {
         this._logger.debug('closing garbage collector consumer');
-        this._consumer.close(cb);
+        if (this._consumer) {
+            this._consumer.close(cb);
+        } else {
+            cb();
+        }
     }
 
     processKafkaEntry(kafkaEntry, done) {
