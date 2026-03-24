@@ -92,4 +92,47 @@ describe('garbage collector', function garbageCollector() {
               .setAttribute('target.owner', ownerId);
         gcTask.processActionEntry(action, done);
     });
+
+    describe('close() garbage collector', () => {
+        it('should call close on the consumer when it exists', done => {
+            const gcWithConsumer = new GarbageCollector({
+                kafkaConfig: {},
+                s3Config: { host: 'localhost', port: 7777 },
+                gcConfig: {
+                    topic: 'backbeat-gc',
+                    auth: { type: 'account', account: 'bart' },
+                    consumer: { groupId: 'backbeat-gc-consumer-group' },
+                },
+            });
+            let closeCalled = false;
+            gcWithConsumer._consumer = {
+                close: cb => {
+                    closeCalled = true;
+                    cb();
+                },
+            };
+            gcWithConsumer.close(err => {
+                assert.ifError(err);
+                assert.strictEqual(closeCalled, true);
+                done();
+            });
+        });
+
+        it('should call callback immediately when consumer is null', done => {
+            const gcNoConsumer = new GarbageCollector({
+                kafkaConfig: {},
+                s3Config: { host: 'localhost', port: 7777 },
+                gcConfig: {
+                    topic: 'backbeat-gc',
+                    auth: { type: 'account', account: 'bart' },
+                    consumer: { groupId: 'backbeat-gc-consumer-group' },
+                },
+            });
+            assert.strictEqual(gcNoConsumer._consumer, null);
+            gcNoConsumer.close(err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+    });
 });

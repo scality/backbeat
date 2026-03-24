@@ -100,7 +100,7 @@ initAndStart();
 
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');
-    garbageCollector.stop(() => {
+    garbageCollector.close(() => {
         process.exit(0);
     });
 });
