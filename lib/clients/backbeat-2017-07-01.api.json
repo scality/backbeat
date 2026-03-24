@@ -1142,7 +1142,13 @@
                 }
             },
             "output": {
-                "type": "string"
+                "type": "structure",
+                "payload": "RaftId",
+                "members": {
+                    "RaftId": {
+                        "type": "string"
+                    }
+                }
             }
         },
         "GetRaftLog": {

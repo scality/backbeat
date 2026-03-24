@@ -71,7 +71,7 @@ describe('BackbeatClient unit tests with mock server', () => {
         });
         return destReq.send((err, data) => {
             assert.ifError(err);
-            assert.strictEqual(data[0], '1');
+            assert.strictEqual(data.RaftId, '1');
             return done();
         });
     });
