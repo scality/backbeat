@@ -37,6 +37,10 @@
                 "resType": "raftId",
                 "name": "bucket2"
             },
+            "/_/metadata/admin/buckets/bucket-raft13/id": {
+                "resType": "raftId",
+                "name": "bucket-raft13"
+            },
             "/_/metadata/admin/raft_sessions/1/log": {
                 "resType": "raftLogs",
                 "name": "1"
@@ -682,7 +686,8 @@
     },
     "raftId": {
         "bucket1": 1,
-        "bucket2": 5
+        "bucket2": 5,
+        "bucket-raft13": 13
     },
     "raftInformation": {
         "1": [

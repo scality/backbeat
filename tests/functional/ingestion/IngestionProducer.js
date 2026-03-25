@@ -158,4 +158,15 @@ describe('ingestion producer tests with mock', () => {
             return done();
         });
     });
+
+    it('should return the full raft ID for multi-digit raft sessions',
+    done => {
+        this.iProducer.getRaftId('bucket-raft13', (err, res) => {
+            assert.ifError(err);
+            assert.strictEqual(typeof res, 'string');
+            // must return '13', not '1' (first character)
+            assert.strictEqual(res, '13');
+            return done();
+        });
+    });
 });
