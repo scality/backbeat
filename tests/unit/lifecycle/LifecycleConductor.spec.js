@@ -411,6 +411,12 @@ describe('Lifecycle Conductor', () => {
                 conductor.activeIndexingJobsRetrieved = getInProgressSucceeded;
                 conductor.activeIndexingJobs = inJobs;
                 conductor._bucketSource = bucektSource;
+                conductor._mongodbClient = {
+                    getDiskUsage: cb => cb(null, { available: 10000000000, free: 10000000000, total: 20000000000 }),
+                    getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                        indexSizes: { _id_: 80000 },
+                    }),
+                };
                 client.indexesObj = getIndexes;
                 client.error = mockError;
 
@@ -422,6 +428,54 @@ describe('Lifecycle Conductor', () => {
                     done();
                 });
             }));
+
+        it('should return v1: missing indexes + disk space check fails', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            conductor._mongodbClient = {
+                getDiskUsage: cb => cb(new Error('dbStats failed')),
+                getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                    indexSizes: { _id_: 80000 },
+                }),
+            };
+            client.indexesObj = [];
+            client.error = null;
+
+            conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('should return v1: missing indexes + insufficient disk space', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            conductor._mongodbClient = {
+                getDiskUsage: cb => cb(null, { available: 100000, free: 100000, total: 20000000000 }),
+                getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                    indexSizes: { _id_: 80000000 },
+                }),
+            };
+            client.indexesObj = [];
+            client.error = null;
+
+            conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
     });
 
     describe('listBuckets', () => {

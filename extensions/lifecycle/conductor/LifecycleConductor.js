@@ -285,26 +285,57 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
-            LifecycleMetrics.onLegacyTask(log, 'putBucketIndexes');
-
-            this.activeIndexingJobs.push({
-                bucket: task.bucketName,
-                indexes: indexesForFeature.lifecycle.v2,
-            });
-
-            return backbeatMetadataProxy.putBucketIndexes(
-                task.bucketName,
-                indexesForFeature.lifecycle.v2,
-                log,
-                err => {
-                    if (err) {
-                        log.warn('unable to create lifecycle indexes', {
-                            bucket: task.bucketName,
-                            error: err,
-                        });
-                    }
+            return async.series({
+                diskUsage: done => this._mongodbClient.getDiskUsage(done),
+                collStats: done => this._mongodbClient.getCollectionStats(
+                    task.bucketName, log, done),
+            }, (err, results) => {
+                if (err) {
+                    log.warn('unable to check disk space, skipping index creation', {
+                        bucket: task.bucketName,
+                        error: err,
+                    });
+                    LifecycleMetrics.onLegacyTask(log, 'diskSpaceCheckFailed');
                     return cb(null, lifecycleTaskVersions.v1);
+                }
+
+                const fsFreeSize = results.diskUsage.free;
+                // Each lifecycle index is roughly the same size as the
+                // _id_ index. We create two, so 3x gives a safe margin
+                // accounting for _id_ index bloat from incremental inserts.
+                const idIndexSize = results.collStats.indexSizes?._id_ || 0;
+
+                if (fsFreeSize < 3 * idIndexSize) {
+                    log.warn('insufficient disk space for index creation', {
+                        bucket: task.bucketName,
+                        fsFreeSize,
+                        threshold: 3 * idIndexSize,
+                    });
+                    LifecycleMetrics.onLegacyTask(log, 'insufficientDiskSpace');
+                    return cb(null, lifecycleTaskVersions.v1);
+                }
+
+                LifecycleMetrics.onLegacyTask(log, 'putBucketIndexes');
+
+                this.activeIndexingJobs.push({
+                    bucket: task.bucketName,
+                    indexes: indexesForFeature.lifecycle.v2,
                 });
+
+                return backbeatMetadataProxy.putBucketIndexes(
+                    task.bucketName,
+                    indexesForFeature.lifecycle.v2,
+                    log,
+                    err => {
+                        if (err) {
+                            log.warn('unable to create lifecycle indexes', {
+                                bucket: task.bucketName,
+                                error: err,
+                            });
+                        }
+                        return cb(null, lifecycleTaskVersions.v1);
+                    });
+            });
         });
     }
 
