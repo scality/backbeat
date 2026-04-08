@@ -2,6 +2,7 @@ const assert = require('assert');
 const sinon = require('sinon');
 
 const BackbeatConsumer = require('../../lib/BackbeatConsumer');
+const { CODES } = require('node-rdkafka');
 
 const { kafka } = require('../config.json');
 const { BreakerState } = require('breakbeat').CircuitBreaker;
@@ -235,6 +236,80 @@ describe('backbeatConsumer', () => {
                 assert.strictEqual(consumer._tasksCompletedSinceLastConsume, false);
                 done();
             }, 500);
+        });
+    });
+
+    describe('onEntryCommittable', () => {
+        let consumer;
+        let mockConsumer;
+
+        const entry = {
+            topic: 'my-test-topic',
+            partition: 2,
+            offset: 280,
+            key: null,
+            timestamp: Date.now(),
+        };
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+
+            mockConsumer = {
+                offsetsStore: sinon.stub(),
+                subscription: sinon.stub().returns(['my-test-topic']),
+                isConnected: sinon.stub().returns(true),
+            };
+            consumer._consumer = mockConsumer;
+
+            // pre-register the offset as consumed so onOffsetProcessed returns a value
+            consumer._offsetLedger.onOffsetConsumed(entry.topic, entry.partition, entry.offset);
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should call offsetsStore when consumer is active and connected', () => {
+            consumer.onEntryCommittable(entry);
+            assert(mockConsumer.offsetsStore.calledOnce);
+        });
+
+        it('should not call offsetsStore when consumer is paused (unsubscribed)', () => {
+            mockConsumer.subscription.returns([]);
+            consumer.onEntryCommittable(entry);
+            assert(mockConsumer.offsetsStore.notCalled);
+        });
+
+        it('should not call offsetsStore when consumer is not connected', () => {
+            mockConsumer.isConnected.returns(false);
+            consumer.onEntryCommittable(entry);
+            assert(mockConsumer.offsetsStore.notCalled);
+        });
+
+        it('should not throw and always log at error level when offsetsStore throws', () => {
+            const errState = new Error('Local: Erroneous state');
+            errState.code = CODES.ERRORS.ERR__STATE;
+            mockConsumer.offsetsStore.throws(errState);
+
+            const errorSpy = sinon.spy(consumer._log, 'error');
+
+            assert.doesNotThrow(() => consumer.onEntryCommittable(entry));
+            assert(errorSpy.calledOnce);
+        });
+
+        it('should not throw and log at error level when offsetsStore throws an unexpected error', () => {
+            const unexpectedErr = new Error('unexpected kafka error');
+            unexpectedErr.code = -1;
+            mockConsumer.offsetsStore.throws(unexpectedErr);
+
+            const errorSpy = sinon.spy(consumer._log, 'error');
+
+            assert.doesNotThrow(() => consumer.onEntryCommittable(entry));
+            assert(errorSpy.calledOnce);
         });
     });
 

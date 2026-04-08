@@ -378,6 +378,104 @@ describe('BackbeatConsumer rebalance tests', () => {
             }
         }, 1000);
     }).timeout(60000);
+
+});
+
+describe('BackbeatConsumer deferred commit after rebalance', () => {
+    const topic = 'backbeat-consumer-spec-ERR-STATE';
+    const groupId = `replication-group-${Math.random()}`;
+    let producer;
+    let consumer1;
+    let consumer2;
+
+    before(function before(done) {
+        this.timeout(60000);
+
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100,
+            compressionType: 'none',
+        });
+        consumer1 = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-ERR-STATE-1',
+            zookeeper: zookeeperConf,
+            kafka: { ...consumerKafkaConf, compressionType: 'none' },
+            groupId, topic,
+            queueProcessor: (_msg, cb) => cb(),
+            bootstrap: true,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer1.on('ready', innerDone),
+        ], err => {
+            if (err) return done(err);
+            consumer2 = new BackbeatConsumer({
+                clientId: 'BackbeatConsumer-ERR-STATE-2',
+                zookeeper: zookeeperConf,
+                kafka: { ...consumerKafkaConf, compressionType: 'none' },
+                groupId, topic,
+                queueProcessor: (_msg, cb) => cb(),
+            });
+            consumer2.on('ready', done);
+        });
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer1.close(innerDone),
+            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+        ], done);
+    });
+
+    it('should not crash when onEntryCommittable is called after partition revoke', done => {
+        let deferredEntry = null;
+
+        // Setup: when consumer1 receives a message, complete with
+        // { committable: false }. This frees the processing queue
+        // slot but does NOT commit the offset.
+        consumer1._queueProcessor = (message, cb) => {
+            deferredEntry = message;
+            process.nextTick(() => cb(null, { committable: false }));
+        };
+
+        consumer2._queueProcessor = (_message, cb) => {
+            process.nextTick(cb);
+        };
+
+        // 1 : consumer1 subscribes and consumes the message.
+        consumer1.subscribe();
+        producer.send([{ key: 'foo', message: '{"hello":"foo"}' }], err => {
+            assert.ifError(err);
+        });
+
+        // 2 : wait until consumer1 has processed the message.
+        // The processing queue is now idle but the
+        // deferred commit is still pending.
+        const waitForDeferred = setInterval(() => {
+            if (!deferredEntry) {
+                return;
+            }
+            clearInterval(waitForDeferred);
+
+            // 3 : consumer2 joins the same group, triggering a
+            // rebalance. consumer1's revoke handler sees an idle
+            // queue and immediately unassigns the partition.
+            consumer1.once('unassign', () => {
+                // 4 : the external caller finishes its work and calls
+                // onEntryCommittable() for the now-revoked partition.
+                // It would crash without the try catch in the method, as
+                // an error ERR__STATE is returned by librdkafka when trying to commit
+                assert.doesNotThrow(() => {
+                    consumer1.onEntryCommittable(deferredEntry);
+                });
+                done();
+            });
+
+            consumer2.subscribe();
+        }, 100);
+    }).timeout(40000);
 });
 
 describe('BackbeatConsumer concurrency tests', () => {
