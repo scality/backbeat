@@ -8,7 +8,7 @@ const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { authTypeAssumeRole } = require('../../lib/constants');
 const { v4: uuid } = require('uuid');
-const safeJsonParse = require('./util/safeJsonParse');
+const safeJsonParse = require('../../lib/util/safeJsonParse');
 const { LifecycleMetrics } = require('./LifecycleMetrics');
 const LIFECYCLE_BUCKETS_ZK_PATH = '/data/buckets';
 const LIFEYCLE_POPULATOR_CLIENT_ID = 'lifecycle-populator';
