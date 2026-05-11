@@ -4,7 +4,7 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { isMasterKey } = require('arsenal').versioning;
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
-const safeJsonParse = require('../notification/utils/safeJsonParse');
+const safeJsonParse = require('../../lib/util/safeJsonParse');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {

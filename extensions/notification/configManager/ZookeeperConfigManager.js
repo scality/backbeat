@@ -6,7 +6,7 @@ const zookeeper = require('node-zookeeper-client');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BaseConfigManager = require('./BaseConfigManager');
 
-const safeJsonParse = require('../utils/safeJsonParse');
+const safeJsonParse = require('../../../lib/util/safeJsonParse');
 const constants = require('../constants');
 
 const paramsJoi = joi.object({

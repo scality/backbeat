@@ -5,7 +5,7 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
-const safeJsonParse = require('../notification/utils/safeJsonParse');
+const safeJsonParse = require('../../lib/util/safeJsonParse');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
