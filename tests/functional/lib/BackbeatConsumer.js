@@ -1,12 +1,29 @@
 const assert = require('assert');
 const async = require('async');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { metrics } = require('arsenal');
+const { ObjectMD } = require('arsenal').models;
 
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatConsumer = require('../../../lib/BackbeatConsumer');
+const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const ColdStorageStatusQueueEntry =
+    require('../../../lib/models/ColdStorageStatusQueueEntry');
+const GarbageCollectorTask =
+    require('../../../extensions/gc/tasks/GarbageCollectorTask');
+const LifecycleColdStatusArchiveTask = require(
+    '../../../extensions/lifecycle/tasks/LifecycleColdStatusArchiveTask');
+const {
+    ProcessorMock,
+    BackbeatClientMock,
+    BackbeatMetadataProxyMock,
+    GarbageCollectorProducerMock,
+    BackbeatProducerMock,
+} = require('../../unit/mocks');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 const { promMetricNames } =
       require('../../../lib/constants').kafkaBacklogMetrics;
@@ -408,7 +425,7 @@ describe('BackbeatConsumer deferred commit after rebalance', () => {
             innerDone => producer.on('ready', innerDone),
             innerDone => consumer1.on('ready', innerDone),
         ], err => {
-            if (err) return done(err);
+            if (err) {return done(err);}
             consumer2 = new BackbeatConsumer({
                 clientId: 'BackbeatConsumer-ERR-STATE-2',
                 zookeeper: zookeeperConf,
@@ -1030,4 +1047,256 @@ describe('BackbeatConsumer shutdown tests', () => {
             },
         ], done);
     }).timeout(60000);
+});
+describe('BackbeatConsumer offset progress when GarbageCollectorTask fails',
+() => {
+    const topic = 'backbeat-consumer-spec-gc-task-fail';
+    const groupId = `replication-group-gc-fail-${Math.random()}`;
+    let producer;
+    let consumer;
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100, compressionType: 'none',
+        });
+        consumer = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-gc-task-fail',
+            zookeeper: zookeeperConf,
+            kafka: { ...consumerKafkaConf, compressionType: 'none' },
+            groupId, topic,
+            queueProcessor: (_msg, cb) => cb(),
+            bootstrap: true,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer.on('ready', innerDone),
+        ], done);
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer.close(innerDone),
+        ], done);
+    });
+
+    it('commits the offset after retries are exhausted', function (done) {
+        this.timeout(60000);
+        const N = 3;
+        let processedCount = 0;
+
+        const backbeatClient = new BackbeatClientMock();
+        const backbeatMdProxy = new BackbeatMetadataProxyMock();
+        const gcProducer = new GarbageCollectorProducerMock();
+        const mdObj = new ObjectMD()
+            .setLocation([{ key: 'k', size: 10, start: 0,
+                dataStoreName: 'old-location' }])
+            .setDataStoreName('old-location')
+            .setAmzStorageClass('old-location')
+            .setTransitionInProgress(true);
+        backbeatMdProxy.setMdObj(mdObj);
+
+        backbeatClient.batchDeleteResponse = {
+            error: { statusCode: 500, retryable: true }, res: null,
+        };
+
+        const gcConfig = {
+            consumer: {
+                retry: {
+                    maxRetries: 2,
+                    backoff: { min: 50, max: 200, jitter: 0, factor: 1.5 },
+                },
+            },
+        };
+        const gcProcessor = new ProcessorMock(
+            null, null, backbeatClient, backbeatMdProxy, gcProducer, null,
+            gcConfig, new werelogs.Logger('test:gc'));
+
+        consumer.on('error', () => {});
+        consumer._queueProcessor = (kafkaEntry, cb) => {
+            const entry = ActionQueueEntry.createFromKafkaEntry(kafkaEntry);
+            const task = new GarbageCollectorTask(gcProcessor);
+            task.processActionEntry(entry, (err, commitInfo) => {
+                processedCount++;
+                cb(err, commitInfo);
+            });
+        };
+
+        consumer._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+            assert.ifError(e1);
+            const baseline = base[0].offset;
+
+            consumer.subscribe();
+
+            const messages = [];
+            for (let i = 0; i < N; i++) {
+                const entry = ActionQueueEntry.create('deleteArchivedSourceData')
+                    .addContext({
+                        origin: 'lifecycle', ruleType: 'archive',
+                        bucketName: 'b', objectKey: `k${i}`, versionId: 'v',
+                    })
+                    .setAttribute('serviceName', 'lifecycle-transition')
+                    .setAttribute('target.oldLocation', 'old-location')
+                    .setAttribute('target.newLocation', 'new-location')
+                    .setAttribute('target.bucket', 'b')
+                    .setAttribute('target.key', `k${i}`)
+                    .setAttribute('target.version', 'v')
+                    .setAttribute('target.accountId', '834789881858')
+                    .setAttribute('target.owner', 'o');
+                messages.push({ key: `k${i}`, message: entry.toKafkaMessage() });
+            }
+            producer.send(messages, e2 => assert.ifError(e2));
+
+            const checkProcessed = setInterval(() => {
+                if (processedCount < N) {
+                    return;
+                }
+                clearInterval(checkProcessed);
+                setTimeout(() => {
+                    consumer._consumer.committed(
+                        [{ topic, partition: 0 }], 5000, (e3, c) => {
+                        assert.ifError(e3);
+                        const observed = c[0].offset;
+                        const expected = baseline + N;
+                        assert.strictEqual(observed, expected,
+                            'expected committed offset to advance from ' +
+                            `${baseline} to ${expected} after ${N} entries ` +
+                            'failed through GarbageCollectorTask retry ' +
+                            `exhaustion, but it stayed at ${observed}`);
+                        done();
+                    });
+                }, 7000);
+            }, 100);
+        });
+    });
+});
+
+describe('BackbeatConsumer offset progress when ' +
+         'LifecycleColdStatusArchiveTask fails', () => {
+    const topic = 'backbeat-consumer-spec-lifecycle-task-fail';
+    const groupId = `replication-group-lifecycle-fail-${Math.random()}`;
+    let producer;
+    let consumer;
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100, compressionType: 'none',
+        });
+        consumer = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-lifecycle-task-fail',
+            zookeeper: zookeeperConf,
+            kafka: { ...consumerKafkaConf, compressionType: 'none' },
+            groupId, topic,
+            queueProcessor: (_msg, cb) => cb(),
+            bootstrap: true,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer.on('ready', innerDone),
+        ], done);
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer.close(innerDone),
+        ], done);
+    });
+
+    it('commits the offset after retries are exhausted', function (done) {
+        this.timeout(60000);
+        const N = 3;
+        let processedCount = 0;
+        const coldLocation = 'cold';
+
+        const backbeatClient = new BackbeatClientMock();
+        const backbeatMdProxy = new BackbeatMetadataProxyMock();
+        const gcProducer = new GarbageCollectorProducerMock();
+        const coldProducer = new BackbeatProducerMock();
+        const objectProcessor = new ProcessorMock(
+            { coldStorageStatusTopicPrefix: 'cold-' }, null,
+            backbeatClient, backbeatMdProxy, gcProducer, coldProducer, null,
+            new werelogs.Logger('test:lifecycle'));
+
+        sinon.stub(backbeatMdProxy, 'getMetadata').yields(
+            Object.assign(new Error('simulated downstream failure'),
+                { statusCode: 500, retryable: true }));
+
+        const retryWrapper = new BackbeatTask({
+            maxRetries: 2,
+            backoff: { min: 50, max: 200, jitter: 0, factor: 1.5 },
+        });
+        const testLog = new werelogs.Logger('test:lifecycle');
+
+        consumer.on('error', () => {});
+        consumer._queueProcessor = (kafkaEntry, cb) => {
+            const entry = ColdStorageStatusQueueEntry
+                .createFromKafkaEntry(kafkaEntry);
+            const task = new LifecycleColdStatusArchiveTask(objectProcessor);
+            retryWrapper.retry({
+                actionDesc: 'process cold storage status entry',
+                actionFunc: done =>
+                    task.processEntry(coldLocation, entry, done),
+                shouldRetryFunc: err => err.retryable,
+                log: testLog,
+            }, (err, commitInfo) => {
+                processedCount++;
+                cb(err, commitInfo);
+            });
+        };
+
+        consumer._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+            assert.ifError(e1);
+            const baseline = base[0].offset;
+
+            consumer.subscribe();
+
+            const messages = [];
+            for (let i = 0; i < N; i++) {
+                const messageBody = JSON.stringify({
+                    op: 'archive',
+                    bucketName: 'testBucket',
+                    objectKey: `testObj${i}`,
+                    objectVersion: 'testversion',
+                    accountId: '834789881858',
+                    archiveInfo: {
+                        archiveId: `archive-${i}`,
+                        archiveVersion: 5166759712787974,
+                    },
+                    requestId: `req-${i}`,
+                });
+                messages.push({ key: `k${i}`, message: messageBody });
+            }
+            producer.send(messages, e2 => assert.ifError(e2));
+
+            const checkProcessed = setInterval(() => {
+                if (processedCount < N) {
+                    return;
+                }
+                clearInterval(checkProcessed);
+                setTimeout(() => {
+                    consumer._consumer.committed(
+                        [{ topic, partition: 0 }], 5000, (e3, c) => {
+                        assert.ifError(e3);
+                        const observed = c[0].offset;
+                        const expected = baseline + N;
+                        assert.strictEqual(observed, expected,
+                            'expected committed offset to advance from ' +
+                            `${baseline} to ${expected} after ${N} entries ` +
+                            'failed through LifecycleColdStatusArchiveTask ' +
+                            `retry exhaustion, but it stayed at ${observed}`);
+                        done();
+                    });
+                }, 7000);
+            }, 100);
+        });
+    });
 });
