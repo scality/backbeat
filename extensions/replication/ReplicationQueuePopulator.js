@@ -58,6 +58,7 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
                 method: 'ReplicationQueuePopulator._filterKeyOp',
                 bucket: entry.bucket,
                 key: entry.key,
+                type: entry.type,
                 raftId: entry.logReader
                     && typeof entry.logReader.getMetricLabels === 'function'
                     && entry.logReader.getMetricLabels().logId,
