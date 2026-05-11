@@ -4,6 +4,7 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const { isMasterKey } = require('arsenal').versioning;
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
+const safeJsonParse = require('../notification/utils/safeJsonParse');
 
 class IngestionQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -39,7 +40,20 @@ class IngestionQueuePopulator extends QueuePopulatorExtension {
     }
 
     _filterValueOp(entry) {
-        const metadataVal = JSON.parse(entry.value);
+        const { error, result: metadataVal } = safeJsonParse(entry.value);
+        if (error) {
+            // The raft entry value is malformed (corruption upstream of the
+            // populator). Log + skip the entry so the populator does not
+            // crash and restart-loop on the same record.
+            this.log.error('failed to parse raft entry value, skipping', {
+                method: 'IngestionQueuePopulator._filterValueOp',
+                bucket: entry.bucket,
+                key: entry.key,
+                type: entry.type,
+                error: error.message,
+            });
+            return true;
+        }
         if (this._isBucketEntry(metadataVal)) {
             this.log.trace('skipping bucket entry');
             return true;

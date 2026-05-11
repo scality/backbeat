@@ -5,6 +5,7 @@ const QueuePopulatorExtension =
           require('../../lib/queuePopulator/QueuePopulatorExtension');
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
+const safeJsonParse = require('../notification/utils/safeJsonParse');
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -48,7 +49,22 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         if (entry.type !== 'put') {
             return;
         }
-        const value = JSON.parse(entry.value);
+        const { error, result: value } = safeJsonParse(entry.value);
+        if (error) {
+            // The raft entry value is malformed (corruption upstream of the
+            // populator). Log + skip + advance the batch so the populator
+            // does not crash and restart-loop on the same record.
+            this.log.error('failed to parse raft entry value, skipping', {
+                method: 'ReplicationQueuePopulator._filterKeyOp',
+                bucket: entry.bucket,
+                key: entry.key,
+                raftId: entry.logReader
+                    && typeof entry.logReader.getMetricLabels === 'function'
+                    && entry.logReader.getMetricLabels().logId,
+                error: error.message,
+            });
+            return;
+        }
         const queueEntry = new ObjectQueueEntry(entry.bucket,
                                                 entry.key, value);
         const sanityCheckRes = queueEntry.checkSanity();
