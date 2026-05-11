@@ -356,4 +356,29 @@ describe('replication queue populator', () => {
         assert(publishedMessage.key);
         assert.strictEqual(decodeURIComponent(publishedMessage.key), 'users..bucket');
     });
+
+    // Regression test: a malformed raft entry value must not
+    // crash the populator. Before this fix, `JSON.parse(entry.value)` at the
+    // top of `_filterKeyOp` threw a SyntaxError on malformed input, which
+    // propagated up through the synchronous filter chain and exited the
+    // populator process — leading to an infinite supervisord restart loop
+    // because the unchanged logOffset re-read the same bad record. The fix
+    // wraps the parse with `safeJsonParse`, logs at error level with the
+    // entry's identifying context, and skips the entry so the batch advances.
+    it('should not throw on malformed entry value and should skip publishing', () => {
+        const entry = {
+            type: 'put',
+            bucket: 'test-bucket-source',
+            key: 'a-test-key 98477724999464999999RG001  1.30.12',
+            // malformed JSON — closing brace missing mid-stream; mimics the
+            // interleaved-fragment shape observed in production (RD-307).
+            value: '{"owner-display-name":"x","content-length":42,"acl":{"Canned":"p"',
+            logReader: {
+                getMetricLabels: () => ({ logId: 'raft_test' }),
+            },
+        };
+
+        assert.doesNotThrow(() => rqp._filterKeyOp(entry));
+        assert.deepStrictEqual(rqp.getState(), {});
+    });
 });
