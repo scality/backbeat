@@ -506,6 +506,114 @@ describe('BackbeatConsumer rebalance during batch processing', () => {
     }).timeout(60000);
 });
 
+describe('BackbeatConsumer ledger drain on rebalance', () => {
+    const topic = 'backbeat-consumer-spec-ledger-drain';
+    const groupId = `replication-group-ledger-drain-${Math.random()}`;
+    let producer;
+    let consumer1;
+    let consumer2;
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100,
+            compressionType: 'none',
+        });
+        consumer1 = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-LEDGER-DRAIN-1',
+            zookeeper: zookeeperConf,
+            kafka: { ...consumerKafkaConf, compressionType: 'none' },
+            groupId, topic,
+            queueProcessor: (_msg, cb) => cb(),
+            bootstrap: true,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer1.on('ready', innerDone),
+        ], err => {
+            if (err) {return done(err);}
+            consumer2 = new BackbeatConsumer({
+                clientId: 'BackbeatConsumer-LEDGER-DRAIN-2',
+                zookeeper: zookeeperConf,
+                kafka: { ...consumerKafkaConf, compressionType: 'none' },
+                groupId, topic,
+                queueProcessor: (_msg, cb) => cb(),
+            });
+            return consumer2.on('ready', done);
+        });
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer1.close(innerDone),
+            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+        ], done);
+    });
+
+    it('commits a deferred offset before unassigning on rebalance', done => {
+        // queueProcessor returns committable: false and schedules
+        // onEntryCommittable after 3 s — simulates a Kafka status
+        // producer's delivery callback landing during the rebalance wait.
+        // The delay must be longer than the broker's typical rebalance
+        // latency (~1 s in this test environment) so the rebalance
+        // handler actually has work to wait on.
+        const ackDelayMs = 3000;
+        consumer1._queueProcessor = (message, cb) => {
+            setTimeout(() => consumer1.onEntryCommittable(message), ackDelayMs);
+            process.nextTick(() => cb(null, { committable: false }));
+        };
+        consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
+
+        consumer2._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+                assert.ifError(e1);
+                const baseline = base[0].offset;
+
+                consumer1.subscribe();
+                producer.send([{ key: 'k', message: '{"x":1}' }], err => {
+                    assert.ifError(err);
+                });
+
+                // Wait until consumer1 has dispatched the task and the
+                // ledger has the deferred entry, then trigger a rebalance
+                // via consumer2.
+                const waitForDispatch = setInterval(() => {
+                    if (consumer1.getOffsetLedger()
+                            .getProcessingCount(topic) === 0) {
+                        return;
+                    }
+                    clearInterval(waitForDispatch);
+                    consumer2.subscribe();
+                }, 50);
+
+                // After consumer1 unassigns (which only happens once the
+                // ledger drains, thanks to the wait), query the broker
+                // via consumer2 (which by then owns the partition or can
+                // see the committed offset). The deferred offset should
+                // have been committed before consumer1 released the
+                // partition.
+                consumer1.once('unassign', () => {
+                    setTimeout(() => {
+                        consumer2._consumer.committed(
+                            [{ topic, partition: 0 }], 5000, (e2, c) => {
+                                assert.ifError(e2);
+                                assert.strictEqual(c[0].offset,
+                                    baseline + 1,
+                                    'expected committed offset to advance ' +
+                                    `from ${baseline} to ${baseline + 1} ` +
+                                    'after deferred onEntryCommittable, ' +
+                                    `but it stayed at ${c[0].offset}`);
+                                done();
+                            });
+                    }, 1000);
+                });
+            });
+    }).timeout(60000);
+});
+
 describe('BackbeatConsumer concurrency tests', () => {
     const topicConc = 'backbeat-consumer-spec-conc-1000';
     const groupIdConc = `replication-group-conc-${Math.random()}`;
