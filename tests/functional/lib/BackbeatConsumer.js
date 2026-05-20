@@ -380,6 +380,132 @@ describe('BackbeatConsumer rebalance tests', () => {
     }).timeout(60000);
 });
 
+describe('BackbeatConsumer rebalance during batch processing', () => {
+    // Smoke test that exercises the rebalance handler while a batch of
+    // messages is being processed. Catches regressions where offsets
+    // can be dropped at the boundary between processing and rebalance.
+    // The pinpoint sync-tail race is covered by the TaskScheduler unit
+    // test (`should run the per-task callback before drain when the
+    // last task completes`).
+    const topic = 'backbeat-consumer-spec-sync-tail';
+    const groupId = `replication-group-sync-tail-${Math.random()}`;
+    let producer;
+    let consumer1;
+    let consumer2;
+
+    before(function before(done) {
+        this.timeout(60000);
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100,
+            compressionType: 'none',
+        });
+        consumer1 = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-SYNC-TAIL-1',
+            zookeeper: zookeeperConf,
+            kafka: { ...consumerKafkaConf, compressionType: 'none' },
+            groupId, topic,
+            queueProcessor: (_msg, cb) => cb(),
+            bootstrap: true,
+        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer1.on('ready', innerDone),
+        ], err => {
+            if (err) {return done(err);}
+            consumer2 = new BackbeatConsumer({
+                clientId: 'BackbeatConsumer-SYNC-TAIL-2',
+                zookeeper: zookeeperConf,
+                kafka: { ...consumerKafkaConf, compressionType: 'none' },
+                groupId, topic,
+                queueProcessor: (_msg, cb) => cb(),
+            });
+            return consumer2.on('ready', done);
+        });
+    });
+
+    after(function after(done) {
+        this.timeout(10000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => consumer1.close(innerDone),
+            innerDone => (consumer2 ? consumer2.close(innerDone) : innerDone()),
+        ], done);
+    });
+
+    it('commits all task offsets when rebalance fires during a batch', done => {
+        const N = 10;
+        let processed = 0;
+        consumer1._queueProcessor = (_message, cb) => {
+            processed++;
+            process.nextTick(cb);
+        };
+        consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
+
+        consumer2._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+                assert.ifError(e1);
+                const baseline = base[0].offset;
+
+                consumer1.subscribe();
+                const messages = [];
+                for (let i = 0; i < N; i++) {
+                    messages.push({ key: `k${i}`, message: `{"i":${i}}` });
+                }
+                producer.send(messages, err => {
+                    assert.ifError(err);
+                });
+
+                // Trigger consumer2.subscribe() once consumer1 has
+                // started processing the batch — that way the
+                // rebalance fires while the batch is in flight (some
+                // tasks already done, some still running). The
+                // synchronous-tail ordering matters for whichever task
+                // happens to be the last to flip the queue's running
+                // counter to zero.
+                let triggered = false;
+                consumer1.on('consumed', () => {
+                    if (triggered) {return;}
+                    triggered = true;
+                    consumer2.subscribe();
+                });
+
+                // Wait for processing + rebalance to settle, then
+                // verify all N offsets reached the broker. Use consumer1
+                // (still connected) and retry on transient "Local:
+                // Timed out" errors that can occur while the rebalance
+                // is mid-flight.
+                const queryCommitted = (attempts, finalCb) => {
+                    consumer1._consumer.committed(
+                        [{ topic, partition: 0 }], 5000, (e2, c) => {
+                            if (e2 && attempts > 0) {
+                                return setTimeout(
+                                    () => queryCommitted(attempts - 1,
+                                        finalCb),
+                                    1000);
+                            }
+                            return finalCb(e2, c);
+                        });
+                };
+                const checkInterval = setInterval(() => {
+                    if (processed < N) {
+                        return;
+                    }
+                    clearInterval(checkInterval);
+                    setTimeout(() => queryCommitted(10, (e2, c) => {
+                        assert.ifError(e2);
+                        assert.strictEqual(c[0].offset, baseline + N,
+                            'expected committed offset to advance ' +
+                            `from ${baseline} to ${baseline + N} ` +
+                            `after ${N} tasks processed during ` +
+                            `rebalance, but it stayed at ${c[0].offset}`);
+                        done();
+                    }), 3000);
+                }, 100);
+            });
+    }).timeout(60000);
+});
+
 describe('BackbeatConsumer concurrency tests', () => {
     const topicConc = 'backbeat-consumer-spec-conc-1000';
     const groupIdConc = `replication-group-conc-${Math.random()}`;

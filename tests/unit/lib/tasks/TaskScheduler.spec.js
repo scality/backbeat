@@ -233,6 +233,23 @@ describe('TaskScheduler', () => {
             sinon.stub(taskScheduler, 'idle').returns(false);
             assert.doesNotThrow(() => taskScheduler._tryDrain());
         });
+
+        it('should run the per-task callback before drain when the last ' +
+           'task completes', done => {
+            const order = [];
+            const taskScheduler = new TaskScheduler(
+                (ctx, cb) => process.nextTick(cb));
+            taskScheduler.setDrain(() => {
+                order.push('drain');
+                try {
+                    assert.deepStrictEqual(order, ['done', 'drain']);
+                    done();
+                } catch (e) {
+                    done(e);
+                }
+            });
+            taskScheduler.push({}, () => order.push('done'));
+        });
     });
 
     describe('setDrain', () => {
