@@ -553,16 +553,128 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
         ], done);
     });
 
-    it('commits a deferred offset before unassigning on rebalance', done => {
-        // queueProcessor returns committable: false and schedules
-        // onEntryCommittable after 3 s — simulates a Kafka status
-        // producer's delivery callback landing during the rebalance wait.
-        // The delay must be longer than the broker's typical rebalance
-        // latency (~1 s in this test environment) so the rebalance
-        // handler actually has work to wait on.
+    // Three timepoints exercise the rebalance wait predicate
+    // (queue.idle AND ledger.empty):
+    //   (1) initial check — both already drained, IDLE path
+    //   (2) queue drains while ledger was already empty — completes
+    //       via the synchronous tail of the last task processed
+    //   (3) ledger drains via 'empty' event while queue was idle —
+    //       the Pattern A (committable: false + deferred ack) case
+
+    it('takes the IDLE path when both queue and ledger are already ' +
+       'drained at revoke time', done => {
+        consumer1._queueProcessor = (_msg, cb) => process.nextTick(cb);
+        consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
+
+        consumer2._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+                assert.ifError(e1);
+                const baseline = base[0].offset;
+
+                consumer1.subscribe();
+                // No producer.send — consumer1 sits idle. Trigger the
+                // rebalance immediately; queue is idle and ledger is
+                // empty when revoke fires.
+                consumer2.subscribe();
+
+                consumer1.once('unassign', () => {
+                    assert.strictEqual(
+                        consumer1.getOffsetLedger()
+                            .getProcessingCount(topic),
+                        0);
+                    setTimeout(() => {
+                        consumer1._consumer.committed(
+                            [{ topic, partition: 0 }], 5000, (e2, c) => {
+                                assert.ifError(e2);
+                                assert.strictEqual(c[0].offset, baseline,
+                                    'committed offset should be unchanged ' +
+                                    'when there was no work pending');
+                                done();
+                            });
+                    }, 1000);
+                });
+            });
+    }).timeout(60000);
+
+    it('completes the wait when the queue drains and ledger is empty',
+    done => {
+        // committable: true (default) tasks — when the last task
+        // completes, _onEntryProcessingDone calls onEntryCommittable
+        // which drains the ledger from the same code path that drains
+        // the queue. Exercises the "queue + ledger drain together"
+        // transition.
+        const N = 5;
+        let processed = 0;
+        consumer1._queueProcessor = (_msg, cb) => {
+            processed++;
+            // small delay so the rebalance has time to land
+            // mid-batch (queue non-idle when revoke fires).
+            setTimeout(cb, 100);
+        };
+        consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
+
+        consumer2._consumer.committed(
+            [{ topic, partition: 0 }], 5000, (e1, base) => {
+                assert.ifError(e1);
+                const baseline = base[0].offset;
+
+                consumer1.subscribe();
+                const messages = [];
+                for (let i = 0; i < N; i++) {
+                    messages.push({ key: `q${i}`, message: `{"i":${i}}` });
+                }
+                producer.send(messages, err => assert.ifError(err));
+
+                let triggered = false;
+                consumer1.on('consumed', () => {
+                    if (triggered) {return;}
+                    triggered = true;
+                    consumer2.subscribe();
+                });
+
+                const checkInterval = setInterval(() => {
+                    if (processed < N) {return;}
+                    clearInterval(checkInterval);
+                    setTimeout(() => {
+                        const queryCommitted = (attempts, cb) => {
+                            consumer1._consumer.committed(
+                                [{ topic, partition: 0 }], 5000,
+                                (e2, c) => {
+                                    if (e2 && attempts > 0) {
+                                        return setTimeout(() =>
+                                            queryCommitted(
+                                                attempts - 1, cb),
+                                            1000);
+                                    }
+                                    return cb(e2, c);
+                                });
+                        };
+                        queryCommitted(10, (e2, c) => {
+                            assert.ifError(e2);
+                            assert.strictEqual(c[0].offset,
+                                baseline + N,
+                                'expected committed offset to advance ' +
+                                `from ${baseline} to ${baseline + N} ` +
+                                `after ${N} tasks processed during ` +
+                                `rebalance, but it stayed at ${c[0].offset}`);
+                            done();
+                        });
+                    }, 2000);
+                }, 100);
+            });
+    }).timeout(60000);
+
+    it('completes the wait when the ledger drains via the empty event',
+    done => {
+        // queueProcessor returns committable: false (the Pattern A
+        // flow used by replication / copy-location). A deferred
+        // onEntryCommittable lands later, simulating the Kafka status
+        // producer's delivery callback. The OffsetLedger 'empty' event
+        // wakes up the rebalance handler.
         const ackDelayMs = 3000;
         consumer1._queueProcessor = (message, cb) => {
-            setTimeout(() => consumer1.onEntryCommittable(message), ackDelayMs);
+            setTimeout(
+                () => consumer1.onEntryCommittable(message), ackDelayMs);
             process.nextTick(() => cb(null, { committable: false }));
         };
         consumer2._queueProcessor = (_msg, cb) => process.nextTick(cb);
@@ -577,9 +689,6 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
                     assert.ifError(err);
                 });
 
-                // Wait until consumer1 has dispatched the task and the
-                // ledger has the deferred entry, then trigger a rebalance
-                // via consumer2.
                 const waitForDispatch = setInterval(() => {
                     if (consumer1.getOffsetLedger()
                             .getProcessingCount(topic) === 0) {
@@ -589,12 +698,6 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
                     consumer2.subscribe();
                 }, 50);
 
-                // After consumer1 unassigns (which only happens once the
-                // ledger drains, thanks to the wait), query the broker
-                // via consumer2 (which by then owns the partition or can
-                // see the committed offset). The deferred offset should
-                // have been committed before consumer1 released the
-                // partition.
                 consumer1.once('unassign', () => {
                     setTimeout(() => {
                         consumer2._consumer.committed(
