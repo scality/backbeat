@@ -544,6 +544,15 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
         });
     });
 
+    afterEach(() => {
+        // Tests in this describe block share consumer1/consumer2.
+        // Unsubscribe both between tests so partition assignment from
+        // one test doesn't leak into the next.
+        consumer1._consumer.unsubscribe();
+        consumer2._consumer.unsubscribe();
+        consumer1.removeAllListeners('unassign');
+    });
+
     after(function after(done) {
         this.timeout(10000);
         async.parallel([

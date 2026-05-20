@@ -169,6 +169,93 @@ describe('OffsetLedger', () => {
         });
     });
 
+    describe(`'empty' event`, () => {
+        it('should emit "empty" when the in-flight count for a topic ' +
+           'transitions to zero', done => {
+            const ledger = new OffsetLedger();
+            ledger.on('empty', topic => {
+                assert.strictEqual(topic, 'topic');
+                assert.strictEqual(ledger.getProcessingCount('topic'), 0);
+                done();
+            });
+            ledger.onOffsetConsumed('topic', 0, 1);
+            ledger.onOffsetProcessed('topic', 0, 1);
+        });
+
+        it('should not emit "empty" when count goes from N to N-1 (still ' +
+           'non-zero)', done => {
+            const ledger = new OffsetLedger();
+            ledger.on('empty', () => {
+                done(new Error('unexpected empty emit'));
+            });
+            ledger.onOffsetConsumed('topic', 0, 1);
+            ledger.onOffsetConsumed('topic', 0, 2);
+            ledger.onOffsetProcessed('topic', 0, 1);
+            // Wait a tick to confirm no deferred emit fires.
+            setImmediate(() => {
+                assert.strictEqual(ledger.getProcessingCount('topic'), 1);
+                done();
+            });
+        });
+
+        it('should only emit for the topic whose count went to zero', done => {
+            const ledger = new OffsetLedger();
+            const emits = [];
+            ledger.on('empty', topic => emits.push(topic));
+            ledger.onOffsetConsumed('topic1', 0, 1);
+            ledger.onOffsetConsumed('topic2', 0, 1);
+            ledger.onOffsetProcessed('topic1', 0, 1);
+            setImmediate(() => {
+                assert.deepStrictEqual(emits, ['topic1']);
+                assert.strictEqual(ledger.getProcessingCount('topic2'), 1);
+                done();
+            });
+        });
+
+        it('should defer emit via nextTick so callers can finish their ' +
+           'synchronous work', done => {
+            const ledger = new OffsetLedger();
+            let processedReturned = false;
+            ledger.on('empty', () => {
+                assert.strictEqual(processedReturned, true,
+                    'emit must fire after onOffsetProcessed returns');
+                done();
+            });
+            ledger.onOffsetConsumed('topic', 0, 1);
+            ledger.onOffsetProcessed('topic', 0, 1);
+            processedReturned = true;
+        });
+
+        it('should not emit if a new entry is consumed between scheduling ' +
+           'and firing the deferred emit', done => {
+            const ledger = new OffsetLedger();
+            ledger.on('empty', () => {
+                done(new Error('emit should have been suppressed'));
+            });
+            ledger.onOffsetConsumed('topic', 0, 1);
+            ledger.onOffsetProcessed('topic', 0, 1);
+            // Push a new entry before the deferred emit fires.
+            ledger.onOffsetConsumed('topic', 0, 2);
+            setImmediate(() => {
+                assert.strictEqual(ledger.getProcessingCount('topic'), 1);
+                done();
+            });
+        });
+
+        it('should not schedule a nextTick when no listeners are ' +
+           'registered (steady-state hot path)', () => {
+            const ledger = new OffsetLedger();
+            // No listener attached — would-be emits should be skipped
+            // entirely. We can't directly observe the absence of the
+            // nextTick, but we can verify nothing throws and behavior
+            // is correct.
+            ledger.onOffsetConsumed('topic', 0, 1);
+            const committable = ledger.onOffsetProcessed('topic', 0, 1);
+            assert.strictEqual(committable, 2);
+            assert.strictEqual(ledger.getProcessingCount('topic'), 0);
+        });
+    });
+
     it('should be able to export the ledger in JSON format', () => {
         const ledger = new OffsetLedger();
 
