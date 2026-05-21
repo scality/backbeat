@@ -65,6 +65,28 @@ const connectorConfig = {
     'heartbeat.interval.ms': 10000,
 };
 
+const connectorConfigSMT = {
+    ...connectorConfig,
+    'output.schema.key': JSON.stringify({
+        type: 'record',
+        name: 'keySchema',
+        fields: [{
+            name: 'documentKey',
+            type: [{
+                type: 'record',
+                name: 'documentKeyRecord',
+                fields: [{
+                    name: '_id',
+                    type: ['string', 'null'],
+                }],
+            }, 'null'],
+        }],
+    }),
+    'key.converter': 'org.apache.kafka.connect.storage.StringConverter',
+    'transforms': 'stripObjectKey',
+    'transforms.stripObjectKey.type': constants.transformObjectKeyClass,
+};
+
 describe('ConnectorsManager', () => {
     let connectorsManager;
     let connector1;
@@ -121,10 +143,17 @@ describe('ConnectorsManager', () => {
     });
 
     describe('_getDefaultConnectorConfiguration', () => {
-        it('should return default configuration', () => {
+        it('should return legacy configuration when transformObjectKey is disabled', () => {
             const config = connectorsManager._getDefaultConnectorConfiguration(
                 'source-connector');
             assert.deepEqual(config, connectorConfig);
+        });
+
+        it('should return SMT configuration when transformObjectKey is enabled', () => {
+            connectorsManager._transformObjectKey = true;
+            const config = connectorsManager._getDefaultConnectorConfiguration(
+                'source-connector');
+            assert.deepEqual(config, connectorConfigSMT);
         });
     });
 
@@ -184,6 +213,52 @@ describe('ConnectorsManager', () => {
             assert.strictEqual(connectors[0].config['offset.partitiom.name'], 'partition-name');
             assert.strictEqual(connectors[0].config['topic.namespace.map'], '{"*":"oplog"}');
             assert.strictEqual(connectors[0].isRunning, true);
+        });
+
+        it('should strip stale SMT keys from oldConfig when the SMT is unavailable', async () => {
+            const config = {
+                ...connectorConfig,
+                // Simulate a previous run where the SMT was active: the
+                // stored connector config still references the SMT class +
+                // converter. We expect _processOldConnectors to drop those
+                // keys when transformObjectKey is now disabled.
+                'transforms': 'stripObjectKey',
+                'transforms.stripObjectKey.type': constants.transformObjectKeyClass,
+                'key.converter': 'org.apache.kafka.connect.storage.StringConverter',
+            };
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
+                .resolves(config);
+            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList')
+                .returns(['bucket1']);
+            sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+            connectorsManager._transformObjectKey = false;
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
+            assert.strictEqual(connectors.length, 1);
+            assert.strictEqual(connectors[0].config['transforms'], undefined);
+            assert.strictEqual(connectors[0].config['transforms.stripObjectKey.type'], undefined);
+            assert.strictEqual(connectors[0].config['key.converter'], undefined);
+            // legacy key schema is restored, not dropped
+            assert.strictEqual(connectors[0].config['output.schema.key'],
+                constants.defaultConnectorConfig['output.schema.key']);
+        });
+
+        it('should keep SMT keys on oldConfig when transformObjectKey is enabled', async () => {
+            const config = {
+                ...connectorConfig,
+                'transforms': 'stripObjectKey',
+                'transforms.stripObjectKey.type': constants.transformObjectKeyClass,
+                'key.converter': 'org.apache.kafka.connect.storage.StringConverter',
+            };
+            sinon.stub(connectorsManager._kafkaConnect, 'getConnectorConfig')
+                .resolves(config);
+            sinon.stub(connectorsManager._pipelineFactory, 'getOldConnectorBucketList')
+                .returns(['bucket1']);
+            sinon.stub(connectorsManager._kafkaConnect, 'deleteConnector');
+            connectorsManager._transformObjectKey = true;
+            const connectors = await connectorsManager._processOldConnectors(['source-connector']);
+            assert.strictEqual(connectors[0].config['transforms'], 'stripObjectKey');
+            assert.strictEqual(connectors[0].config['transforms.stripObjectKey.type'],
+                constants.transformObjectKeyClass);
         });
 
         it('should warn when the number of retrieved bucket in a connector exceeds the limit', async () => {
@@ -455,13 +530,16 @@ describe('ConnectorsManager', () => {
             sinon.restore();
         });
 
-        it('should schedule connector updates', () => {
-            const updateConnectorsStub = sinon.stub(connectorsManager, '_updateConnectors');
+        it('should schedule connector updates', async () => {
+            const updateConnectorsStub = sinon.stub(connectorsManager, '_updateConnectors')
+                .resolves();
+            let scheduledCb;
             sinon.stub(schedule, 'scheduleJob').callsFake((rule, cb) => {
-                cb();
+                scheduledCb = cb;
             });
             connectorsManager.scheduleConnectorUpdates();
-            assert(updateConnectorsStub.called);
+            await scheduledCb();
+            assert(updateConnectorsStub.calledOnce);
         });
     });
 });

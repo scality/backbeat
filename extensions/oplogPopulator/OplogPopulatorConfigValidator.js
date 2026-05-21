@@ -11,6 +11,10 @@ const joiSchema = joi.object({
     probeServer: probeServerJoi.default(),
     connectorsUpdateCronRule: joi.string().default('*/1 * * * * *'),
     heartbeatIntervalMs: joi.number().default(10000),
+    // When true, oplog source connectors use the TransformObjectKey SMT to
+    // key messages by the raw S3 object key (BB-768). Enable only once the
+    // Kafka Connect image ships the TransformObjectKey plugin.
+    transformObjectKey: joi.boolean().default(false),
 });
 
 function configValidator(backbeatConfig, extConfig) {

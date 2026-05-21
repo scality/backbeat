@@ -277,6 +277,7 @@ class OplogPopulator {
                 cronRule: this._config.connectorsUpdateCronRule,
                 prefix: this._config.prefix,
                 heartbeatIntervalMs: this._config.heartbeatIntervalMs,
+                transformObjectKey: this._config.transformObjectKey,
                 kafkaConnectHost: this._config.kafkaConnectHost,
                 kafkaConnectPort: this._config.kafkaConnectPort,
                 metricsHandler: this._metricsHandler,

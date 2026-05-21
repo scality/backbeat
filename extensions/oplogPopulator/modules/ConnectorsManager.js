@@ -21,6 +21,7 @@ const paramsJoi = joi.object({
     cronRule: joi.string().required(),
     prefix: joi.string(),
     heartbeatIntervalMs: joi.number().required(),
+    transformObjectKey: joi.boolean().default(false),
     kafkaConnectHost: joi.string().required(),
     kafkaConnectPort: joi.number().required(),
     metricsHandler: joi.object()
@@ -81,6 +82,11 @@ class ConnectorsManager extends EventEmitter {
         this._oldConnectors = [];
         this._allocationStrategy = params.allocationStrategy;
         this._pipelineFactory = params.pipelineFactory;
+        // When true, connectors are configured with the TransformObjectKey
+        // SMT so the oplog message key is the raw S3 object key. Enabled via
+        // the oplogPopulator 'transformObjectKey' config flag, set by the
+        // operator once Kafka Connect ships the TransformObjectKey plugin.
+        this._transformObjectKey = params.transformObjectKey || false;
     }
 
     /**
@@ -102,6 +108,7 @@ class ConnectorsManager extends EventEmitter {
         };
         return {
             ...constants.defaultConnectorConfig,
+            ...(this._transformObjectKey ? constants.smtKeyConfig : {}),
             ...connectorConfig
         };
     }
@@ -165,12 +172,26 @@ class ConnectorsManager extends EventEmitter {
                 }
                 // generating a new config as the old config can be outdated (wrong topic for example)
                 const config = this._getDefaultConnectorConfiguration(connectorName);
+                // update existing connector config while leaving in fields that were
+                // added manually like 'offset.topic.name'
+                const mergedConfig = { ...oldConfig, ...config };
+                // When the SMT is disabled, scrub any SMT-only keys that may
+                // linger in oldConfig from a previous run with it enabled.
+                // Otherwise the connector keeps referencing the missing
+                // TransformObjectKey class and fails to start. The SMT-only
+                // keys are those in smtKeyConfig that the legacy base does not
+                // also define (output.schema.key is restored, not removed).
+                if (!this._transformObjectKey) {
+                    for (const k of Object.keys(constants.smtKeyConfig)) {
+                        if (!(k in constants.defaultConnectorConfig)) {
+                            delete mergedConfig[k];
+                        }
+                    }
+                }
                 // initializing connector
                 const connector = new Connector({
                     name: connectorName,
-                    // update existing connector config while leaving in fields that were
-                    // added manually like 'offset.topic.name'
-                    config: { ...oldConfig, ...config },
+                    config: mergedConfig,
                     buckets,
                     getPipeline: this._pipelineFactory.getPipeline,
                     isRunning: true,

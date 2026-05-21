@@ -24,4 +24,29 @@ describe('OplogPopulatorConfigValidator', () => {
             assert.strictEqual(result.value.locationStrippingBytesThreshold, 100 * 1000000);
         });
     });
+
+    describe('transformObjectKey validation', () => {
+        it('should default to false when not provided', () => {
+            const result = OplogPopulatorConfigJoiSchema.validate(defaultConfig);
+            assert.ifError(result.error);
+            assert.strictEqual(result.value.transformObjectKey, false);
+        });
+
+        it('should accept an explicit boolean', () => {
+            const result = OplogPopulatorConfigJoiSchema.validate({
+                ...defaultConfig,
+                transformObjectKey: true,
+            });
+            assert.ifError(result.error);
+            assert.strictEqual(result.value.transformObjectKey, true);
+        });
+
+        it('should reject a non-boolean', () => {
+            const result = OplogPopulatorConfigJoiSchema.validate({
+                ...defaultConfig,
+                transformObjectKey: 'yes',
+            });
+            assert(result.error);
+        });
+    });
 });
