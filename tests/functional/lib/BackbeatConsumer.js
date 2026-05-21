@@ -562,13 +562,10 @@ describe('BackbeatConsumer ledger drain on rebalance', () => {
         ], done);
     });
 
-    // Three timepoints exercise the rebalance wait predicate
-    // (queue.idle AND ledger.empty):
-    //   (1) initial check — both already drained, IDLE path
-    //   (2) queue drains while ledger was already empty — completes
-    //       via the synchronous tail of the last task processed
-    //   (3) ledger drains via 'empty' event while queue was idle —
-    //       the Pattern A (committable: false + deferred ack) case
+    // Two of the three timepoints of the wait predicate
+    // (queue.idle AND ledger.empty) are exercised here; the queue-drain
+    // case is covered by the `BackbeatConsumer rebalance during batch
+    // processing` suite above.
 
     it('takes the IDLE path when both queue and ledger are already ' +
        'drained at revoke time', done => {
