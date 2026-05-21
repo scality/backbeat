@@ -169,7 +169,7 @@ describe('OffsetLedger', () => {
         });
     });
 
-    describe(`'empty' event`, () => {
+    describe('\'empty\' event', () => {
         it('should emit "empty" when the in-flight count for a topic ' +
            'transitions to zero', done => {
             const ledger = new OffsetLedger();
