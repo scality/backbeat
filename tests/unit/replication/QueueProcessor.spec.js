@@ -136,6 +136,115 @@ describe('Queue Processor', () => {
         });
     });
 
+    describe('processReplicationEntry fan-out', () => {
+        function makeKafkaEntry(backends) {
+            return {
+                value: JSON.stringify({
+                    bucket: 'src-bucket',
+                    key: 'obj',
+                    value: JSON.stringify({
+                        'md-model-version': 2,
+                        'replicationInfo': {
+                            status: 'PENDING',
+                            content: ['DATA', 'METADATA'],
+                            destination: 'arn:aws:s3:::legacy-dest',
+                            role: 'arn:aws:iam::111:role/src',
+                            backends,
+                        },
+                    }),
+                }),
+            };
+        }
+
+        beforeEach(() => {
+            qp.taskScheduler = { push: sinon.stub().callsArgWith(1, null) };
+        });
+
+        it('dispatches one task when a single backend matches this.site', async () => {
+            const kafkaEntry = makeKafkaEntry([
+                {
+                    site: 'site-crr',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+            ]);
+
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.calledOnce(qp.taskScheduler.push);
+
+            const pushed = qp.taskScheduler.push.firstCall.args[0];
+            assert.strictEqual(pushed.entry.getDestination(), 'arn:aws:s3:::bucket-a');
+            assert.strictEqual(pushed.entry.getRole(), 'arn:aws:iam::222:role/dst');
+        });
+
+        it('dispatches one task per backend when several share this.site', async () => {
+            const kafkaEntry = makeKafkaEntry([
+                {
+                    site: 'site-crr',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+                {
+                    site: 'site-crr',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+            ]);
+
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.calledTwice(qp.taskScheduler.push);
+
+            const destinations = qp.taskScheduler.push.getCalls().map(c => c.args[0].entry.getDestination()).sort();
+            assert.deepStrictEqual(destinations, [
+                'arn:aws:s3:::bucket-a',
+                'arn:aws:s3:::bucket-b',
+            ]);
+        });
+
+        it('skips when no PENDING backend matches this.site', async () => {
+            const kafkaEntry = makeKafkaEntry([
+                {
+                    site: 'site-other',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-x',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+            ]);
+
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
+
+        it('skips PENDING backend that is for a different site', async () => {
+            const kafkaEntry = makeKafkaEntry([
+                {
+                    site: 'site-crr',
+                    status: 'COMPLETED',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-a',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+                {
+                    site: 'site-other',
+                    status: 'PENDING',
+                    dataStoreVersionId: '',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    role: 'arn:aws:iam::222:role/dst',
+                },
+            ]);
+
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
+    });
+
     describe('constructor', () => {
         it('should use s3c site\'s host as a destination host', () => {
             const config = getQueueProcessorConfig();

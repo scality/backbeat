@@ -18,8 +18,8 @@ const { ObjectMD } = require('arsenal/build/lib/models');
 
 function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)
-        .toCompletedEntry('sf')
-        .toCompletedEntry('replicationaws')
+        .toCompletedEntry({ site: 'sf' })
+        .toCompletedEntry({ site: 'replicationaws' })
         .setSite('sf')
         .setOriginOp('s3:ObjectCreated:Put');
 }
@@ -32,7 +32,7 @@ function getRefreshedEntry() {
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {
     assert.strictEqual(
-        updatedSourceEntry.getReplicationSiteStatus(site), status);
+        updatedSourceEntry.getReplicationSiteStatus({ site }), status);
 }
 
 const metricHandlers = ReplicationStatusProcessor.loadMetricHandlers(
@@ -85,12 +85,54 @@ describe('UpdateReplicationStatus', () => {
         it('should return null when site status is FAILED and existing site ' +
         'status is COMPLETED', () => {
             const sourceEntry = getCompletedEntry()
-                  .toFailedEntry('sf')
+                  .toFailedEntry({ site: 'sf' })
                   .setSite('sf');
             const refreshedEntry = getCompletedEntry();
             const updatedSourceEntry = updateReplicationStatus
                   ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
             assert.strictEqual(updatedSourceEntry, null);
+        });
+
+        it('marks the right backend when two share a site (multi-destination)', () => {
+          const _makeMultiDest = () => new ObjectQueueEntry(
+            'bucket', 'key 98500086134471999999RG001  0', {
+                    'md-model-version': 2,
+                    'last-modified': new Date().toISOString(),
+                    'replicationInfo': {
+                        status: 'PROCESSING',
+                        content: ['DATA', 'METADATA'],
+                        destination: 'arn:aws:s3:::legacy',
+                        role: 'arn:aws:iam::111:role/src',
+                        backends: [
+                            { site: 'sf', status: 'COMPLETED',
+                              dataStoreVersionId: '',
+                              destination: 'arn:aws:s3:::bucket-a',
+                              role: 'arn:aws:iam::222:role/dst' },
+                            { site: 'sf', status: 'PENDING',
+                              dataStoreVersionId: '',
+                              destination: 'arn:aws:s3:::bucket-b',
+                              role: 'arn:aws:iam::222:role/dst' },
+                        ],
+                    },
+                });
+            const sourceEntry = _makeMultiDest().setReplicationBackend({
+                site: 'sf',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::222:role/dst',
+            });
+            sourceEntry.setReplicationSiteStatus({
+                site: 'sf',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::222:role/dst',
+            }, 'COMPLETED');
+            const refreshedEntry = _makeMultiDest();
+            const updatedSourceEntry = updateReplicationStatus
+                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            assert.ok(updatedSourceEntry,
+                'expected an entry, not the short-circuit null');
+            const backends = updatedSourceEntry.getReplicationBackends();
+            assert.strictEqual(backends[0].status, 'COMPLETED');
+            assert.strictEqual(backends[1].status, 'COMPLETED');
         });
     });
 

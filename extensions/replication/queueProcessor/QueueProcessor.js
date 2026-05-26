@@ -1,6 +1,7 @@
 'use strict';
 
 const async = require('async');
+const { callbackify } = require('util');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
@@ -18,8 +19,6 @@ const QueueEntry = require('../../../lib/models/QueueEntry');
 const TaskScheduler = require('../../../lib/tasks/TaskScheduler');
 const { getTaskSchedulerQueueKey,
         getTaskSchedulerDedupeKey } = require('./taskSchedulerHelpers');
-const getLocationsFromStorageClass =
-    require('../utils/getLocationsFromStorageClass');
 const ReplicateObject = require('../tasks/ReplicateObject');
 const MultipleBackendTask = require('../tasks/MultipleBackendTask');
 const CopyLocationTask = require('../tasks/CopyLocationTask');
@@ -742,7 +741,7 @@ class QueueProcessor extends EventEmitter {
                 }
                 this._consumer = this._createConsumer(
                     this.topic,
-                    this.processReplicationEntry.bind(this), options);
+                    callbackify(this.processReplicationEntry.bind(this)), options);
                 return this._consumer.once('canary', done);
             },
             done  => {
@@ -865,41 +864,92 @@ class QueueProcessor extends EventEmitter {
      * @param {function} done - callback function
      * @return {undefined}
      */
-    processReplicationEntry(kafkaEntry, done) {
+    async processReplicationEntry(kafkaEntry) {
         const sourceEntry = QueueEntry.createFromKafkaEntry(kafkaEntry);
+
         if (sourceEntry.error) {
             this.logger.error('error processing replication entry', { error: sourceEntry.error });
-            return process.nextTick(() => done(errors.InternalError));
+            throw errors.InternalError;
         }
+
         if (sourceEntry.skip) {
-            // skip message, noop
-            return process.nextTick(done);
+            return;
         }
-        let task;
+
+        const logSkip = () => {
+            this.logger.debug('skip replication entry', { entry: sourceEntry.getLogInfo() });
+        };
+
+        // Route Bucket Queue Entries
         if (sourceEntry instanceof BucketQueueEntry) {
-            if (this.echoMode) {
-                task = new EchoBucket(this);
+            if (!this.echoMode) {
+                logSkip();
+                return;
             }
-            // ignore bucket entry if echo mode disabled
-        } else if (sourceEntry instanceof ObjectQueueEntry) {
-            const replicationStorageClass =
-                sourceEntry.getReplicationStorageClass();
-            const sites = getLocationsFromStorageClass(replicationStorageClass);
-            if (sites.includes(this.site)) {
-                if (this.destConfig.replicationEndpoint &&
-                    replicationBackends.includes(this.destConfig.replicationEndpoint.type)) {
-                    task = new MultipleBackendTask(this);
-                } else {
-                    task = new ReplicateObject(this);
+
+            this.logger.debug('replication entry is being pushed', { entry: sourceEntry.getLogInfo() });
+            await new Promise((resolve, reject) => {
+                this.taskScheduler.push({ task: new EchoBucket(this), entry: sourceEntry, kafkaEntry },
+                    err => err ? reject(err) : resolve());
+            });
+            return;
+        }
+
+        // Route Object Queue Entries
+        if (!(sourceEntry instanceof ObjectQueueEntry)) {
+            logSkip();
+            return;
+        }
+
+        const pendingBackends = sourceEntry.getReplicationBackends()
+            .filter(b => b.status === 'PENDING' && b.site === this.site);
+
+        if (pendingBackends.length === 0) {
+            logSkip();
+            return;
+        }
+
+        const endpointType = this.destConfig.replicationEndpoint?.type;
+        const isCloud = endpointType && replicationBackends.includes(endpointType);
+
+        // Sequential loop over pending backends. Each backend is attempted
+        // independently so a failure on one does not skip the others; the
+        // first error is re-thrown at the end so the Kafka entry is retried.
+        // On retry, the same backends are re-dispatched: the task itself
+        // refreshes the live metadata and short-circuits backends that have
+        // since completed.
+        let firstError = null;
+        for (const backend of pendingBackends) {
+            const task = new (isCloud ? MultipleBackendTask : ReplicateObject)(this);
+            const perBackendEntry = sourceEntry.clone().setReplicationBackend(backend);
+
+            this.logger.debug('replication entry is being pushed', {
+                entry: perBackendEntry.getLogInfo(),
+                destination: backend.destination,
+                role: backend.role,
+            });
+
+            try {
+                await new Promise((resolve, reject) => {
+                    this.taskScheduler.push(
+                        { task, entry: perBackendEntry, kafkaEntry },
+                        err => err ? reject(err) : resolve(),
+                    );
+                });
+            } catch (err) {
+                this.logger.error('error replicating to backend', {
+                    entry: perBackendEntry.getLogInfo(),
+                    destination: backend.destination,
+                    error: err.message,
+                });
+                if (!firstError) {
+                    firstError = err;
                 }
             }
         }
-        if (task) {
-            this.logger.debug('replication entry is being pushed', { entry: sourceEntry.getLogInfo() });
-            return this.taskScheduler.push({ task, entry: sourceEntry, kafkaEntry }, done);
+        if (firstError) {
+            throw firstError;
         }
-        this.logger.debug('skip replication entry', { entry: sourceEntry.getLogInfo() });
-        return process.nextTick(done);
     }
 
     /**

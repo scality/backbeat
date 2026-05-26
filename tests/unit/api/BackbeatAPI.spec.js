@@ -609,4 +609,85 @@ describe('BackbeatAPI', () => {
             });
         });
     });
+
+    describe('_pushToCRRRetryKafkaTopics', () => {
+        it('published retry messages identify the failed backend by site, destination and role', done => {
+            const queueEntry = new ObjectQueueEntry('src-bucket', 'src-key', {
+                'md-model-version': 2,
+                'owner-display-name': 'Bart',
+                'owner-id': 'cid',
+                'content-length': 0,
+                'content-md5': 'd41d8cd98f00b204e9800998ecf8427e',
+                'last-modified': '2026-06-10T00:00:00.000Z',
+                'x-amz-version-id': 'null',
+                'x-amz-server-version-id': '',
+                'x-amz-storage-class': 'sf',
+                'acl': { Canned: 'private', FULL_CONTROL: [], WRITE_ACP: [], READ: [], READ_ACP: [] },
+                'key': '',
+                'location': null,
+                'isDeleteMarker': false,
+                'tags': {},
+                'replicationInfo': {
+                    status: 'PENDING',
+                    backends: [{
+                        site: 'sf',
+                        status: 'PENDING',
+                        destination: 'arn:aws:s3:::bucket-a',
+                        role: 'arn:aws:iam::111:role/r',
+                        dataStoreVersionId: '',
+                    }, {
+                        site: 'sf',
+                        status: 'PENDING',
+                        destination: 'arn:aws:s3:::bucket-b',
+                        role: 'arn:aws:iam::222:role/r',
+                        dataStoreVersionId: '',
+                    }],
+                    content: ['DATA'],
+                    destination: 'arn:aws:s3:::bucket-a',
+                    storageClass: 'sf',
+                    role: 'arn:aws:iam::000:role/src,arn:aws:iam::111:role/r',
+                },
+                'versionId': 'v1',
+            });
+            queueEntry.setReplicationBackend({
+                site: 'sf',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::222:role/r',
+            });
+
+            const statusMessages = [];
+            const retryMessages = [];
+            sinon.stub(bbapi, '_crrStatusProducer').value({
+                send: (entries, cb) => {
+                    statusMessages.push(...entries);
+                    process.nextTick(cb);
+                },
+            });
+            sinon.stub(bbapi, '_crrProducer').value({
+                send: (entries, cb) => {
+                    retryMessages.push(...entries);
+                    process.nextTick(cb);
+                },
+            });
+
+            bbapi._pushToCRRRetryKafkaTopics(queueEntry, err => {
+                assert.ifError(err);
+                assert.strictEqual(statusMessages.length, 1);
+                assert.strictEqual(retryMessages.length, 1);
+
+                const expected = {
+                    site: 'sf',
+                    destination: 'arn:aws:s3:::bucket-b',
+                    role: 'arn:aws:iam::222:role/r',
+                };
+                for (const msg of [statusMessages[0], retryMessages[0]]) {
+                    const payload = JSON.parse(msg.message);
+                    assert.strictEqual(payload.site, expected.site);
+                    assert.strictEqual(payload.destination, expected.destination);
+                    assert.strictEqual(payload.role, expected.role);
+                }
+                done();
+            });
+        });
+    });
 });

@@ -56,7 +56,7 @@ class MultipleBackendTask extends ReplicateObject {
 
     _setupRolesOnce(entry, log, cb) {
         log.debug('getting bucket replication', { entry: entry.getLogInfo() });
-        const entryRolesString = entry.getReplicationRoles();
+        const entryRolesString = entry.getReplicationRoles(entry.getReplicationBackend());
         let errMessage;
         let entryRoles;
         if (entryRolesString !== undefined) {
@@ -85,7 +85,8 @@ class MultipleBackendTask extends ReplicateObject {
             .then(data => {
                 const replicationEnabled = data.ReplicationConfiguration.Rules
                     .some(rule => rule.Status === 'Enabled' &&
-                        entry.getObjectKey().startsWith(rule.Prefix));
+                        entry.getObjectKey().startsWith(
+                            rule.Filter?.Prefix ?? rule.Prefix ?? ''));
                 if (!replicationEnabled) {
                     errMessage = 'replication disabled for object';
                     log.debug(errMessage, {
@@ -159,7 +160,8 @@ class MultipleBackendTask extends ReplicateObject {
                     customizeDescription('error parsing metadata blob'));
             }
             const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result)
+                .setReplicationBackend(sourceEntry.getReplicationBackend());
             return cb(null, refreshedEntry);
         });
     }
@@ -317,7 +319,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendAbortMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             UploadId: uploadId,
             RequestUids: log.getSerializedUids(),
@@ -353,7 +355,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendCompleteMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             VersionId: sourceEntry.getEncodedVersionId() || 'null',
             UserMetaData: sourceEntry.getUserMetadata(),
@@ -371,7 +373,7 @@ class MultipleBackendTask extends ReplicateObject {
         
         return this.backbeatSource.send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
                     data.versionId);
                 return doneOnce();
             })
@@ -445,7 +447,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendPutMPUPartCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             PartNumber: partNumber,
             UploadId: uploadId,
@@ -506,7 +508,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendInitiateMPUCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             VersionId: sourceEntry.getEncodedVersionId() || 'null',
             UserMetaData: sourceEntry.getUserMetadata(),
@@ -951,7 +953,7 @@ class MultipleBackendTask extends ReplicateObject {
             Key: sourceEntry.getObjectKey(),
             CanonicalID: sourceEntry.getOwnerId(),
             ContentMD5: sourceEntry.getContentMd5(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             VersionId: sourceEntry.getEncodedVersionId() || 'null',
             UserMetaData: sourceEntry.getUserMetadata(),
@@ -969,7 +971,7 @@ class MultipleBackendTask extends ReplicateObject {
         const writeStartTime = Date.now();
         return this.backbeatSource.send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
                     data.versionId);
 
                 this._publishDataWriteMetrics(size, sourceEntry, writeStartTime);
@@ -1008,10 +1010,10 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendPutObjectTaggingCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             DataStoreVersionId:
-                sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
+                sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
             Tags: JSON.stringify(sourceEntry.getTags()),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
@@ -1022,7 +1024,7 @@ class MultipleBackendTask extends ReplicateObject {
         const writeStartTime = Date.now();
         return this.backbeatSource.send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
                     data.versionId);
                 // TODO : follow-up BB-730 to provide better metrics
                 this._publishMetadataWriteMetrics(JSON.stringify(sourceEntry.getTags()), writeStartTime);
@@ -1065,10 +1067,10 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendDeleteObjectTaggingCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             DataStoreVersionId:
-                sourceEntry.getReplicationSiteDataStoreVersionId(this.site),
+                sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend()),
             SourceBucket: sourceEntry.getBucket(),
             SourceVersionId: sourceEntry.getVersionId(),
             ReplicationEndpointSite: this.site,
@@ -1078,7 +1080,7 @@ class MultipleBackendTask extends ReplicateObject {
         const writeStartTime = Date.now();
         return this.backbeatSource.send(command)
             .then(data => {
-                sourceEntry.setReplicationSiteDataStoreVersionId(this.site,
+                sourceEntry.setReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend(),
                     data.versionId);
                 // TODO : follow-up BB-730 to provide better metrics
                 this._publishMetadataWriteMetrics('', writeStartTime);
@@ -1146,7 +1148,7 @@ class MultipleBackendTask extends ReplicateObject {
         const command = new MultipleBackendDeleteObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
-            StorageType: sourceEntry.getReplicationStorageType(),
+            StorageType: this._getReplicationEndpointType(),
             StorageClass: this.site,
             RequestUids: log.getSerializedUids(),
         });
@@ -1217,7 +1219,7 @@ class MultipleBackendTask extends ReplicateObject {
                     return this._putDeleteMarker(sourceEntry, log, next);
                 }
                 const status = refreshedEntry.getReplicationSiteStatus(
-                    this.site);
+                    sourceEntry.getReplicationBackend());
                 log.debug('refreshed entry site replication info', {
                     entry: refreshedEntry.getLogInfo(),
                     site: this.site, siteStatus: status,
@@ -1236,7 +1238,8 @@ class MultipleBackendTask extends ReplicateObject {
                 // Only put/delete tags if object was previously
                 // replicated. Otherwise we replicate the whole object
                 // which should also replicate the updated tags.
-                const dataStoreVersionId = sourceEntry.getReplicationSiteDataStoreVersionId(this.site);
+                const dataStoreVersionId =
+                    sourceEntry.getReplicationSiteDataStoreVersionId(sourceEntry.getReplicationBackend());
                 if (content.includes('PUT_TAGGING') && dataStoreVersionId) {
                     return this._putObjectTagging(sourceEntry, log, next);
                 }

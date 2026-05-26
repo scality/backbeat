@@ -86,7 +86,8 @@ class UpdateReplicationStatus extends BackbeatTask {
                     customizeDescription('error parsing metadata blob'));
             }
             const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+                sourceEntry.getObjectVersionedKey(), parsedEntry.result)
+                .setReplicationBackend(sourceEntry.getReplicationBackend());
             return cb(null, refreshedEntry);
         });
     }
@@ -125,7 +126,7 @@ class UpdateReplicationStatus extends BackbeatTask {
         const data = {};
         const site = sourceEntry.getSite();
         data[site] = { ops: 1, bytes };
-        const status = sourceEntry.getReplicationSiteStatus(site);
+        const status = sourceEntry.getReplicationSiteStatus(sourceEntry.getReplicationBackend());
         // Report to MetricsProducer with completed/failed metrics.
         if (status === 'COMPLETED' || status === 'FAILED') {
             const entryType = status === 'COMPLETED' ?
@@ -155,24 +156,24 @@ class UpdateReplicationStatus extends BackbeatTask {
      * @return {ObjectQueueEntry} The entry to put on the source
      */
     _getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry) {
+        const backend = sourceEntry.getReplicationBackend();
         const hasMD5Mismatch =
             sourceEntry.getContentMd5() !== refreshedEntry.getContentMd5();
         if (hasMD5Mismatch) {
-            return refreshedEntry.toPendingEntry(sourceEntry.getSite());
+            return refreshedEntry.toPendingEntry(backend);
         }
         try {
             const soureEntryTags = sourceEntry.getTags();
             const refreshedEntryTags = refreshedEntry.getTags();
             assert.deepStrictEqual(soureEntryTags, refreshedEntryTags);
         } catch {
-            return refreshedEntry.toPendingEntry(sourceEntry.getSite());
+            return refreshedEntry.toPendingEntry(backend);
         }
-        return refreshedEntry.toCompletedEntry(sourceEntry.getSite());
+        return refreshedEntry.toCompletedEntry(backend);
     }
 
     _checkStatus(sourceEntry) {
-        const site = sourceEntry.getSite();
-        const status = sourceEntry.getReplicationSiteStatus(site);
+        const status = sourceEntry.getReplicationSiteStatus(sourceEntry.getReplicationBackend());
         const statuses = ['COMPLETED', 'FAILED', 'PENDING'];
         if (!statuses.includes(status)) {
             const msg = `unknown status in replication info: ${status}`;
@@ -184,7 +185,8 @@ class UpdateReplicationStatus extends BackbeatTask {
     _getUpdatedSourceEntry(params, log) {
         const { sourceEntry, refreshedEntry } = params;
         const site = sourceEntry.getSite();
-        const oldStatus = refreshedEntry.getReplicationSiteStatus(site);
+        const backend = sourceEntry.getReplicationBackend();
+        const oldStatus = refreshedEntry.getReplicationSiteStatus(backend);
         if (oldStatus === 'COMPLETED') {
             // COMPLETED is to be considered a final state, we should
             // not be able to override it.
@@ -204,12 +206,12 @@ class UpdateReplicationStatus extends BackbeatTask {
                      });
             return null;
         }
-        const newStatus = sourceEntry.getReplicationSiteStatus(site);
+        const newStatus = sourceEntry.getReplicationSiteStatus(backend);
         let entry;
         if (newStatus === 'COMPLETED' && sourceEntry.getReplicationIsNFS()) {
             entry = this._getNFSUpdatedSourceEntry(sourceEntry, refreshedEntry);
         } else if (newStatus === 'COMPLETED') {
-            entry = refreshedEntry.toCompletedEntry(site);
+            entry = refreshedEntry.toCompletedEntry(backend);
 
             let replayCount = 0;
             if (sourceEntry.getReplayCount() >= 0) {
@@ -238,12 +240,11 @@ class UpdateReplicationStatus extends BackbeatTask {
             }
 
         } else if (newStatus === 'PENDING') {
-            entry = refreshedEntry.toPendingEntry(site);
+            entry = refreshedEntry.toPendingEntry(backend);
         }
-        const versionId =
-            sourceEntry.getReplicationSiteDataStoreVersionId(site);
-        entry.setReplicationSiteDataStoreVersionId(site, versionId);
-        entry.setSite(site);
+        const versionId = sourceEntry.getReplicationSiteDataStoreVersionId(backend);
+        entry.setReplicationSiteDataStoreVersionId(backend, versionId);
+        entry.setReplicationBackend(backend);
         return entry;
     }
 
@@ -325,7 +326,8 @@ class UpdateReplicationStatus extends BackbeatTask {
     _pushReplayEntry(queueEntry, site, log) {
         queueEntry.decReplayCount();
         const count = queueEntry.getReplayCount();
-        const retryEntry = queueEntry.toRetryEntry(site).toKafkaEntry();
+        const backend = queueEntry.getReplicationBackend();
+        const retryEntry = queueEntry.toRetryEntry(backend).toKafkaEntry(backend);
         const topicName = this.replayTopics[count];
         if (topicName && this.replayProducers[topicName]) {
             this.replayProducers[topicName].publishReplayEntry(retryEntry);
@@ -392,7 +394,7 @@ class UpdateReplicationStatus extends BackbeatTask {
             const lastModified = new Date(refreshedEntry.getLastModified());
             this.metricsHandler.replicationLatency(labels, (Date.now() - lastModified) / 1000);
 
-            return refreshedEntry.toFailedEntry(site);
+            return refreshedEntry.toFailedEntry(queueEntry.getReplicationBackend());
         }
         if (count > 0) {
             if (count > totalAttempts) { // might happen if replay config has changed

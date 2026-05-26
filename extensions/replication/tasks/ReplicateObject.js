@@ -4,6 +4,7 @@ const { S3Client, GetBucketReplicationCommand, GetObjectCommand } = require('@aw
 const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
+const ReplicationConfiguration = require('arsenal').models.ReplicationConfiguration;
 
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
@@ -177,13 +178,12 @@ class ReplicateObject extends BackbeatTask {
 
     _getUpdatedSourceEntry(params) {
         const { sourceEntry, replicationStatus } = params;
+        const backend = sourceEntry.getReplicationBackend();
         const entry = replicationStatus === 'COMPLETED' ?
-              sourceEntry.toCompletedEntry(this.site) :
-              sourceEntry.toFailedEntry(this.site);
-        const versionId =
-              sourceEntry.getReplicationSiteDataStoreVersionId(this.site);
-        return entry.setReplicationSiteDataStoreVersionId(this.site,
-            versionId);
+              sourceEntry.toCompletedEntry(backend) :
+              sourceEntry.toFailedEntry(backend);
+        const versionId = sourceEntry.getReplicationSiteDataStoreVersionId(backend);
+        return entry.setReplicationSiteDataStoreVersionId(backend, versionId);
     }
 
     _publishReplicationStatus(sourceEntry, replicationStatus, params) {
@@ -191,7 +191,8 @@ class ReplicateObject extends BackbeatTask {
         const entryParams = { sourceEntry, replicationStatus };
         const updatedSourceEntry = this._getUpdatedSourceEntry(entryParams);
         const updateData = sourceEntry.getReplicationContent().includes('DATA');
-        const kafkaEntries = [updatedSourceEntry.toKafkaEntry(this.site)];
+        const kafkaEntries = [updatedSourceEntry.toKafkaEntry(
+            sourceEntry.getReplicationBackend())];
         this.replicationStatusProducer.send(kafkaEntries, err => {
             if (err) {
                 log.error('error in entry delivery to replication status topic', {
@@ -227,7 +228,7 @@ class ReplicateObject extends BackbeatTask {
     _setupRolesOnce(entry, log, cb) {
         log.debug('getting bucket replication',
             { entry: entry.getLogInfo() });
-        const entryRolesString = entry.getReplicationRoles();
+        const entryRolesString = entry.getReplicationRoles(entry.getReplicationBackend());
         let entryRoles;
         if (entryRolesString !== undefined) {
             entryRoles = entryRolesString.split(',');
@@ -254,7 +255,8 @@ class ReplicateObject extends BackbeatTask {
             .then(data => {
                 const replicationEnabled = (
                 data.ReplicationConfiguration.Rules.some(
-                    rule => entry.getObjectKey().startsWith(rule.Prefix)
+                    rule => entry.getObjectKey().startsWith(
+                        rule.Filter?.Prefix ?? rule.Prefix ?? '')
                         && rule.Status === 'Enabled'));
             if (!replicationEnabled) {
                 log.debug('replication disabled for object',
@@ -266,9 +268,9 @@ class ReplicateObject extends BackbeatTask {
                     'replication disabled for object'));
             }
             const roles = data.ReplicationConfiguration.Role.split(',');
-            if (roles.length !== 2) {
-                log.error('expecting two roles separated by a ' +
-                    'comma in bucket replication configuration',
+            if (roles.length > 2) {
+                log.error('expecting one or two roles in bucket ' +
+                    'replication configuration',
                     {
                         method: 'ReplicateObject._setupRolesOnce',
                         entry: entry.getLogInfo(),
@@ -287,18 +289,45 @@ class ReplicateObject extends BackbeatTask {
                     });
                 return cb(errors.BadRole);
             }
-            if (roles[1] !== entryRoles[1]) {
+            // Pick the rule for this specific backend (multi-destination
+            // configs may share a StorageClass with distinct Bucket /
+            // Account), then derive the expected destination role from
+            // its Account; fall back to literal role[1] for legacy
+            // configs without Account.
+            const entryDestination = entry.getDestination();
+            const entryRoleAccount = entry.getRole()?.split(':')[4];
+            const matchingRule = data.ReplicationConfiguration.Rules.find(rule => {
+                const prefix = rule.Filter?.Prefix ?? rule.Prefix ?? '';
+                return rule.Status === 'Enabled' &&
+                    rule.Destination?.StorageClass === this.site &&
+                    entry.getObjectKey().startsWith(prefix) &&
+                    (!entryDestination || rule.Destination?.Bucket === entryDestination) &&
+                    (!entryRoleAccount || !rule.Destination?.Account
+                        || rule.Destination.Account === entryRoleAccount);
+            });
+            let expectedDestRole;
+            if (matchingRule && matchingRule.Destination.Account) {
+                expectedDestRole = ReplicationConfiguration
+                    .resolveDestinationRole(
+                        data.ReplicationConfiguration.Role,
+                        matchingRule.Destination.Account);
+            } else if (roles.length === 2) {
+                expectedDestRole = roles[1];
+            } else {
+                expectedDestRole = roles[0];
+            }
+            if (expectedDestRole !== entryRoles[1]) {
                 log.error('role in replication entry for target does ' +
                     'not match role in bucket replication configuration ',
                     {
                         method: 'ReplicateObject._setupRolesOnce',
                         entry: entry.getLogInfo(),
                         entryRole: entryRoles[1],
-                        bucketRole: roles[1],
+                        bucketRole: expectedDestRole,
                     });
                 return cb(errors.BadRole);
             }
-            return cb(null, roles[0], roles[1]);
+            return cb(null, entryRoles[0], entryRoles[1]);
         })
         .catch(err => {
             // eslint-disable-next-line no-param-reassign
@@ -380,7 +409,8 @@ class ReplicateObject extends BackbeatTask {
                         customizeDescription('error parsing metadata blob'));
                 }
                 const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                    sourceEntry.getObjectVersionedKey(), parsedEntry.result);
+                    sourceEntry.getObjectVersionedKey(), parsedEntry.result)
+                    .setReplicationBackend(sourceEntry.getReplicationBackend());
                 return cb(null, refreshedEntry);
             })
             .catch(err => {
@@ -615,7 +645,7 @@ class ReplicateObject extends BackbeatTask {
     _putMetadataOnce(entry, mdOnly, log, cb) {
         log.debug('putting metadata', {
             where: 'target', entry: entry.getLogInfo(),
-            replicationStatus: entry.getReplicationSiteStatus(this.site),
+            replicationStatus: entry.getReplicationSiteStatus(entry.getReplicationBackend()),
         });
         const cbOnce = jsutil.once(cb);
 
@@ -815,7 +845,7 @@ class ReplicateObject extends BackbeatTask {
     processQueueEntry(_sourceEntry, kafkaEntry, done) {
         let sourceEntry = _sourceEntry;
         const log = this.logger.newRequestLogger();
-        const destEntry = sourceEntry.toReplicaEntry(this.site);
+        const destEntry = sourceEntry.toReplicaEntry(sourceEntry.getReplicationBackend());
 
         log.debug('processing entry',
             { entry: sourceEntry.getLogInfo() });
@@ -867,7 +897,8 @@ class ReplicateObject extends BackbeatTask {
                     if (err) {
                         return next(err);
                     }
-                    const status = refreshedEntry.getReplicationSiteStatus(this.site);
+                    const status = refreshedEntry.getReplicationSiteStatus(
+                        sourceEntry.getReplicationBackend());
                     if (status === 'COMPLETED') {
                         log.info('replication already completed, skipping', {
                             entry: sourceEntry.getLogInfo(),
