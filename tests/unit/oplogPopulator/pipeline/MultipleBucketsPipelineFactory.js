@@ -46,25 +46,52 @@ describe('MultipleBucketsPipelineFactory', () => {
             assert.strictEqual(result, '[]');
         });
 
-        it('should return the pipeline with buckets and location stripping', () => {
+        it('should return the pipeline with buckets, key synthesis and location stripping', () => {
             const buckets = ['bucket1', 'bucket2'];
             const result = multipleBucketsPipelineFactory.getPipeline(buckets);
             const pipeline = JSON.parse(result);
 
-            assert.strictEqual(pipeline.length, 2);
+            assert.strictEqual(pipeline.length, 3);
             assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1','bucket2']}}});
-            assert.deepStrictEqual(pipeline[1].$set['fullDocument.value.location'], {
+            assert.deepStrictEqual(pipeline[1], {
+                $addFields: {
+                    key: {
+                        $ifNull: [
+                            '$fullDocument.value.key',
+                            '$updateDescription.updatedFields.value.key',
+                        ],
+                    },
+                },
+            });
+            assert.deepStrictEqual(pipeline[2].$set['fullDocument.value.location'], {
                 $cond: {
                     if: { $gte: ['$fullDocument.value.content-length', thresholdBytes] },
                     then: '$$REMOVE',
                     else: '$fullDocument.value.location',
                 },
             });
-            assert.deepStrictEqual(pipeline[1].$set['updateDescription.updatedFields.value.location'], {
+            assert.deepStrictEqual(pipeline[2].$set['updateDescription.updatedFields.value.location'], {
                 $cond: {
                     if: { $gte: ['$updateDescription.updatedFields.value.content-length', thresholdBytes] },
                     then: '$$REMOVE',
                     else: '$updateDescription.updatedFields.value.location',
+                },
+            });
+        });
+
+        it('should return the pipeline with key synthesis when location stripping is disabled', () => {
+            const factory = new MultipleBucketsPipelineFactory(0);
+            const pipeline = JSON.parse(factory.getPipeline(['bucket1']));
+            assert.strictEqual(pipeline.length, 2);
+            assert.deepStrictEqual(pipeline[0], {$match:{'ns.coll':{$in:['bucket1']}}});
+            assert.deepStrictEqual(pipeline[1], {
+                $addFields: {
+                    key: {
+                        $ifNull: [
+                            '$fullDocument.value.key',
+                            '$updateDescription.updatedFields.value.key',
+                        ],
+                    },
                 },
             });
         });

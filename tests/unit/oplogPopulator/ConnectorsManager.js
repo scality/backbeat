@@ -44,22 +44,8 @@ const connectorConfig = {
                     }],
                 }, 'null'],
         }, {
-            name: 'fullDocument',
-            type: [{
-               type: 'record',
-               name: 'fullDocumentRecord',
-               fields: [{
-                    name: 'value',
-                    type: [{
-                        type: 'record',
-                        name: 'valueRecord',
-                        fields: [{
-                            name: 'key',
-                            type: ['string', 'null'],
-                        }],
-                    }, 'null'],
-               }],
-            }, 'null'],
+            name: 'key',
+            type: ['string', 'null'],
         }],
     }),
     'heartbeat.interval.ms': 10000,

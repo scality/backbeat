@@ -19,6 +19,7 @@ describe('PipelineFactory', function () {
     const collectionName = 'test-pipeline-stripping';
     let collection;
     let setStage;
+    let addFieldsStage;
 
     before(async () => {
         await client.connect();
@@ -26,7 +27,8 @@ describe('PipelineFactory', function () {
 
         const factory = new MultipleBucketsPipelineFactory(THRESHOLD);
         const pipeline = JSON.parse(factory.getPipeline(['test-bucket']));
-        setStage = pipeline[1];
+        addFieldsStage = pipeline[1];
+        setStage = pipeline[2];
     });
 
     afterEach(async () => {
@@ -145,6 +147,47 @@ describe('PipelineFactory', function () {
                 results[0].updateDescription.updatedFields.value.location,
                 undefined
             );
+        });
+    });
+
+    describe('key synthesis ($addFields)', () => {
+        it('should populate key from fullDocument.value.key on insert-shaped docs', async () => {
+            const doc = { fullDocument: { value: { key: 'my/object' } } };
+            await collection.insertOne(doc);
+            const results = await collection.aggregate([addFieldsStage]).toArray();
+            assert.strictEqual(results.length, 1);
+            assert.strictEqual(results[0].key, 'my/object');
+        });
+
+        it('should populate key from updateDescription.updatedFields.value.key on update-shaped docs', async () => {
+            const doc = { updateDescription: { updatedFields: { value: { key: 'my/object' } } } };
+            await collection.insertOne(doc);
+            const results = await collection.aggregate([addFieldsStage]).toArray();
+            assert.strictEqual(results.length, 1);
+            assert.strictEqual(results[0].key, 'my/object');
+        });
+
+        it('should prefer fullDocument.value.key when both are present', async () => {
+            const doc = {
+                fullDocument: { value: { key: 'from-full' } },
+                updateDescription: { updatedFields: { value: { key: 'from-update' } } },
+            };
+            await collection.insertOne(doc);
+            const results = await collection.aggregate([addFieldsStage]).toArray();
+            assert.strictEqual(results[0].key, 'from-full');
+        });
+
+        it('should leave key absent when neither path is populated', async () => {
+            // $ifNull returns missing (not null) when all inputs are missing.
+            // The connector's nullable Avro key schema emits this as null on
+            // the wire, so the partition outcome is the same as an explicit
+            // null. In production deletes are ignored, so this case doesn't
+            // occur for consumed events.
+            const doc = { fullDocument: null };
+            await collection.insertOne(doc);
+            const results = await collection.aggregate([addFieldsStage]).toArray();
+            assert.strictEqual(results.length, 1);
+            assert.strictEqual(results[0].key, undefined);
         });
     });
 });

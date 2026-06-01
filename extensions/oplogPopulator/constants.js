@@ -23,10 +23,6 @@ const constants = {
         'output.format.value': 'json',
         'value.converter.schemas.enable': false,
         'value.converter': 'org.apache.kafka.connect.storage.StringConverter',
-        // Kafka message key config
-        // The message key is set to only contain the bucket where the event happend.
-        // This will make events of the same bucket always land in the same partition
-        // as they will have the same key
         'output.format.key': 'schema',
         'output.schema.key': JSON.stringify({
             type: 'record',
@@ -42,22 +38,8 @@ const constants = {
                         }],
                     }, 'null'],
             }, {
-                name: 'fullDocument',
-                type: [{
-                   type: 'record',
-                   name: 'fullDocumentRecord',
-                   fields: [{
-                        name: 'value',
-                        type: [{
-                            type: 'record',
-                            name: 'valueRecord',
-                            fields: [{
-                                name: 'key',
-                                type: ['string', 'null'],
-                            }],
-                        }, 'null'],
-                   }],
-                }, 'null'],
+                name: 'key',
+                type: ['string', 'null'],
             }],
         }),
     },

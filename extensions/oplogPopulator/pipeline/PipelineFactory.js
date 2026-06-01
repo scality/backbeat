@@ -70,6 +70,21 @@ class PipelineFactory {
         }
         const pipeline = [
             stage,
+            // Synthesise a top-level 'key' from fullDocument.value.key
+            // (insert/replace) or updateDescription.updatedFields.value.key
+            // (update). Relies on object MD writes always $set-ing the whole
+            // 'value' subdocument; a partial dotted $set would mis-partition.
+            // See BB-768 (superseded SMT alternative in PR #2741).
+            {
+                $addFields: {
+                    key: {
+                        $ifNull: [
+                            '$fullDocument.value.key',
+                            '$updateDescription.updatedFields.value.key',
+                        ],
+                    },
+                },
+            },
         ];
         if (this._locationStrippingBytesThreshold > 0) {
             pipeline.push({
