@@ -265,7 +265,7 @@ class LifecycleConductor {
                 // Veeam buckets (SosAPI enabled) manage cleanup via their own
                 // S3 calls, not lifecycle policies. Skip the expensive index
                 // build and stick with v1.
-                log.trace('skipping index creation: SosAPI bucket');
+                log.trace('skipping index creation: SosAPI/Veeam has its own cleanup management');
                 LifecycleMetrics.onLegacyTask(log, 'sosApi');
                 return cb(null, lifecycleTaskVersions.v1);
             }
