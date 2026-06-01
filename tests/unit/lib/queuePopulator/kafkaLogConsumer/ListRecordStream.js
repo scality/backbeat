@@ -1,8 +1,11 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 const logger = new werelogs.Logger('ListRecordStream');
 const ListRecordStream =
     require('../../../../../lib/queuePopulator/KafkaLogConsumer/ListRecordStream');
+const KafkaLogConsumerMetrics =
+    require('../../../../../lib/queuePopulator/KafkaLogConsumer/KafkaLogConsumerMetrics');
 
 const changeStreamDocument = {
     ns: {
@@ -155,6 +158,32 @@ describe('ListRecordStream', () => {
                         timestamp: '2023-11-29T15:05:57.000Z',
                     }],
                 });
+                return done();
+            });
+        });
+
+        it('should call onMissingKey when key is absent on a processed event', done => {
+            // changeStreamDocument has no top-level 'key' field — emulates an
+            // event that slipped past the $addFields stage. Should still be
+            // processed (objectMd is present) but the metric helper should fire.
+            const stub = sinon.stub(KafkaLogConsumerMetrics, 'onMissingKey');
+            const kafkaMessage = getKafkaMessage(JSON.stringify(changeStreamDocument));
+            listRecordStream.write(kafkaMessage);
+            listRecordStream.once('data', () => {
+                assert(stub.calledOnceWith(logger, 'insert'));
+                stub.restore();
+                return done();
+            });
+        });
+
+        it('should NOT call onMissingKey when key is present', done => {
+            const stub = sinon.stub(KafkaLogConsumerMetrics, 'onMissingKey');
+            const doc = { ...changeStreamDocument, key: 'example-key' };
+            const kafkaMessage = getKafkaMessage(JSON.stringify(doc));
+            listRecordStream.write(kafkaMessage);
+            listRecordStream.once('data', () => {
+                assert(stub.notCalled);
+                stub.restore();
                 return done();
             });
         });
