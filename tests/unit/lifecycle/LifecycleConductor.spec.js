@@ -429,6 +429,42 @@ describe('Lifecycle Conductor', () => {
                 });
             }));
 
+        it('should return v1: SosAPI bucket skips index creation', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            client.indexesObj = [];
+            client.error = null;
+
+            const sosTask = { ...getTask(true), hasSosApi: true };
+            conductor._indexesGetOrCreate(sosTask, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('should still return v2 when SosAPI bucket already has indexes built', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            client.indexesObj = indexesForFeature.lifecycle.v2;
+            client.error = null;
+
+            const sosTask = { ...getTask(true), hasSosApi: true };
+            conductor._indexesGetOrCreate(sosTask, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
+                done();
+            });
+        });
+
         it('should return v1: missing indexes + disk space check fails', done => {
             const client = new BackbeatMetadataProxyMock();
             conductor.clientManager.getBackbeatMetadataProxy = () => client;
@@ -805,6 +841,45 @@ describe('Lifecycle Conductor', () => {
                         ],
                     },
                 });
+                done();
+            });
+        });
+
+        it('should populate hasSosApi from bucket capabilities when listing from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                bucketSource: 'mongodb',
+            }, []);
+
+            const docs = [
+                { _id: 'veeam-bucket', value: { owner: 'acc', capabilities: { VeeamSOSApi: { foo: 'bar' } } } },
+                { _id: 'normal-bucket', value: { owner: 'acc' } },
+            ];
+            let idx = 0;
+            const cursor = {
+                hasNext: () => Promise.resolve(idx < docs.length),
+                next: () => Promise.resolve(docs[idx++]),
+            };
+            const projectStub = sinon.stub().returns(cursor);
+            const findStub = sinon.stub().returns({ project: projectStub });
+
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, []),
+                getCollection: name => {
+                    if (name === '__metastore') {return { find: findStub };}
+                    return { collectionName: name };
+                },
+                _isSpecialCollection: () => false,
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
+
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                // VeeamSOSApi field must be in the projection so we can read it
+                assert.strictEqual(projectStub.getCall(0).args[0]['value.capabilities.VeeamSOSApi'], 1);
+                const tasks = queue.list();
+                assert.strictEqual(tasks.length, 2);
+                assert.strictEqual(tasks.find(t => t.bucketName === 'veeam-bucket').hasSosApi, true);
+                assert.strictEqual(tasks.find(t => t.bucketName === 'normal-bucket').hasSosApi, false);
                 done();
             });
         });

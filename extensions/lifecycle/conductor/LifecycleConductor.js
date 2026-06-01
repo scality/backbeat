@@ -261,6 +261,15 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v2);
             }
 
+            if (task.hasSosApi) {
+                // Veeam buckets (SosAPI enabled) manage cleanup via their own
+                // S3 calls, not lifecycle policies. Skip the expensive index
+                // build and stick with v1.
+                log.trace('skipping index creation: SosAPI bucket');
+                LifecycleMetrics.onLegacyTask(log, 'sosApi');
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
             if (!this.lcConfig.autoCreateIndexes) {
                 log.trace('skipping index creation: auto creation of indexes disabled');
                 LifecycleMetrics.onLegacyTask(log, 'noIndex');
@@ -759,7 +768,12 @@ class LifecycleConductor {
                 const cursor = this._mongodbClient
                     .getCollection('__metastore')
                     .find(filter)
-                    .project({ '_id': 1, 'value.owner': 1, 'value.lifecycleConfiguration': 1 });
+                    .project({
+                        '_id': 1,
+                        'value.owner': 1,
+                        'value.lifecycleConfiguration': 1,
+                        'value.capabilities.VeeamSOSApi': 1,
+                    });
 
                 return done(null, cursor);
             },
@@ -797,6 +811,7 @@ class LifecycleConductor {
                                         bucketName: name,
                                         canonicalId: doc.value.owner,
                                         isLifecycled: !!doc.value.lifecycleConfiguration,
+                                        hasSosApi: !!doc.value.capabilities?.VeeamSOSApi,
                                     });
                                     nEnqueued += 1;
                                     lastSentId = doc._id;
