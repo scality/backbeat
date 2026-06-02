@@ -9,7 +9,8 @@ const LifecycleConductor = require(
     '../../../extensions/lifecycle/conductor/LifecycleConductor');
 const {
     lifecycleTaskVersions,
-    indexesForFeature
+    indexesForFeature,
+    keyPrefixes,
 } = require('../../../lib/constants');
 
 const {
@@ -120,13 +121,18 @@ function makeLifecycleConductorWithFilters(options, markers) {
 
 describe('indexesForFeature.lifecycle.v2', () => {
     it('should restrict both indexes to master entries via partialFilterExpression', () => {
-        const expected = { _id: { $gte: '\x7fM', $lt: '\x7fN' } };
+        const expected = { _id: { $gte: keyPrefixes.master, $lt: keyPrefixes.masterEnd } };
         const indexes = indexesForFeature.lifecycle.v2;
         assert.strictEqual(indexes.length, 2);
         for (const idx of indexes) {
             assert.deepStrictEqual(idx.partialFilterExpression, expected,
                 `${idx.name} should have partialFilterExpression restricting to masters`);
         }
+    });
+
+    it('should derive master key range from arsenal DbPrefixes', () => {
+        assert.strictEqual(keyPrefixes.master, '\x7fM');
+        assert.strictEqual(keyPrefixes.masterEnd, '\x7fN');
     });
 });
 
