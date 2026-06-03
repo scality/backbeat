@@ -1,14 +1,18 @@
 const async = require('async');
 const { S3Client, GetBucketReplicationCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
-const errors = require('arsenal').errors;
-const jsutil = require('arsenal').jsutil;
-const ObjectMDLocation = require('arsenal').models.ObjectMDLocation;
-const ReplicationConfiguration = require('arsenal').models.ReplicationConfiguration;
+const { errors, jsutil, versioning } = require('arsenal');
+const { ObjectMDLocation, ReplicationConfiguration } = require('arsenal').models;
+const {
+    encode: encodeMicroVersionId,
+    decode: decodeMicroVersionId,
+    compare: compareMicroVersionId,
+    Ordering,
+} = versioning.VersionID;
 
 const ClientManager = require('../../../lib/clients/ClientManager');
 const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
-const { 
+const {
     BackbeatRoutesClient,
     PutDataCommand,
     BatchDeleteCommand,
@@ -16,6 +20,10 @@ const {
     GetMetadataCommand,
     addContentLengthMiddleware,
     attachReqUids,
+    attachExpectContinueMiddleware,
+    VersionIdCollisionException,
+    StaleMicroVersionIdException,
+    MicroVersionIdAlreadyStoredException,
 } = require('@scality/cloudserverclient');
 
 const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
@@ -159,11 +167,11 @@ class ReplicateObject extends BackbeatTask {
         }, cb);
     }
 
-    _putMetadata(entry, mdOnly, log, cb) {
+    _putMetadata(entry, mdOnly, conflict, log, cb) {
         this.retry({
             actionDesc: 'update metadata on target',
             logFields: { entry: entry.getLogInfo() },
-            actionFunc: done => this._putMetadataOnce(entry, mdOnly,
+            actionFunc: done => this._putMetadataOnce(entry, mdOnly, conflict,
                 log, done),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
@@ -452,11 +460,30 @@ class ReplicateObject extends BackbeatTask {
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
         return mapLimitWaitPendingIfError(locations, mpuConcLimit, (part, done) => {
             this._getAndPutPart(sourceEntry, destEntry, part, log, done);
-        }, (err, destLocations) => {
-            if (err) {
-                return this._deleteOrphans(destEntry, destLocations, log, () => cb(err));
+        }, (err, partResults) => {
+            let collisionResult;
+            const uploadedParts = [];
+            for (const result of (partResults || [])) {
+                if (!result) {
+                    continue;
+                }
+                if (result.isCollision) {
+                    collisionResult = collisionResult || result;
+                } else {
+                    uploadedParts.push(result);
+                }
             }
-            return cb(null, destLocations);
+            const hasPutDataConflict = collisionResult !== undefined;
+            if (err || hasPutDataConflict) {
+                // On error or conflict, drop all parts written
+                return this._deleteOrphans(destEntry, uploadedParts, log, () => {
+                    if (hasPutDataConflict) {
+                        return cb(null, [], collisionResult);
+                    }
+                    return cb(err);
+                });
+            }
+            return cb(null, partResults, undefined);
         });
     }
 
@@ -570,7 +597,9 @@ class ReplicateObject extends BackbeatTask {
                     // destination bucket has to be versioning enabled.
                     VersioningRequired: true,
                     RequestUids: log.getSerializedUids(),
+                    VersionId: sourceEntry.getEncodedVersionId(),
                 });
+                attachExpectContinueMiddleware(putCommand, this.backbeatDest.config?.requestHandler);
                 addContentLengthMiddleware(
                     putCommand,
                     response.ContentLength,
@@ -599,6 +628,17 @@ class ReplicateObject extends BackbeatTask {
                             if (incomingMsg.destroy) {
                                 incomingMsg.destroy();
                             }
+                        }
+
+                        if (err instanceof VersionIdCollisionException) {
+                            log.info('cascade putData: data already at destination', {
+                                method: 'ReplicateObject._getAndPutPartOnce',
+                                entry: destEntry.getLogInfo(),
+                            });
+                            return doneOnce(null, {
+                                isCollision: true,
+                                microVersionId: err.microVersionId,
+                            });
                         }
                         // eslint-disable-next-line no-param-reassign
                         err.origin = 'target';
@@ -642,7 +682,13 @@ class ReplicateObject extends BackbeatTask {
             });
     }
 
-    _putMetadataOnce(entry, mdOnly, log, cb) {
+    _putMetadataOnce(entry, mdOnly, conflict, log, cb) {
+        if (this._shouldSkipMetadata(entry.getMicroVersionId(), conflict, log)) {
+            log.info('skipping putMetadata: destination already has same or newer revision', {
+                entry: entry.getLogInfo(),
+            });
+            return cb();
+        }
         log.debug('putting metadata', {
             where: 'target', entry: entry.getLogInfo(),
             replicationStatus: entry.getReplicationSiteStatus(entry.getReplicationBackend()),
@@ -657,9 +703,10 @@ class ReplicateObject extends BackbeatTask {
             accountId = _extractAccountIdFromRole(this.targetRole);
         }
 
-        // sends extra header x-scal-replication-content to the target
-        // if it's a metadata operation only
-        const replicationContent = (mdOnly ? 'METADATA' : undefined);
+        // METADATA: update existing document (preserve stored location).
+        // DATA,METADATA: create a new document.
+        const localMdOnly = mdOnly || !!conflict;
+        const replicationContent = (localMdOnly ? 'METADATA' : 'DATA,METADATA');
         const mdBlob = entry.getSerialized();
         const command = new PutMetadataCommand({
             Bucket: entry.getBucket(),
@@ -671,6 +718,8 @@ class ReplicateObject extends BackbeatTask {
             // destination bucket has to be versioning enabled.
             VersioningRequired: true,
             RequestUids: log.getSerializedUids(),
+            MicroVersionId: entry.getMicroVersionId()
+                ? encodeMicroVersionId(entry.getMicroVersionId()) : '',
         });
         const writeStartTime = Date.now();
         return this.backbeatDest.send(command)
@@ -681,7 +730,9 @@ class ReplicateObject extends BackbeatTask {
             .catch(err => {
                 // eslint-disable-next-line no-param-reassign
                 err.origin = 'target';
-                if (err.ObjNotFound || err.name === 'ObjNotFound') {
+                if (err.ObjNotFound || err.name === 'ObjNotFound' ||
+                    err instanceof MicroVersionIdAlreadyStoredException ||
+                    err instanceof StaleMicroVersionIdException) {
                     return cbOnce(err);
                 }
                 log.error('an error occurred when putting metadata to S3',
@@ -868,7 +919,7 @@ class ReplicateObject extends BackbeatTask {
                 // put metadata in target bucket
                 next => {
                     // TODO check that bucket role matches role in metadata
-                    this._putMetadata(destEntry, false, log, next);
+                    this._putMetadata(destEntry, false, null, log, next);
                 },
             ], err => this._handleReplicationOutcome(
                 err, sourceEntry, destEntry, kafkaEntry, log, done));
@@ -920,16 +971,15 @@ class ReplicateObject extends BackbeatTask {
                     return this._getAndPutData(sourceEntry, destEntry, log,
                                                next);
                 }
-                return next(null, []);
+                return next(null, [], undefined);
             },
             // update location, replication status and put metadata in
             // target bucket
-            (destLocations, next) => {
+            (destLocations, conflict, next) => {
                 destEntry.setLocation(destLocations);
-                this._putMetadata(destEntry, mdOnly, log, err => {
+                return this._putMetadata(destEntry, mdOnly, conflict, log, err => {
                     if (err) {
-                        return this._deleteOrphans(
-                            destEntry, destLocations, log, () => next(err));
+                        return this._deleteOrphans(destEntry, destLocations, log, () => next(err));
                     }
                     return next();
                 });
@@ -938,17 +988,37 @@ class ReplicateObject extends BackbeatTask {
             err, sourceEntry, destEntry, kafkaEntry, log, done));
     }
 
-    _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log, done) {
-        log.debug('reprocessing entry as full replication',
-            { entry: sourceEntry.getLogInfo() });
+    // Returns true if putMetadata can be skipped because the destination already
+    // holds this revision or a newer one. Returns false when there is no conflict,
+    // when the destination microVersionId is absent or can't be parsed (proceed
+    // conservatively), or when the source holds a newer revision.
+    _shouldSkipMetadata(sourceMicroVersionId, conflict, log) {
+        if (!conflict) {
+            return false;
+        }
+        let destMvId = null;
+        if (conflict.microVersionId) {
+            const decoded = decodeMicroVersionId(conflict.microVersionId);
+            if (decoded instanceof Error) {
+                log.warn('could not decode microVersionId from putData 409, ' +
+                    'proceeding to putMetadata without skip optimisation', {
+                    error: decoded.message,
+                });
+            } else {
+                destMvId = decoded;
+            }
+        }
+        const comparison = compareMicroVersionId(sourceMicroVersionId, destMvId);
+        return destMvId !== null &&
+            (comparison === Ordering.OLDER || comparison === Ordering.EQUAL);
+    }
 
+    _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log, done) {
         return async.waterfall([
             next => this._getAndPutData(sourceEntry, destEntry, log, next),
-            // update location, replication status and put metadata in
-            // target bucket
-            (location, next) => {
-                destEntry.setLocation(location);
-                this._putMetadata(destEntry, false, log, next);
+            (destLocations, conflict, next) => {
+                destEntry.setLocation(destLocations);
+                return this._putMetadata(destEntry, false, conflict, log, next);
             },
         ], err => this._handleReplicationOutcome(
             err, sourceEntry, destEntry, kafkaEntry, log, done));
@@ -956,12 +1026,18 @@ class ReplicateObject extends BackbeatTask {
 
     _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry,
         log, done) {
+        if (err instanceof MicroVersionIdAlreadyStoredException ||
+            err instanceof StaleMicroVersionIdException) {
+            log.info('replication completed: metadata revision already at destination',
+                { entry: sourceEntry.getLogInfo(), reason: err.name });
+            this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
+            return done(null, { committable: false });
+        }
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                 'replication status as COMPLETED',
                 { entry: sourceEntry.getLogInfo() });
-            this._publishReplicationStatus(
-                sourceEntry, 'COMPLETED', { kafkaEntry, log });
+            this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
             return done(null, { committable: false });
         }
         if (err.BadRole || err.name === 'BadRole' ||
@@ -991,8 +1067,7 @@ class ReplicateObject extends BackbeatTask {
                     { entry: sourceEntry.getLogInfo() });
                 return done();
             }
-            log.info('target object version does not exist, retrying ' +
-                'a full replication',
+            log.info('replication target object not found, retrying with full data write',
                 { entry: sourceEntry.getLogInfo() });
             // TODO: Is this the right place to capture retry metrics?
             return this._processQueueEntryRetryFull(

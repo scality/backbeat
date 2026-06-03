@@ -1203,6 +1203,16 @@
     "@smithy/types" "^4.12.0"
     tslib "^2.6.2"
 
+"@aws-sdk/middleware-expect-continue@^3.972.8":
+  version "3.972.14"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/middleware-expect-continue/-/middleware-expect-continue-3.972.14.tgz#6bffa547da965dba80ee123ac1f8f1446cc596c2"
+  integrity sha512-3TNFEVGO4sWZj9TEXOCZLzGEctXHnaO4fk2EQ8KVaboTbwHmEPEQrm17Xb9koImUIXEw0sgi2xtHjg7LuTS3rA==
+  dependencies:
+    "@aws-sdk/types" "^3.973.9"
+    "@smithy/core" "^3.24.5"
+    "@smithy/types" "^4.14.2"
+    tslib "^2.6.2"
+
 "@aws-sdk/middleware-expect-continue@^3.972.9":
   version "3.972.9"
   resolved "https://registry.yarnpkg.com/@aws-sdk/middleware-expect-continue/-/middleware-expect-continue-3.972.9.tgz#ad62cbc4c5f310a5d104b7fc1150eca13a3c07a4"
@@ -1822,6 +1832,14 @@
   integrity sha512-reXRwoJ6CfChoqAsBszUYajAF8Z2LRE+CRcKocvFSMpIiLOtYU3aJ9trmn6VVPAzbbY5LXF+FfmUslbXk1SYFg==
   dependencies:
     "@smithy/types" "^4.14.0"
+    tslib "^2.6.2"
+
+"@aws-sdk/types@^3.973.9":
+  version "3.973.9"
+  resolved "https://registry.yarnpkg.com/@aws-sdk/types/-/types-3.973.9.tgz#7d1c08cc6e82ec2ac2f2da102a7dd55806592f7f"
+  integrity sha512-kuBfgQVdcz5Bmapc4A13YbpVw/pXkesfhetcFYwbntqas8sF41OHyd4o28+/TG2ZQdHBsv90Lsu5y6oitvYCdg==
+  dependencies:
+    "@smithy/types" "^4.14.2"
     tslib "^2.6.2"
 
 "@aws-sdk/util-arn-parser@3.893.0":
@@ -3215,12 +3233,13 @@
   resolved "https://registry.yarnpkg.com/@rtsao/scc/-/scc-1.1.0.tgz#927dd2fae9bc3361403ac2c7a00c32ddce9ad7e8"
   integrity sha512-zt6OdqaDoOnJ1ZYsCYGt9YmWzDXl4vQdKTyJev62gFhRGKdx7mcT54V9KIjg+d2wi9EXsPvAPKe7i7WjfVWB8g==
 
-"@scality/cloudserverclient@^1.0.8":
-  version "1.0.8"
-  resolved "https://registry.yarnpkg.com/@scality/cloudserverclient/-/cloudserverclient-1.0.8.tgz#0b48fa9ae3f280c0f83039029b5527d2a6ba0d57"
-  integrity sha512-ZjGg91BV6e0pmVVoOu2vo/lA+KVKXX4euHqOpejYvOGY4j/z0lKql8Li2tZ7H5bDitL3jEiXx0p0ZBnXfOdzTw==
+"@scality/cloudserverclient@^1.0.9":
+  version "1.0.9"
+  resolved "https://registry.yarnpkg.com/@scality/cloudserverclient/-/cloudserverclient-1.0.9.tgz#0a333e39436e1f1e74279c3b5a11645be1fffbc1"
+  integrity sha512-ZGqH4G535opDAEP2PxdYDFG7kjZ/eBrzP3ZmO49goFVjRhyDCZ1gT0Pask3/wZcyysZ2Au1qylorZSLPiZmB2A==
   dependencies:
     "@aws-sdk/client-s3" "^3.1009.0"
+    "@aws-sdk/middleware-expect-continue" "^3.972.8"
     JSONStream "^1.3.5"
     fast-xml-parser "^5.5.7"
 
@@ -3450,6 +3469,15 @@
     "@smithy/util-stream" "^4.5.22"
     "@smithy/util-utf8" "^4.2.2"
     "@smithy/uuid" "^1.1.2"
+    tslib "^2.6.2"
+
+"@smithy/core@^3.24.5":
+  version "3.24.5"
+  resolved "https://registry.yarnpkg.com/@smithy/core/-/core-3.24.5.tgz#396ca5662afc6d83a8f41b7e492e427c48a0924e"
+  integrity sha512-Kt8phUg45M15EjhYAbZ+fFikYneijLu9Liugz8ZsYz2i8j0hzGv27LWKpEHYRfvj+LyCOSijpcR/2i8RouV+cA==
+  dependencies:
+    "@aws-crypto/crc32" "5.2.0"
+    "@smithy/types" "^4.14.2"
     tslib "^2.6.2"
 
 "@smithy/credential-provider-imds@^4.2.13":
@@ -4412,6 +4440,13 @@
   version "4.14.0"
   resolved "https://registry.yarnpkg.com/@smithy/types/-/types-4.14.0.tgz#72fb6fd315f2eff7d4878142db2d1db4ef94f9bc"
   integrity sha512-OWgntFLW88kx2qvf/c/67Vno1yuXm/f9M7QFAtVkkO29IJXGBIg0ycEaBTH0kvCtwmvZxRujrgP5a86RvsXJAQ==
+  dependencies:
+    tslib "^2.6.2"
+
+"@smithy/types@^4.14.2":
+  version "4.14.2"
+  resolved "https://registry.yarnpkg.com/@smithy/types/-/types-4.14.2.tgz#6034ff1e0e52bfb7d744ac371b651a8bf21f30f1"
+  integrity sha512-P+otAxbV4CqBybp7EkcJCrig63yE2E7PuNVOmilVMRcx/O+QDzGULTrKsq4DV13gSfak9ObPrWaHl/9bL5YcWw==
   dependencies:
     tslib "^2.6.2"
 

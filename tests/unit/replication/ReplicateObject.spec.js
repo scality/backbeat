@@ -1,10 +1,18 @@
 const assert = require('assert');
 const sinon = require('sinon');
+const { Readable } = require('stream');
 
 const QueueEntry = require('../../../lib/models/QueueEntry');
 const ReplicateObject = require('../../../extensions/replication/tasks/ReplicateObject');
 const ClientManager = require('../../../lib/clients/ClientManager');
 const locations = require('../../../conf/locationConfig.json');
+const { versioning } = require('arsenal');
+const { generateVersionId, encode } = versioning.VersionID;
+const {
+    VersionIdCollisionException,
+    StaleMicroVersionIdException,
+    MicroVersionIdAlreadyStoredException,
+} = require('@scality/cloudserverclient');
 
 const { replicationEntry } = require('../../utils/kafkaEntries');
 const fakeLogger = require('../../utils/fakeLogger');
@@ -72,6 +80,211 @@ describe('ReplicateObject', () => {
         sinon.restore();
     });
 
+    function makeMicroVersionIds() {
+        const a = generateVersionId('test', 'RG001');
+        const b = generateVersionId('test', 'RG001');
+        const [older, newer] = a > b ? [a, b] : [b, a]; // In case they are generated at the same millisecond
+        return { older, newer, olderEncoded: encode(older), newerEncoded: encode(newer) };
+    }
+
+    function makeBodyStream() {
+        const stream = new Readable({ read() {} });
+        process.nextTick(() => stream.push(null));
+        return stream;
+    }
+
+    function makeSourceEntry(microVersionId) {
+        return {
+            getBucket: () => 'src-bucket',
+            getObjectKey: () => 'key',
+            getEncodedVersionId: () => encode(generateVersionId('test', 'RG001')),
+            getMicroVersionId: () => microVersionId || null,
+            getOwnerId: () => 'canonical-id',
+            getLogInfo: () => ({}),
+            getLocation: () => [{
+                key: 'data-key', size: 10, start: 0,
+                dataStoreName: 'file', dataStoreETag: '1:abc',
+            }],
+            getContentLength: () => 10,
+        };
+    }
+
+    function makeDestEntry() {
+        return {
+            getBucket: () => 'dest-bucket',
+            getObjectKey: () => 'key',
+            getOwnerId: () => 'canonical-id',
+            getLogInfo: () => ({}),
+            setAmzServerSideEncryption: () => {},
+            setAmzEncryptionCustomerAlgorithm: () => {},
+            setAmzEncryptionKeyId: () => {},
+            setLocation: () => {},
+        };
+    }
+
+    describe('putData : cascade VersionIdCollisionException handling', () => {
+        let part;
+
+        beforeEach(() => {
+            part = { key: 'data-key', size: 10, start: 0,
+                dataStoreName: 'file', dataStoreETag: '1:abc' };
+            sinon.stub(task, '_publishReadMetrics').returns();
+            sinon.stub(task, '_publishDataWriteMetrics').returns();
+        });
+
+        function mockDataTransfer(destinationMicroVersionId) {
+            task.S3source = {
+                send: sinon.stub().resolves({
+                    Body: makeBodyStream(),
+                    ContentLength: 10,
+                }),
+            };
+            const err = new VersionIdCollisionException({
+                message: 'version already at destination',
+                microVersionId: destinationMicroVersionId,
+            });
+            task.backbeatDest = {
+                send: sinon.stub().rejects(err),
+            };
+        }
+
+        it('should return collision info on VersionIdCollisionException', done => {
+            const { older, olderEncoded } = makeMicroVersionIds();
+            mockDataTransfer(olderEncoded);
+            task._getAndPutPartOnce(makeSourceEntry(older), makeDestEntry(), part, fakeLogger, (err, result) => {
+                assert.ifError(err);
+                assert.ok(result && result.isCollision, 'should return collision info object');
+                assert.ok('microVersionId' in result,
+                    'collision info should include microVersionId');
+                sinon.assert.notCalled(task._publishDataWriteMetrics);
+                done();
+            });
+        });
+
+        it('should set data location and publish metrics when no collision', done => {
+            task.S3source = {
+                send: sinon.stub().resolves({ Body: makeBodyStream(), ContentLength: 10 }),
+            };
+            task.backbeatDest = {
+                send: sinon.stub().resolves({
+                    Location: [{ key: 'new-key', dataStoreName: 'file' }],
+                }),
+            };
+            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, (err, result) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(result, {
+                    key: 'new-key',
+                    start: 0,
+                    size: 10,
+                    dataStoreName: 'file',
+                    dataStoreETag: '1:abc',
+                    blockId: undefined,
+                });
+                sinon.assert.calledOnce(task._publishDataWriteMetrics);
+                done();
+            });
+        });
+    });
+
+    describe('putMetadata : cascade handling', () => {
+        let entry;
+
+        beforeEach(() => {
+            entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
+        });
+
+        it('should pass through MicroVersionIdAlreadyStoredException and skip metrics', done => {
+            const metricsStub = sinon.stub(task, '_publishMetadataWriteMetrics').returns();
+            const loopErr = new MicroVersionIdAlreadyStoredException({
+                message: 'incoming microVersionId already at destination',
+            });
+            task.backbeatDest = { send: sinon.stub().rejects(loopErr) };
+            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
+                assert.ok(err instanceof MicroVersionIdAlreadyStoredException);
+                sinon.assert.notCalled(metricsStub);
+                done();
+            });
+        });
+
+        it('should pass through StaleMicroVersionIdException', done => {
+            sinon.stub(task, '_publishMetadataWriteMetrics').returns();
+            const staleErr = new StaleMicroVersionIdException({
+                message: 'incoming revision is older than destination',
+            });
+            task.backbeatDest = { send: sinon.stub().rejects(staleErr) };
+            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
+                assert.ok(err instanceof StaleMicroVersionIdException);
+                done();
+            });
+        });
+
+        it('should publish metrics and succeed on normal response', done => {
+            const metricsStub = sinon.stub(task, '_publishMetadataWriteMetrics').returns();
+            task.backbeatDest = { send: sinon.stub().resolves({}) };
+            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(metricsStub);
+                done();
+            });
+        });
+    });
+
+    describe('_handleReplicationOutcome : cascade outcomes', () => {
+        let sourceEntry, destEntry, kafkaEntry;
+
+        beforeEach(() => {
+            sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            destEntry = makeDestEntry();
+            kafkaEntry = {};
+            sinon.stub(task, '_publishReplicationStatus').returns();
+
+            sinon.stub(sourceEntry, 'toCompletedEntry').returns(sourceEntry);
+            sinon.stub(sourceEntry, 'toFailedEntry').returns(sourceEntry);
+            sinon.stub(sourceEntry, 'setReplicationSiteDataStoreVersionId').returns(sourceEntry);
+            sinon.stub(sourceEntry, 'getReplicationSiteDataStoreVersionId').returns('v1');
+        });
+
+        it('should mark COMPLETED for MicroVersionIdAlreadyStoredException', done => {
+            task._handleReplicationOutcome(
+                new MicroVersionIdAlreadyStoredException({}),
+                sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
+                    sinon.assert.calledWith(task._publishReplicationStatus,
+                        sourceEntry, 'COMPLETED', sinon.match.any);
+                    done();
+                });
+        });
+
+        it('should mark COMPLETED for StaleMicroVersionIdException', done => {
+            task._handleReplicationOutcome(
+                new StaleMicroVersionIdException({}),
+                sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
+                    sinon.assert.calledWith(task._publishReplicationStatus,
+                        sourceEntry, 'COMPLETED', sinon.match.any);
+                    done();
+                });
+        });
+
+        it('should mark COMPLETED on successful replication', done => {
+            task._handleReplicationOutcome(
+                null, sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
+                    sinon.assert.calledWith(task._publishReplicationStatus,
+                        sourceEntry, 'COMPLETED', sinon.match.any);
+                    done();
+                });
+        });
+
+        it('should mark FAILED for real errors', done => {
+            const realErr = Object.assign(new Error('network failure'), { origin: 'target' });
+            task._handleReplicationOutcome(
+                realErr, sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
+                    sinon.assert.calledWith(task._publishReplicationStatus,
+                        sourceEntry, 'FAILED', sinon.match.any);
+                    done();
+                });
+        });
+    });
+
     describe('_setTargetAccountMd', () => {
         it('should skip gettin target account info when auth type is assumeRole', done => {
             sinon.stub(task, '_setupDestClients').returns();
@@ -107,7 +320,7 @@ describe('ReplicateObject', () => {
                 send: sendStub,
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
-            task._putMetadataOnce(entry, true, fakeLogger, err => {
+            task._putMetadataOnce(entry, true, null, fakeLogger, err => {
                 assert.ifError(err);
                 assert(sendStub.calledOnce);
                 assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
@@ -123,7 +336,7 @@ describe('ReplicateObject', () => {
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
             sinon.stub(task.destConfig.auth, 'type').value('role');
-            task._putMetadataOnce(entry, true, fakeLogger, err => {
+            task._putMetadataOnce(entry, true, null, fakeLogger, err => {
                 assert.ifError(err);
                 assert(sendStub.calledOnce);
                 assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
@@ -198,6 +411,53 @@ describe('ReplicateObject', () => {
                     destination: 'arn:aws:s3:::bucket-a',
                 }),
                 'v-1');
+        });
+    });
+
+    describe('_processQueueEntry', () => {
+        it('should call _putMetadata with mdOnly=false for zero-byte objects', done => {
+            const destEntry = {
+                getBucket: () => 'dest-bucket',
+                getObjectKey: () => 'key',
+                getLogInfo: () => ({}),
+                setLocation: () => {},
+                getReplicationBackend: () => 'site',
+                getReplicationSiteStatus: () => 'PENDING',
+            };
+            const sourceEntry = {
+                getBucket: () => 'src-bucket',
+                getObjectKey: () => 'key',
+                getEncodedVersionId: () => encode(generateVersionId('test', 'RG001')),
+                getMicroVersionId: () => null,
+                getReplicationContent: () => ['DATA', 'METADATA'],
+                getContentLength: () => 0,
+                getLocation: () => [],
+                getReducedLocations: () => [],
+                getLastModified: () => new Date().toISOString(),
+                getIsDeleteMarker: () => false,
+                getReplicationBackend: () => 'site',
+                getLogInfo: () => ({}),
+                toReplicaEntry: () => destEntry,
+            };
+
+            task.metricsHandler = { rpo: () => {} };
+            task.mProducer = { publishMetrics: () => {} };
+
+            sinon.stub(task, '_setupRoles').callsFake((e, l, cb) => cb(null, 'srcRole', 'dstRole'));
+            sinon.stub(task, '_setTargetAccountMd').callsFake((e, r, l, cb) => cb(null));
+            sinon.stub(task, '_publishReplicationStatus');
+
+            const putMetadataStub = sinon.stub(task, '_putMetadata')
+                .callsFake((e, mdOnly, conflict, l, cb) => {
+                    assert.strictEqual(mdOnly, false,
+                        'zero-byte objects must use DATA,METADATA (create) mode, not METADATA-only (update) mode');
+                    cb(null);
+                });
+
+            task.processQueueEntry(sourceEntry, {}, () => {
+                sinon.assert.calledOnce(putMetadataStub);
+                done();
+            });
         });
     });
 
@@ -753,6 +1013,94 @@ describe('ReplicateObject', () => {
             assert.strictEqual(credentials.accessKeyId, 'accessKeyNoAssumeRole');
             assert.strictEqual(credentials.secretAccessKey, 'secretKeyNoAssumeRole');
             assert.strictEqual(endpoint, 'http://s3.zenko.local:80/');
+        });
+    });
+
+    describe('_shouldSkipMetadata', () => {
+        let sourceMvId, olderSourceMvId, encodedNewer, encodedOlder;
+
+        before(() => {
+            const ids = makeMicroVersionIds();
+            olderSourceMvId = ids.older;
+            sourceMvId = ids.newer;
+            encodedNewer = ids.newerEncoded;
+            encodedOlder = ids.olderEncoded;
+        });
+
+        it('returns false when conflict is null', () => {
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, null, fakeLogger), false);
+        });
+
+        it('returns false when conflict is undefined', () => {
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, undefined, fakeLogger), false);
+        });
+
+        it('returns false when conflict has no microVersionId field', () => {
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, { isCollision: true }, fakeLogger), false);
+        });
+
+        it('returns false when conflict has null microVersionId', () => {
+            const conflict = { isCollision: true, microVersionId: null };
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, conflict, fakeLogger), false);
+        });
+
+        it('returns false when conflict has undecodable microVersionId', () => {
+            const conflict = { isCollision: true, microVersionId: 'tooshort' };
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, conflict, fakeLogger), false);
+        });
+
+        it('returns false when source microVersionId is null (cannot compare)', () => {
+            const conflict = { isCollision: true, microVersionId: encodedNewer };
+            assert.strictEqual(task._shouldSkipMetadata(null, conflict, fakeLogger), false);
+        });
+
+        it('returns true when source revision equals destination revision', () => {
+            const conflict = { isCollision: true, microVersionId: encodedNewer };
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, conflict, fakeLogger), true);
+        });
+
+        it('returns true when source revision is older than destination revision', () => {
+            const conflict = { isCollision: true, microVersionId: encodedNewer };
+            assert.strictEqual(task._shouldSkipMetadata(olderSourceMvId, conflict, fakeLogger), true);
+        });
+
+        it('returns false when source revision is newer than destination revision', () => {
+            const conflict = { isCollision: true, microVersionId: encodedOlder };
+            assert.strictEqual(task._shouldSkipMetadata(sourceMvId, conflict, fakeLogger), false);
+        });
+    });
+
+    describe('_putMetadataOnce with conflict', () => {
+        it('skips the request when conflict revision is equal to source (already at destination)', done => {
+            sinon.stub(task, '_publishMetadataWriteMetrics').returns();
+            const { newer, newerEncoded } = makeMicroVersionIds();
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            sinon.stub(entry, 'getMicroVersionId').returns(newer);
+            const conflict = { isCollision: true, microVersionId: newerEncoded };
+            const sendStub = sinon.stub().resolves({});
+            task.backbeatDest = { send: sendStub };
+            task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
+            task._putMetadataOnce(entry, false, conflict, fakeLogger, err => {
+                assert.ifError(err);
+                sinon.assert.notCalled(sendStub);
+                done();
+            });
+        });
+
+        it('proceeds with the request when conflict revision is older than source', done => {
+            sinon.stub(task, '_publishMetadataWriteMetrics').returns();
+            const { olderEncoded, newer } = makeMicroVersionIds();
+            const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
+            sinon.stub(entry, 'getMicroVersionId').returns(newer);
+            const conflict = { isCollision: true, microVersionId: olderEncoded };
+            const sendStub = sinon.stub().resolves({});
+            task.backbeatDest = { send: sendStub };
+            task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
+            task._putMetadataOnce(entry, false, conflict, fakeLogger, err => {
+                assert.ifError(err);
+                sinon.assert.calledOnce(sendStub);
+                done();
+            });
         });
     });
 
