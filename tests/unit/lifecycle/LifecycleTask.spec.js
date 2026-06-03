@@ -9,6 +9,7 @@ const { ValidLifecycleRules } = require('arsenal').models;
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
 const fakeLogger = require('../../utils/fakeLogger');
+const { withActiveSpan } = require('../../utils/withActiveSpan');
 const { timeOptions } = require('../../functional/lifecycle/configObjects');
 
 const HOUR = 1000 * 60 * 60;
@@ -2364,6 +2365,55 @@ describe('lifecycle task helper methods', () => {
             lifecycleTask._getTransitionActionEntry(testParams, mockObjectMD, fakeLogger, (err, entry) => {
                 assert.deepStrictEqual(err, expectedError);
                 assert.strictEqual(entry, undefined);
+                done();
+            });
+        });
+    });
+});
+
+describe('LifecycleTask trace-context propagation', () => {
+    it('_sendBucketEntry stamps traceparent headers when a span is active', done => {
+        let captured;
+        const self = {
+            bucketTasksTopic: 'bucket-tasks',
+            producer: {
+                sendToTopic: (topic, entries, cb) => {
+                    captured = entries[0];
+                    cb(null);
+                },
+            },
+        };
+        withActiveSpan(() => {
+            LifecycleTask.prototype._sendBucketEntry.call(self, { foo: 1 }, err => {
+                assert.ifError(err);
+                assert(captured.headers.some(h => h.traceparent));
+                done();
+            });
+        });
+    });
+
+    it('_sendObjectAction stamps traceparent headers when a span is active', done => {
+        let captured;
+        const self = {
+            objectTasksTopic: 'object-tasks',
+            log: fakeLogger,
+            circuitBreakers: { tripped: () => false },
+            producer: {
+                sendToTopic: (topic, entries, cb) => {
+                    captured = entries[0];
+                    cb(null);
+                },
+            },
+        };
+        const entry = {
+            getAttribute: key => (key === 'transitionTime' ? Date.now() : undefined),
+            getActionType: () => 'expiration',
+            toKafkaMessage: () => JSON.stringify({ foo: 1 }),
+        };
+        withActiveSpan(() => {
+            LifecycleTask.prototype._sendObjectAction.call(self, entry, err => {
+                assert.ifError(err);
+                assert(captured.headers.some(h => h.traceparent));
                 done();
             });
         });

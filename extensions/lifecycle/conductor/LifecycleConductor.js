@@ -29,6 +29,10 @@ const {
     startCircuitBreakerMetricsExport,
     updateCircuitBreakerConfigForImplicitOutputQueue,
 } = require('../../../lib/CircuitBreaker');
+const { context: otelContext, trace, SpanKind, ROOT_CONTEXT } =
+    require('@opentelemetry/api');
+const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
+const tracing = require('../../../lib/tracing');
 
 const DEFAULT_CRON_RULE = '* * * * *';
 const DEFAULT_CONCURRENCY = 10;
@@ -340,7 +344,7 @@ class LifecycleConductor {
     }
 
     _taskToMessage(task, taskVersion, log) {
-        return {
+        return stampTraceHeaders({
             message: JSON.stringify({
                 action: 'processObjects',
                 contextInfo: {
@@ -354,7 +358,7 @@ class LifecycleConductor {
                 },
                 details: {},
             }),
-        };
+        });
     }
 
     _getAccountIds(unknownCanonicalIds, log, cb) {
@@ -402,6 +406,32 @@ class LifecycleConductor {
     }
 
     processBuckets(cb) {
+        if (!tracing.isEnabled()) {
+            this._processBucketsInternal(cb);
+            return;
+        }
+        // Root INTERNAL trace per cron firing (no upstream parent); the
+        // in-process scan work (Mongo bucket listing) nests under it.
+        const tracer = trace.getTracer('backbeat');
+        const span = tracer.startSpan('lifecycle.conductor.scan', {
+            kind: SpanKind.INTERNAL,
+        }, ROOT_CONTEXT);
+        const ctx = trace.setSpan(ROOT_CONTEXT, span);
+        otelContext.with(ctx, () => {
+            try {
+                this._processBucketsInternal((err, res) => {
+                    tracing.endSpan(span, err);
+                    if (cb) {cb(err, res);}
+                });
+            } catch (err) {
+                // sync throw: end span (don't leak), then rethrow
+                tracing.endSpan(span, err);
+                throw err;
+            }
+        });
+    }
+
+    _processBucketsInternal(cb) {
         const log = this.logger.newRequestLogger();
         const start = new Date();
         let nBucketsQueued = 0;

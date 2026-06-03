@@ -1,4 +1,7 @@
 'use strict';
+const tracing = require('../../../lib/tracing');
+tracing.init();
+
 const async = require('async');
 const assert = require('assert');
 const werelogs = require('werelogs');
@@ -340,6 +343,6 @@ process.on('SIGTERM', () => {
                 });
                 process.exit(1);
             }
-            process.exit(0);
+            tracing.close().finally(() => process.exit(0));
         });
 });

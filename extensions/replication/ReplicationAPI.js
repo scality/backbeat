@@ -3,6 +3,7 @@ const locations = require('../../conf/locationConfig.json') || {};
 
 const ActionQueueEntry = require('../../lib/models/ActionQueueEntry');
 const ReplicationMetrics = require('./ReplicationMetrics');
+const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
 
 let { dataMoverTopic } = config.extensions.replication;
 const { coldStorageArchiveTopicPrefix } = config.extensions.lifecycle;
@@ -74,10 +75,10 @@ class ReplicationAPI {
     static sendDataMoverAction(producer, action, log, cb) {
         const { accountId, bucket, key, version, eTag, attempt } = action.getAttribute('target');
         const { origin, fromLocation, contentLength, transitionTime } = action.getAttribute('metrics');
-        const kafkaEntry = {
+        const kafkaEntry = stampTraceHeaders({
             key: `${bucket}/${key}`,
             message: action.toKafkaMessage(),
-        };
+        });
         let topic = dataMoverTopic;
         const toLocation = action.getAttribute('toLocation');
         const locationConfig = locations[toLocation];
