@@ -79,10 +79,7 @@ describe('BackbeatConsumer main tests', () => {
 
     it('should be able to read messages sent to the topic and publish ' +
     'topic metrics', done => {
-        let consumeCb = null;
         let totalConsumed = 0;
-        let topicOffset;
-        let consumerOffset;
         const zkMetricsPath = `/test/kafka-backlog-metrics/${topic}/0`;
         const latestConsumedMetric = metrics.ZenkoMetrics.getMetric(
             promMetricNames.latestConsumedMessageTimestamp);
@@ -90,20 +87,35 @@ describe('BackbeatConsumer main tests', () => {
         // reset to 0 before the test
         latestConsumedMetric.reset();
 
-        function _checkZkMetrics(done) {
-            async.waterfall([
-                next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
-                (topicOffsetData, stat, next) => {
-                    topicOffset = Number.parseInt(topicOffsetData, 10);
-                    zookeeper.getData(`${zkMetricsPath}/consumers/${groupId}`,
-                                      next);
-                },
-            ], (err, consumerOffsetData) => {
-                assert.ifError(err);
-                consumerOffset = Number.parseInt(consumerOffsetData, 10);
-                assert.strictEqual(topicOffset, consumerOffset);
-                done();
-            });
+        // Offsets are published to zookeeper every second (intervalS: 1)
+        // once the consumer offsets get committed, so poll until the
+        // published offsets match instead of sleeping a fixed delay. The
+        // 2-second cap per attempt turns a zookeeper read stuck on a
+        // stale connection into a retry instead of a silent test timeout.
+        function _checkZkMetrics(cb) {
+            async.retry(
+                { times: 10, interval: 1000 },
+                async.timeout(attemptDone => async.waterfall([
+                    next => zookeeper.getData(`${zkMetricsPath}/topic`, next),
+                    (topicOffsetData, stat, next) => zookeeper.getData(
+                        `${zkMetricsPath}/consumers/${groupId}`,
+                        (err, consumerOffsetData) => next(
+                            err, topicOffsetData, consumerOffsetData)),
+                ], (err, topicOffsetData, consumerOffsetData) => {
+                    if (err) {
+                        return attemptDone(err);
+                    }
+                    const topicOffset = Number.parseInt(topicOffsetData, 10);
+                    const consumerOffset =
+                          Number.parseInt(consumerOffsetData, 10);
+                    if (topicOffset !== consumerOffset) {
+                        return attemptDone(new Error(
+                            'offsets not in sync yet: ' +
+                            `topic=${topicOffset} consumer=${consumerOffset}`));
+                    }
+                    return attemptDone();
+                }), 2000),
+                cb);
         }
         async function _checkPromMetrics() {
             const latestConsumedMetricValues =
@@ -119,23 +131,16 @@ describe('BackbeatConsumer main tests', () => {
                 assert.deepStrictEqual(
                     messages.map(e => e.message),
                     consumedMessages.map(buffer => buffer.toString()));
-                // metrics are published every second, so they
-                // should be there after 5s
-                setTimeout(() => {
-                    _checkZkMetrics(() => {
-                        consumeCb();
-                        consumer._consumer.unsubscribe();
-                    });
-                }, 5000);
-                assert.deepStrictEqual(
-                    messages.map(e => e.message),
-                    consumedMessages.map(buffer => buffer.toString()));
                 // Prometheus metrics are updated locally in memory so
                 // immediately visible
-                _checkPromMetrics();
+                _checkPromMetrics()
+                    .then(() => _checkZkMetrics(err => {
+                        consumer._consumer.unsubscribe();
+                        done(err);
+                    }))
+                    .catch(done);
             }
         });
-        consumeCb = done;
         producer.send(messages, err => {
             assert.ifError(err);
         });
