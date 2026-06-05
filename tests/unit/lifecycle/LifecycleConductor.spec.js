@@ -7,6 +7,8 @@ const { splitter } = require('arsenal').constants;
 
 const LifecycleConductor = require(
     '../../../extensions/lifecycle/conductor/LifecycleConductor');
+const { LifecycleMetrics } = require(
+    '../../../extensions/lifecycle/LifecycleMetrics');
 const {
     lifecycleTaskVersions,
     indexesForFeature
@@ -509,6 +511,34 @@ describe('Lifecycle Conductor', () => {
                 assert.deepStrictEqual(client.receivedIdxObj, null);
                 assert.deepStrictEqual(conductor.activeIndexingJobs, []);
                 assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('should emit putBucketIndexesFailed metric when putBucketIndexes errors', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            conductor._mongodbClient = {
+                getDiskUsage: cb => cb(null, { free: 1e12, total: 2e12 }),
+                getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                    indexSizes: { _id_: 1000 },
+                }),
+            };
+            client.indexesObj = [];
+            client.putBucketIndexes = (bucket, indexes, _log, cb) =>
+                cb(new Error('mongo createIndexes failed'));
+
+            const metricsSpy = sinon.spy(LifecycleMetrics, 'onLegacyTask');
+
+            conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                assert(metricsSpy.calledWith(sinon.match.any, 'putBucketIndexesFailed'),
+                    'expected LifecycleMetrics.onLegacyTask to be called with '
+                    + '\'putBucketIndexesFailed\'');
                 done();
             });
         });

@@ -341,6 +341,7 @@ class LifecycleConductor {
                                 bucket: task.bucketName,
                                 error: err,
                             });
+                            LifecycleMetrics.onLegacyTask(log, 'putBucketIndexesFailed');
                         }
                         return cb(null, lifecycleTaskVersions.v1);
                     });
