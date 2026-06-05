@@ -13,6 +13,9 @@ const qpRetryJoi = joi.object({
 
 const CRR_FAILURE_EXPIRY = 24 * 60 * 60; // Expire Redis keys after 24 hours.
 const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
+// Floor matches librdkafka's default session.timeout.ms (45s): kafka refuses to
+// start a consumer whose max.poll.interval.ms is below the session timeout.
+const MAX_POLL_INTERVAL_MS_MIN = 45000;
 
 const joiSchema = joi.object({
     source: {
@@ -69,6 +72,7 @@ const joiSchema = joi.object({
         groupId: joi.string().required(),
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
+        maxPollIntervalMs: joi.number().min(MAX_POLL_INTERVAL_MS_MIN),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: joi.alternatives().try(
