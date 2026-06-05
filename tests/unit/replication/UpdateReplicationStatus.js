@@ -134,6 +134,74 @@ describe('UpdateReplicationStatus', () => {
             assert.strictEqual(backends[0].status, 'COMPLETED');
             assert.strictEqual(backends[1].status, 'COMPLETED');
         });
+
+        it('returns a PENDING entry when the source status is PENDING', () => {
+            const sourceEntry = getCompletedEntry()
+                .toPendingEntry({ site: 'sf' })
+                .setSite('sf');
+            const refreshedEntry = getRefreshedEntry();
+            const updatedSourceEntry = updateReplicationStatus
+                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            checkReplicationInfo('sf', 'PENDING', updatedSourceEntry);
+        });
+    });
+
+    describe('_checkStatus', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
+
+        it('returns undefined for a known status', () => {
+            const sourceEntry = getCompletedEntry();
+            assert.strictEqual(updateReplicationStatus._checkStatus(sourceEntry), undefined);
+        });
+
+        it('returns an InternalError for an unknown status', () => {
+            const sourceEntry = getCompletedEntry();
+            sourceEntry.setReplicationSiteStatus({ site: 'sf' }, 'GIBBERISH');
+            const err = updateReplicationStatus._checkStatus(sourceEntry);
+            assert(err);
+            assert.strictEqual(err.is.InternalError, true);
+        });
+    });
+
+    describe('_reportMetrics', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
+        beforeEach(() => {
+            updateReplicationStatus.mProducer = { publishMetrics: sinon.stub().yields() };
+        });
+
+        it('publishes metrics for a COMPLETED replication', () => {
+            const sourceEntry = getCompletedEntry();
+            updateReplicationStatus._reportMetrics(sourceEntry, sourceEntry);
+            sinon.assert.calledOnce(updateReplicationStatus.mProducer.publishMetrics);
+        });
+
+        it('does not publish metrics for PENDING entries', () => {
+            const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry)
+                .setSite('sf');
+            updateReplicationStatus._reportMetrics(sourceEntry, sourceEntry);
+            sinon.assert.notCalled(updateReplicationStatus.mProducer.publishMetrics);
+        });
+    });
+
+    describe('_pushReplayEntry', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus({
+            getStateVars: () => ({
+                repConfig: { replicationStatusProcessor: {} },
+                sourceConfig: { auth: {}, s3: { host: 'localhost', port: 8000 }, transport: 'http' },
+                replayTopics: ['replay-topic'],
+            }),
+        }, metricHandlers);
+
+        it('publishes the retry entry to the replay topic and decrements replayCount', () => {
+            const publishReplayEntry = sinon.stub();
+            updateReplicationStatus.replayProducers = {
+                'replay-topic': { publishReplayEntry },
+            };
+            const queueEntry = getCompletedEntry().setReplayCount(1);
+            updateReplicationStatus._pushReplayEntry(queueEntry, 'sf', log);
+            assert.strictEqual(queueEntry.getReplayCount(), 0);
+            sinon.assert.calledOnce(publishReplayEntry);
+        });
     });
 
     describe('_getNFSUpdatedSourceEntry()', () => {

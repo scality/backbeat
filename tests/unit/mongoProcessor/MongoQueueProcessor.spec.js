@@ -167,6 +167,15 @@ describe('MongoQueueProcessor._updateReplicationInfo', () => {
         });
     });
 
+    it('clears replicationInfo when the bucket has no replication configuration', () => {
+        const proc = _makeProcessor([{ site: 'crr-a', type: 'scality' }]);
+        const entry = _makeEntry();
+        proc._updateReplicationInfo(entry, _makeBucketInfo(null), ['DATA']);
+        // No replication config → backends stay empty (the reset that
+        // runs before the early return still wipes any stale state).
+        assert.deepStrictEqual(entry.getReplicationInfo().backends, []);
+    });
+
     it('produces no backends when no rule matches', () => {
         const proc = _makeProcessor([{ site: 'crr-a', type: 'scality' }]);
         const entry = _makeEntry('other/path');

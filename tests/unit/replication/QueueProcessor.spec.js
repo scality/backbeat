@@ -243,6 +243,66 @@ describe('Queue Processor', () => {
             await qp.processReplicationEntry(kafkaEntry);
             sinon.assert.notCalled(qp.taskScheduler.push);
         });
+
+        it('throws InternalError on a malformed kafka entry', async () => {
+            const kafkaEntry = { value: 'not-valid-json{' };
+            await assert.rejects(
+                () => qp.processReplicationEntry(kafkaEntry),
+                err => err.is.InternalError === true);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
+
+        it('returns silently for canary heartbeat entries', async () => {
+            // The populator's canary messages keep consumer groups warm:
+            // deserialize, commit the offset, do nothing else.
+            const kafkaEntry = { value: JSON.stringify({ canary: true }) };
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
+
+        it('skips bucket entries when echo mode is disabled', async () => {
+            qp.echoMode = false;
+            // The QueueEntry parser recognises BucketQueueEntry when
+            // `bucket` is the arsenal 'users..bucket' constant.
+            const kafkaEntry = {
+                value: JSON.stringify({
+                    bucket: 'users..bucket',
+                    key: 'some-canonical-id..|..src-bucket',
+                    value: JSON.stringify({ creationDate: new Date().toJSON() }),
+                }),
+            };
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
+
+        it('dispatches an EchoBucket task for bucket entries when echo mode is enabled', async () => {
+            qp.echoMode = true;
+            const kafkaEntry = {
+                value: JSON.stringify({
+                    bucket: 'users..bucket',
+                    key: 'some-canonical-id..|..src-bucket',
+                    value: JSON.stringify({ creationDate: new Date().toJSON() }),
+                }),
+            };
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.calledOnce(qp.taskScheduler.push);
+            const pushed = qp.taskScheduler.push.firstCall.args[0];
+            assert.strictEqual(pushed.task.constructor.name, 'EchoBucket');
+        });
+
+        it('skips entries that are neither bucket nor object queue entries', async () => {
+            // DeleteOpQueueEntry: neither Bucket nor Object → falls through
+            // the routing without being pushed.
+            const kafkaEntry = {
+                value: JSON.stringify({
+                    type: 'del',
+                    bucket: 'src-bucket',
+                    key: 'some-key',
+                }),
+            };
+            await qp.processReplicationEntry(kafkaEntry);
+            sinon.assert.notCalled(qp.taskScheduler.push);
+        });
     });
 
     describe('constructor', () => {
