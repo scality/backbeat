@@ -4,7 +4,8 @@
 
 AWS S3 endpoint (aws-us-east-1 for example) will be defined as a location
 constraint in the locationConstraint section of
-[CloudServer](https://github.com/scality/S3). The locationConstraint config has
+[CloudServer](https://github.com/scality/cloudserver).
+The locationConstraint config has
 properties to set the bucket name, region, credentials for AWS S3.This enables
 multiple backend feature in CloudServer which Backbeat will leverage to CRR to
 AWS S3.
