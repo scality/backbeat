@@ -1551,6 +1551,10 @@ describe('GC should be created if config is provided', () => {
 
     it('should create a GC if config is provided', function (done) {
         this.timeout(60000);
+        // unique topic + group so this test's consumer is the sole group
+        // member, assigned its partition immediately (a shared group rejoin
+        // can stall waiting out a previous member's session)
+        const suffix = Math.random().toString(36).slice(2);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
@@ -1561,12 +1565,12 @@ describe('GC should be created if config is provided', () => {
               transport: 'http',
             },
             { replicationStatusTopic:
-              'backbeat-func-test-repstatus',
+              `backbeat-func-test-repstatus-${suffix}`,
               replicationStatusProcessor: {
                   retry: {
                       timeoutS: 5,
                   },
-                  groupId: 'backbeat-func-test-group-id',
+                  groupId: `backbeat-func-test-group-id-${suffix}`,
               },
               monitorReplicationFailures: true,
               objectSizeMetrics: [100, 1000],
@@ -1583,6 +1587,10 @@ describe('GC should be created if config is provided', () => {
 
     it('should not create a GC if config is not provided', function (done) {
         this.timeout(60000);
+        // unique topic + group so this test's consumer is the sole group
+        // member, assigned its partition immediately (a shared group rejoin
+        // can stall waiting out a previous member's session)
+        const suffix = Math.random().toString(36).slice(2);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
             { hosts: 'localhost:9092' },
             { auth: { type: 'role',
@@ -1593,12 +1601,12 @@ describe('GC should be created if config is provided', () => {
               transport: 'http',
             },
             { replicationStatusTopic:
-              'backbeat-func-test-repstatus',
+              `backbeat-func-test-repstatus-${suffix}`,
               replicationStatusProcessor: {
                   retry: {
                       timeoutS: 5,
                   },
-                  groupId: 'backbeat-func-test-group-id',
+                  groupId: `backbeat-func-test-group-id-${suffix}`,
               },
               monitorReplicationFailures: true,
               objectSizeMetrics: [100, 1000],
