@@ -795,12 +795,17 @@ describe('BackbeatConsumer with circuit breaker', () => {
 });
 
 describe('BackbeatConsumer shutdown tests', () => {
-    const topic = uniqueTopic('backbeat-consumer-spec-shutdown');
-    const groupId = `bucket-processor-${Math.random()}`;
+    // Each test gets a fresh topic + group so its consumer is the sole group
+    // member and is assigned its partition immediately. With a shared group,
+    // each new consumer would wait out the previous (closed) member's session
+    // before the single partition is reassigned, which can exceed the hook
+    // timeout (the assignment wait below).
     const messages = [
         { key: 'm1', message: '{"value":"1"}' },
         { key: 'm2', message: '{"value":"2"}' },
     ];
+    let topic;
+    let groupId;
     let zookeeper;
     let producer;
     let consumer;
@@ -813,22 +818,19 @@ describe('BackbeatConsumer shutdown tests', () => {
 
     before(function before(done) {
         this.timeout(60000);
+        zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
+        zookeeper.on('ready', done);
+    });
+
+    beforeEach(function beforeEach(done) {
+        this.timeout(60000);
+        topic = uniqueTopic('backbeat-consumer-spec-shutdown');
+        groupId = `bucket-processor-${Math.random()}`;
         producer = new BackbeatProducer({
             topic,
             kafka: producerKafkaConf,
             pollIntervalMs: 100,
         });
-        async.parallel([
-            innerDone => producer.on('ready', innerDone),
-            innerDone => {
-                zookeeper = new ZookeeperManager(zookeeperConf.connectionString, null, log);
-                zookeeper.on('ready', innerDone);
-            },
-        ], done);
-    });
-
-    beforeEach(function beforeEach(done) {
-        this.timeout(60000);
         consumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
             kafka: {
@@ -841,28 +843,27 @@ describe('BackbeatConsumer shutdown tests', () => {
             fromOffset: 'earliest',
             concurrency: 2,
         });
-        consumer.once('ready', () => {
-            consumer.subscribe();
-            // wait until partitions are assigned so close()/disconnect in the
-            // tests below act on a fully-joined consumer (bootstrap used to
-            // guarantee this before emitting 'ready')
-            waitForAssignment(consumer, done);
-        });
+        async.parallel([
+            innerDone => producer.on('ready', innerDone),
+            innerDone => consumer.once('ready', () => {
+                consumer.subscribe();
+                // wait until partitions are assigned so close()/disconnect in
+                // the tests below act on a fully-joined consumer (bootstrap
+                // used to guarantee this before emitting 'ready')
+                waitForAssignment(consumer, innerDone);
+            }),
+        ], done);
     });
 
-    afterEach(() => {
+    afterEach(done => {
         consumer.removeAllListeners('consumed');
+        producer.close(done);
     });
 
     after(function after(done) {
         this.timeout(10000);
-        async.parallel([
-            innerDone => producer.close(innerDone),
-            innerDone => {
-                zookeeper.close();
-                innerDone();
-            },
-        ], done);
+        zookeeper.close();
+        done();
     });
 
     it('should stop consuming and wait for current jobs to end before shutting down', done => {
