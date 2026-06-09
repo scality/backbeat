@@ -1,6 +1,7 @@
 const assert = require('assert');
 
 const configValidator = require('../../../extensions/replication/ReplicationConfigValidator');
+const { replication } = require('../../config.json').extensions;
 
 const baseConfig = {
     source: {
@@ -330,5 +331,50 @@ describe('ReplicationConfigValidator', () => {
             conf.destination.sites.aws1.auth.vault.adminCredentials,
             adminCredentials,
         );
+    });
+});
+
+// tests/config.json sets a distinctive (non-default) value so a pass-through is
+// provable: queueProcessor 350000.
+
+function withoutMaxPollInterval() {
+    const clone = JSON.parse(JSON.stringify(replication));
+    delete clone.queueProcessor.maxPollIntervalMs;
+    return clone;
+}
+
+function withValue(maxPollIntervalMs) {
+    return {
+        ...replication,
+        queueProcessor: {
+            ...replication.queueProcessor,
+            maxPollIntervalMs,
+        },
+    };
+}
+
+describe('ReplicationConfigValidator maxPollIntervalMs', () => {
+    it('should read the queueProcessor value from config', () => {
+        const validated = configValidator(null, replication);
+        assert.strictEqual(
+            validated.queueProcessor.maxPollIntervalMs, 350000);
+    });
+
+    it('should leave it unset when not configured', () => {
+        const validated = configValidator(null, withoutMaxPollInterval());
+        assert.strictEqual(
+            validated.queueProcessor.maxPollIntervalMs, undefined);
+    });
+
+    it('should reject a value below 45000', () => {
+        assert.throws(
+            () => configValidator(null, withValue(30000)),
+            /greater than or equal to 45000/);
+    });
+
+    it('should reject a value above 1800000 (30 minutes)', () => {
+        assert.throws(
+            () => configValidator(null, withValue(1900000)),
+            /less than or equal to 1800000/);
     });
 });
