@@ -138,6 +138,7 @@
             "queueProcessor": {
                 "groupId": "backbeat-test-replication-group",
                 "concurrency": 10,
+                "maxPollIntervalMs": 350000,
                 "probeServer": {
                     "bindAddress": "localhost",
                     "port": 4043
