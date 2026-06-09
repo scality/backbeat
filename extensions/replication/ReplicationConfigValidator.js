@@ -16,6 +16,11 @@ const OBJECT_SIZE_METRICS = [66560, 8388608, 68157440];
 // Floor matches librdkafka's default session.timeout.ms (45s): kafka refuses to
 // start a consumer whose max.poll.interval.ms is below the session timeout.
 const MAX_POLL_INTERVAL_MS_MIN = 45000;
+// Ceiling of 30 minutes: this knob lets a single slow large-MPU transfer
+// finish, not silence a wedged consumer. A poll gap past 30 min means the task
+// is stuck - let kafka evict and redeliver rather than hide the failure behind
+// an ever-growing timeout.
+const MAX_POLL_INTERVAL_MS_MAX = 1800000;
 
 const joiSchema = joi.object({
     source: {
@@ -72,7 +77,9 @@ const joiSchema = joi.object({
         groupId: joi.string().required(),
         retry: qpRetryJoi,
         concurrency: joi.number().greater(0).default(10),
-        maxPollIntervalMs: joi.number().min(MAX_POLL_INTERVAL_MS_MIN),
+        maxPollIntervalMs: joi.number()
+            .min(MAX_POLL_INTERVAL_MS_MIN)
+            .max(MAX_POLL_INTERVAL_MS_MAX),
         mpuPartsConcurrency: joi.number().greater(0).default(10),
         minMPUSizeMB: joi.number().greater(0).default(20),
         probeServer: joi.alternatives().try(

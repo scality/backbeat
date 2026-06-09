@@ -41,4 +41,10 @@ describe('ReplicationConfigValidator maxPollIntervalMs', () => {
             () => configValidator(null, withValue(30000)),
             /greater than or equal to 45000/);
     });
+
+    it('should reject a value above 1800000 (30 minutes)', () => {
+        assert.throws(
+            () => configValidator(null, withValue(1900000)),
+            /less than or equal to 1800000/);
+    });
 });
