@@ -70,7 +70,7 @@ describe('KafkaBacklogMetrics class', function kafkaBacklogMetrics() {
                     topic: TOPIC,
                     groupId: GROUP_ID,
                 });
-                consumer.on('ready', next);
+                consumer.once('ready', next);
             },
             next => {
                 consumer.subscribe();

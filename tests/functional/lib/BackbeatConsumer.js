@@ -33,6 +33,19 @@ function uniqueTopic(name) {
     return `${name}-${Math.random().toString(36).slice(2)}`;
 }
 
+// Wait until the broker has assigned partitions to the consumer. Bootstrap
+// used to guarantee a fully-joined, assigned consumer before `ready`; without
+// it `ready` fires on connect, so tests that close/disconnect right away would
+// otherwise act on an unassigned consumer. Bounded by the mocha hook timeout.
+function waitForAssignment(consumer, cb) {
+    const interval = setInterval(() => {
+        if (consumer._consumer.assignments().length !== 0) {
+            clearInterval(interval);
+            cb();
+        }
+    }, 1000);
+}
+
 describe('BackbeatConsumer main tests', () => {
     const topic = uniqueTopic('backbeat-consumer-spec');
     const groupId = `replication-group-${Math.random()}`;
@@ -828,9 +841,12 @@ describe('BackbeatConsumer shutdown tests', () => {
             fromOffset: 'earliest',
             concurrency: 2,
         });
-        consumer.on('ready', () => {
+        consumer.once('ready', () => {
             consumer.subscribe();
-            done();
+            // wait until partitions are assigned so close()/disconnect in the
+            // tests below act on a fully-joined consumer (bootstrap used to
+            // guarantee this before emitting 'ready')
+            waitForAssignment(consumer, done);
         });
     });
 
@@ -910,7 +926,7 @@ describe('BackbeatConsumer shutdown tests', () => {
         async.series([
             next => {
                 consumer._consumer.disconnect();
-                consumer._consumer.on('disconnected', () => next());
+                consumer._consumer.once('disconnected', () => next());
             },
             next => consumer.close(next),
         ], done);

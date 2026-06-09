@@ -1534,6 +1534,21 @@ describe('queue processor functional tests with mocking', () => {
 });
 
 describe('GC should be created if config is provided', () => {
+    // Wait until the processor's consumer has partitions assigned before
+    // stopping it: close() waits for the revoke ('unassign') rebalance, which
+    // never fires if the consumer subscribed but was never assigned, so an
+    // immediate stop() would hang. Bootstrap used to guarantee assignment
+    // before start()'s callback fired.
+    function waitForProcessorAssignment(processor, cb) {
+        const interval = setInterval(() => {
+            const consumer = processor._consumer && processor._consumer._consumer;
+            if (consumer && consumer.assignments().length !== 0) {
+                clearInterval(interval);
+                cb();
+            }
+        }, 1000);
+    }
+
     it('should create a GC if config is provided', function (done) {
         this.timeout(60000);
         const replicationStatusProcessor = new ReplicationStatusProcessor(
@@ -1561,7 +1576,8 @@ describe('GC should be created if config is provided', () => {
             { topic: 'backbeat-gc' });
         replicationStatusProcessor.start(() => {
             assert(replicationStatusProcessor.getStateVars().gcProducer);
-            replicationStatusProcessor.stop(done);
+            waitForProcessorAssignment(replicationStatusProcessor,
+                () => replicationStatusProcessor.stop(done));
         });
     });
 
@@ -1591,7 +1607,8 @@ describe('GC should be created if config is provided', () => {
             { topic: 'metrics-test-topic' });
         replicationStatusProcessor.start(() => {
             assert.strictEqual(replicationStatusProcessor.getStateVars().gcProducer, null);
-            replicationStatusProcessor.stop(done);
+            waitForProcessorAssignment(replicationStatusProcessor,
+                () => replicationStatusProcessor.stop(done));
         });
     });
 });
