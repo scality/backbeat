@@ -192,7 +192,8 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 },
             };
 
-            // make topic unique so that different tests' bootstrap messages don't interfere
+            // make topic unique so a fresh consumer reading from 'earliest'
+            // does not replay messages produced by other tests
             lcConfig.bucketTasksTopic += Math.random();
 
             const localKafkaConfig = {
@@ -295,7 +296,8 @@ describe('lifecycle conductor', function lifecycleConductor() {
                 },
             };
 
-            // make topic unique so that different tests' bootstrap messages don't interfere
+            // make topic unique so a fresh consumer reading from 'earliest'
+            // does not replay messages produced by other tests
             lcConfig.bucketTasksTopic += Math.random();
 
             const localKafkaConfig = {

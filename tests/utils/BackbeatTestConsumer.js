@@ -6,9 +6,12 @@ const BackbeatConsumer = require('../../lib/BackbeatConsumer');
 
 class BackbeatTestConsumer extends BackbeatConsumer {
     constructor(config) {
+        // Read from the start of the topic so that every message produced
+        // after the consumer is created is guaranteed to be consumed,
+        // without racing partition assignment.
         super(Object.assign({}, config,
                             { queueProcessor: function dummy() {},
-                              bootstrap: true }));
+                              fromOffset: config.fromOffset || 'earliest' }));
         // hook queue processor function
         this._queueProcessor = this._processMessage.bind(this);
         this._expectVars = null;

@@ -848,7 +848,7 @@ describe('queue processor functional tests with mocking', () => {
                         },
                         {},
                         { topic: 'metrics-test-topic' });
-                    replicationStatusProcessor.start({ bootstrap: true }, done);
+                    replicationStatusProcessor.start(done);
                 },
                 done => {
                     copyLocationResultsConsumer = new BackbeatConsumer({
@@ -861,7 +861,7 @@ describe('queue processor functional tests with mocking', () => {
                         kafka: {
                             hosts: 'localhost:9092',
                         },
-                        bootstrap: true,
+                        fromOffset: 'earliest',
                     });
                     copyLocationResultsConsumer.on('ready', done);
                 },
@@ -1559,7 +1559,7 @@ describe('GC should be created if config is provided', () => {
             {},
             { topic: 'metrics-test-topic' },
             { topic: 'backbeat-gc' });
-        replicationStatusProcessor.start({ bootstrap: true }, () => {
+        replicationStatusProcessor.start(() => {
             assert(replicationStatusProcessor.getStateVars().gcProducer);
             replicationStatusProcessor.stop(done);
         });
@@ -1589,7 +1589,7 @@ describe('GC should be created if config is provided', () => {
             },
             {},
             { topic: 'metrics-test-topic' });
-        replicationStatusProcessor.start({ bootstrap: true }, () => {
+        replicationStatusProcessor.start(() => {
             assert.strictEqual(replicationStatusProcessor.getStateVars().gcProducer, null);
             replicationStatusProcessor.stop(done);
         });

@@ -23,8 +23,18 @@ const consumerKafkaConf = {
 };
 const log = new werelogs.Logger('BackbeatConsumer:test');
 
+// These suites create consumers with `fromOffset: 'earliest'` and a
+// throwaway per-run topic. Reading from the start of an empty topic
+// guarantees every produced message is consumed regardless of when the
+// consumer joins the group, so no readiness dance is needed. The random
+// suffix keeps each run isolated: a fresh group reading `earliest` on a
+// reused topic would otherwise replay messages from previous runs.
+function uniqueTopic(name) {
+    return `${name}-${Math.random().toString(36).slice(2)}`;
+}
+
 describe('BackbeatConsumer main tests', () => {
-    const topic = 'backbeat-consumer-spec';
+    const topic = uniqueTopic('backbeat-consumer-spec');
     const groupId = `replication-group-${Math.random()}`;
     const messages = [
         { key: 'foo', message: '{"hello":"foo"}' },
@@ -50,7 +60,7 @@ describe('BackbeatConsumer main tests', () => {
             zookeeper: zookeeperConf,
             kafka: consumerKafkaConf, groupId, topic,
             queueProcessor,
-            bootstrap: true,
+            fromOffset: 'earliest',
         });
         async.parallel([
             innerDone => producer.on('ready', innerDone),
@@ -209,7 +219,7 @@ describe('BackbeatConsumer main tests', () => {
 });
 
 describe('BackbeatConsumer rebalance tests', () => {
-    const topic = 'backbeat-consumer-spec-rebalance';
+    const topic = uniqueTopic('backbeat-consumer-spec-rebalance');
     const groupId = `replication-group-${Math.random()}`;
     const messages = [
         { key: 'foo', message: '{"hello":"foo"}' },
@@ -254,19 +264,6 @@ describe('BackbeatConsumer rebalance tests', () => {
         }, consumedMessages++ ? 4000 : 2000);
     }
 
-    before(function before(done) {
-        this.timeout(60000);
-
-        // Bootstrap just once at the beginning of the test suite
-        const bootstrapConsumer = new BackbeatConsumer({
-            zookeeper: zookeeperConf,
-            kafka: { hosts: consumerKafkaConf.hosts }, groupId, topic,
-            queueProcessor,
-            bootstrap: true,
-        });
-        bootstrapConsumer.on('ready', () => bootstrapConsumer.close(done));
-    });
-
     beforeEach(function before(done) {
         this.timeout(60000);
 
@@ -283,6 +280,7 @@ describe('BackbeatConsumer rebalance tests', () => {
             groupId, topic,
             queueProcessor,
             concurrency: 2,
+            fromOffset: 'earliest',
         });
 
         async.parallel([
@@ -295,6 +293,7 @@ describe('BackbeatConsumer rebalance tests', () => {
                         zookeeper: zookeeperConf,
                         kafka: consumerKafkaConf, groupId, topic,
                         queueProcessor,
+                        fromOffset: 'earliest',
                     });
                     consumer2.on('ready', cb);
                 },
@@ -385,7 +384,7 @@ describe('BackbeatConsumer rebalance tests', () => {
 });
 
 describe('BackbeatConsumer concurrency tests', () => {
-    const topicConc = 'backbeat-consumer-spec-conc-1000';
+    const topicConc = uniqueTopic('backbeat-consumer-spec-conc-1000');
     const groupIdConc = `replication-group-conc-${Math.random()}`;
     let producer;
     let consumer;
@@ -413,7 +412,7 @@ describe('BackbeatConsumer concurrency tests', () => {
             kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
             queueProcessor,
             concurrency: 10,
-            bootstrap: true,
+            fromOffset: 'earliest',
         });
         async.parallel([
             innerDone => producer.on('ready', innerDone),
@@ -520,7 +519,7 @@ describe('BackbeatConsumer concurrency tests', () => {
 });
 
 describe('BackbeatConsumer "deferred committable" tests', () => {
-    const topicConc = 'backbeat-consumer-spec-deferred';
+    const topicConc = uniqueTopic('backbeat-consumer-spec-deferred');
     const groupIdConc = `replication-group-deferred-${Math.random()}`;
     let producer;
     let consumer;
@@ -550,7 +549,7 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
             kafka: consumerKafkaConf, groupId: groupIdConc, topic: topicConc,
             queueProcessor,
             concurrency: 10,
-            bootstrap: true,
+            fromOffset: 'earliest',
         });
         async.parallel([
             innerDone => producer.on('ready', innerDone),
@@ -604,7 +603,10 @@ describe('BackbeatConsumer "deferred committable" tests', () => {
 });
 
 describe('BackbeatConsumer with circuit breaker', () => {
-    const topicBreaker = 'backbeat-consumer-spec-breaker';
+    // groupId is regenerated per test, so the topic is too: a fresh group
+    // reading `earliest` on a shared topic would replay earlier tests'
+    // messages.
+    let topicBreaker;
     let groupIdBreaker;
     let producer;
     let consumer;
@@ -619,6 +621,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
         this.timeout(120000);
 
         groupIdBreaker = `replication-group-breaker-${Math.random()}`;
+        topicBreaker = uniqueTopic('backbeat-consumer-spec-breaker');
 
         producer = new BackbeatProducer({
             kafka: producerKafkaConf,
@@ -630,7 +633,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
             kafka: consumerKafkaConf, groupId: groupIdBreaker, topic: topicBreaker,
             queueProcessor,
             concurrency: 10,
-            bootstrap: true,
+            fromOffset: 'earliest',
             circuitBreaker: this.currentTest.breakerConf,
         });
         async.parallel([
@@ -779,7 +782,7 @@ describe('BackbeatConsumer with circuit breaker', () => {
 });
 
 describe('BackbeatConsumer shutdown tests', () => {
-    const topic = 'backbeat-consumer-spec-shutdown';
+    const topic = uniqueTopic('backbeat-consumer-spec-shutdown');
     const groupId = `bucket-processor-${Math.random()}`;
     const messages = [
         { key: 'm1', message: '{"value":"1"}' },
@@ -822,7 +825,7 @@ describe('BackbeatConsumer shutdown tests', () => {
             queueProcessor,
             groupId,
             topic,
-            bootstrap: true,
+            fromOffset: 'earliest',
             concurrency: 2,
         });
         consumer.on('ready', () => {

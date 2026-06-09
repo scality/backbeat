@@ -349,13 +349,11 @@ class ReplicationStatusProcessor {
     /**
      * Start kafka consumer
      *
-     * @param {object} [options] - options object (only used for tests
-     * for now)
      * @param {function} [cb] - optional callback called when startup
      * is complete
      * @return {undefined}
      */
-    start(options, cb) {
+    start(cb) {
         async.parallel([
             done => {
                 this._failedCRRProducer = new FailedCRRProducer(this.kafkaConfig);
@@ -398,7 +396,6 @@ class ReplicationStatusProcessor {
                     concurrency:
                     this.repConfig.replicationStatusProcessor.concurrency,
                     queueProcessor: this.processKafkaEntry.bind(this),
-                    bootstrap: (options && options.bootstrap) || false,
                 });
                 this._consumer.on('error', () => {
                     if (!consumerReady) {
