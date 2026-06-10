@@ -89,12 +89,25 @@ describe('QueueProcessor stuck-consumer self-exit', () => {
     it('should log fatal and exit(1) after 1s when armed and within ' +
     'budget', () => {
         process.env.REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT = 'true';
-        qp._onRebalanceTimeout({ queueLen: 3, running: 2 });
+        qp._onRebalanceTimeout({
+            queueLen: 3,
+            running: 2,
+            stuckTasks: [
+                { topic, partition: 0, offset: 12, key: 'k1', ageSeconds: 45 },
+                { topic, partition: 1, offset: 34, key: 'k2', ageSeconds: 90 },
+            ],
+        });
         sinon.assert.calledOnceWithMatch(
             fatalStub,
             'consumer stuck after rebalance drain timeout, exiting for ' +
             'restart',
-            sinon.match({ queueLen: 3, running: 2, exitsInWindow: 1 }));
+            sinon.match({
+                stuckTaskCount: 2,
+                oldestAgeSeconds: 90,
+                queueLen: 3,
+                running: 2,
+                exitsInWindow: 1,
+            }));
         // hard exit only fires after the 1s grace delay
         clock.tick(999);
         sinon.assert.notCalled(exitStub);

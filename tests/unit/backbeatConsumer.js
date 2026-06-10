@@ -157,6 +157,76 @@ describe('backbeatConsumer', () => {
         });
     });
 
+    describe('getInFlightTasks', () => {
+        let consumer;
+
+        beforeEach(() => {
+            consumer = new BackbeatConsumerMock({
+                kafka,
+                groupId: 'unittest-group',
+                topic: 'my-test-topic',
+            });
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should return an empty array without a processing queue', () => {
+            assert.deepStrictEqual(consumer.getInFlightTasks(), []);
+        });
+
+        it('should map in-flight entries to their identities', () => {
+            const now = Date.now();
+            sinon.useFakeTimers({ now });
+            consumer._processingQueue = {
+                workersList: () => [{
+                    data: {
+                        topic: 'my-test-topic',
+                        partition: 1,
+                        offset: 42,
+                        key: Buffer.from(`object-key-${'x'.repeat(300)}`),
+                        _bbStartedAt: now - 30000,
+                    },
+                }, {
+                    data: {
+                        topic: 'my-test-topic',
+                        partition: 2,
+                        offset: 7,
+                    },
+                }],
+            };
+            const tasks = consumer.getInFlightTasks();
+            assert.strictEqual(tasks.length, 2);
+            assert.strictEqual(tasks[0].topic, 'my-test-topic');
+            assert.strictEqual(tasks[0].partition, 1);
+            assert.strictEqual(tasks[0].offset, 42);
+            // key is stringified and truncated to 200 chars
+            assert.strictEqual(tasks[0].key.length, 200);
+            assert(tasks[0].key.startsWith('object-key-'));
+            assert.strictEqual(tasks[0].ageSeconds, 30);
+            // entries without key or start time stay readable
+            assert.strictEqual(tasks[1].offset, 7);
+            assert.strictEqual(tasks[1].key, undefined);
+            assert.strictEqual(tasks[1].ageSeconds, undefined);
+        });
+
+        it('should cap the number of returned tasks to the limit', () => {
+            const workers = [];
+            for (let i = 0; i < 7; i++) {
+                workers.push({ data: {
+                    topic: 'my-test-topic', partition: 0, offset: i,
+                } });
+            }
+            consumer._processingQueue = { workersList: () => workers };
+            assert.strictEqual(consumer.getInFlightTasks().length, 5);
+            assert.strictEqual(consumer.getInFlightTasks(2).length, 2);
+            assert.deepStrictEqual(
+                consumer.getInFlightTasks(2).map(task => task.offset),
+                [0, 1]);
+        });
+    });
+
     describe('sequentialy consume from topic', () => {
         let consumer;
 

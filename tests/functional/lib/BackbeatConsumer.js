@@ -388,6 +388,11 @@ describe('BackbeatConsumer rebalance tests', () => {
                     'number');
                 assert.strictEqual(typeof rebalanceTimeoutEvent.running,
                     'number');
+                assert(Array.isArray(rebalanceTimeoutEvent.stuckTasks));
+                assert(rebalanceTimeoutEvent.stuckTasks.length > 0);
+                rebalanceTimeoutEvent.stuckTasks.forEach(task => {
+                    assert.strictEqual(typeof task.offset, 'number');
+                });
                 done();
             }
         }, 1000);

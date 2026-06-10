@@ -487,9 +487,15 @@ class QueueProcessor extends EventEmitter {
                 });
             return;
         }
+        const stuckAges = (queueState.stuckTasks || [])
+            .map(task => task.ageSeconds)
+            .filter(age => typeof age === 'number');
         this.logger.fatal(
             'consumer stuck after rebalance drain timeout, exiting for ' +
             'restart', {
+                stuckTaskCount: queueState.stuckTasks?.length,
+                oldestAgeSeconds:
+                    stuckAges.length ? Math.max(...stuckAges) : undefined,
                 queueLen: queueState.queueLen,
                 running: queueState.running,
                 exitsInWindow: budget.exitsInWindow,
