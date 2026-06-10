@@ -1,6 +1,9 @@
 'use strict';
 
 const async = require('async');
+const fs = require('fs');
+const os = require('os');
+const path = require('path');
 const { EventEmitter } = require('events');
 const Redis = require('ioredis');
 const schedule = require('node-schedule');
@@ -42,6 +45,15 @@ const {
     proxyIAMPath,
     replicationBackends,
 } = require('../constants');
+
+// Budget for stuck-consumer self-exits (see _onRebalanceTimeout): allow
+// at most STUCK_EXIT_BUDGET_MAX_EXITS exits per
+// STUCK_EXIT_BUDGET_WINDOW_HOURS rolling window, so a chronic cause
+// escalates to the probe-latched alarm instead of hiding in a crash loop.
+const STUCK_EXIT_BUDGET_MAX_EXITS = 3;
+const STUCK_EXIT_BUDGET_WINDOW_HOURS = 6;
+const STUCK_EXIT_BUDGET_WINDOW_MS =
+    STUCK_EXIT_BUDGET_WINDOW_HOURS * 60 * 60 * 1000;
 
 /**
  * Labels used for Prometheus metrics
@@ -229,6 +241,14 @@ class QueueProcessor extends EventEmitter {
 
         this.logger = new Logger(
             `Backbeat:Replication:QueueProcessor:${this.site}`);
+
+        // Stuck-consumer self-exit budget file (see _onRebalanceTimeout):
+        // per-site AND per-topic, since all site/replay processors share
+        // one container /tmp and replay processors share the site name.
+        this._stuckExitBudgetFile = path.join(
+            os.tmpdir(),
+            `backbeat-qp-exit-budget-${this.site}-${this.topic}.json`);
+        this._warnIfRestartedAfterStuckExit();
 
         // global variables
         if (sourceConfig.transport === 'https') {
@@ -418,12 +438,145 @@ class QueueProcessor extends EventEmitter {
                 process.exit(1);
             }
         });
+        consumer.on('rebalance.timeout',
+            queueState => this._onRebalanceTimeout(queueState));
         consumer.on('ready', () => {
             consumerReady = true;
             const paused = options && options.paused;
             consumer.subscribe(paused);
         });
         return consumer;
+    }
+
+    /**
+     * Handle a consumer stuck past the rebalance drain timeout.
+     *
+     * S3C: supervisord only restarts a program when its process exits;
+     * nothing acts on a failed healthcheck. Crash so the supervisor
+     * rejoins us to the group and stuck in-flight tasks die instead of
+     * completing late ("ghost" writes). Hard exit, NOT
+     * process.emit('SIGTERM') as CRASH_ON_BATCH_TIMEOUT does: the
+     * SIGTERM path waits on close() -> 'unassign', which blocks on the
+     * very tasks that are stuck. On K8s the liveness probe handles this
+     * and this env var is never set. Exact match: a stray ="false"
+     * must not arm it.
+     *
+     * @param {object} queueState - processing queue state at the time of
+     * the timeout, as emitted by the consumer
+     * @return {undefined}
+     */
+    _onRebalanceTimeout(queueState) {
+        if (process.env.REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT !== 'true') {
+            this.logger.error(
+                'consumer stuck after rebalance drain timeout, self-restart ' +
+                'disabled (REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT != true); consumer ' +
+                'stays disconnected — external restart (liveness probe or ' +
+                'operator) required', {
+                    queueLen: queueState.queueLen,
+                    running: queueState.running,
+                });
+            return;
+        }
+        const budget = this._consumeStuckExitBudget();
+        if (!budget.ok) {
+            this.logger.error(
+                'stuck-consumer exit budget exhausted, staying disconnected ' +
+                'for operator intervention', {
+                    exitsInWindow: budget.exitsInWindow,
+                    windowHours: STUCK_EXIT_BUDGET_WINDOW_HOURS,
+                });
+            return;
+        }
+        this.logger.fatal(
+            'consumer stuck after rebalance drain timeout, exiting for ' +
+            'restart', {
+                queueLen: queueState.queueLen,
+                running: queueState.running,
+                exitsInWindow: budget.exitsInWindow,
+            });
+        setTimeout(() => process.exit(1), 1000);
+    }
+
+    /**
+     * Log a boot-correlation warning when this process starts after a
+     * recent stuck-consumer self-exit, so the restart and the exit that
+     * caused it can be tied together from the logs alone.
+     *
+     * @return {undefined}
+     */
+    _warnIfRestartedAfterStuckExit() {
+        const pastExits = this._readStuckExitBudget();
+        if (pastExits.length > 0) {
+            const lastExitAt = Math.max(...pastExits);
+            this.logger.warn('starting after stuck-consumer self-exit', {
+                exitsInWindow: pastExits.length,
+                lastExitAt,
+                downSeconds: Math.round((Date.now() - lastExitAt) / 1000),
+            });
+        }
+    }
+
+    /**
+     * Read the stuck-consumer self-exit budget file and return the exit
+     * timestamps still within the budget window. FAIL-OPEN: any
+     * read/parse error is treated as an empty budget, so a damaged file
+     * never blocks a restart.
+     *
+     * @return {number[]} epoch-ms timestamps of recent self-exits
+     */
+    _readStuckExitBudget() {
+        try {
+            const timestamps = JSON.parse(
+                fs.readFileSync(this._stuckExitBudgetFile, 'utf8'));
+            const now = Date.now();
+            return timestamps.filter(ts => typeof ts === 'number' &&
+                now - ts < STUCK_EXIT_BUDGET_WINDOW_MS);
+        } catch (err) {
+            if (err.code !== 'ENOENT') {
+                this.logger.warn(
+                    'could not read/persist stuck-consumer exit budget ' +
+                    'file, treating as empty (fail-open)', {
+                        op: 'read',
+                        path: this._stuckExitBudgetFile,
+                        error: err && err.message,
+                    });
+            }
+            return [];
+        }
+    }
+
+    /**
+     * Check and consume the stuck-consumer self-exit budget: at most
+     * STUCK_EXIT_BUDGET_MAX_EXITS exits per
+     * STUCK_EXIT_BUDGET_WINDOW_HOURS hours, persisted across restarts
+     * in a per-site, per-topic file under the OS temp dir. FAIL-OPEN:
+     * if the file cannot be persisted, still allow the exit (restart is
+     * the primary goal).
+     *
+     * @return {object} budget - the budget decision
+     * @return {boolean} budget.ok - true if a self-exit is allowed now
+     * @return {number} budget.exitsInWindow - exits counted in the
+     * current window, including this one when allowed
+     */
+    _consumeStuckExitBudget() {
+        const exits = this._readStuckExitBudget();
+        if (exits.length >= STUCK_EXIT_BUDGET_MAX_EXITS) {
+            return { ok: false, exitsInWindow: exits.length };
+        }
+        exits.push(Date.now());
+        try {
+            fs.writeFileSync(this._stuckExitBudgetFile,
+                JSON.stringify(exits));
+        } catch (err) {
+            this.logger.warn(
+                'could not read/persist stuck-consumer exit budget file, ' +
+                'treating as empty (fail-open)', {
+                    op: 'write',
+                    path: this._stuckExitBudgetFile,
+                    error: err && err.message,
+                });
+        }
+        return { ok: true, exitsInWindow: exits.length };
     }
 
     _setupEcho() {

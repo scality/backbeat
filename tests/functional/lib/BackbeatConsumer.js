@@ -361,6 +361,11 @@ describe('BackbeatConsumer rebalance tests', () => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
+        let rebalanceTimeoutEvent = null;
+        consumer.on('rebalance.timeout', queueState => {
+            rebalanceTimeoutEvent = queueState;
+        });
+
         consumer.once('consumed.message', () => {
             // trigger rebalance during processing of first message
             consumer2.subscribe();
@@ -378,6 +383,11 @@ describe('BackbeatConsumer rebalance tests', () => {
         timer = setInterval(() => {
             if (!consumer.isReady()) {
                 assert(consumer2.isReady());
+                assert(rebalanceTimeoutEvent);
+                assert.strictEqual(typeof rebalanceTimeoutEvent.queueLen,
+                    'number');
+                assert.strictEqual(typeof rebalanceTimeoutEvent.running,
+                    'number');
                 done();
             }
         }, 1000);
