@@ -59,6 +59,19 @@ const MAX_RETRIES = 4;
 // parallel tasks, so the total delay of retries should about 1m30s.
 const MAX_RETRIES_TOTAL = CONCURRENCY_DEFAULT * MAX_RETRIES * 10;
 
+function attachArchiveInfoHeader(command) {
+    command.middlewareStack.add(next => async args => {
+        if (args.request && args.request.headers) {
+            // eslint-disable-next-line no-param-reassign
+            args.request.headers['x-amz-scal-archive-info'] = 'true';
+        }
+        return next(args);
+    }, {
+        step: 'build',
+        name: 'attachArchiveInfoHeader',
+    });
+}
+
 /**
  * compare 2 version by their stale dates returning:
  * - LT (-1) if v1 is less than v2
@@ -1588,12 +1601,20 @@ class LifecycleTask extends BackbeatTask {
             params.VersionId = obj.VersionId;
         }
         const command = new HeadObjectCommand(params);
+        attachArchiveInfoHeader(command);
         attachReqUids(command, log.getSerializedUids());
         return this.s3target.send(command)
             .then(data => {
                 LifecycleMetrics.onS3Request(log, 'headObject', 'bucket', null);
                 const object = Object.assign({}, obj,
-                    { LastModified: data.LastModified });
+                    {
+                        LastModified: data.LastModified,
+                        // With the archive-info header, CloudServer always
+                        // returns the real storage class (never STANDARD):
+                        // the preserved cold class for cold/restored objects,
+                        // the data-store name otherwise.
+                        StorageClass: data.StorageClass,
+                    });
 
                 // There is an order of importance in cases of conflicts
                 // Expiration and NoncurrentVersionExpiration should be priority

@@ -10,6 +10,8 @@ const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
 const LifecycleTaskV2 = require(
     '../../../extensions/lifecycle/tasks/LifecycleTaskV2');
+const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 const fakeLogger = require('../../utils/fakeLogger');
 const { withActiveSpan } = require('../../utils/withActiveSpan');
 const { timeOptions } = require('../../functional/lifecycle/configObjects');
@@ -2470,6 +2472,121 @@ describe('lifecycle task helper methods', () => {
             });
         });
     });
+
+    describe('_sendObjectAction', () => {
+        it('should emit trigger metrics with the entry location', done => {
+            const lifecycleTask = new LifecycleTask(lp);
+            const sentEntries = [];
+            lifecycleTask.objectTasksTopic = 'object-topic';
+            lifecycleTask.circuitBreakers = {
+                tripped: sinon.stub().returns(false),
+            };
+            lifecycleTask.producer = {
+                sendToTopic: (topic, entries, cb) => {
+                    sentEntries.push({ topic, entries });
+                    cb();
+                },
+            };
+            const triggeredMetric = sinon.stub(LifecycleMetrics, 'onLifecycleTriggered');
+
+            const entry = ActionQueueEntry.create('deleteObject')
+                .setAttribute('target.owner', 'test-owner')
+                .setAttribute('target.bucket', 'test-bucket')
+                .setAttribute('target.accountId', 'test-account')
+                .setAttribute('target.key', 'test-key')
+                .setAttribute('details.dataStoreName', 'us-east-1')
+                .setAttribute('transitionTime', Date.now() - HOUR);
+            lifecycleTask._sendObjectAction(entry, err => {
+                assert.ifError(err);
+                assert.strictEqual(entry.getAttribute('details.dataStoreName'), 'us-east-1');
+                assert.strictEqual(lifecycleTask.circuitBreakers.tripped.firstCall.args[1], 'us-east-1');
+                assert.strictEqual(triggeredMetric.firstCall.args[3], 'us-east-1');
+                assert.strictEqual(sentEntries.length, 1);
+                done();
+            });
+        });
+    });
+
+    describe('_compareObject location metrics', () => {
+        // With the x-amz-scal-archive-info request header, CloudServer's
+        // HeadObject always returns the real storage class: the preserved
+        // cold class for cold and restored objects, the data-store name
+        // otherwise (never the STANDARD placeholder the listing may carry).
+        [
+            {
+                desc: 'hot object on the default location',
+                listedStorageClass: 'STANDARD',
+                headStorageClass: 'us-east-1',
+            },
+            {
+                desc: 'hot object on a non-default location',
+                listedStorageClass: 'site-azure',
+                headStorageClass: 'site-azure',
+            },
+            {
+                desc: 'cold object',
+                listedStorageClass: 'location-dmf-v1',
+                headStorageClass: 'location-dmf-v1',
+            },
+            {
+                // restored objects keep the cold class in
+                // x-amz-storage-class even though the restored copy lives
+                // on a warm location
+                desc: 'restored cold object',
+                listedStorageClass: 'location-dmf-v1',
+                headStorageClass: 'location-dmf-v1',
+            },
+        ].forEach(({ desc, listedStorageClass, headStorageClass }) => {
+            it(`should queue the expiration of a ${desc} with the ` +
+            'archive-info storage class', done => {
+                class LifecycleTaskMock extends LifecycleTask {
+                    _sendObjectAction(entry, cb) {
+                        this.latestEntry = entry;
+                        return cb();
+                    }
+                }
+
+                const lifecycleTask = new LifecycleTaskMock(lp);
+                lifecycleTask.s3target = {
+                    send: sinon.stub().resolves({
+                        LastModified: new Date().toISOString(),
+                        StorageClass: headStorageClass,
+                    }),
+                };
+
+                const bucketData = {
+                    target: {
+                        owner: 'test-owner',
+                        bucket: 'test-bucket',
+                        accountId: 'test-account',
+                    },
+                    details: {},
+                };
+                const rules = {
+                    Expiration: {
+                        Date: new Date(Date.now() - DAY),
+                    },
+                };
+                const listedObject = Object.assign({}, OBJECT, {
+                    StorageClass: listedStorageClass,
+                });
+
+                lifecycleTask._compareObject(bucketData, listedObject, rules, fakeLogger, err => {
+                    assert.ifError(err);
+                    assert.strictEqual(lifecycleTask.s3target.send.calledOnce, true);
+                    const command = lifecycleTask.s3target.send.firstCall.args[0];
+                    assert(command.middlewareStack.identify()
+                        .includes('attachArchiveInfoHeader - build'));
+                    assert.strictEqual(
+                        lifecycleTask.latestEntry.getAttribute('details.dataStoreName'),
+                        headStorageClass
+                    );
+                    done();
+                });
+            });
+        });
+    });
+
 });
 
 describe('LifecycleTask trace-context propagation', () => {
