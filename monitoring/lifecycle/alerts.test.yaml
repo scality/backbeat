@@ -466,6 +466,49 @@ tests:
         eval_time: 14m
         exp_alerts: []
 
+  - name: LifecycleIndexCreationFailed
+    interval: 1h
+    input_series:
+      - series: s3_lifecycle_legacy_tasks_total{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless",origin="conductor",status="putBucketIndexesFailed"}
+        values: 0x5 1x12
+      - series: s3_lifecycle_legacy_tasks_total{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless",origin="conductor",status="noIndex"}
+        values: 0+1x17
+    alert_rule_test:
+      - alertname: LifecycleIndexCreationFailed
+        eval_time: 4h
+        exp_alerts: []
+      - alertname: LifecycleIndexCreationFailed
+        eval_time: 6h
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: zenko
+              job: artesca-data-backbeat-lifecycle-producer-headless
+              origin: conductor
+              status: putBucketIndexesFailed
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: |-
+                The lifecycle producer failed to create the v2 lifecycle indexes on at least one bucket in the last 12 hours. The producer will fall back to v1 (full-scan) processing for that bucket. Check producer logs for the bucket name and the underlying MongoDB error.
+              summary: "Lifecycle index creation failure"
+      - alertname: LifecycleIndexCreationFailed
+        eval_time: 15h
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+              namespace: zenko
+              job: artesca-data-backbeat-lifecycle-producer-headless
+              origin: conductor
+              status: putBucketIndexesFailed
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: |-
+                The lifecycle producer failed to create the v2 lifecycle indexes on at least one bucket in the last 12 hours. The producer will fall back to v1 (full-scan) processing for that bucket. Check producer logs for the bucket name and the underlying MongoDB error.
+              summary: "Lifecycle index creation failure"
+      - alertname: LifecycleIndexCreationFailed
+        eval_time: 18h
+        exp_alerts: []
+
   - name: LifecycleLatency
     interval: 10m
     input_series:

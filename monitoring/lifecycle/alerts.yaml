@@ -82,6 +82,20 @@ groups:
         {{ ${lifecycle_latency_critical_threshold} | humanizeDuration }} ago.
       summary: "Lifecycle scan not executed in time"
 
+  - alert: LifecycleIndexCreationFailed
+    Expr: |
+      increase(s3_lifecycle_legacy_tasks_total{namespace="${namespace}", job="${job_lifecycle_producer}", status="putBucketIndexesFailed"}[12h]) > 0
+    Labels:
+     severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: >-
+        The lifecycle producer failed to create the v2 lifecycle indexes on at
+        least one bucket in the last 12 hours. The producer will fall back to
+        v1 (full-scan) processing for that bucket. Check producer logs for the
+        bucket name and the underlying MongoDB error.
+      summary: "Lifecycle index creation failure"
+
 - name: LifecycleBucketProcessor
   rules:
 
