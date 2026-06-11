@@ -444,9 +444,9 @@ class QueueProcessor extends EventEmitter {
      * @return {undefined}
      */
     _onRebalanceTimeout() {
-        const armed = process.env
-            .REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT;
-        if (armed !== 'true') {
+        const isSelfRestartEnabled = process.env
+            .REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT === 'true';
+        if (!isSelfRestartEnabled) {
             return;
         }
         this.logger.fatal('CRR consumer stuck after rebalance drain ' +
