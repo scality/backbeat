@@ -1,5 +1,6 @@
 const assert = require('assert');
 const async = require('async');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { metrics } = require('arsenal');
@@ -299,6 +300,8 @@ describe('BackbeatConsumer rebalance tests', () => {
 
     afterEach(function after(done) {
         this.timeout(10000);
+        delete process.env.CRASH_ON_REBALANCE_TIMEOUT;
+        sinon.restore();
         if (timer) {
             clearInterval(timer);
             timer = null;
@@ -352,14 +355,15 @@ describe('BackbeatConsumer rebalance tests', () => {
         });
     }).timeout(40000);
 
-    it('should fail healthcheck on rebalance timeout', done => {
+    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT ' +
+    'is set', done => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
-        let hasEmittedRebalanceTimeout = false;
-        consumer.on('rebalance.timeout', () => {
-            hasEmittedRebalanceTimeout = true;
-        });
+        // stub the exit before arming the gate, so a real exit can
+        // never fire inside the test process
+        const exitStub = sinon.stub(process, 'exit');
+        process.env.CRASH_ON_REBALANCE_TIMEOUT = 'true';
 
         consumer.once('consumed.message', () => {
             // trigger rebalance during processing of first message
@@ -380,15 +384,18 @@ describe('BackbeatConsumer rebalance tests', () => {
         timer = setInterval(() => {
             if (!consumer.isReady()) {
                 clearInterval(timer);
-                try {
-                    assert(consumer2.isReady(),
-                        'the healthy consumer should still be ready');
-                    assert(hasEmittedRebalanceTimeout,
-                        'rebalance.timeout should have been emitted');
-                    done();
-                } catch (err) {
-                    done(err);
-                }
+                // the exit fires one second after the fatal log; give
+                // it room before asserting
+                setTimeout(() => {
+                    try {
+                        assert(consumer2.isReady(),
+                            'the healthy consumer should still be ready');
+                        sinon.assert.calledOnceWithExactly(exitStub, 1);
+                        done();
+                    } catch (err) {
+                        done(err);
+                    }
+                }, 1500);
             }
         }, 1000);
     }).timeout(60000);
