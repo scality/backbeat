@@ -390,6 +390,9 @@ class QueueProcessor extends EventEmitter {
         const groupId =
               `${this.repConfig.queueProcessor.groupId}-${this.site}`;
         const consumer = new BackbeatConsumer({
+            // names this consumer's log lines (the default is a generic
+            // 'BackbeatConsumer' shared by every backbeat service)
+            clientId: `Backbeat:Replication:QueueProcessor:${this.site}:Consumer`,
             zookeeper: {
                 connectionString: this.zkConfig.connectionString,
             },
