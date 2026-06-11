@@ -356,6 +356,11 @@ describe('BackbeatConsumer rebalance tests', () => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
+        let hasEmittedRebalanceTimeout = false;
+        consumer.on('rebalance.timeout', () => {
+            hasEmittedRebalanceTimeout = true;
+        });
+
         consumer.once('consumed.message', () => {
             // trigger rebalance during processing of first message
             consumer2.subscribe();
@@ -369,11 +374,21 @@ describe('BackbeatConsumer rebalance tests', () => {
             assert.ifError(err);
         });
 
-        // The consumer should become unhealthy eventually
+        // The consumer should become unhealthy eventually. A failed
+        // assertion inside a timer callback would surface as an
+        // unattributed exception, so report it through done() instead.
         timer = setInterval(() => {
             if (!consumer.isReady()) {
-                assert(consumer2.isReady());
-                done();
+                clearInterval(timer);
+                try {
+                    assert(consumer2.isReady(),
+                        'the healthy consumer should still be ready');
+                    assert(hasEmittedRebalanceTimeout,
+                        'rebalance.timeout should have been emitted');
+                    done();
+                } catch (err) {
+                    done(err);
+                }
             }
         }, 1000);
     }).timeout(60000);

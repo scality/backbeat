@@ -419,12 +419,41 @@ class QueueProcessor extends EventEmitter {
                 process.exit(1);
             }
         });
+        consumer.on('rebalance.timeout', () => this._onRebalanceTimeout());
         consumer.on('ready', () => {
             consumerReady = true;
             const paused = options && options.paused;
             consumer.subscribe(paused);
         });
         return consumer;
+    }
+
+    /**
+     * Handle a consumer stuck past the rebalance drain timeout.
+     *
+     * On S3C, supervisord only restarts a program when its process
+     * exits; nothing acts on the failed healthcheck this disconnect
+     * was designed to trip. Exit so the supervisor restarts us and the
+     * group gets a fresh consumer, instead of a zombie whose stuck
+     * tasks can still complete late and write over the partition's new
+     * owner (ghost objects, orphaned parts). Hard exit, not SIGTERM:
+     * the graceful stop path waits on the very tasks that are stuck.
+     * The env var is never set on K8s, where the liveness probe
+     * already handles this state.
+     *
+     * @return {undefined}
+     */
+    _onRebalanceTimeout() {
+        const armed = process.env
+            .REPLICATION_QUEUE_PROCESSOR_CRASH_ON_REBALANCE_TIMEOUT;
+        if (armed !== 'true') {
+            return;
+        }
+        this.logger.fatal('CRR consumer stuck after rebalance drain ' +
+            'timeout, exiting so the process supervisor restarts us',
+            { site: this.site });
+        // grace period so the fatal line flushes to stdout before the exit
+        setTimeout(() => process.exit(1), 1000);
     }
 
     _setupEcho() {
