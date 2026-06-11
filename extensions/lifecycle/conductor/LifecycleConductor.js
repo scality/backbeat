@@ -324,8 +324,6 @@ class LifecycleConductor {
                     return cb(null, lifecycleTaskVersions.v1);
                 }
 
-                LifecycleMetrics.onLegacyTask(log, 'putBucketIndexes');
-
                 this.activeIndexingJobs.push({
                     bucket: task.bucketName,
                     indexes: indexesForFeature.lifecycle.v2,
@@ -342,6 +340,7 @@ class LifecycleConductor {
                                 error: err,
                             });
                         }
+                        LifecycleMetrics.onLegacyTask(log, err ? 'putBucketIndexesFailed' : 'putBucketIndexes');
                         return cb(null, lifecycleTaskVersions.v1);
                     });
             });
