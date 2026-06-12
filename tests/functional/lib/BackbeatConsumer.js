@@ -1,5 +1,6 @@
 const assert = require('assert');
 const async = require('async');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { metrics } = require('arsenal');
@@ -300,6 +301,8 @@ describe('BackbeatConsumer rebalance tests', () => {
 
     afterEach(function after(done) {
         this.timeout(10000);
+        delete process.env.CRASH_ON_REBALANCE_TIMEOUT;
+        sinon.restore();
         if (timer) {
             clearInterval(timer);
             timer = null;
@@ -357,6 +360,11 @@ describe('BackbeatConsumer rebalance tests', () => {
         assert(consumer.isReady());
         assert(consumer2.isReady());
 
+        // with the gate unset, the drain timeout must disconnect the
+        // consumer but leave the process alive; stub the exit so a
+        // gate regression cannot kill the test process
+        const exitStub = sinon.stub(process, 'exit');
+
         consumer.once('consumed.message', () => {
             // trigger rebalance during processing of first message
             consumer2.subscribe();
@@ -370,11 +378,69 @@ describe('BackbeatConsumer rebalance tests', () => {
             assert.ifError(err);
         });
 
-        // The consumer should become unhealthy eventually
+        // The consumer should become unhealthy eventually. A failed
+        // assertion inside a timer callback would surface as an
+        // unattributed exception, so report it through done() instead.
         timer = setInterval(() => {
             if (!consumer.isReady()) {
-                assert(consumer2.isReady());
-                done();
+                clearInterval(timer);
+                // a wrongly-armed exit would fire 1s after the
+                // timeout; wait past that before asserting nothing fired
+                setTimeout(() => {
+                    try {
+                        assert(consumer2.isReady(),
+                            'the healthy consumer should still be ready');
+                        sinon.assert.notCalled(exitStub);
+                        done();
+                    } catch (err) {
+                        done(err);
+                    }
+                }, 1500);
+            }
+        }, 1000);
+    }).timeout(60000);
+
+    it('should exit on rebalance timeout when CRASH_ON_REBALANCE_TIMEOUT ' +
+    'is set', done => {
+        assert(consumer.isReady());
+        assert(consumer2.isReady());
+
+        // stub the exit before arming the gate, so a real exit can
+        // never fire inside the test process
+        const exitStub = sinon.stub(process, 'exit');
+        process.env.CRASH_ON_REBALANCE_TIMEOUT = 'true';
+
+        consumer.once('consumed.message', () => {
+            // trigger rebalance during processing of first message
+            consumer2.subscribe();
+
+            // Return true to allow the consumer to "be stuck" on the message
+            return true;
+        });
+
+        consumer.subscribe();
+        producer.send([{ key: 'msg', message: 'taskStuck' }], err => {
+            assert.ifError(err);
+        });
+
+        // The consumer should become unhealthy eventually. A failed
+        // assertion inside a timer callback would surface as an
+        // unattributed exception, so report it through done() instead.
+        timer = setInterval(() => {
+            if (!consumer.isReady()) {
+                clearInterval(timer);
+                // the exit fires one second after the fatal log; give
+                // it room before asserting
+                setTimeout(() => {
+                    try {
+                        assert(consumer2.isReady(),
+                            'the healthy consumer should still be ready');
+                        sinon.assert.calledOnceWithExactly(exitStub, 1);
+                        done();
+                    } catch (err) {
+                        done(err);
+                    }
+                }, 1500);
             }
         }, 1000);
     }).timeout(60000);
