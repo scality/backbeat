@@ -81,7 +81,7 @@ describe('BackbeatConsumer main tests', () => {
     it('should be able to read messages sent to the topic and publish ' +
     'topic metrics', done => {
         let consumeCb = null;
-        let totalConsumed = 0;
+        let triggered = false;
         let topicOffset;
         let consumerOffset;
         const zkMetricsPath = `/test/kafka-backlog-metrics/${topic}/0`;
@@ -113,10 +113,10 @@ describe('BackbeatConsumer main tests', () => {
             assert(latestConsumedMetricValues[0].value >= beforeConsume / 1000);
         }
         consumer.subscribe();
-        consumer.on('consumed', messagesConsumed => {
-            totalConsumed += messagesConsumed;
-            assert(totalConsumed <= messages.length);
-            if (totalConsumed === messages.length) {
+        consumer.on('consumed', () => {
+            assert(consumedMessages.length <= messages.length);
+            if (consumedMessages.length >= messages.length && !triggered) {
+                triggered = true;
                 assert.deepStrictEqual(
                     messages.map(e => e.message),
                     consumedMessages.map(buffer => buffer.toString()));
