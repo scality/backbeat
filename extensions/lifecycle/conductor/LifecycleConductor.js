@@ -11,6 +11,7 @@ const BucketClient = require('bucketclient').RESTClient;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
 
+const config = require('../../../lib/Config');
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const BackbeatTask = require('../../../lib/tasks/BackbeatTask');
 const ZookeeperManager = require('../../../lib/clients/ZookeeperManager');
@@ -25,6 +26,7 @@ const {
 } = require('../../../lib/constants');
 
 const { LifecycleMetrics } = require('../LifecycleMetrics');
+const { hasMassExpirationRule } = require('../util/mongoRules');
 const { BreakerState, CircuitBreaker } = require('breakbeat').CircuitBreaker;
 const {
     startCircuitBreakerMetricsExport,
@@ -277,6 +279,12 @@ class LifecycleConductor {
                 return cb(null, lifecycleTaskVersions.v1);
             }
 
+            if (task.hasMassExpirationRule) {
+                log.trace('skipping index creation: bucket has a mass-expiration rule');
+                LifecycleMetrics.onLegacyTask(log, 'massExpirationRule');
+                return cb(null, lifecycleTaskVersions.v1);
+            }
+
             if (!this.lcConfig.autoCreateIndexes) {
                 log.trace('skipping index creation: auto creation of indexes disabled');
                 LifecycleMetrics.onLegacyTask(log, 'noIndex');
@@ -328,6 +336,22 @@ class LifecycleConductor {
                         threshold: 3 * idIndexSize,
                     });
                     LifecycleMetrics.onLegacyTask(log, 'insufficientDiskSpace');
+                    return cb(null, lifecycleTaskVersions.v1);
+                }
+
+                const { maxAutoIndexDocCount, maxAutoIndexStorageBytes } =
+                    config.lifecycleConductorOptions;
+                const docCount = results.collStats.count || 0;
+                const storageSize = results.collStats.storageSize || 0;
+                if (docCount > maxAutoIndexDocCount || storageSize > maxAutoIndexStorageBytes) {
+                    log.warn('skipping index creation: collection too large', {
+                        bucket: task.bucketName,
+                        docCount,
+                        storageSize,
+                        maxDocCount: maxAutoIndexDocCount,
+                        maxStorageBytes: maxAutoIndexStorageBytes,
+                    });
+                    LifecycleMetrics.onLegacyTask(log, 'collectionTooBig');
                     return cb(null, lifecycleTaskVersions.v1);
                 }
 
@@ -893,6 +917,8 @@ class LifecycleConductor {
                                         canonicalId: doc.value.owner,
                                         isLifecycled: !!doc.value.lifecycleConfiguration,
                                         hasSosApi: !!doc.value.capabilities?.VeeamSOSApi,
+                                        hasMassExpirationRule: hasMassExpirationRule(
+                                            doc.value.lifecycleConfiguration?.rules),
                                     });
                                     nEnqueued += 1;
                                     lastSentId = doc._id;

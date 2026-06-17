@@ -730,6 +730,116 @@ describe('Lifecycle Conductor', () => {
                 done();
             });
         });
+
+        it('should return v1: bucket has a mass-expiration rule', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            client.indexesObj = [];
+            client.error = null;
+
+            const task = { ...getTask(true), hasMassExpirationRule: true };
+            conductor._indexesGetOrCreate(task, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('mass-expiration guard short-circuits before fetching diskUsage/collStats', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            // Throw if either MongoDB call is made — the guard must short-circuit before.
+            conductor._mongodbClient = {
+                getDiskUsage: () => { throw new Error('getDiskUsage should not be called'); },
+                getCollectionStats: () => { throw new Error('getCollectionStats should not be called'); },
+            };
+            client.indexesObj = [];
+            client.error = null;
+
+            const task = { ...getTask(true), hasMassExpirationRule: true };
+            conductor._indexesGetOrCreate(task, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('should still return v2 when mass-expiration bucket already has indexes', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            client.indexesObj = indexesForFeature.lifecycle.v2;
+            client.error = null;
+
+            const task = { ...getTask(true), hasMassExpirationRule: true };
+            conductor._indexesGetOrCreate(task, log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v2);
+                done();
+            });
+        });
+
+        it('should return v1: collection too big (docCount over threshold)', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            conductor._mongodbClient = {
+                getDiskUsage: cb => cb(null, { available: 1e12, free: 1e12, total: 2e12 }),
+                getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                    indexSizes: { _id_: 1000 },
+                    count: 20000000,
+                    storageSize: 100,
+                }),
+            };
+            client.indexesObj = [];
+            client.error = null;
+
+            conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
+
+        it('should return v1: collection too big (storageSize over threshold)', done => {
+            const client = new BackbeatMetadataProxyMock();
+            conductor.clientManager.getBackbeatMetadataProxy = () => client;
+            conductor.activeIndexingJobsRetrieved = true;
+            conductor.activeIndexingJobs = [];
+            conductor._bucketSource = 'mongodb';
+            conductor._mongodbClient = {
+                getDiskUsage: cb => cb(null, { available: 1e12, free: 1e12, total: 2e12 }),
+                getCollectionStats: (bucketName, _log, cb) => cb(null, {
+                    indexSizes: { _id_: 1000 },
+                    count: 100,
+                    storageSize: 20 * 1024 * 1024 * 1024,
+                }),
+            };
+            client.indexesObj = [];
+            client.error = null;
+
+            conductor._indexesGetOrCreate(getTask(true), log, (err, taskVersion) => {
+                assert.ifError(err);
+                assert.deepStrictEqual(client.receivedIdxObj, null);
+                assert.deepStrictEqual(conductor.activeIndexingJobs, []);
+                assert.deepStrictEqual(taskVersion, lifecycleTaskVersions.v1);
+                done();
+            });
+        });
     });
 
     describe('listBuckets', () => {
@@ -1098,6 +1208,71 @@ describe('Lifecycle Conductor', () => {
                 assert.strictEqual(tasks.length, 2);
                 assert.strictEqual(tasks.find(t => t.bucketName === 'veeam-bucket').hasSosApi, true);
                 assert.strictEqual(tasks.find(t => t.bucketName === 'normal-bucket').hasSosApi, false);
+                done();
+            });
+        });
+
+        it('should populate hasMassExpirationRule from lifecycle rules when listing from mongodb', done => {
+            const lcConductor = makeLifecycleConductorWithFilters({
+                bucketSource: 'mongodb',
+            }, []);
+
+            const docs = [
+                {
+                    _id: 'mass-exp-bucket',
+                    value: {
+                        owner: 'acc',
+                        lifecycleConfiguration: {
+                            rules: [
+                                { ruleStatus: 'Enabled',
+                                    actions: [{ actionName: 'Expiration', days: 0 }] },
+                            ],
+                        },
+                    },
+                },
+                {
+                    _id: 'selective-bucket',
+                    value: {
+                        owner: 'acc',
+                        lifecycleConfiguration: {
+                            rules: [
+                                { ruleStatus: 'Enabled', actions: [{ actionName: 'Expiration', days: 30 }] },
+                            ],
+                        },
+                    },
+                },
+                { _id: 'no-lifecycle-bucket', value: { owner: 'acc' } },
+            ];
+            let idx = 0;
+            const cursor = {
+                hasNext: () => Promise.resolve(idx < docs.length),
+                next: () => Promise.resolve(docs[idx++]),
+            };
+            const projectStub = sinon.stub().returns(cursor);
+            const findStub = sinon.stub().returns({ project: projectStub });
+
+            lcConductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, []),
+                getCollection: name => {
+                    if (name === '__metastore') {return { find: findStub };}
+                    return { collectionName: name };
+                },
+                _isSpecialCollection: () => false,
+            };
+            sinon.stub(lcConductor._zkClient, 'getData').yields(null, null, null);
+
+            lcConductor.listBuckets(queue, fakeLogger, err => {
+                assert.ifError(err);
+                // lifecycleConfiguration must be in the projection so we can read its rules
+                assert.strictEqual(projectStub.getCall(0).args[0]['value.lifecycleConfiguration'], 1);
+                const tasks = queue.list();
+                assert.strictEqual(tasks.length, 3);
+                const massExp = tasks.find(t => t.bucketName === 'mass-exp-bucket');
+                const selective = tasks.find(t => t.bucketName === 'selective-bucket');
+                const noLifecycle = tasks.find(t => t.bucketName === 'no-lifecycle-bucket');
+                assert.strictEqual(massExp.hasMassExpirationRule, true);
+                assert.strictEqual(selective.hasMassExpirationRule, false);
+                assert.strictEqual(noLifecycle.hasMassExpirationRule, false);
                 done();
             });
         });
