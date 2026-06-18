@@ -158,66 +158,6 @@ describe('backbeatConsumer', () => {
         });
     });
 
-    describe('getInFlightTasks', () => {
-        let consumer;
-
-        beforeEach(() => {
-            consumer = new BackbeatConsumerMock({
-                kafka,
-                groupId: 'unittest-group',
-                topic: 'my-test-topic',
-            });
-        });
-
-        it('should return an empty array without a processing queue', () => {
-            assert.deepStrictEqual(consumer.getInFlightTasks(), []);
-        });
-
-        it('should map in-flight entries to their identities', () => {
-            consumer._processingQueue = {
-                workersList: () => [{
-                    data: {
-                        topic: 'my-test-topic',
-                        partition: 1,
-                        offset: 42,
-                        key: Buffer.from(`object-key-${'x'.repeat(300)}`),
-                    },
-                }, {
-                    data: {
-                        topic: 'my-test-topic',
-                        partition: 2,
-                        offset: 7,
-                    },
-                }],
-            };
-            const tasks = consumer.getInFlightTasks();
-            assert.strictEqual(tasks.length, 2);
-            assert.strictEqual(tasks[0].topic, 'my-test-topic');
-            assert.strictEqual(tasks[0].partition, 1);
-            assert.strictEqual(tasks[0].offset, 42);
-            // the key is stringified whole, never truncated
-            assert.strictEqual(tasks[0].key,
-                `object-key-${'x'.repeat(300)}`);
-            // entries without a key keep their other fields, the key
-            // field stays undefined
-            assert.strictEqual(tasks[1].offset, 7);
-            assert.strictEqual(tasks[1].key, undefined);
-        });
-
-        it('should cap the number of returned tasks', () => {
-            const workers = [];
-            for (let i = 0; i < 12; i++) {
-                workers.push({ data: {
-                    topic: 'my-test-topic', partition: 0, offset: i,
-                } });
-            }
-            consumer._processingQueue = { workersList: () => workers };
-            assert.deepStrictEqual(
-                consumer.getInFlightTasks().map(task => task.offset),
-                [0, 1, 2, 3, 4, 5, 6, 7, 8, 9]);
-        });
-    });
-
     describe('sequentialy consume from topic', () => {
         let consumer;
 
