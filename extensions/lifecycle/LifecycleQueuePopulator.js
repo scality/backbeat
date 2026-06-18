@@ -283,8 +283,10 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
         }
 
         // if entry is a versioned object and is the master entry, skip task as
-        // the non-master entry will be processed
-        if (this._isVersionedObject(value) && isMasterKey(entry.key)) {
+        // the non-master entry will be processed. The retrigger restore flow
+        // (originOp 's3:ObjectRestore:Retry') only updates the master entry, so
+        // the master event is the only one we will ever get — do not skip it.
+        if (this._isVersionedObject(value) && isMasterKey(entry.key) && operation !== 's3:ObjectRestore:Retry') {
             this.log.trace('skip processing of object master entry');
             return;
         }
