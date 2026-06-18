@@ -1,4 +1,6 @@
 'use strict';
+const tracing = require('../../lib/tracing');
+tracing.init();
 
 const { errors } = require('arsenal');
 const werelogs = require('werelogs');
@@ -101,6 +103,6 @@ initAndStart();
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');
     garbageCollector.close(() => {
-        process.exit(0);
+        tracing.close().finally(() => process.exit(0));
     });
 });

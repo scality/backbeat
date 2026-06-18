@@ -24,6 +24,7 @@ const ReplicationAPI = require('../../replication/ReplicationAPI');
 const { LifecycleMetrics, LIFECYCLE_MARKER_METRICS_LOCATION } = require('../LifecycleMetrics');
 const locationsConfig = require('../../../conf/locationConfig.json') || {};
 const { rulesSupportTransition } = require('../util/rules');
+const { stampTraceHeaders } = require('arsenal/build/lib/tracing').kafka;
 const { decode } = versioning.VersionID;
 
 const errorTransitionInProgress = errors.InternalError.
@@ -121,7 +122,7 @@ class LifecycleTask extends BackbeatTask {
      * @return {undefined}
      */
     _sendBucketEntry(entry, cb) {
-        const entries = [{ message: JSON.stringify(entry) }];
+        const entries = [stampTraceHeaders({ message: JSON.stringify(entry) })];
         this.producer.sendToTopic(this.bucketTasksTopic, entries, err => {
             LifecycleMetrics.onKafkaPublish(null, 'BucketTopic', 'bucket', err, 1);
             return cb(err);
@@ -183,7 +184,7 @@ class LifecycleTask extends BackbeatTask {
             location,
             Date.now() - entry.getAttribute('transitionTime'));
 
-        const entries = [{ message: entry.toKafkaMessage() }];
+        const entries = [stampTraceHeaders({ message: entry.toKafkaMessage() })];
         this.producer.sendToTopic(this.objectTasksTopic, entries,  err => {
             LifecycleMetrics.onKafkaPublish(null, 'ObjectTopic', 'bucket', err, 1);
             return cb(err);

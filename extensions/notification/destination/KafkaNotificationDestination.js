@@ -100,7 +100,17 @@ class KafkaNotificationDestination extends NotificationDestination {
      */
     send(messages, done) {
         const starTime = Date.now();
-        this._notificationProducer.send(messages, error => {
+        // Trust boundary: strip headers before producing to the customer Kafka.
+        // Delete on a shallow copy so the caller's messages aren't mutated.
+        const safeMessages = messages.map(m => {
+            if (m && m.headers) {
+                const rest = { ...m };
+                delete rest.headers;
+                return rest;
+            }
+            return m;
+        });
+        this._notificationProducer.send(safeMessages, error => {
             if (error) {
                 const { host, topic } = this._destinationConfig;
                 this._log.error('error in message delivery to external Kafka destination', {

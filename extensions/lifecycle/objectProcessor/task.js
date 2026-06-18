@@ -1,4 +1,6 @@
 'use strict';
+const tracing = require('../../../lib/tracing');
+tracing.init();
 
 const async = require('async');
 const werelogs = require('werelogs');
@@ -120,6 +122,6 @@ async.waterfall([
 process.on('SIGTERM', () => {
     logger.info('received SIGTERM, exiting');
     objectProcessor.close(() => {
-        process.exit(0);
+        tracing.close().finally(() => process.exit(0));
     });
 });
