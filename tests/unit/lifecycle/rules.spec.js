@@ -318,6 +318,31 @@ describe('rulesToParams with versioning Disabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
+    it('with Expiration rule using Days set to 0 (no BeforeDate, lists all)', () => {
+        const currentDate = Date.now();
+        const prefix = '';
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 0 },
+                ID: '123',
+                Prefix: prefix,
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: prefix,
+               MaxKeys: MAX_KEYS,
+            },
+            listType: 'current',
+            remainings: []
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
     it('with Expiration rule using Days and prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';

@@ -142,8 +142,7 @@ class RulesReducer {
         let storageClass;
 
         if (r.Expiration) {
-            // NOTE: Expiration Days cannot be 0.
-            if (r.Expiration.Days) {
+            if (r.Expiration.Days !== undefined) {
                 days = this._decrementExpirationDay(r.Expiration.Days);
             } else if (r.Expiration.Date) {
                 if (r.Expiration.Date <= this._currentDate) {
@@ -200,8 +199,8 @@ class RulesReducer {
         let storageClass;
 
         if (r.NoncurrentVersionExpiration) {
-            // 'NoncurrentDays' for NoncurrentVersionExpiration action is a positive integer
-            if (r.NoncurrentVersionExpiration.NoncurrentDays) {
+            // 'NoncurrentDays' for NoncurrentVersionExpiration action is a nonnegative integer
+            if (r.NoncurrentVersionExpiration.NoncurrentDays !== undefined) {
                 days = this._decrementExpirationDay(r.NoncurrentVersionExpiration.NoncurrentDays);
             }
         }
@@ -246,7 +245,7 @@ class RulesReducer {
         // NOTE: When you specify the Days tag, Amazon S3 automatically performs ExpiredObjectDeleteMarker
         // cleanup when the delete markers are old enough to satisfy the age criteria.
         if (r.Expiration) {
-            if (r.Expiration.Days) {
+            if (r.Expiration.Days !== undefined) {
                 days = this._decrementExpirationDay(r.Expiration.Days);
             } else if (r.Expiration.Date) {
                 if (r.Expiration.Date <= this._currentDate) {

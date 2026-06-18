@@ -121,6 +121,28 @@ describe('RulesReducer with versioning Enabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
+    it('with Expiration rule using Days set to 0', () => {
+        const currentDate = Date.now();
+        const prefix = '';
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 0 },
+                ID: '123',
+                Prefix: prefix,
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            currents: [{ prefix: '', days: 0 }],
+            nonCurrents: [],
+            orphans: [{ prefix: '', days: 0 }],
+        };
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        assert.deepStrictEqual(result, expected);
+    });
+
     it('with Expiration rule using Days and prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';
@@ -454,6 +476,30 @@ describe('RulesReducer with versioning Enabled', () => {
             nonCurrents: [{
                 prefix: '',
                 days: 2,
+            }],
+            orphans: [],
+        };
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with NoncurrentVersionExpiration rule using NoncurrentDays set to 0', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 0 },
+                ID: '0',
+                Prefix: '',
+                Status: 'Enabled',
+            },
+        ];
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        const expected = {
+            currents: [],
+            nonCurrents: [{
+                prefix: '',
+                days: 0,
             }],
             orphans: [],
         };

@@ -143,6 +143,29 @@ describe('RulesReducer with versioning Disabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
+    it('with Expiration rule using Days set to 0', () => {
+        const currentDate = Date.now();
+        const prefix = '';
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 0 },
+                ID: '123',
+                Prefix: prefix,
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            currents: [{
+                prefix: '',
+                days: 0,
+            }]
+        };
+        const rulesReducer = new RulesReducer(versioningStatus, currentDate, bucketLCRules, options);
+        const result = rulesReducer.toListings();
+
+        assert.deepStrictEqual(result, expected);
+    });
+
     it('with Expiration rule using Days and prefix', () => {
         const currentDate = Date.now();
         const prefix = 'pre';

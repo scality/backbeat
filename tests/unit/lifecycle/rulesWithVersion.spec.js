@@ -262,6 +262,33 @@ describe('rulesToParams with versioning Enabled', () => {
         assert.deepStrictEqual(result, expected);
     });
 
+    it('with Expiration rule using Days set to 0 (no BeforeDate, lists all)', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                Expiration: { Days: 0 },
+                ID: '123',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+        const expected = {
+            params: {
+               Bucket: bucketName,
+               Prefix: '',
+               MaxKeys: MAX_KEYS,
+            },
+            listType: 'current',
+            remainings: [{
+                listType: 'orphan',
+                prefix: '',
+            }]
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
     it('with Expiration rule using Days', () => {
         const currentDate = Date.now();
         const prefix = '';
@@ -712,6 +739,31 @@ describe('rulesToParams with versioning Enabled', () => {
             {
                 NoncurrentVersionTransitions: [{ NoncurrentDays: 0, StorageClass: locationName }],
                 ID: '456',
+                Prefix: '',
+                Status: 'Enabled',
+            }
+        ];
+
+        const expected = {
+            params: {
+                Bucket: bucketName,
+                Prefix: '',
+                MaxKeys: MAX_KEYS,
+            },
+            listType: 'noncurrent',
+            remainings: []
+        };
+
+        const result = rulesToParams(versioningStatus, currentDate, bucketLCRules, bucketData, options);
+        assert.deepStrictEqual(result, expected);
+    });
+
+    it('with NoncurrentVersionExpiration rule using NoncurrentDays set to 0 (no BeforeDate)', () => {
+        const currentDate = Date.now();
+        const bucketLCRules = [
+            {
+                NoncurrentVersionExpiration: { NoncurrentDays: 0 },
+                ID: '123',
                 Prefix: '',
                 Status: 'Enabled',
             }
