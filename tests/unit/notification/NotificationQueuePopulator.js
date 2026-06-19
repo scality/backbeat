@@ -639,6 +639,69 @@ describe('NotificationQueuePopulator ::', () => {
             });
         });
     });
+
+    describe('trace context propagation ::', () => {
+        const tp = '00-abcdef1234567890abcdef1234567890-1234567890abcdef-01';
+        const ts = 'congo=t61rcWkgMzE';
+
+        it('should attach traceparent header when oplog value has traceContext', async () => {
+            sinon.stub(bnConfigManager, 'getConfig').returns(config);
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                    'traceContext': { traceparent: tp, tracestate: ts },
+                });
+            assert(publishStub.calledOnce);
+            // publish(topic, key, message, optEntriesToPublish, headers)
+            const headers = publishStub.getCall(0).args.at(4);
+            assert.deepStrictEqual(headers, [
+                { traceparent: tp },
+                { tracestate: ts },
+            ]);
+        });
+
+        it('should attach traceparent-only header when tracestate is missing', async () => {
+            sinon.stub(bnConfigManager, 'getConfig').returns(config);
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                    'traceContext': { traceparent: tp },
+                });
+            const headers = publishStub.getCall(0).args.at(4);
+            assert.deepStrictEqual(headers, [{ traceparent: tp }]);
+        });
+
+        it('should pass undefined headers when oplog value has no traceContext', async () => {
+            sinon.stub(bnConfigManager, 'getConfig').returns(config);
+            const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+            await notificationQueuePopulator._processObjectEntry(
+                'example-bucket',
+                'example-key',
+                {
+                    'originOp': 's3:ObjectCreated:Put',
+                    'dataStoreName': 'metastore',
+                    'content-length': '100',
+                    'last-modified': '0000',
+                    'md-model-version': '1',
+                });
+            const headers = publishStub.getCall(0).args.at(4);
+            assert.strictEqual(headers, undefined);
+        });
+    });
 });
 
 

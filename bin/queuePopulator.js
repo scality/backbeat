@@ -1,3 +1,6 @@
+const tracing = require('../lib/tracing');
+tracing.init();
+
 const async = require('async');
 const schedule = require('node-schedule');
 
@@ -98,6 +101,6 @@ process.on('SIGTERM', () => {
             });
             process.exit(1);
         }
-        process.exit(0);
+        tracing.close().finally(() => process.exit(0));
     });
 });

@@ -38,4 +38,23 @@ describe('KafkaNotificationDestination ::', () => {
             done();
         });
     });
+
+    it('strips trace headers before producing to the customer Kafka', done => {
+        const destConfig = { host: 'localhost', port: 9092, topic: 'test', resource: 'res' };
+        const dest = new KafkaNotificationDestination({ destConfig, logger: FakeLogger });
+        let captured;
+        dest._notificationProducer = { send: (msgs, cb) => { captured = msgs; cb(null); } };
+        const messages = [
+            { key: 'k', message: 'v', headers: [{ traceparent: '00-abc-def-01' }] },
+        ];
+        dest.send(messages, () => {
+            assert.strictEqual(captured.length, 1);
+            assert.strictEqual(captured[0].headers, undefined);
+            assert.strictEqual(captured[0].key, 'k');
+            assert.strictEqual(captured[0].message, 'v');
+            // the caller's original message is not mutated (shallow copy, not delete)
+            assert.deepStrictEqual(messages[0].headers, [{ traceparent: '00-abc-def-01' }]);
+            done();
+        });
+    });
 });

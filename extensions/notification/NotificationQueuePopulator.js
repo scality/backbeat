@@ -10,6 +10,7 @@ const messageUtil = require('./utils/message');
 const notifConstants = require('./constants');
 const QueuePopulatorExtension =
     require('../../lib/queuePopulator/QueuePopulatorExtension');
+const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
 
 class NotificationQueuePopulator extends QueuePopulatorExtension {
     /**
@@ -290,13 +291,16 @@ class NotificationQueuePopulator extends QueuePopulatorExtension {
                             eventTime: message.dateTime,
                             matchingConfig,
                         });
+                        const traceHeaders = traceHeadersFromEntry(value);
                         this.publish(topic,
                             // keeping all messages for same object
                             // in the same partition to keep the order.
                             // here we use the object name and not the
                             // "_id" which also includes the versionId
                             `${bucket}/${message.key}`,
-                            JSON.stringify(message));
+                            JSON.stringify(message),
+                            undefined,
+                            traceHeaders);
                         // keep track of internal topics we have pushed to
                         pushedToTopic[topic] = true;
                     }

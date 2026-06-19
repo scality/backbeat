@@ -6,6 +6,7 @@ const QueuePopulatorExtension =
 const ObjectQueueEntry = require('../../lib/models/ObjectQueueEntry');
 const locationsConfig = require('../../conf/locationConfig.json') || {};
 const safeJsonParse = require('../../lib/util/safeJsonParse');
+const { traceHeadersFromEntry } = require('arsenal/build/lib/tracing').kafka;
 
 class ReplicationQueuePopulator extends QueuePopulatorExtension {
     constructor(params) {
@@ -112,11 +113,15 @@ class ReplicationQueuePopulator extends QueuePopulatorExtension {
         const publishedEntry = Object.assign({}, entry);
         delete publishedEntry.logReader;
 
+        const traceHeaders = traceHeadersFromEntry(value);
+
         this.log.trace('publishing object replication entry',
                        { entry: queueEntry.getLogInfo() });
         this.publish(this.repConfig.topic,
                      `${queueEntry.getBucket()}/${queueEntry.getObjectKey()}`,
-                     JSON.stringify(publishedEntry));
+                     JSON.stringify(publishedEntry),
+                     undefined,
+                     traceHeaders);
     }
 
     /**
