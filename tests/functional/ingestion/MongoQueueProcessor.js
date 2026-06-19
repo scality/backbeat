@@ -390,10 +390,6 @@ describe('MongoQueueProcessor', function mqp() {
                 // size of object is 0 and is a new version
                 assert.deepStrictEqual(repInfo.content,
                     ['METADATA']);
-                assert.strictEqual(repInfo.storageClass,
-                    bootstrapList[1].site);
-                assert.strictEqual(repInfo.storageType, 'aws_s3');
-                assert.strictEqual(repInfo.dataStoreVersionId, '');
 
                 validateMetricReport('completed', done);
             });
@@ -648,9 +644,6 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(repInfo.status, '');
                 assert.deepStrictEqual(repInfo.backends, []);
                 assert.deepStrictEqual(repInfo.content, []);
-                assert.strictEqual(repInfo.storageClass, '');
-                assert.strictEqual(repInfo.storageType, '');
-                assert.strictEqual(repInfo.dataStoreVersionId, '');
 
                 done();
             });
@@ -711,9 +704,6 @@ describe('MongoQueueProcessor', function mqp() {
                 assert.strictEqual(repInfo.status, '');
                 assert.deepStrictEqual(repInfo.backends, []);
                 assert.deepStrictEqual(repInfo.content, []);
-                assert.strictEqual(repInfo.storageClass, '');
-                assert.strictEqual(repInfo.storageType, '');
-                assert.strictEqual(repInfo.dataStoreVersionId, '');
 
                 done();
             });
@@ -813,13 +803,9 @@ describe('MongoQueueProcessor', function mqp() {
                             status: 'PENDING'
                         }],
                         content: ['METADATA', 'PUT_TAGGING'],
-                        dataStoreVersionId: '',
-                        destination: 'arn:aws:s3:::mqp-test-bucket',
                         isNFS: null,
                         role: 'arn:aws:iam::root:role/s3-replication-role',
                         status: 'PENDING',
-                        storageClass: 'test-site-2',
-                        storageType: 'aws_s3'
                     })
                     .getValue());
 

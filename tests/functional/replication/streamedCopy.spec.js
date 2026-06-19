@@ -76,6 +76,7 @@ const mockSourceEntry = {
     getContentDisposition: () => undefined,
     getContentEncoding: () => undefined,
     getTags: () => {},
+    getReplicationBackend: () => ({ site: 'sf' }),
     setAmzServerSideEncryption: () => {},
     setAmzEncryptionKeyId: () => {},
     setAmzEncryptionCustomerAlgorithm: () => {},
@@ -99,6 +100,7 @@ const mockEmptySourceEntry = {
     getContentDisposition: () => undefined,
     getContentEncoding: () => undefined,
     getTags: () => {},
+    getReplicationBackend: () => ({ site: 'sf' }),
     setReplicationSiteDataStoreVersionId: () => {},
 };
 

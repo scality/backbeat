@@ -81,6 +81,100 @@ describe('MultipleBackendTask', function test() {
         });
     });
 
+    describe('::_setupRolesOnce', () => {
+        const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+
+        function makeEntry() {
+            return new ObjectQueueEntry('source-bucket', 'key', {
+                'md-model-version': 2,
+                'replicationInfo': {
+                    status: 'PENDING',
+                    content: ['DATA', 'METADATA'],
+                    destination: '',
+                    role: 'arn:aws:iam::111:role/src',
+                    backends: [{
+                        site: 'test-site-2',
+                        status: 'PENDING',
+                        dataStoreVersionId: '',
+                    }],
+                },
+            }).setSite('test-site-2');
+        }
+
+        it('matches V2 rules by Filter.Prefix', done => {
+            sinon.stub(task, '_setupSourceClients').returns();
+            task.S3source = {
+                send: () => Promise.resolve({
+                    ReplicationConfiguration: {
+                        Role: 'arn:aws:iam::111:role/src',
+                        Rules: [{
+                            Status: 'Enabled',
+                            Filter: { Prefix: '' },
+                            Destination: {
+                                Bucket: 'arn:aws:s3:::bucket-a',
+                                StorageClass: 'test-site-2',
+                            },
+                        }],
+                    },
+                }),
+            };
+
+            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+
+        it('rejects with PreconditionFailed when no rule matches the object key', done => {
+            sinon.stub(task, '_setupSourceClients').returns();
+            task.S3source = {
+                send: () => Promise.resolve({
+                    ReplicationConfiguration: {
+                        Role: 'arn:aws:iam::111:role/src',
+                        Rules: [{
+                            Status: 'Enabled',
+                            Filter: { Prefix: 'logs/' },
+                            Destination: {
+                                Bucket: 'arn:aws:s3:::bucket-a',
+                                StorageClass: 'test-site-2',
+                            },
+                        }],
+                    },
+                }),
+            };
+
+            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
+                assert(err);
+                assert.strictEqual(err.is.PreconditionFailed, true);
+                done();
+            });
+        });
+
+        it('accepts V1 rules with top-level Prefix', done => {
+            sinon.stub(task, '_setupSourceClients').returns();
+            task.S3source = {
+                send: () => Promise.resolve({
+                    ReplicationConfiguration: {
+                        Role: 'arn:aws:iam::111:role/src',
+                        Rules: [{
+                            Status: 'Enabled',
+                            Prefix: '',
+                            Destination: {
+                                Bucket: 'arn:aws:s3:::bucket-a',
+                                StorageClass: 'test-site-2',
+                            },
+                        }],
+                    },
+                }),
+            };
+
+            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
+                assert.ifError(err);
+                done();
+            });
+        });
+    });
+
     describe('::initiateMultipartUpload', () => {
         it('should use exponential backoff if retryable error', done => {
             const doneOnce = jsutil.once(done);
@@ -473,6 +567,73 @@ describe('MultipleBackendTask', function test() {
             task._initiateMPU(sourceEntry, fakeLogger, err => {
                 assert.ifError(err);
                 assert(task.backbeatSource.send.notCalled);
+                done();
+            });
+        });
+    });
+
+    describe('per-backend key routing', () => {
+        const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+
+        function makeEntryWithTwoSameSiteBackends() {
+            const entry = new ObjectQueueEntry('source-bucket', 'key', {
+                'md-model-version': 2,
+                'replicationInfo': {
+                    status: 'PENDING',
+                    content: ['DATA', 'METADATA'],
+                    destination: '',
+                    role: 'arn:aws:iam::111:role/src',
+                    backends: [
+                        {
+                            site: 'test-site-2',
+                            destination: 'arn:aws:s3:::bucket-a',
+                            role: 'arn:aws:iam::aaa:role/r',
+                            status: 'PENDING',
+                            dataStoreVersionId: '',
+                        },
+                        {
+                            site: 'test-site-2',
+                            destination: 'arn:aws:s3:::bucket-b',
+                            role: 'arn:aws:iam::bbb:role/r',
+                            status: 'PENDING',
+                            dataStoreVersionId: '',
+                        },
+                    ],
+                },
+                'tags': {},
+            });
+            entry.setReplicationBackend({
+                site: 'test-site-2',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::bbb:role/r',
+            });
+            return entry;
+        }
+
+        it('_putObjectTaggingOnce writes the new versionId on the targeted backend only', done => {
+            const entry = makeEntryWithTwoSameSiteBackends();
+            task.backbeatSource = { send: sinon.stub().resolves({ versionId: 'new-vid' }) };
+            sinon.stub(task, '_publishMetadataWriteMetrics');
+
+            task._putObjectTaggingOnce(entry, fakeLogger, err => {
+                assert.ifError(err);
+                const backends = entry.getReplicationBackends();
+                assert.strictEqual(backends[0].dataStoreVersionId, '');
+                assert.strictEqual(backends[1].dataStoreVersionId, 'new-vid');
+                done();
+            });
+        });
+
+        it('_deleteObjectTaggingOnce writes the new versionId on the targeted backend only', done => {
+            const entry = makeEntryWithTwoSameSiteBackends();
+            task.backbeatSource = { send: sinon.stub().resolves({ versionId: 'del-vid' }) };
+            sinon.stub(task, '_publishMetadataWriteMetrics');
+
+            task._deleteObjectTaggingOnce(entry, fakeLogger, err => {
+                assert.ifError(err);
+                const backends = entry.getReplicationBackends();
+                assert.strictEqual(backends[0].dataStoreVersionId, '');
+                assert.strictEqual(backends[1].dataStoreVersionId, 'del-vid');
                 done();
             });
         });

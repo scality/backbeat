@@ -7,7 +7,7 @@ const errors = require('arsenal').errors;
 const { replicationBackends, emptyFileMd5 } = require('arsenal').constants;
 const MongoClient = require('arsenal').storage
     .metadata.mongoclient.MongoClientInterface;
-const { ObjectMD } = require('arsenal').models;
+const { ObjectMD, ReplicationConfiguration } = require('arsenal').models;
 const { VersionID } = require('arsenal').versioning;
 const { extractVersionId } = require('../../lib/util/versioning');
 
@@ -235,24 +235,6 @@ class MongoQueueProcessor {
     }
 
     /**
-     * get dataStoreVersionId, if exists
-     * @param {ObjectMDData} objMd - object md fetched from mongo
-     * @param {String} site - storage location name
-     * @return {String} dataStoreVersionId
-     */
-    _getDataStoreVersionId(objMd, site) {
-        let dataStoreVersionId = '';
-        if (objMd.replicationInfo && objMd.replicationInfo.backends) {
-            const backend = objMd.replicationInfo.backends
-                                                 .find(l => l.site === site);
-            if (backend && backend.dataStoreVersionId) {
-                dataStoreVersionId = backend.dataStoreVersionId;
-            }
-        }
-        return dataStoreVersionId;
-    }
-
-    /**
      * Update ingested entry metadata fields: owner-id, owner-display-name
      * @param {ObjectQueueEntry} entry - object queue entry object
      * @param {BucketInfo} bucketInfo - bucket info object
@@ -340,53 +322,33 @@ class MongoQueueProcessor {
         const objectMDModel = new ObjectMD();
         entry.setReplicationInfo(objectMDModel.getReplicationInfo());
 
-        // TODO: refactor based off cloudserver getReplicationInfo
-        if (bucketRepInfo) {
-            const { role, destination, rules } = bucketRepInfo;
-            const rule = rules.find(r =>
-                (entry.getObjectKey().startsWith(r.prefix) && r.enabled));
-
-            if (rule) {
-                const replicationInfo = {};
-                const storageTypes = [];
-                const backends = [];
-                const storageClasses = rule.storageClass.split(',');
-
-                storageClasses.forEach(storageClass => {
-                    const storageClassName =
-                        storageClass.endsWith(':preferred_read') ?
-                        storageClass.split(':')[0] : storageClass;
-                    const location = this._bootstrapList.find(l =>
-                        (l.site === storageClassName));
-                    if (location && replicationBackends[location.type]) {
-                        storageTypes.push(location.type);
-                    }
-                    let dataStoreVersionId = '';
-                    if (zenkoObjMd) {
-                        dataStoreVersionId = this._getDataStoreVersionId(
-                            zenkoObjMd, storageClassName);
-                    }
-                    backends.push({
-                        site: storageClassName,
-                        status: 'PENDING',
-                        dataStoreVersionId,
-                    });
-                });
-
-                // save updated replication info
-                replicationInfo.status = 'PENDING';
-                replicationInfo.backends = backends;
-                replicationInfo.content = content;
-                replicationInfo.destination = destination;
-                replicationInfo.storageClass = storageClasses.join(',');
-                replicationInfo.role = role;
-                replicationInfo.storageType = storageTypes.join(',');
-                replicationInfo.isNFS = bucketInfo.isNFS();
-
-                // apply changes
-                entry.setReplicationInfo(replicationInfo);
-            }
+        if (!bucketRepInfo) {
+            return;
         }
+
+        const isCloud = site => {
+            const location = this._bootstrapList.find(l => l.site === site);
+            return !!(location && replicationBackends[location.type]);
+        };
+
+        const backends = ReplicationConfiguration.resolveBackends(
+            bucketRepInfo,
+            entry.getObjectKey(),
+            isCloud,
+            zenkoObjMd?.replicationInfo?.backends,
+        );
+
+        if (backends.length === 0) {
+            return;
+        }
+
+        entry.setReplicationInfo({
+            status: 'PENDING',
+            backends,
+            content,
+            role: ReplicationConfiguration.resolveSourceRole(bucketRepInfo.role),
+            isNFS: bucketInfo.isNFS(),
+        });
     }
 
     /**

@@ -34,40 +34,40 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(entry.error, undefined);
 
             // If one site is a REPLICA, the global status should be REPLICA
-            const replica = entry.toReplicaEntry('sf');
-            assert.strictEqual(replica.getReplicationSiteStatus('sf'),
+            const replica = entry.toReplicaEntry({ site: 'sf' });
+            assert.strictEqual(replica.getReplicationSiteStatus({ site: 'sf' }),
                 'REPLICA');
             assert.strictEqual(
-                replica.getReplicationSiteStatus('replicationaws'),
+                replica.getReplicationSiteStatus({ site: 'replicationaws' }),
                 'PENDING');
             assert.strictEqual(replica.getReplicationStatus(), 'REPLICA');
 
             // If one site is FAILED, the global status should be FAILED
-            const failed = entry.toFailedEntry('sf');
-            assert.strictEqual(failed.getReplicationSiteStatus('sf'),
+            const failed = entry.toFailedEntry({ site: 'sf' });
+            assert.strictEqual(failed.getReplicationSiteStatus({ site: 'sf' }),
                 'FAILED');
             assert.strictEqual(
-                replica.getReplicationSiteStatus('replicationaws'),
+                replica.getReplicationSiteStatus({ site: 'replicationaws' }),
                 'PENDING');
             assert.strictEqual(failed.getReplicationStatus(), 'FAILED');
 
             // If one site is still PENDING, the global status should be
             // PROCESSING even though one has completed
-            const completed = entry.toCompletedEntry('sf');
-            assert.strictEqual(completed.getReplicationSiteStatus('sf'),
+            const completed = entry.toCompletedEntry({ site: 'sf' });
+            assert.strictEqual(completed.getReplicationSiteStatus({ site: 'sf' }),
                 'COMPLETED');
             assert.strictEqual(
-                completed.getReplicationSiteStatus('replicationaws'),
+                completed.getReplicationSiteStatus({ site: 'replicationaws' }),
                 'PENDING');
             assert.strictEqual(completed.getReplicationStatus(), 'PROCESSING');
 
             // If all sites are COMPLETED, the global status should be COMPLETED
-            const completed1 = entry.toCompletedEntry('sf');
-            const completed2 = entry.toCompletedEntry('replicationaws');
+            const completed1 = entry.toCompletedEntry({ site: 'sf' });
+            const completed2 = entry.toCompletedEntry({ site: 'replicationaws' });
             assert.strictEqual(completed2
-                .getReplicationSiteStatus('replicationaws'),
+                .getReplicationSiteStatus({ site: 'replicationaws' }),
                 'COMPLETED');
-            assert.strictEqual(completed1.getReplicationSiteStatus('sf'),
+            assert.strictEqual(completed1.getReplicationSiteStatus({ site: 'sf' }),
                 'COMPLETED');
             assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
         });

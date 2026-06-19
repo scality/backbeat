@@ -18,8 +18,8 @@ const { ObjectMD } = require('arsenal/build/lib/models');
 
 function getCompletedEntry() {
     return QueueEntry.createFromKafkaEntry(replicationEntry)
-        .toCompletedEntry('sf')
-        .toCompletedEntry('replicationaws')
+        .toCompletedEntry({ site: 'sf' })
+        .toCompletedEntry({ site: 'replicationaws' })
         .setSite('sf')
         .setOriginOp('s3:ObjectCreated:Put');
 }
@@ -32,7 +32,7 @@ function getRefreshedEntry() {
 
 function checkReplicationInfo(site, status, updatedSourceEntry) {
     assert.strictEqual(
-        updatedSourceEntry.getReplicationSiteStatus(site), status);
+        updatedSourceEntry.getReplicationSiteStatus({ site }), status);
 }
 
 const metricHandlers = ReplicationStatusProcessor.loadMetricHandlers(
@@ -85,12 +85,122 @@ describe('UpdateReplicationStatus', () => {
         it('should return null when site status is FAILED and existing site ' +
         'status is COMPLETED', () => {
             const sourceEntry = getCompletedEntry()
-                  .toFailedEntry('sf')
+                  .toFailedEntry({ site: 'sf' })
                   .setSite('sf');
             const refreshedEntry = getCompletedEntry();
             const updatedSourceEntry = updateReplicationStatus
                   ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
             assert.strictEqual(updatedSourceEntry, null);
+        });
+
+        it('marks the right backend when two share a site (multi-destination)', () => {
+          const _makeMultiDest = () => new ObjectQueueEntry(
+            'bucket', 'key 98500086134471999999RG001  0', {
+                    'md-model-version': 2,
+                    'last-modified': new Date().toISOString(),
+                    'replicationInfo': {
+                        status: 'PROCESSING',
+                        content: ['DATA', 'METADATA'],
+                        destination: 'arn:aws:s3:::legacy',
+                        role: 'arn:aws:iam::111:role/src',
+                        backends: [
+                            { site: 'sf', status: 'COMPLETED',
+                              dataStoreVersionId: '',
+                              destination: 'arn:aws:s3:::bucket-a',
+                              role: 'arn:aws:iam::222:role/dst' },
+                            { site: 'sf', status: 'PENDING',
+                              dataStoreVersionId: '',
+                              destination: 'arn:aws:s3:::bucket-b',
+                              role: 'arn:aws:iam::222:role/dst' },
+                        ],
+                    },
+                });
+            const sourceEntry = _makeMultiDest().setReplicationBackend({
+                site: 'sf',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::222:role/dst',
+            });
+            sourceEntry.setReplicationSiteStatus({
+                site: 'sf',
+                destination: 'arn:aws:s3:::bucket-b',
+                role: 'arn:aws:iam::222:role/dst',
+            }, 'COMPLETED');
+            const refreshedEntry = _makeMultiDest();
+            const updatedSourceEntry = updateReplicationStatus
+                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            assert.ok(updatedSourceEntry,
+                'expected an entry, not the short-circuit null');
+            const backends = updatedSourceEntry.getReplicationBackends();
+            assert.strictEqual(backends[0].status, 'COMPLETED');
+            assert.strictEqual(backends[1].status, 'COMPLETED');
+        });
+
+        it('returns a PENDING entry when the source status is PENDING', () => {
+            const sourceEntry = getCompletedEntry()
+                .toPendingEntry({ site: 'sf' })
+                .setSite('sf');
+            const refreshedEntry = getRefreshedEntry();
+            const updatedSourceEntry = updateReplicationStatus
+                ._getUpdatedSourceEntry({ sourceEntry, refreshedEntry }, log);
+            checkReplicationInfo('sf', 'PENDING', updatedSourceEntry);
+        });
+    });
+
+    describe('_checkStatus', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
+
+        it('returns undefined for a known status', () => {
+            const sourceEntry = getCompletedEntry();
+            assert.strictEqual(updateReplicationStatus._checkStatus(sourceEntry), undefined);
+        });
+
+        it('returns an InternalError for an unknown status', () => {
+            const sourceEntry = getCompletedEntry();
+            sourceEntry.setReplicationSiteStatus({ site: 'sf' }, 'GIBBERISH');
+            const err = updateReplicationStatus._checkStatus(sourceEntry);
+            assert(err);
+            assert.strictEqual(err.is.InternalError, true);
+        });
+    });
+
+    describe('_reportMetrics', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus(rspMock, metricHandlers);
+        beforeEach(() => {
+            updateReplicationStatus.mProducer = { publishMetrics: sinon.stub().yields() };
+        });
+
+        it('publishes metrics for a COMPLETED replication', () => {
+            const sourceEntry = getCompletedEntry();
+            updateReplicationStatus._reportMetrics(sourceEntry, sourceEntry);
+            sinon.assert.calledOnce(updateReplicationStatus.mProducer.publishMetrics);
+        });
+
+        it('does not publish metrics for PENDING entries', () => {
+            const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry)
+                .setSite('sf');
+            updateReplicationStatus._reportMetrics(sourceEntry, sourceEntry);
+            sinon.assert.notCalled(updateReplicationStatus.mProducer.publishMetrics);
+        });
+    });
+
+    describe('_pushReplayEntry', () => {
+        const updateReplicationStatus = new UpdateReplicationStatus({
+            getStateVars: () => ({
+                repConfig: { replicationStatusProcessor: {} },
+                sourceConfig: { auth: {}, s3: { host: 'localhost', port: 8000 }, transport: 'http' },
+                replayTopics: ['replay-topic'],
+            }),
+        }, metricHandlers);
+
+        it('publishes the retry entry to the replay topic and decrements replayCount', () => {
+            const publishReplayEntry = sinon.stub();
+            updateReplicationStatus.replayProducers = {
+                'replay-topic': { publishReplayEntry },
+            };
+            const queueEntry = getCompletedEntry().setReplayCount(1);
+            updateReplicationStatus._pushReplayEntry(queueEntry, 'sf', log);
+            assert.strictEqual(queueEntry.getReplayCount(), 0);
+            sinon.assert.calledOnce(publishReplayEntry);
         });
     });
 
