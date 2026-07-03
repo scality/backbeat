@@ -2076,6 +2076,19 @@
     "@typespec/ts-http-runtime" "^0.3.0"
     tslib "^2.6.2"
 
+"@azure/core-rest-pipeline@^1.24.0":
+  version "1.24.0"
+  resolved "https://registry.yarnpkg.com/@azure/core-rest-pipeline/-/core-rest-pipeline-1.24.0.tgz#7582157ffebfe60d0a7fc00fd292203d8cbd3f40"
+  integrity sha512-PpLsoDQ3AMmKZ0VU+0GrmqMxgp/sExjlVm4R+nLWngeoEGAzOIPVifaxKGU5gMv+nWELUoHfvrolWD+ZS/nFJg==
+  dependencies:
+    "@azure/abort-controller" "^2.1.2"
+    "@azure/core-auth" "^1.10.0"
+    "@azure/core-tracing" "^1.3.0"
+    "@azure/core-util" "^1.13.0"
+    "@azure/logger" "^1.3.0"
+    "@typespec/ts-http-runtime" "^0.3.4"
+    tslib "^2.6.2"
+
 "@azure/core-tracing@^1.0.0", "@azure/core-tracing@^1.2.0", "@azure/core-tracing@^1.3.0":
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/@azure/core-tracing/-/core-tracing-1.3.1.tgz#e971045c901ea9c110616b0e1db272507781d5f6"
@@ -2166,6 +2179,26 @@
     events "^3.0.0"
     tslib "^2.8.1"
 
+"@azure/storage-blob@^12.31.0":
+  version "12.33.0"
+  resolved "https://registry.yarnpkg.com/@azure/storage-blob/-/storage-blob-12.33.0.tgz#10ad4586f4922731b8b79cc86becada7567a1fab"
+  integrity sha512-2SX8oP8PyblUcAFZSg39c8Ls+tFjavM6sBeV+qpw33mRzRhI/5hrFJmJ/x0H9xx5l6ECPvgSP8uPxqTeVbHNIA==
+  dependencies:
+    "@azure/abort-controller" "^2.1.2"
+    "@azure/core-auth" "^1.9.0"
+    "@azure/core-client" "^1.9.3"
+    "@azure/core-http-compat" "^2.2.0"
+    "@azure/core-lro" "^2.2.0"
+    "@azure/core-paging" "^1.6.2"
+    "@azure/core-rest-pipeline" "^1.19.1"
+    "@azure/core-tracing" "^1.2.0"
+    "@azure/core-util" "^1.11.0"
+    "@azure/core-xml" "^1.4.5"
+    "@azure/logger" "^1.1.4"
+    "@azure/storage-common" "^12.4.1"
+    events "^3.0.0"
+    tslib "^2.8.1"
+
 "@azure/storage-common@^12.1.1":
   version "12.1.1"
   resolved "https://registry.yarnpkg.com/@azure/storage-common/-/storage-common-12.1.1.tgz#cd0768188f7cf8ea7202d584067ad5f3eba89744"
@@ -2175,6 +2208,21 @@
     "@azure/core-auth" "^1.9.0"
     "@azure/core-http-compat" "^2.2.0"
     "@azure/core-rest-pipeline" "^1.19.1"
+    "@azure/core-tracing" "^1.2.0"
+    "@azure/core-util" "^1.11.0"
+    "@azure/logger" "^1.1.4"
+    events "^3.3.0"
+    tslib "^2.8.1"
+
+"@azure/storage-common@^12.4.1":
+  version "12.4.1"
+  resolved "https://registry.yarnpkg.com/@azure/storage-common/-/storage-common-12.4.1.tgz#78c23ab22dd04ce27b13dfe8991b45b6fdedb345"
+  integrity sha512-t14unw/WofGDUi7TKJrsyXyPsN+NLgRm7hMaq0llxNmTIzt7f257+6LE6FKIJPh88zLj6M7LPvzve0fEYg/L3A==
+  dependencies:
+    "@azure/abort-controller" "^2.1.2"
+    "@azure/core-auth" "^1.9.0"
+    "@azure/core-http-compat" "^2.2.0"
+    "@azure/core-rest-pipeline" "^1.24.0"
     "@azure/core-tracing" "^1.2.0"
     "@azure/core-util" "^1.11.0"
     "@azure/logger" "^1.1.4"
@@ -2726,6 +2774,14 @@
   version "1.3.1"
   resolved "https://registry.yarnpkg.com/@scality/hdclient/-/hdclient-1.3.1.tgz#52f7d8e9051278f7d610de30828aac84c3943498"
   integrity sha512-dLAE/tU/TYklf4GR0EjouNFOcgkXgk6EgJB8yhLzI3vcgOAvbShOxCK/GYI6jdeOzxDJQSaVz4zFisfDqlX6tA==
+  dependencies:
+    httpagent "github:scality/httpagent#1.1.0"
+    werelogs "github:scality/werelogs#8.2.2"
+
+"@scality/hdclient@^1.3.2":
+  version "1.3.2"
+  resolved "https://registry.yarnpkg.com/@scality/hdclient/-/hdclient-1.3.2.tgz#544d08a5b88869a9c30107c05d774e13595966fb"
+  integrity sha512-voy67AlH1irNmaXno0KP/KpiEBYzzdW8EoGjBXsVztLFjGe+RQnNtAyzCn05secZZy43jBYLOrZ7032gorxvrg==
   dependencies:
     httpagent "github:scality/httpagent#1.1.0"
     werelogs "github:scality/werelogs#8.2.2"
@@ -4499,6 +4555,15 @@
     https-proxy-agent "^7.0.0"
     tslib "^2.6.2"
 
+"@typespec/ts-http-runtime@^0.3.4":
+  version "0.3.6"
+  resolved "https://registry.yarnpkg.com/@typespec/ts-http-runtime/-/ts-http-runtime-0.3.6.tgz#eda78b5fffb39ca86a4dadbb5a0c2600131d3570"
+  integrity sha512-jIXhD0eWQ1JA6ln/5Dltyx22UxWNrw0hZmhy2rlv6m6KgF7kplHx3g0fzi09lNmTJQRR91OlemYp3xFnvDK9og==
+  dependencies:
+    http-proxy-agent "^7.0.0"
+    https-proxy-agent "^7.0.0"
+    tslib "^2.6.2"
+
 "@zenko/cloudserver@git+https://github.com/scality/cloudserver#9.1.4":
   version "9.1.4"
   resolved "git+https://github.com/scality/cloudserver#e2ace246a92f3c113463684ea90bbba42086d08e"
@@ -4943,18 +5008,18 @@ arraybuffer.prototype.slice@^1.0.4:
   optionalDependencies:
     ioctl "^2.0.2"
 
-"arsenal@git+https://github.com/scality/arsenal#8.3.0":
-  version "8.3.0"
-  resolved "git+https://github.com/scality/arsenal#7c6c73a01c37e241e0e054edbdc9e3a379c16a77"
+"arsenal@git+https://github.com/scality/arsenal#8.3.13":
+  version "8.3.13"
+  resolved "git+https://github.com/scality/arsenal#6c3772d837b4efcad93a62671f4550b5286b814d"
   dependencies:
     "@aws-sdk/client-kms" "^3.975.0"
     "@aws-sdk/client-s3" "^3.975.0"
     "@aws-sdk/credential-providers" "^3.975.0"
     "@aws-sdk/lib-storage" "^3.975.0"
     "@azure/identity" "^4.13.0"
-    "@azure/storage-blob" "^12.28.0"
+    "@azure/storage-blob" "^12.31.0"
     "@js-sdsl/ordered-set" "^4.4.2"
-    "@scality/hdclient" "^1.3.1"
+    "@scality/hdclient" "^1.3.2"
     "@smithy/node-http-handler" "^4.3.0"
     "@smithy/protocol-http" "^5.3.5"
     JSONStream "^1.3.5"
@@ -4982,7 +5047,7 @@ arraybuffer.prototype.slice@^1.0.4:
     sproxydclient "github:scality/sproxydclient#8.1.0"
     utf8 "^3.0.0"
     uuid "^10.0.0"
-    werelogs scality/werelogs#8.2.2
+    werelogs scality/werelogs#8.2.4
     xml2js "^0.6.2"
   optionalDependencies:
     ioctl "^2.0.2"
@@ -10694,7 +10759,6 @@ webidl-conversions@^7.0.0:
 
 "werelogs@github:scality/werelogs#8.2.2", werelogs@scality/werelogs#8.2.2:
   version "8.2.2"
-  uid e53bef5145697bf8af940dcbe59408988d64854f
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/e53bef5145697bf8af940dcbe59408988d64854f"
   dependencies:
     fast-safe-stringify "^2.1.1"
@@ -10714,7 +10778,7 @@ werelogs@scality/werelogs#8.2.0:
     fast-safe-stringify "^2.1.1"
     safe-json-stringify "^1.2.0"
 
-"werelogs@scality/werelogs#semver:^8.2.4":
+werelogs@scality/werelogs#8.2.4, "werelogs@scality/werelogs#semver:^8.2.4":
   version "8.2.4"
   resolved "https://codeload.github.com/scality/werelogs/tar.gz/a7bbb5917a08b035d3763b24b070d517483d6982"
   dependencies:
