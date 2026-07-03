@@ -1,4 +1,5 @@
 const async = require('async');
+const { promisify } = require('util');
 const { v4: uuid } = require('uuid');
 const { GetBucketReplicationCommand } = require('@aws-sdk/client-s3');
 
@@ -54,7 +55,7 @@ class MultipleBackendTask extends ReplicateObject {
         return this.destConfig.replicationEndpoint.type;
     }
 
-    _setupRolesOnce(entry, log, cb) {
+    async _setupRolesOnce(entry, log) {
         log.debug('getting bucket replication', { entry: entry.getLogInfo() });
         const entryRolesString = entry.getReplicationRoles();
         let errMessage;
@@ -71,7 +72,7 @@ class MultipleBackendTask extends ReplicateObject {
                 entry: entry.getLogInfo(),
                 roles: entryRolesString,
             });
-            return cb(errors.BadRole.customizeDescription(errMessage));
+            throw errors.BadRole.customizeDescription(errMessage);
         }
         this.sourceRole = entryRoles[0];
 
@@ -81,57 +82,55 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: entry.getBucket(),
         });
         attachReqUids(command, log.getSerializedUids());
-        return this.S3source.send(command)
-            .then(data => {
-                const replicationEnabled = data.ReplicationConfiguration.Rules
-                    .some(rule => rule.Status === 'Enabled' &&
-                        entry.getObjectKey().startsWith(rule.Prefix));
-                if (!replicationEnabled) {
-                    errMessage = 'replication disabled for object';
-                    log.debug(errMessage, {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                    });
-                    return cb(errors.PreconditionFailed.customizeDescription(
-                        errMessage));
-                }
-                const roles = data.ReplicationConfiguration.Role.split(',');
-                if (roles.length > 2) {
-                    errMessage = 'expecting no more than two roles in bucket ' +
-                        'replication configuration when replicating to an ' +
-                        'external location';
-                    log.error(errMessage, {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        roles,
-                    });
-                    return cb(errors.BadRole.customizeDescription(errMessage));
-                }
-                if (roles[0] !== entryRoles[0]) {
-                    log.error('role in replication entry for source does not ' +
-                    'match role in bucket replication configuration', {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        entryRole: entryRoles[0],
-                        bucketRole: roles[0],
-                    });
-                    return cb(errors.BadRole);
-                }
-                return cb();
-            })
-            .catch(err => {
-                log.error('error getting replication configuration from S3', {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    origin: 'source',
-                    peer: this.sourceConfig.s3,
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                });
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                return cb(err);
+        let data;
+        try {
+            data = await this.S3source.send(command);
+        } catch (err) {
+            log.error('error getting replication configuration from S3', {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+                httpStatus: err.$metadata?.httpStatusCode,
             });
+            // eslint-disable-next-line no-param-reassign
+            err.origin = 'source';
+            throw err;
+        }
+        const replicationEnabled = data.ReplicationConfiguration.Rules
+            .some(rule => rule.Status === 'Enabled' &&
+                entry.getObjectKey().startsWith(rule.Prefix));
+        if (!replicationEnabled) {
+            errMessage = 'replication disabled for object';
+            log.debug(errMessage, {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+            });
+            throw errors.PreconditionFailed.customizeDescription(errMessage);
+        }
+        const roles = data.ReplicationConfiguration.Role.split(',');
+        if (roles.length > 2) {
+            errMessage = 'expecting no more than two roles in bucket ' +
+                'replication configuration when replicating to an ' +
+                'external location';
+            log.error(errMessage, {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                roles,
+            });
+            throw errors.BadRole.customizeDescription(errMessage);
+        }
+        if (roles[0] !== entryRoles[0]) {
+            log.error('role in replication entry for source does not ' +
+            'match role in bucket replication configuration', {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                entryRole: entryRoles[0],
+                bucketRole: roles[0],
+            });
+            throw errors.BadRole;
+        }
     }
 
     _refreshSourceEntry(sourceEntry, log, cb) {
@@ -1182,9 +1181,7 @@ class MultipleBackendTask extends ReplicateObject {
      * @return {undefined}
      */
     _setupClients(entry, log, cb) {
-        // Sets up source clients using the role from the replication
-        // configuration if the authentication type is as such.
-        return this._setupRoles(entry, log, cb);
+        return this._setupRoles(entry, log).then(() => cb()).catch(cb);
     }
 
     processQueueEntry(sourceEntry, kafkaEntry, done) {

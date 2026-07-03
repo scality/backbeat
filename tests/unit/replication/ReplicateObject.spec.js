@@ -73,33 +73,27 @@ describe('ReplicateObject', () => {
     });
 
     describe('_setTargetAccountMd', () => {
-        it('should skip gettin target account info when auth type is assumeRole', done => {
+        it('should skip gettin target account info when auth type is assumeRole', async () => {
             sinon.stub(task, '_setupDestClients').returns();
-            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').yields();
-            task._setTargetAccountMd({}, '', fakeLogger, err => {
-                assert.ifError(err);
-                assert(setTargetAccountStub.notCalled);
-                done();
-            });
+            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').resolves();
+            await task._setTargetAccountMd({}, '', fakeLogger);
+            assert(setTargetAccountStub.notCalled);
         });
 
-        it('should get target account info', done => {
+        it('should get target account info', async () => {
             sinon.stub(task, '_setupDestClients').returns();
-            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').yields();
+            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').resolves();
             task.destConfig.auth = {
                 type: 'service',
                 account: 'replication-service',
             };
-            task._setTargetAccountMd({ getLogInfo: () => {} }, '', fakeLogger, err => {
-                assert.ifError(err);
-                assert(setTargetAccountStub.calledOnce);
-                done();
-            });
+            await task._setTargetAccountMd({ getLogInfo: () => {} }, '', fakeLogger);
+            assert(setTargetAccountStub.calledOnce);
         });
     });
 
     describe('_putMetadataOnce', () => {
-        it('should pass extract accountId from role and pass it when using AssumeRole auth', done => {
+        it('should pass extract accountId from role and pass it when using AssumeRole auth', async () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const sendStub = sinon.stub().resolves({});
@@ -107,14 +101,11 @@ describe('ReplicateObject', () => {
                 send: sendStub,
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
-            task._putMetadataOnce(entry, true, fakeLogger, err => {
-                assert.ifError(err);
-                assert(sendStub.calledOnce);
-                assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
-                done();
-            });
+            await task._putMetadataOnce(entry, true, fakeLogger);
+            assert(sendStub.calledOnce);
+            assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
         });
-        it('should not pass accountId when not in assumeRole', done => {
+        it('should not pass accountId when not in assumeRole', async () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const sendStub = sinon.stub().resolves({});
@@ -123,12 +114,9 @@ describe('ReplicateObject', () => {
             };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
             sinon.stub(task.destConfig.auth, 'type').value('role');
-            task._putMetadataOnce(entry, true, fakeLogger, err => {
-                assert.ifError(err);
-                assert(sendStub.calledOnce);
-                assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
-                done();
-            });
+            await task._putMetadataOnce(entry, true, fakeLogger);
+            assert(sendStub.calledOnce);
+            assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
         });
     });
 
