@@ -26,6 +26,9 @@ const {
     extractBucketProcessorCircuitBreakerConfigs,
 } = require('../CircuitBreakerGroup');
 const { lifecycleTaskVersions } = require('../../../lib/constants');
+const {
+    LifecycleMetrics,
+} = require('../LifecycleMetrics');
 const locations = require('../../../conf/locationConfig.json');
 
 const PROCESS_OBJECTS_ACTION = 'processObjects';
@@ -277,21 +280,30 @@ class LifecycleBucketProcessor {
             return process.nextTick(() => cb(errors.InternalError));
         }
         const { bucket, owner, accountId, taskVersion } = result.target;
-        if (!bucket || !owner || (!accountId && this._authConfig.type === authTypeAssumeRole)) {
-            this._log.error('kafka bucket entry missing required fields', {
-                method: 'LifecycleBucketProcessor._processBucketEntry',
-                bucket,
-                owner,
-                accountId,
-            });
-            return process.nextTick(() => cb(errors.InternalError));
-        }
-        this._log.debug('processing bucket entry', {
-            method: 'LifecycleBucketProcessor._processBucketEntry',
+        const conductorScanId = result.contextInfo?.conductorScanId;
+        const conductorScanStartTimestamp = result.contextInfo?.conductorScanStartTimestamp;
+        // Use one request logger per bucket-task message so scan context stays
+        // attached to all logs emitted while that message is processed.
+        const log = this._log.newRequestLogger();
+        log.addDefaultFields({
+            conductorScanId,
+            conductorScanStartTimestamp,
             bucket,
             owner,
             accountId,
         });
+
+        if (!bucket || !owner || (!accountId && this._authConfig.type === authTypeAssumeRole)) {
+            log.error('kafka bucket entry missing required fields', {
+                method: 'LifecycleBucketProcessor._processBucketEntry',
+            });
+            return process.nextTick(() => cb(errors.InternalError));
+        }
+        log.debug('processing bucket entry', {
+            method: 'LifecycleBucketProcessor._processBucketEntry',
+        });
+        LifecycleMetrics.onBucketProcessorScanMessageReceived(
+            log, conductorScanId, conductorScanStartTimestamp);
 
         const s3Client = this.clientManager.getS3Client(accountId);
         if (!s3Client) {
@@ -307,19 +319,23 @@ class LifecycleBucketProcessor {
         }
 
         const params = { Bucket: bucket };
-        return this._getBucketLifecycleConfiguration(s3Client, params, (err, config) => {
+        return this._getBucketLifecycleConfiguration(s3Client, params, log, (err, config) => {
             if (err) {
                 if (err.name === 'NoSuchLifecycleConfiguration') {
-                    this._log.debug('skipping non-lifecycled bucket', { bucket });
+                    log.debug('skipping non-lifecycled bucket', {
+                        bucket,
+                    });
                     return cb();
                 }
 
                 if (err.name === 'NoSuchBucket') {
-                    this._log.error('skipping non-existent bucket', { bucket });
+                    log.error('skipping non-existent bucket', {
+                        bucket,
+                    });
                     return cb();
                 }
 
-                this._log.error('error getting bucket lifecycle config', {
+                log.error('error getting bucket lifecycle config', {
                     method: 'LifecycleBucketProcessor._processBucketEntry',
                     bucket,
                     owner,
@@ -339,7 +355,7 @@ class LifecycleBucketProcessor {
                 task = new LifecycleTaskV2(this);
             }
 
-            this._log.info('scheduling new task for bucket lifecycle', {
+            log.info('scheduling new task for bucket lifecycle', {
                 method: 'LifecycleBucketProcessor._processBucketEntry',
                 bucket,
                 owner,
@@ -360,10 +376,11 @@ class LifecycleBucketProcessor {
      * Call AWS.S3.GetBucketLifecycleConfiguration in a retry wrapper.
      * @param {S3Client} s3Client - the s3 client
      * @param {object} params - the parameters to pass to getBucketLifecycleConfiguration
+     * @param {Logger} log - The request logger to use
      * @param {Function} cb - The callback to call
      * @return {undefined}
      */
-    _getBucketLifecycleConfiguration(s3Client, params, cb) {
+    _getBucketLifecycleConfiguration(s3Client, params, log, cb) {
         return this.retryWrapper.retry({
             actionDesc: 'get bucket lifecycle',
             logFields: { params },
@@ -374,7 +391,7 @@ class LifecycleBucketProcessor {
                     .catch(done);
             },
             shouldRetryFunc: err => err.retryable,
-            log: this._log,
+            log,
         }, cb);
     }
 

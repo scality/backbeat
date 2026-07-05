@@ -28,6 +28,7 @@ const {
 } = require('../../utils/kafkaEntries');
 const LifecycleTask = require('../../../extensions/lifecycle/tasks/LifecycleTask');
 const LifecycleTaskV2 = require('../../../extensions/lifecycle/tasks/LifecycleTaskV2');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
 
 describe('Lifecycle Bucket Processor', () => {
@@ -260,6 +261,44 @@ describe('Lifecycle Bucket Processor', () => {
                     assert(opts.validateTask(tasks[0]));
                     done();
                 });
+            });
+        });
+
+        it('should pass conductor scan start timestamp to lifecycle metrics', done => {
+            const kafkaMessage = {
+                ...bucketProcessorV2Entry,
+                value: JSON.stringify({
+                    ...JSON.parse(bucketProcessorV2Entry.value),
+                    contextInfo: {
+                        conductorScanId: 'scan-A',
+                        conductorScanStartTimestamp: 1700000000000,
+                    },
+                }),
+            };
+            const metricStub = sinon.stub(
+                LifecycleMetrics, 'onBucketProcessorScanMessageReceived');
+            lbp.clientManager = {
+                getS3Client: () => ({}),
+                getBackbeatMetadataProxy: () => ({}),
+            };
+            sinon.stub(lbp, '_getBucketLifecycleConfiguration').yields(null, {
+                Rules: [{
+                    Status: 'Enabled',
+                    Transitions: [{
+                        Days: 10,
+                        StorageClass: 'azure'
+                    }],
+                    ID: 'dac36d89-0005-4c78-8e00-7e9ace06a9c4'
+                }]
+            });
+            lbp._internalTaskScheduler = async.queue((ctx, cb) => cb(), 1);
+
+            lbp._processBucketEntry(kafkaMessage, err => {
+                assert.ifError(err);
+                assert(metricStub.calledOnce);
+                assert.strictEqual(metricStub.firstCall.args[1], 'scan-A');
+                assert.strictEqual(metricStub.firstCall.args[2], 1700000000000);
+                done();
             });
         });
     });
