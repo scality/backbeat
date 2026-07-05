@@ -52,6 +52,11 @@ class Metrics:
         job='${job_lifecycle_producer}', namespace='${namespace}',
     )
 
+    LATEST_BATCH_END_TIME = metrics.Metric(
+        's3_lifecycle_latest_batch_end_time',
+        job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
+
     BUCKET_LISTING_SUCCESS, BUCKET_LISTING_ERROR, BUCKET_LISTING_THROTTLING = [
         metrics.CounterMetric(
             name, job='${job_lifecycle_producer}', namespace='${namespace}',
@@ -71,6 +76,21 @@ class Metrics:
     LEGACY_TASKS = metrics.CounterMetric(
         's3_lifecycle_legacy_tasks_total',
         'status', job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
+
+    LATEST_BATCH_BUCKET_COUNT = metrics.Metric(
+        's3_lifecycle_latest_batch_bucket_count',
+        job='${job_lifecycle_producer}', namespace='${namespace}',
+    )
+
+    BUCKET_PROCESSOR_SCAN_MESSAGES_RECEIVED = metrics.CounterMetric(
+        's3_lifecycle_bucket_processor_scan_messages_total',
+        'conductor_scan_id', job='${job_lifecycle_bucket_processor}', namespace='${namespace}',
+    )
+
+    BUCKET_PROCESSOR_SCAN_MESSAGE_AGE = metrics.BucketMetric(
+        's3_lifecycle_bucket_processor_scan_message_age_seconds',
+        job='${job_lifecycle_bucket_processor}', namespace='${namespace}',
     )
 
     S3_OPS = metrics.CounterMetric(
@@ -730,6 +750,96 @@ lifecycle_scan_rate = TimeSeries(
     ]
 )
 
+lifecycle_full_scan_duration = TimeSeries(
+    title="Conductor Batch Duration",
+    description="Duration of completed conductor scans over time. "
+        "Gaps appear while a scan is in progress (its end time has not "
+        "caught up with its start time yet).",
+    dataSource="${DS_PROMETHEUS}",
+    unit=UNITS.SECONDS,
+    legendCalcs=['min', 'mean', 'max'],
+    legendDisplayMode='table',
+    legendPlacement='right',
+    lineInterpolation='smooth',
+    targets=[
+        Target(
+            expr='((max(' + Metrics.LATEST_BATCH_END_TIME() + ') - '
+                'max(' + Metrics.LATEST_BATCH_START_TIME() + ')) > 0) / 1000',
+            legendFormat='scan duration',
+        ),
+    ],
+)
+
+lifecycle_scan_count_buckets = Stat(
+    title="Buckets Listed",
+    description="Number of buckets listed during the latest conductor scan.",
+    dataSource="${DS_PROMETHEUS}",
+    reduceCalc="last",
+    decimals=0,
+    noValue='0',
+    targets=[
+        Target(
+            expr=Metrics.LATEST_BATCH_BUCKET_COUNT(),
+        ),
+    ],
+    thresholds=[
+        Threshold('semi-dark-blue', 0, 0.0),
+    ],
+)
+
+bucket_processor_messages_received = TimeSeries(
+    title="Bucket Tasks Picked Up by Pod",
+    description="Rate of messages received by bucket processor, by pod",
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation="smooth",
+    decimals=0,
+    targets=[
+        Target(
+            expr='sum(rate(' + Metrics.BUCKET_PROCESSOR_SCAN_MESSAGES_RECEIVED() + ')) '
+                'by (pod)',
+            legendFormat='{{pod}}',
+        ),
+    ],
+)
+
+bucket_processor_active_scan_ids = TimeSeries(
+    title="Bucket Processor Recent Conductor Scans",
+    description="Total messages received by bucket-processor, by scan: each "
+        "scan draws a rising line that plateaus when the scan completes "
+        "(until its per-scan series expires). "
+        "This panel is used to verify that there are no concurrent scans",
+    dataSource="${DS_PROMETHEUS}",
+    lineInterpolation="smooth",
+    decimals=0,
+    legendDisplayMode="hidden",
+    targets=[
+        Target(
+            expr='sum(increase(' + Metrics.BUCKET_PROCESSOR_SCAN_MESSAGES_RECEIVED() + ')) '
+                'by (conductor_scan_id)',
+            legendFormat='{{conductor_scan_id}}',
+        ),
+    ],
+)
+
+bucket_processor_scan_message_age = Heatmap(
+    title="Bucket Processor Scan Message Age",
+    description="Elapsed wall-clock time between conductor scan start and "
+        "bucket-task message pickup by bucket processors.",
+    dataSource="${DS_PROMETHEUS}",
+    dataFormat='tsbuckets',
+    hideZeroBuckets=True,
+    maxDataPoints=25,
+    tooltip=Tooltip(show=True, showHistogram=True),
+    yAxis=YAxis(format=UNITS.SECONDS, decimals=0),
+    cards={'cardPadding': 1, 'cardRound': 2},
+    color=HeatmapColor(mode='opacity'),
+    targets=[Target(
+        expr='sum(increase(' + Metrics.BUCKET_PROCESSOR_SCAN_MESSAGE_AGE.bucket() + ')) by(le)',
+        format="heatmap",
+        legendFormat="{{le}}",
+    )],
+)
+
 active_indexing_jobs = TimeSeries(
     title="Active Indexing jobs",
     dataSource="${DS_PROMETHEUS}",
@@ -897,6 +1007,12 @@ dashboard = (
             layout.row([s3_delete_object_ops, s3_delete_mpu_ops], height=8),
             RowPanel(title="Lifecycle Conductor"),
             layout.row([lifecycle_scans, trigger_latency], height=7),
+            layout.row([lifecycle_full_scan_duration, *layout.resize([lifecycle_scan_count_buckets], width=4)], height=7),
+            layout.row([
+                bucket_processor_messages_received,
+                bucket_processor_active_scan_ids,
+                bucket_processor_scan_message_age,
+            ], height=7),
             layout.row([lifecycle_scan_rate, active_indexing_jobs, legacy_tasks], height=7),
         ]),
     )
