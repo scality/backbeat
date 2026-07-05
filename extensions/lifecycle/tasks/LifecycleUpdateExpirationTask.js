@@ -155,6 +155,7 @@ class LifecycleUpdateExpirationTask extends BackbeatTask {
             objectKey: 'target.key',
             versionId: 'target.version',
         });
+        log.addDefaultFields(entry.getLogInfo());
 
         async.waterfall([
             next => {

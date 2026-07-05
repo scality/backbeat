@@ -309,6 +309,7 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
             objectKey: 'target.key',
             versionId: 'target.version',
         });
+        log.addDefaultFields(entry.getLogInfo());
 
         return async.series([
             next => this._checkDate(entry, log, next),
