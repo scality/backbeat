@@ -1,16 +1,39 @@
 const { ZenkoMetrics } = require('arsenal').metrics;
+const { Logger } = require('werelogs');
 
-const LIFECYCLE_LABEL_ORIGIN =  'origin';
+const lifecycleMetricsLogger = new Logger('Backbeat:LifecycleMetrics');
+
+const LIFECYCLE_LABEL_ORIGIN = 'origin';
 const LIFECYCLE_LABEL_OP = 'op';
 const LIFECYCLE_LABEL_STATUS = 'status';
 const LIFECYCLE_LABEL_LOCATION = 'location';
 const LIFECYCLE_LABEL_TYPE = 'type';
+const LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID = 'conductor_scan_id';
 
 const LIFECYCLE_MARKER_METRICS_LOCATION = '-delete-marker-';
 
+// Keep per-scan series long enough for scraping and debugging recent overlap,
+// but remove them from prom-client after a configurable retention interval.
+// We intentionally do not cap the number of tracked scan IDs: if overlapping
+// scans happen, hiding older IDs would remove the signal this metric provides.
+// Prometheus retains scraped scan-id series until TSDB retention expires.
+const DEFAULT_SCAN_METRIC_RETENTION_S = 24 * 60 * 60;
+const CONDUCTOR_ORIGIN = 'conductor';
+const BUCKET_PROCESSOR_ORIGIN = 'bucket_processor';
+const SCAN_METRIC_RETENTION_MS = DEFAULT_SCAN_METRIC_RETENTION_S * 1000;
+
 const conductorLatestBatchStartTime = ZenkoMetrics.createGauge({
     name: 's3_lifecycle_latest_batch_start_time',
-    help: 'Timestamp of latest lifecycle batch start time',
+    help: 'Conductor scheduling heartbeat: ms-since-epoch timestamp of ' +
+        'the most recent scan start. Use to detect that the conductor is ' +
+        'still scheduling scans (LifecycleLateScan alert).',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN],
+});
+
+const conductorLatestBatchEndTime = ZenkoMetrics.createGauge({
+    name: 's3_lifecycle_latest_batch_end_time',
+    help: 'Timestamp (ms since epoch) of the most recent lifecycle ' +
+        'conductor scan end after the scan reached bucket listing.',
     labelNames: [LIFECYCLE_LABEL_ORIGIN],
 });
 
@@ -49,6 +72,73 @@ const lifecycleLegacyTask = ZenkoMetrics.createCounter({
     help: 'Number of legacy tasks triggered by lifecycle',
     labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_STATUS],
 });
+
+const conductorLatestBatchBucketCount = ZenkoMetrics.createGauge({
+    name: 's3_lifecycle_latest_batch_bucket_count',
+    help: 'Number of buckets listed in the latest lifecycle conductor batch',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN],
+});
+
+const bucketProcessorScanMessagesReceived = ZenkoMetrics.createCounter({
+    name: 's3_lifecycle_bucket_processor_scan_messages_total',
+    help: 'Total number of bucket-task messages picked up by this bucket ' +
+        'processor, grouped by conductor scan id. Per-scan series are ' +
+        'auto-removed by a local cleanup timer (see setScanMetricTimeout) ' +
+        'to keep label cardinality bounded.',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID],
+});
+
+const bucketProcessorScanMessageAgeSeconds = ZenkoMetrics.createHistogram({
+    name: 's3_lifecycle_bucket_processor_scan_message_age_seconds',
+    help: 'Elapsed wall-clock time in seconds between conductor scan start ' +
+        'and bucket-tasks topic message pickup by this bucket processor. ' +
+        'This is a dequeue/backlog age signal, not bucket processing duration.',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN],
+    buckets: [60, 300, 600, 1800, 3600, 7200, 14400, 28800, 43200, 86400],
+});
+
+// Map conductor scan ids to the cleanup timer that removes their per-scan
+// prom-client series after they stop receiving bucket-task messages.
+const scanMetricTimers = new Map();
+
+function removeBucketProcessorScanMetrics(conductorScanId) {
+    try {
+        bucketProcessorScanMessagesReceived.remove({
+            [LIFECYCLE_LABEL_ORIGIN]: BUCKET_PROCESSOR_ORIGIN,
+            [LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID]: conductorScanId,
+        });
+    } catch (err) {
+        // Removing a non-existent series should not happen; if it does it
+        // likely signals a bad conductorScanId or a missing metric label.
+        lifecycleMetricsLogger.warn(
+            'failed to remove bucket processor scan metric',
+            { conductorScanId, error: err.message });
+    }
+}
+
+function setScanMetricTimeout(conductorScanId) {
+    const previousTimer = scanMetricTimers.get(conductorScanId);
+    if (previousTimer) {
+        clearTimeout(previousTimer);
+    }
+
+    // Reset retention on every message so an active scan remains observable.
+    // Cleanup starts only after the scan stops producing bucket-task messages.
+    const cleanupTimer = setTimeout(() => {
+        removeBucketProcessorScanMetrics(conductorScanId);
+        scanMetricTimers.delete(conductorScanId);
+    }, SCAN_METRIC_RETENTION_MS);
+    cleanupTimer.unref();
+    scanMetricTimers.set(conductorScanId, cleanupTimer);
+}
+
+function resetLifecycleScanMetricCleanupTimers() {
+    scanMetricTimers.forEach((timer, conductorScanId) => {
+        clearTimeout(timer);
+        removeBucketProcessorScanMetrics(conductorScanId);
+    });
+    scanMetricTimers.clear();
+}
 
 const lifecycleS3Operations = ZenkoMetrics.createCounter({
     name: 's3_lifecycle_s3_operations_total',
@@ -113,11 +203,23 @@ class LifecycleMetrics {
         }
     }
 
-    static onProcessBuckets(log) {
+    /**
+     * Update the conductor scheduling heartbeat. Called at the start of
+     * every conductor scan; consumed by the LifecycleLateScan alert to
+     * detect that the conductor has stopped scheduling.
+     *
+     * @param {Object} log - logger
+     * @param {number} scanStartTimestamp - scan start timestamp in ms
+     */
+    static onProcessBuckets(log, scanStartTimestamp = Date.now()) {
         try {
-            conductorLatestBatchStartTime.set({ origin: 'conductor' }, Date.now());
+            conductorLatestBatchStartTime.set(
+                { [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN },
+                scanStartTimestamp);
         } catch (err) {
-            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onProcessBuckets');
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onProcessBuckets', {
+                scanStartTimestamp,
+            });
         }
     }
 
@@ -169,6 +271,82 @@ class LifecycleMetrics {
             lifecycleLegacyTask.inc({ origin: 'conductor', status });
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLegacyTask', { status });
+        }
+    }
+
+    /**
+     * Record metrics at the end of a full conductor scan.
+     * @param {Object} log - logger
+     * @param {number} bucketCount - total buckets listed
+     */
+    static onConductorScanComplete(log, bucketCount) {
+        try {
+            const endTimestamp = Date.now();
+            conductorLatestBatchEndTime.set({
+                [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
+            }, endTimestamp);
+            conductorLatestBatchBucketCount.set({
+                [LIFECYCLE_LABEL_ORIGIN]: CONDUCTOR_ORIGIN,
+            }, bucketCount);
+        } catch (err) {
+            LifecycleMetrics.handleError(
+                log, err, 'LifecycleMetrics.onConductorScanComplete', {
+                    bucketCount,
+                }
+            );
+        }
+    }
+
+    /**
+     * Increment the count of bucket-tasks topic messages picked up by this
+     * bucket processor for a specific conductor scan. Called before the task
+     * is dispatched to the scheduler, once per Kafka message regardless of how
+     * many objects it covers or whether processing eventually succeeds.
+     *
+     * Note: this counts messages (initial + continuation/listing slices),
+     * not unique buckets. Keep one time series per conductor_scan_id so that
+     * overlapping scans remain visible. Old scan series are removed by a
+     * timer after a fixed retention interval without
+     * update to avoid unbounded prom-client memory growth.
+     *
+     * @param {Object} log - logger
+     * @param {string} conductorScanId - conductor scan id from contextInfo
+     * @param {number} [conductorScanStartTimestamp] - conductor scan start
+     *   timestamp from contextInfo
+     */
+    static onBucketProcessorScanMessageReceived(
+        log, conductorScanId, conductorScanStartTimestamp) {
+        // Old conductor messages produced during rolling upgrades do not have
+        // a scan id. Do not create a synthetic "undefined" scan-id series.
+        if (!conductorScanId) {
+            return;
+        }
+        try {
+            bucketProcessorScanMessagesReceived.inc({
+                [LIFECYCLE_LABEL_ORIGIN]: BUCKET_PROCESSOR_ORIGIN,
+                [LIFECYCLE_LABEL_CONDUCTOR_SCAN_ID]: conductorScanId,
+            });
+            setScanMetricTimeout(conductorScanId);
+            // A negative or non-finite age means the conductor scan-start
+            // timestamp is missing or the producer/consumer clocks are skewed.
+            // Skip the observation and warn instead of recording a misleading
+            // 0 in the first histogram bucket.
+            const ageSeconds = (Date.now() - conductorScanStartTimestamp) / 1000;
+            if (Number.isFinite(ageSeconds) && ageSeconds >= 0) {
+                bucketProcessorScanMessageAgeSeconds.observe({
+                    [LIFECYCLE_LABEL_ORIGIN]: BUCKET_PROCESSOR_ORIGIN,
+                }, ageSeconds);
+            } else {
+                lifecycleMetricsLogger.warn(
+                    'skipping bucket processor scan message age observation',
+                    { conductorScanId, conductorScanStartTimestamp, ageSeconds });
+            }
+        } catch (err) {
+            LifecycleMetrics.handleError(
+                log, err,
+                'LifecycleMetrics.onBucketProcessorScanMessageReceived',
+                { conductorScanId, conductorScanStartTimestamp }
+            );
         }
     }
 
@@ -247,6 +425,8 @@ class LifecycleMetrics {
 }
 
 module.exports = {
+    DEFAULT_SCAN_METRIC_RETENTION_S,
     LifecycleMetrics,
     LIFECYCLE_MARKER_METRICS_LOCATION,
+    resetLifecycleScanMetricCleanupTimers,
 };
