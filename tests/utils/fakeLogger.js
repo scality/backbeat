@@ -5,6 +5,7 @@ const fakeLogger = {
     debug: console.debug, // eslint-disable-line no-console
     warn: console.warn,    // eslint-disable-line no-console
     getSerializedUids: () => {},
+    addDefaultFields: () => {},
     end: () => fakeLogger,
     newRequestLogger: () => fakeLogger,
 };

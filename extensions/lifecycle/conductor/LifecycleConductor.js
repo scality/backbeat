@@ -3,6 +3,7 @@
 const async = require('async');
 const schedule = require('node-schedule');
 const zookeeper = require('node-zookeeper-client');
+const { v7: uuid } = require('uuid');
 
 const { constants, errors } = require('arsenal');
 const Logger = require('werelogs').Logger;
@@ -105,6 +106,8 @@ class LifecycleConductor {
         this._vaultClientCache = null;
         this._initialized = false;
         this._batchInProgress = false;
+        this._currentScanId = null;
+        this._currentScanStartTimestamp = null;
 
         // this cache only needs to be the size of one listing.
         // worst case scenario is 1 account per bucket:
@@ -353,6 +356,8 @@ class LifecycleConductor {
                 action: 'processObjects',
                 contextInfo: {
                     reqId: log.getSerializedUids(),
+                    conductorScanId: this._currentScanId,
+                    conductorScanStartTimestamp: this._currentScanStartTimestamp,
                 },
                 target: {
                     bucket: task.bucketName,
@@ -395,7 +400,8 @@ class LifecycleConductor {
 
     _createBucketTaskMessages(tasks, log, cb) {
         if (this.lcConfig.forceLegacyListing) {
-            return process.nextTick(cb, null, tasks.map(t => this._taskToMessage(t, lifecycleTaskVersions.v1, log)));
+            return process.nextTick(cb, null, tasks.map(t =>
+                this._taskToMessage(t, lifecycleTaskVersions.v1, log)));
         }
 
         return async.mapLimit(tasks, 10, (t, taskDone) =>
@@ -409,10 +415,24 @@ class LifecycleConductor {
             }), cb);
     }
 
+    _completeCurrentScan(log, nBucketsListed) {
+        LifecycleMetrics.onConductorScanComplete(
+            log,
+            nBucketsListed || 0,
+        );
+        this._resetCurrentScan();
+    }
+
+    _resetCurrentScan() {
+        this._currentScanId = null;
+        this._currentScanStartTimestamp = null;
+    }
+
     processBuckets(cb) {
         const log = this.logger.newRequestLogger();
-        const start = new Date();
+        const scanId = uuid();
         let nBucketsQueued = 0;
+        let nBucketsListed = 0;
         let messageDeliveryReports = 0;
 
         const messageSendQueue = async.cargo((tasks, done) => {
@@ -439,7 +459,8 @@ class LifecycleConductor {
                         }
                         return true;
                     }))),
-                (tasksWithAccountId, next) => this._createBucketTaskMessages(tasksWithAccountId, log, next),
+                (tasksWithAccountId, next) => this._createBucketTaskMessages(
+                    tasksWithAccountId, log, next),
             ],
             (err, messages) => {
                 nBucketsQueued += tasks.length;
@@ -448,7 +469,8 @@ class LifecycleConductor {
                     nBucketsQueued,
                     bucketsInCargo: tasks.length,
                     kafkaBucketMessagesDeliveryReports: messageDeliveryReports,
-                    kafkaEnqueueRateHz: Math.round(nBucketsQueued * 1000 / (new Date() - start)),
+                    kafkaEnqueueRateHz: Math.round(
+                        nBucketsQueued * 1000 / (Date.now() - this._currentScanStartTimestamp)),
                 });
 
                 this._accountIdCache.expireOldest();
@@ -463,18 +485,30 @@ class LifecycleConductor {
 
         async.waterfall([
             next => this._controlBacklog(next),
+            next => {
+                // The scan has started: index handling and listing below are
+                // part of it, so timestamp the scan start here (right after
+                // the backlog-control gate, the only step that skips a scan).
+                this._currentScanId = scanId;
+                this._currentScanStartTimestamp = Date.now();
+                log.addDefaultFields({
+                    conductorScanId: scanId,
+                    conductorScanStartTimestamp: this._currentScanStartTimestamp,
+                });
+                LifecycleMetrics.onProcessBuckets(log, this._currentScanStartTimestamp);
+                this._batchInProgress = true;
+                log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
+                return next();
+            },
             // error retrieving in progress jobs should not stop the current batch
             // fallback to V1 listings
             next => this._indexesGetInProgressJobs(log, () => next(null)),
+            next => this.listBuckets(messageSendQueue, log, (err, listedBucketsCount) => {
+                LifecycleMetrics.onBucketListing(log, err);
+                nBucketsListed = listedBucketsCount;
+                return next(err);
+            }),
             next => {
-                this._batchInProgress = true;
-                log.info('starting new lifecycle batch', { bucketSource: this._bucketSource });
-                this.listBuckets(messageSendQueue, log, (err, nBucketsListed) => {
-                    LifecycleMetrics.onBucketListing(log, err);
-                    return next(err, nBucketsListed);
-                });
-            },
-            (nBucketsListed, next) => {
                 async.until(
                     () => nBucketsQueued === nBucketsListed,
                     unext => setTimeout(unext, 1000),
@@ -482,7 +516,12 @@ class LifecycleConductor {
             },
         ], err => {
             if (err && err.Throttling) {
-                log.info('not starting new lifecycle batch', { reason: err });
+                // Throttling only originates from the backlog-control gate,
+                // before the scan id is set, so no scan was started and there
+                // is no scan duration to report here.
+                log.info('not starting new lifecycle batch', {
+                    reason: err,
+                });
                 if (cb) {
                     cb(err);
                 }
@@ -493,17 +532,30 @@ class LifecycleConductor {
             this.activeIndexingJobs = [];
             this._batchInProgress = false;
             const unknownCanonicalIds = this._accountIdCache.getMisses();
+            const fullScanElapsedMs = Date.now() - this._currentScanStartTimestamp;
 
             if (err) {
-                log.error('lifecycle batch failed', { error: err, unknownCanonicalIds });
+                log.error('lifecycle batch failed', {
+                    error: err,
+                    unknownCanonicalIdCount: unknownCanonicalIds.length,
+                    fullScanElapsedMs,
+                    nBucketsListed,
+                    nBucketsQueued,
+                });
+                this._resetCurrentScan();
                 if (cb) {
                     cb(err);
                 }
                 return;
             }
 
-            log.info('finished pushing lifecycle batch', { nBucketsQueued, unknownCanonicalIds });
-            LifecycleMetrics.onProcessBuckets(log);
+            log.info('finished pushing lifecycle batch', {
+                nBucketsQueued,
+                unknownCanonicalIdCount: unknownCanonicalIds.length,
+                fullScanElapsedMs,
+                nBucketsListed,
+            });
+            this._completeCurrentScan(log, nBucketsListed);
             if (cb) {
                 cb(null, nBucketsQueued);
             }
@@ -615,7 +667,7 @@ class LifecycleConductor {
         let isTruncated = true;
         let marker = initMarker;
         let nEnqueued = 0;
-        const start = new Date();
+        const start = Date.now();
         const retryWrapper = new BackbeatTask(this.lcConfig.conductor.retry);
 
         this.lastSentId = null;
@@ -628,7 +680,7 @@ class LifecycleConductor {
                     nEnqueuedToDownstream: nEnqueued,
                     inFlight: queue.length(),
                     maxInFlight: this._maxInFlightBatchSize,
-                    bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                    bucketListingPushRateHz: Math.round(nEnqueued * 1000 / (Date.now() - start)),
                     breakerState,
                 };
 
@@ -713,7 +765,7 @@ class LifecycleConductor {
 
     listMongodbBuckets(queue, log, cb) {
         let nEnqueued = 0;
-        const start = new Date();
+        const start = Date.now();
 
         const lastEntryPath = this.getBucketProgressZkPath();
         let lastSentId = null;
@@ -788,7 +840,7 @@ class LifecycleConductor {
                             nEnqueuedToDownstream: nEnqueued,
                             inFlight: queue.length(),
                             maxInFlight: this._maxInFlightBatchSize,
-                            enqueueRateHz: Math.round(nEnqueued * 1000 / (new Date() - start)),
+                            enqueueRateHz: Math.round(nEnqueued * 1000 / (Date.now() - start)),
                             breakerState,
                         };
 
