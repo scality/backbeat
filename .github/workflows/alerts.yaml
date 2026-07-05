@@ -32,6 +32,8 @@ jobs:
             lifecycle_transition_replicas=3
             lifecycle_latency_warning_threshold=120
             lifecycle_latency_critical_threshold=180
+            lifecycle_conductor_scan_warning_threshold=120
+            lifecycle_conductor_scan_critical_threshold=180
           github_token: ${{ secrets.GIT_ACCESS_TOKEN }}
 
       - name: Render and test replication 
