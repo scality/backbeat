@@ -1,10 +1,12 @@
 const assert = require('assert');
+const sinon = require('sinon');
 const werelogs = require('werelogs');
 
 const { ObjectMD } = require('arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleUpdateExpirationTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleUpdateExpirationTask');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
 const {
     GarbageCollectorProducerMock,
@@ -60,7 +62,13 @@ describe('LifecycleUpdateExpirationTask', () => {
         task = new LifecycleUpdateExpirationTask(objectProcessor);
     });
 
+    afterEach(() => {
+        sinon.restore();
+    });
+
     it('should expire restored object', done => {
+        const startedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleStarted');
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
         const requestedAt = new Date();
         const restoreCompletedAt = new Date();
         const expireDate = new Date();
@@ -94,6 +102,8 @@ describe('LifecycleUpdateExpirationTask', () => {
             const receivedGcEntry = gcProducer.getReceivedEntry();
             assert.strictEqual(receivedGcEntry.getActionType(), 'deleteData');
             assert.deepStrictEqual(receivedGcEntry.getAttribute('target.locations'), oldLocation);
+            assert.strictEqual(startedMetric.firstCall.args[2], 'location-dmf-v1');
+            assert.strictEqual(completedMetric.firstCall.args[2], 'location-dmf-v1');
             done();
         });
     });
