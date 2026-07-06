@@ -23,20 +23,36 @@ class BackbeatTestConsumer extends BackbeatConsumer {
                         `expected ${expectedMsg.key}`);
             }
             if (expectedMsg.value !== undefined) {
-                const parsedMsg = typeof expectedMsg.value === 'object' ?
-                          JSON.parse(message.value) :
-                          message.value.toString();
-                if (typeof expectedMsg.value === 'object' &&
-                    expectedMsg.value.contextInfo?.reqId === 'test-request-id') {
+                const isExpectedObject = typeof expectedMsg.value === 'object';
+                const parsedMsg = isExpectedObject ?
+                    JSON.parse(message.value) :
+                    message.value.toString();
+                const expectedValue = isExpectedObject ?
+                    JSON.parse(JSON.stringify(expectedMsg.value)) :
+                    expectedMsg.value;
+                if (isExpectedObject &&
+                    expectedValue.contextInfo?.reqId === 'test-request-id') {
                     // RequestId is generated randomly, we can't compare it: just check that it is
                     // present
                     assert(parsedMsg.contextInfo?.reqId, 'expected contextInfo.reqId field');
-                    parsedMsg.contextInfo.reqId = expectedMsg.value.contextInfo?.reqId;
+                    expectedValue.contextInfo.reqId = parsedMsg.contextInfo.reqId;
+                    if (expectedValue.contextInfo?.conductorScanId === 'test-scan-id') {
+                        assert(parsedMsg.contextInfo?.conductorScanId,
+                            'expected contextInfo.conductorScanId field');
+                        expectedValue.contextInfo.conductorScanId =
+                            parsedMsg.contextInfo.conductorScanId;
+                    }
+                    if (expectedValue.contextInfo?.conductorScanStartTimestamp === 0) {
+                        assert(parsedMsg.contextInfo?.conductorScanStartTimestamp,
+                            'expected contextInfo.conductorScanStartTimestamp field');
+                        expectedValue.contextInfo.conductorScanStartTimestamp =
+                            parsedMsg.contextInfo.conductorScanStartTimestamp;
+                    }
                 }
                 assert.deepStrictEqual(
-                    parsedMsg, expectedMsg.value,
+                    parsedMsg, expectedValue,
                     `unexpected message value ${parsedMsg}, ` +
-                        `expected ${expectedMsg.value}`);
+                        `expected ${expectedValue}`);
             }
         }
 

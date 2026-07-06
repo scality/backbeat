@@ -15,6 +15,12 @@ class LifecycleTaskV2 extends LifecycleTask {
      * NOTE: Among other methods, LifecycleTaskV2 inherits the processBucketEntry method from LifecycleTask.
      */
 
+    _getBucketEntryRequestIdContext(log) {
+        return {
+            requestId: log.getSerializedUids(),
+        };
+    }
+
     /**
      * Skips kafka entry
      * @param {object} bucketData - bucket data from bucketTasksTopic
@@ -51,9 +57,11 @@ class LifecycleTaskV2 extends LifecycleTask {
                     storageClass,
                 } = l;
 
-                const entry = Object.assign({}, bucketData, {
-                    contextInfo: { requestId: log.getSerializedUids() },
-                    details: { beforeDate, prefix, listType, storageClass },
+                const entry = this._makeContinuationEntry(bucketData, log, {
+                    beforeDate,
+                    prefix,
+                    listType,
+                    storageClass,
                 });
 
                 this._sendBucketEntry(entry, err => {
@@ -114,15 +122,12 @@ class LifecycleTaskV2 extends LifecycleTask {
 
             // re-queue truncated listing only once.
             if (isTruncated && nbRetries === 0) {
-                const entry = Object.assign({}, bucketData, {
-                    contextInfo: { requestId: log.getSerializedUids() },
-                    details: {
-                        beforeDate: params.BeforeDate,
-                        prefix: params.Prefix,
-                        storageClass: params.ExcludedDataStoreName,
-                        listType,
-                        ...markerInfo
-                    },
+                const entry = this._makeContinuationEntry(bucketData, log, {
+                    beforeDate: params.BeforeDate,
+                    prefix: params.Prefix,
+                    storageClass: params.ExcludedDataStoreName,
+                    listType,
+                    ...markerInfo,
                 });
 
                 this._sendBucketEntry(entry, err => {
@@ -198,15 +203,12 @@ class LifecycleTaskV2 extends LifecycleTask {
 
             // re-queue truncated listing only once.
             if (isTruncated && nbRetries === 0) {
-                const entry = Object.assign({}, bucketData, {
-                    contextInfo: { requestId: log.getSerializedUids() },
-                    details: {
-                        beforeDate: params.BeforeDate,
-                        prefix: params.Prefix,
-                        storageClass: params.ExcludedDataStoreName,
-                        listType,
-                        ...markerInfo,
-                    },
+                const entry = this._makeContinuationEntry(bucketData, log, {
+                    beforeDate: params.BeforeDate,
+                    prefix: params.Prefix,
+                    storageClass: params.ExcludedDataStoreName,
+                    listType,
+                    ...markerInfo,
                 });
 
                 this._sendBucketEntry(entry, err => {
@@ -350,6 +352,7 @@ class LifecycleTaskV2 extends LifecycleTask {
                 site: rules.Transition.StorageClass,
                 transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
                     rules.Transition, obj.LastModified),
+                bucketData,
             }, log, cb);
         }
 
@@ -422,11 +425,7 @@ class LifecycleTaskV2 extends LifecycleTask {
 
         if (applicableExpRule) {
             const entry = ActionQueueEntry.create('deleteObject')
-                .addContext({
-                    origin: 'lifecycle',
-                    ruleType: 'expiration',
-                    reqId: log.getSerializedUids(),
-                })
+                .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.key', deleteMarker.Key)

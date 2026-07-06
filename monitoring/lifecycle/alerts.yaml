@@ -25,6 +25,12 @@ x-inputs:
 - name: lifecycle_latency_critical_threshold
   type: config
   value: 36*60*60 # 36h, in seconds
+- name: lifecycle_conductor_scan_warning_threshold
+  type: config
+  value: 10*60 # 10m, in seconds
+- name: lifecycle_conductor_scan_critical_threshold
+  type: config
+  value: 30*60 # 30m, in seconds
 
 groups:
 - name: LifecycleProducer
@@ -57,9 +63,9 @@ groups:
     Annotations:
       zenko_service: backbeat-lifecycle-producer
       description: >-
-        Last lifecycle scan was performed more than
+        Last lifecycle scan was scheduled more than
         {{ ${lifecycle_latency_warning_threshold} | humanizeDuration }} ago.
-      summary: "Lifecycle scan not executed in time"
+      summary: "Lifecycle scan not scheduled in time"
 
   - alert: LifecycleLateScan
     Expr: |
@@ -78,9 +84,67 @@ groups:
     Annotations:
       zenko_service: backbeat-lifecycle-producer
       description: >-
-        Last lifecycle scan was performed more than
+        Last lifecycle scan was scheduled more than
         {{ ${lifecycle_latency_critical_threshold} | humanizeDuration }} ago.
-      summary: "Lifecycle scan not executed in time"
+      summary: "Lifecycle scan not scheduled in time"
+
+  - alert: LifecycleStalledScan
+    Expr: |
+      # Keep end_time=0 meaningful: if the first scan starts but never
+      # completes, or errors after starting without updating end_time,
+      # this alert should fire after the configured threshold.
+      time() - (
+        (
+          max(s3_lifecycle_latest_batch_start_time{
+            namespace="${namespace}", job="${job_lifecycle_producer}"
+          })
+          >
+          (
+            max(s3_lifecycle_latest_batch_end_time{
+              namespace="${namespace}", job="${job_lifecycle_producer}"
+            })
+            or vector(0)
+          )
+        ) / 1000
+      ) > ${lifecycle_conductor_scan_warning_threshold}
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: >-
+        Last lifecycle scan did not complete within
+        {{ ${lifecycle_conductor_scan_warning_threshold} | humanizeDuration }} of being scheduled
+        (it may be stalled or have failed).
+      summary: "Lifecycle scan did not complete in time"
+
+  - alert: LifecycleStalledScan
+    Expr: |
+      # Keep end_time=0 meaningful: if the first scan starts but never
+      # completes, or errors after starting without updating end_time,
+      # this alert should fire after the configured threshold.
+      time() - (
+        (
+          max(s3_lifecycle_latest_batch_start_time{
+            namespace="${namespace}", job="${job_lifecycle_producer}"
+          })
+          >
+          (
+            max(s3_lifecycle_latest_batch_end_time{
+              namespace="${namespace}", job="${job_lifecycle_producer}"
+            })
+            or vector(0)
+          )
+        ) / 1000
+      ) > ${lifecycle_conductor_scan_critical_threshold}
+    Labels:
+      severity: critical
+    Annotations:
+      zenko_service: backbeat-lifecycle-producer
+      description: >-
+        Last lifecycle scan did not complete within
+        {{ ${lifecycle_conductor_scan_critical_threshold} | humanizeDuration }} of being scheduled
+        (it may be stalled or have failed).
+      summary: "Lifecycle scan did not complete in time"
 
   - alert: LifecycleIndexCreationFailed
     Expr: |
@@ -142,6 +206,25 @@ groups:
       zenko_service: backbeat-lifecycle-bucket-processor
       description: "More than 5% of S3 requests by bucket processors resulting in errors"
       summary: "Very high rate of S3 request errors"
+
+  - alert: LifecycleBucketProcessorMultipleParallelScans
+    Expr: |
+      count(
+        sum by(conductor_scan_id) (
+          rate(s3_lifecycle_bucket_processor_scan_messages_total{
+            namespace="${namespace}", job="${job_lifecycle_bucket_processor}"
+          }[1m])
+        ) > 0
+      ) > 1
+    For: "10m"
+    Labels:
+      severity: warning
+    Annotations:
+      zenko_service: backbeat-lifecycle-bucket-processor
+      description: >-
+        Bucket processors have processed bucket-task messages from multiple
+        lifecycle conductor scans in parallel for more than 10 minutes.
+      summary: "Lifecycle bucket processors are receiving multiple scans"
 
 - name: LifecycleObjectProcessor
   rules:

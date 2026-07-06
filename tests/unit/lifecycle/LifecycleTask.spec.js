@@ -8,6 +8,8 @@ const { ValidLifecycleRules } = require('arsenal').models;
 
 const LifecycleTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleTask');
+const LifecycleTaskV2 = require(
+    '../../../extensions/lifecycle/tasks/LifecycleTaskV2');
 const fakeLogger = require('../../utils/fakeLogger');
 const { withActiveSpan } = require('../../utils/withActiveSpan');
 const { timeOptions } = require('../../functional/lifecycle/configObjects');
@@ -652,6 +654,94 @@ describe('lifecycle task helper methods', () => {
                 const latestEntry = lct2.getLatestEntry();
                 assert.equal(latestEntry, undefined);
             });
+        });
+    });
+
+    describe('LifecycleTaskV2 scan context propagation', () => {
+        let lifecycleTaskV2;
+
+        const bucketData = {
+            target: {
+                owner: 'test-user',
+                accountId: 'test-account',
+                bucket: 'test-bucket',
+            },
+            contextInfo: {
+                conductorScanId: 'scan-A',
+                conductorScanStartTimestamp: 1700000000000,
+            },
+        };
+
+        beforeEach(() => {
+            lifecycleTaskV2 = new LifecycleTaskV2(lp);
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should propagate scan context to current-version transition actions', done => {
+            sinon.stub(lifecycleTaskV2, '_checkAndApplyExpirationRule').returns(false);
+            sinon.stub(lifecycleTaskV2, '_isDeleteMarker').returns(false);
+            sinon.stub(lifecycleTaskV2, '_applyTransitionRule')
+                .callsFake((params, log, cb) => {
+                    assert.strictEqual(params.bucketData.contextInfo.conductorScanId, 'scan-A');
+                    assert.strictEqual(
+                        params.bucketData.contextInfo.conductorScanStartTimestamp, 1700000000000);
+                    cb();
+                });
+
+            lifecycleTaskV2._compareCurrent(bucketData, {
+                Key: 'test-key',
+                VersionId: 'test-version',
+                ETag: '"test-etag"',
+                LastModified: '2023-01-01T00:00:00.000Z',
+            }, {
+                Transition: {
+                    Days: 1,
+                    StorageClass: 'test-site',
+                },
+            }, fakeLogger, done);
+        });
+
+        it('should propagate scan context to expired delete-marker actions', () => {
+            class LifecycleTaskV2Mock extends LifecycleTaskV2 {
+                _sendObjectAction(entry, cb) {
+                    this.latestEntry = entry;
+                    return cb();
+                }
+            }
+            lifecycleTaskV2 = new LifecycleTaskV2Mock(lp);
+
+            lifecycleTaskV2._checkAndApplyEODMRule(bucketData, {
+                Key: 'test-key',
+                VersionId: 'test-version',
+                LastModified: new Date(Date.now() - (2 * DAY)).toISOString(),
+            }, {
+                Expiration: { Days: 1 },
+            }, fakeLogger);
+
+            const context = lifecycleTaskV2.latestEntry.getContext();
+            assert.strictEqual(context.conductorScanId, 'scan-A');
+            assert.strictEqual(context.conductorScanStartTimestamp, 1700000000000);
+        });
+
+        it('should preserve V2 continuation requestId context', () => {
+            const log = {
+                ...fakeLogger,
+                getSerializedUids: () => 'test-request-id',
+            };
+            const entry = lifecycleTaskV2._makeContinuationEntry(bucketData, log, {
+                beforeDate: '2023-01-01T00:00:00.000Z',
+                prefix: '',
+                listType: 'current',
+            });
+
+            assert.strictEqual(entry.contextInfo.requestId, 'test-request-id');
+            assert.strictEqual(entry.contextInfo.reqId, undefined);
+            assert.strictEqual(entry.contextInfo.conductorScanId, 'scan-A');
+            assert.strictEqual(
+                entry.contextInfo.conductorScanStartTimestamp, 1700000000000);
         });
     });
 
@@ -2231,6 +2321,17 @@ describe('lifecycle task helper methods', () => {
             site: 'test-site',
             accountId: 'test-account-id',
             transitionTime: Date.now(),
+            bucketData: {
+                target: {
+                    bucket: 'test-bucket',
+                    owner: 'test-owner',
+                    accountId: 'test-account-id',
+                },
+                contextInfo: {
+                    conductorScanId: 'scan-A',
+                    conductorScanStartTimestamp: 1700000000000,
+                },
+            },
         };
 
         before(() => {

@@ -129,6 +129,45 @@ class LifecycleTask extends BackbeatTask {
         });
     }
 
+    _getScanContext(bucketData) {
+        return {
+            conductorScanId: bucketData?.contextInfo?.conductorScanId,
+            conductorScanStartTimestamp: bucketData?.contextInfo?.conductorScanStartTimestamp,
+        };
+    }
+
+    _getBucketEntryContext(bucketData, log) {
+        return {
+            ...this._getBucketEntryRequestIdContext(log),
+            ...this._getScanContext(bucketData),
+        };
+    }
+
+    _getBucketEntryRequestIdContext(log) {
+        return {
+            reqId: log.getSerializedUids(),
+        };
+    }
+
+    _getActionContext(bucketData, log, ruleType) {
+        return {
+            origin: 'lifecycle',
+            ruleType,
+            reqId: log.getSerializedUids(),
+            ...this._getScanContext(bucketData),
+        };
+    }
+
+    _makeContinuationEntry(bucketData, log, details) {
+        return {
+            ...bucketData,
+            contextInfo: this._getBucketEntryContext(bucketData, log),
+            // Preserve the previous Object.assign-style behavior: callers pass
+            // freshly-built details and ownership moves to the queued entry.
+            details,
+        };
+    }
+
     /**
      * This function forces syncing the latest data mover topic
      * offsets to the 'lifecycle' metrics snapshot. It is called when
@@ -236,10 +275,7 @@ class LifecycleTask extends BackbeatTask {
                         marker = contents[contents.length - 1].Key;
                     }
 
-                    const entry = Object.assign({}, bucketData, {
-                        contextInfo: { reqId: log.getSerializedUids() },
-                        details: { marker },
-                    });
+                    const entry = this._makeContinuationEntry(bucketData, log, { marker });
                     this._sendBucketEntry(entry, err => {
                         if (!err) {
                             log.debug(
@@ -409,15 +445,10 @@ class LifecycleTask extends BackbeatTask {
             if (data.IsTruncated && allVersions.length > 0 && nbRetries === 0) {
                 // Uses last version whether Version or DeleteMarker
                 const last = allVersions[allVersions.length - 1];
-                const entry = Object.assign({}, bucketData, {
-                    contextInfo: {
-                        reqId: log.getSerializedUids(),
-                    },
-                    details: {
-                        keyMarker: data.NextKeyMarker,
-                        versionIdMarker: data.NextVersionIdMarker,
-                        prevDate: last.LastModified,
-                    },
+                const entry = this._makeContinuationEntry(bucketData, log, {
+                    keyMarker: data.NextKeyMarker,
+                    versionIdMarker: data.NextVersionIdMarker,
+                    prevDate: last.LastModified,
                 });
                 this._sendBucketEntry(entry, err => {
                     if (!err) {
@@ -495,14 +526,9 @@ class LifecycleTask extends BackbeatTask {
                 if (data.IsTruncated && nbRetries === 0) {
                     // re-queue to kafka with `NextUploadIdMarker` &
                     // `NextKeyMarker` only once.
-                    const entry = Object.assign({}, bucketData, {
-                        contextInfo: {
-                            reqId: log.getSerializedUids(),
-                        },
-                        details: {
-                            keyMarker: data.NextKeyMarker,
-                            uploadIdMarker: data.NextUploadIdMarker,
-                        },
+                    const entry = this._makeContinuationEntry(bucketData, log, {
+                        keyMarker: data.NextKeyMarker,
+                        uploadIdMarker: data.NextUploadIdMarker,
                     });
                     return this._sendBucketEntry(entry, err => {
                         if (!err) {
@@ -1037,11 +1063,7 @@ class LifecycleTask extends BackbeatTask {
             rules.Expiration.Date < currentDate) {
             // expiration date passed for this object
             const entry = ActionQueueEntry.create('deleteObject')
-                .addContext({
-                    origin: 'lifecycle',
-                    ruleType: 'expiration',
-                    reqId: log.getSerializedUids(),
-                })
+                .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
@@ -1065,11 +1087,7 @@ class LifecycleTask extends BackbeatTask {
         if (rules.Expiration.Days !== undefined &&
             daysSinceInitiated >= rules.Expiration.Days) {
             const entry = ActionQueueEntry.create('deleteObject')
-                .addContext({
-                    origin: 'lifecycle',
-                    ruleType: 'expiration',
-                    reqId: log.getSerializedUids(),
-                })
+                .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
@@ -1171,11 +1189,7 @@ class LifecycleTask extends BackbeatTask {
             transitionTime: new Date(params.transitionTime).toISOString(),
             attempt,
         });
-        entry.addContext({
-            origin: 'lifecycle',
-            ruleType: 'transition',
-            reqId: log.getSerializedUids(),
-        });
+        entry.addContext(this._getActionContext(params.bucketData, log, 'transition'));
         entry.setAttribute('source', {
             bucket: params.bucket,
             objectKey: params.objectKey,
@@ -1375,6 +1389,7 @@ class LifecycleTask extends BackbeatTask {
                 site: rules[ncvt].StorageClass,
                 transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
                     { Days: rules[ncvt][ncd] }, staleDate),
+                bucketData,
             }, log, cb);
             return;
         }
@@ -1447,11 +1462,7 @@ class LifecycleTask extends BackbeatTask {
                 // if a valid Expiration rule exists, apply and permanently delete this DM
                 if (matchingNoncurrentKeys.length === 0 && applicableExpRule) {
                     const entry = ActionQueueEntry.create('deleteObject')
-                        .addContext({
-                            origin: 'lifecycle',
-                            ruleType: 'expiration',
-                            reqId: log.getSerializedUids(),
-                        })
+                        .addContext(this._getActionContext(bucketData, log, 'expiration'))
                         .setAttribute('target.owner', bucketData.target.owner)
                         .setAttribute('target.bucket', bucketData.target.bucket)
                         .setAttribute('target.key', deleteMarker.Key)
@@ -1516,11 +1527,7 @@ class LifecycleTask extends BackbeatTask {
             const storageClass = this._isDeleteMarker(verToExpire) ?
                 LIFECYCLE_MARKER_METRICS_LOCATION : verToExpire.StorageClass;
             const entry = ActionQueueEntry.create('deleteObject')
-                .addContext({
-                    origin: 'lifecycle',
-                    ruleType: 'expiration',
-                    reqId: log.getSerializedUids(),
-                })
+                .addContext(this._getActionContext(bucketData, log, 'expiration'))
                 .setAttribute('target.owner', bucketData.target.owner)
                 .setAttribute('target.bucket', bucketData.target.bucket)
                 .setAttribute('target.accountId', bucketData.target.accountId)
@@ -1607,6 +1614,7 @@ class LifecycleTask extends BackbeatTask {
                         site: rules.Transition.StorageClass,
                         transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
                             rules.Transition, object.LastModified),
+                        bucketData,
                     }, log, done);
                 }
                 return done();
@@ -1710,6 +1718,7 @@ class LifecycleTask extends BackbeatTask {
                 encodedVersionId: undefined,
                 transitionTime: this._lifecycleDateTime.getTransitionTimestamp(
                     rules.Transition, version.LastModified),
+                bucketData,
             }, log, done);
         }
 
@@ -1755,11 +1764,7 @@ class LifecycleTask extends BackbeatTask {
                     uploadId: upload.UploadId,
                 });
                 const entry = ActionQueueEntry.create('deleteMPU')
-                    .addContext({
-                        origin: 'lifecycle',
-                        ruleType: 'expiration',
-                        reqId: log.getSerializedUids(),
-                    })
+                    .addContext(this._getActionContext(bucketData, log, 'expiration'))
                     .setAttribute('target.owner', bucketData.target.owner)
                     .setAttribute('target.bucket', bucketData.target.bucket)
                     .setAttribute('target.accountId', bucketData.target.accountId)
@@ -1828,6 +1833,7 @@ class LifecycleTask extends BackbeatTask {
     processBucketEntry(bucketLCRules, bucketData, s3target,
     backbeatMetadataProxy, nbRetries, done) {
         const log = this.log.newRequestLogger();
+        log.addDefaultFields(this._getScanContext(bucketData));
         this.s3target = s3target;
         this.backbeatMetadataProxy = backbeatMetadataProxy;
         if (!this.backbeatMetadataProxy) {

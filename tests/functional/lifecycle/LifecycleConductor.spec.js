@@ -41,7 +41,11 @@ const expected2Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket1', owner: 'owner1', taskVersion: version },
             details: {},
         },
@@ -49,7 +53,11 @@ const expected2Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: version },
             details: {},
         },
@@ -60,7 +68,11 @@ const expected4Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket1', owner: 'owner1', taskVersion: version },
             details: {},
         },
@@ -68,7 +80,11 @@ const expected4Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket1-2', owner: 'owner1', taskVersion: version },
             details: {},
         },
@@ -76,7 +92,11 @@ const expected4Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket3', owner: 'owner3', taskVersion: version },
             details: {},
         },
@@ -84,7 +104,11 @@ const expected4Messages = (version='v2') => ([
     {
         value: {
             action: 'processObjects',
-            contextInfo: { reqId: 'test-request-id' },
+            contextInfo: {
+                reqId: 'test-request-id',
+                conductorScanId: 'test-scan-id',
+                conductorScanStartTimestamp: 0,
+            },
             target: { bucket: 'bucket4', owner: 'owner4', taskVersion: version },
             details: {},
         },

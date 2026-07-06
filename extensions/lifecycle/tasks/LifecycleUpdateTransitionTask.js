@@ -267,6 +267,7 @@ class LifecycleUpdateTransitionTask extends BackbeatTask {
             eTag: 'target.eTag',
             lastModified: 'target.lastModified',
         });
+        log.addDefaultFields(entry.getLogInfo());
         if (entry.getStatus() === 'success') {
             return this.handleSuccessfullTransition(entry, log, done);
         }

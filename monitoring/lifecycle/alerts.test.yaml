@@ -328,8 +328,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 4m
         exp_alerts:
@@ -337,14 +337,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 5m
         exp_alerts:
@@ -352,14 +352,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 6m
         exp_alerts:
@@ -367,8 +367,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 7m
         exp_alerts:
@@ -376,8 +376,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 8m
         exp_alerts:
@@ -385,14 +385,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 9m
         exp_alerts:
@@ -400,14 +400,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 10m
         exp_alerts:
@@ -415,14 +415,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 11m
         exp_alerts:
@@ -430,14 +430,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 12m
         exp_alerts:
@@ -445,14 +445,14 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
           - exp_labels:
               severity: critical
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 3m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 3m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 13m
         exp_alerts:
@@ -460,8 +460,8 @@ tests:
               severity: warning
             exp_annotations:
               zenko_service: backbeat-lifecycle-producer
-              description: "Last lifecycle scan was performed more than 2m 0s ago."
-              summary: "Lifecycle scan not executed in time"
+              description: "Last lifecycle scan was scheduled more than 2m 0s ago."
+              summary: "Lifecycle scan not scheduled in time"
       - alertname: LifecycleLateScan
         eval_time: 14m
         exp_alerts: []
@@ -508,6 +508,69 @@ tests:
       - alertname: LifecycleIndexCreationFailed
         eval_time: 18h
         exp_alerts: []
+
+  - name: LifecycleStalledScan
+    interval: 1m
+    input_series:
+      - series: s3_lifecycle_latest_batch_start_time{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless",pod="foo"}
+        values: 60000+0x5 360000
+      - series: s3_lifecycle_latest_batch_end_time{namespace="zenko",job="artesca-data-backbeat-lifecycle-producer-headless",pod="foo"}
+        values: 0+0x5 360000
+    alert_rule_test:
+      - alertname: LifecycleStalledScan
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleStalledScan
+        eval_time: 4m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed)."
+              summary: "Lifecycle scan did not complete in time"
+      - alertname: LifecycleStalledScan
+        eval_time: 5m
+        exp_alerts:
+          - exp_labels:
+              severity: critical
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan did not complete within 3m 0s of being scheduled (it may be stalled or have failed)."
+              summary: "Lifecycle scan did not complete in time"
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-producer
+              description: "Last lifecycle scan did not complete within 2m 0s of being scheduled (it may be stalled or have failed)."
+              summary: "Lifecycle scan did not complete in time"
+      - alertname: LifecycleStalledScan
+        eval_time: 6m
+        exp_alerts: []
+
+  - name: LifecycleBucketProcessorMultipleParallelScans
+    interval: 1m
+    input_series:
+      - series: s3_lifecycle_bucket_processor_scan_messages_total{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",conductor_scan_id="scan-a"}
+        values: 0+10x20
+      - series: s3_lifecycle_bucket_processor_scan_messages_total{namespace="zenko",job="artesca-data-backbeat-lifecycle-bucket-processor-headless",conductor_scan_id="scan-b"}
+        values: _ _ _ 0+10x17
+    alert_rule_test:
+      - alertname: LifecycleBucketProcessorMultipleParallelScans
+        eval_time: 2m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorMultipleParallelScans
+        eval_time: 10m
+        exp_alerts: []
+      - alertname: LifecycleBucketProcessorMultipleParallelScans
+        eval_time: 15m
+        exp_alerts:
+          - exp_labels:
+              severity: warning
+            exp_annotations:
+              zenko_service: backbeat-lifecycle-bucket-processor
+              description: "Bucket processors have processed bucket-task messages from multiple lifecycle conductor scans in parallel for more than 10 minutes."
+              summary: "Lifecycle bucket processors are receiving multiple scans"
 
   - name: LifecycleLatency
     interval: 10m

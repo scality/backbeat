@@ -3,6 +3,7 @@
 const assert = require('assert');
 const sinon = require('sinon');
 const fakeLogger = require('../../utils/fakeLogger');
+const { errors } = require('arsenal');
 const { splitter } = require('arsenal').constants;
 
 const LifecycleConductor = require(
@@ -180,9 +181,14 @@ describe('Lifecycle Conductor', () => {
 
             sinon.stub(conductor, '_controlBacklog')
                 .callsFake(cb => cb(null));
+            const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
 
             conductor.processBuckets(err => {
                 assert.strictEqual(err.message, 'error');
+                assert(metricStub.notCalled);
+                assert.strictEqual(conductor._batchInProgress, false);
+                assert.strictEqual(conductor._currentScanId, null);
+                assert.strictEqual(conductor._currentScanStartTimestamp, null);
                 done();
             });
         });
@@ -209,6 +215,124 @@ describe('Lifecycle Conductor', () => {
                 .callsFake(cb => cb(null));
 
             conductor.processBuckets(done);
+        });
+
+        it('should publish full scan metrics at end of scan', done => {
+            conductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, ['job1']),
+                getCollection: () => ({
+                    find: () => ({
+                        project: () => ({
+                            hasNext: () => Promise.resolve(false),
+                        }),
+                    }),
+                }),
+            };
+            conductor._zkClient = {
+                getData: (_, cb) => cb(null, null, null),
+                setData: (path, data, version, cb) => cb(null, { version: 1 }),
+            };
+
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
+            const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
+
+            conductor.processBuckets(err => {
+                assert.ifError(err);
+                assert(metricStub.calledOnce);
+                const [, bucketCount] = metricStub.firstCall.args;
+                assert.strictEqual(bucketCount, 0);
+                done();
+            });
+        });
+
+        it('should keep the in-flight scan id when backlog control throttles a new scan', done => {
+            const inFlightScanId = 'in-flight-scan-id';
+            conductor._currentScanId = inFlightScanId;
+            conductor._batchInProgress = true;
+
+            sinon.stub(conductor, '_controlBacklog')
+                .callsFake(cb => cb(errors.Throttling.customizeDescription('Batch in progress')));
+            const onProcessBucketsStub = sinon.stub(LifecycleMetrics, 'onProcessBuckets');
+
+            conductor.processBuckets(err => {
+                assert(err && err.Throttling);
+                assert.strictEqual(conductor._currentScanId, inFlightScanId);
+                assert(onProcessBucketsStub.notCalled);
+                done();
+            });
+        });
+
+        it('should reset scan state without completion metrics when the scan fails after start', done => {
+            conductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, []),
+            };
+
+            // Throttling can only originate from _controlBacklog (before the
+            // scan starts); a failure after start is a generic error and must
+            // reset the scan state.
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
+            sinon.stub(conductor, 'listBuckets')
+                .callsFake((queue, log, cb) => cb(errors.InternalError));
+            const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
+
+            conductor.processBuckets(err => {
+                assert(err && err.InternalError);
+                assert(metricStub.notCalled);
+                assert.strictEqual(conductor._batchInProgress, false);
+                assert.strictEqual(conductor._currentScanId, null);
+                assert.strictEqual(conductor._currentScanStartTimestamp, null);
+                done();
+            });
+        });
+
+        it('should generate a conductorScanId', done => {
+            conductor._mongodbClient = {
+                getIndexingJobs: (_, cb) => cb(null, []),
+                getCollection: () => ({
+                    find: () => ({
+                        project: () => ({
+                            hasNext: () => Promise.resolve(false),
+                        }),
+                    }),
+                }),
+            };
+            conductor._zkClient = {
+                getData: (_, cb) => cb(null, null, null),
+                setData: (path, data, version, cb) => cb(null, { version: 1 }),
+            };
+            conductor._producer = { send: (msg, cb) => cb(null, {}) };
+            const addDefaultFieldsStub = sinon.stub();
+            const testLog = conductor.logger.newRequestLogger();
+            testLog.addDefaultFields = addDefaultFieldsStub;
+            sinon.stub(conductor.logger, 'newRequestLogger').returns(testLog);
+
+            sinon.stub(conductor, '_controlBacklog').callsFake(cb => cb(null));
+            let capturedScanId = null;
+            sinon.stub(conductor, 'listBuckets')
+                .callsFake((queue, log, cb) => {
+                    const scanId = conductor._currentScanId;
+                    // Verify scanId is a valid UUID
+                    const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                    assert(uuidRegex.test(scanId),
+                        `conductorScanId should be a valid UUID v7, got: ${scanId}`);
+                    capturedScanId = scanId;
+                    assert(addDefaultFieldsStub.calledOnce);
+                    assert.strictEqual(addDefaultFieldsStub.firstCall.args[0].conductorScanId, scanId);
+                    cb(null, 0);
+                });
+            const metricStub = sinon.stub(LifecycleMetrics, 'onConductorScanComplete');
+
+            conductor.processBuckets(err => {
+                assert.ifError(err);
+                assert(metricStub.calledOnce);
+                const logPassedToMetric = metricStub.firstCall.args[0];
+                assert.strictEqual(logPassedToMetric, testLog);
+                assert(capturedScanId);
+                const uuidRegex = /^[0-9a-f]{8}-[0-9a-f]{4}-7[0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+                assert(uuidRegex.test(capturedScanId),
+                    `captured conductorScanId should be a valid UUID v7, got: ${capturedScanId}`);
+                done();
+            });
         });
 
         // tests that `activeIndexingJobRetrieved` is not reset until the e
@@ -261,6 +385,18 @@ describe('Lifecycle Conductor', () => {
 
                 done();
             });
+        });
+    });
+
+    describe('_taskToMessage', () => {
+        it('should include conductor scan id in task context', () => {
+            conductor._currentScanId = 'scan-id-test';
+            conductor._currentScanStartTimestamp = 1700000000000;
+            const taskMessage = conductor._taskToMessage(
+                getTask(true), lifecycleTaskVersions.v2, log);
+            const parsed = JSON.parse(taskMessage.message);
+            assert.strictEqual(parsed.contextInfo.conductorScanId, 'scan-id-test');
+            assert.strictEqual(parsed.contextInfo.conductorScanStartTimestamp, 1700000000000);
         });
     });
 
