@@ -195,7 +195,12 @@ class LifecycleDeleteObjectTask extends BackbeatTask {
 
         const actionType = entry.getActionType();
         const transitionTime = entry.getAttribute('transitionTime');
-        const location = this.objectMD?.dataStoreName || entry.getAttribute('details.dataStoreName');
+        // The entry attribute carries the location resolved at queue time
+        // (the cold class for cold/restored objects). Fall back to the object
+        // metadata for entries missing it, e.g. expired object delete markers
+        // queued by LifecycleTaskV2, which do not set it. objectMD is only
+        // fetched for versioned deleteObject actions, hence the optional call.
+        const location = entry.getAttribute('details.dataStoreName') || this.objectMD?.getDataStoreName();
 
         let reqMethod = 'deleteObject';
         let actionMethod = this._deleteObject.bind(this);

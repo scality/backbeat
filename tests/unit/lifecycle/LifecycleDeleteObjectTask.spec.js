@@ -7,6 +7,7 @@ const { ObjectMD } = require('arsenal').models;
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 const LifecycleDeleteObjectTask = require(
     '../../../extensions/lifecycle/tasks/LifecycleDeleteObjectTask');
+const { LifecycleMetrics } = require('../../../extensions/lifecycle/LifecycleMetrics');
 
 const day = 1000 * 60 * 60 * 24;
 
@@ -51,6 +52,7 @@ describe('LifecycleDeleteObjectTask', () => {
     });
 
     afterEach(() => {
+        sinon.restore();
         backbeatMdProxyClient.setError(null);
     });
 
@@ -275,6 +277,55 @@ describe('LifecycleDeleteObjectTask', () => {
             assert.ifError(err);
             assert.strictEqual(backbeatClient.times.deleteObjectFromExpiration, 1);
             assert.strictEqual(s3Client.calls.deleteObject, 0);
+            done();
+        });
+    });
+
+
+    it('should emit expiration metrics with the cold location carried by the entry', done => {
+        const startedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleStarted');
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
+        // Simulate a restored cold object: the object metadata carries the
+        // warm location the restored copy was written to, while the entry
+        // carries the cold location resolved at queue time. The metric must
+        // use the entry location, not the metadata one.
+        objMd.setDataStoreName('warm-restored-location');
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('details.dataStoreName', 'cold-location')
+            .setAttribute('transitionTime', Date.now() - day);
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(startedMetric.firstCall.args[2], 'cold-location');
+            assert.strictEqual(completedMetric.firstCall.args[2], 'cold-location');
+            done();
+        });
+    });
+
+    it('should fall back to the metadata location when the entry does not carry one', done => {
+        const startedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleStarted');
+        const completedMetric = sinon.stub(LifecycleMetrics, 'onLifecycleCompleted');
+        // Entries queued without details.dataStoreName (e.g. expired object
+        // delete markers from LifecycleTaskV2): the metric falls back to the
+        // location from the object metadata fetched during processing.
+        objMd.setDataStoreName('md-location');
+        const entry = ActionQueueEntry.create('deleteObject')
+            .setAttribute('target.owner', 'testowner')
+            .setAttribute('target.bucket', 'testbucket')
+            .setAttribute('target.accountId', 'testid')
+            .setAttribute('target.key', 'testkey')
+            .setAttribute('target.version', 'testversion')
+            .setAttribute('transitionTime', Date.now() - day);
+        backbeatClient.setResponse(null, {});
+        task.processActionEntry(entry, err => {
+            assert.ifError(err);
+            assert.strictEqual(startedMetric.firstCall.args[2], 'md-location');
+            assert.strictEqual(completedMetric.firstCall.args[2], 'md-location');
             done();
         });
     });
