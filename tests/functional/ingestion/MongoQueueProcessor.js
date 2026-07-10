@@ -833,7 +833,7 @@ describe('MongoQueueProcessor', function mqp() {
                 title: ' with lifecycle configuration',
                 patchBucketInfo: (bucketInfo, next) => next(null, {
                     ...bucketInfo,
-                    lifecycleConfiguration: new LifecycleConfiguration(null, { replicationEndpoints: [] }),
+                    lifecycleConfiguration: new LifecycleConfiguration(null, null, { replicationEndpoints: [] }),
                 }),
                 options: { doesNotNeedOpogUpdate: true, versionId: VERSION_ID },
             },
