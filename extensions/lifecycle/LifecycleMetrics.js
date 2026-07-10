@@ -194,6 +194,15 @@ const lifecycleKafkaPublish = {
     }),
 };
 
+const lifecycleFailed = ZenkoMetrics.createCounter({
+    name: 's3_lifecycle_failed_total',
+    help: 'Total number of lifecycle tasks that failed permanently after ' +
+        'retries were exhausted or on a non-retryable error. Offset is ' +
+        'committed to avoid ledger leaks; the underlying operation is not ' +
+        'retried.',
+    labelNames: [LIFECYCLE_LABEL_ORIGIN, LIFECYCLE_LABEL_TYPE, LIFECYCLE_LABEL_LOCATION],
+});
+
 class LifecycleMetrics {
     static handleError(log, err, method, params = {}) {
         if (log) {
@@ -419,6 +428,20 @@ class LifecycleMetrics {
         } catch (err) {
             LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onKafkaPublish', {
                 op, process, count, kafkaErr,
+            });
+        }
+    }
+
+    static onLifecycleFailed(log, process, type, location) {
+        try {
+            lifecycleFailed.inc({
+                [LIFECYCLE_LABEL_ORIGIN]: process,
+                [LIFECYCLE_LABEL_TYPE]: type,
+                [LIFECYCLE_LABEL_LOCATION]: location,
+            });
+        } catch (err) {
+            LifecycleMetrics.handleError(log, err, 'LifecycleMetrics.onLifecycleFailed', {
+                process, type, location,
             });
         }
     }

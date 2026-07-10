@@ -4,6 +4,7 @@ const sinon = require('sinon');
 const { ObjectMD } = require('arsenal').models;
 
 const GarbageCollectorTask = require('../../../extensions/gc/tasks/GarbageCollectorTask');
+const { GarbageCollectorMetrics } = require('../../../extensions/gc/GarbageCollectorMetrics');
 const ActionQueueEntry = require('../../../lib/models/ActionQueueEntry');
 
 const {
@@ -47,6 +48,7 @@ describe('GarbageCollectorTask', () => {
             consumer: {
                 retry: {
                     maxRetries: 3,
+                    backoff: { min: 10, max: 20, factor: 1, jitter: 0 },
                 },
             },
         };
@@ -141,8 +143,9 @@ describe('GarbageCollectorTask', () => {
         });
     });
 
-    it('should not delete archived location info if gc failed', done => {
+    it('should commit and record a failure metric if gc failed', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 500 }, res: null };
+        const onGcFailedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcFailed');
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
               .addContext({
@@ -169,7 +172,10 @@ describe('GarbageCollectorTask', () => {
 
         gcTask.processActionEntry(entry, (err, commitInfo) => {
             assert.strictEqual(err.statusCode, 500);
-            assert.deepStrictEqual(commitInfo, { committable: false });
+            assert.strictEqual(commitInfo, undefined);
+            assert.strictEqual(onGcFailedSpy.callCount, 1);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
+                ['archive', 'old-location']);
             assert.strictEqual(backbeatMetadataProxyClient.getReceivedMd(), null);
 
             const objMD = backbeatMetadataProxyClient.mdObj;
@@ -177,12 +183,14 @@ describe('GarbageCollectorTask', () => {
             assert.strictEqual(objMD.getDataStoreName(), 'old-location');
             assert.strictEqual(objMD.getAmzStorageClass(), 'old-location');
             assert.strictEqual(objMD.getTransitionInProgress(), true);
+            onGcFailedSpy.restore();
             done();
         });
     });
 
     it('should retry delete archived source data if gc failed with retryable error', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
+        const onGcFailedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcFailed');
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
               .addContext({
@@ -212,13 +220,17 @@ describe('GarbageCollectorTask', () => {
         gcTask.processActionEntry(entry, (err, commitInfo) => {
             assert.strictEqual(batchDeleteDataSpy.callCount, 4);
             assert.strictEqual(err.statusCode, 500);
-            assert.deepStrictEqual(commitInfo, { committable: false });
+            assert.strictEqual(commitInfo, undefined);
+            assert.strictEqual(onGcFailedSpy.callCount, 1);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
+                ['archive', 'old-location']);
             batchDeleteDataSpy.restore();
+            onGcFailedSpy.restore();
             done();
         });
     });
 
-    it('should send committable error when object is not found', done => {
+    it('should commit without retry when object is not found', done => {
         backbeatMetadataProxyClient.error = { statusCode: 404, name: 'ObjNotFound' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
@@ -242,12 +254,12 @@ describe('GarbageCollectorTask', () => {
 
         gcTask.processActionEntry(entry, (err, commitInfo) => {
             assert.strictEqual(err.statusCode, 404);
-            assert.deepStrictEqual(commitInfo, { committable: true });
+            assert.strictEqual(commitInfo, undefined);
             done();
         });
     });
 
-    it('should send committable error when bucket is not found', done => {
+    it('should commit without retry when bucket is not found', done => {
         backbeatMetadataProxyClient.error = { statusCode: 404, name: 'NoSuchBucket' };
 
         const entry = ActionQueueEntry.create('deleteArchivedSourceData')
@@ -271,7 +283,7 @@ describe('GarbageCollectorTask', () => {
 
         gcTask.processActionEntry(entry, (err, commitInfo) => {
             assert.strictEqual(err.statusCode, 404);
-            assert.deepStrictEqual(commitInfo, { committable: true });
+            assert.strictEqual(commitInfo, undefined);
             done();
         });
     });
@@ -326,6 +338,7 @@ describe('GarbageCollectorTask', () => {
 
     it('should retry delete data if gc failed with retryable error', done => {
         backbeatClient.batchDeleteResponse = { error: { statusCode: 500, retryable: true }, res: null };
+        const onGcFailedSpy = sinon.spy(GarbageCollectorMetrics, 'onGcFailed');
 
         const entry = ActionQueueEntry.create('deleteData')
             .addContext({
@@ -336,6 +349,11 @@ describe('GarbageCollectorTask', () => {
                 versionId: version,
             })
             .setAttribute('serviceName', 'lifecycle-expiration')
+            .setAttribute('source', {
+                bucket,
+                objectKey: key,
+                storageClass: 'sourceStorageClass',
+            })
             .setAttribute('target', {
                 bucket,
                 key: version,
@@ -360,7 +378,11 @@ describe('GarbageCollectorTask', () => {
         gcTask.processActionEntry(entry, err => {
             assert.strictEqual(batchDeleteDataSpy.callCount, 4);
             assert.strictEqual(err.statusCode, 500);
+            assert.strictEqual(onGcFailedSpy.callCount, 1);
+            assert.deepStrictEqual(onGcFailedSpy.firstCall.args.slice(1),
+                ['expiration', 'sourceStorageClass']);
             batchDeleteDataSpy.restore();
+            onGcFailedSpy.restore();
             done();
         });
     });

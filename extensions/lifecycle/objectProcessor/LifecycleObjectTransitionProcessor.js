@@ -3,6 +3,7 @@ const assert = require('assert');
 const async = require('async');
 
 const ColdStorageStatusQueueEntry = require('../../../lib/models/ColdStorageStatusQueueEntry');
+const { LifecycleMetrics } = require('../LifecycleMetrics');
 const LifecycleObjectProcessor = require('./LifecycleObjectProcessor');
 const LifecycleUpdateExpirationTask = require('../tasks/LifecycleUpdateExpirationTask');
 const LifecycleUpdateTransitionTask = require('../tasks/LifecycleUpdateTransitionTask');
@@ -200,7 +201,20 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
             actionFunc: done => task.processEntry(coldLocation, entry, done),
             shouldRetryFunc: err => err.retryable,
             log: this._log,
-        }, done);
+        }, err => {
+            if (err) {
+                this._log.error('task failed permanently after retries, committing offset', {
+                    method: 'LifecycleObjectTransitionProcessor.processColdStorageStatusEntry',
+                    error: err.message,
+                    op: entry.op,
+                    coldLocation,
+                    ...entry.getLogInfo(),
+                });
+                LifecycleMetrics.onLifecycleFailed(this._log, this.getProcessorType(),
+                    entry.op, coldLocation);
+            }
+            return done(err);
+        });
     }
 
     getStateVars() {

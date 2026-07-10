@@ -125,6 +125,25 @@ describe('LifecycleColdStatusArchiveTask', () => {
         });
     });
 
+    it('should propagate the error without setting committable when metadata update fails', done => {
+        const putError = new Error('metadata service down');
+        putError.retryable = false;
+        sinon.stub(backbeatMetadataProxyClient, 'putMetadata').yields(putError);
+
+        const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
+        mdObj.setLocation(loc)
+            .setDataStoreName('us-east-1')
+            .setAmzStorageClass('us-east-1')
+            .setArchive(null);
+        backbeatMetadataProxyClient.setMdObj(mdObj);
+
+        archiveTask.processEntry(coldLocation, entry, (err, commitInfo) => {
+            assert.strictEqual(err, putError);
+            assert.strictEqual(commitInfo, undefined);
+            done();
+        });
+    });
+
     it('should send kafka entry to delete orphan cold object when source object was deleted', done => {
         const entry = ColdStorageStatusQueueEntry.createFromKafkaEntry({ value: message });
 

@@ -23,6 +23,14 @@ const gcDuration = ZenkoMetrics.createHistogram({
     buckets: [0.2, 0.1, 0.5, 2.5, 10, 50],
 });
 
+const gcFailed = ZenkoMetrics.createCounter({
+    name: 's3_gc_failed_total',
+    help: 'Total number of GC tasks that failed permanently after retries ' +
+        'were exhausted or on a non-retryable error. Offset is committed to ' +
+        'avoid ledger leaks; the underlying operation is not retried.',
+    labelNames: [GC_LABEL_ORIGIN, GC_LABEL_LOCATION],
+});
+
 class GarbageCollectorMetrics {
     static handleError(log, err, method) {
         if (log) {
@@ -51,6 +59,17 @@ class GarbageCollectorMetrics {
             }, duration / 1000);
         } catch (err) {
             GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onGcComplete');
+        }
+    }
+
+    static onGcFailed(log, process, location) {
+        try {
+            gcFailed.inc({
+                [GC_LABEL_ORIGIN]: process,
+                [GC_LABEL_LOCATION]: location,
+            });
+        } catch (err) {
+            GarbageCollectorMetrics.handleError(log, err, 'GarbageCollectorMetrics.onGcFailed');
         }
     }
 }
