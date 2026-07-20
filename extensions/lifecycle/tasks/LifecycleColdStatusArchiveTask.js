@@ -137,8 +137,7 @@ class LifecycleColdStatusArchiveTask extends LifecycleUpdateTransitionTask {
             },
         ], err => {
             if (err && !(err instanceof SkipMdUpdateError)) {
-                // if error occurs, do not commit offset
-                return done(err, { committable: false });
+                return done(err);
             }
             return done();
         });

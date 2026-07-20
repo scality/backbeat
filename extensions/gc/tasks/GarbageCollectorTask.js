@@ -203,7 +203,20 @@ class GarbageCollectorTask extends BackbeatTask {
             actionFunc: cb => this._executeDeleteDataOnce(entry, log, cb),
             shouldRetryFunc: err => err.retryable,
             log,
-        }, done);
+        }, err => {
+            if (err) {
+                const ruleType = entry.getContextAttribute('ruleType');
+                log.error('task failed permanently after retries, committing offset', {
+                    method: 'GarbageCollectorTask._executeDeleteData',
+                    error: err.message,
+                    locations: entry.getAttribute('target.locations'),
+                    ...entry.getLogInfo(),
+                });
+                GarbageCollectorMetrics.onGcFailed(log, ruleType,
+                    entry.getAttribute('source.storageClass'));
+            }
+            return done(err);
+        });
     }
 
     _deleteArchivedSourceDataOnce(entry, log, done) {
@@ -250,6 +263,11 @@ class GarbageCollectorTask extends BackbeatTask {
                     }
 
                     if (err) {
+                        // Stash the parts on the entry so the outer
+                        // retry-wrapper's failure log (in
+                        // _deleteArchivedSourceData) can surface them for ops
+                        // to reclaim manually if the delete never succeeds.
+                        entry.setAttribute('target.locations', locations);
                         log.error('an error occurred on batchDelete backbeat route',
                             Object.assign({
                                 method: 'GarbageCollectorTask._deleteArchivedSourceData',
@@ -289,17 +307,7 @@ class GarbageCollectorTask extends BackbeatTask {
                     next(err);
                 });
             },
-        ], err => {
-            if (err) {
-                // if error occurs, do not commit offset unless the error is ObjNotFound
-                // because it means the object has been deleted by other means and we don't need to retry
-                    if (err.name === 'ObjNotFound' || err.name === 'NoSuchBucket') {
-                        return done(err, { committable: true });
-                }
-                return done(err, { committable: false });
-            }
-            return done();
-        });
+        ], err => done(err));
     }
 
     _deleteArchivedSourceData(entry, log, done) {
@@ -310,7 +318,19 @@ class GarbageCollectorTask extends BackbeatTask {
             actionFunc: cb => this._deleteArchivedSourceDataOnce(entry, log, cb),
             shouldRetryFunc: err => err.retryable,
             log,
-        }, done);
+        }, err => {
+            if (err && err.name !== 'ObjNotFound' && err.name !== 'NoSuchBucket') {
+                log.error('task failed permanently after retries, committing offset', {
+                    method: 'GarbageCollectorTask._deleteArchivedSourceData',
+                    error: err.message,
+                    locations: entry.getAttribute('target.locations'),
+                    ...entry.getLogInfo(),
+                });
+                GarbageCollectorMetrics.onGcFailed(log, 'archive',
+                    entry.getAttribute('target.oldLocation'));
+            }
+            return done(err);
+        });
     }
 
     /**
