@@ -36,7 +36,7 @@ const RoleCredentials = require('../../../lib/credentials/RoleCredentials');
 const { metricsExtension, metricsTypeQueued, metricsTypeCompleted, replicationStages } = require('../constants');
 
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
-const { authTypeAssumeRole } = require('../../../lib/constants');
+const { authTypeAssumeRole, replicationExpectContinueThreshold } = require('../../../lib/constants');
 
 const errorAlreadyCompleted = {};
 
@@ -599,10 +599,14 @@ class ReplicateObject extends BackbeatTask {
                     RequestUids: log.getSerializedUids(),
                     VersionId: sourceEntry.getEncodedVersionId(),
                 });
-                attachExpectContinueMiddleware(putCommand, this.backbeatDest.config?.requestHandler);
                 addContentLengthMiddleware(
                     putCommand,
                     response.ContentLength,
+                );
+                attachExpectContinueMiddleware(
+                    putCommand,
+                    this.backbeatDest.config?.requestHandler,
+                    replicationExpectContinueThreshold,
                 );
                 const writeStartTime = Date.now();
                 return this.backbeatDest.send(putCommand, { abortSignal: abortController.signal })

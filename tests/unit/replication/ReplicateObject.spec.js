@@ -14,6 +14,8 @@ const {
     MicroVersionIdAlreadyStoredException,
 } = require('@scality/cloudserverclient');
 
+const { HttpRequest } = require('@smithy/protocol-http');
+const { replicationExpectContinueThreshold } = require('../../../lib/constants');
 const { replicationEntry } = require('../../utils/kafkaEntries');
 const fakeLogger = require('../../utils/fakeLogger');
 
@@ -181,6 +183,56 @@ describe('ReplicateObject', () => {
                     blockId: undefined,
                 });
                 sinon.assert.calledOnce(task._publishDataWriteMetrics);
+                done();
+            });
+        });
+    });
+
+    describe('Expect: 100-continue threshold', () => {
+        const part = { key: 'data-key', size: 10, start: 0, dataStoreName: 'file', dataStoreETag: '1:abc' };
+
+        beforeEach(() => {
+            sinon.stub(task, '_publishReadMetrics').returns();
+            sinon.stub(task, '_publishDataWriteMetrics').returns();
+        });
+
+        function makeDestWithExpectCapture() {
+            let expectHeader;
+            return {
+                dest: {
+                    send: async command => {
+                        const req = new HttpRequest({ hostname: 'x', headers: {}, body: 'x' });
+                        await command.middlewareStack.resolve(async () => ({}), {})({ request: req });
+                        expectHeader = req.headers.Expect;
+                        return { Location: [{ key: 'x', dataStoreName: 'file' }] };
+                    },
+                },
+                getExpect: () => expectHeader,
+            };
+        }
+
+        it('should not set Expect header for objects below the threshold', done => {
+            task.S3source = { send: sinon.stub().resolves({
+                Body: makeBodyStream(), ContentLength: replicationExpectContinueThreshold - 1,
+            }) };
+            const { dest, getExpect } = makeDestWithExpectCapture();
+            task.backbeatDest = dest;
+            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, err => {
+                assert.ifError(err);
+                assert.strictEqual(getExpect(), undefined);
+                done();
+            });
+        });
+
+        it('should set Expect header for objects at or above the threshold', done => {
+            task.S3source = { send: sinon.stub().resolves({
+                Body: makeBodyStream(), ContentLength: replicationExpectContinueThreshold,
+            }) };
+            const { dest, getExpect } = makeDestWithExpectCapture();
+            task.backbeatDest = dest;
+            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, err => {
+                assert.ifError(err);
+                assert.strictEqual(getExpect(), '100-continue');
                 done();
             });
         });
