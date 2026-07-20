@@ -1018,7 +1018,17 @@ class ReplicateObject extends BackbeatTask {
             next => this._getAndPutData(sourceEntry, destEntry, log, next),
             (destLocations, conflict, next) => {
                 destEntry.setLocation(destLocations);
-                return this._putMetadata(destEntry, false, conflict, log, next);
+                return this._putMetadata(destEntry, false, conflict, log, err => {
+                    if (err) {
+                        log.warn('putMetadata failed during full retry, cleaning up orphan data', {
+                            method: 'ReplicateObject._processQueueEntryRetryFull',
+                            entry: destEntry.getLogInfo(),
+                            error: err.message,
+                        });
+                        return this._deleteOrphans(destEntry, destLocations, log, () => next(err));
+                    }
+                    return next();
+                });
             },
         ], err => this._handleReplicationOutcome(
             err, sourceEntry, destEntry, kafkaEntry, log, done));
