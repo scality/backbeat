@@ -21,16 +21,16 @@ x-inputs:
   type: constant
 - name: lifecycle_latency_warning_threshold
   type: config
-  value: 24*60*60 # 24h, in seconds
+  value: 86400 # 24h, in seconds
 - name: lifecycle_latency_critical_threshold
   type: config
-  value: 36*60*60 # 36h, in seconds
+  value: 129600 # 36h, in seconds
 - name: lifecycle_conductor_scan_warning_threshold
   type: config
-  value: 10*60 # 10m, in seconds
+  value: 600 # 10m, in seconds
 - name: lifecycle_conductor_scan_critical_threshold
   type: config
-  value: 30*60 # 30m, in seconds
+  value: 1800 # 30m, in seconds
 
 groups:
 - name: LifecycleProducer
