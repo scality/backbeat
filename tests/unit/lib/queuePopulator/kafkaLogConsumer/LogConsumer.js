@@ -55,6 +55,7 @@ describe('LogConsumer', () => {
         logConsumer = new LogConsumer(kafkaConfig, logger);
         logConsumer._consumer = {
             offsetsStore: () => null,
+            isConnected: () => true,
         };
     });
 
@@ -258,11 +259,35 @@ describe('LogConsumer', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
             logConsumer._pendingCommit = false;
-            
+
             logConsumer.storeOffsets();
-            
+
             assert.strictEqual(logConsumer._pendingCommit, true);
             sinon.assert.calledOnce(offsetsStore);
+        });
+
+        it('should not call offsetsStore when consumer is not connected', () => {
+            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
+            sinon.stub(logConsumer._consumer, 'isConnected').returns(false);
+            logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
+
+            logConsumer.storeOffsets();
+
+            sinon.assert.notCalled(offsetsStore);
+            assert.strictEqual(logConsumer._topicPartition, null);
+            assert.strictEqual(logConsumer._pendingCommit, false);
+        });
+
+        it('should not crash nor set pendingCommit when offsetsStore throws', () => {
+            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore')
+                .throws(new Error('Local: Erroneous state'));
+            logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
+
+            assert.doesNotThrow(() => logConsumer.storeOffsets());
+
+            sinon.assert.calledOnce(offsetsStore);
+            assert.strictEqual(logConsumer._topicPartition, null);
+            assert.strictEqual(logConsumer._pendingCommit, false);
         });
     });
 
