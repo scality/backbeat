@@ -461,6 +461,26 @@ describe('ReplicateObject', () => {
         });
     });
 
+    it('_processQueueEntryRetryFull should delete orphans on putMetadata errors', done => {
+        const writtenLocations = [{ key: 'data-key', dataStoreName: 'file' }];
+        const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
+        const destEntry = makeDestEntry();
+        sinon.stub(task, '_publishReplicationStatus').returns();
+        sinon.stub(task, '_deleteOrphans').callsFake((entry, locations, log, cb) => cb());
+        sinon.stub(task, '_getAndPutData').callsFake((src, dest, log, cb) =>
+            cb(null, writtenLocations, undefined));
+        sinon.stub(task, '_putMetadata').callsFake((entry, mdOnly, conflict, log, cb) =>
+            cb(new MicroVersionIdAlreadyStoredException({ message: 'collision' })));
+
+        task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger, err => {
+            assert.ifError(err);
+            sinon.assert.calledOnce(task._deleteOrphans);
+            sinon.assert.calledWith(task._deleteOrphans,
+                destEntry, writtenLocations, sinon.match.any, sinon.match.any);
+            done();
+        });
+    });
+
     describe('_publishReplicationStatus', () => {
         const ObjectQueueEntry =
             require('../../../lib/models/ObjectQueueEntry');
