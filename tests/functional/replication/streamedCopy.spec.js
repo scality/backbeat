@@ -222,7 +222,8 @@ describe('streamed copy functional tests', () => {
            repTask._setupDestClients('dummyrole', log);
            repTask._getAndPutPartOnce(
                mockSourceEntry, mockSourceEntry, mockPartInfo,
-               log.newRequestLogger(), cb);
+               log.newRequestLogger())
+               .then(r => cb(null, r), cb);
        },
      },
      { name: 'MultipleBackendTask::_getAndPutObjectOnce',

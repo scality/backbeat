@@ -1,7 +1,7 @@
-const async = require('async');
+const { promisify } = require('util');
 const { S3Client, GetBucketReplicationCommand, GetObjectCommand } = require('@aws-sdk/client-s3');
 
-const { errors, jsutil, versioning } = require('arsenal');
+const { errors, versioning } = require('arsenal');
 const { ObjectMDLocation, ReplicationConfiguration } = require('arsenal').models;
 const {
     encode: encodeMicroVersionId,
@@ -26,7 +26,7 @@ const {
     MicroVersionIdAlreadyStoredException,
 } = require('@scality/cloudserverclient');
 
-const mapLimitWaitPendingIfError = require('../../../lib/util/mapLimitWaitPendingIfError');
+const runTasksWithConcurrency = require('../../../lib/util/runTasksWithConcurrency');
 const { isRetryableMiddleware, TIMEOUT_MS } = require('../../../lib/clients/utils');
 const { isAccessDeniedError, getAccessDeniedLogFields } = require('../../../lib/util/replicationPermissionError');
 const getExtMetrics = require('../utils/getExtMetrics');
@@ -103,24 +103,25 @@ class ReplicateObject extends BackbeatTask {
         return new RoleCredentials(vaultclient, 'replication', roleArn, log);
     }
 
-    _setupRoles(entry, log, cb) {
-        this.retry({
+    async _setupRoles(entry, log) {
+        return await this.retry({
             actionDesc: 'get bucket replication configuration',
             logFields: { entry: entry.getLogInfo() },
-            actionFunc: done => this._setupRolesOnce(entry, log, done),
+            actionFunc: done => this._setupRolesOnce(entry, log)
+                .then(roles => done(null, roles), done),
             // Rely on AWS SDK notion of retryable error to decide if
             // we should set the entry replication status to FAILED
             // (non retryable) or retry later.
             shouldRetryFunc: err => err.retryable,
             log,
-        }, cb);
+        });
     }
 
-    _setTargetAccountMd(destEntry, targetRole, log, cb) {
+    async _setTargetAccountMd(destEntry, targetRole, log) {
         if (!this.destHosts) {
             log.warn('cannot process entry: no target site configured',
                 { entry: destEntry.getLogInfo() });
-            return cb(errors.InternalError);
+            throw errors.InternalError;
         }
         this._setupDestClients(this.targetRole, log);
 
@@ -128,14 +129,14 @@ class ReplicateObject extends BackbeatTask {
         // using assumeRole i.e when targeting an Zenko
         // We delegate this task to the destination's Cloudserver
         if (this.destConfig.auth.type === authTypeAssumeRole) {
-            return process.nextTick(cb);
+            return;
         }
 
-        return this.retry({
+        await this.retry({
             actionDesc: 'lookup target account attributes',
             logFields: { entry: destEntry.getLogInfo() },
-            actionFunc: done => this._setTargetAccountMdOnce(
-                destEntry, targetRole, log, done),
+            actionFunc: done => this._setTargetAccountMdOnce(destEntry, targetRole, log)
+                .then(() => done(), done),
             // this call uses our own Vault client which does not set
             // the 'retryable' field
             shouldRetryFunc: err =>
@@ -146,16 +147,16 @@ class ReplicateObject extends BackbeatTask {
                 this._setupDestClients(this.targetRole, log);
             },
             log,
-        }, cb);
+        });
     }
 
-    _getAndPutPart(sourceEntry, destEntry, part, log, cb) {
+    async _getAndPutPart(sourceEntry, destEntry, part, log) {
         const partLogger = this.logger.newRequestLogger(log.getUids());
-        this.retry({
+        return await this.retry({
             actionDesc: 'stream part data',
             logFields: { entry: sourceEntry.getLogInfo(), part },
-            actionFunc: done => this._getAndPutPartOnce(
-                sourceEntry, destEntry, part, partLogger, done),
+            actionFunc: done => this._getAndPutPartOnce(sourceEntry, destEntry, part, partLogger)
+                .then(r => done(null, r), done),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
                 if (err.origin === 'target') {
@@ -164,15 +165,15 @@ class ReplicateObject extends BackbeatTask {
                 }
             },
             log: partLogger,
-        }, cb);
+        });
     }
 
-    _putMetadata(entry, mdOnly, conflict, log, cb) {
-        this.retry({
+    async _putMetadata(entry, mdOnly, conflict, log) {
+        return await this.retry({
             actionDesc: 'update metadata on target',
             logFields: { entry: entry.getLogInfo() },
-            actionFunc: done => this._putMetadataOnce(entry, mdOnly, conflict,
-                log, done),
+            actionFunc: done => this._putMetadataOnce(entry, mdOnly, conflict, log)
+                .then(data => done(null, data), done),
             shouldRetryFunc: err => err.retryable,
             onRetryFunc: err => {
                 if (err.origin === 'target') {
@@ -181,7 +182,7 @@ class ReplicateObject extends BackbeatTask {
                 }
             },
             log,
-        }, cb);
+        });
     }
 
     _getUpdatedSourceEntry(params) {
@@ -233,7 +234,7 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    _setupRolesOnce(entry, log, cb) {
+    async _setupRolesOnce(entry, log) {
         log.debug('getting bucket replication',
             { entry: entry.getLogInfo() });
         const entryRolesString = entry.getReplicationRoles(entry.getReplicationBackend());
@@ -249,7 +250,7 @@ class ReplicateObject extends BackbeatTask {
                     entry: entry.getLogInfo(),
                     roles: entryRolesString,
                 });
-            return cb(errors.BadRole);
+            throw errors.BadRole;
         }
         this.sourceRole = entryRoles[0];
         this.targetRole = entryRoles[1];
@@ -259,89 +260,13 @@ class ReplicateObject extends BackbeatTask {
         const command = new GetBucketReplicationCommand(
             { Bucket: entry.getBucket() });
         attachReqUids(command, log.getSerializedUids());
-        return this.S3source.send(command)
-            .then(data => {
-                const replicationEnabled = (
-                data.ReplicationConfiguration.Rules.some(
-                    rule => entry.getObjectKey().startsWith(
-                        rule.Filter?.Prefix ?? rule.Prefix ?? '')
-                        && rule.Status === 'Enabled'));
-            if (!replicationEnabled) {
-                log.debug('replication disabled for object',
-                    {
-                        method: 'ReplicateObject._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                    });
-                return cb(errors.PreconditionFailed.customizeDescription(
-                    'replication disabled for object'));
-            }
-            const roles = data.ReplicationConfiguration.Role.split(',');
-            if (roles.length > 2) {
-                log.error('expecting one or two roles in bucket ' +
-                    'replication configuration',
-                    {
-                        method: 'ReplicateObject._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        roles,
-                    });
-                return cb(errors.BadRole);
-            }
-            if (roles[0] !== entryRoles[0]) {
-                log.error('role in replication entry for source does ' +
-                    'not match role in bucket replication configuration ',
-                    {
-                        method: 'ReplicateObject._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        entryRole: entryRoles[0],
-                        bucketRole: roles[0],
-                    });
-                return cb(errors.BadRole);
-            }
-            // Pick the rule for this specific backend (multi-destination
-            // configs may share a StorageClass with distinct Bucket /
-            // Account), then derive the expected destination role from
-            // its Account; fall back to literal role[1] for legacy
-            // configs without Account.
-            const entryDestination = entry.getDestination();
-            const entryRoleAccount = entry.getRole()?.split(':')[4];
-            const matchingRule = data.ReplicationConfiguration.Rules.find(rule => {
-                const prefix = rule.Filter?.Prefix ?? rule.Prefix ?? '';
-                return rule.Status === 'Enabled' &&
-                    rule.Destination?.StorageClass === this.site &&
-                    entry.getObjectKey().startsWith(prefix) &&
-                    (!entryDestination || rule.Destination?.Bucket === entryDestination) &&
-                    (!entryRoleAccount || !rule.Destination?.Account
-                        || rule.Destination.Account === entryRoleAccount);
-            });
-            let expectedDestRole;
-            if (matchingRule && matchingRule.Destination.Account) {
-                expectedDestRole = ReplicationConfiguration
-                    .resolveDestinationRole(
-                        data.ReplicationConfiguration.Role,
-                        matchingRule.Destination.Account);
-            } else if (roles.length === 2) {
-                expectedDestRole = roles[1];
-            } else {
-                expectedDestRole = roles[0];
-            }
-            if (expectedDestRole !== entryRoles[1]) {
-                log.error('role in replication entry for target does ' +
-                    'not match role in bucket replication configuration ',
-                    {
-                        method: 'ReplicateObject._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        entryRole: entryRoles[1],
-                        bucketRole: expectedDestRole,
-                    });
-                return cb(errors.BadRole);
-            }
-            return cb(null, entryRoles[0], entryRoles[1]);
-        })
-        .catch(err => {
-            // eslint-disable-next-line no-param-reassign
+
+        let data;
+        try {
+            data = await this.S3source.send(command);
+        } catch (err) {
             err.origin = 'source';
-            log.error('error getting replication ' +
-                'configuration from S3',
+            log.error('error getting replication configuration from S3',
                 {
                     method: 'ReplicateObject._setupRolesOnce',
                     entry: entry.getLogInfo(),
@@ -351,140 +276,209 @@ class ReplicateObject extends BackbeatTask {
                     err,
                     httpStatus: err.$metadata?.httpStatusCode,
                 });
-            return cb(err);
+            throw err;
+        }
+
+        const replicationEnabled = data.ReplicationConfiguration.Rules.some(
+            rule => entry.getObjectKey().startsWith(
+                rule.Filter?.Prefix ?? rule.Prefix ?? '')
+            && rule.Status === 'Enabled');
+        if (!replicationEnabled) {
+            log.debug('replication disabled for object',
+                {
+                    method: 'ReplicateObject._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                });
+            throw errors.PreconditionFailed.customizeDescription(
+                'replication disabled for object');
+        }
+        const roles = data.ReplicationConfiguration.Role.split(',');
+        if (roles.length > 2) {
+            log.error('expecting one or two roles in bucket ' +
+                'replication configuration',
+                {
+                    method: 'ReplicateObject._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                    roles,
+                });
+            throw errors.BadRole;
+        }
+        if (roles[0] !== entryRoles[0]) {
+            log.error('role in replication entry for source does ' +
+                'not match role in bucket replication configuration ',
+                {
+                    method: 'ReplicateObject._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                    entryRole: entryRoles[0],
+                    bucketRole: roles[0],
+                });
+            throw errors.BadRole;
+        }
+        // Pick the rule for this specific backend (multi-destination
+        // configs may share a StorageClass with distinct Bucket /
+        // Account), then derive the expected destination role from
+        // its Account; fall back to literal role[1] for legacy
+        // configs without Account.
+        const entryDestination = entry.getDestination();
+        const entryRoleAccount = entry.getRole()?.split(':')[4];
+        const matchingRule = data.ReplicationConfiguration.Rules.find(rule => {
+            const prefix = rule.Filter?.Prefix ?? rule.Prefix ?? '';
+            return rule.Status === 'Enabled' &&
+                rule.Destination?.StorageClass === this.site &&
+                entry.getObjectKey().startsWith(prefix) &&
+                (!entryDestination || rule.Destination?.Bucket === entryDestination) &&
+                (!entryRoleAccount || !rule.Destination?.Account
+                    || rule.Destination.Account === entryRoleAccount);
         });
+        let expectedDestRole;
+        if (matchingRule && matchingRule.Destination.Account) {
+            expectedDestRole = ReplicationConfiguration
+                .resolveDestinationRole(
+                    data.ReplicationConfiguration.Role,
+                    matchingRule.Destination.Account);
+        } else if (roles.length === 2) {
+            expectedDestRole = roles[1];
+        } else {
+            expectedDestRole = roles[0];
+        }
+        if (expectedDestRole !== entryRoles[1]) {
+            log.error('role in replication entry for target does ' +
+                'not match role in bucket replication configuration ',
+                {
+                    method: 'ReplicateObject._setupRolesOnce',
+                    entry: entry.getLogInfo(),
+                    entryRole: entryRoles[1],
+                    bucketRole: expectedDestRole,
+                });
+            throw errors.BadRole;
+        }
+        return [entryRoles[0], entryRoles[1]];
     }
 
-    _setTargetAccountMdOnce(destEntry, targetRole, log, cb) {
+    async _setTargetAccountMdOnce(destEntry, targetRole, log) {
         log.debug('changing target account owner',
             { entry: destEntry.getLogInfo() });
         const targetAccountId = _extractAccountIdFromRole(targetRole);
-        this.s3destCredentials.lookupAccountAttributes(
-            targetAccountId, (err, accountAttr) => {
-                if (err) {
-                    // eslint-disable-next-line no-param-reassign
-                    err.origin = 'target';
-                    let peer;
-                    if (this.destConfig.auth.type === 'role') {
-                        peer = this.destBackbeatHost;
-                        if (this.destConfig.auth.vault) {
-                            const { host, port } = this.destConfig.auth.vault;
-                            if (host) {
-                                // no proxy is used, log the vault host/port
-                                peer = { host, port };
-                            }
-                        }
+        const lookupAccountAttributes = promisify(
+            this.s3destCredentials.lookupAccountAttributes.bind(this.s3destCredentials));
+        let accountAttr;
+        try {
+            accountAttr = await lookupAccountAttributes(targetAccountId);
+        } catch (err) {
+            err.origin = 'target';
+            let peer;
+            if (this.destConfig.auth.type === 'role') {
+                peer = this.destBackbeatHost;
+                if (this.destConfig.auth.vault) {
+                    const { host, port } = this.destConfig.auth.vault;
+                    if (host) {
+                        peer = { host, port };
                     }
-                    log.error('an error occurred when looking up target ' +
-                        'account attributes',
-                        {
-                            method: 'ReplicateObject._setTargetAccountMdOnce',
-                            entry: destEntry.getLogInfo(),
-                            origin: 'target',
-                            peer,
-                            error: err.message,
-                            err,
-                        });
-                    return cb(err);
                 }
-                log.debug('setting owner info in target metadata',
-                    {
-                        entry: destEntry.getLogInfo(),
-                        accountAttr,
-                    });
-                destEntry.setOwnerId(accountAttr.canonicalID);
-                destEntry.setOwnerDisplayName(accountAttr.displayName);
-                return cb();
+            }
+            log.error('an error occurred when looking up target ' +
+                'account attributes',
+                {
+                    method: 'ReplicateObject._setTargetAccountMdOnce',
+                    entry: destEntry.getLogInfo(),
+                    origin: 'target',
+                    peer,
+                    error: err.message,
+                    err,
+                });
+            throw err;
+        }
+        log.debug('setting owner info in target metadata',
+            {
+                entry: destEntry.getLogInfo(),
+                accountAttr,
             });
+        destEntry.setOwnerId(accountAttr.canonicalID);
+        destEntry.setOwnerDisplayName(accountAttr.displayName);
     }
 
-    _refreshSourceEntry(sourceEntry, log, cb) {
+    async _refreshSourceEntry(sourceEntry, log) {
         const params = {
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
             VersionId: sourceEntry.getEncodedVersionId(),
             RequestUids: log.getSerializedUids(),
         };
-        return this.backbeatSource.send(new GetMetadataCommand(params))
-            .then(data => {
-                const parsedEntry = ObjectQueueEntry.createFromBlob(data.Body);
-                if (parsedEntry.error) {
-                    log.error('error parsing metadata blob', {
-                        error: parsedEntry.error,
-                        method: 'ReplicateObject._refreshSourceEntry',
-                    });
-                    return cb(errors.InternalError.
-                        customizeDescription('error parsing metadata blob'));
-                }
-                const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                    sourceEntry.getObjectVersionedKey(), parsedEntry.result)
-                    .setReplicationBackend(sourceEntry.getReplicationBackend());
-                return cb(null, refreshedEntry);
-            })
-            .catch(err => {
-                err.origin = 'source'; // eslint-disable-line no-param-reassign
-                const logFields = {
-                    method: 'ReplicateObject._refreshSourceEntry',
-                    error: err,
-                };
-                if (isAccessDeniedError(err)) {
-                    Object.assign(logFields, getAccessDeniedLogFields(
-                        sourceEntry.getBucket(), this.sourceRole));
-                }
-                log.error('error getting metadata blob from S3', logFields);
-                return cb(err);
+        let data;
+        try {
+            data = await this.backbeatSource.send(new GetMetadataCommand(params));
+        } catch (err) {
+            err.origin = 'source';
+            const logFields = {
+                method: 'ReplicateObject._refreshSourceEntry',
+                error: err,
+            };
+            if (isAccessDeniedError(err)) {
+                Object.assign(logFields, getAccessDeniedLogFields(
+                    sourceEntry.getBucket(), this.sourceRole));
+            }
+            log.error('error getting metadata blob from S3', logFields);
+            throw err;
+        }
+        const parsedEntry = ObjectQueueEntry.createFromBlob(data.Body);
+        if (parsedEntry.error) {
+            log.error('error parsing metadata blob', {
+                error: parsedEntry.error,
+                method: 'ReplicateObject._refreshSourceEntry',
             });
+            throw errors.InternalError.customizeDescription('error parsing metadata blob');
+        }
+        return new ObjectQueueEntry(sourceEntry.getBucket(),
+            sourceEntry.getObjectVersionedKey(), parsedEntry.result)
+            .setReplicationBackend(sourceEntry.getReplicationBackend());
     }
 
-    _getAndPutData(sourceEntry, destEntry, log, cb) {
+    async _getAndPutData(sourceEntry, destEntry, log) {
         log.debug('replicating data', { entry: sourceEntry.getLogInfo() });
-        if (sourceEntry.getLocation().some(part => {
-            const partObj = new ObjectMDLocation(part);
-            return partObj.getDataStoreETag() === undefined;
-        })) {
-            const errMessage =
-                  'cannot replicate object without dataStoreETag property';
+        const missingETag = sourceEntry.getLocation().some(part =>
+            new ObjectMDLocation(part).getDataStoreETag() === undefined);
+        if (missingETag) {
+            const errMessage = 'cannot replicate object without dataStoreETag property';
             log.error(errMessage, {
                 method: 'ReplicateObject._getAndPutData',
                 entry: sourceEntry.getLogInfo(),
             });
-            return cb(errors.InternalError.customizeDescription(errMessage));
+            throw errors.InternalError.customizeDescription(errMessage);
         }
         // For Replication Replay testing, set the BACKBEAT_INJECT_REPLICATION_ERROR_RATE variable
         if (BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
             if (Math.random() < BACKBEAT_INJECT_REPLICATION_ERROR_RATE) {
-                return process.nextTick(() => cb(new Error('Replication error')));
+                throw new Error('Replication error');
             }
         }
         const locations = sourceEntry.getReducedLocations();
         const mpuConcLimit = this.repConfig.queueProcessor.mpuPartsConcurrency;
-        return mapLimitWaitPendingIfError(locations, mpuConcLimit, (part, done) => {
-            this._getAndPutPart(sourceEntry, destEntry, part, log, done);
-        }, (err, partResults) => {
-            let collisionResult;
-            const uploadedParts = [];
-            for (const result of (partResults || [])) {
-                if (!result) {
-                    continue;
-                }
-                if (result.isCollision) {
-                    collisionResult = collisionResult || result;
-                } else {
-                    uploadedParts.push(result);
-                }
+        const [mapErr, partResults] = await runTasksWithConcurrency(
+            locations, mpuConcLimit,
+            part => this._getAndPutPart(sourceEntry, destEntry, part, log));
+
+        let collisionResult;
+        const uploadedParts = [];
+        for (const result of (partResults || [])) {
+            if (!result) {
+                continue;
             }
-            const hasPutDataConflict = collisionResult !== undefined;
-            if (err || hasPutDataConflict) {
-                // On error or conflict, drop all parts written
-                return this._deleteOrphans(destEntry, uploadedParts, log, () => {
-                    if (hasPutDataConflict) {
-                        return cb(null, [], collisionResult);
-                    }
-                    return cb(err);
-                });
+            if (result.isCollision) {
+                collisionResult = collisionResult || result;
+            } else {
+                uploadedParts.push(result);
             }
-            return cb(null, partResults, undefined);
-        });
+        }
+        const hasPutDataConflict = collisionResult !== undefined;
+        // On error or conflict, drop all parts written
+        if (mapErr || hasPutDataConflict) {
+            await this._deleteOrphans(destEntry, uploadedParts, log);
+            if (hasPutDataConflict) {
+                return [[], collisionResult];
+            }
+            throw mapErr;
+        }
+        return [partResults, undefined];
     }
 
     _publishReadMetrics(size, readStartTime) {
@@ -534,16 +528,15 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    _getAndPutPartOnce(sourceEntry, destEntry, part, log, done) {
-        const doneOnce = jsutil.once(done);
+    async _getAndPutPartOnce(sourceEntry, destEntry, part, log) {
         const partObj = new ObjectMDLocation(part);
         const partNumber = partObj.getPartNumber();
         const partSize = partObj.getPartSize();
-        
+
         const abortController = new AbortController();
         let sourceStreamAborted = false;
         let destRequestAborted = false;
-        
+
         const command = new GetObjectCommand({
             Bucket: sourceEntry.getBucket(),
             Key: sourceEntry.getObjectKey(),
@@ -552,152 +545,145 @@ class ReplicateObject extends BackbeatTask {
         });
         attachReqUids(command, log.getSerializedUids());
         const readStartTime = Date.now();
-        
-        this.S3source.send(command, { abortSignal: abortController.signal })
-            .then(response => {
-                const incomingMsg = response.Body;
-                incomingMsg.on('error', err => {
-                    if (!sourceStreamAborted && !destRequestAborted) {
-                        abortController.abort();
-                        destRequestAborted = true;
-                    }
-                    if (err.$metadata?.httpStatusCode === 404) {
-                        return doneOnce(errors.ObjNotFound);
-                    }
-                    if (!sourceStreamAborted) {
-                        // eslint-disable-next-line no-param-reassign
-                        err.origin = 'source';
-                        // eslint-disable-next-line no-param-reassign
-                        err.retryable = true;
-                        log.error('an error occurred when streaming data from S3',
-                            {
-                                method: 'ReplicateObject._getAndPutPartOnce',
-                                entry: destEntry.getLogInfo(),
-                                part,
-                                origin: 'source',
-                                peer: this.sourceConfig.s3,
-                                error: err.message,
-                                err,
-                            });
-                    }
-                    return doneOnce(err);
-                });
-                
-                incomingMsg.on('end', () => {
-                    this._publishReadMetrics(partSize, readStartTime);
-                });
-                
-                log.debug('putting data', { entry: destEntry.getLogInfo(), part });
-                const putCommand = new PutDataCommand({
-                    Bucket: destEntry.getBucket(),
-                    Key: destEntry.getObjectKey(),
-                    CanonicalID: destEntry.getOwnerId(),
-                    ContentMD5: partObj.getPartETag(),
-                    Body: incomingMsg,
-                    // destination bucket has to be versioning enabled.
-                    VersioningRequired: true,
-                    RequestUids: log.getSerializedUids(),
-                    VersionId: sourceEntry.getEncodedVersionId(),
-                });
-                addContentLengthMiddleware(
-                    putCommand,
-                    response.ContentLength,
-                );
-                attachExpectContinueMiddleware(
-                    putCommand,
-                    this.backbeatDest.config?.requestHandler,
-                    replicationExpectContinueThreshold,
-                );
-                const writeStartTime = Date.now();
-                return this.backbeatDest.send(putCommand, { abortSignal: abortController.signal })
-                    .then(data => {
-                        partObj.setDataLocation(data.Location[0]);
 
-                        // Set encryption parameters that were used to encrypt the
-                        // target data in the object metadata, or reset them if
-                        // there was no encryption
-                        const { ServerSideEncryption, SSECustomerAlgorithm, SSEKMSKeyId } = data;
-                        destEntry.setAmzServerSideEncryption(ServerSideEncryption || '');
-                        destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
-                        destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
+        let response;
+        try {
+            response = await this.S3source.send(command, { abortSignal: abortController.signal });
+        } catch (err) {
+            if (!sourceStreamAborted) {
+                abortController.abort();
+                destRequestAborted = true;
+            }
+            err.origin = 'source';
+            if (err.$metadata?.httpStatusCode !== 404) {
+                log.error('an error occurred on getObject from S3', {
+                    method: 'ReplicateObject._getAndPutPartOnce',
+                    entry: sourceEntry.getLogInfo(),
+                    part,
+                    origin: 'source',
+                    peer: this.sourceConfig.s3,
+                    error: err.message,
+                    err,
+                    httpStatus: err.$metadata?.httpStatusCode,
+                });
+            }
+            throw err;
+        }
 
-                        this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
-                        return doneOnce(null, partObj.getValue());
-                    })
-                    .catch(err => {
-                        if (!destRequestAborted) {
-                            // Abort the source stream
-                            abortController.abort();
-                            sourceStreamAborted = true;
-                            if (incomingMsg.destroy) {
-                                incomingMsg.destroy();
-                            }
-                        }
+        const incomingMsg = response.Body;
+        const putCommand = new PutDataCommand({
+            Bucket: destEntry.getBucket(),
+            Key: destEntry.getObjectKey(),
+            CanonicalID: destEntry.getOwnerId(),
+            ContentMD5: partObj.getPartETag(),
+            Body: incomingMsg,
+            // destination bucket has to be versioning enabled.
+            VersioningRequired: true,
+            RequestUids: log.getSerializedUids(),
+            VersionId: sourceEntry.getEncodedVersionId(),
+        });
+        addContentLengthMiddleware(putCommand, response.ContentLength);
+        attachExpectContinueMiddleware(
+            putCommand,
+            this.backbeatDest.config?.requestHandler,
+            replicationExpectContinueThreshold,
+        );
+        log.debug('putting data', { entry: destEntry.getLogInfo(), part });
+        const writeStartTime = Date.now();
 
-                        if (err instanceof VersionIdCollisionException) {
-                            log.info('cascade putData: data already at destination', {
-                                method: 'ReplicateObject._getAndPutPartOnce',
-                                entry: destEntry.getLogInfo(),
-                            });
-                            return doneOnce(null, {
-                                isCollision: true,
-                                microVersionId: err.microVersionId,
-                            });
-                        }
-                        // eslint-disable-next-line no-param-reassign
-                        err.origin = 'target';
-                        log.error('an error occurred on putData to S3',
-                            {
-                                method: 'ReplicateObject._getAndPutPartOnce',
-                                entry: destEntry.getLogInfo(),
-                                part,
-                                origin: 'target',
-                                peer: this.destBackbeatHost,
-                                error: err.message,
-                                httpStatus: err.$metadata?.httpStatusCode,
-                                err,
-                            });
-                        return doneOnce(err);
-                    });
-            })
-            .catch(err => {
-                if (!sourceStreamAborted) {
-                    // Abort controller in case the destination request is still pending
+        return await new Promise((resolve, reject) => {
+            incomingMsg.on('error', err => {
+                if (!sourceStreamAborted && !destRequestAborted) {
                     abortController.abort();
                     destRequestAborted = true;
                 }
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
                 if (err.$metadata?.httpStatusCode === 404) {
-                    return doneOnce(err);
+                    const objNotFound = errors.ObjNotFound;
+                    objNotFound.origin = 'source';
+                    return reject(objNotFound);
                 }
-                log.error('an error occurred on getObject from S3',
-                    {
-                        method: 'ReplicateObject._getAndPutPartOnce',
-                        entry: sourceEntry.getLogInfo(),
-                        part,
-                        origin: 'source',
-                        peer: this.sourceConfig.s3,
-                        error: err.message,
-                        err,
-                        httpStatus: err.$metadata?.httpStatusCode,
-                    });
-                return doneOnce(err);
+                if (!sourceStreamAborted) {
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'source';
+                    // eslint-disable-next-line no-param-reassign
+                    err.retryable = true;
+                    log.error('an error occurred when streaming data from S3',
+                        {
+                            method: 'ReplicateObject._getAndPutPartOnce',
+                            entry: destEntry.getLogInfo(),
+                            part,
+                            origin: 'source',
+                            peer: this.sourceConfig.s3,
+                            error: err.message,
+                            err,
+                        });
+                }
+                return reject(err);
             });
+
+            incomingMsg.on('end', () => {
+                this._publishReadMetrics(partSize, readStartTime);
+            });
+
+            this.backbeatDest.send(putCommand, { abortSignal: abortController.signal })
+                .then(data => {
+                    partObj.setDataLocation(data.Location[0]);
+
+                    // Set encryption parameters that were used to encrypt the
+                    // target data in the object metadata, or reset them if
+                    // there was no encryption
+                    const { ServerSideEncryption, SSECustomerAlgorithm, SSEKMSKeyId } = data;
+                    destEntry.setAmzServerSideEncryption(ServerSideEncryption || '');
+                    destEntry.setAmzEncryptionCustomerAlgorithm(SSECustomerAlgorithm || '');
+                    destEntry.setAmzEncryptionKeyId(SSEKMSKeyId || '');
+
+                    this._publishDataWriteMetrics(partSize, sourceEntry, writeStartTime);
+                    resolve(partObj.getValue());
+                })
+                .catch(err => {
+                    if (!destRequestAborted) {
+                        abortController.abort();
+                        sourceStreamAborted = true;
+                        if (incomingMsg.destroy) {
+                            incomingMsg.destroy();
+                        }
+                    }
+                    if (err instanceof VersionIdCollisionException) {
+                        log.info('cascade putData: data already at destination', {
+                            method: 'ReplicateObject._getAndPutPartOnce',
+                            entry: destEntry.getLogInfo(),
+                        });
+                        return resolve({ isCollision: true, microVersionId: err.microVersionId });
+                    }
+                    // eslint-disable-next-line no-param-reassign
+                    err.origin = 'target';
+                    log.error('an error occurred on putData to S3',
+                        {
+                            method: 'ReplicateObject._getAndPutPartOnce',
+                            entry: destEntry.getLogInfo(),
+                            part,
+                            origin: 'target',
+                            peer: this.destBackbeatHost,
+                            error: err.message,
+                            httpStatus: err.$metadata?.httpStatusCode,
+                            err,
+                        });
+                    return reject(err);
+                });
+        });
     }
 
-    _putMetadataOnce(entry, mdOnly, conflict, log, cb) {
+    async _putMetadataOnce(entry, mdOnly, conflict, log) {
         if (this._shouldSkipMetadata(entry.getMicroVersionId(), conflict, log)) {
             log.info('skipping putMetadata: destination already has same or newer revision', {
                 entry: entry.getLogInfo(),
             });
-            return cb();
+            return;
         }
         log.debug('putting metadata', {
             where: 'target', entry: entry.getLogInfo(),
             replicationStatus: entry.getReplicationSiteStatus(entry.getReplicationBackend()),
         });
-        const cbOnce = jsutil.once(cb);
 
         // accountid is only needed when using assumeRole auth
         // to delegate the task of updating metadata with
@@ -726,38 +712,35 @@ class ReplicateObject extends BackbeatTask {
                 ? encodeMicroVersionId(entry.getMicroVersionId()) : '',
         });
         const writeStartTime = Date.now();
-        return this.backbeatDest.send(command)
-            .then(data => {
-                this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
-                return cbOnce(null, data);
-            })
-            .catch(err => {
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'target';
-                if (err.ObjNotFound || err.name === 'ObjNotFound' ||
-                    err instanceof MicroVersionIdAlreadyStoredException ||
-                    err instanceof StaleMicroVersionIdException) {
-                    return cbOnce(err);
-                }
-                log.error('an error occurred when putting metadata to S3',
-                    {
-                        method: 'ReplicateObject._putMetadataOnce',
-                        entry: entry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                        err,
-                    });
-                return cbOnce(err);
-            });
+        try {
+            await this.backbeatDest.send(command);
+        } catch (err) {
+            err.origin = 'target';
+            if (err.ObjNotFound || err.name === 'ObjNotFound' ||
+                err instanceof MicroVersionIdAlreadyStoredException ||
+                err instanceof StaleMicroVersionIdException) {
+                throw err;
+            }
+            log.error('an error occurred when putting metadata to S3',
+                {
+                    method: 'ReplicateObject._putMetadataOnce',
+                    entry: entry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                    err,
+                });
+            throw err;
+        }
+        this._publishMetadataWriteMetrics(mdBlob, writeStartTime);
     }
 
-    _deleteOrphans(entry, locations, log, cb) {
+    async _deleteOrphans(entry, locations, log) {
         const writtenLocations = locations
             .filter(loc => loc)
             .map(loc => ({ key: loc.key, dataStoreName: loc.dataStoreName }));
         if (writtenLocations.length === 0) {
-            return process.nextTick(cb);
+            return;
         }
         log.info('deleting orphan data after replication failure',
             {
@@ -771,30 +754,28 @@ class ReplicateObject extends BackbeatTask {
             Locations: writtenLocations,
             RequestUids: log.getSerializedUids(),
         });
-        
-        return this.backbeatDest.send(command)
-            .then(() => cb())
-            .catch(err => {
-                log.error('an error occurred during batch delete of orphan data',
-                    {
-                        method: 'ReplicateObject._deleteOrphans',
-                        entry: entry.getLogInfo(),
-                        origin: 'target',
-                        peer: this.destBackbeatHost,
-                        error: err.message,
-                        httpStatus: err.$metadata?.httpStatusCode,
-                        err,
-                    });
-                writtenLocations.forEach(location => {
-                    log.error('orphan data location was not deleted', {
-                        method: 'ReplicateObject._deleteOrphans',
-                        entry: entry.getLogInfo(),
-                        location,
-                    });
+        try {
+            await this.backbeatDest.send(command);
+        } catch (err) {
+            log.error('an error occurred during batch delete of orphan data',
+                {
+                    method: 'ReplicateObject._deleteOrphans',
+                    entry: entry.getLogInfo(),
+                    origin: 'target',
+                    peer: this.destBackbeatHost,
+                    error: err.message,
+                    httpStatus: err.$metadata?.httpStatusCode,
+                    err,
                 });
-                // do not return the batch delete error, only log it
-                return cb();
+            writtenLocations.forEach(location => {
+                log.error('orphan data location was not deleted', {
+                    method: 'ReplicateObject._deleteOrphans',
+                    entry: entry.getLogInfo(),
+                    location,
+                });
             });
+            // do not propagate the batch delete error, only log it
+        }
     }
 
     _setupSourceClients(sourceRole, log) {
@@ -897,7 +878,7 @@ class ReplicateObject extends BackbeatTask {
         });
     }
 
-    processQueueEntry(_sourceEntry, kafkaEntry, done) {
+    async _processQueueEntry(_sourceEntry, kafkaEntry) {
         let sourceEntry = _sourceEntry;
         const log = this.logger.newRequestLogger();
         const destEntry = sourceEntry.toReplicaEntry(sourceEntry.getReplicationBackend());
@@ -911,85 +892,63 @@ class ReplicateObject extends BackbeatTask {
             location: this.site,
         }, (Date.now() - lastModified) / 1000);
 
-        if (sourceEntry.getIsDeleteMarker()) {
-            return async.waterfall([
-                next => {
-                    this._setupRoles(sourceEntry, log, next);
-                },
-                (sourceRole, targetRole, next) => {
-                    this._setTargetAccountMd(destEntry, targetRole, log,
-                        next);
-                },
-                // put metadata in target bucket
-                next => {
-                    // TODO check that bucket role matches role in metadata
-                    this._putMetadata(destEntry, false, null, log, next);
-                },
-            ], err => this._handleReplicationOutcome(
-                err, sourceEntry, destEntry, kafkaEntry, log, done));
-        }
-
+        const isDeleteMarker = sourceEntry.getIsDeleteMarker();
         const mdOnly = !sourceEntry.getReplicationContent().includes('DATA');
-        return async.waterfall([
-            // get data stream from source bucket
-            next => {
-                this._setupRoles(sourceEntry, log, next);
-            },
-            (sourceRole, targetRole, next) => {
-                this._setTargetAccountMd(destEntry, targetRole, log, next);
-            },
-            next => {
-                if (mdOnly) {
-                    return next();
-                }
-                const isLargeObject = sourceEntry.getContentLength() / 1000000 >=
-                    this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB;
-                const isLocationStripped = sourceEntry.getContentLength() > 0 && sourceEntry.getLocation().length === 0;
-                if (!isLargeObject && !isLocationStripped) {
-                    return next();
-                }
-                return this._refreshSourceEntry(sourceEntry, log, (err, refreshedEntry) => {
-                    if (err) {
-                        return next(err);
-                    }
-                    const status = refreshedEntry.getReplicationSiteStatus(
-                        sourceEntry.getReplicationBackend());
-                    if (status === 'COMPLETED') {
-                        log.info('replication already completed, skipping', {
-                            entry: sourceEntry.getLogInfo(),
-                        });
-                        return next(errorAlreadyCompleted);
-                    }
-                    // Reassign sourceEntry to use fresh metadata
-                    sourceEntry = refreshedEntry;
-                    return next();
-                });
-            },
-            // Get data from source bucket and put it on the target bucket
-            next => {
+
+        try {
+            const [, targetRole] = await this._setupRoles(sourceEntry, log);
+            await this._setTargetAccountMd(destEntry, targetRole, log);
+
+            if (isDeleteMarker) {
+                // TODO check that bucket role matches role in metadata
+                await this._putMetadata(destEntry, false, null, log);
+            } else {
                 if (!mdOnly) {
+                    const isLargeObject = sourceEntry.getContentLength() / 1000000 >=
+                        this.repConfig.queueProcessor.sourceCheckIfSizeGreaterThanMB;
+                    const isLocationStripped = sourceEntry.getContentLength() > 0 &&
+                        sourceEntry.getLocation().length === 0;
+                    if (isLargeObject || isLocationStripped) {
+                        const refreshedEntry = await this._refreshSourceEntry(sourceEntry, log);
+                        const status = refreshedEntry.getReplicationSiteStatus(
+                            sourceEntry.getReplicationBackend());
+                        if (status === 'COMPLETED') {
+                            log.info('replication already completed, skipping', {
+                                entry: sourceEntry.getLogInfo(),
+                            });
+                            throw errorAlreadyCompleted;
+                        }
+                        sourceEntry = refreshedEntry;
+                    }
                     const extMetrics = getExtMetrics(this.site,
                         sourceEntry.getContentLength(), sourceEntry);
                     this.mProducer.publishMetrics(extMetrics,
                         metricsTypeQueued, metricsExtension, () => {});
-                    return this._getAndPutData(sourceEntry, destEntry, log,
-                                               next);
                 }
-                return next(null, [], undefined);
-            },
-            // update location, replication status and put metadata in
-            // target bucket
-            (destLocations, conflict, next) => {
+
+                const [destLocations, conflict] = !mdOnly
+                    ? await this._getAndPutData(sourceEntry, destEntry, log)
+                    : [[], undefined];
+
                 destEntry.setLocation(destLocations);
-                return this._putMetadata(destEntry, mdOnly, conflict, log, err => {
-                    if (err) {
-                        return this._deleteOrphans(destEntry, destLocations, log, () => next(err));
-                    }
-                    return next();
-                });
-            },
-        ], err => this._handleReplicationOutcome(
-            err, sourceEntry, destEntry, kafkaEntry, log, done));
+                try {
+                    await this._putMetadata(destEntry, mdOnly, conflict, log);
+                } catch (err) {
+                    await this._deleteOrphans(destEntry, destLocations, log);
+                    throw err;
+                }
+            }
+        } catch (err) {
+            return await this._handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log);
+        }
+        return await this._handleReplicationOutcome(null, sourceEntry, destEntry, kafkaEntry, log);
+    }
+
+    processQueueEntry(_sourceEntry, kafkaEntry, done) {
+        this._processQueueEntry(_sourceEntry, kafkaEntry).then(
+            result => result === null ? done() : done(null, result),
+            err => done(err),
+        );
     }
 
     // Returns true if putMetadata can be skipped because the destination already
@@ -1017,42 +976,41 @@ class ReplicateObject extends BackbeatTask {
             (comparison === Ordering.OLDER || comparison === Ordering.EQUAL);
     }
 
-    _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log, done) {
-        return async.waterfall([
-            next => this._getAndPutData(sourceEntry, destEntry, log, next),
-            (destLocations, conflict, next) => {
-                destEntry.setLocation(destLocations);
-                return this._putMetadata(destEntry, false, conflict, log, err => {
-                    if (err) {
-                        log.warn('putMetadata failed during full retry, cleaning up orphan data', {
-                            method: 'ReplicateObject._processQueueEntryRetryFull',
-                            entry: destEntry.getLogInfo(),
-                            error: err.message,
-                        });
-                        return this._deleteOrphans(destEntry, destLocations, log, () => next(err));
-                    }
-                    return next();
+    async _processQueueEntryRetryFull(sourceEntry, destEntry, kafkaEntry, log) {
+        let destLocations = null;
+        try {
+            let conflict;
+            [destLocations, conflict] = await this._getAndPutData(sourceEntry, destEntry, log);
+            destEntry.setLocation(destLocations);
+            await this._putMetadata(destEntry, false, conflict, log);
+        } catch (err) {
+            if (destLocations !== null) {
+                log.warn('putMetadata failed during full retry, cleaning up orphan data', {
+                    method: 'ReplicateObject._processQueueEntryRetryFull',
+                    entry: destEntry.getLogInfo(),
+                    error: err.message,
                 });
-            },
-        ], err => this._handleReplicationOutcome(
-            err, sourceEntry, destEntry, kafkaEntry, log, done));
+                await this._deleteOrphans(destEntry, destLocations, log);
+            }
+            return await this._handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log);
+        }
+        return await this._handleReplicationOutcome(null, sourceEntry, destEntry, kafkaEntry, log);
     }
 
-    _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry,
-        log, done) {
+    async _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log) {
         if (err instanceof MicroVersionIdAlreadyStoredException ||
             err instanceof StaleMicroVersionIdException) {
             log.info('replication completed: metadata revision already at destination',
                 { entry: sourceEntry.getLogInfo(), reason: err.name });
             this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
-            return done(null, { committable: false });
+            return { committable: false };
         }
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                 'replication status as COMPLETED',
                 { entry: sourceEntry.getLogInfo() });
             this._publishReplicationStatus(sourceEntry, 'COMPLETED', { kafkaEntry, log });
-            return done(null, { committable: false });
+            return { committable: false };
         }
         if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
@@ -1066,31 +1024,31 @@ class ReplicateObject extends BackbeatTask {
                     origin: err.origin,
                     error: err.description,
                 });
-            return done();
+            return null;
         }
         if (err === errorAlreadyCompleted) {
             log.warn('replication skipped: ' +
                      'source object version already COMPLETED',
                      { entry: sourceEntry.getLogInfo() });
-            return done();
+            return null;
         }
         if (err.ObjNotFound || err.name === 'ObjNotFound') {
             if (err.origin === 'source') {
                 log.info('replication skipped: ' +
                     'source object version does not exist',
                     { entry: sourceEntry.getLogInfo() });
-                return done();
+                return null;
             }
             log.info('replication target object not found, retrying with full data write',
                 { entry: sourceEntry.getLogInfo() });
             // TODO: Is this the right place to capture retry metrics?
-            return this._processQueueEntryRetryFull(
-                sourceEntry, destEntry, kafkaEntry, log, done);
+            return await this._processQueueEntryRetryFull(
+                sourceEntry, destEntry, kafkaEntry, log);
         }
         if (err.InvalidObjectState || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
-            return done();
+            return null;
         }
         log.debug('replication failed permanently for object, ' +
             'publishing replication status as FAILED',
@@ -1104,7 +1062,7 @@ class ReplicateObject extends BackbeatTask {
             reason: err.description,
             kafkaEntry,
         });
-        return done(null, { committable: false });
+        return { committable: false };
     }
 }
 

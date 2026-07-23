@@ -150,20 +150,19 @@ describe('ReplicateObject', () => {
             };
         }
 
-        it('should return collision info on VersionIdCollisionException', done => {
+        it('should return collision info on VersionIdCollisionException', () => {
             const { older, olderEncoded } = makeMicroVersionIds();
             mockDataTransfer(olderEncoded);
-            task._getAndPutPartOnce(makeSourceEntry(older), makeDestEntry(), part, fakeLogger, (err, result) => {
-                assert.ifError(err);
-                assert.ok(result && result.isCollision, 'should return collision info object');
-                assert.ok('microVersionId' in result,
-                    'collision info should include microVersionId');
-                sinon.assert.notCalled(task._publishDataWriteMetrics);
-                done();
-            });
+            return task._getAndPutPartOnce(makeSourceEntry(older), makeDestEntry(), part, fakeLogger)
+                .then(result => {
+                    assert.ok(result && result.isCollision, 'should return collision info object');
+                    assert.ok('microVersionId' in result,
+                        'collision info should include microVersionId');
+                    sinon.assert.notCalled(task._publishDataWriteMetrics);
+                });
         });
 
-        it('should set data location and publish metrics when no collision', done => {
+        it('should set data location and publish metrics when no collision', () => {
             task.S3source = {
                 send: sinon.stub().resolves({ Body: makeBodyStream(), ContentLength: 10 }),
             };
@@ -172,19 +171,18 @@ describe('ReplicateObject', () => {
                     Location: [{ key: 'new-key', dataStoreName: 'file' }],
                 }),
             };
-            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, (err, result) => {
-                assert.ifError(err);
-                assert.deepStrictEqual(result, {
-                    key: 'new-key',
-                    start: 0,
-                    size: 10,
-                    dataStoreName: 'file',
-                    dataStoreETag: '1:abc',
-                    blockId: undefined,
+            return task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger)
+                .then(result => {
+                    assert.deepStrictEqual(result, {
+                        key: 'new-key',
+                        start: 0,
+                        size: 10,
+                        dataStoreName: 'file',
+                        dataStoreETag: '1:abc',
+                        blockId: undefined,
+                    });
+                    sinon.assert.calledOnce(task._publishDataWriteMetrics);
                 });
-                sinon.assert.calledOnce(task._publishDataWriteMetrics);
-                done();
-            });
         });
     });
 
@@ -211,30 +209,24 @@ describe('ReplicateObject', () => {
             };
         }
 
-        it('should not set Expect header for objects below the threshold', done => {
+        it('should not set Expect header for objects below the threshold', () => {
             task.S3source = { send: sinon.stub().resolves({
                 Body: makeBodyStream(), ContentLength: replicationExpectContinueThreshold - 1,
             }) };
             const { dest, getExpect } = makeDestWithExpectCapture();
             task.backbeatDest = dest;
-            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, err => {
-                assert.ifError(err);
-                assert.strictEqual(getExpect(), undefined);
-                done();
-            });
+            return task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger)
+                .then(() => assert.strictEqual(getExpect(), undefined));
         });
 
-        it('should set Expect header for objects at or above the threshold', done => {
+        it('should set Expect header for objects at or above the threshold', () => {
             task.S3source = { send: sinon.stub().resolves({
                 Body: makeBodyStream(), ContentLength: replicationExpectContinueThreshold,
             }) };
             const { dest, getExpect } = makeDestWithExpectCapture();
             task.backbeatDest = dest;
-            task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger, err => {
-                assert.ifError(err);
-                assert.strictEqual(getExpect(), '100-continue');
-                done();
-            });
+            return task._getAndPutPartOnce(makeSourceEntry(), makeDestEntry(), part, fakeLogger)
+                .then(() => assert.strictEqual(getExpect(), '100-continue'));
         });
     });
 
@@ -246,39 +238,34 @@ describe('ReplicateObject', () => {
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
         });
 
-        it('should pass through MicroVersionIdAlreadyStoredException and skip metrics', done => {
+        it('should pass through MicroVersionIdAlreadyStoredException and skip metrics', () => {
             const metricsStub = sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const loopErr = new MicroVersionIdAlreadyStoredException({
                 message: 'incoming microVersionId already at destination',
             });
             task.backbeatDest = { send: sinon.stub().rejects(loopErr) };
-            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
-                assert.ok(err instanceof MicroVersionIdAlreadyStoredException);
-                sinon.assert.notCalled(metricsStub);
-                done();
-            });
+            return assert.rejects(
+                task._putMetadataOnce(entry, false, null, fakeLogger),
+                MicroVersionIdAlreadyStoredException)
+                .then(() => sinon.assert.notCalled(metricsStub));
         });
 
-        it('should pass through StaleMicroVersionIdException', done => {
+        it('should pass through StaleMicroVersionIdException', () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const staleErr = new StaleMicroVersionIdException({
                 message: 'incoming revision is older than destination',
             });
             task.backbeatDest = { send: sinon.stub().rejects(staleErr) };
-            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
-                assert.ok(err instanceof StaleMicroVersionIdException);
-                done();
-            });
+            return assert.rejects(
+                task._putMetadataOnce(entry, false, null, fakeLogger),
+                StaleMicroVersionIdException);
         });
 
-        it('should publish metrics and succeed on normal response', done => {
+        it('should publish metrics and succeed on normal response', () => {
             const metricsStub = sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             task.backbeatDest = { send: sinon.stub().resolves({}) };
-            task._putMetadataOnce(entry, false, null, fakeLogger, err => {
-                assert.ifError(err);
-                sinon.assert.calledOnce(metricsStub);
-                done();
-            });
+            return task._putMetadataOnce(entry, false, null, fakeLogger)
+                .then(() => sinon.assert.calledOnce(metricsStub));
         });
     });
 
@@ -297,103 +284,104 @@ describe('ReplicateObject', () => {
             sinon.stub(sourceEntry, 'getReplicationSiteDataStoreVersionId').returns('v1');
         });
 
-        it('should mark COMPLETED for MicroVersionIdAlreadyStoredException', done => {
-            task._handleReplicationOutcome(
+        it('should mark COMPLETED for MicroVersionIdAlreadyStoredException', async () => {
+            await task._handleReplicationOutcome(
                 new MicroVersionIdAlreadyStoredException({}),
-                sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
-                    sinon.assert.calledWith(task._publishReplicationStatus,
-                        sourceEntry, 'COMPLETED', sinon.match.any);
-                    done();
-                });
+                sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            sinon.assert.calledWith(task._publishReplicationStatus,
+                sourceEntry, 'COMPLETED', sinon.match.any);
         });
 
-        it('should mark COMPLETED for StaleMicroVersionIdException', done => {
-            task._handleReplicationOutcome(
+        it('should mark COMPLETED for StaleMicroVersionIdException', async () => {
+            await task._handleReplicationOutcome(
                 new StaleMicroVersionIdException({}),
-                sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
-                    sinon.assert.calledWith(task._publishReplicationStatus,
-                        sourceEntry, 'COMPLETED', sinon.match.any);
-                    done();
-                });
+                sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            sinon.assert.calledWith(task._publishReplicationStatus,
+                sourceEntry, 'COMPLETED', sinon.match.any);
         });
 
-        it('should mark COMPLETED on successful replication', done => {
-            task._handleReplicationOutcome(
-                null, sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
-                    sinon.assert.calledWith(task._publishReplicationStatus,
-                        sourceEntry, 'COMPLETED', sinon.match.any);
-                    done();
-                });
+        it('should mark COMPLETED on successful replication', async () => {
+            await task._handleReplicationOutcome(
+                null, sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            sinon.assert.calledWith(task._publishReplicationStatus,
+                sourceEntry, 'COMPLETED', sinon.match.any);
         });
 
-        it('should mark FAILED for real errors', done => {
+        it('should mark FAILED for real errors', async () => {
             const realErr = Object.assign(new Error('network failure'), { origin: 'target' });
-            task._handleReplicationOutcome(
-                realErr, sourceEntry, destEntry, kafkaEntry, fakeLogger, () => {
-                    sinon.assert.calledWith(task._publishReplicationStatus,
-                        sourceEntry, 'FAILED', sinon.match.any);
-                    done();
-                });
+            await task._handleReplicationOutcome(
+                realErr, sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            sinon.assert.calledWith(task._publishReplicationStatus,
+                sourceEntry, 'FAILED', sinon.match.any);
+        });
+
+        it('should skip without retry for a source-origin ObjNotFound', async () => {
+            sinon.stub(task, '_processQueueEntryRetryFull').resolves();
+            const objNotFound = Object.assign(new Error('not found'),
+                { ObjNotFound: true, name: 'ObjNotFound', origin: 'source' });
+            const result = await task._handleReplicationOutcome(
+                objNotFound, sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            assert.strictEqual(result, null);
+            sinon.assert.notCalled(task._processQueueEntryRetryFull);
+            sinon.assert.neverCalledWith(task._publishReplicationStatus,
+                sourceEntry, 'FAILED', sinon.match.any);
+        });
+
+        it('should retry with full data write for a target-origin ObjNotFound', async () => {
+            sinon.stub(task, '_processQueueEntryRetryFull').resolves({ committable: false });
+            const objNotFound = Object.assign(new Error('not found'),
+                { ObjNotFound: true, name: 'ObjNotFound', origin: 'target' });
+            await task._handleReplicationOutcome(
+                objNotFound, sourceEntry, destEntry, kafkaEntry, fakeLogger);
+            sinon.assert.calledOnce(task._processQueueEntryRetryFull);
         });
     });
 
     describe('_setTargetAccountMd', () => {
-        it('should skip gettin target account info when auth type is assumeRole', done => {
+        it('should skip gettin target account info when auth type is assumeRole', () => {
             sinon.stub(task, '_setupDestClients').returns();
-            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').yields();
-            task._setTargetAccountMd({}, '', fakeLogger, err => {
-                assert.ifError(err);
-                assert(setTargetAccountStub.notCalled);
-                done();
-            });
+            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').resolves();
+            return task._setTargetAccountMd({}, '', fakeLogger)
+                .then(() => assert(setTargetAccountStub.notCalled));
         });
 
-        it('should get target account info', done => {
+        it('should get target account info', () => {
             sinon.stub(task, '_setupDestClients').returns();
-            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').yields();
+            const setTargetAccountStub = sinon.stub(task, '_setTargetAccountMdOnce').resolves();
             task.destConfig.auth = {
                 type: 'service',
                 account: 'replication-service',
             };
-            task._setTargetAccountMd({ getLogInfo: () => {} }, '', fakeLogger, err => {
-                assert.ifError(err);
-                assert(setTargetAccountStub.calledOnce);
-                done();
-            });
+            return task._setTargetAccountMd({ getLogInfo: () => {} }, '', fakeLogger)
+                .then(() => assert(setTargetAccountStub.calledOnce));
         });
     });
 
     describe('_putMetadataOnce', () => {
-        it('should pass extract accountId from role and pass it when using AssumeRole auth', done => {
+        it('should pass extract accountId from role and pass it when using AssumeRole auth', () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const sendStub = sinon.stub().resolves({});
-            task.backbeatDest = {
-                send: sendStub,
-            };
+            task.backbeatDest = { send: sendStub };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
-            task._putMetadataOnce(entry, true, null, fakeLogger, err => {
-                assert.ifError(err);
-                assert(sendStub.calledOnce);
-                assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
-                done();
-            });
+            return task._putMetadataOnce(entry, true, null, fakeLogger)
+                .then(() => {
+                    assert(sendStub.calledOnce);
+                    assert.deepStrictEqual(sendStub.firstCall.args[0].input.AccountId, '123456789012');
+                });
         });
-        it('should not pass accountId when not in assumeRole', done => {
+        it('should not pass accountId when not in assumeRole', () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
             const sendStub = sinon.stub().resolves({});
-            task.backbeatDest = {
-                send: sendStub,
-            };
+            task.backbeatDest = { send: sendStub };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
             sinon.stub(task.destConfig.auth, 'type').value('role');
-            task._putMetadataOnce(entry, true, null, fakeLogger, err => {
-                assert.ifError(err);
-                assert(sendStub.calledOnce);
-                assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
-                done();
-            });
+            return task._putMetadataOnce(entry, true, null, fakeLogger)
+                .then(() => {
+                    assert(sendStub.calledOnce);
+                    assert.strictEqual(sendStub.firstCall.args[0].input.AccountId, undefined);
+                });
         });
     });
 
@@ -495,15 +483,15 @@ describe('ReplicateObject', () => {
             task.metricsHandler = { rpo: () => {} };
             task.mProducer = { publishMetrics: () => {} };
 
-            sinon.stub(task, '_setupRoles').callsFake((e, l, cb) => cb(null, 'srcRole', 'dstRole'));
-            sinon.stub(task, '_setTargetAccountMd').callsFake((e, r, l, cb) => cb(null));
+            sinon.stub(task, '_setupRoles').resolves(['srcRole', 'dstRole']);
+            sinon.stub(task, '_setTargetAccountMd').resolves();
             sinon.stub(task, '_publishReplicationStatus');
 
             const putMetadataStub = sinon.stub(task, '_putMetadata')
-                .callsFake((e, mdOnly, conflict, l, cb) => {
+                .callsFake((e, mdOnly) => {
                     assert.strictEqual(mdOnly, false,
                         'zero-byte objects must use DATA,METADATA (create) mode, not METADATA-only (update) mode');
-                    cb(null);
+                    return Promise.resolve();
                 });
 
             task.processQueueEntry(sourceEntry, {}, () => {
@@ -518,19 +506,19 @@ describe('ReplicateObject', () => {
         const sourceEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
         const destEntry = makeDestEntry();
         sinon.stub(task, '_publishReplicationStatus').returns();
-        sinon.stub(task, '_deleteOrphans').callsFake((entry, locations, log, cb) => cb());
-        sinon.stub(task, '_getAndPutData').callsFake((src, dest, log, cb) =>
-            cb(null, writtenLocations, undefined));
-        sinon.stub(task, '_putMetadata').callsFake((entry, mdOnly, conflict, log, cb) =>
-            cb(new MicroVersionIdAlreadyStoredException({ message: 'collision' })));
+        sinon.stub(task, '_deleteOrphans').resolves();
+        sinon.stub(task, '_getAndPutData').resolves([writtenLocations, undefined]);
+        sinon.stub(task, '_putMetadata').rejects(
+            new MicroVersionIdAlreadyStoredException({ message: 'collision' }));
 
-        task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger, err => {
-            assert.ifError(err);
-            sinon.assert.calledOnce(task._deleteOrphans);
-            sinon.assert.calledWith(task._deleteOrphans,
-                destEntry, writtenLocations, sinon.match.any, sinon.match.any);
-            done();
-        });
+        task._processQueueEntryRetryFull(sourceEntry, destEntry, {}, fakeLogger)
+            .then(() => {
+                sinon.assert.calledOnce(task._deleteOrphans);
+                sinon.assert.calledWith(task._deleteOrphans,
+                    destEntry, writtenLocations, sinon.match.any);
+                done();
+            })
+            .catch(done);
     });
 
     describe('_publishReplicationStatus', () => {
@@ -606,7 +594,7 @@ describe('ReplicateObject', () => {
             return entry.setReplicationBackend(backends[0]);
         }
 
-        it('validates per-backend role via account substitution', done => {
+        it('validates per-backend role via account substitution', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -630,15 +618,14 @@ describe('ReplicateObject', () => {
                 destination: 'arn:aws:s3:::bucket-a',
                 role: 'arn:aws:iam::222:role/repRule',
             }]);
-            task._setupRolesOnce(entry, fakeLogger, (err, src, dst) => {
-                assert.ifError(err);
-                assert.strictEqual(src, 'arn:aws:iam::111:role/src');
-                assert.strictEqual(dst, 'arn:aws:iam::222:role/repRule');
-                done();
-            });
+            return task._setupRolesOnce(entry, fakeLogger)
+                .then(([src, dst]) => {
+                    assert.strictEqual(src, 'arn:aws:iam::111:role/src');
+                    assert.strictEqual(dst, 'arn:aws:iam::222:role/repRule');
+                });
         });
 
-        it('rejects when per-backend role does not match substituted role', done => {
+        it('rejects when per-backend role does not match substituted role', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -662,14 +649,12 @@ describe('ReplicateObject', () => {
                 destination: 'arn:aws:s3:::bucket-a',
                 role: 'arn:aws:iam::999:role/repRule',
             }]);
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.BadRole, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.BadRole === true);
         });
 
-        it('matches V2 rules by Filter.Prefix', done => {
+        it('matches V2 rules by Filter.Prefix', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -712,13 +697,10 @@ describe('ReplicateObject', () => {
                     role: 'arn:aws:iam::222:role/dst',
                 });
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert.ifError(err);
-                done();
-            });
+            return task._setupRolesOnce(entry, fakeLogger);
         });
 
-        it('rejects with PreconditionFailed when V1 prefix does not match the object key', done => {
+        it('rejects with PreconditionFailed when V1 prefix does not match the object key', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -745,14 +727,12 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::222:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.PreconditionFailed, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.PreconditionFailed === true);
         });
 
-        it('rejects with PreconditionFailed when the only matching rule is Disabled', done => {
+        it('rejects with PreconditionFailed when the only matching rule is Disabled', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -778,14 +758,12 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::222:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.PreconditionFailed, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.PreconditionFailed === true);
         });
 
-        it('accepts when at least one enabled rule matches among several', done => {
+        it('accepts when at least one enabled rule matches among several', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -822,13 +800,10 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::222:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert.ifError(err);
-                done();
-            });
+            return task._setupRolesOnce(entry, fakeLogger);
         });
 
-        it('rejects with PreconditionFailed when no rule matches', done => {
+        it('rejects with PreconditionFailed when no rule matches', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -863,14 +838,12 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::222:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.PreconditionFailed, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.PreconditionFailed === true);
         });
 
-        it('rejects with BadRole when the bucket config role has more than two ARNs', done => {
+        it('rejects with BadRole when the bucket config role has more than two ARNs', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -897,14 +870,12 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::222:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.BadRole, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.BadRole === true);
         });
 
-        it('picks the rule matching the backend destination when several share a StorageClass', done => {
+        it('picks the rule matching the backend destination when several share a StorageClass', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -943,15 +914,14 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::333:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, (err, src, dst) => {
-                assert.ifError(err);
-                assert.strictEqual(src, 'arn:aws:iam::111:role/src');
-                assert.strictEqual(dst, 'arn:aws:iam::333:role/dst');
-                done();
-            });
+            return task._setupRolesOnce(entry, fakeLogger)
+                .then(([src, dst]) => {
+                    assert.strictEqual(src, 'arn:aws:iam::111:role/src');
+                    assert.strictEqual(dst, 'arn:aws:iam::333:role/dst');
+                });
         });
 
-        it('rejects when the backend role does not match its rule Account substitution', done => {
+        it('rejects when the backend role does not match its rule Account substitution', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -990,14 +960,12 @@ describe('ReplicateObject', () => {
                 role: 'arn:aws:iam::999:role/dst',
             }]);
 
-            task._setupRolesOnce(entry, fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.BadRole, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(entry, fakeLogger),
+                err => err.is.BadRole === true);
         });
 
-        it('falls back to literal compare for legacy configs without Account', done => {
+        it('falls back to literal compare for legacy configs without Account', () => {
             task.site = 'site';
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
@@ -1027,12 +995,11 @@ describe('ReplicateObject', () => {
                     }],
                 },
             }).setSite('site');
-            task._setupRolesOnce(entry, fakeLogger, (err, src, dst) => {
-                assert.ifError(err);
-                assert.strictEqual(src, 'arn:aws:iam::111:role/src');
-                assert.strictEqual(dst, 'arn:aws:iam::222:role/legacy');
-                done();
-            });
+            return task._setupRolesOnce(entry, fakeLogger)
+                .then(([src, dst]) => {
+                    assert.strictEqual(src, 'arn:aws:iam::111:role/src');
+                    assert.strictEqual(dst, 'arn:aws:iam::222:role/legacy');
+                });
         });
     });
 
@@ -1143,7 +1110,7 @@ describe('ReplicateObject', () => {
     });
 
     describe('_putMetadataOnce with conflict', () => {
-        it('skips the request when conflict revision is equal to source (already at destination)', done => {
+        it('skips the request when conflict revision is equal to source (already at destination)', () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const { newer, newerEncoded } = makeMicroVersionIds();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
@@ -1152,14 +1119,11 @@ describe('ReplicateObject', () => {
             const sendStub = sinon.stub().resolves({});
             task.backbeatDest = { send: sendStub };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
-            task._putMetadataOnce(entry, false, conflict, fakeLogger, err => {
-                assert.ifError(err);
-                sinon.assert.notCalled(sendStub);
-                done();
-            });
+            return task._putMetadataOnce(entry, false, conflict, fakeLogger)
+                .then(() => sinon.assert.notCalled(sendStub));
         });
 
-        it('proceeds with the request when conflict revision is older than source', done => {
+        it('proceeds with the request when conflict revision is older than source', () => {
             sinon.stub(task, '_publishMetadataWriteMetrics').returns();
             const { olderEncoded, newer } = makeMicroVersionIds();
             const entry = QueueEntry.createFromKafkaEntry(replicationEntry);
@@ -1168,11 +1132,8 @@ describe('ReplicateObject', () => {
             const sendStub = sinon.stub().resolves({});
             task.backbeatDest = { send: sendStub };
             task.targetRole = 'arn:aws:iam::123456789012:role/crr-role';
-            task._putMetadataOnce(entry, false, conflict, fakeLogger, err => {
-                assert.ifError(err);
-                sinon.assert.calledOnce(sendStub);
-                done();
-            });
+            return task._putMetadataOnce(entry, false, conflict, fakeLogger)
+                .then(() => sinon.assert.calledOnce(sendStub));
         });
     });
 

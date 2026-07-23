@@ -79,6 +79,27 @@ describe('BackbeatTask', () => {
         });
     });
 
+    describe('retry (Promise mode)', () => {
+        it('should retry on retryable errors and resolve with the final result', async () => {
+            const task = new BackbeatTask({ timeoutS: 10, backoff: { min: 1, max: 10, jitter: 0, factor: 1 } });
+            let attempts = 0;
+            const result = await task.retry({
+                actionDesc: 'test',
+                actionFunc: done => {
+                    attempts += 1;
+                    if (attempts < 3) {
+                        return done(Object.assign(new Error('retry me'), { retryable: true }));
+                    }
+                    return done(null, 'ok');
+                },
+                shouldRetryFunc: err => err.retryable,
+                log: logger,
+            });
+            assert.strictEqual(result, 'ok');
+            assert.strictEqual(attempts, 3);
+        });
+    });
+
     describe('retry method with sinon fake timers', () => {
         let clock;
 
