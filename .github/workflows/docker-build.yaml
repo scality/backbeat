@@ -46,7 +46,12 @@ jobs:
           tags: ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
-        
+
+      - name: Check Kerberos support in built images
+        run: |
+          .github/scripts/check_image_kerberos_support.sh ghcr.io/${{ github.repository }}:${{ github.sha }}
+          .github/scripts/check_image_kerberos_support.sh ghcr.io/${{ github.repository }}:${{ github.sha }}-federation
+
       - name: Install Oras
         run: |
           curl -L https://github.com/oras-project/oras/releases/download/v${ORAS_VERSION}/oras_${ORAS_VERSION}_linux_amd64.tar.gz | \
