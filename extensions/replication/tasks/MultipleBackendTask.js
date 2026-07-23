@@ -1,3 +1,4 @@
+const { promisify } = require('util');
 const async = require('async');
 const { v4: uuid } = require('uuid');
 const { GetBucketReplicationCommand } = require('@aws-sdk/client-s3');
@@ -6,6 +7,7 @@ const errors = require('arsenal').errors;
 const jsutil = require('arsenal').jsutil;
 const ObjectMD = require('arsenal').models.ObjectMD;
 const ObjectQueueEntry = require('../../../lib/models/ObjectQueueEntry');
+const BackbeatMetadataProxy = require('../../../lib/BackbeatMetadataProxy');
 
 const ReplicateObject = require('./ReplicateObject');
 const { 
@@ -23,6 +25,8 @@ const {
 } = require('@scality/cloudserverclient');
 const getExtMetrics = require('../utils/getExtMetrics');
 const { metricsExtension, metricsTypeQueued } = require('../constants');
+
+const getMetadata = promisify(BackbeatMetadataProxy.prototype.getMetadata);
 
 const MPU_GCP_MAX_PARTS = 1024;
 
@@ -54,7 +58,7 @@ class MultipleBackendTask extends ReplicateObject {
         return this.destConfig.replicationEndpoint.type;
     }
 
-    _setupRolesOnce(entry, log, cb) {
+    async _setupRolesOnce(entry, log) {
         log.debug('getting bucket replication', { entry: entry.getLogInfo() });
         const entryRolesString = entry.getReplicationRoles(entry.getReplicationBackend());
         let errMessage;
@@ -71,7 +75,7 @@ class MultipleBackendTask extends ReplicateObject {
                 entry: entry.getLogInfo(),
                 roles: entryRolesString,
             });
-            return cb(errors.BadRole.customizeDescription(errMessage));
+            throw errors.BadRole.customizeDescription(errMessage);
         }
         this.sourceRole = entryRoles[0];
 
@@ -81,89 +85,86 @@ class MultipleBackendTask extends ReplicateObject {
             Bucket: entry.getBucket(),
         });
         attachReqUids(command, log.getSerializedUids());
-        return this.S3source.send(command)
-            .then(data => {
-                const replicationEnabled = data.ReplicationConfiguration.Rules
-                    .some(rule => rule.Status === 'Enabled' &&
-                        entry.getObjectKey().startsWith(
-                            rule.Filter?.Prefix ?? rule.Prefix ?? ''));
-                if (!replicationEnabled) {
-                    errMessage = 'replication disabled for object';
-                    log.debug(errMessage, {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                    });
-                    return cb(errors.PreconditionFailed.customizeDescription(
-                        errMessage));
-                }
-                const roles = data.ReplicationConfiguration.Role.split(',');
-                if (roles.length > 2) {
-                    errMessage = 'expecting no more than two roles in bucket ' +
-                        'replication configuration when replicating to an ' +
-                        'external location';
-                    log.error(errMessage, {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        roles,
-                    });
-                    return cb(errors.BadRole.customizeDescription(errMessage));
-                }
-                if (roles[0] !== entryRoles[0]) {
-                    log.error('role in replication entry for source does not ' +
-                    'match role in bucket replication configuration', {
-                        method: 'MultipleBackendTask._setupRolesOnce',
-                        entry: entry.getLogInfo(),
-                        entryRole: entryRoles[0],
-                        bucketRole: roles[0],
-                    });
-                    return cb(errors.BadRole);
-                }
-                return cb();
-            })
-            .catch(err => {
-                log.error('error getting replication configuration from S3', {
-                    method: 'MultipleBackendTask._setupRolesOnce',
-                    entry: entry.getLogInfo(),
-                    origin: 'source',
-                    peer: this.sourceConfig.s3,
-                    error: err.message,
-                    httpStatus: err.$metadata?.httpStatusCode,
-                });
-                // eslint-disable-next-line no-param-reassign
-                err.origin = 'source';
-                return cb(err);
+
+        let data;
+        try {
+            data = await this.S3source.send(command);
+        } catch (err) {
+            log.error('error getting replication configuration from S3', {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                origin: 'source',
+                peer: this.sourceConfig.s3,
+                error: err.message,
+                httpStatus: err.$metadata?.httpStatusCode,
             });
+            err.origin = 'source';
+            throw err;
+        }
+
+        const replicationEnabled = data.ReplicationConfiguration.Rules
+            .some(rule => rule.Status === 'Enabled' &&
+                entry.getObjectKey().startsWith(
+                    rule.Filter?.Prefix ?? rule.Prefix ?? ''));
+        if (!replicationEnabled) {
+            errMessage = 'replication disabled for object';
+            log.debug(errMessage, {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+            });
+            throw errors.PreconditionFailed.customizeDescription(errMessage);
+        }
+        const roles = data.ReplicationConfiguration.Role.split(',');
+        if (roles.length > 2) {
+            errMessage = 'expecting no more than two roles in bucket ' +
+                'replication configuration when replicating to an ' +
+                'external location';
+            log.error(errMessage, {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                roles,
+            });
+            throw errors.BadRole.customizeDescription(errMessage);
+        }
+        if (roles[0] !== entryRoles[0]) {
+            log.error('role in replication entry for source does not ' +
+            'match role in bucket replication configuration', {
+                method: 'MultipleBackendTask._setupRolesOnce',
+                entry: entry.getLogInfo(),
+                entryRole: entryRoles[0],
+                bucketRole: roles[0],
+            });
+            throw errors.BadRole;
+        }
     }
 
-    _refreshSourceEntry(sourceEntry, log, cb) {
+    async _refreshSourceEntry(sourceEntry, log) {
         const params = {
             bucket: sourceEntry.getBucket(),
             objectKey: sourceEntry.getObjectKey(),
             versionId: sourceEntry.getEncodedVersionId() || 'null',
         };
-        return this.backbeatSourceProxy.getMetadata(
-        params, log, (err, blob) => {
-            if (err) {
-                log.error('error getting metadata blob from S3', {
-                    method: 'MultipleBackendTask._refreshSourceEntry',
-                    error: err,
-                });
-                return cb(err);
-            }
-            const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
-            if (parsedEntry.error) {
-                log.error('error parsing metadata blob', {
-                    error: parsedEntry.error,
-                    method: 'MultipleBackendTask._refreshSourceEntry',
-                });
-                return cb(errors.InternalError.
-                    customizeDescription('error parsing metadata blob'));
-            }
-            const refreshedEntry = new ObjectQueueEntry(sourceEntry.getBucket(),
-                sourceEntry.getObjectVersionedKey(), parsedEntry.result)
-                .setReplicationBackend(sourceEntry.getReplicationBackend());
-            return cb(null, refreshedEntry);
-        });
+        let blob;
+        try {
+            blob = await getMetadata.call(this.backbeatSourceProxy, params, log);
+        } catch (err) {
+            log.error('error getting metadata blob from S3', {
+                method: 'MultipleBackendTask._refreshSourceEntry',
+                error: err,
+            });
+            throw err;
+        }
+        const parsedEntry = ObjectQueueEntry.createFromBlob(blob.Body);
+        if (parsedEntry.error) {
+            log.error('error parsing metadata blob', {
+                error: parsedEntry.error,
+                method: 'MultipleBackendTask._refreshSourceEntry',
+            });
+            throw errors.InternalError.customizeDescription('error parsing metadata blob');
+        }
+        return new ObjectQueueEntry(sourceEntry.getBucket(),
+            sourceEntry.getObjectVersionedKey(), parsedEntry.result)
+            .setReplicationBackend(sourceEntry.getReplicationBackend());
     }
 
     /**
@@ -1186,7 +1187,7 @@ class MultipleBackendTask extends ReplicateObject {
     _setupClients(entry, log, cb) {
         // Sets up source clients using the role from the replication
         // configuration if the authentication type is as such.
-        return this._setupRoles(entry, log, cb);
+        return this._setupRoles(entry, log).then(() => cb(), cb);
     }
 
     processQueueEntry(sourceEntry, kafkaEntry, done) {
@@ -1196,18 +1197,16 @@ class MultipleBackendTask extends ReplicateObject {
 
         return async.waterfall([
             next => this._setupClients(sourceEntry, log, next),
-            next => this._refreshSourceEntry(sourceEntry, log, (err, res) => {
-                if (err && err.name === 'ObjNotFound' &&
-                    sourceEntry.getReplicationIsNFS() && !sourceEntry.getIsDeleteMarker()) {
+            next => this._refreshSourceEntry(sourceEntry, log)
+                .then(res => next(null, res), err => {
+                    if (err.name === 'ObjNotFound' &&
+                        sourceEntry.getReplicationIsNFS() && !sourceEntry.getIsDeleteMarker()) {
                         // The object was deleted before entry is processed, we
                         // can safely skip this entry.
                         return next(errors.InvalidObjectState);
-                }
-                if (err) {
+                    }
                     return next(err);
-                }
-                return next(null, res);
-            }),
+                }),
             (refreshedEntry, next) => {
                 const lastModified = new Date(refreshedEntry.getLastModified());
                 this.metricsHandler.rpo({
@@ -1267,18 +1266,18 @@ class MultipleBackendTask extends ReplicateObject {
                 }
                 return this._getAndPutObject(sourceEntry, log, next);
             },
-        ], err => this._handleReplicationOutcome(
-            err, sourceEntry, kafkaEntry, log, done));
+        ], err => this._handleReplicationOutcome(err, sourceEntry, null, kafkaEntry, log)
+            .then(result => (result === null ? done() : done(null, result)), done));
     }
 
-    _handleReplicationOutcome(err, sourceEntry, kafkaEntry, log, done) {
+    async _handleReplicationOutcome(err, sourceEntry, destEntry, kafkaEntry, log) {
         if (!err) {
             log.debug('replication succeeded for object, publishing ' +
                       'replication status as COMPLETED',
                       { entry: sourceEntry.getLogInfo() });
             this._publishReplicationStatus(
                 sourceEntry, 'COMPLETED', { kafkaEntry, log });
-            return done(null, { committable: false });
+            return { committable: false };
         }
         if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
@@ -1291,18 +1290,18 @@ class MultipleBackendTask extends ReplicateObject {
                     entry: sourceEntry.getLogInfo(),
                     origin: err.origin,
                     error: err.description });
-            return done();
+            return null;
         }
         if (err.ObjNotFound || err.name === 'ObjNotFound') {
             log.info('replication skipped: ' +
                      'source object version does not exist',
                      { entry: sourceEntry.getLogInfo() });
-            return done();
+            return null;
         }
         if (err.InvalidObjectState || err.name === 'InvalidObjectState') {
             log.info('replication skipped: invalid object state',
                      { entry: sourceEntry.getLogInfo() });
-            return done();
+            return null;
         }
         log.debug('replication failed permanently for object, ' +
                   'publishing replication status as FAILED',
@@ -1315,7 +1314,7 @@ class MultipleBackendTask extends ReplicateObject {
                 reason: err.description,
                 kafkaEntry,
             });
-        return done(null, { committable: false });
+        return { committable: false };
     }
 }
 

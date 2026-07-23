@@ -101,7 +101,7 @@ describe('MultipleBackendTask', function test() {
             }).setSite('test-site-2');
         }
 
-        it('matches V2 rules by Filter.Prefix', done => {
+        it('matches V2 rules by Filter.Prefix', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
                 send: () => Promise.resolve({
@@ -119,13 +119,10 @@ describe('MultipleBackendTask', function test() {
                 }),
             };
 
-            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
-                assert.ifError(err);
-                done();
-            });
+            return task._setupRolesOnce(makeEntry(), fakeLogger);
         });
 
-        it('rejects with PreconditionFailed when no rule matches the object key', done => {
+        it('rejects with PreconditionFailed when no rule matches the object key', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
                 send: () => Promise.resolve({
@@ -143,14 +140,12 @@ describe('MultipleBackendTask', function test() {
                 }),
             };
 
-            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
-                assert(err);
-                assert.strictEqual(err.is.PreconditionFailed, true);
-                done();
-            });
+            return assert.rejects(
+                task._setupRolesOnce(makeEntry(), fakeLogger),
+                err => err.is.PreconditionFailed === true);
         });
 
-        it('accepts V1 rules with top-level Prefix', done => {
+        it('accepts V1 rules with top-level Prefix', () => {
             sinon.stub(task, '_setupSourceClients').returns();
             task.S3source = {
                 send: () => Promise.resolve({
@@ -168,10 +163,7 @@ describe('MultipleBackendTask', function test() {
                 }),
             };
 
-            task._setupRolesOnce(makeEntry(), fakeLogger, err => {
-                assert.ifError(err);
-                done();
-            });
+            return task._setupRolesOnce(makeEntry(), fakeLogger);
         });
     });
 
@@ -401,9 +393,9 @@ describe('MultipleBackendTask', function test() {
             fakeLogger.newRequestLogger = () => fakeLogger;
             queueEntry = QueueEntry.createFromKafkaEntry(replicationEntry);
             sinon.stub(task, '_setupClients').yields(null);
-            sinon.stub(task, '_refreshSourceEntry').yields(null, queueEntry);
+            sinon.stub(task, '_refreshSourceEntry').resolves(queueEntry);
             sinon.stub(task, '_handleReplicationOutcome').callsFake(
-                (err, sourceEntry, kafkaEntry, log, done) => done(err, null));
+                err => (err ? Promise.reject(err) : Promise.resolve(null)));
         });
 
         afterEach(() => {
