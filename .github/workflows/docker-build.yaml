@@ -52,6 +52,11 @@ jobs:
           cache-from: type=gha,scope=federation
           cache-to: type=gha,scope=federation,mode=max
 
+      - name: Check Kerberos support in built images
+        run: |
+          .github/scripts/check_image_kerberos_support.sh ghcr.io/${{ github.repository }}:${{ env.TAG }}
+          .github/scripts/check_image_kerberos_support.sh ghcr.io/${{ github.repository }}:${{ env.TAG }}-federation
+
       - name: Install Oras
         shell: bash
         run: |
