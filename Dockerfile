@@ -4,6 +4,8 @@ FROM node:${NODE_VERSION} AS builder
 
 WORKDIR /usr/src/app
 
+# libsasl2-dev is required at build time for node-rdkafka to compile
+# librdkafka with SASL GSSAPI (Kerberos) support.
 RUN apt-get update \
     && apt-get install -y --no-install-recommends \
         ca-certificates \
@@ -20,7 +22,8 @@ RUN apt-get update \
         libssl-dev \
         libreadline-dev \
         libffi-dev \
-        libzstd-dev
+        libzstd-dev \
+        libsasl2-dev
 
 ENV DOCKERIZE_VERSION=v0.6.1
 
@@ -37,10 +40,15 @@ RUN yarn install --ignore-engines --frozen-lockfile --production --network-concu
 ################################################################################
 FROM node:${NODE_VERSION}
 
+# Kerberos runtime for Kafka destinations: kinit (krb5-user), libsasl2, and
+# the Cyrus SASL GSSAPI plugin, loaded dynamically by librdkafka.
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
         jq \
+        krb5-user \
+        libsasl2-2 \
+        libsasl2-modules-gssapi-mit \
         openssl \
         tini \
     && rm -rf /var/lib/apt/lists/*
