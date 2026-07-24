@@ -216,6 +216,59 @@ describe('ZookeeperConfigManager', () => {
         });
     });
 
+    describe('_setBucketNotifConfig resilience', () => {
+        afterEach(() => {
+            sinon.restore();
+            zk._resetState();
+        });
+
+        it('should create the node and persist the config when it does not exist yet', done => {
+            const manager = new ZookeeperConfigManager(params);
+            const bucket = 'freshBucket';
+            const config = getTestConfigValue(bucket);
+            const node = `/${zkConfigParentNode}/${bucket}`;
+            async.series([
+                next => managerInit(manager, next),
+                next => manager._setBucketNotifConfig(
+                    bucket, JSON.stringify(config), err => {
+                        assert.ifError(err);
+                        return next();
+                    }),
+                next => zkClient.getData(node, undefined, (err, data) => {
+                    assert.ifError(err);
+                    assert.strictEqual(
+                        JSON.parse(data.toString()).bucket, bucket);
+                    return next();
+                }),
+            ], done);
+        });
+
+        it('should retry the config write on a transient failure', done => {
+            const manager = new ZookeeperConfigManager(params);
+            const bucket = 'retryBucket';
+            const config = getTestConfigValue(bucket);
+            const node = `/${zkConfigParentNode}/${bucket}`;
+            managerInit(manager, () => {
+                const transient = new Error('transient zookeeper error');
+                const stub = sinon.stub(manager, '_setBucketNotifConfig');
+                stub.onCall(0).callsFake((b, d, cb) => cb(transient));
+                stub.onCall(1).callsFake((b, d, cb) => cb(transient));
+                stub.callThrough();
+                // setConfig triggers the listener retry
+                manager.setConfig(bucket, config);
+                setTimeout(() => {
+                    assert.strictEqual(stub.callCount, 3);
+                    zkClient.getData(node, undefined, (err, data) => {
+                        assert.ifError(err);
+                        assert.strictEqual(
+                            JSON.parse(data.toString()).bucket, bucket);
+                        return done();
+                    });
+                }, 2000);
+            });
+        });
+    });
+
     describe('setup', () => {
         it('should setup zookeeper client when it\'s not provided', done => {
             const manager = new ZookeeperConfigManager({
