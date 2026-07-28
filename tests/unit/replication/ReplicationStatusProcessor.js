@@ -130,4 +130,34 @@ describe('ReplicationStatusProcessor', () => {
             ]);
         });
     });
+    describe('::_getConsumerOptions', () => {
+        it('should consume the status topic from the earliest offset', () => {
+            const replicationStatusProcessor = new ReplicationStatusProcessor(
+                { hosts: 'localhost:9092' },
+                {
+                    auth: {},
+                    s3: {},
+                    transport: 'http',
+                },
+                {
+                    replicationStatusTopic: 'backbeat-replication-status',
+                    replicationStatusProcessor: {
+                        groupId: 'backbeat-replication-status-group',
+                        concurrency: 10,
+                        maxQueued: 1000,
+                    },
+                    objectSizeMetrics: [100, 1000],
+                },
+                {});
+            const consumerOptions =
+                replicationStatusProcessor._getConsumerOptions({});
+
+            assert.strictEqual(consumerOptions.fromOffset, 'earliest');
+            assert.strictEqual(consumerOptions.topic,
+                'backbeat-replication-status');
+            assert.strictEqual(consumerOptions.groupId,
+                'backbeat-replication-status-group');
+            assert.strictEqual(consumerOptions.bootstrap, false);
+        });
+    });
 });

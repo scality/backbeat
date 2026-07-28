@@ -347,6 +347,29 @@ class ReplicationStatusProcessor {
     }
 
     /**
+     * Build the options of the status topic consumer
+     * @param {Object} [options] - options object as given to start()
+     * @return {Object} consumer options
+     */
+    _getConsumerOptions(options) {
+        return {
+            kafka: {
+                hosts: this.kafkaConfig.hosts,
+                site: this.kafkaConfig.site,
+                compressionType: this.kafkaConfig.compressionType,
+                requiredAcks: this.kafkaConfig.requiredAcks,
+            },
+            topic: this.repConfig.replicationStatusTopic,
+            groupId: this.repConfig.replicationStatusProcessor.groupId,
+            concurrency: this.repConfig.replicationStatusProcessor.concurrency,
+            maxQueued: this.repConfig.replicationStatusProcessor.maxQueued,
+            queueProcessor: this.processKafkaEntry.bind(this),
+            bootstrap: (options && options.bootstrap) || false,
+            fromOffset: 'earliest',
+        };
+    }
+
+    /**
      * Start kafka consumer
      *
      * @param {object} [options] - options object (only used for tests
@@ -386,20 +409,8 @@ class ReplicationStatusProcessor {
             },
             done => {
                 let consumerReady = false;
-                this._consumer = new BackbeatConsumer({
-                    kafka: {
-                        hosts: this.kafkaConfig.hosts,
-                        site: this.kafkaConfig.site,
-                        compressionType: this.kafkaConfig.compressionType,
-                        requiredAcks: this.kafkaConfig.requiredAcks,
-                    },
-                    topic: this.repConfig.replicationStatusTopic,
-                    groupId: this.repConfig.replicationStatusProcessor.groupId,
-                    concurrency: this.repConfig.replicationStatusProcessor.concurrency,
-                    maxQueued: this.repConfig.replicationStatusProcessor.maxQueued,
-                    queueProcessor: this.processKafkaEntry.bind(this),
-                    bootstrap: (options && options.bootstrap) || false,
-                });
+                this._consumer = new BackbeatConsumer(
+                    this._getConsumerOptions(options));
                 this._consumer.on('error', () => {
                     if (!consumerReady) {
                         this.logger.fatal('error starting a backbeat consumer');

@@ -257,7 +257,7 @@ describe('BackbeatConsumer rebalance tests', () => {
         // Bootstrap just once at the beginning of the test suite
         const bootstrapConsumer = new BackbeatConsumer({
             zookeeper: zookeeperConf,
-            kafka: { hosts: consumerKafkaConf.hosts }, groupId, topic,
+            kafka: consumerKafkaConf, groupId, topic,
             queueProcessor,
             bootstrap: true,
         });
@@ -1273,4 +1273,103 @@ describe('BackbeatConsumer shutdown tests', () => {
             },
         ], done);
     }).timeout(60000);
+});
+
+describe('BackbeatConsumer fromOffset tests', () => {
+    const topic = 'backbeat-consumer-spec-from-offset';
+    let producer;
+    let consumer;
+    let consumedMessages;
+
+    function queueProcessor(message, cb) {
+        consumedMessages.push(message.value.toString());
+        process.nextTick(cb);
+    }
+
+    function waitFor(predicate, timeoutMs, description, cb) {
+        const deadline = Date.now() + timeoutMs;
+        const check = () => {
+            if (predicate()) {
+                return cb();
+            }
+            if (Date.now() > deadline) {
+                return cb(new Error(`timed out waiting for ${description}`));
+            }
+            return setTimeout(check, 200);
+        };
+        check();
+    }
+
+    function startConsumer(cb) {
+        consumer = new BackbeatConsumer({
+            clientId: 'BackbeatConsumer-fromOffset',
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf,
+            groupId: `from-offset-group-${Math.random()}`,
+            topic,
+            fromOffset: 'earliest',
+            queueProcessor,
+            concurrency: 2,
+        });
+        consumer.on('ready', () => {
+            consumer.subscribe();
+            cb();
+        });
+    }
+
+    before(function before(done) {
+        this.timeout(60000);
+        // settle the topic once (bootstrap canary produced and
+        // consumed) so per-test consumers join an established topic;
+        // per-test groups stay fresh so their partitions have no
+        // committed offset
+        const bootstrapConsumer = new BackbeatConsumer({
+            zookeeper: zookeeperConf,
+            kafka: consumerKafkaConf,
+            groupId: `from-offset-bootstrap-${Math.random()}`,
+            topic,
+            queueProcessor,
+            bootstrap: true,
+        });
+        bootstrapConsumer.on('ready', () => bootstrapConsumer.close(done));
+    });
+
+    beforeEach(function beforeEach(done) {
+        this.timeout(60000);
+        consumedMessages = [];
+        producer = new BackbeatProducer({
+            kafka: producerKafkaConf, topic,
+            pollIntervalMs: 100,
+        });
+        producer.on('ready', done);
+    });
+
+    afterEach(function afterEach(done) {
+        this.timeout(90000);
+        async.parallel([
+            innerDone => producer.close(innerDone),
+            innerDone => (consumer ? consumer.close(innerDone) : innerDone()),
+        ], err => {
+            consumer = null;
+            done(err);
+        });
+    });
+
+    it('should consume messages produced before the group existed with ' +
+    'fromOffset earliest', function testEarliest(done) {
+        this.timeout(120000);
+        const marker = `marker-earliest-${Math.random()}`;
+        async.series([
+            next => producer.send([{ key: 'k', message: marker }], next),
+            // without fromOffset 'earliest', the client default
+            // ('latest') would position past this pre-existing
+            // message and never deliver it
+            next => startConsumer(next),
+            // wide budget: a consumer group's first join can take a
+            // session timeout (45s) to settle when a rebalance hits
+            // its joining window
+            next => waitFor(() => consumedMessages.includes(marker), 75000,
+                'the pre-existing message to be consumed', next),
+        ], done);
+    });
 });
