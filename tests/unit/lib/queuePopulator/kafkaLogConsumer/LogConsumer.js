@@ -211,14 +211,21 @@ describe('LogConsumer', () => {
     });
 
     describe('storeOffsets', () => {
+        let drained;
+
+        beforeEach(() => {
+            drained = sinon.spy();
+            logConsumer.on('drained', drained);
+        });
+
         it('should not call offsetsStore when topicPartition is undefined', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             logConsumer._topicPartition = undefined;
-            
+
             logConsumer.storeOffsets();
-            
+
             sinon.assert.notCalled(offsetsStore);
-            assert.strictEqual(logConsumer._pendingCommit, false);
+            sinon.assert.calledOnce(drained);
         });
 
         it('should not store offsets if topicPartition is empty array', () => {
@@ -226,17 +233,18 @@ describe('LogConsumer', () => {
             logConsumer._topicPartition = [];
             logConsumer.storeOffsets();
             assert(offsetsStore.notCalled);
-            assert.strictEqual(logConsumer._pendingCommit, false);
+            sinon.assert.calledOnce(drained);
         });
 
-        it('should reset topicPartition after storing offsets', () => {
+        it('should reset topicPartition and emit drained after storing offsets', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             const topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 1 }];
             logConsumer._topicPartition = topicPartition;
             logConsumer.storeOffsets();
             assert(offsetsStore.calledWithMatch(topicPartition));
             assert.strictEqual(logConsumer._topicPartition, null);
-            assert.strictEqual(logConsumer._pendingCommit, true);
+            sinon.assert.calledOnce(drained);
+            assert(offsetsStore.calledBefore(drained));
         });
 
         it('should store multiple partition offsets correctly', () => {
@@ -248,25 +256,15 @@ describe('LogConsumer', () => {
             ];
             logConsumer._topicPartition = topicPartition;
             logConsumer.storeOffsets();
-            
+
             sinon.assert.calledOnce(offsetsStore);
             sinon.assert.calledWith(offsetsStore, topicPartition);
             assert.strictEqual(logConsumer._topicPartition, null);
-            assert.strictEqual(logConsumer._pendingCommit, true);
+            sinon.assert.calledOnce(drained);
         });
 
-        it('should set pendingCommit to true when storing offsets', () => {
-            const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
-            logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
-            logConsumer._pendingCommit = false;
-
-            logConsumer.storeOffsets();
-
-            assert.strictEqual(logConsumer._pendingCommit, true);
-            sinon.assert.calledOnce(offsetsStore);
-        });
-
-        it('should not call offsetsStore when consumer is not connected', () => {
+        it('should not call offsetsStore but still emit drained when consumer ' +
+        'is not connected', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore').returns(null);
             sinon.stub(logConsumer._consumer, 'isConnected').returns(false);
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
@@ -275,10 +273,10 @@ describe('LogConsumer', () => {
 
             sinon.assert.notCalled(offsetsStore);
             assert.strictEqual(logConsumer._topicPartition, null);
-            assert.strictEqual(logConsumer._pendingCommit, false);
+            sinon.assert.calledOnce(drained);
         });
 
-        it('should not crash nor set pendingCommit when offsetsStore throws', () => {
+        it('should not crash and still emit drained when offsetsStore throws', () => {
             const offsetsStore = sinon.stub(logConsumer._consumer, 'offsetsStore')
                 .throws(new Error('Local: Erroneous state'));
             logConsumer._topicPartition = [{ topic: 'oplog-topic', partition: 0, offset: 5 }];
@@ -287,7 +285,7 @@ describe('LogConsumer', () => {
 
             sinon.assert.calledOnce(offsetsStore);
             assert.strictEqual(logConsumer._topicPartition, null);
-            assert.strictEqual(logConsumer._pendingCommit, false);
+            sinon.assert.calledOnce(drained);
         });
     });
 
@@ -299,44 +297,52 @@ describe('LogConsumer', () => {
     });
 
     describe('_onOffsetCommit', () => {
-        it('should not log error and not change pendingCommit on NO_OFFSET error', () => {
+        let drained;
+
+        beforeEach(() => {
+            drained = sinon.spy();
+            logConsumer.on('drained', drained);
+        });
+
+        it('should not log error on NO_OFFSET error', () => {
             const logErrorSpy = sinon.spy(logConsumer._log, 'error');
             const logDebugSpy = sinon.spy(logConsumer._log, 'debug');
-            logConsumer._pendingCommit = true;
-            
+
             const result = logConsumer._onOffsetCommit({ code: kafka.CODES.ERRORS.ERR__NO_OFFSET }, null);
-            
+
             sinon.assert.notCalled(logErrorSpy);
             sinon.assert.notCalled(logDebugSpy);
-            assert.strictEqual(logConsumer._pendingCommit, true);
+            sinon.assert.notCalled(drained);
             assert.strictEqual(result, undefined);
         });
 
-        it('should log error and not change pendingCommit on non-NO_OFFSET errors', () => {
+        it('should log error on non-NO_OFFSET errors', () => {
             const logErrorSpy = sinon.spy(logConsumer._log, 'error');
             const logDebugSpy = sinon.spy(logConsumer._log, 'debug');
             const error = { code: kafka.CODES.ERRORS.ERR__UNKNOWN_TOPIC };
             const topicPartitions = [{ topic: 'test-topic', partition: 1, offset: 5 }];
-            logConsumer._pendingCommit = true;
-            
+
             const result = logConsumer._onOffsetCommit(error, topicPartitions);
-            
+
             sinon.assert.calledOnce(logErrorSpy);
             sinon.assert.notCalled(logDebugSpy);
-            assert.strictEqual(logConsumer._pendingCommit, true);
+            sinon.assert.notCalled(drained);
             assert.strictEqual(result, undefined);
         });
 
-        it('should set pendingCommit to false on successful commit', () => {
+        it('should log at debug level on successful commit', () => {
+            const logErrorSpy = sinon.spy(logConsumer._log, 'error');
+            const logDebugSpy = sinon.spy(logConsumer._log, 'debug');
             const topicPartitions = [
                 { topic: 'oplog-topic', partition: 0, offset: 10 },
                 { topic: 'oplog-topic', partition: 1, offset: 20 }
             ];
-            logConsumer._pendingCommit = true;
-            
+
             const result = logConsumer._onOffsetCommit(null, topicPartitions);
-            
-            assert.strictEqual(logConsumer._pendingCommit, false);
+
+            sinon.assert.notCalled(logErrorSpy);
+            sinon.assert.calledOnce(logDebugSpy);
+            sinon.assert.notCalled(drained);
             assert.strictEqual(result, undefined);
         });
     });
@@ -374,15 +380,16 @@ describe('LogConsumer', () => {
                 clock.restore();
             });
 
-            it('should immediately unassign when no pending messages or commits', async () => {
+            it('should commit and immediately unassign when no batch is in flight', async () => {
                 const unassignStub = sinon.stub();
+                const commitStub = sinon.stub();
                 const assignment = [{ topic: 'test-topic', partition: 0 }];
                 logConsumer._consumer = {
                     unassign: unassignStub,
+                    commit: commitStub,
                     isConnected: () => true,
                 };
                 logConsumer._topicPartition = [];
-                logConsumer._pendingCommit = false;
 
                 let unassignHandler;
                 const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
@@ -394,19 +401,22 @@ describe('LogConsumer', () => {
 
                 void await unassignPromise;
 
+                sinon.assert.calledOnce(commitStub);
                 sinon.assert.calledOnce(unassignStub);
+                assert(commitStub.calledBefore(unassignStub));
             });
 
-            it('should wait for pending messages to be processed and committed before unassigning', async () => {
+            it('should wait for the in-flight batch before committing and unassigning', async () => {
                 const unassignStub = sinon.stub();
                 const commitStub = sinon.stub();
+                const offsetsStoreStub = sinon.stub();
                 logConsumer._consumer = {
                     unassign: unassignStub,
                     commit: commitStub,
+                    offsetsStore: offsetsStoreStub,
                     isConnected: () => true,
                 };
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
-                logConsumer._pendingCommit = false;
 
                 let unassignHandler;
                 const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
@@ -415,38 +425,59 @@ describe('LogConsumer', () => {
 
                 logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
 
-                // First tick - should not unassign yet due to pending messages
+                // should not unassign while the batch is in flight
                 clock.tick(1000);
                 sinon.assert.notCalled(unassignStub);
 
-                // Simulate processing completion and commit
-                logConsumer._topicPartition = null;
-                logConsumer._pendingCommit = true;
-
-                // Second tick - should not unassign yet due to pending commit
-                clock.tick(1000);
-                sinon.assert.notCalled(unassignStub);
-
-                // Simulate successful commit by emitting drained event
-                logConsumer._pendingCommit = false;
-                logConsumer.emit('drained');
+                // batch processing completes: offsets are stored, which
+                // releases the drain
+                logConsumer.storeOffsets();
 
                 void await unassignPromise;
 
+                sinon.assert.calledOnce(offsetsStoreStub);
+                sinon.assert.calledOnce(commitStub);
+                sinon.assert.calledOnce(unassignStub);
+                assert(offsetsStoreStub.calledBefore(commitStub));
+                assert(commitStub.calledBefore(unassignStub));
+            });
+
+            it('should unassign even when the commit throws', async () => {
+                const unassignStub = sinon.stub();
+                const commitStub = sinon.stub().throws(new Error('Local: Erroneous state'));
+                logConsumer._consumer = {
+                    unassign: unassignStub,
+                    commit: commitStub,
+                    isConnected: () => true,
+                };
+                logConsumer._topicPartition = [];
+
+                let unassignHandler;
+                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+
+                logConsumer.once('unassigned', unassignHandler);
+
+                logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
+                clock.tick(1000);
+
+                void await unassignPromise;
+
+                sinon.assert.calledOnce(commitStub);
                 sinon.assert.calledOnce(unassignStub);
             });
 
             it('should disconnect consumer on timeout', async () => {
                 const disconnectStub = sinon.stub();
                 const unassignStub = sinon.stub();
+                const commitStub = sinon.stub();
                 logConsumer._consumer = {
                     disconnect: disconnectStub,
                     unassign: unassignStub,
+                    commit: commitStub,
                     isConnected: () => true,
                 };
                 logConsumer._maxPollIntervalMs = 5000;
                 logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
-                logConsumer._pendingCommit = false;
 
                 let unassignHandler;
                 const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
@@ -457,6 +488,40 @@ describe('LogConsumer', () => {
 
                 // Advance time to trigger timeout (maxPollIntervalMs - 1000)
                 clock.tick(4000);
+
+                void await unassignPromise;
+
+                sinon.assert.calledOnce(unassignStub);
+                sinon.assert.calledOnce(disconnectStub);
+            });
+
+            it('should cap the drain timeout at 30 seconds', async () => {
+                const disconnectStub = sinon.stub();
+                const unassignStub = sinon.stub();
+                const commitStub = sinon.stub();
+                logConsumer._consumer = {
+                    disconnect: disconnectStub,
+                    unassign: unassignStub,
+                    commit: commitStub,
+                    isConnected: () => true,
+                };
+                logConsumer._maxPollIntervalMs = 300000;
+                logConsumer._topicPartition = [{ topic: 'test', partition: 0, offset: 1 }];
+
+                let unassignHandler;
+                const unassignPromise = new Promise(resolve => { unassignHandler = resolve; });
+
+                logConsumer.once('unassigned', unassignHandler);
+
+                logConsumer._onRebalance({ code: kafka.CODES.ERRORS.ERR__REVOKE_PARTITIONS }, []);
+
+                // just below the cap: still waiting for the batch
+                clock.tick(29000);
+                sinon.assert.notCalled(unassignStub);
+
+                // past the 30s cap: unassign fires, not at
+                // maxPollIntervalMs - 1000
+                clock.tick(2000);
 
                 void await unassignPromise;
 
