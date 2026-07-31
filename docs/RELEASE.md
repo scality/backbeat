@@ -5,10 +5,10 @@
 Docker images are hosted on [ghcr.io/scality](https://github.com/orgs/scality/packages).
 There are a few images:
 
-* Container image: `ghrc.io/scality/backbeat`
-* Dashboards: `ghrc.io/scality/backbeat/backbeat-dashboard`
-* Policies: `ghrc.io/scality/backbeat/backbeat-policies`
-* CI ancillary images: `ghrc.io/scality/backbeat/ci-*`
+* Container image: `ghcr.io/scality/backbeat`
+* Dashboards: `ghcr.io/scality/backbeat/backbeat-dashboard`
+* Policies: `ghcr.io/scality/backbeat/backbeat-policies`
+* CI ancillary images: `ghcr.io/scality/backbeat/ci-*`
 
 The CI will push images with every CI build tagging the
 content with the developer’s branch short SHA-1 commit hash.
