@@ -17,6 +17,7 @@ describe('ZookeeperManager', () => {
             connect: sinon.stub(),
             getData: sinon.stub(),
             mkdirp: sinon.stub(),
+            create: sinon.stub(),
             close: sinon.stub(),
         };
 
@@ -85,6 +86,44 @@ describe('ZookeeperManager', () => {
         zkClient.on('error', err => {
             assert(err, 'Error event should be emitted');
             assert.strictEqual(err.name, 'Simulated MKDIRP error');
+            done();
+        });
+    });
+
+    it('should create parent path without data and child with data using mkdirpWithChildDataOnly', done => {
+        mockClient.mkdirp.callsArgWith(4, null);
+        mockClient.create.callsArgWith(4, null);
+
+        zkClient = new ZookeeperManager('localhost:2181', {}, log);
+
+        const testPath = '/config/bucket1';
+        const testData = Buffer.from('test-data');
+
+        zkClient.mkdirpWithChildDataOnly(testPath, testData, err => {
+            assert.ifError(err);
+            sinon.assert.calledOnce(mockClient.mkdirp);
+            sinon.assert.calledWith(mockClient.mkdirp, '/config', null);
+            sinon.assert.calledOnce(mockClient.create);
+            sinon.assert.calledWith(mockClient.create, testPath, testData);
+            done();
+        });
+    });
+
+    it('should handle NODE_EXISTS error on parent path in mkdirpWithChildDataOnly', done => {
+        mockClient.mkdirp.callsArgWith(4, { name: 'NODE_EXISTS' });
+        mockClient.create.callsArgWith(4, null);
+
+        zkClient = new ZookeeperManager('localhost:2181', {}, log);
+
+        const testPath = '/config/bucket1';
+        const testData = Buffer.from('test-data');
+
+        zkClient.mkdirpWithChildDataOnly(testPath, testData, err => {
+            assert.ifError(err);
+            sinon.assert.calledOnce(mockClient.mkdirp);
+            sinon.assert.calledWith(mockClient.mkdirp, '/config', null);
+            sinon.assert.calledOnce(mockClient.create);
+            sinon.assert.calledWith(mockClient.create, testPath, testData);
             done();
         });
     });

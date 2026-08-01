@@ -50,6 +50,27 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         this._setupEventListeners();
     }
 
+    // https://github.com/alexguan/node-zookeeper-client/blob/master/lib/WatcherManager.js#L13-L39
+    // watchers should be reapplied only when their event is triggered, otherwise they will be duplicated
+    // and the lib will keep adding listeners
+    // (even if the functions are the same, they are js object so they don't match)
+    // warn early to catch leak more easily instead of waiting event emitter limit at 10 listeners.
+    _warnZkWatchersLeak(type, path) {
+        const watcherManager = this._zkClient?.client?.connectionManager?.watcherManager;
+
+        const watchers = watcherManager?.[`${type}Watchers`]?.[path];
+        if (!watchers) {
+            return;
+        }
+
+        const listeners = watchers.listenerCount('notification');
+        if (listeners > 0) {
+            process.emitWarning(`${type}Watchers[${path}] has already ${listeners} listeners`, {
+                code: 'ZkWatchersLeak',
+            });
+        }
+    }
+
     _errorListener(error, listener) {
         this.log.error('ZookeeperConfigManager.emitter.error', {
             listener,
@@ -72,28 +93,29 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         });
     }
 
-    _getConfigListener(updatedBucket = '') {
+    _getConfigListener(bucket) {
         this.log.debug('ZookeeperConfigManager.emitter.getConfig', {
             event: 'getConfig',
+            bucket,
+        });
+        this._updateLocalStore([bucket]);
+    }
+
+    _listConfigsListener() {
+        this.log.debug('ZookeeperConfigManager.emitter.listConfigs', {
+            event: 'listConfigs',
         });
         this._listBucketsWithConfig((err, buckets) => {
             if (err) {
-                this._emitter.emit('error', err, 'getConfigListener');
+                this._emitter.emit('error', err, 'listConfigsListener');
                 return undefined;
             }
-            this.log.debug('bucket config to be updated in map', {
-                bucket: updatedBucket,
-            });
             const newBuckets = this._getNewBucketNodes(buckets);
             this.log.debug('new bucket configs to be added to map', {
                 buckets: newBuckets,
             });
-            const bucketsToMap = updatedBucket ? [updatedBucket, ...newBuckets] : newBuckets;
-            this.log.debug('bucket configs to be added/updated to map', {
-                buckets: bucketsToMap,
-            });
-            if (bucketsToMap.length > 0) {
-                this._updateLocalStore(bucketsToMap);
+            if (newBuckets.length > 0) {
+                this._updateLocalStore(newBuckets);
             }
             return undefined;
         });
@@ -118,6 +140,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             .on('setConfig',
                 (bucket, config) => this._setConfigListener(bucket, config))
             .on('getConfig', bucket => this._getConfigListener(bucket))
+            .on('listConfigs', () => this._listConfigsListener())
             .on('removeConfig', bucket => this._removeConfigListener(bucket));
     }
 
@@ -132,10 +155,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         return `/${constants.zkConfigParentNode}/${bucket}`;
     }
 
-    _getConfigDataFromBuffer(data) {
+    _getConfigDataFromBuffer(data, bucket) {
         const { error, result } = safeJsonParse(data);
         if (error) {
-            this.log.error('invalid config', { error, config: data });
+            this.log.error('invalid config', { error, config: data, bucket });
             return undefined;
         }
         return result;
@@ -150,6 +173,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             zkPath,
         });
+        this._warnZkWatchersLeak('data', zkPath);
         return this._zkClient.getData(zkPath, event => {
             this.log.debug('zookeeper getData watcher triggered', {
                 zkPath,
@@ -211,13 +235,12 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         return async.waterfall([
             next => this._checkNodeExists(zkPath, next),
             (exists, next) => {
-                if (!exists) {
-                    return this._createBucketNotifConfigNode(bucket,
-                        err => next(err));
+                if (exists) {
+                    return this._zkClient.setData(zkPath, Buffer.from(data), -1, next);
+                } else {
+                    return this._createBucketNotifConfigNode(bucket, data, next);
                 }
-                return next();
-            },
-            next => this._zkClient.setData(zkPath, Buffer.from(data), -1, next),
+            }
         ], err => {
             if (err) {
                 this.log.error('error saving config', { method, zkPath, data });
@@ -255,7 +278,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         });
     }
 
-    _createBucketNotifConfigNode(bucket, cb) {
+    _createBucketNotifConfigNode(bucket, data, cb) {
         const method
             = 'ZookeeperConfigManager._createBucketNotifConfigNode';
         const zkPath = this._getBucketNodeZkPath(bucket);
@@ -264,7 +287,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             zkPath,
         });
-        return this._zkClient.mkdirp(zkPath, err => {
+        // mkdirp to ensure parent path exists,
+        // then atomically create the znode while setting data immediately
+        // to avoid other watchers to read the znode because data is set at creation
+        return this._zkClient.mkdirpWithChildDataOnly(zkPath, Buffer.from(data), err => {
             if (err) {
                 this.log.error('Could not pre-create path in zookeeper', {
                     method,
@@ -273,7 +299,10 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 });
                 return this._callbackHandler(cb, err);
             }
-            return this._callbackHandler(cb);
+            // if znode is created, run getData to set a watcher on the bucket config
+            // in case another node becomes leader on the raft and modifies the config
+            // while the current process keeps running
+            return this._updateLocalStore([bucket], cb => this._callbackHandler(cb));
         });
     }
 
@@ -319,6 +348,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
         const method
             = 'ZookeeperConfigManager._listBucketsWithConfig';
         const zkPath = `/${constants.zkConfigParentNode}`;
+        this._warnZkWatchersLeak('child', zkPath);
         this._zkClient.getChildren(zkPath, event => {
             this.log.debug('zookeeper getChildren watcher triggered', {
                 zkPath,
@@ -326,7 +356,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 event,
             });
             if (event.type === zookeeper.Event.NODE_CHILDREN_CHANGED) {
-                this._emitter.emit('getConfig');
+                this._emitter.emit('listConfigs');
             }
         }, (error, buckets) => {
             if (error) {
@@ -339,6 +369,11 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 });
                 this._callbackHandler(cb, error);
             }
+            this.log.debug('list of buckets', {
+                zkPath,
+                method,
+                buckets,
+            });
             this._callbackHandler(cb, null, buckets);
         });
     }
@@ -349,7 +384,7 @@ class ZookeeperConfigManager extends BaseConfigManager  {
                 if (err) {
                     return next(err);
                 }
-                const configObject = this._getConfigDataFromBuffer(data);
+                const configObject = this._getConfigDataFromBuffer(data, bucket);
                 if (configObject) {
                     this._configs.set(bucket, configObject);
                 }
@@ -402,16 +437,20 @@ class ZookeeperConfigManager extends BaseConfigManager  {
      * Remove bucket notification configuration
      *
      * @param {String} bucket - bucket
+     * @param {boolean} [emitToZk = true] - whether to emit the event to zookeeper
      * @return {boolean} - true if removed
      */
-    removeConfig(bucket) {
+    removeConfig(bucket, emitToZk = true) {
         try {
             this.log.debug('remove config', {
                 method: 'ZookeeperConfigManager.removeConfig',
                 bucket,
+                emitToZk,
             });
             this._configs.delete(bucket);
-            this._emitter.emit('removeConfig', bucket);
+            if (emitToZk) {
+                this._emitter.emit('removeConfig', bucket);
+            }
             return true;
         } catch (err) {
             const errMsg
