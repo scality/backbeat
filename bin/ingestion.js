@@ -33,8 +33,9 @@ const { connectionString, autoCreateNamespace, retries } = zkConfig;
 const RESUME_NODE = 'scheduledResume';
 
 const log = new werelogs.Logger('Backbeat:IngestionPopulator');
-werelogs.configure({ level: config.log.logLevel,
-    dump: config.log.dumpLevel });
+const ingestionLogConfig = ingestionExtConfigs.log ?? config.log;
+werelogs.configure({ level: ingestionLogConfig.logLevel,
+    dump: ingestionLogConfig.dumpLevel });
 
 let scheduler;
 let ingestionPopulator;

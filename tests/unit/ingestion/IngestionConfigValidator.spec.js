@@ -14,6 +14,31 @@ const baseExtConfig = {
 
 const qpBatchMaxRead = config.queuePopulator.batchMaxRead;
 
+describe('IngestionConfigValidator log override', () => {
+    it('should pass through log config when set', () => {
+        const validated = configValidator({}, {
+            ...baseExtConfig,
+            log: { logLevel: 'debug', dumpLevel: 'error' },
+        });
+        assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
+    });
+
+    it('should leave log undefined when not set, deferring to global config.log', () => {
+        const validated = configValidator({}, baseExtConfig);
+        assert.strictEqual(validated.log, undefined);
+    });
+
+    it('should reject a partial log config with missing dumpLevel', () => {
+        let err;
+        try {
+            configValidator({}, { ...baseExtConfig, log: { logLevel: 'debug' } });
+        } catch (e) {
+            err = e;
+        }
+        assert(err, 'expected configValidator to throw on partial log config');
+    });
+});
+
 describe('IngestionConfigValidator batchMaxRead fallback', () => {
     it('should override queuePopulator.batchMaxRead when set in extension config', () => {
         const validated = configValidator({}, { ...baseExtConfig, batchMaxRead: 500 });

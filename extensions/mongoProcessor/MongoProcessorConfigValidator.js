@@ -1,5 +1,5 @@
 const joi = require('joi');
-const { retryParamsJoi, probeServerJoi } = require('../../lib/config/configItems.joi');
+const { retryParamsJoi, probeServerJoi, logJoiOptional } = require('../../lib/config/configItems.joi');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 
@@ -11,6 +11,7 @@ const joiSchema = joi.object({
     maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
     probeServer: probeServerJoi.default(),
     circuitBreaker: joi.object().optional(),
+    log: logJoiOptional,
 });
 
 function configValidator(backbeatConfig, extConfig) {

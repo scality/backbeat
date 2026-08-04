@@ -23,8 +23,9 @@ const mongoProcessorConfig = config.extensions.mongoProcessor;
 const mongoClientConfig = config.queuePopulator.mongo;
 
 const log = new werelogs.Logger('Backbeat:MongoProcessor:task');
-werelogs.configure({ level: config.log.logLevel,
-    dump: config.log.dumpLevel });
+const mongoProcessorLogConfig = mongoProcessorConfig.log ?? config.log;
+werelogs.configure({ level: mongoProcessorLogConfig.logLevel,
+    dump: mongoProcessorLogConfig.dumpLevel });
 
 const mqp = new MongoQueueProcessor(kafkaConfig, mongoProcessorConfig,
     mongoClientConfig, mConfig);
