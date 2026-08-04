@@ -9,6 +9,11 @@ const BaseConfigManager = require('./BaseConfigManager');
 const safeJsonParse = require('../../../lib/util/safeJsonParse');
 const constants = require('../constants');
 
+// bounded retry with backoff for config writes to zookeeper, so a transient
+// failure does not drop the configuration
+const CONFIG_WRITE_MAX_ATTEMPTS = 5;
+const CONFIG_WRITE_RETRY_BASE_MS = 200;
+
 const paramsJoi = joi.object({
     zkClient: joi.object().optional(),
     zkConfig: joi.object().when('zkClient', {
@@ -64,7 +69,15 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             config,
         });
-        this._setBucketNotifConfig(bucket, JSON.stringify(config), err => {
+        const data = JSON.stringify(config);
+        // retry with backoff; the write is idempotent so retrying is safe
+        return async.retry({
+            times: CONFIG_WRITE_MAX_ATTEMPTS,
+            interval: retryCount =>
+                CONFIG_WRITE_RETRY_BASE_MS * (2 ** (retryCount - 1)),
+        },
+        next => this._setBucketNotifConfig(bucket, data, next),
+        err => {
             if (err) {
                 this._emitter.emit('error', err, 'setConfigListener');
             }
@@ -208,21 +221,29 @@ class ZookeeperConfigManager extends BaseConfigManager  {
             bucket,
             zkPath,
         });
-        return async.waterfall([
-            next => this._checkNodeExists(zkPath, next),
-            (exists, next) => {
-                if (!exists) {
-                    return this._createBucketNotifConfigNode(bucket,
-                        err => next(err));
-                }
-                return next();
-            },
-            next => this._zkClient.setData(zkPath, Buffer.from(data), -1, next),
-        ], err => {
+        // idempotent create-or-update of the bucket's config node
+        return this._writeBucketNotifConfigNode(zkPath, bucket, data, err => {
             if (err) {
-                this.log.error('error saving config', { method, zkPath, data });
+                this.log.error('error saving config', { method, zkPath, data, error: err });
             }
             return this._callbackHandler(cb, err);
+        });
+    }
+
+    _writeBucketNotifConfigNode(zkPath, bucket, data, cb) {
+        // forward only the error, not setData's stat result
+        return this._zkClient.setData(zkPath, Buffer.from(data), -1, err => {
+            if (err && err.name === 'NO_NODE') {
+                // create the node if it does not exist yet, then write again
+                return this._createBucketNotifConfigNode(bucket, createErr => {
+                    if (createErr) {
+                        return cb(createErr);
+                    }
+                    return this._zkClient.setData(zkPath, Buffer.from(data),
+                        -1, retryErr => cb(retryErr));
+                });
+            }
+            return cb(err);
         });
     }
 
