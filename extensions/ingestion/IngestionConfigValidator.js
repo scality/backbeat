@@ -10,6 +10,7 @@ const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
     cronRule: joi.string().default('*/5 * * * * *'),
     maxParallelReaders: joi.number().greater(0).default(5),
+    batchMaxRead: joi.number().greater(0).optional(),
     sources: joi.array().required(),
     probeServer: probeServerJoi.default(),
     circuitBreaker: joi.object().optional(),

@@ -47,7 +47,7 @@ function getIngestionZkPath() {
 
 function queueBatch(ingestionPopulator, log) {
     log.debug('start queueing ingestion batch');
-    const maxRead = qpConfig.batchMaxRead;
+    const maxRead = ingestionExtConfigs.batchMaxRead ?? qpConfig.batchMaxRead;
     // apply updates to Ingestion Readers
     ingestionPopulator.applyUpdates();
     ingestionPopulator.processLogEntries({ maxRead }, err => {
