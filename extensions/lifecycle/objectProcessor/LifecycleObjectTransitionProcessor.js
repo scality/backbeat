@@ -133,6 +133,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 maxQueued: this._processConfig.maxQueued,
                 queueProcessor: this.processColdStorageStatusEntry.bind(this),
                 circuitBreaker,
+                fromOffset: 'earliest',
             };
         });
 

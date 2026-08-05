@@ -89,6 +89,7 @@ class LifecycleObjectProcessor extends EventEmitter {
             circuitBreakerMetrics: {
                 type: 'lifecycle_object_processor',
             },
+            fromOffset: 'earliest',
         };
     }
 

@@ -176,6 +176,7 @@ class QueueProcessor extends EventEmitter {
                     concurrency,
                     maxQueued: this.notifConfig.queueProcessor.maxQueued,
                     queueProcessor: this.processKafkaEntry.bind(this),
+                    fromOffset: 'earliest',
                 });
                 this._consumer.on('error', err => {
                     this.logger.error('error starting notification consumer',

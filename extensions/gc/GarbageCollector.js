@@ -143,6 +143,7 @@ class GarbageCollector extends EventEmitter {
             // sent to the gc don't have a key anyways)
             orderByFunc: null,
             queueProcessor: this.processKafkaEntry.bind(this),
+            fromOffset: 'earliest',
         });
         this._consumer.on('error', () => {
             if (!consumerReady) {
