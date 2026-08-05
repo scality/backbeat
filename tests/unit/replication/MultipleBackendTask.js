@@ -710,4 +710,43 @@ describe('MultipleBackendTask', function test() {
             });
         });
     });
+
+    describe('::_handleReplicationOutcome', () => {
+        function makeSourceError(name) {
+            const err = new Error(name);
+            err.name = name;
+            err.origin = 'source';
+            return err;
+        }
+
+        beforeEach(() => {
+            sinon.stub(task, '_publishReplicationStatus').returns();
+        });
+
+        afterEach(() => {
+            sinon.restore();
+        });
+
+        it('should publish FAILED and defer the commit for a stale-credential 403', done => {
+            task._handleReplicationOutcome(makeSourceError('InvalidAccessKeyId'),
+                sourceEntry, replicationEntry, fakeLogger, (err, completionArgs) => {
+                    assert.ifError(err);
+                    assert.deepStrictEqual(completionArgs, { committable: false });
+                    assert(task._publishReplicationStatus.calledOnce);
+                    assert.strictEqual(
+                        task._publishReplicationStatus.firstCall.args[1], 'FAILED');
+                    return done();
+                });
+        });
+
+        it('should skip a source AccessDenied without publishing a status', done => {
+            task._handleReplicationOutcome(makeSourceError('AccessDenied'),
+                sourceEntry, replicationEntry, fakeLogger, (err, completionArgs) => {
+                    assert.ifError(err);
+                    assert.strictEqual(completionArgs, undefined);
+                    assert(task._publishReplicationStatus.notCalled);
+                    return done();
+                });
+        });
+    });
 });

@@ -1283,8 +1283,7 @@ class MultipleBackendTask extends ReplicateObject {
         if (err.BadRole || err.name === 'BadRole' ||
             (err.origin === 'source' &&
              (err.NoSuchEntity || err.name === 'NoSuchEntity' ||
-              err.AccessDenied || err.name === 'AccessDenied' ||
-              err.InvalidAccessKeyId || err.name === 'InvalidAccessKeyId'))) {
+              err.AccessDenied || err.name === 'AccessDenied'))) {
             log.error('replication failed permanently for object, ' +
                       'processing skipped',
                 { failMethod: err.method,
