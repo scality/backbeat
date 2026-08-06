@@ -99,6 +99,8 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
     getConsumerParams() {
         const consumerParams = super.getConsumerParams(this._lcConfig.transitionTasksTopic);
 
+        consumerParams[this._lcConfig.transitionTasksTopic].fromOffset = 'earliest';
+
         const locations = require('../../../conf/locationConfig.json') || {};
 
         this._lcConfig.coldStorageTopics.forEach(topic => {
@@ -133,6 +135,7 @@ class LifecycleObjectTransitionProcessor extends LifecycleObjectProcessor {
                 maxQueued: this._processConfig.maxQueued,
                 queueProcessor: this.processColdStorageStatusEntry.bind(this),
                 circuitBreaker,
+                fromOffset: 'earliest',
             };
         });
 

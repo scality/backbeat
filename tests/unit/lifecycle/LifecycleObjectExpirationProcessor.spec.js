@@ -16,6 +16,14 @@ describe('LifecycleObjectExpirationProcessor', () => {
         );
     });
 
+    it('should not pin fromOffset on the object tasks topic', () => {
+        const consumerParams = objectProcessor.getConsumerParams();
+        assert.strictEqual(
+            consumerParams[config.extensions.lifecycle.objectTasksTopic].fromOffset,
+            undefined,
+        );
+    });
+
     it('should contain object tasks topic in consumer params', () => {
         const consumerParams = objectProcessor.getConsumerParams();
         assert.deepStrictEqual(Object.keys(consumerParams), [config.extensions.lifecycle.objectTasksTopic]);

@@ -121,14 +121,11 @@ class GarbageCollector extends EventEmitter {
     }
 
     /**
-     * Start kafka consumer. Emits a 'ready' event when
-     * consumer is ready.
-     *
-     * @return {undefined}
+     * Build the options of the garbage collector topic consumer
+     * @return {Object} consumer options
      */
-    start() {
-        let consumerReady = false;
-        this._consumer = new BackbeatConsumer({
+    _getConsumerOptions() {
+        return {
             kafka: {
                 hosts: this._kafkaConfig.hosts,
                 site: this._kafkaConfig.site,
@@ -143,7 +140,19 @@ class GarbageCollector extends EventEmitter {
             // sent to the gc don't have a key anyways)
             orderByFunc: null,
             queueProcessor: this.processKafkaEntry.bind(this),
-        });
+            fromOffset: 'earliest',
+        };
+    }
+
+    /**
+     * Start kafka consumer. Emits a 'ready' event when
+     * consumer is ready.
+     *
+     * @return {undefined}
+     */
+    start() {
+        let consumerReady = false;
+        this._consumer = new BackbeatConsumer(this._getConsumerOptions());
         this._consumer.on('error', () => {
             if (!consumerReady) {
                 this._logger.error('garbage collector failed to start the ' +

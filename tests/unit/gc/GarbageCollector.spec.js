@@ -64,6 +64,10 @@ describe('garbage collector', function garbageCollector() {
     after(() => {
         httpServer.close();
     });
+    it('should consume the gc topic from the earliest offset', () => {
+        assert.strictEqual(gc._getConsumerOptions().fromOffset, 'earliest');
+    });
+
     it('should skip unsupported action type', done => {
         expectBatchDeleteLocations = null;
         const action = ActionQueueEntry.create('foo');

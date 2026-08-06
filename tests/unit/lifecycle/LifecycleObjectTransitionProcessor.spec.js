@@ -21,6 +21,26 @@ describe('LifecycleObjectTransitionProcessor', () => {
         );
     });
 
+    it('should consume the transition tasks topic from the earliest offset', () => {
+        const consumerParams = objectProcessor.getConsumerParams();
+        assert.strictEqual(
+            consumerParams[config.extensions.lifecycle.transitionTasksTopic].fromOffset,
+            'earliest'
+        );
+    });
+
+    it('should consume the cold status topics from the earliest offset', () => {
+        const coldTopic = `${config.extensions.lifecycle.coldStorageStatusTopicPrefix}location-dmf-v1`;
+        const coldProcessor = new LifecycleObjectTransitionProcessor(
+            config.zookeeper,
+            config.kafka,
+            { ...config.extensions.lifecycle, coldStorageTopics: [coldTopic] },
+            config.s3,
+        );
+        const consumerParams = coldProcessor.getConsumerParams();
+        assert.strictEqual(consumerParams[coldTopic].fromOffset, 'earliest');
+    });
+
     it('should contain transition tasks topic in consumer params', () => {
         const consumerParams = objectProcessor.getConsumerParams();
         assert.deepStrictEqual(Object.keys(consumerParams), [config.extensions.lifecycle.transitionTasksTopic]);
