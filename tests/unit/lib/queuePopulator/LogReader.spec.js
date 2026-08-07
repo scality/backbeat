@@ -12,7 +12,6 @@ const LogReader = require('../../../../lib/queuePopulator/LogReader');
 const KafkaLogReader = require('../../../../lib/queuePopulator/KafkaLogReader');
 const BucketFileLogReader = require('../../../../lib/queuePopulator/BucketFileLogReader');
 const RaftLogReader = require('../../../../lib/queuePopulator/RaftLogReader');
-const MongoLogReader = require('../../../../lib/queuePopulator/MongoLogReader');
 
 
 class MockLogConsumer {
@@ -52,11 +51,6 @@ describe('LogReader', () => {
         sinon.restore();
     });
 
-    // Currently the initial offset is set to 1 with mongodb backend,
-    // it looks odd considering mongodb uses random IDs as log cursors
-    // and could be cleaned up, but this test coming from 7.4 branch
-    // with a raft log reader still makes sense to improve coverage in
-    // the current code, so keeping it.
     it('should start from offset 1 if no zookeeper log offset', done => {
         logReader.setup(err => {
             assert.ifError(err);
@@ -65,9 +59,9 @@ describe('LogReader', () => {
         });
     });
 
-    // TODO there is currently no initialization of log offset with
-    // mongodb backend, re-enable when implementing initial log offset
-    // fetching with mongodb backend.
+    // TODO the log offset initialization tested here only runs with the
+    // "bucketd" log source, which the unit-test config does not select:
+    // re-enable by forcing config.queuePopulator.logSource to "bucketd".
     it.skip('should start from offset 1 on log consumer readRecords error', done => {
         const errorLogReader = new LogReader({
             logId: 'test-log-reader',
@@ -700,17 +694,6 @@ describe('LogReader', () => {
                 },
             },
             logName: 'raft-log',
-        }, {
-            name: 'MongoLogReader',
-            Reader: MongoLogReader,
-            config: {
-                mongoConfig: {
-                    logName: 'test-log',
-                    host: 'localhost',
-                    port: 8000,
-                },
-            },
-            logName: 'mongo-log',
         }].forEach(params => {
             it(`should return proper ${params.name} metrics labels`, () => {
                 const reader = new params.Reader({
@@ -758,17 +741,6 @@ describe('LogReader', () => {
             config: {
                 raftId: 'test-log',
                 bucketdConfig: {
-                    host: 'localhost',
-                    port: 8000,
-                },
-            },
-            expected: true,
-        }, {
-            name: 'MongoLogReader',
-            Reader: MongoLogReader,
-            config: {
-                mongoConfig: {
-                    logName: 'test-log',
                     host: 'localhost',
                     port: 8000,
                 },
