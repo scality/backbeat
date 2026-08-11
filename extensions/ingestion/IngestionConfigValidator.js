@@ -1,5 +1,6 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
+const { KAFKA_PRODUCER_PARAMS_SCHEMA } = require('../../lib/config.joi');
 
 const joiSchema = joi.object({
     auth: joi.object({
@@ -17,6 +18,7 @@ const joiSchema = joi.object({
     processor: joi.object({
         circuitBreaker: joi.object().optional(),
     }).optional(),
+    producerParams: KAFKA_PRODUCER_PARAMS_SCHEMA,
 });
 
 function configValidator(backbeatConfig, extConfig) {

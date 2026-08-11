@@ -7,6 +7,7 @@ const config = require('../../../lib/Config');
 const IngestionPopulator =
     require('../../../lib/queuePopulator/IngestionPopulator');
 const IngestionReader = require('../../../lib/queuePopulator/IngestionReader');
+const BackbeatProducer = require('../../../lib/BackbeatProducer');
 const fakeLogger = require('../../utils/fakeLogger');
 
 const zkConfig = config.zookeeper;
@@ -352,6 +353,96 @@ describe('Ingestion Populator', () => {
                 assert.ifError(err);
                 done();
             });
+        });
+    });
+
+    describe('_setupProducer producerParams merge', () => {
+        let capturedProducerParams;
+
+        beforeEach(() => {
+            sinon.stub(BackbeatProducer.prototype, 'setFromConfig').callsFake(function (cfg) {
+                capturedProducerParams = cfg.producerParams;
+                // Minimal instance state so producerConfig getter doesn't throw.
+                this._kafkaHosts = cfg.kafka.hosts;
+                this._topic = null;
+                this._pollIntervalMs = 2000;
+                this._maxRequestSize = 5000020;
+                this._compressionType = 'Zstd';
+                this._requiredAcks = -1;
+                this._producerParams = cfg.producerParams || {};
+            });
+        });
+
+        afterEach(() => {
+            sinon.restore();
+            capturedProducerParams = undefined;
+        });
+
+        it('should pass merged producerParams : extension overrides global', () => {
+            const globalParams = {
+                'queue.buffering.max.kbytes': 1048576,
+                'queue.buffering.max.ms': 100,
+            };
+            const extParams = {
+                'queue.buffering.max.messages': 200000,
+                'queue.buffering.max.ms': 500,
+            };
+
+            const populator = new IngestionPopulator(
+                null,
+                zkConfig,
+                { ...kafkaConfig, producerParams: globalParams },
+                qpConfig,
+                mConfig,
+                rConfig,
+                { ...ingestionConfig, producerParams: extParams },
+                s3Config
+            );
+
+            populator._setupProducer(() => {});
+
+            assert.strictEqual(capturedProducerParams['queue.buffering.max.kbytes'], 1048576);
+            assert.strictEqual(capturedProducerParams['queue.buffering.max.messages'], 200000);
+            assert.strictEqual(capturedProducerParams['queue.buffering.max.ms'], 500,
+                'extension producerParams should override global kafka.producerParams');
+        });
+
+        it('should work when only global kafka.producerParams are set', () => {
+            const globalParams = { 'queue.buffering.max.kbytes': 524288 };
+
+            const populator = new IngestionPopulator(
+                null,
+                zkConfig,
+                { ...kafkaConfig, producerParams: globalParams },
+                qpConfig,
+                mConfig,
+                rConfig,
+                ingestionConfig,
+                s3Config
+            );
+
+            populator._setupProducer(() => {});
+
+            assert.strictEqual(capturedProducerParams['queue.buffering.max.kbytes'], 524288);
+        });
+
+        it('should work when only extension producerParams are set', () => {
+            const extParams = { 'queue.buffering.max.messages': 100000 };
+
+            const populator = new IngestionPopulator(
+                null,
+                zkConfig,
+                kafkaConfig,
+                qpConfig,
+                mConfig,
+                rConfig,
+                { ...ingestionConfig, producerParams: extParams },
+                s3Config
+            );
+
+            populator._setupProducer(() => {});
+
+            assert.strictEqual(capturedProducerParams['queue.buffering.max.messages'], 100000);
         });
     });
 });
