@@ -406,6 +406,7 @@ class LifecycleBucketProcessor {
             maxRequestSize: this._kafkaConfig.maxRequestSize,
             compressionType: this._kafkaConfig.compressionType,
             requiredAcks: this._kafkaConfig.requiredAcks,
+            producerParams: this._kafkaConfig.producerParams,
             topic: this._lcConfig.objectTasksTopic,
         });
         producer.once('error', err => {

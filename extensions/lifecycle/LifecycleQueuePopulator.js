@@ -64,6 +64,7 @@ class LifecycleQueuePopulator extends QueuePopulatorExtension {
             maxRequestSize: this.kafkaConfig.maxRequestSize,
             compressionType: this.kafkaConfig.compressionType,
             requiredAcks: this.kafkaConfig.requiredAcks,
+            producerParams: this.kafkaConfig.producerParams,
             topic,
         });
         producer.once('error', done);

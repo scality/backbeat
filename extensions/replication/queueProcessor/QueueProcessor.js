@@ -363,6 +363,7 @@ class QueueProcessor extends EventEmitter {
             maxRequestSize: this.kafkaConfig.maxRequestSize,
             compressionType: this.kafkaConfig.compressionType,
             requiredAcks: this.kafkaConfig.requiredAcks,
+            producerParams: this.kafkaConfig.producerParams,
             topic: this.repConfig.replicationStatusTopic,
         });
         producer.once('error', done);

@@ -1031,6 +1031,7 @@ class LifecycleConductor {
             maxRequestSize: this.kafkaConfig.maxRequestSize,
             compressionType: this.kafkaConfig.compressionType,
             requiredAcks: this.kafkaConfig.requiredAcks,
+            producerParams: this.kafkaConfig.producerParams,
             topic: this.lcConfig.bucketTasksTopic,
         });
         producer.once('error', cb);

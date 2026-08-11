@@ -30,6 +30,7 @@ class FailedCRRProducer {
             maxRequestSize: this._kafkaConfig.maxRequestSize,
             compressionType: this._kafkaConfig.compressionType,
             requiredAcks: this._kafkaConfig.requiredAcks,
+            producerParams: this._kafkaConfig.producerParams,
             topic: this._topic,
         });
         this._producer.once('error', cb);
