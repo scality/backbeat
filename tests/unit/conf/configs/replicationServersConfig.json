@@ -25,7 +25,7 @@
         "batchMaxRead": 10000,
         "batchTimeoutMs": 9000,
         "zookeeperPath": "/queue-populator",
-        "logSource": "mongo",
+        "logSource": "kafka",
         "bucketd": {
             "host": "127.0.0.1",
             "port": 9000
