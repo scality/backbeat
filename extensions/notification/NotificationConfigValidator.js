@@ -78,7 +78,10 @@ const destinationSchema = joi.object({
         otherwise: joi.string().default('none'),
     }),
     // number of record keys the destination is spread over: raise it to let
-    // more than one delivery worker handle the destination in parallel
+    // more than one delivery worker handle the destination in parallel;
+    // keys collide under the broker's crc32(key) % partitions, so m keys
+    // reach at most m partitions and usually fewer: size well above the
+    // parallelism wanted and verify against the observed partition map
     spreadFactor: joi.number().integer().min(1).default(1),
 });
 

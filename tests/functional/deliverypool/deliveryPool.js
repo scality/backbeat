@@ -625,8 +625,9 @@ function deliveryToDestinations() {
     const destinationA = destinationConfig({
         resource: `poc-dest-a-${RUN_ID}`,
         topic: customerTopicA,
-        // spread over three delivery topic keys, so that the destination is
-        // not pinned to a single partition and a single worker
+        // spread over three delivery topic keys so more than one partition
+        // can carry the destination (sub-keys collide under crc32 % P, so
+        // this is up to three partitions, not exactly three)
         spreadFactor: 3,
     });
     const destinationB = destinationConfig({
@@ -1032,8 +1033,9 @@ function drainOldInternalTopic() {
     const destination = destinationConfig({
         resource: `poc-dest-replay-${RUN_ID}`,
         topic: `poc-bn-replay-customer-${RUN_ID}`,
-        // two record keys, so the replayed records land on both partitions
-        // of the delivery topic
+        // two record keys, so the replay exercises the spread key path
+        // (which partitions they land on is up to crc32 % P, and both keys
+        // can collide onto one)
         spreadFactor: 2,
     });
     destination.internalTopic = oldTopic;

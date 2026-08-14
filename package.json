@@ -21,7 +21,7 @@
     "cover": "cross-env TEST_SUITE=${TEST_SUITE:-test} nyc --clean --silent yarn run $TEST_SUITE && nyc report --reporter=lcov --report-dir ./coverage/$TEST_SUITE",
     "ft_test": "mocha --recursive $(find tests/functional -name '*.js') --timeout 30000 --exit",
     "ft_test:notification": "mocha --recursive $(find tests/functional/notification -name '*.js') --timeout 30000 --exit",
-    "ft_test:notification:deliverypool": "mocha tests/functional/notification/deliveryPool.js --timeout 120000 --exit",
+    "ft_test:notification:deliverypool": "mocha tests/functional/deliverypool/deliveryPool.js --timeout 120000 --exit",
     "ft_test:replication": "mocha --recursive $(find tests/functional/replication -name '*.js') --timeout 30000 --exit",
     "ft_test:lib": "mocha --recursive $(find tests/functional/lib -name '*.js') --timeout 30000 --exit",
     "ft_test:lifecycle": "mocha --recursive $(find tests/functional/lifecycle -name '*.js') --timeout 30000 --exit",
