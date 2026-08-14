@@ -2,7 +2,7 @@
 // one host or inside one container, and only one process can bind a given
 // port. The deployment hands each worker process its own port through this
 // environment variable, which wins over the configured one.
-const DELIVERY_POOL_PROBE_PORT_ENV = 'DELIVERY_POOL_PROBE_PORT';
+const DELIVERY_PROBE_PORT_ENV = 'DELIVERY_PROBE_PORT';
 
 const MAX_PORT = 65535;
 
@@ -20,7 +20,7 @@ function resolveProbeServerConfig(deliveryPoolConfig, env, logger) {
     if (!probeServer) {
         return undefined;
     }
-    const rawPort = (env || {})[DELIVERY_POOL_PROBE_PORT_ENV];
+    const rawPort = (env || {})[DELIVERY_PROBE_PORT_ENV];
     if (rawPort === undefined || `${rawPort}`.trim() === '') {
         return probeServer;
     }
@@ -30,7 +30,7 @@ function resolveProbeServerConfig(deliveryPoolConfig, env, logger) {
         if (logger) {
             logger.warn('ignoring invalid probe server port from the environment', {
                 method: 'resolveProbeServerConfig',
-                envVar: DELIVERY_POOL_PROBE_PORT_ENV,
+                envVar: DELIVERY_PROBE_PORT_ENV,
                 value: rawPort,
                 port: probeServer.port,
             });
@@ -41,6 +41,6 @@ function resolveProbeServerConfig(deliveryPoolConfig, env, logger) {
 }
 
 module.exports = {
-    DELIVERY_POOL_PROBE_PORT_ENV,
+    DELIVERY_PROBE_PORT_ENV,
     resolveProbeServerConfig,
 };
