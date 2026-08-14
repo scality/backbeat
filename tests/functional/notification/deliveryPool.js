@@ -13,6 +13,7 @@ const { buildDeliveryKey } =
 
 const KAFKA_HOSTS = 'localhost:9092';
 const CONNECT_TIMEOUT = 20000;
+const STOP_TIMEOUT = 20000;
 const METADATA_TIMEOUT = 10000;
 const TIMEOUT = 60000;
 const TOPIC_ALREADY_EXISTS = 36;
@@ -133,35 +134,12 @@ function committedOffsets(groupId, topic, partitions, done) {
 }
 
 /**
- * Sum of the offsets committed by a group, which is also the number of
- * records of the topic the group is done with
+ * Polls the offsets committed by a group until they add up to the expected
+ * number of records. The consumer commits its stored offsets on a timer, so a
+ * single look would only tell whether the last commit already happened.
  *
- * @param {String} groupId - consumer group id
- * @param {String} topic - topic name
- * @param {Number} partitionCount - number of partitions of the topic
- * @param {Function} done - callback: done(err, total)
- * @return {undefined}
- */
-function committedTotal(groupId, topic, partitionCount, done) {
-    const partitions = [];
-    for (let i = 0; i < partitionCount; i++) {
-        partitions.push(i);
-    }
-    return committedOffsets(groupId, topic, partitions, (err, offsets) => {
-        if (err) {
-            return done(err);
-        }
-        // an unset offset is reported as a negative value
-        return done(null, Object.values(offsets)
-            .filter(offset => offset >= 0)
-            .reduce((total, offset) => total + offset, 0));
-    });
-}
-
-/**
- * Polls the committed offsets of a group until they add up to the expected
- * number of records. The consumer commits its stored offsets on a timer, so
- * a single look would only tell whether the last commit already happened.
+ * One client is connected for the whole wait: connecting one per poll would
+ * leave dozens of kafka clients behind in a single test run.
  *
  * @param {String} groupId - consumer group id
  * @param {String} topic - topic name
@@ -173,23 +151,34 @@ function committedTotal(groupId, topic, partitionCount, done) {
  */
 function waitForCommittedTotal(groupId, topic, partitionCount, expected,
     timeoutMs, done) {
-    const deadline = Date.now() + timeoutMs;
-    let lastSeen = null;
-    const check = () => committedTotal(groupId, topic, partitionCount,
-        (err, total) => {
-            if (!err) {
-                lastSeen = total;
-                if (total === expected) {
-                    return done();
+    const toppars = [];
+    for (let i = 0; i < partitionCount; i++) {
+        toppars.push({ topic, partition: i });
+    }
+    return withConsumer(groupId, (consumer, cb) => {
+        const deadline = Date.now() + timeoutMs;
+        let lastSeen = null;
+        const check = () => consumer.committed(toppars, METADATA_TIMEOUT,
+            (err, committed) => {
+                if (!err) {
+                    // an unset offset is reported as a negative value
+                    lastSeen = (committed || [])
+                        .map(tp => tp.offset)
+                        .filter(offset => offset >= 0)
+                        .reduce((total, offset) => total + offset, 0);
+                    if (lastSeen === expected) {
+                        return cb();
+                    }
                 }
-            }
-            if (Date.now() >= deadline) {
-                return done(new Error(`timed out waiting for group ${groupId}` +
-                    ` to commit ${expected} records, last seen ${lastSeen}`));
-            }
-            return setTimeout(check, 1000);
-        });
-    return check();
+                if (Date.now() >= deadline) {
+                    return cb(new Error('timed out waiting for group ' +
+                        `${groupId} to commit ${expected} records, last ` +
+                        `seen ${lastSeen}`));
+                }
+                return setTimeout(check, 1000);
+            });
+        return check();
+    }, done);
 }
 
 function commitOffsets(groupId, toppars, done) {
@@ -373,7 +362,7 @@ function readCounterByReason(name, labels, done) {
  * @param {Function} done - callback
  * @return {undefined}
  */
-function waitForCounter(name, labels, expected, timeoutMs, done) {
+function waitForCounter(name, labels, expected, timeoutMs, pollMs, done) {
     const deadline = Date.now() + timeoutMs;
     let lastSeen = 0;
     const check = () => readCounter(name, labels, (err, value) => {
@@ -387,7 +376,7 @@ function waitForCounter(name, labels, expected, timeoutMs, done) {
             return done(new Error(`timed out waiting for ${name} to reach ` +
                 `${expected}, last seen ${lastSeen}`));
         }
-        return setTimeout(check, 500);
+        return setTimeout(check, pollMs);
     });
     return check();
 }
@@ -498,6 +487,35 @@ function deliveredEvent(record) {
     };
 }
 
+/**
+ * Stops a worker, giving up after a while.
+ *
+ * BackbeatConsumer.close() waits for the revoke callback of a rebalance it
+ * cannot time out on its own, so an unbounded stop would hang the suite
+ * rather than fail the test that is at fault.
+ *
+ * @param {DeliveryWorker} worker - worker to stop, may be null
+ * @param {Function} done - callback
+ * @return {undefined}
+ */
+function stopWorker(worker, done) {
+    if (!worker) {
+        return process.nextTick(done);
+    }
+    let called = false;
+    const finish = () => {
+        if (!called) {
+            called = true;
+            done();
+        }
+    };
+    const timer = setTimeout(finish, STOP_TIMEOUT);
+    return worker.stop(() => {
+        clearTimeout(timer);
+        finish();
+    });
+}
+
 function uniqueObjectKeys(records) {
     return new Set(records.map(record => deliveredEvent(record).key));
 }
@@ -592,7 +610,7 @@ function deliveryToDestinations() {
     });
 
     after(done => async.series([
-        next => (worker ? worker.stop(() => next()) : next()),
+        next => stopWorker(worker, next),
         next => (tailerA ? tailerA.stop(next) : next()),
         next => (tailerB ? tailerB.stop(next) : next()),
     ], done));
@@ -685,12 +703,13 @@ function deliveryToDestinations() {
 
 describe('notification delivery worker :: at least once across a restart',
 function atLeastOnceAcrossRestart() {
-    this.timeout(TIMEOUT);
+    // two worker lifetimes and three hundred deliveries
+    this.timeout(120000);
 
     const deliveryTopic = `poc-bn-restart-delivery-${RUN_ID}`;
     const customerTopic = `poc-bn-restart-customer-${RUN_ID}`;
     const groupId = `poc-bn-restart-group-${RUN_ID}`;
-    const recordCount = 40;
+    const recordCount = 60;
     const destination = destinationConfig({
         resource: `poc-dest-restart-${RUN_ID}`,
         topic: customerTopic,
@@ -737,8 +756,8 @@ function atLeastOnceAcrossRestart() {
     });
 
     after(done => async.series([
-        next => (firstWorker ? firstWorker.stop(() => next()) : next()),
-        next => (secondWorker ? secondWorker.stop(() => next()) : next()),
+        next => stopWorker(firstWorker, next),
+        next => stopWorker(secondWorker, next),
         next => (tailer ? tailer.stop(next) : next()),
     ], done));
 
@@ -750,11 +769,13 @@ function atLeastOnceAcrossRestart() {
                 firstWorker = new DeliveryWorker(kafkaConfig, notifConfig);
                 return firstWorker.start(null, next);
             },
-            next => waitFor('the first deliveries',
-                () => tailer.records.length >= 3, 30000, next),
+            // the worker's own counter moves as soon as a delivery report
+            // comes in, without the lag of reading the destination topic
+            next => waitForCounter(DELIVERED_METRIC,
+                { target: destination.resource }, 1, 30000, 20, next),
             // a graceful stop drains the delivery in flight and commits what
             // it finished, the rest is the second worker's problem
-            next => firstWorker.stop(() => next()),
+            next => stopWorker(firstWorker, next),
             next => waitUntilQuiet(tailer, 500, next),
             next => {
                 deliveredByFirst = uniqueObjectKeys(tailer.records).size;
@@ -769,7 +790,7 @@ function atLeastOnceAcrossRestart() {
             },
             next => waitFor('the second worker to deliver the rest',
                 () => uniqueObjectKeys(tailer.records).size === recordCount,
-                40000, next),
+                75000, next),
         ], err => {
             assert.ifError(err);
             const delivered = uniqueObjectKeys(tailer.records);
@@ -873,7 +894,7 @@ function unreachableDestination() {
     });
 
     after(done => async.series([
-        next => (worker ? worker.stop(() => next()) : next()),
+        next => stopWorker(worker, next),
         next => (tailer ? tailer.stop(next) : next()),
     ], done));
 
@@ -894,7 +915,8 @@ function unreachableDestination() {
     it('should count the undeliverable records as dropped', done =>
         async.series([
             next => waitForCounter(DROPPED_METRIC,
-                { target: deadDestination.resource }, deadCount, 90000, next),
+                { target: deadDestination.resource }, deadCount, 90000, 500,
+                next),
             next => readCounterByReason(DROPPED_METRIC,
                 { target: deadDestination.resource }, (err, byReason) => {
                     assert.ifError(err);
