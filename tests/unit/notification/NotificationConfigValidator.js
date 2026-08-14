@@ -476,3 +476,108 @@ describe('NotificationConfigValidator ::', () => {
         })
     );
 });
+
+describe('NotificationConfigValidator delivery pool ::', () => {
+    const destinationConfig = {
+        resource: 'resource',
+        type: 'kafka',
+        host: 'host',
+        port: 8000,
+        topic: 'topic',
+    };
+
+    it('should default the destination spread factor to 1', () => {
+        const config = notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            destinations: [destinationConfig],
+        });
+        assert.strictEqual(config.destinations[0].spreadFactor, 1);
+    });
+
+    it('should reject a spread factor below 1', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            destinations: [{ ...destinationConfig, spreadFactor: 0 }],
+        }));
+    });
+
+    it('should reject a non integer spread factor', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            destinations: [{ ...destinationConfig, spreadFactor: 1.5 }],
+        }));
+    });
+
+    it('should leave the delivery pool unset when it is not configured', () => {
+        const config = notificationConfigValidator(null, defaultExtConfig);
+        assert.strictEqual(config.deliveryPool, undefined);
+    });
+
+    it('should apply the delivery pool defaults', () => {
+        const config = notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {},
+        });
+        assert.strictEqual(config.deliveryPool.enabled, false);
+        assert.strictEqual(config.deliveryPool.deliveryTimeoutMs, 30000);
+        assert.strictEqual(config.deliveryPool.producerIdleMs, 300000);
+        assert.strictEqual(config.deliveryPool.maxProducers, 50);
+        assert.strictEqual(config.deliveryPool.concurrency, 1000);
+        assert.strictEqual(config.deliveryPool.maxQueued, 1000);
+    });
+
+    it('should accept an enabled delivery pool with a topic and a group id', () => {
+        assert.doesNotThrow(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true,
+                topic: 'delivery-topic',
+                groupId: 'delivery-group',
+            },
+        }));
+    });
+
+    it('should require a topic when the delivery pool is enabled', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true,
+                groupId: 'delivery-group',
+            },
+        }));
+    });
+
+    it('should require a group id when the delivery pool is enabled', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true,
+                topic: 'delivery-topic',
+            },
+        }));
+    });
+
+    it('should reject a delivery timeout below the producer request timeout', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true,
+                topic: 'delivery-topic',
+                groupId: 'delivery-group',
+                deliveryTimeoutMs: 5000,
+            },
+        }));
+    });
+
+    it('should reject a delivery timeout above the poll interval margin', () => {
+        assert.throws(() => notificationConfigValidator(null, {
+            ...defaultExtConfig,
+            deliveryPool: {
+                enabled: true,
+                topic: 'delivery-topic',
+                groupId: 'delivery-group',
+                deliveryTimeoutMs: 240001,
+            },
+        }));
+    });
+});
