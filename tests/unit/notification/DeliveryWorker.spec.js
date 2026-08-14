@@ -6,7 +6,7 @@ const FakeLogger = require('../../utils/fakeLogger');
 
 const DeliveryWorker = require(
     '../../../extensions/notification/deliveryWorker/DeliveryWorker');
-const { DELIVERY_PROBE_PORT_ENV, resolveProbeServerConfig } = require(
+const { DELIVERY_POOL_PROBE_PORT_ENV, resolveProbeServerConfig } = require(
     '../../../extensions/notification/deliveryWorker/probeConfig');
 
 const DELIVERED_METRIC = 's3_notification_delivery_worker_delivered_total';
@@ -316,7 +316,7 @@ describe('notification DeliveryWorker', () => {
 
         it('should let the environment give this worker its own port', () => {
             const resolved = resolveProbeServerConfig(withProbe,
-                { [DELIVERY_PROBE_PORT_ENV]: '8902' });
+                { [DELIVERY_POOL_PROBE_PORT_ENV]: '8902' });
             assert.strictEqual(resolved.port, 8902);
             assert.strictEqual(resolved.bindAddress, '0.0.0.0');
             // the configured object is left alone
@@ -327,7 +327,7 @@ describe('notification DeliveryWorker', () => {
             ['notaport', '0', '70000', '8900abc'].forEach(value => {
                 const logger = { ...FakeLogger, warn: sinon.stub() };
                 const resolved = resolveProbeServerConfig(withProbe,
-                    { [DELIVERY_PROBE_PORT_ENV]: value }, logger);
+                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, logger);
                 assert.strictEqual(resolved.port, 8900, `for value "${value}"`);
                 assert(logger.warn.calledOnce, `no warning for value "${value}"`);
                 assert.strictEqual(logger.warn.args[0][1].value, value);
@@ -338,7 +338,7 @@ describe('notification DeliveryWorker', () => {
             ['', '   '].forEach(value => {
                 const logger = { ...FakeLogger, warn: sinon.stub() };
                 const resolved = resolveProbeServerConfig(withProbe,
-                    { [DELIVERY_PROBE_PORT_ENV]: value }, logger);
+                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, logger);
                 assert.strictEqual(resolved, probeServer, `for value "${value}"`);
                 assert(logger.warn.notCalled, `unexpected warning for value "${value}"`);
             });
