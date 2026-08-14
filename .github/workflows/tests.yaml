@@ -31,20 +31,20 @@ jobs:
             file: ""
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
     - name: Set up Docker Buildx
-      uses: docker/setup-buildx-action@v3
+      uses: docker/setup-buildx-action@v4
 
     - name: Login to Registry
-      uses: docker/login-action@v3
+      uses: docker/login-action@v4
       with:
         registry: ghcr.io
         username: ${{ github.repository_owner }}
         password: ${{ github.token }}
 
     - name: Build and push ${{ matrix.name }}
-      uses: docker/build-push-action@v6
+      uses: docker/build-push-action@v7
       with:
         push: true
         context: ${{ matrix.context }}
@@ -57,9 +57,9 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
 
-    - uses: actions/setup-go@v5
+    - uses: actions/setup-go@v6
       with:
         go-version: '1.16.2'
         cache-dependency-path: bucket-scanner/go.sum
@@ -74,7 +74,7 @@ jobs:
                -nodes 1 -stream -timeout 5m -slowSpecThreshold 60
       working-directory: bucket-scanner
 
-    - uses: codecov/codecov-action@v5
+    - uses: codecov/codecov-action@v6
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: bucket-scanner
@@ -84,7 +84,7 @@ jobs:
     runs-on: ubuntu-latest
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
@@ -132,7 +132,7 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
@@ -146,7 +146,7 @@ jobs:
         BACKBEAT_CONFIG_FILE: tests/config.json
         TEST_SUITE: test
 
-    - uses: codecov/codecov-action@v5
+    - uses: codecov/codecov-action@v6
       with:
         token: ${{ secrets.CODECOV_TOKEN }}
         directory: ./coverage/test
@@ -215,7 +215,7 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
@@ -283,7 +283,7 @@ jobs:
         - 27019:27019
     steps:
     - name: Checkout
-      uses: actions/checkout@v4
+      uses: actions/checkout@v6
     - uses: actions/setup-node@v6
       with:
         node-version: '22'
@@ -320,7 +320,7 @@ jobs:
         cloudserver_tag: [ '9.0.19' ]
     steps:
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v6
       - uses: actions/setup-node@v6
         with:
           node-version: '22'
@@ -328,7 +328,7 @@ jobs:
       - name: Install node dependencies
         run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
       - name: Login to Registry
-        uses: docker/login-action@v3
+        uses: docker/login-action@v4
         with:
           registry: ghcr.io
           username: ${{ github.repository_owner }}
@@ -363,7 +363,7 @@ jobs:
           PROFILE: ${{ matrix.profile }}
           TEST_SUITE: ft_test:queuepopulator
         run: yarn run cover
-      - uses: codecov/codecov-action@v4
+      - uses: codecov/codecov-action@v6
         with:
           token: ${{ secrets.CODECOV_TOKEN }}
           directory: ./coverage/ft_test:queuepopulator
