@@ -741,3 +741,169 @@ describe('NotificationQueuePopulator with multiple rules ::', () => {
         });
     });
 });
+
+describe('NotificationQueuePopulator with delivery pool ::', () => {
+    const deliveryTopic = notificationConfig.deliveryPool.topic;
+    const addressedConfig = {
+        bucket: 'example-bucket',
+        notificationConfiguration: {
+            queueConfig: [
+                {
+                    events: ['s3:ObjectCreated:Put'],
+                    queueArn: 'arn:scality:bucketnotif:::destination1',
+                    id: 'config-1',
+                    filterRules: [],
+                },
+                {
+                    events: ['s3:ObjectCreated:Put'],
+                    queueArn: 'arn:scality:bucketnotif:::destination2',
+                    id: 'config-2',
+                    filterRules: [],
+                },
+            ],
+        },
+    };
+    const objectEntry = {
+        'originOp': 's3:ObjectCreated:Put',
+        'dataStoreName': 'metastore',
+        'content-length': '100',
+        'last-modified': '0000',
+        'md-model-version': '1',
+    };
+    let bnConfigManager;
+    let notificationQueuePopulator;
+
+    beforeEach(() => {
+        bnConfigManager = new NotificationConfigManager({
+            mongoConfig,
+            bucketMetastore: '__metastore',
+            maxCachedConfigs: 1000,
+            logger,
+        });
+        sinon.stub(bnConfigManager, 'getConfig').returns(addressedConfig);
+        notificationQueuePopulator = new NotificationQueuePopulator({
+            config: {
+                ...notificationConfig,
+                deliveryPool: {
+                    ...notificationConfig.deliveryPool,
+                    enabled: true,
+                },
+            },
+            bnConfigManager,
+            logger,
+        });
+        notificationQueuePopulator._metricsStore = {
+            notifEvent: () => null,
+        };
+    });
+
+    it('should publish one record per matching destination on the delivery topic', async () => {
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        assert(publishStub.calledTwice);
+        assert.strictEqual(publishStub.getCall(0).args.at(0), deliveryTopic);
+        assert.strictEqual(publishStub.getCall(1).args.at(0), deliveryTopic);
+    });
+
+    it('should use the destination resource as key when the spread factor is 1', async () => {
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        assert.strictEqual(publishStub.getCall(0).args.at(1), 'destination1');
+        assert.strictEqual(publishStub.getCall(1).args.at(1), 'destination2');
+    });
+
+    it('should address each record with its destination and configuration', async () => {
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        const first = JSON.parse(publishStub.getCall(0).args.at(2));
+        const second = JSON.parse(publishStub.getCall(1).args.at(2));
+        assert.strictEqual(first.destinationId, 'destination1');
+        assert.strictEqual(first.configurationId, 'config-1');
+        assert.strictEqual(first.bucket, 'example-bucket');
+        assert.strictEqual(first.key, 'example-key');
+        assert.strictEqual(first.eventType, 's3:ObjectCreated:Put');
+        assert.strictEqual(second.destinationId, 'destination2');
+        assert.strictEqual(second.configurationId, 'config-2');
+    });
+
+    it('should publish one record per destination even when destinations ' +
+        'share an internal topic', async () => {
+        notificationQueuePopulator.notificationConfig = {
+            ...notificationQueuePopulator.notificationConfig,
+            destinations: notificationConfig.destinations.map(destination => ({
+                ...destination,
+                internalTopic: 'custom-topic',
+            })),
+        };
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        assert(publishStub.calledTwice);
+        assert.strictEqual(publishStub.getCall(0).args.at(0), deliveryTopic);
+        assert.strictEqual(publishStub.getCall(1).args.at(0), deliveryTopic);
+        const destinationIds = [0, 1].map(call =>
+            JSON.parse(publishStub.getCall(call).args.at(2)).destinationId);
+        assert.deepStrictEqual(destinationIds, ['destination1', 'destination2']);
+    });
+
+    it('should spread a destination over its spread factor and keep the key ' +
+        'stable for the same object', async () => {
+        notificationQueuePopulator.notificationConfig = {
+            ...notificationQueuePopulator.notificationConfig,
+            destinations: notificationConfig.destinations.map(destination => ({
+                ...destination,
+                spreadFactor: 4,
+            })),
+        };
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        assert.strictEqual(publishStub.callCount, 4);
+        const key = publishStub.getCall(0).args.at(1);
+        const [resource, index] = key.split('|');
+        assert.strictEqual(resource, 'destination1');
+        assert(Number(index) >= 0 && Number(index) < 4);
+        // the same object is always addressed to the same key, so the same
+        // partition, so the same delivery worker
+        assert.strictEqual(publishStub.getCall(2).args.at(1), key);
+    });
+
+    it('should not publish anything when no destination matches', async () => {
+        bnConfigManager.getConfig.returns({
+            bucket: 'example-bucket',
+            notificationConfiguration: {
+                queueConfig: [
+                    {
+                        events: ['s3:ObjectRemoved:Delete'],
+                        queueArn: 'arn:scality:bucketnotif:::destination1',
+                        id: 'config-1',
+                        filterRules: [],
+                    },
+                ],
+            },
+        });
+        const publishStub = sinon.stub(notificationQueuePopulator, 'publish');
+        await notificationQueuePopulator._processObjectEntry(
+            'example-bucket',
+            'example-key',
+            objectEntry);
+        assert(publishStub.notCalled);
+    });
+});
