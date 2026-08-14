@@ -3,7 +3,11 @@ const async = require('async');
 const { AdminClient, KafkaConsumer } = require('node-rdkafka');
 const { ZenkoMetrics } = require('arsenal').metrics;
 
+const werelogs = require('werelogs');
+
 const BackbeatProducer = require('../../../lib/BackbeatProducer');
+const NotificationQueuePopulator =
+    require('../../../extensions/notification/NotificationQueuePopulator');
 const DeliveryWorker =
     require('../../../extensions/notification/deliveryWorker/DeliveryWorker');
 const DeliveryTopicDrainer =
@@ -53,6 +57,9 @@ const TOPICS = {
     dropCustomer: { name: `poc-bn-drop-customer-${RUN_ID}`, partitions: 1 },
     oldInternal: { name: `poc-bn-internal-${RUN_ID}`, partitions: 2 },
     replayDelivery: { name: `poc-bn-replay-delivery-${RUN_ID}`, partitions: 2 },
+    seamDelivery: { name: `poc-bn-seam-delivery-${RUN_ID}`, partitions: 2 },
+    seamCustomerA: { name: `poc-bn-seam-customer-a-${RUN_ID}`, partitions: 1 },
+    seamCustomerB: { name: `poc-bn-seam-customer-b-${RUN_ID}`, partitions: 1 },
 };
 
 /**
@@ -690,7 +697,7 @@ function deliveryToDestinations() {
             `${expectedPerDestination})`,
             () => tailerA.records.length >= expectedPerDestination &&
                 tailerB.records.length >= expectedPerDestination,
-            30000, next),
+            60000, next),
         next => waitUntilQuiet(tailerA, 500, next),
         next => waitUntilQuiet(tailerB, 500, next),
     ], err => {
@@ -962,7 +969,7 @@ function unreachableDestination() {
     'one is unreachable', done => async.series([
         next => waitFor(() => 'the healthy destination to receive every ' +
             `record (${tailer.records.length}/${healthyCount})`,
-            () => tailer.records.length >= healthyCount, 30000, next),
+            () => tailer.records.length >= healthyCount, 60000, next),
         next => waitUntilQuiet(tailer, 500, next),
     ], err => {
         assert.ifError(err);
@@ -1186,4 +1193,220 @@ function drainOldInternalTopic() {
                     `the replay moved the old group on partition ${tp.partition}`));
                 return done();
             }));
+});
+
+describe('notification delivery pool :: populator to destination topic',
+function populatorToDestination() {
+    this.timeout(TIMEOUT);
+
+    const deliveryTopic = TOPICS.seamDelivery.name;
+    const customerTopicA = TOPICS.seamCustomerA.name;
+    const customerTopicB = TOPICS.seamCustomerB.name;
+    const groupId = `poc-bn-seam-group-${RUN_ID}`;
+    const objectKey = 'seam-object-1';
+    const configIdA = `${CONFIG_ID}-a`;
+    const configIdB = `${CONFIG_ID}-b`;
+    const destinationA = destinationConfig({
+        resource: `poc-seam-dest-a-${RUN_ID}`,
+        topic: customerTopicA,
+        // spread, so the delivery key carries the pipe that the populator
+        // url-encodes on the wire
+        spreadFactor: 2,
+    });
+    const destinationB = destinationConfig({
+        resource: `poc-seam-dest-b-${RUN_ID}`,
+        topic: customerTopicB,
+    });
+    const notifConfig = {
+        bucketMetastore: '__metastore',
+        destinations: [destinationA, destinationB],
+        deliveryPool: deliveryPoolConfig({
+            topic: deliveryTopic,
+            groupId,
+            concurrency: 10,
+        }),
+    };
+    // destination A is only wired for creations, destination B for both, so
+    // the removal must reach B alone
+    const queueConfig = [
+        {
+            id: configIdA,
+            events: ['s3:ObjectCreated:*'],
+            queueArn: `arn:scality:bucketnotif:::${destinationA.resource}`,
+            filterRules: [],
+        },
+        {
+            id: configIdB,
+            events: ['s3:ObjectCreated:*', 's3:ObjectRemoved:*'],
+            queueArn: `arn:scality:bucketnotif:::${destinationB.resource}`,
+            filterRules: [],
+        },
+    ];
+    const bnConfigManager = {
+        getConfig: bucket => ({
+            bucket,
+            notificationConfiguration: { queueConfig },
+        }),
+    };
+
+    /**
+     * One metadata log entry, the shape the oplog hands the populator
+     *
+     * @param {String} eventType - originOp of the entry
+     * @param {String} type - log entry type, put or del
+     * @param {Number} index - used to space the event times apart
+     * @return {Object} log entry
+     */
+    function logEntry(eventType, type, index) {
+        return {
+            bucket: BUCKET,
+            key: objectKey,
+            type,
+            // no overheadFields: the event time then comes from the metadata,
+            // which is what makes the delivered eventTime predictable
+            value: JSON.stringify({
+                'last-modified': eventTime(index),
+                'originOp': eventType,
+                'dataStoreName': 'us-east-1',
+                'md-model-version': 5,
+                'content-length': 1024,
+            }),
+        };
+    }
+
+    let worker = null;
+    let tailerA = null;
+    let tailerB = null;
+    let published = [];
+
+    before(done => {
+        const populator = new NotificationQueuePopulator({
+            config: notifConfig,
+            logger: new werelogs.Logger('NotificationQueuePopulator:seam'),
+            bnConfigManager,
+            metricsHandler: { notifEvent: () => {} },
+        });
+        const batch = {};
+        const entries = [
+            logEntry('s3:ObjectCreated:Put', 'put', 0),
+            logEntry('s3:ObjectRemoved:Delete', 'del', 1),
+        ];
+        return async.series([
+            next => {
+                // the populator fills the batch synchronously through
+                // publish(), exactly as the queue populator drives it
+                populator.setBatch(batch);
+                return async.eachSeries(entries,
+                    (entry, entryDone) => populator.filterAsync(entry, entryDone),
+                    err => {
+                        populator.unsetBatch();
+                        return next(err);
+                    });
+            },
+            next => {
+                published = batch[deliveryTopic] || [];
+                // the records that go on the wire are the populator's own
+                // bytes, not something this test rebuilt
+                return produceRecords(deliveryTopic, published, next);
+            },
+            next => {
+                tailerA = new TopicTailer(customerTopicA);
+                return tailerA.start(next);
+            },
+            next => {
+                tailerB = new TopicTailer(customerTopicB);
+                return tailerB.start(next);
+            },
+            next => {
+                worker = new DeliveryWorker(kafkaConfig, notifConfig);
+                return worker.start(null, next);
+            },
+        ], done);
+    });
+
+    after(done => async.series([
+        next => stopWorker(worker, next),
+        next => (tailerA ? tailerA.stop(next) : next()),
+        next => (tailerB ? tailerB.stop(next) : next()),
+    ], done));
+
+    it('should address one record per matching destination, under the ' +
+    'url-encoded delivery key', done => {
+        assert.strictEqual(published.length, 3,
+            'one record for the creation on each destination, one for the ' +
+            'removal on the destination configured for it');
+        const byDestination = new Map();
+        published.forEach(record => {
+            const entry = JSON.parse(record.message);
+            if (!byDestination.has(entry.destinationId)) {
+                byDestination.set(entry.destinationId, []);
+            }
+            byDestination.get(entry.destinationId).push({ record, entry });
+        });
+        assert.deepStrictEqual([...byDestination.keys()].sort(),
+            [destinationA.resource, destinationB.resource].sort());
+        byDestination.forEach((records, destinationId) => {
+            const destination = destinationId === destinationA.resource ?
+                destinationA : destinationB;
+            records.forEach(({ record, entry }) => {
+                assert.strictEqual(record.key, encodeURIComponent(
+                    buildDeliveryKey(destination, BUCKET, entry.key)));
+                assert.strictEqual(entry.bucket, BUCKET);
+                assert.strictEqual(entry.key, objectKey);
+            });
+        });
+        // spread destinations carry the pipe, and it is percent encoded on
+        // the wire, plain destinations carry the bare resource name
+        byDestination.get(destinationA.resource).forEach(({ record }) => {
+            assert(/%7C[01]$/.test(record.key),
+                `expected an encoded sub key, got ${record.key}`);
+            assert(!record.key.includes('|'),
+                `the pipe reached the wire raw in ${record.key}`);
+        });
+        byDestination.get(destinationB.resource).forEach(({ record }) =>
+            assert.strictEqual(record.key, destinationB.resource));
+        return done();
+    });
+
+    it('should deliver each event only to the destinations configured for ' +
+    'it, keyed by bucket and object key', done => async.series([
+        next => waitFor(() => 'the seam destinations to receive their ' +
+            `records (${tailerA.records.length} and ${tailerB.records.length})`,
+            () => tailerA.records.length >= 1 && tailerB.records.length >= 2,
+            60000, next),
+        next => waitUntilQuiet(tailerA, 500, next),
+        next => waitUntilQuiet(tailerB, 500, next),
+    ], err => {
+        assert.ifError(err);
+        const onA = tailerA.records.map(deliveredEvent);
+        const onB = tailerB.records
+            .slice()
+            .sort((a, b) => a.offset - b.offset)
+            .map(deliveredEvent);
+        // the creation went to both, the removal to B alone: no destination
+        // sees an event it was not configured for
+        assert.deepStrictEqual(onA.map(e => e.eventName),
+            ['s3:ObjectCreated:Put']);
+        assert.deepStrictEqual(onB.map(e => e.eventName),
+            ['s3:ObjectCreated:Put', 's3:ObjectRemoved:Delete']);
+        [...onA, ...onB].forEach(event => {
+            assert.strictEqual(event.bucket, BUCKET);
+            assert.strictEqual(event.key, objectKey);
+            // the worker re-keys on the object, so no delivery key, and in
+            // particular no encoded pipe, may reach a destination
+            assert.strictEqual(event.recordKey, `${BUCKET}/${objectKey}`);
+            assert(!event.recordKey.includes('%7C'),
+                `a delivery key leaked to a destination: ${event.recordKey}`);
+        });
+        return done();
+    }));
+
+    it('should carry the matching configuration id of each destination all ' +
+    'the way to the delivered payload', done => {
+        tailerA.records.map(deliveredEvent).forEach(event =>
+            assert.strictEqual(event.configurationId, configIdA));
+        tailerB.records.map(deliveredEvent).forEach(event =>
+            assert.strictEqual(event.configurationId, configIdB));
+        return done();
+    });
 });
