@@ -323,11 +323,24 @@ describe('notification DeliveryWorker', () => {
             assert.strictEqual(probeServer.port, 8900);
         });
 
-        it('should fall back to the configured port for a bad override', () => {
-            ['', '  ', 'notaport', '0', '70000', '8900abc'].forEach(value => {
+        it('should fall back to the configured port and warn for a bad override', () => {
+            ['notaport', '0', '70000', '8900abc'].forEach(value => {
+                const logger = { ...FakeLogger, warn: sinon.stub() };
                 const resolved = resolveProbeServerConfig(withProbe,
-                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, FakeLogger);
+                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, logger);
                 assert.strictEqual(resolved.port, 8900, `for value "${value}"`);
+                assert(logger.warn.calledOnce, `no warning for value "${value}"`);
+                assert.strictEqual(logger.warn.args[0][1].value, value);
+            });
+        });
+
+        it('should fall back quietly when the override is empty', () => {
+            ['', '   '].forEach(value => {
+                const logger = { ...FakeLogger, warn: sinon.stub() };
+                const resolved = resolveProbeServerConfig(withProbe,
+                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, logger);
+                assert.strictEqual(resolved, probeServer, `for value "${value}"`);
+                assert(logger.warn.notCalled, `unexpected warning for value "${value}"`);
             });
         });
 
