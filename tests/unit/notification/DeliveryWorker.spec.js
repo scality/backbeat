@@ -2,8 +2,12 @@ const assert = require('assert');
 const sinon = require('sinon');
 const { ZenkoMetrics } = require('arsenal').metrics;
 
+const FakeLogger = require('../../utils/fakeLogger');
+
 const DeliveryWorker = require(
     '../../../extensions/notification/deliveryWorker/DeliveryWorker');
+const { DELIVERY_POOL_PROBE_PORT_ENV, resolveProbeServerConfig } = require(
+    '../../../extensions/notification/deliveryWorker/probeConfig');
 
 const DELIVERED_METRIC = 's3_notification_delivery_worker_delivered_total';
 const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
@@ -299,6 +303,38 @@ describe('notification DeliveryWorker', () => {
             const entry = makeEntry('this is not json');
             assert.strictEqual(worker._orderBy({ entry }), undefined);
             assert.strictEqual(entry._notifEntry, undefined);
+        });
+    });
+
+    describe('probe server config', () => {
+        const probeServer = { bindAddress: '0.0.0.0', port: 8900 };
+        const withProbe = { ...notifConfig.deliveryPool, probeServer };
+
+        it('should keep the configured port when the environment is silent', () => {
+            assert.strictEqual(resolveProbeServerConfig(withProbe, {}), probeServer);
+        });
+
+        it('should let the environment give this worker its own port', () => {
+            const resolved = resolveProbeServerConfig(withProbe,
+                { [DELIVERY_POOL_PROBE_PORT_ENV]: '8902' });
+            assert.strictEqual(resolved.port, 8902);
+            assert.strictEqual(resolved.bindAddress, '0.0.0.0');
+            // the configured object is left alone
+            assert.strictEqual(probeServer.port, 8900);
+        });
+
+        it('should fall back to the configured port for a bad override', () => {
+            ['', '  ', 'notaport', '0', '70000', '8900abc'].forEach(value => {
+                const resolved = resolveProbeServerConfig(withProbe,
+                    { [DELIVERY_POOL_PROBE_PORT_ENV]: value }, FakeLogger);
+                assert.strictEqual(resolved.port, 8900, `for value "${value}"`);
+            });
+        });
+
+        it('should stay undefined when no probe server is configured', () => {
+            assert.strictEqual(
+                resolveProbeServerConfig(notifConfig.deliveryPool, {}), undefined);
+            assert.strictEqual(resolveProbeServerConfig(undefined, {}), undefined);
         });
     });
 

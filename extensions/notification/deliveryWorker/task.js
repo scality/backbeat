@@ -1,6 +1,6 @@
 'use strict';
 const assert = require('assert');
-const { errors } = require('arsenal');
+const { errors, jsutil } = require('arsenal');
 const async = require('async');
 const werelogs = require('werelogs');
 const {
@@ -10,6 +10,7 @@ const {
 } = require('arsenal').network.probe.ProbeServer;
 const { sendSuccess, sendError } = require('arsenal').network.probe.Utils;
 const DeliveryWorker = require('./DeliveryWorker');
+const { resolveProbeServerConfig } = require('./probeConfig');
 const { startProbeServer } = require('../../../lib/util/probe');
 
 const config = require('../../../lib/Config');
@@ -46,12 +47,22 @@ function handleLiveness(res, log) {
     }
 }
 
+const probeServerConfig = resolveProbeServerConfig(
+    notifConfig.deliveryPool, process.env, log);
+
 async.series([
     next => deliveryWorker.start(null, next),
-    next => startProbeServer(notifConfig.deliveryPool.probeServer, (err, probeServer) => {
+    next => startProbeServer(probeServerConfig, jsutil.once((err, probeServer) => {
         if (err) {
-            log.error('error starting probe server', { error: err });
-            return next(err);
+            // a worker that cannot serve its probe routes still delivers
+            // notifications, so keep going rather than taking the process
+            // down: workers sharing a config file also share a port, and
+            // only the first of them can bind it
+            log.error('probe server not started, continuing without it', {
+                error: err.message,
+                port: probeServerConfig && probeServerConfig.port,
+            });
+            return next();
         }
         if (probeServer !== undefined) {
             // following the same pattern as other extensions, where liveness
@@ -62,7 +73,7 @@ async.series([
             );
         }
         return next();
-    })
+    }))
 ], err => {
     if (err) {
         log.error('error starting notification delivery worker task', {
