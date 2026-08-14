@@ -1304,6 +1304,9 @@ function populatorToDestination() {
                     });
             },
             next => {
+                // publish() keys the batch by the raw topic name while the
+                // producer applies the topic prefix, so these two agree only
+                // while KAFKA_TOPIC_PREFIX is unset, as it is here and in CI
                 published = batch[deliveryTopic] || [];
                 // the records that go on the wire are the populator's own
                 // bytes, not something this test rebuilt
