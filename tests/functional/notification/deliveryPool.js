@@ -28,6 +28,33 @@ const DROPPED_METRIC = 's3_notification_delivery_worker_dropped_total';
 
 const kafkaConfig = { hosts: KAFKA_HOSTS };
 
+// how long a freshly created topic is given to become visible cluster wide,
+// and how many consecutive clean looks at it are needed
+const TOPIC_PROPAGATION_TIMEOUT = 60000;
+const TOPIC_PROPAGATION_POLL_MS = 1000;
+const STABLE_METADATA_CHECKS = 3;
+
+// Every topic of the run, created once before anything consumes. A broker
+// still answering "unknown topic" for a topic that was just created makes
+// librdkafka drop it from the subscription, which is why deployments
+// pre-create the delivery topic before any worker starts. The suites mirror
+// that rather than racing topic creation.
+const TOPICS = {
+    delivery: { name: `poc-bn-delivery-${RUN_ID}`, partitions: 3 },
+    customerA: { name: `poc-bn-customer-a-${RUN_ID}`, partitions: 3 },
+    customerB: { name: `poc-bn-customer-b-${RUN_ID}`, partitions: 1 },
+    restartDelivery: {
+        name: `poc-bn-restart-delivery-${RUN_ID}`, partitions: 1,
+    },
+    restartCustomer: {
+        name: `poc-bn-restart-customer-${RUN_ID}`, partitions: 1,
+    },
+    dropDelivery: { name: `poc-bn-drop-delivery-${RUN_ID}`, partitions: 1 },
+    dropCustomer: { name: `poc-bn-drop-customer-${RUN_ID}`, partitions: 1 },
+    oldInternal: { name: `poc-bn-internal-${RUN_ID}`, partitions: 2 },
+    replayDelivery: { name: `poc-bn-replay-delivery-${RUN_ID}`, partitions: 2 },
+};
+
 /**
  * Runs fn against a connected consumer, then disconnects it
  *
@@ -55,6 +82,22 @@ function withConsumer(groupId, fn, done) {
     });
 }
 
+/**
+ * Runs a kafka call, handing a synchronous throw to the callback instead of
+ * letting it escape into whichever test happens to be running
+ *
+ * @param {Function} cb - callback to fail
+ * @param {Function} fn - call to make
+ * @return {undefined}
+ */
+function callOrFail(cb, fn) {
+    try {
+        return fn();
+    } catch (err) {
+        return cb(err);
+    }
+}
+
 function createTopics(topics, done) {
     const admin = AdminClient.create({ 'metadata.broker.list': KAFKA_HOSTS });
     return async.eachSeries(topics, (topic, next) => admin.createTopic({
@@ -71,37 +114,47 @@ function createTopics(topics, done) {
 }
 
 /**
- * Waits until every partition of a topic has a leader, so that a producer
- * sending to it right away does not have to wait for a metadata refresh
+ * Waits until every topic is visible cluster wide with a leader on each of
+ * its partitions, several looks in a row.
+ *
+ * One client is connected for the whole wait, and it asks for the metadata
+ * of the whole cluster rather than of one topic, so what it sees is what a
+ * consumer joining afterwards will see.
  *
  * @param {Object[]} topics - topics, as { name, partitions }
  * @param {Function} done - callback
  * @return {undefined}
  */
 function waitForTopics(topics, done) {
-    const deadline = Date.now() + 20000;
-    const check = () => withConsumer(`poc-meta-${RUN_ID}`, (consumer, cb) =>
-        async.everySeries(topics, (topic, next) => consumer.getMetadata({
-            topic: topic.name,
-            timeout: METADATA_TIMEOUT,
-        }, (err, metadata) => {
-            if (err) {
-                return next(null, false);
-            }
-            const found = metadata.topics.find(t => t.name === topic.name);
-            return next(null, !!found &&
-                found.partitions.length === topic.partitions &&
-                found.partitions.every(p => p.leader >= 0));
-        }), cb), (err, ready) => {
-        if (!err && ready) {
-            return done();
-        }
-        if (Date.now() >= deadline) {
-            return done(err || new Error('timed out waiting for topics'));
-        }
-        return setTimeout(check, 500);
-    });
-    return check();
+    return withConsumer(`poc-meta-${RUN_ID}`, (consumer, cb) => {
+        const deadline = Date.now() + TOPIC_PROPAGATION_TIMEOUT;
+        let stableChecks = 0;
+        let missing = topics.map(topic => topic.name);
+        const check = () => callOrFail(cb, () =>
+            consumer.getMetadata({ timeout: METADATA_TIMEOUT },
+            (err, metadata) => {
+                if (!err) {
+                    missing = topics.filter(topic => {
+                        const found = metadata.topics.find(
+                            t => t.name === topic.name);
+                        return !found ||
+                            found.partitions.length !== topic.partitions ||
+                            !found.partitions.every(p => p.leader >= 0);
+                    }).map(topic => topic.name);
+                }
+                stableChecks = !err && missing.length === 0 ?
+                    stableChecks + 1 : 0;
+                if (stableChecks >= STABLE_METADATA_CHECKS) {
+                    return cb();
+                }
+                if (Date.now() >= deadline) {
+                    return cb(new Error('timed out waiting for topics to ' +
+                        `propagate, still incomplete: ${missing.join(', ')}`));
+                }
+                return setTimeout(check, TOPIC_PROPAGATION_POLL_MS);
+            }));
+        return check();
+    }, done);
 }
 
 function produceRecords(topic, messages, done) {
@@ -158,7 +211,8 @@ function waitForCommittedTotal(groupId, topic, partitionCount, expected,
     return withConsumer(groupId, (consumer, cb) => {
         const deadline = Date.now() + timeoutMs;
         let lastSeen = null;
-        const check = () => consumer.committed(toppars, METADATA_TIMEOUT,
+        const check = () => callOrFail(cb, () =>
+            consumer.committed(toppars, METADATA_TIMEOUT,
             (err, committed) => {
                 if (!err) {
                     // an unset offset is reported as a negative value
@@ -176,7 +230,7 @@ function waitForCommittedTotal(groupId, topic, partitionCount, expected,
                         `seen ${lastSeen}`));
                 }
                 return setTimeout(check, 1000);
-            });
+            }));
         return check();
     }, done);
 }
@@ -246,6 +300,15 @@ class TopicTailer {
         if (this._stopped) {
             return;
         }
+        try {
+            this._consume();
+        } catch {
+            // the client was torn down under the call, stop reading
+            this._stopped = true;
+        }
+    }
+
+    _consume() {
         this._consumer.consume(100, (err, records) => {
             if (!err && records) {
                 records.forEach(record => this.records.push({
@@ -281,7 +344,8 @@ function waitFor(what, predicate, timeoutMs, done) {
             return done();
         }
         if (Date.now() >= deadline) {
-            return done(new Error(`timed out waiting for ${what}`));
+            const label = typeof what === 'function' ? what() : what;
+            return done(new Error(`timed out waiting for ${label}`));
         }
         return setTimeout(check, 100);
     };
@@ -524,15 +588,26 @@ function eventTime(index) {
     return new Date(Date.UTC(2026, 0, 1, 0, 0, index)).toISOString();
 }
 
+// mocha root hook: every topic of the run exists and has propagated before
+// the first consumer of the run is built
+before(function createEveryTopic(done) {
+    this.timeout(TOPIC_PROPAGATION_TIMEOUT + 60000);
+    const topics = Object.values(TOPICS);
+    return async.series([
+        next => createTopics(topics, next),
+        next => waitForTopics(topics, next),
+    ], done);
+});
+
 describe('notification delivery worker :: delivery to destinations',
 function deliveryToDestinations() {
     this.timeout(TIMEOUT);
 
-    const deliveryTopic = `poc-bn-delivery-${RUN_ID}`;
-    const customerTopicA = `poc-bn-customer-a-${RUN_ID}`;
-    const customerTopicB = `poc-bn-customer-b-${RUN_ID}`;
+    const deliveryTopic = TOPICS.delivery.name;
+    const customerTopicA = TOPICS.customerA.name;
+    const customerTopicB = TOPICS.customerB.name;
     const groupId = `poc-bn-delivery-group-${RUN_ID}`;
-    const deliveryPartitions = 3;
+    const deliveryPartitions = TOPICS.delivery.partitions;
     // three objects, each with the same put, put then delete sequence
     const objectKeys = ['object-alpha', 'object-beta', 'object-gamma'];
     const eventTypes = [
@@ -567,11 +642,6 @@ function deliveryToDestinations() {
     let tailerB = null;
 
     before(done => {
-        const topics = [
-            { name: deliveryTopic, partitions: deliveryPartitions },
-            { name: customerTopicA, partitions: 3 },
-            { name: customerTopicB, partitions: 1 },
-        ];
         // events of one object are produced in order, objects are
         // interleaved, so that the worker sees keys it has to keep apart
         const records = [];
@@ -588,8 +658,6 @@ function deliveryToDestinations() {
             });
         });
         return async.series([
-            next => createTopics(topics, next),
-            next => waitForTopics(topics, next),
             // produced before the worker exists: a worker joining with a
             // fresh group only sees them because it reads from the earliest
             // offset
@@ -617,7 +685,9 @@ function deliveryToDestinations() {
 
     it('should deliver every record to its own destination topic, keyed by ' +
     'bucket and object key', done => async.series([
-        next => waitFor('every record to reach its destination topic',
+        next => waitFor(() => 'every record to reach its destination topic ' +
+            `(${tailerA.records.length} and ${tailerB.records.length} of ` +
+            `${expectedPerDestination})`,
             () => tailerA.records.length >= expectedPerDestination &&
                 tailerB.records.length >= expectedPerDestination,
             30000, next),
@@ -706,8 +776,8 @@ function atLeastOnceAcrossRestart() {
     // two worker lifetimes and three hundred deliveries
     this.timeout(120000);
 
-    const deliveryTopic = `poc-bn-restart-delivery-${RUN_ID}`;
-    const customerTopic = `poc-bn-restart-customer-${RUN_ID}`;
+    const deliveryTopic = TOPICS.restartDelivery.name;
+    const customerTopic = TOPICS.restartCustomer.name;
     const groupId = `poc-bn-restart-group-${RUN_ID}`;
     const recordCount = 60;
     const destination = destinationConfig({
@@ -734,10 +804,6 @@ function atLeastOnceAcrossRestart() {
     let tailer = null;
 
     before(done => {
-        const topics = [
-            { name: deliveryTopic, partitions: 1 },
-            { name: customerTopic, partitions: 1 },
-        ];
         const records = objectKeys.map((key, index) => addressedRecord({
             destination,
             key,
@@ -745,8 +811,6 @@ function atLeastOnceAcrossRestart() {
             dateTime: eventTime(index),
         }));
         return async.series([
-            next => createTopics(topics, next),
-            next => waitForTopics(topics, next),
             next => produceRecords(deliveryTopic, records, next),
             next => {
                 tailer = new TopicTailer(customerTopic);
@@ -788,7 +852,9 @@ function atLeastOnceAcrossRestart() {
                 secondWorker = new DeliveryWorker(kafkaConfig, notifConfig);
                 return secondWorker.start(null, next);
             },
-            next => waitFor('the second worker to deliver the rest',
+            next => waitFor(() => 'the second worker to deliver the rest ' +
+                `(${uniqueObjectKeys(tailer.records).size}/${recordCount} ` +
+                `delivered, ${deliveredByFirst} of them by the first worker)`,
                 () => uniqueObjectKeys(tailer.records).size === recordCount,
                 75000, next),
         ], err => {
@@ -821,8 +887,8 @@ function unreachableDestination() {
     // the others
     this.timeout(120000);
 
-    const deliveryTopic = `poc-bn-drop-delivery-${RUN_ID}`;
-    const customerTopic = `poc-bn-drop-customer-${RUN_ID}`;
+    const deliveryTopic = TOPICS.dropDelivery.name;
+    const customerTopic = TOPICS.dropCustomer.name;
     const groupId = `poc-bn-drop-group-${RUN_ID}`;
     const healthyCount = 6;
     const deadCount = 3;
@@ -855,10 +921,6 @@ function unreachableDestination() {
     let tailer = null;
 
     before(done => {
-        const topics = [
-            { name: deliveryTopic, partitions: 1 },
-            { name: customerTopic, partitions: 1 },
-        ];
         const records = [];
         for (let i = 0; i < Math.max(healthyCount, deadCount); i++) {
             if (i < healthyCount) {
@@ -879,8 +941,6 @@ function unreachableDestination() {
             }
         }
         return async.series([
-            next => createTopics(topics, next),
-            next => waitForTopics(topics, next),
             next => produceRecords(deliveryTopic, records, next),
             next => {
                 tailer = new TopicTailer(customerTopic);
@@ -900,7 +960,8 @@ function unreachableDestination() {
 
     it('should keep delivering to the healthy destination while the other ' +
     'one is unreachable', done => async.series([
-        next => waitFor('the healthy destination to receive every record',
+        next => waitFor(() => 'the healthy destination to receive every ' +
+            `record (${tailer.records.length}/${healthyCount})`,
             () => tailer.records.length >= healthyCount, 30000, next),
         next => waitUntilQuiet(tailer, 500, next),
     ], err => {
@@ -958,9 +1019,8 @@ describe('notification delivery replay :: draining an old internal topic',
 function drainOldInternalTopic() {
     this.timeout(TIMEOUT);
 
-    const oldTopic = `poc-bn-internal-${RUN_ID}`;
-    const deliveryTopic = `poc-bn-replay-delivery-${RUN_ID}`;
-    const deliveryPartitions = 2;
+    const oldTopic = TOPICS.oldInternal.name;
+    const deliveryTopic = TOPICS.replayDelivery.name;
     const processorGroupId = `poc-bn-processor-${RUN_ID}`;
     const destination = destinationConfig({
         resource: `poc-dest-replay-${RUN_ID}`,
@@ -971,7 +1031,6 @@ function drainOldInternalTopic() {
     });
     destination.internalTopic = oldTopic;
     const oldGroupId = `${processorGroupId}-${destination.resource}`;
-    const oldPartitions = 2;
     const legacyCount = 12;
     const notifConfig = {
         topic: oldTopic,
@@ -1023,10 +1082,6 @@ function drainOldInternalTopic() {
     }
 
     before(done => {
-        const topics = [
-            { name: oldTopic, partitions: oldPartitions },
-            { name: deliveryTopic, partitions: deliveryPartitions },
-        ];
         const records = [];
         for (let i = 0; i < legacyCount; i++) {
             records.push(legacyRecord({
@@ -1039,8 +1094,6 @@ function drainOldInternalTopic() {
             }));
         }
         return async.waterfall([
-            next => createTopics(topics, next),
-            next => waitForTopics(topics, next),
             next => produceRecords(oldTopic, records, next),
             next => readTopic(oldTopic, legacyCount, 30000, next),
             (written, next) => {
