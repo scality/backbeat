@@ -28,14 +28,9 @@ describe('IngestionConfigValidator log override', () => {
         assert.strictEqual(validated.log, undefined);
     });
 
-    it('should reject a partial log config with missing dumpLevel', () => {
-        let err;
-        try {
-            configValidator({}, { ...baseExtConfig, log: { logLevel: 'debug' } });
-        } catch (e) {
-            err = e;
-        }
-        assert(err, 'expected configValidator to throw on partial log config');
+    it('should default the level left out of a partial log config', () => {
+        const validated = configValidator({}, { ...baseExtConfig, log: { logLevel: 'debug' } });
+        assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
     });
 });
 

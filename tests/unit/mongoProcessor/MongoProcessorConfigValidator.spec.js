@@ -23,13 +23,8 @@ describe('MongoProcessorConfigValidator log override', () => {
         assert.strictEqual(validated.log, undefined);
     });
 
-    it('should reject a partial log config with missing dumpLevel', () => {
-        let err;
-        try {
-            configValidator({}, { ...baseConfig, log: { logLevel: 'warn' } });
-        } catch (e) {
-            err = e;
-        }
-        assert(err, 'expected configValidator to throw on partial log config');
+    it('should default the level left out of a partial log config', () => {
+        const validated = configValidator({}, { ...baseConfig, log: { logLevel: 'warn' } });
+        assert.deepStrictEqual(validated.log, { logLevel: 'warn', dumpLevel: 'error' });
     });
 });
