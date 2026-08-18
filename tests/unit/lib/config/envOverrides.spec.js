@@ -11,7 +11,6 @@ const {
 const { backbeatConfigJoi } = require('../../../../lib/config.joi');
 const {
     logJoi,
-    logJoiOptional,
     probeServerJoi,
     probeServerPerSite,
 } = require('../../../../lib/config/configItems.joi');
@@ -226,8 +225,6 @@ describe('config env var mapping', () => {
             const config = applyEnvOverrides({}, backbeatConfigJoi, [], { LOG_LEVEL: 'warn' });
             assert.deepStrictEqual(joi.attempt(config.log, logJoi),
                                    { logLevel: 'warn', dumpLevel: 'error' });
-            assert.deepStrictEqual(joi.attempt({ dumpLevel: 'warn' }, logJoiOptional),
-                                   { logLevel: 'info', dumpLevel: 'warn' });
         });
     });
 

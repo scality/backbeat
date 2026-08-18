@@ -12,11 +12,14 @@ const baseExtConfig = {
     probeServer: { port: 4000 },
 };
 
+// the validated backbeat config, passed to every extension validator
+const globalConfig = { log: { logLevel: 'info', dumpLevel: 'trace' } };
+
 const qpBatchMaxRead = config.queuePopulator.batchMaxRead;
 
 describe('IngestionConfigValidator log override', () => {
     it('should pass through log config when set', () => {
-        const validated = configValidator({}, {
+        const validated = configValidator(globalConfig, {
             ...baseExtConfig,
             log: { logLevel: 'debug', dumpLevel: 'error' },
         });
@@ -24,20 +27,23 @@ describe('IngestionConfigValidator log override', () => {
     });
 
     it('should leave log undefined when not set, deferring to global config.log', () => {
-        const validated = configValidator({}, baseExtConfig);
+        const validated = configValidator(globalConfig, baseExtConfig);
         assert.strictEqual(validated.log, undefined);
     });
 
-    it('should default the level left out of a partial log config', () => {
-        const validated = configValidator({}, { ...baseExtConfig, log: { logLevel: 'debug' } });
-        assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
+    it('should inherit the level left out of a partial log config', () => {
+        const validated = configValidator(globalConfig, {
+            ...baseExtConfig,
+            log: { logLevel: 'debug' },
+        });
+        assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'trace' });
     });
 
     it('should accept the log level from the environment on its own', () => {
         process.env.EXTENSIONS_INGESTION_LOG_LEVEL = 'debug';
         try {
-            const validated = configValidator({}, { ...baseExtConfig });
-            assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
+            const validated = configValidator(globalConfig, { ...baseExtConfig });
+            assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'trace' });
         } finally {
             delete process.env.EXTENSIONS_INGESTION_LOG_LEVEL;
         }
