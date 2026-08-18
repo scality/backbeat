@@ -278,6 +278,102 @@ describe('Ingestion Populator', () => {
         });
     });
 
+    describe('_setupUpdatedReaders', () => {
+        const FAILING_BUCKET = 'failing-zenko-bucket';
+        const WORKING_BUCKET = 'working-zenko-bucket';
+
+        /**
+         * @param {string} zenkoBucket - target zenko bucket of the reader
+         * @param {Error|null} setupError - error to fail `setup` with
+         * @return {object} the stubbed reader
+         */
+        function createLogReaderMock(zenkoBucket, setupError) {
+            const logReader = sinon.createStubInstance(IngestionReader);
+            logReader.getTargetZenkoBucketName.returns(zenkoBucket);
+            logReader.setup.yieldsAsync(setupError);
+            return logReader;
+        }
+
+        beforeEach(() => {
+            ip.logReaders = [];
+            ip.logReadersUpdate = [];
+        });
+
+        it('should activate a log reader once its setup succeeds', done => {
+            const logReaderMock = createLogReaderMock(WORKING_BUCKET, null);
+            ip._ingestionSources[WORKING_BUCKET] = logReaderMock;
+            ip.logReadersUpdate = [logReaderMock];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, [logReaderMock]);
+                assert.deepStrictEqual(ip.logReadersUpdate, []);
+                done();
+            });
+        });
+
+        it('should queue a log reader again when its setup fails', done => {
+            const logReaderMock =
+                createLogReaderMock(FAILING_BUCKET, errors.InternalError);
+            ip._ingestionSources[FAILING_BUCKET] = logReaderMock;
+            ip.logReadersUpdate = [logReaderMock];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, []);
+                assert.deepStrictEqual(ip.logReadersUpdate, [logReaderMock]);
+                done();
+            });
+        });
+
+        it('should not queue a log reader again when its setup fails and ' +
+        'its source is no longer configured', done => {
+            const logReaderMock =
+                createLogReaderMock(FAILING_BUCKET, errors.InternalError);
+            delete ip._ingestionSources[FAILING_BUCKET];
+            ip.logReadersUpdate = [logReaderMock];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, []);
+                assert.deepStrictEqual(ip.logReadersUpdate, []);
+                done();
+            });
+        });
+
+        it('should not queue a log reader again when its setup fails and ' +
+        'its source has been registered with another reader', done => {
+            const staleReader =
+                createLogReaderMock(FAILING_BUCKET, errors.InternalError);
+            const currentReader = createLogReaderMock(FAILING_BUCKET, null);
+            ip._ingestionSources[FAILING_BUCKET] = currentReader;
+            ip.logReadersUpdate = [staleReader];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, []);
+                assert.deepStrictEqual(ip.logReadersUpdate, []);
+                done();
+            });
+        });
+
+        it('should keep setting up other log readers when one fails', done => {
+            const failingReader =
+                createLogReaderMock(FAILING_BUCKET, errors.InternalError);
+            const workingReader = createLogReaderMock(WORKING_BUCKET, null);
+            ip._ingestionSources[FAILING_BUCKET] = failingReader;
+            ip._ingestionSources[WORKING_BUCKET] = workingReader;
+            ip.logReadersUpdate = [failingReader, workingReader];
+
+            ip._setupUpdatedReaders(err => {
+                assert.ifError(err);
+                assert.deepStrictEqual(ip.logReaders, [workingReader]);
+                assert.deepStrictEqual(ip.logReadersUpdate, [failingReader]);
+                done();
+            });
+        });
+    });
+
     describe('_processLogReaderEntries', () => {
         it('should skip when previous batch currently in progress', () => {
             const logReaderMock = {
