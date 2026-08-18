@@ -1,5 +1,6 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 const { supportedSaslProtocols, supportedScramMechanisms } = require('./constants');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
@@ -100,13 +101,8 @@ const joiSchema = joi.object({
     zookeeperOpConcurrency: joi.number().default(10),
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
-    return validatedConfig;
-}
-
 module.exports = {
-    notificationConfigValidator: configValidator,
+    notificationConfigValidator: extensionConfigValidator('notification', joiSchema),
     authSchema,
     credentialsFileSchema,
 };

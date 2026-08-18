@@ -27,4 +27,14 @@ describe('MongoProcessorConfigValidator log override', () => {
         const validated = configValidator({}, { ...baseConfig, log: { logLevel: 'warn' } });
         assert.deepStrictEqual(validated.log, { logLevel: 'warn', dumpLevel: 'error' });
     });
+
+    it('should accept the log level from the environment on its own', () => {
+        process.env.EXTENSIONS_MONGO_PROCESSOR_LOG_LEVEL = 'warn';
+        try {
+            const validated = configValidator({}, { ...baseConfig });
+            assert.deepStrictEqual(validated.log, { logLevel: 'warn', dumpLevel: 'error' });
+        } finally {
+            delete process.env.EXTENSIONS_MONGO_PROCESSOR_LOG_LEVEL;
+        }
+    });
 });

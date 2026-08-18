@@ -1,6 +1,7 @@
 const joi = require('joi');
 const { KAFKA_PRODUCER_PARAMS_SCHEMA } = require('../../lib/config.joi');
 const { probeServerJoi, logJoiOptional } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const joiSchema = joi.object({
     auth: joi.object({
@@ -22,9 +23,4 @@ const joiSchema = joi.object({
     log: logJoiOptional,
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
-    return validatedConfig;
-}
-
-module.exports = configValidator;
+module.exports = extensionConfigValidator('ingestion', joiSchema);

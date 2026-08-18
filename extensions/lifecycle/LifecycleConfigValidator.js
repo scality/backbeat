@@ -7,14 +7,15 @@ const {
     probeServerJoi,
     retryParamsJoi,
 } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const { backbeatConsumer: { MAX_QUEUED_DEFAULT } } = require('../../lib/constants');
 const { ValidLifecycleRules: supportedLifecycleRules } = require('arsenal').models;
 
 const joiSchema = joi.object({
     zookeeperPath: joi.string().required(),
-    bucketTasksTopic: joi.string().required(),
-    objectTasksTopic: joi.string().required(),
+    bucketTasksTopic: joi.string().required().meta({ env: 'BUCKET_TASK_TOPIC' }),
+    objectTasksTopic: joi.string().required().meta({ env: 'OBJECT_TASK_TOPIC' }),
     transitionTasksTopic: joi.string().default(parent => parent.objectTasksTopic),
     coldStorageTopics: joi.array().items(joi.string()).unique().default([]),
     auth: authJoi.optional(),
@@ -28,7 +29,7 @@ const joiSchema = joi.object({
             when('bucketSource', { is: 'bucketd', then: joi.required() }),
         mongodb: mongoJoi.
             when('bucketSource', { is: 'mongodb', then: joi.required() }),
-        cronRule: joi.string().required(),
+        cronRule: joi.string().required().meta({ env: 'CRONRULE' }),
         concurrency: joi.number().greater(0).default(10),
         concurrentIndexesBuildLimit: joi.number().greater(0).default(10),
         backlogControl: joi.object({
@@ -83,8 +84,4 @@ const joiSchema = joi.object({
     ).default(supportedLifecycleRules),
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    return joi.attempt(extConfig, joiSchema);
-}
-
-module.exports = configValidator;
+module.exports = extensionConfigValidator('lifecycle', joiSchema);

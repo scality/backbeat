@@ -1,5 +1,6 @@
 const joi = require('joi');
 const { retryParamsJoi, probeServerJoi, logJoiOptional } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 
@@ -14,9 +15,4 @@ const joiSchema = joi.object({
     log: logJoiOptional,
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
-    return validatedConfig;
-}
-
-module.exports = configValidator;
+module.exports = extensionConfigValidator('mongoProcessor', joiSchema);

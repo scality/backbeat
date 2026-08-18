@@ -32,6 +32,16 @@ describe('IngestionConfigValidator log override', () => {
         const validated = configValidator({}, { ...baseExtConfig, log: { logLevel: 'debug' } });
         assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
     });
+
+    it('should accept the log level from the environment on its own', () => {
+        process.env.EXTENSIONS_INGESTION_LOG_LEVEL = 'debug';
+        try {
+            const validated = configValidator({}, { ...baseExtConfig });
+            assert.deepStrictEqual(validated.log, { logLevel: 'debug', dumpLevel: 'error' });
+        } finally {
+            delete process.env.EXTENSIONS_INGESTION_LOG_LEVEL;
+        }
+    });
 });
 
 describe('IngestionConfigValidator batchMaxRead fallback', () => {

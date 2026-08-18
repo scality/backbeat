@@ -4,6 +4,7 @@ const { hostPortJoi, transportJoi, bootstrapListJoi, adminCredsJoi,
         retryParamsJoi, probeServerJoi, probeServerPerSite, 
         stsConfigJoi } =
     require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 const {
     authTypeAccount,
     authTypeAssumeRole,
@@ -13,10 +14,13 @@ const {
 
 const { MAX_QUEUED_DEFAULT }  = require('../../lib/constants').backbeatConsumer;
 
+// the historic env var names put the backend before `RETRY`, e.g.
+// EXTENSIONS_REPLICATION_QUEUE_PROCESSOR_AWS_S3_RETRY_BACKOFF_MIN
 const qpRetryJoi = joi.object({
-    aws_s3: retryParamsJoi, // eslint-disable-line camelcase
-    azure: retryParamsJoi,
-    gcp: retryParamsJoi,
+    // eslint-disable-next-line camelcase
+    aws_s3: retryParamsJoi.meta({ envVarAlias: 'QUEUE_PROCESSOR_AWS_S3_RETRY' }),
+    azure: retryParamsJoi.meta({ envVarAlias: 'QUEUE_PROCESSOR_AZURE_RETRY' }),
+    gcp: retryParamsJoi.meta({ envVarAlias: 'QUEUE_PROCESSOR_GCP_RETRY' }),
     scality: retryParamsJoi,
 });
 
@@ -97,7 +101,7 @@ const joiSchema = joi.object({
             otherwise: joi.required(),
         }),
         bootstrapList: bootstrapListJoi,
-    }).required().custom(_validatePerSiteDestinationConfig),
+    }).required().custom(_validatePerSiteDestinationConfig).meta({ env: 'DEST' }),
     topic: joi.string().required(),
     dataMoverTopic: joi.string().optional(),
     replicationStatusTopic: joi.string().required(),
@@ -128,13 +132,13 @@ const joiSchema = joi.object({
         circuitBreaker: joi.object().optional(),
         sourceCheckIfSizeGreaterThanMB: joi.number().positive().default(100),
     }).required(),
-    replicationStatusProcessor: {
+    replicationStatusProcessor: joi.object({
         groupId: joi.string().required(),
         retry: retryParamsJoi,
         concurrency: joi.number().greater(0).default(10),
         maxQueued: joi.number().greater(0).default(MAX_QUEUED_DEFAULT),
         probeServer: probeServerJoi.default(),
-    },
+    }).meta({ env: 'STATUS_PROCESSOR' }),
     replayProcessor: joi.object({
         probeServer: probeServerPerSite,
     }).optional(),
@@ -178,8 +182,10 @@ function _loadAdminCredentialsFromFile(filePath) {
     return { accessKey, secretKey };
 }
 
+const validateConfig = extensionConfigValidator('replication', joiSchema);
+
 function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
+    const validatedConfig = validateConfig(backbeatConfig, extConfig);
     const { source, destination } = validatedConfig;
     if (source.auth.vault) {
         const { adminCredentialsFile } = source.auth.vault;

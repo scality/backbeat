@@ -27,6 +27,7 @@ updates in a FIFO order.
 ## DESIGN
 
 - [Backbeat core design](/DESIGN.md)
+- [Configuration](/docs/configuration.md)
 - [CRR to AWS S3 workflow](/docs/crr-to-aws-s3.md)
 - [Object Lifecycle management](/docs/lifecycle.md)
 - [Metrics](/docs/metrics.md)

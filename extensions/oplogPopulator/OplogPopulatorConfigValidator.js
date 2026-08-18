@@ -1,5 +1,6 @@
 const joi = require('joi');
 const { probeServerJoi } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
@@ -13,12 +14,7 @@ const joiSchema = joi.object({
     heartbeatIntervalMs: joi.number().default(10000),
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
-    return validatedConfig;
-}
-
 module.exports = {
     OplogPopulatorConfigJoiSchema: joiSchema,
-    OplogPopulatorConfigValidator: configValidator
+    OplogPopulatorConfigValidator: extensionConfigValidator('oplogPopulator', joiSchema)
 };

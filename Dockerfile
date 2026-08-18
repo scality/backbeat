@@ -14,7 +14,6 @@ RUN apt-get update \
         bash \
         python3 \
         git \
-        jq \
         zlib1g-dev \
         libncurses5-dev \
         libgdbm-dev \
@@ -45,7 +44,6 @@ FROM node:${NODE_VERSION}
 RUN apt-get update && \
     apt-get install -y --no-install-recommends \
         ca-certificates \
-        jq \
         krb5-user \
         libsasl2-2 \
         libsasl2-modules-gssapi-mit \
@@ -62,6 +60,6 @@ COPY --from=builder /usr/local/bin/dockerize /usr/local/bin/
 
 ENV AWS_SDK_JS_SUPPRESS_MAINTENANCE_MODE_MESSAGE=1
 
-ENTRYPOINT ["tini", "-g", "--", "/usr/src/app/docker-entrypoint.sh"]
+ENTRYPOINT ["tini", "-g", "--"]
 
 EXPOSE 8900

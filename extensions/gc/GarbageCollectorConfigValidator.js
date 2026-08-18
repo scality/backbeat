@@ -5,6 +5,7 @@ const {
     probeServerJoi,
     hostPortJoi,
 } = require('../../lib/config/configItems.joi');
+const { extensionConfigValidator } = require('../../lib/config/extensionConfigValidator');
 
 const joiSchema = joi.object({
     topic: joi.string().required(),
@@ -18,9 +19,4 @@ const joiSchema = joi.object({
     vaultAdmin: hostPortJoi,
 });
 
-function configValidator(backbeatConfig, extConfig) {
-    const validatedConfig = joi.attempt(extConfig, joiSchema);
-    return validatedConfig;
-}
-
-module.exports = configValidator;
+module.exports = extensionConfigValidator('gc', joiSchema);
