@@ -8,6 +8,8 @@ const { Config } = require('../../../../lib/Config');
 const { getField } = require('../../../../lib/config/fields');
 const backbeatConfig = require('./config.json');
 
+const CONFIG_OVERRIDES = 'BACKBEAT_CONFIG_OVERRIDES';
+
 describe('Config', () => {
     let config;
     let testConfig;
@@ -51,6 +53,124 @@ describe('Config', () => {
             'AbortIncompleteMultipartUpload',
         ];
         assert.doesNotThrow(() => config._parseConfig(testConfig));
+    });
+
+    describe('configuration overrides', () => {
+        afterEach(() => {
+            delete process.env[CONFIG_OVERRIDES];
+            delete process.env.BACKBEAT_CONFIG_FILE;
+            delete process.env.KAFKA_HOSTS;
+            delete process.env.EXTENSIONS_GC_TOPIC;
+            delete process.env.MONGODB_DATABASE;
+            delete process.env.MONGODB_HOSTS;
+        });
+
+        it('should win over an env var of the global config', () => {
+            process.env.KAFKA_HOSTS = 'from-env:9092';
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":"from-override:9092"}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.kafka.hosts, 'from-override:9092');
+        });
+
+        it('should win over an env var of an extension', () => {
+            process.env.EXTENSIONS_GC_TOPIC = 'from-env-gc';
+            process.env[CONFIG_OVERRIDES] = '{"extensions":{"gc":{"topic":"from-override-gc"}}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.extensions.gc.topic, 'from-override-gc');
+        });
+
+        it('should win over an env var setting several fields at once', () => {
+            process.env.MONGODB_HOSTS = 'from-env:27017';
+            process.env[CONFIG_OVERRIDES] =
+                '{"queuePopulator":{"mongo":{"replicaSetHosts":"from-override:27017"}}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.queuePopulator.mongo.replicaSetHosts,
+                               'from-override:27017');
+        });
+
+        it('should override a value of the config file', () => {
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":"patched:9092"}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.kafka.hosts, 'patched:9092');
+        });
+
+        it('should leave the fields it does not mention alone', () => {
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":"patched:9092"}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.kafka.maxRequestSize,
+                               backbeatConfig.kafka.maxRequestSize);
+            assert.strictEqual(config.server.port, backbeatConfig.server.port);
+        });
+
+        it('should override a field of an extension', () => {
+            process.env[CONFIG_OVERRIDES] = '{"extensions":{"gc":{"topic":"patched-gc"}}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.extensions.gc.topic, 'patched-gc');
+            // the rest of the extension config is untouched
+            assert.strictEqual(config.extensions.gc.consumer.concurrency,
+                               backbeatConfig.extensions.gc.consumer.concurrency);
+        });
+
+        it('should set a field the config file does not define', () => {
+            process.env[CONFIG_OVERRIDES] =
+                '{"kafka":{"producerParams":{"linger.ms":10,"socket.timeout.ms":5000}}}';
+            config._parseConfig(testConfig);
+            assert.deepStrictEqual(config.kafka.producerParams,
+                                   { 'linger.ms': 10, 'socket.timeout.ms': 5000 });
+        });
+
+        it('should replace an array rather than merge it', () => {
+            process.env[CONFIG_OVERRIDES] =
+                '{"server":{"healthChecks":{"allowFrom":["10.0.0.0/8"]}}}';
+            config._parseConfig(testConfig);
+            // _parseConfig appends the default health checks to the configured ones
+            assert.deepStrictEqual(config.server.healthChecks.allowFrom,
+                                   ['10.0.0.0/8', '127.0.0.1/8', '::1']);
+        });
+
+        it('should restore the schema default when a field is deleted', () => {
+            // a value the schema default differs from, so that the assertion
+            // tells the field was deleted from the value it held
+            testConfig.kafka.backlogMetrics.intervalS = 120;
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"backlogMetrics":{"intervalS":null}}}';
+            config._parseConfig(testConfig);
+            // the joi default of the field, not the value of the config file
+            assert.strictEqual(config.kafka.backlogMetrics.intervalS, 60);
+        });
+
+        it('should coerce the types joi converts', () => {
+            process.env[CONFIG_OVERRIDES] = '{"queuePopulator":{"batchMaxRead":"250"}}';
+            config._parseConfig(testConfig);
+            assert.strictEqual(config.queuePopulator.batchMaxRead, 250);
+        });
+
+        it('should validate the merged config, rejecting a wrong type', () => {
+            process.env[CONFIG_OVERRIDES] = '{"server":{"port":"not-a-number"}}';
+            assert.throws(() => config._parseConfig(testConfig), /port/);
+        });
+
+        it('should validate the merged config, rejecting an unknown field', () => {
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"notAKafkaSetting":1}}';
+            assert.throws(() => config._parseConfig(testConfig), /notAKafkaSetting/);
+        });
+
+        it('should validate the merged config, rejecting a deleted required field', () => {
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":null}}';
+            assert.throws(() => config._parseConfig(testConfig), /hosts/);
+        });
+
+        it('should reject an invalid overrides document', () => {
+            process.env[CONFIG_OVERRIDES] = '{oops';
+            assert.throws(() => config._parseConfig(testConfig),
+                          /invalid JSON value for BACKBEAT_CONFIG_OVERRIDES/);
+        });
+
+        it('should apply the overrides when loading the configuration file', () => {
+            process.env.BACKBEAT_CONFIG_FILE = require.resolve('./config.json');
+            process.env[CONFIG_OVERRIDES] = '{"kafka":{"hosts":"patched:9092"}}';
+            const loaded = new Config();
+            assert.strictEqual(loaded.kafka.hosts, 'patched:9092');
+        });
     });
 });
 
