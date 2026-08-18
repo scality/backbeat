@@ -72,3 +72,68 @@ describe('BackbeatConsumer._processTask', () => {
         });
     });
 });
+
+describe('BackbeatConsumer subscription state', () => {
+    const proto = BackbeatConsumer.prototype;
+
+    function makeSelf(subscription) {
+        return {
+            _topic: 'test-topic',
+            _groupId: 'test-group',
+            _log: { debug: () => {}, error: () => {} },
+            _consumer: { subscription },
+            _getSubscription: proto._getSubscription,
+            isPaused: proto.isPaused,
+        };
+    }
+
+    it('should report paused when the consumer has no subscription', () => {
+        const self = makeSelf(() => []);
+        assert.strictEqual(proto.isPaused.call(self), true);
+        assert.strictEqual(proto.getServiceStatus.call(self), false);
+    });
+
+    it('should report active when the consumer is subscribed', () => {
+        const self = makeSelf(() => ['test-topic']);
+        assert.strictEqual(proto.isPaused.call(self), false);
+        assert.strictEqual(proto.getServiceStatus.call(self), true);
+    });
+
+    it('should report paused rather than throw when subscription() fails', () => {
+        // node-rdkafka throws ERR__STATE when the consumer is connected but
+        // mid-unassign or closing
+        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        assert.strictEqual(proto.isPaused.call(self), true);
+        assert.strictEqual(proto.getServiceStatus.call(self), false);
+    });
+
+    it('should not throw out of onEntryCommittable when subscription() fails', () => {
+        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        self._offsetLedger = {
+            onOffsetProcessed: () => 42,
+            toString: () => '',
+        };
+        self._consumer.isConnected = () => true;
+        self._consumer.offsetsStore =
+            () => assert.fail('offsetsStore must not be called while unavailable');
+
+        assert.doesNotThrow(() => proto.onEntryCommittable.call(self,
+            { topic: 'test-topic', partition: 0, offset: 42 }));
+    });
+
+    it('should subscribe on resume when the subscription is unavailable', () => {
+        const self = makeSelf(() => { throw new Error('Local: Erroneous state'); });
+        let subscribed = null;
+        self._consumer.subscribe = topics => { subscribed = topics; };
+
+        assert.doesNotThrow(() => proto.resume.call(self, 'test-site'));
+        assert.deepStrictEqual(subscribed, ['test-topic']);
+    });
+
+    it('should not subscribe on resume when already subscribed', () => {
+        const self = makeSelf(() => ['test-topic']);
+        self._consumer.subscribe = () => assert.fail('should not re-subscribe');
+
+        assert.doesNotThrow(() => proto.resume.call(self, 'test-site'));
+    });
+});
