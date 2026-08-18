@@ -70,6 +70,18 @@ describe('config overrides', () => {
             assert.deepStrictEqual(target, { a: { b: 1, c: 2 } });
         });
 
+        it('should ignore a `__proto__` key instead of reaching the prototype', () => {
+            // an object literal would set the prototype rather than a member,
+            // so the patch has to be spelled out as JSON
+            const patch = JSON.parse('{"a":1,"__proto__":{"polluted":"yes"}}');
+            try {
+                assert.deepStrictEqual(mergePatch({}, patch), { a: 1 });
+                assert.strictEqual({}.polluted, undefined);
+            } finally {
+                delete Object.prototype.polluted;
+            }
+        });
+
         it('should not share the patch structure with the merged result', () => {
             const patch = { a: { b: 1 } };
             const target = mergePatch({}, patch);
@@ -106,6 +118,23 @@ describe('config overrides', () => {
                     () => applyConfigOverrides({}, [], { [CONFIG_OVERRIDES]: patch }),
                     /BACKBEAT_CONFIG_OVERRIDES must hold a JSON object/);
             });
+        });
+
+        it('should ignore a `__proto__` key instead of polluting the prototype', () => {
+            // an object literal would set the prototype rather than a member,
+            // so the patch has to be spelled out as JSON
+            const patch = '{"kafka":{"hosts":"other:9092","__proto__":{"nested":"pollution"}},' +
+                          '"__proto__":{"polluted":"yes"}}';
+            const config = { kafka: { hosts: 'localhost:9092' } };
+            try {
+                applyConfigOverrides(config, [], { [CONFIG_OVERRIDES]: patch });
+                assert.deepStrictEqual(config, { kafka: { hosts: 'other:9092' } });
+                assert.strictEqual({}.polluted, undefined);
+                assert.strictEqual({}.nested, undefined);
+            } finally {
+                delete Object.prototype.polluted;
+                delete Object.prototype.nested;
+            }
         });
 
         it('should apply the whole patch without a prefix', () => {
