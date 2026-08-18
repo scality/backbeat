@@ -71,4 +71,54 @@ describe('QueueEntry helper class', () => {
             assert.strictEqual(completed1.getReplicationStatus(), 'COMPLETED');
         });
     });
+
+    describe('nested field decoding', () => {
+        function withDecodedValue(kafkaEntry) {
+            const record = JSON.parse(kafkaEntry.value);
+            record.value = JSON.parse(record.value);
+            return { ...kafkaEntry, value: JSON.stringify(record) };
+        }
+
+        it('should accept an object as the entry value', () => {
+            const fromString = QueueEntry.createFromKafkaEntry(replicationEntry);
+            const fromObject = QueueEntry.createFromKafkaEntry(
+                withDecodedValue(replicationEntry));
+
+            assert.strictEqual(fromObject.error, undefined);
+            assert.deepStrictEqual(fromObject.getValue(), fromString.getValue());
+            assert.strictEqual(fromObject.getBucket(), fromString.getBucket());
+            assert.strictEqual(fromObject.getObjectKey(),
+                               fromString.getObjectKey());
+        });
+
+        it('should report a malformed value string', () => {
+            const entry = QueueEntry.createFromKafkaEntry({
+                value: JSON.stringify({
+                    type: 'put',
+                    bucket: 'bucket',
+                    key: 'key',
+                    value: 'not json',
+                }),
+            });
+
+            assert.strictEqual(entry.error.message,
+                               'malformed JSON in kafka entry');
+        });
+
+        it('should reject a value that is neither a string nor an object',
+        () => {
+            const entry = QueueEntry.createFromKafkaEntry({
+                value: JSON.stringify({
+                    type: 'put',
+                    bucket: 'bucket',
+                    key: 'key',
+                    value: 42,
+                }),
+            });
+
+            assert.strictEqual(entry.error.message,
+                               'malformed JSON in kafka entry');
+            assert.match(entry.error.description, /got number/);
+        });
+    });
 });
