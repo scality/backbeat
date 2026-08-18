@@ -2,9 +2,8 @@
 
 const assert = require('assert');
 
-const QueueEntry =
-          require('../../../lib/models/QueueEntry');
-const { replicationEntry } = require('../../utils/kafkaEntries');
+const QueueEntry = require('../../../../lib/models/QueueEntry');
+const { replicationEntry } = require('../../../utils/kafkaEntries');
 
 describe('QueueEntry helper class', () => {
     describe('built from Kafka queue entry', () => {
