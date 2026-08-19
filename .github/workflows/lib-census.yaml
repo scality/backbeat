@@ -1,0 +1,194 @@
+---
+# Throwaway workflow (BB-849): measures the lib-suite flakiness rate of several
+# trees under the real CI environment, N runs each. Not part of normal CI.
+name: lib-census
+
+# workflow_dispatch only works from the default branch, so this runs on push
+# to the census branch instead; bump RUNS_PER_ARM and push to launch a round.
+on:
+  push:
+    branches:
+    - poc/BB-849-lib-census
+
+env:
+  RUNS_PER_ARM: '1'
+
+jobs:
+  build:
+    name: build ${{ matrix.name }}
+    runs-on: ubuntu-latest
+    permissions:
+      contents: read
+      packages: write
+    strategy:
+      matrix:
+        include:
+          - name: ci-kafka
+            context: .github/dockerfiles/kafka
+            file: ""
+          - name: syntheticbucketd
+            context: .
+            file: .github/dockerfiles/syntheticbucketd/Dockerfile
+          - name: ci-mongodb
+            context: .github/dockerfiles/mongodb
+            file: ""
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+
+    - name: Set up Docker Buildx
+      uses: docker/setup-buildx-action@v3
+
+    - name: Login to Registry
+      uses: docker/login-action@v3
+      with:
+        registry: ghcr.io
+        username: ${{ github.repository_owner }}
+        password: ${{ github.token }}
+
+    - name: Build and push ${{ matrix.name }}
+      uses: docker/build-push-action@v6
+      with:
+        push: true
+        context: ${{ matrix.context }}
+        file: ${{ matrix.file || format('{0}/Dockerfile', matrix.context) }}
+        tags: ghcr.io/${{ github.repository }}/${{ matrix.name }}:${{ github.sha }}
+        cache-from: type=gha,scope=${{ matrix.name }}
+        cache-to: type=gha,mode=max,scope=${{ matrix.name }}
+
+  prepare:
+    runs-on: ubuntu-latest
+    outputs:
+      matrix: ${{ steps.gen.outputs.matrix }}
+    steps:
+    - name: Build arm x run matrix
+      id: gen
+      run: |
+        python3 - "$RUNS_PER_ARM" >> "$GITHUB_OUTPUT" <<'PY'
+        import json
+        import sys
+
+        n = int(sys.argv[1])
+        # sha: tree to test.  nrk: node-rdkafka version to force after install
+        # ('' keeps whatever the tree's yarn.lock pins).
+        arms = [
+            {'arm': 'A-17jul-3.0.1', 'sha': 'c16e5ddb', 'nrk': ''},
+            {'arm': 'B-16jul-3.6.1', 'sha': 'd7f3303d', 'nrk': ''},
+            {'arm': 'C-head-3.0.1', 'sha': '52b9510f', 'nrk': ''},
+        ]
+        include = [dict(a, idx=i) for a in arms for i in range(1, n + 1)]
+        print('matrix=' + json.dumps(include))
+        PY
+
+  census:
+    needs: [build, prepare]
+    name: ${{ matrix.arm }} ${{ matrix.idx }}
+    runs-on: ubuntu-latest
+    strategy:
+      fail-fast: false
+      max-parallel: 10
+      matrix:
+        include: ${{ fromJSON(needs.prepare.outputs.matrix) }}
+    services:
+      redis:
+        image: redis:alpine
+        ports:
+        - 6379:6379
+      syntheticbucketd:
+        image: ghcr.io/${{ github.repository }}/syntheticbucketd:${{ github.sha }}
+        ports:
+        - 9001:9001
+      zookeeper:
+        image: zookeeper:3.9.4
+        ports:
+        - 2181:2181
+        env:
+          ZOOKEEPER_CLIENT_PORT: 2181
+          ZOOKEEPER_TICK_TIME: 2000
+      kafka:
+        image: ghcr.io/${{ github.repository }}/ci-kafka:${{ github.sha }}
+        credentials:
+          username: ${{ github.repository_owner }}
+          password: ${{ github.token }}
+        ports:
+        - 9092:9092
+        env:
+          KAFKA_BROKER_ID: 1
+          KAFKA_ZOOKEEPER_CONNECT: zookeeper:2181
+          KAFKA_ADVERTISED_LISTENERS: PLAINTEXT://localhost:9092
+          KAFKA_LISTENERS: PLAINTEXT://0.0.0.0:9092
+          KAFKA_OFFSETS_TOPIC_REPLICATION_FACTOR: 1
+      mongo:
+        image: ghcr.io/${{ github.repository}}/ci-mongodb:${{ github.sha }}
+        ports:
+        - 27017:27017
+        - 27018:27018
+        - 27019:27019
+    steps:
+    - name: Checkout
+      uses: actions/checkout@v4
+      with:
+        fetch-depth: 0
+
+    - name: Check out arm tree ${{ matrix.sha }}
+      run: git checkout --detach ${{ matrix.sha }}
+
+    - uses: actions/setup-node@v6
+      with:
+        node-version: '22'
+        cache: yarn
+
+    - name: Install node dependencies
+      run: yarn install --ignore-engines --frozen-lockfile --network-concurrency 1
+
+    - name: Force node-rdkafka ${{ matrix.nrk }}
+      if: matrix.nrk != ''
+      run: yarn add node-rdkafka@${{ matrix.nrk }} --ignore-engines --network-concurrency 1
+
+    - name: Report effective versions
+      run: |
+        node -e "console.log('node-rdkafka', require('node-rdkafka/package.json').version,
+                             '/ librdkafka', require('node-rdkafka').librdkafkaVersion)"
+        echo "tree: $(git rev-parse --short HEAD)"
+        find tests/functional/lib -name '*.js' | sort
+
+    - name: Wait for services
+      run: |
+        timeout 60 bash -c 'until nc -z localhost 9092; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 2181; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
+        timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
+
+    - name: Run lib tests
+      env:
+        BACKBEAT_CONFIG_FILE: tests/config.json
+      run: .github/scripts/run_ft_tests.bash ft_test:lib 2>&1 | tee census.log
+
+    - name: Upload log
+      if: always()
+      uses: actions/upload-artifact@v4
+      with:
+        name: log-${{ matrix.arm }}-${{ matrix.idx }}
+        path: census.log
+        retention-days: 7
+
+  summary:
+    needs: census
+    if: always()
+    runs-on: ubuntu-latest
+    steps:
+    - name: Tabulate per-arm outcomes
+      env:
+        GH_TOKEN: ${{ github.token }}
+      run: |
+        gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100" \
+          --paginate --jq '.jobs[] | [.name, .conclusion] | @tsv' > jobs.tsv
+        {
+          echo "| arm | failed / total | rate |"
+          echo "|---|---|---|"
+          for arm in A-17jul-3.0.1 B-16jul-3.6.1 C-head-3.0.1; do
+            t=$(grep -c "^$arm " jobs.tsv || true)
+            f=$(awk -F'\t' -v a="$arm" '$1 ~ "^"a" " && $2=="failure"' jobs.tsv | wc -l)
+            [ "$t" -gt 0 ] && echo "| $arm | $f / $t | $(( 100 * f / t ))% |"
+          done
+        } >> "$GITHUB_STEP_SUMMARY"
