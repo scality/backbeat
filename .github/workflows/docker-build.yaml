@@ -6,6 +6,7 @@ on:
     branches-ignore:
     - development/**
     - q/*/**
+    - poc/**
   workflow_call:
     inputs:
       tag:

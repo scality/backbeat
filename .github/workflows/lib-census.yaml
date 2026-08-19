@@ -11,7 +11,7 @@ on:
     - poc/BB-849-lib-census
 
 env:
-  RUNS_PER_ARM: '1'
+  RUNS_PER_ARM: '25'
 
 jobs:
   build:
@@ -159,7 +159,9 @@ jobs:
         timeout 60 bash -c 'until nc -z localhost 6379; do sleep 1; done'
         timeout 60 bash -c 'until nc -z localhost 27017; do sleep 1; done'
 
+    # shell: bash gives -o pipefail, without which tee masks a mocha failure
     - name: Run lib tests
+      shell: bash
       env:
         BACKBEAT_CONFIG_FILE: tests/config.json
       run: .github/scripts/run_ft_tests.bash ft_test:lib 2>&1 | tee census.log
@@ -177,18 +179,43 @@ jobs:
     if: always()
     runs-on: ubuntu-latest
     steps:
+    - name: Collect logs
+      uses: actions/download-artifact@v4
+      with:
+        pattern: log-*
+        path: logs
+
     - name: Tabulate per-arm outcomes
-      env:
-        GH_TOKEN: ${{ github.token }}
       run: |
-        gh api "repos/${{ github.repository }}/actions/runs/${{ github.run_id }}/jobs?per_page=100" \
-          --paginate --jq '.jobs[] | [.name, .conclusion] | @tsv' > jobs.tsv
-        {
-          echo "| arm | failed / total | rate |"
-          echo "|---|---|---|"
-          for arm in A-17jul-3.0.1 B-16jul-3.6.1 C-head-3.0.1; do
-            t=$(grep -c "^$arm " jobs.tsv || true)
-            f=$(awk -F'\t' -v a="$arm" '$1 ~ "^"a" " && $2=="failure"' jobs.tsv | wc -l)
-            [ "$t" -gt 0 ] && echo "| $arm | $f / $t | $(( 100 * f / t ))% |"
-          done
-        } >> "$GITHUB_STEP_SUMMARY"
+        python3 - >> "$GITHUB_STEP_SUMMARY" <<'PY'
+        import collections
+        import pathlib
+        import re
+
+        per = collections.defaultdict(lambda: collections.Counter())
+        detail = collections.defaultdict(collections.Counter)
+        for log in sorted(pathlib.Path('logs').glob('log-*/census.log')):
+            arm = log.parent.name.split('-', 1)[1].rsplit('-', 1)[0]
+            text = log.read_text(errors='replace')
+            passing = re.search(r'(\d+) passing', text)
+            failing = re.search(r'(\d+) failing', text)
+            if not passing or int(passing.group(1)) < 10:
+                per[arm]['invalid'] += 1
+                continue
+            per[arm]['valid'] += 1
+            if failing:
+                per[arm]['failed'] += 1
+                for m in re.finditer(r'^\s+\d+\) (.+)$', text, re.M):
+                    detail[arm][m.group(1).strip()] += 1
+
+        print('| arm | failed / valid | rate | invalid |')
+        print('|---|---|---|---|')
+        for arm in sorted(per):
+            c = per[arm]
+            rate = 100 * c['failed'] / c['valid'] if c['valid'] else 0
+            print(f"| {arm} | {c['failed']} / {c['valid']} | {rate:.0f}% | {c['invalid']} |")
+        for arm in sorted(detail):
+            print(f"\n**{arm}** failing contexts")
+            for name, n in detail[arm].most_common():
+                print(f"- {n}x {name}")
+        PY

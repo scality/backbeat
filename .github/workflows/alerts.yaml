@@ -5,6 +5,7 @@ on:
     branches-ignore:
       - development/**
       - q/*/**
+      - poc/**
 
 jobs:
   run-alert-tests:
