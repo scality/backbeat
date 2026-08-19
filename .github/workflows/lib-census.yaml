@@ -72,7 +72,7 @@ jobs:
         # sha: tree to test.  nrk: node-rdkafka version to force after install
         # ('' keeps whatever the tree's yarn.lock pins).
         arms = [
-            {'arm': 'D-head-3.6.1', 'sha': '52b9510f', 'nrk': '3.6.1'},
+            {'arm': 'E-skip-3.0.1', 'sha': 'c30d5302', 'nrk': ''},
         ]
         include = [dict(a, idx=i) for a in arms for i in range(1, n + 1)]
         print('matrix=' + json.dumps(include))
